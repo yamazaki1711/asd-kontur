@@ -62,6 +62,12 @@ workspaces = sa.Table(
     sa.Column("workspace_id", postgresql.UUID(as_uuid=True), primary_key=True),
     sa.Column("construction_object_id", postgresql.UUID(as_uuid=True), nullable=False),
     sa.Column("lifecycle_state", sa.Text, nullable=False),
+    sa.Column("lifecycle_version", sa.BigInteger, nullable=False),
+    sa.Column("workspace_revision", sa.BigInteger, nullable=False),
+    sa.Column("write_fenced", sa.Boolean, nullable=False),
+    sa.Column("legal_hold_active", sa.Boolean, nullable=False),
+    sa.Column("purge_started_at", sa.DateTime(timezone=True)),
+    sa.Column("destroyed_at", sa.DateTime(timezone=True)),
     sa.Column("revision", sa.BigInteger, nullable=False),
     sa.Column("retention_class", sa.Text, nullable=False),
     sa.Column("retention_profile_key", sa.Text, nullable=False),
@@ -86,7 +92,10 @@ workspaces = sa.Table(
     sa.CheckConstraint("revision >= 1", name="ck_workspace_revision_positive"),
     sa.CheckConstraint(
         "lifecycle_state IN "
-        "('provisioned', 'active', 'frozen', 'finalized', 'archived', 'blocked')",
+        "('PROVISIONING','ACTIVE','FREEZING','FROZEN','FINALIZING','FINALIZED',"
+        "'EXPORTING','EXPORTED','ARCHIVING','ARCHIVED','CLOSED','REOPENING',"
+        "'RESET_PLANNING','RESET_AUTHORIZED','PURGING','VERIFYING_RESET',"
+        "'RESET_VERIFIED','DESTROYING','DESTROYED','RECOVERY_REQUIRED','QUARANTINED')",
         name="ck_workspace_lifecycle_state",
     ),
     sa.CheckConstraint(
@@ -146,6 +155,12 @@ mode_executions = sa.Table(
     sa.Column("contract_version", sa.Text, nullable=False),
     sa.Column("schema_id", sa.Text, nullable=False),
     sa.Column("schema_version", sa.Text, nullable=False),
+    sa.Column("process_definition_key", sa.Text, nullable=False),
+    sa.Column("process_definition_version", sa.Text, nullable=False),
+    sa.Column("authority_profile_key", sa.Text, nullable=False),
+    sa.Column("authority_profile_version", sa.Text, nullable=False),
+    sa.Column("output_contract_key", sa.Text, nullable=False),
+    sa.Column("output_contract_version", sa.Text, nullable=False),
     sa.Column("policy_assignment_key", sa.Text, nullable=False),
     sa.Column("policy_assignment_version", sa.Text, nullable=False),
     sa.Column("rule_set_key", sa.Text, nullable=False),

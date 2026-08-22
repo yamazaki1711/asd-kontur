@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.0:schema:destruction-attestation",
+  "title": "ASD-KONTUR content-free DestructionAttestation v1.0",
+  "type": "object",
+  "required": [
+    "record_type",
+    "attestation_id",
+    "attestation_version",
+    "workspace_id",
+    "lifecycle_revision",
+    "plan_id",
+    "plan_digest",
+    "retention_profile",
+    "basis_registry",
+    "basis_code",
+    "legal_hold_check_ids",
+    "requester_identity_id",
+    "confirmer_identity_id",
+    "executor_identity_id",
+    "verifier_identity_id",
+    "adapter_registry",
+    "receipt_ids",
+    "scan_ids",
+    "aggregate_deleted_count",
+    "aggregate_residue_count",
+    "residue_classes",
+    "platform_integrity_before",
+    "platform_integrity_after",
+    "verified_at",
+    "assurance_class",
+    "outcome"
+  ],
+  "properties": {
+    "record_type": {"const": "destruction_attestation"},
+    "attestation_id": {"type": "string", "format": "uuid"},
+    "attestation_version": {"type": "integer", "minimum": 1},
+    "workspace_id": {"type": "string", "format": "uuid"},
+    "lifecycle_revision": {"type": "integer", "minimum": 1},
+    "plan_id": {"type": "string", "format": "uuid"},
+    "plan_digest": {"$ref": "#/$defs/digest"},
+    "retention_profile": {"$ref": "#/$defs/exactVersion"},
+    "basis_registry": {"$ref": "#/$defs/exactVersion"},
+    "basis_code": {"type": "string", "minLength": 1},
+    "legal_hold_check_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}},
+    "requester_identity_id": {"type": "string", "minLength": 1},
+    "confirmer_identity_id": {"type": "string", "minLength": 1},
+    "executor_identity_id": {"type": "string", "minLength": 1},
+    "verifier_identity_id": {"type": "string", "minLength": 1},
+    "adapter_registry": {"$ref": "#/$defs/exactVersion"},
+    "receipt_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}},
+    "scan_ids": {"type": "array", "minItems": 1, "items": {"type": "string", "format": "uuid"}},
+    "aggregate_deleted_count": {"type": "integer", "minimum": 0},
+    "aggregate_residue_count": {"type": "integer", "minimum": 0},
+    "residue_classes": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "platform_integrity_before": {"$ref": "#/$defs/digest"},
+    "platform_integrity_after": {"$ref": "#/$defs/digest"},
+    "verified_at": {"type": "string", "format": "date-time"},
+    "assurance_class": {"enum": ["development/disposable", "production"]},
+    "outcome": {"enum": ["verified", "incomplete", "failed", "quarantined"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"outcome": {"const": "verified"}}, "required": ["outcome"]},
+      "then": {
+        "properties": {
+          "aggregate_residue_count": {"const": 0}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "exactVersion": {
+      "type": "object",
+      "required": ["key", "version"],
+      "properties": {
+        "key": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "pattern": "^(?!latest$)[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
