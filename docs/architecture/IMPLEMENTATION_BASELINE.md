@@ -1,15 +1,16 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted architecture-only repository baseline`
-- **Дата:** 2026-08-22
+- **Статус:** `Accepted implementation baseline — G-04 PASS`
+- **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
-- **Область:** граница между принятой архитектурой и ещё не начатой
-  реализацией нового общего ядра
+- **Область:** принятая архитектура и минимальный persistence foundation
+  нового общего ядра
 
 ## 1. Текущее состояние
 
-Репозиторий намеренно переведён в architecture-only baseline:
+Архитектурный re-baseline сохранён; поверх него добавлен первый общий
+implementation foundation:
 
 - `G-00 Architecture Baseline` — `PASS`;
 - `G-01 Logical Data Model` — `PASS`;
@@ -17,11 +18,12 @@
   нормативный профиль;
 - `G-02B production instance readiness` — `BLOCKED`;
 - `G-03 Contract Pack` — `PASS 2026-08-22`; нормативные schemas, registry и
-  fixtures приняты без начала runtime implementation;
-- `G-04 Persistence Foundation` — `BLOCKED`, следующий gate только после
-  отдельной implementation authority;
-- ORM, DDL, migrations, persistence, deployment и прикладное ядро —
-  `NOT STARTED`.
+  fixtures приняты, а runtime adapter проверен последующим G-04;
+- `G-04 Persistence Foundation` — `PASS 2026-08-23`; Contract Pack runtime,
+  PostgreSQL migrations, RLS, scoped repositories, audit и messaging ledgers
+  проверены на real PostgreSQL локально и в CI;
+- `G-05 Platform Knowledge Foundation` — `BLOCKED` до отдельной authority;
+- mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
 assets и бинарный DOCX удалены из active tree. Они остаются в Git history,
@@ -52,24 +54,24 @@ tree без новых контрактов, проверки scope/provenance �
 
 ## 3. Непереходимые границы
 
-Несмотря на закрытие `G-03`, до отдельной implementation authority запрещены:
+Несмотря на закрытие `G-04`, без следующей отдельной authority не начинаются:
 
-- прикладной код, ORM, DDL и migrations;
-- persistence repositories и PostgreSQL/S3/VPS deployment;
+- Platform Knowledge/Source Evidence implementation и последующие gates;
+- PostgreSQL/S3/VPS production deployment;
 - перенос legacy templates, binaries и данных конкретного ОКС;
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-04; сам факт
-прохождения G-03 не разрешает его реализацию, не активирует production policy
+Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-05; сам факт
+прохождения G-04 не разрешает его реализацию, не активирует production policy
 instances и не отменяет `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline
 
-Architecture-only branch проверяется структурно: tracked file manifest,
-Markdown links, trailing whitespace, отсутствие секретов, моделей,
-pilot/ОКС payload и prototype runtime. `pytest` к этой ветке неприменим,
-поскольку активной реализации и test suite в baseline намеренно нет.
+Активный baseline проверяется locked dependencies, Ruff, mypy, Contract Pack
+fixtures, Alembic и PostgreSQL integration suite, а также структурными
+проверками Markdown/whitespace и отсутствия секретов, моделей и pilot/ОКС
+payload. Production readiness из этих проверок не следует.
 
 Восстановление прежнего GitHub baseline выполняется чтением archive branch
 или tag, но не переключением default branch без отдельного решения владельца

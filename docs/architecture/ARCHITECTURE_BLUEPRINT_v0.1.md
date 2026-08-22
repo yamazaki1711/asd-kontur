@@ -300,8 +300,12 @@ profiles с `default deny` до утверждения.
     production instances остаются `BLOCKED`.
 12. **Contract Pack v0.1** — принят 2026-08-22 и закрывает G-03: stable
     registry, Draft 2020-12 schemas, valid/hostile fixtures, compatibility,
-    scope/provenance/authority/error contracts. Runtime implementation не
-    начата.
+    scope/provenance/authority/error contracts. Его offline runtime adapter
+    реализован и проверен в G-04 без изменения принятых schemas.
+13. **G-04 Persistence Foundation v0.1** — принят 2026-08-23: Python 3.12
+    scaffold, Contract Pack runtime, PostgreSQL schemas/Alembic, composite
+    scope/RLS, Unit of Work, audit, object и messaging ledgers проверены на
+    real PostgreSQL локально и в CI; production deployment не создавался.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -376,5 +380,7 @@ machine-readable Contract Pack.
 
 ORM, DDL, migrations и persistence modules запрещены до отдельной
 implementation authority. Deployment и external egress отдельно запрещены до
-active production policy instances. Следующий gate по critical path — G-04
-Persistence Foundation; G-03 PASS не начинает его автоматически.
+active production policy instances. G-04 Persistence Foundation закрыт
+2026-08-23 на PostgreSQL/Contract Pack evidence. Следующий gate по critical
+path — G-05 Platform Knowledge Foundation; G-04 PASS не начинает его
+автоматически.

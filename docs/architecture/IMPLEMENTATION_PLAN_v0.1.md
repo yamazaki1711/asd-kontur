@@ -152,7 +152,7 @@ provider/region или численные RPO/RTO. TA-TD-18 не разреша�
 | G-01 Logical Data Model v0.1 | G-00; accepted identity/scope/SoR/retention/process contracts | Отдельный reviewed normative artifact; до него нет ORM/DDL/migration | Architecture approval; policy values referenced, not invented | `PASS 2026-08-22` |
 | G-02 Deployment and Policy Profiles v0.1 | G-00 and G-01 scopes; evidence from provider terms, benchmarks, threat/recovery analysis | Complete profiles or fail-closed values; no production deploy/egress without them | Architecture + applicable security/professional/provider-policy authority | `PASS 2026-08-22` profile contract; production instances `BLOCKED` |
 | G-03 Contract Pack | G-01/G-02; schema registry/versioning rules | Machine-readable contracts pass compatibility, negative-scope and round-trip tests | Architecture/API/security owners | `PASS 2026-08-22` |
-| G-04 Persistence Foundation | G-01…03 | PostgreSQL schemas/migrations/repositories/RLS/audit/object ledger/inbox-outbox adapters and isolation tests | Implementation authority after gates | `BLOCKED` |
+| G-04 Persistence Foundation | G-01…03 | PostgreSQL schemas/migrations/repositories/RLS/audit/object ledger/inbox-outbox adapters and isolation tests | Implementation authority after gates | `PASS 2026-08-23` |
 | G-05 Platform Knowledge Foundation | G-04 | Source/Evidence Ledger, official registry, NTD editions/units, canon, rules, FTS/vector/typed graph, Gateway, Promotion Gate | Knowledge/rule authorities; RuleVersion only qualified human | `BLOCKED` |
 | G-06 Workspace Lifecycle Foundation | G-04 and required G-05 source contracts | Provision/isolate/ModeExecution/archive/export/reset/destroy/restore/import; distributed residue tests | Lifecycle request/confirm/verify separation | `BLOCKED` |
 | G-07 AI/VLM Harness | G-03…06, approved qualification/policy profiles | native-first, local Qwen3.8-27B, provider-neutral controlled route, Candidate lifecycle, validators/repair/budgets/raw retention | Harness/security/qualified confirmation authorities | `BLOCKED` |
@@ -263,7 +263,7 @@ enter only as labeled test data after universal contracts.
 |---|---|
 | Capability; inputs; scope | Canonical PostgreSQL transaction boundary, RLS, repositories, audit, object ledger, inbox/outbox; M4/R123 |
 | Dependencies / DoR | G-01…03 PASS and explicit implementation authority |
-| Actions / artifacts | Future schemas/migrations/repositories/policy enforcement/adapters; no work in current task |
+| Actions / artifacts | `src/asd_kontur/{contracts,domain,persistence,settings}`, Alembic `0001_g04`, tests, CI and `docs/implementation/G04_PERSISTENCE_FOUNDATION_v0.1.md` |
 | Tests | Migration up/down-forward path, composite-scope FK, RLS negative matrix, append-only audit, idempotency/reconciliation |
 | DoD | G-04 suite passes; no canonical state on VPS/S3; source/object admission atomic by contract |
 | Risks / rollback | Premature ORM, data leaks, split SoR; forward migration or restore verified backup, never destructive reset |
@@ -582,7 +582,9 @@ throughput and scoped estimation.
 ## 14. Stop conditions, next artifact and acceptance
 
 G-03 Contract Pack закрыт принятым `CONTRACT_PACK_v0.1.md` и
-`contracts/v0.1/`. Implementation всё ещё требует отдельной authority. G-02
+`contracts/v0.1/`. G-04 Persistence Foundation закрыт PostgreSQL/Contract
+Pack implementation evidence от 2026-08-23. Каждый следующий gate всё ещё
+требует свою DoR и authority. G-02
 Deployment and Policy Profiles принят как complete fail-closed profile
 contract; concrete production instances остаются blocked. External egress,
 provider use, deployment и destructive production actions остаются отдельно
@@ -590,10 +592,10 @@ blocked.
 
 Следующий gate critical path после отдельного разрешения на реализацию:
 
-`G-04 Persistence Foundation`.
+`G-05 Platform Knowledge Foundation`.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02
 acceptance while preserving explicit production blockers. The implementation
 sequence, gates, WP DoR/DoD/tests, migration paths, maturity and risk controls
-remain normative; no later WP is thereby complete. G-03 PASS не начинает G-04.
+remain normative; no later WP is thereby complete. G-04 PASS не начинает G-05.

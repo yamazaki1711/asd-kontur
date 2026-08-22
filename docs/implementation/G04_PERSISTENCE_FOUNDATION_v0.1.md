@@ -1,6 +1,6 @@
 # G‑04 Persistence Foundation v0.1
 
-- **Статус:** `Implementation candidate — local DoD PASS, CI evidence pending`
+- **Статус:** `Accepted implementation baseline — G-04 PASS`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка:** `implementation/g04-persistence-foundation-v0.1`
@@ -16,8 +16,8 @@
 |---|---|---|
 | Capability | canonical PostgreSQL transaction boundary, RLS, repositories, audit, object ledger, inbox/outbox; M4/R123 | Реализовано в `src/asd_kontur/persistence/` |
 | DoR | G‑01…G‑03 `PASS` и explicit implementation authority | Выполнено |
-| Tests | migration up/down-forward, composite-scope FK, RLS negative matrix, append-only audit, idempotency/reconciliation | Выполнено локально на disposable PostgreSQL 17; CI PostgreSQL 18 ожидается |
-| DoD | G‑04 suite passes; canonical state отсутствует на VPS/S3; source/object admission atomic by contract | Локальная suite проходит; deployment отсутствует; admission реализован одной Unit of Work |
+| Tests | migration up/down-forward, composite-scope FK, RLS negative matrix, append-only audit, idempotency/reconciliation | `PASS`: disposable PostgreSQL 17 локально и PostgreSQL 18 в GitHub Actions |
+| DoD | G‑04 suite passes; canonical state отсутствует на VPS/S3; source/object admission atomic by contract | `PASS`: suite green, deployment отсутствует, admission реализован одной Unit of Work |
 | Rollback | forward migration или verified backup; destructive reset запрещён | Production downgrade fail-closed; downgrade только для disposable test DB |
 | Memory | отдельные platform/workspace schemas, content-minimal audit, residues inventoried | Реализовано для минимального G‑04 scope; distributed residues остаются G‑06 |
 
@@ -200,17 +200,17 @@ development/test DB. Whole-schema reset не является lifecycle implemen
 
 | Evidence | Состояние на ветке |
 |---|---|
-| Lock consistency | реализовано; final command перед публикацией |
+| Lock consistency | `PASS` |
 | Ruff format/lint | локально `PASS` |
-| mypy strict | локально `PASS`, 16 source files на момент первого прогона |
+| mypy strict | локально и CI `PASS`, 17 source files |
 | Contract Registry | `PASS`: 13 unique schemas, fingerprints, offline refs |
 | Contract fixtures | `PASS`: 17 valid, 2 schema-invalid, 8 semantic-invalid |
 | Identity/JCS | `PASS`: RFC 9562 vector, UUIDv5 vector, RFC 8785/SHA‑256 |
 | PostgreSQL migrations | `PASS` на disposable PostgreSQL 17.10 |
-| PostgreSQL behavior | `PASS`: 8 grouped integration tests, покрывающих 15 DB scenarios; fixture isolation проверяется unit test |
+| PostgreSQL behavior | `PASS`: 8 grouped integration tests, покрывающих 15 DB scenarios; fixture isolation и secret/project-data scan проверяются unit tests |
 | Application role | подтверждена non-owner/non-superuser role с enforced RLS |
 | Downgrade/upgrade | `PASS` только в отдельной disposable DB |
-| CI PostgreSQL 18 | `PENDING` до GitHub Actions branch/PR run |
+| CI PostgreSQL 18 | `PASS`, GitHub Actions run `32573117497` и duplicate PR run `32573120306` |
 
 Integration cases проверяют поведение, а не поиск SQL-текста: clean upgrade,
 schema/RLS inspection, organization A/B, workspace A/B, отсутствующий scope,
@@ -221,14 +221,14 @@ audit UPDATE/DELETE, atomic object/outbox, rollback и disposable round trip.
 
 | Item | Implemented | Unit/contract | PostgreSQL | CI | State |
 |---|---:|---:|---:|---:|---|
-| Contract runtime | yes | yes | n/a | pending | locally verified |
-| UUID identities | yes | yes | n/a | pending | locally verified |
-| Physical schema/migration | yes | inspection | yes | pending | locally verified |
-| Composite scope/RLS | yes | n/a | yes | pending | locally verified |
-| Unit of Work/repos | yes | typed checks | yes | pending | locally verified |
-| Audit append-only | yes | n/a | yes | pending | locally verified |
-| Object ledger/admission | yes | n/a | yes | pending | locally verified |
-| Inbox/outbox/idempotency | yes | n/a | yes | pending | locally verified |
+| Contract runtime | yes | yes | n/a | yes | verified |
+| UUID identities | yes | yes | n/a | yes | verified |
+| Physical schema/migration | yes | inspection | yes | yes | verified |
+| Composite scope/RLS | yes | n/a | yes | yes | verified |
+| Unit of Work/repos | yes | typed checks | yes | yes | verified |
+| Audit append-only | yes | n/a | yes | yes | verified |
+| Object ledger/admission | yes | n/a | yes | yes | verified |
+| Inbox/outbox/idempotency | yes | n/a | yes | yes | verified |
 | VPS/S3 deployment | no | n/a | n/a | n/a | intentionally out of scope |
 | Lifecycle destruction | no | n/a | n/a | n/a | future G‑06 |
 | Business workflows | no | n/a | n/a | n/a | future gates |
