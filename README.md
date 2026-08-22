@@ -79,10 +79,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `G-05 Platform Knowledge Foundation` — **PASS 2026-08-23**: WP‑05/06/07,
   PostgreSQL migrations, FTS/pgvector/typed graph, Knowledge Gateway, rules и
   Promotion Gate проверены локально и в canonical PostgreSQL 18 CI;
-- `G-06 Workspace Lifecycle Foundation` — **CANDIDATE PASS / CI PENDING**:
+- `G-06 Workspace Lifecycle Foundation` — **PASS 2026-08-23**:
   synthetic/disposable lifecycle, archive/import, reset/destroy, adapter
-  receipts, residual scans и content-free attestation реализованы; production
-  retention/destruction readiness остаётся `BLOCKED`.
+  receipts, residual scans и content-free attestation проверены локально и в
+  canonical PostgreSQL 18 CI; production retention/destruction readiness
+  остаётся `BLOCKED`.
 
 Ключевые документы:
 

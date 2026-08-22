@@ -1,6 +1,6 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted implementation baseline — G-04/G-05 PASS; G-06 candidate`
+- **Статус:** `Accepted implementation baseline — G-04/G-05/G-06 PASS`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
@@ -25,9 +25,9 @@ implementation foundation:
 - `G-05 Platform Knowledge Foundation` — `PASS 2026-08-23`: WP‑05/06/07,
   migrations, pgvector/FTS/graph, Gateway, rules и Promotion Gate проверены
   локально и в canonical PostgreSQL 18 CI;
-- `G-06 Workspace Lifecycle Foundation` — `CANDIDATE PASS 2026-08-23`:
+- `G-06 Workspace Lifecycle Foundation` — `PASS 2026-08-23`:
   lifecycle/archive/import/reset/destruction foundation и A/B isolation
-  проверены локально; canonical PostgreSQL 18 CI ожидается;
+  проверены локально и в canonical PostgreSQL 18 CI;
 - mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot

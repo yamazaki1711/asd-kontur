@@ -1,6 +1,6 @@
 # АСД-КОНТУР — G-06 Workspace Lifecycle Foundation v0.1
 
-- **Статус:** `Implementation complete; G-06 candidate PASS pending canonical PostgreSQL 18 CI`
+- **Статус:** `Accepted implementation baseline; G-06 PASS`
 - **Владелец:** Олег Щербаков
 - **Дата:** 2026-08-23
 - **Gate:** `G-06 Workspace Lifecycle Foundation`
@@ -329,7 +329,7 @@ Local evidence on 2026-08-23:
 | G-06 PostgreSQL tests | roles/RLS, transitions/outbox, direct-update denial, freeze fence, A/B purge, fresh-scope import, versioned legal hold/release, full reset, downgrade/upgrade |
 | Migration | clean head and disposable `0003→0002→0003` pass |
 | Ruff / mypy | format and lint clean; strict mypy clean for 34 source files |
-| PostgreSQL 18 + pgvector canonical CI | pending; required before final `G-06=PASS` |
+| PostgreSQL 18 + pgvector canonical CI | run `32582490189`: PostgreSQL 18.6, pgvector 0.8.6, `98 passed` |
 
 Test counts are inventory, not readiness evidence. The material evidence is the
 behavioural isolation, failure and attestation assertions above.
@@ -361,9 +361,8 @@ The following remain `BLOCKED` and are not masked by G-06:
 | Full adapter inventory | 17 synthetic/disposable classes | PASS local |
 | A/B isolation | real non-owner PostgreSQL test | PASS local |
 | Platform survives reset | before/after integrity assertion | PASS local |
-| PostgreSQL 18 canonical CI | required workflow run | PENDING |
+| PostgreSQL 18 canonical CI | workflow run `32582490189` | PASS |
 
-Until the canonical PostgreSQL 18 workflow is green, overall gate state is
-`candidate PASS / IN_PROGRESS`. After that evidence is recorded and status
-documents are synchronized, `G-06=PASS` means only an accepted synthetic
-foundation, not production destruction readiness or product readiness.
+`G-06=PASS` means only an accepted synthetic/disposable implementation
+foundation verified locally and in canonical CI. It does not mean production
+destruction readiness, mode readiness, deliverable readiness or ProductReady.

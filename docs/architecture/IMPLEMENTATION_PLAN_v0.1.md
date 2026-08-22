@@ -154,7 +154,7 @@ provider/region или численные RPO/RTO. TA-TD-18 не разреша�
 | G-03 Contract Pack | G-01/G-02; schema registry/versioning rules | Machine-readable contracts pass compatibility, negative-scope and round-trip tests | Architecture/API/security owners | `PASS 2026-08-22` |
 | G-04 Persistence Foundation | G-01…03 | PostgreSQL schemas/migrations/repositories/RLS/audit/object ledger/inbox-outbox adapters and isolation tests | Implementation authority after gates | `PASS 2026-08-23` |
 | G-05 Platform Knowledge Foundation | G-04 | Source/Evidence Ledger, official registry, NTD editions/units, canon, rules, FTS/vector/typed graph, Gateway, Promotion Gate | Knowledge/rule authorities; RuleVersion only qualified human | `PASS 2026-08-23` |
-| G-06 Workspace Lifecycle Foundation | G-04 and required G-05 source contracts | Provision/isolate/ModeExecution/archive/export/reset/destroy/restore/import; distributed residue tests | Lifecycle request/confirm/verify separation | `CANDIDATE PASS 2026-08-23`; canonical PostgreSQL 18 CI pending |
+| G-06 Workspace Lifecycle Foundation | G-04 and required G-05 source contracts | Provision/isolate/ModeExecution/archive/export/reset/destroy/restore/import; distributed residue tests | Lifecycle request/confirm/verify separation | `PASS 2026-08-23` |
 | G-07 AI/VLM Harness | G-03…06, approved qualification/policy profiles | native-first, local Qwen3.8-27B, provider-neutral controlled route, Candidate lifecycle, validators/repair/budgets/raw retention | Harness/security/qualified confirmation authorities | `BLOCKED` |
 | G-08 Four-mode Product Slices | G-04…07 and common process kernel | Four separate E2E suites through same core; no mode-specific core/store | Product acceptance authorities per mode | `BLOCKED` |
 | G-09 Three Product Deliverables | G-08 | Industrial acceptance R-1, R-2, R-3; R-3 geometry gate is hard blocker | Qualified legal/engineering/geometry roles as applicable | `BLOCKED` |
@@ -592,10 +592,9 @@ blocked.
 
 Следующий gate critical path после отдельного разрешения на реализацию:
 
-`G-06 Workspace Lifecycle Foundation` реализован по прямому разрешению
-владельца; локальный PostgreSQL 17 evidence получен 2026-08-23. Финальный
-`PASS` требует зелёного canonical PostgreSQL 18 CI. Следующий gate — G-07 —
-не начинается автоматически.
+`G-06 Workspace Lifecycle Foundation` закрыт 2026-08-23 по local PostgreSQL 17
+и canonical PostgreSQL 18 evidence. Следующий gate — G-07 — не начинается
+автоматически.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02
