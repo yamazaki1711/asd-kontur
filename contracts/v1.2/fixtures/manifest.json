@@ -1,0 +1,10 @@
+{
+  "valid": [
+    {"path": "valid/disagreement-protocol.json", "schema_pointer": "#/$defs/deliverable"},
+    {"path": "valid/terminal-event.json", "schema_pointer": "#/$defs/processEvent"}
+  ],
+  "invalid": [
+    {"path": "invalid/model-finalized.json", "schema_pointer": "#/$defs/deliverable", "expected": "empty typed items, blockers, and missing independent finalization decision"},
+    {"path": "invalid/indeterminate-without-uncertainty.json", "schema_pointer": "#/$defs/deliverable", "expected": "indeterminate material finding lacks an uncertainty code"}
+  ]
+}
