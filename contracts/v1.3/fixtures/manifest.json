@@ -1,0 +1,8 @@
+{
+  "schema_id": "urn:asd-kontur:contracts:v1.3:schema:support",
+  "valid": ["valid/support-terminal.json", "valid/support-generation.json"],
+  "invalid": [
+    {"path": "invalid/model-geometry.json", "reason": "model/VLM output cannot be a confirmed geometry reference"},
+    {"path": "invalid/payment-with-blocker.json", "reason": "payment_ready cannot contain blockers"}
+  ]
+}
