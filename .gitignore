@@ -33,6 +33,22 @@ uploads/
 tmp/
 logs/
 *.log
+staging/
+artifacts/
+outputs/
+
+# Local models and generated corpora
+models/
+*.gguf
+*.safetensors
+*.onnx
+*.ckpt
+
+# Credentials and local access metadata
+*.p12
+*.pfx
+*.mobileconfig
+.tailscale/
 
 # Office temporary files
 ~$*.docx
