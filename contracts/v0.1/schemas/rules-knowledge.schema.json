@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge",
+  "title": "ASD-KONTUR Deterministic Rules and Knowledge Gateway v0.1",
+  "$defs": {
+    "ruleTrace": {
+      "type": "object",
+      "required": ["trace_id", "rule_set_version", "rule_version", "policy_versions", "confirmed_input_refs", "evidence_refs", "applicability_basis", "calculation_steps", "missing_inputs", "uncertainty_refs", "conflict_policy_refs", "evaluator_binding", "deterministic_fingerprint"],
+      "properties": {
+        "trace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "rule_set_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "rule_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "policy_versions": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "confirmed_input_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "evidence_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "applicability_basis": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "normalized_units_or_crs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "calculation_steps": {"type": "array", "items": {"type": "object"}},
+        "missing_inputs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "uncertainty_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "conflict_policy_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "evaluator_binding": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "deterministic_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "ruleEvaluation": {
+      "type": "object",
+      "required": ["record_type", "evaluation_id", "workspace_id", "rule_set_version", "rule_version", "confirmed_input_refs", "source_version_refs", "applicable_edition_refs", "applicability", "outcome", "typed_output", "rule_trace", "evaluated_at", "deterministic_fingerprint"],
+      "properties": {
+        "record_type": {"const": "rule_evaluation"},
+        "evaluation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "rule_set_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "rule_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "confirmed_input_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "source_version_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "applicable_edition_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "applicability": {"enum": ["applicable", "not_applicable", "indeterminate"]},
+        "outcome": {"enum": ["pass", "fail", "blocked", "conflict", "not_evaluated"]},
+        "typed_output": {"type": "object"},
+        "rule_trace": {"$ref": "#/$defs/ruleTrace"},
+        "evaluated_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "deterministic_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"applicability": {"const": "indeterminate"}}},
+          "then": {
+            "properties": {
+              "outcome": {"enum": ["blocked", "conflict", "not_evaluated"]},
+              "rule_trace": {"properties": {"missing_inputs": {"minItems": 1}}}
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "ruleSetUpgrade": {
+      "type": "object",
+      "required": ["record_type", "upgrade_id", "workspace_id", "source_rule_set", "target_rule_set", "impact_preview_ref", "compatibility_result", "affected_evaluations", "authority_reference", "status", "digest"],
+      "properties": {
+        "record_type": {"const": "controlled_ruleset_upgrade"},
+        "upgrade_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_rule_set": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "target_rule_set": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "impact_preview_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "compatibility_result": {"enum": ["compatible", "incompatible", "indeterminate"]},
+        "affected_evaluations": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "status": {"enum": ["previewed", "approved", "adopted", "blocked", "failed"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "gatewayRequest": {
+      "type": "object",
+      "required": ["contract_name", "contract_version", "schema_id", "schema_version", "request_id", "workspace_id", "tool_name", "purpose", "authorization_decision_id", "parameters", "requested_at", "digest"],
+      "properties": {
+        "contract_name": {"const": "knowledge.gateway.request"},
+        "contract_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "schema_id": {"type": "string", "format": "uri"},
+        "schema_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "tool_name": {
+          "enum": ["knowledge.search", "knowledge.get_source_fragment", "knowledge.get_applicable_rules", "knowledge.trace_assertion", "knowledge.explain_conflict", "knowledge.get_required_documents"]
+        },
+        "purpose": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "authorization_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "rule_set_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "parameters": {"type": "object"},
+        "requested_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "gatewayResponse": {
+      "type": "object",
+      "required": ["contract_name", "contract_version", "schema_id", "schema_version", "response_id", "request_id", "workspace_id", "tool_name", "status", "results", "evidence_pack", "editions", "applicability", "gaps", "conflicts", "uncertainties", "responded_at", "digest"],
+      "properties": {
+        "contract_name": {"const": "knowledge.gateway.response"},
+        "contract_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "schema_id": {"type": "string", "format": "uri"},
+        "schema_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "response_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "tool_name": {
+          "enum": ["knowledge.search", "knowledge.get_source_fragment", "knowledge.get_applicable_rules", "knowledge.trace_assertion", "knowledge.explain_conflict", "knowledge.get_required_documents"]
+        },
+        "status": {"enum": ["completed", "partial", "blocked", "failed"]},
+        "results": {"type": "array", "items": {"type": "object"}},
+        "evidence_pack": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:source-evidence#/$defs/evidencePack"},
+        "editions": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "applicability": {"enum": ["applicable", "not_applicable", "indeterminate", "not_evaluated"]},
+        "gaps": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "conflicts": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "uncertainties": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "errors": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"}},
+        "responded_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/ruleTrace"},
+    {"$ref": "#/$defs/ruleEvaluation"},
+    {"$ref": "#/$defs/ruleSetUpgrade"},
+    {"$ref": "#/$defs/gatewayRequest"},
+    {"$ref": "#/$defs/gatewayResponse"}
+  ]
+}

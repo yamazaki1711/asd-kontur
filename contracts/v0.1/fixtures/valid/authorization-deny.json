@@ -1,0 +1,21 @@
+{
+  "record_type": "authorization_decision",
+  "authorization_decision_id": "authz.synthetic.external-deny.001",
+  "request_id": "authz-request.synthetic.external.001",
+  "decision": "deny",
+  "reason_codes": ["POLICY_PROVIDER_TERMS_UNSET", "POLICY_PROVIDER_ALLOWLIST_EMPTY"],
+  "considered_policy_versions": [
+    {"key": "policy.provider-allowlist", "version": "architecture-2026-08-22.1"},
+    {"key": "policy.provider-terms", "version": "production-blocked-2026-08-22.1"}
+  ],
+  "grant_ref": null,
+  "decided_by": {
+    "identity_id": "service.synthetic.policy-decision-point",
+    "identity_kind": "service",
+    "identity_version": "1"
+  },
+  "decided_at": "2026-08-22T00:00:00Z",
+  "valid_until": "2026-08-22T00:05:00Z",
+  "scope_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "digest": "sha256:1010101010101010101010101010101010101010101010101010101010101010"
+}

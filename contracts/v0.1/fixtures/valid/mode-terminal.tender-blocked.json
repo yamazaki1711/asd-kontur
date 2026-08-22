@@ -1,0 +1,22 @@
+{
+  "record_type": "mode_execution_terminal_result",
+  "terminal_result_id": "terminal.synthetic.tender.001",
+  "mode_execution_id": "mode.synthetic.tender.001",
+  "workspace_id": "ws.synthetic.a",
+  "mode": "Tender",
+  "rule_set_version": {"key": "ruleset.synthetic.core", "version": "0.1.0"},
+  "policy_versions": [{"key": "policy.synthetic.retention", "version": "0.1.0"}],
+  "input_manifest_ref": {"key": "input-manifest.synthetic.001", "version": "1"},
+  "deliverable_refs": [],
+  "validation_refs": [{"key": "mode-validation.synthetic.001", "version": "1"}],
+  "blocker_refs": [{"key": "blocker.policy.synthetic.001", "version": "1"}],
+  "uncertainty_refs": [],
+  "outcome": "blocked",
+  "authority_reference": {
+    "grant_id": "grant.synthetic.mode-terminal",
+    "capability": "mode.execution.complete",
+    "decision_id": "authorization.synthetic.003"
+  },
+  "completed_at": "2026-08-22T00:00:00Z",
+  "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+}

@@ -1,0 +1,32 @@
+{
+  "record_type": "destruction_attestation",
+  "attestation_id": "attestation.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "deletion_plan_ref": {"key": "deletion-plan.synthetic.001", "version": "1"},
+  "initial_lifecycle_state": "CLOSED",
+  "final_lifecycle_state": "RESET_VERIFIED",
+  "adapter_receipts": [
+    {"key": "receipt.synthetic.postgres.001", "version": "1"},
+    {"key": "receipt.synthetic.objects.001", "version": "1"}
+  ],
+  "residual_records": [],
+  "recovery_residues": [
+    {"key": "residue.synthetic.backup.001", "version": "1"}
+  ],
+  "legal_hold_active": false,
+  "cross_workspace_test_refs": [
+    {"key": "scope-test.synthetic.001", "version": "1"}
+  ],
+  "result": "verified",
+  "started_at": "2026-08-22T00:00:00Z",
+  "completed_at": "2026-08-22T00:01:00Z",
+  "verifier_authority": {
+    "grant_id": "grant.synthetic.destruction-verifier.001",
+    "capability": "attestation.confirm",
+    "decision_id": "authz.synthetic.attestation.001"
+  },
+  "integrity": {
+    "content_digest": "sha256:1212121212121212121212121212121212121212121212121212121212121212",
+    "signature_ref": "signature.synthetic.001"
+  }
+}

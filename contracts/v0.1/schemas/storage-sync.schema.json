@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:storage-sync",
+  "title": "ASD-KONTUR Storage Adapter and Synchronization v0.1",
+  "$defs": {
+    "objectReference": {
+      "type": "object",
+      "required": ["object_id", "object_version", "object_class", "scope_kind", "storage_tier", "content_digest", "size_bytes", "media_type", "access_capability_ref", "encryption_profile_ref"],
+      "properties": {
+        "object_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "object_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "object_class": {"enum": ["immutable_source", "workspace_artifact", "platform_artifact", "archive", "backup_recovery"]},
+        "scope_kind": {"enum": ["platform", "workspace"]},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "storage_tier": {"enum": ["mbp_local", "s3_platform", "s3_workspace", "s3_archive", "s3_recovery", "vps_staging"]},
+        "content_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"type": "string", "minLength": 1},
+        "access_capability_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "encryption_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "retention_class": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope_kind": {"const": "workspace"}}},
+          "then": {"required": ["workspace_id"]},
+          "else": {"not": {"required": ["workspace_id"]}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "adapterOperation": {
+      "type": "object",
+      "required": ["record_type", "operation_id", "adapter_id", "operation", "scope_kind", "object_reference", "authorization_decision_id", "idempotency_key", "requested_at", "input_digest"],
+      "properties": {
+        "record_type": {"const": "storage_adapter_operation"},
+        "operation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "adapter_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "operation": {"enum": ["put", "get", "head", "list", "delete", "verify"]},
+        "scope_kind": {"enum": ["platform", "workspace"]},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "object_reference": {"$ref": "#/$defs/objectReference"},
+        "authorization_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "requested_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "input_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "adapterReceipt": {
+      "type": "object",
+      "required": ["record_type", "receipt_id", "operation_id", "adapter_id", "workspace_id", "status", "object_ref", "observed_digest", "observed_size_bytes", "verified_at", "residue_records", "digest"],
+      "properties": {
+        "record_type": {"const": "storage_adapter_receipt"},
+        "receipt_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "operation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "adapter_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "status": {"enum": ["succeeded", "not_found", "failed", "unknown", "verification_failed"]},
+        "object_ref": {"$ref": "#/$defs/objectReference"},
+        "observed_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "observed_size_bytes": {"type": "integer", "minimum": 0},
+        "verified_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "residue_records": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "error": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "syncEnvelope": {
+      "type": "object",
+      "required": ["record_type", "sync_message_id", "organization_id", "workspace_id", "source_node_id", "destination_node_id", "authority_epoch", "base_workspace_version", "operation_type", "payload_ref", "idempotency_key", "correlation_id", "created_at", "expires_at", "digest"],
+      "properties": {
+        "record_type": {"const": "sync_envelope"},
+        "sync_message_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_node_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "destination_node_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "authority_epoch": {"type": "integer", "minimum": 1},
+        "base_workspace_version": {"type": "integer", "minimum": 0},
+        "operation_type": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "payload_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "correlation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "created_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "expires_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "syncAck": {
+      "type": "object",
+      "required": ["record_type", "ack_id", "sync_message_id", "workspace_id", "state", "observed_authority_epoch", "observed_workspace_version", "receipt_ref", "errors", "acknowledged_at", "digest"],
+      "properties": {
+        "record_type": {"const": "sync_ack"},
+        "ack_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "sync_message_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "state": {"enum": ["received", "staged", "accepted", "rejected", "conflict", "expired", "reconciliation_required"]},
+        "observed_authority_epoch": {"type": "integer", "minimum": 1},
+        "observed_workspace_version": {"type": "integer", "minimum": 0},
+        "receipt_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "errors": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"}},
+        "acknowledged_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "reconciliationRecord": {
+      "type": "object",
+      "required": ["record_type", "reconciliation_id", "workspace_id", "subject_refs", "observed_states", "decision", "authority_epoch", "resolved_at", "digest"],
+      "properties": {
+        "record_type": {"const": "reconciliation_record"},
+        "reconciliation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "subject_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "observed_states": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "decision": {"enum": ["accept_existing", "retry_same_effect", "compensate", "quarantine", "human_required"]},
+        "authority_epoch": {"type": "integer", "minimum": 1},
+        "resolved_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/objectReference"},
+    {"$ref": "#/$defs/adapterOperation"},
+    {"$ref": "#/$defs/adapterReceipt"},
+    {"$ref": "#/$defs/syncEnvelope"},
+    {"$ref": "#/$defs/syncAck"},
+    {"$ref": "#/$defs/reconciliationRecord"}
+  ]
+}

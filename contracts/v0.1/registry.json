@@ -1,0 +1,229 @@
+{
+  "registry_id": "urn:asd-kontur:contracts:v0.1:registry",
+  "registry_version": "0.1.0",
+  "status": "accepted_architecture_baseline",
+  "owner": "Oleg Shcherbakov",
+  "decision_date": "2026-08-22",
+  "effective_from": "2026-08-22T00:00:00Z",
+  "effective_until": null,
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "schema_namespace": "urn:asd-kontur:contracts:v0.1:schema:",
+  "normalization_rule": "Each key in a contract_group is an individual contract. Its complete passport is the merge of release_defaults, the referenced family_passport and the contract_group fields; absence of any required merged field invalidates the registry.",
+  "required_passport_fields": [
+    "contract_key",
+    "contract_family",
+    "contract_version",
+    "schema_id",
+    "schema_pointer",
+    "status",
+    "owner",
+    "scope",
+    "producer",
+    "consumers",
+    "compatibility_policy",
+    "effective_from",
+    "effective_until",
+    "supersedes",
+    "deprecation",
+    "retention_class",
+    "authority_requirements",
+    "tests",
+    "digest"
+  ],
+  "release_defaults": {
+    "contract_version": "0.1.0",
+    "status": "accepted",
+    "owner": "Oleg Shcherbakov",
+    "compatibility_policy": "semver_exact_for_persistence",
+    "effective_from": "2026-08-22T00:00:00Z",
+    "effective_until": null,
+    "supersedes": null,
+    "deprecation": null
+  },
+  "family_passports": {
+    "domain": {
+      "scope": ["platform", "organization", "workspace"],
+      "producer": ["authoritative_domain_core"],
+      "consumers": ["domain_services", "process_orchestrator", "qualified_human_interfaces"],
+      "retention_class": "scope_canonical_or_versioned",
+      "authority_requirements": ["scope_authorization", "domain_transition_authority"],
+      "tests": ["schema", "round_trip", "scope_isolation", "provenance", "state_transition"]
+    },
+    "integration": {
+      "scope": ["platform", "organization", "workspace"],
+      "producer": ["outbox_publisher", "coordination_adapters"],
+      "consumers": ["inbox_consumers", "status_projection", "reconciliation"],
+      "retention_class": "operational_message_ledger",
+      "authority_requirements": ["service_capability", "destination_policy"],
+      "tests": ["schema", "deduplication", "at_least_once", "ordering", "redaction"]
+    },
+    "tool": {
+      "scope": ["platform", "workspace"],
+      "producer": ["knowledge_tool_gateway"],
+      "consumers": ["authorized_local_or_external_execution"],
+      "retention_class": "request_response_by_scope_policy",
+      "authority_requirements": ["tool_capability", "purpose", "classification", "policy_decision"],
+      "tests": ["schema", "authorization", "provenance", "no_direct_storage_access"]
+    },
+    "provider": {
+      "scope": ["workspace"],
+      "producer": ["provider_adapter", "execution_orchestrator"],
+      "consumers": ["candidate_builder", "verification_harness", "cost_reconciliation"],
+      "retention_class": "workspace_vlm_execution",
+      "authority_requirements": ["active_egress_policy_when_external", "budget_reservation", "qualified_profile"],
+      "tests": ["schema", "default_deny", "budget", "fallback_reauthorization", "candidate_boundary"]
+    },
+    "storage": {
+      "scope": ["platform", "workspace"],
+      "producer": ["storage_adapter"],
+      "consumers": ["authorized_domain_services", "archive_and_recovery_services"],
+      "retention_class": "object_class_and_scope_policy",
+      "authority_requirements": ["scoped_object_capability", "storage_policy_decision"],
+      "tests": ["schema", "integrity", "workspace_isolation", "residue", "digest_not_capability"]
+    },
+    "process_lifecycle": {
+      "scope": ["workspace"],
+      "producer": ["process_orchestrator", "lifecycle_controller"],
+      "consumers": ["domain_core", "storage_adapters", "audit_writer"],
+      "retention_class": "workspace_lifecycle_and_minimal_attestation",
+      "authority_requirements": ["workspace_lifecycle_capability", "dual_authority_for_destruction"],
+      "tests": ["schema", "idempotency", "archive_import_new_workspace", "attestation", "residue"]
+    },
+    "authorization": {
+      "scope": ["platform", "organization", "workspace"],
+      "producer": ["policy_decision_point", "authority_registry", "audit_writer"],
+      "consumers": ["all_protected_operations"],
+      "retention_class": "content_minimal_audit_or_scope_policy",
+      "authority_requirements": ["active_grant_or_explicit_deny", "segregation_of_duties"],
+      "tests": ["schema", "fail_closed", "qualification", "content_minimality", "no_authority_delegation_to_model"]
+    },
+    "deliverable": {
+      "scope": ["workspace"],
+      "producer": ["mode_orchestrator", "generation_core", "geometry_core"],
+      "consumers": ["qualified_reviewers", "export_and_archive_services"],
+      "retention_class": "workspace_deliverable",
+      "authority_requirements": ["exact_evidence_binding", "validation", "professional_review_when_required"],
+      "tests": ["schema", "provenance", "finalization_gate", "four_mode_e2e", "product_readiness"]
+    }
+  },
+  "schemas": [
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:common", "path": "schemas/common.schema.json", "digest": "sha256:3fa97be7e48471e5da1b30fdb4df50cc549f457239267f6fd3bd69b52464717e"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:error", "path": "schemas/error.schema.json", "digest": "sha256:52525a0edbee2909ca32a0de948e297d0765cfff1e806f3aea581193112b92c0"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:message", "path": "schemas/message.schema.json", "digest": "sha256:3125699d93d9de504810b08e23bbabe8a711fbef1e1bef8dadbe7a1fedc7395b"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:source-evidence", "path": "schemas/source-evidence.schema.json", "digest": "sha256:a24830cbc469e9da213086380cb94518b053df1a25f12f4029680e8f9ddfbf4f"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:candidate-fact", "path": "schemas/candidate-fact.schema.json", "digest": "sha256:dab0978b7025168e02d2e6d454140029b41c6a023d8ef505485b9dc4871acc6c"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge", "path": "schemas/rules-knowledge.schema.json", "digest": "sha256:97b34d94eb187d6c87baeb30464180161643e192b40f18042f74a1fef279c798"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:vlm-execution", "path": "schemas/vlm-execution.schema.json", "digest": "sha256:e4e15429405c43469e9ec8172b882c4df1dcd834707e9dbe11d5bd3feef54b65"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:storage-sync", "path": "schemas/storage-sync.schema.json", "digest": "sha256:7c2933bc2ed3ae2931aaacdd4fe437c6c50762e60995bd13726ba8bb6cdd5a52"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:lifecycle", "path": "schemas/lifecycle.schema.json", "digest": "sha256:9a1c9b7be7222e00dbf074a68d2d251bb5eecb1ada21ba80f7589c463ca396e8"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:authorization-audit", "path": "schemas/authorization-audit.schema.json", "digest": "sha256:a7a9fcd076949d5b11338a8b4226b37973c5080f3f26549d396b228a0076c63f"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:generation", "path": "schemas/generation.schema.json", "digest": "sha256:9e5a399e9ba34179dd85f7454f540e3e9ea2c913c799c271e10b5ef8156af6ed"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:geometry", "path": "schemas/geometry.schema.json", "digest": "sha256:aa2ae281d53c4f5b4aeaf3ec7a67bd7bf72544138e5399c323469727cedbd1a5"},
+    {"schema_id": "urn:asd-kontur:contracts:v0.1:schema:mode-deliverable", "path": "schemas/mode-deliverable.schema.json", "digest": "sha256:ee8ac8472ee134072c9db19adde1c2ad535b968fcfeb4cbb6a1122a4376098bc"}
+  ],
+  "contract_groups": [
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:common",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["common.scope-reference", "common.identity", "common.authority-reference", "common.policy-reference", "common.ruleset-reference", "common.source-locator", "common.evidence-reference", "common.provenance"]
+    },
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:error",
+      "schema_pointer": "#",
+      "contract_keys": ["error.typed"]
+    },
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:message",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["command.envelope", "command.outcome"]
+    },
+    {
+      "contract_family": "integration",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:message",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["event.domain", "event.integration", "outbox.record", "inbox.receipt", "delivery.attempt", "delivery.quarantine", "delivery.reconciliation"]
+    },
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:source-evidence",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["source.admission", "source.artifact", "source.version", "source.locator", "source.physical-object", "source.acquisition", "source.extraction-attempt", "source.extraction-result", "evidence.link", "evidence.pack", "evidence.capsule", "evidence.assertion-trace", "source.archive-import-lineage"]
+    },
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:candidate-fact",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["candidate.version", "candidate.field", "candidate.validation-result", "candidate.validation-failure", "candidate.targeted-repair", "uncertainty.record", "conflict.record", "confirmation.decision", "workspace-fact.version"]
+    },
+    {
+      "contract_family": "domain",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["rules.applicable-request", "rules.applicable-response", "rule.evaluation", "rule.trace", "rule.conflict-explanation", "rule.required-documents", "ruleset.controlled-upgrade", "rule.workspace-version", "rule.human-fallback"]
+    },
+    {
+      "contract_family": "tool",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["knowledge.search", "knowledge.get-source-fragment", "knowledge.get-applicable-rules", "knowledge.trace-assertion", "knowledge.explain-conflict", "knowledge.get-required-documents"]
+    },
+    {
+      "contract_family": "provider",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:vlm-execution",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["vlm.capabilities", "vlm.health", "vlm.submit", "vlm.poll", "vlm.cancel", "vlm.provider-result", "vlm.routing-decision", "vlm.authorization", "vlm.budget-reservation", "vlm.execution-attempt", "vlm.validation", "vlm.targeted-repair", "vlm.fallback", "vlm.cost-reconciliation", "vlm.terminal-outcome", "vlm.candidate-construction"]
+    },
+    {
+      "contract_family": "storage",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:storage-sync",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["storage.scoped-object-reference", "storage.immutable-source", "storage.platform-object", "storage.workspace-object", "storage.archive-object", "storage.recovery-object", "storage.put", "storage.get", "storage.head", "storage.list", "storage.delete", "storage.integrity-receipt", "storage.residue", "storage.adapter-verification", "sync.envelope", "sync.ack", "sync.reconciliation"]
+    },
+    {
+      "contract_family": "process_lifecycle",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:lifecycle",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["lifecycle.freeze", "lifecycle.finalize", "lifecycle.export", "lifecycle.archive", "lifecycle.archive-verification", "lifecycle.archive-import", "lifecycle.deletion-plan", "lifecycle.dual-authorization", "lifecycle.purge", "lifecycle.adapter-receipt", "lifecycle.residue-verification", "lifecycle.reset", "lifecycle.destruction-attestation", "lifecycle.destroy"]
+    },
+    {
+      "contract_family": "authorization",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:authorization-audit",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["authorization.request", "authorization.envelope", "authorization.decision", "authorization.capability", "authorization.grant", "authorization.professional-qualification", "authorization.confirmation-policy", "authorization.segregation-of-duties", "authorization.egress", "authorization.destructive", "authorization.legal-hold", "audit.content-minimal-record"]
+    },
+    {
+      "contract_family": "deliverable",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:generation",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["template.source", "template.version", "template.qualification", "template.activation", "template.applicability", "template.binding-plan", "template.field-resolution", "template.evidence-binding", "generation.request", "generation.run", "generation.format-adapter", "generation.render-artifact", "generation.validation-report", "generation.print-validation", "generation.document-candidate", "generation.professional-review", "generation.finalized-document", "generation.export-package"]
+    },
+    {
+      "contract_family": "deliverable",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:geometry",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["geometry.source", "geometry.design", "geometry.confirmed-as-built", "geometry.crs-reference-frame", "geometry.unit-precision", "geometry.transformation", "geometry.deterministic-calculation", "geometry.tolerance-evaluation", "geometry.conflict", "geometry.executive-scheme-eligibility"]
+    },
+    {
+      "contract_family": "deliverable",
+      "schema_id": "urn:asd-kontur:contracts:v0.1:schema:mode-deliverable",
+      "schema_pointer": "#/$defs",
+      "contract_keys": ["mode.execution-request", "mode.input-manifest", "mode.pinned-policies-rules", "mode.progress", "mode.blocker-uncertainty", "mode.draft", "mode.validation", "mode.finalization", "mode.terminal-result", "deliverable.disagreement-protocol", "deliverable.revised-contract", "deliverable.pd-rd-analysis", "deliverable.missing-work-material-finding", "deliverable.constructive-clash", "deliverable.geometric-clash", "deliverable.executive-scheme", "deliverable.id-document", "deliverable.audit-finding", "deliverable.restoration-finding", "deliverable.export-manifest", "deliverable.archive-manifest", "product.readiness"]
+    }
+  ],
+  "compatibility": {
+    "versioning": "semantic_versioning",
+    "persisted_reference": "exact_contract_and_schema_version",
+    "additive_change": "new_optional_property_or_new_non-exhaustive-enum-contract-minor-only-after-consumer-proof",
+    "breaking_change": "new_major_contract_and_schema_identity",
+    "mutable_latest": "forbidden",
+    "unknown_fields": "rejected_at_authority_and_state-boundary",
+    "historical_schemas": "immutable",
+    "event_upcasting": "explicit_pure_adapter_to_pinned_target_without_event_sourcing_claim",
+    "canonicalization": "RFC8785_JCS_before_sha256",
+    "network_schema_fetch": "forbidden"
+  },
+  "fixture_manifest": "fixtures/manifest.json"
+}

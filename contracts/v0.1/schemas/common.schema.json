@@ -1,0 +1,303 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:common",
+  "title": "ASD-KONTUR Contract Common Definitions v0.1",
+  "$defs": {
+    "typedId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "semanticVersion": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scopeReference": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["scope_kind", "platform_scope"],
+          "properties": {
+            "scope_kind": {"const": "platform"},
+            "platform_scope": {"$ref": "#/$defs/typedId"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["scope_kind", "organization_id"],
+          "properties": {
+            "scope_kind": {"const": "organization"},
+            "organization_id": {"$ref": "#/$defs/typedId"}
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["scope_kind", "organization_id", "construction_object_id", "workspace_id"],
+          "properties": {
+            "scope_kind": {"const": "workspace"},
+            "organization_id": {"$ref": "#/$defs/typedId"},
+            "construction_object_id": {"$ref": "#/$defs/typedId"},
+            "workspace_id": {"$ref": "#/$defs/typedId"},
+            "mode_execution_id": {"$ref": "#/$defs/typedId"}
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "identity": {
+      "type": "object",
+      "required": ["identity_id", "identity_kind"],
+      "properties": {
+        "identity_id": {"$ref": "#/$defs/typedId"},
+        "identity_kind": {
+          "enum": ["human", "service", "integration", "model", "node", "device"]
+        },
+        "identity_version": {"$ref": "#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "authorityReference": {
+      "type": "object",
+      "required": ["grant_id", "capability", "decision_id"],
+      "properties": {
+        "grant_id": {"$ref": "#/$defs/typedId"},
+        "capability": {"$ref": "#/$defs/typedId"},
+        "decision_id": {"$ref": "#/$defs/typedId"},
+        "qualification_ref": {"$ref": "#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "versionReference": {
+      "type": "object",
+      "required": ["key", "version"],
+      "properties": {
+        "key": {"$ref": "#/$defs/typedId"},
+        "version": {"$ref": "#/$defs/typedId"},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "policyReference": {
+      "type": "object",
+      "required": ["key", "version", "status"],
+      "properties": {
+        "key": {"$ref": "#/$defs/typedId"},
+        "version": {"$ref": "#/$defs/typedId"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "status": {"enum": ["draft", "proposed", "approved", "active", "suspended", "superseded", "retired", "unset", "blocked"]}
+      },
+      "additionalProperties": false
+    },
+    "ruleSetReference": {
+      "type": "object",
+      "required": ["key", "version", "manifest_digest"],
+      "properties": {
+        "key": {"$ref": "#/$defs/typedId"},
+        "version": {"$ref": "#/$defs/typedId"},
+        "digest": {"$ref": "#/$defs/digest"},
+        "manifest_digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "evidenceReference": {
+      "type": "object",
+      "required": ["evidence_id", "evidence_version", "scope_kind"],
+      "properties": {
+        "evidence_id": {"$ref": "#/$defs/typedId"},
+        "evidence_version": {"$ref": "#/$defs/typedId"},
+        "scope_kind": {"enum": ["platform", "workspace"]},
+        "workspace_id": {"$ref": "#/$defs/typedId"},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope_kind": {"const": "workspace"}}},
+          "then": {"required": ["workspace_id"]},
+          "else": {"not": {"required": ["workspace_id"]}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "sourceLocator": {
+      "type": "object",
+      "required": ["source_version_id", "locator_kind", "locator_value"],
+      "properties": {
+        "source_version_id": {"$ref": "#/$defs/typedId"},
+        "locator_kind": {
+          "enum": ["page", "page_region", "structural_unit", "cell", "range", "entity", "byte_range"]
+        },
+        "locator_value": {"type": "object", "minProperties": 1},
+        "fragment_digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "uncertaintyReference": {
+      "type": "object",
+      "required": ["uncertainty_id", "uncertainty_version", "workspace_id"],
+      "properties": {
+        "uncertainty_id": {"$ref": "#/$defs/typedId"},
+        "uncertainty_version": {"$ref": "#/$defs/typedId"},
+        "workspace_id": {"$ref": "#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "conflictReference": {
+      "type": "object",
+      "required": ["conflict_id", "conflict_version", "workspace_id"],
+      "properties": {
+        "conflict_id": {"$ref": "#/$defs/typedId"},
+        "conflict_version": {"$ref": "#/$defs/typedId"},
+        "workspace_id": {"$ref": "#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "pagination": {
+      "type": "object",
+      "required": ["page_size"],
+      "properties": {
+        "page_size": {"type": "integer", "minimum": 1},
+        "cursor": {"type": ["string", "null"]},
+        "next_cursor": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "required": ["created_by", "created_at", "contract_refs"],
+      "properties": {
+        "created_by": {"$ref": "#/$defs/identity"},
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "contract_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/versionReference"}
+        },
+        "source_locators": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sourceLocator"}
+        },
+        "parent_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/versionReference"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "messageEnvelope": {
+      "type": "object",
+      "required": [
+        "contract_name",
+        "contract_version",
+        "schema_id",
+        "schema_version",
+        "message_id",
+        "scope_kind",
+        "purpose",
+        "classification",
+        "correlation_id",
+        "policy_versions",
+        "retention_class",
+        "provenance",
+        "digest"
+      ],
+      "properties": {
+        "contract_name": {"$ref": "#/$defs/typedId"},
+        "contract_version": {"$ref": "#/$defs/semanticVersion"},
+        "schema_id": {"type": "string", "format": "uri"},
+        "schema_version": {"$ref": "#/$defs/semanticVersion"},
+        "message_id": {"$ref": "#/$defs/typedId"},
+        "scope_kind": {"enum": ["platform", "organization", "workspace"]},
+        "platform_scope": {"$ref": "#/$defs/typedId"},
+        "organization_id": {"$ref": "#/$defs/typedId"},
+        "construction_object_id": {"$ref": "#/$defs/typedId"},
+        "workspace_id": {"$ref": "#/$defs/typedId"},
+        "mode_execution_id": {"$ref": "#/$defs/typedId"},
+        "aggregate_id": {"$ref": "#/$defs/typedId"},
+        "aggregate_version": {"type": "integer", "minimum": 0},
+        "expected_version": {"type": "integer", "minimum": 0},
+        "actor_identity": {"$ref": "#/$defs/identity"},
+        "service_identity": {"$ref": "#/$defs/identity"},
+        "authority_reference": {"$ref": "#/$defs/authorityReference"},
+        "purpose": {"$ref": "#/$defs/typedId"},
+        "classification": {"$ref": "#/$defs/typedId"},
+        "idempotency_key": {"type": "string", "minLength": 1, "maxLength": 256},
+        "correlation_id": {"$ref": "#/$defs/typedId"},
+        "causation_id": {
+          "oneOf": [{"$ref": "#/$defs/typedId"}, {"type": "null"}]
+        },
+        "occurred_at": {"$ref": "#/$defs/timestamp"},
+        "requested_at": {"$ref": "#/$defs/timestamp"},
+        "policy_versions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/versionReference"}
+        },
+        "rule_set_version": {"$ref": "#/$defs/versionReference"},
+        "payload": {"type": "object"},
+        "evidence_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/evidenceReference"}
+        },
+        "uncertainty_refs": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/typedId"}
+        },
+        "requested_side_effects": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/typedId"}
+        },
+        "retention_class": {"$ref": "#/$defs/typedId"},
+        "provenance": {"$ref": "#/$defs/provenance"},
+        "digest": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"scope_kind": {"const": "platform"}}},
+          "then": {
+            "required": ["platform_scope"],
+            "not": {
+              "anyOf": [
+                {"required": ["organization_id"]},
+                {"required": ["construction_object_id"]},
+                {"required": ["workspace_id"]},
+                {"required": ["mode_execution_id"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {"properties": {"scope_kind": {"const": "organization"}}},
+          "then": {
+            "required": ["organization_id"],
+            "not": {
+              "anyOf": [
+                {"required": ["platform_scope"]},
+                {"required": ["construction_object_id"]},
+                {"required": ["workspace_id"]},
+                {"required": ["mode_execution_id"]}
+              ]
+            }
+          }
+        },
+        {
+          "if": {"properties": {"scope_kind": {"const": "workspace"}}},
+          "then": {
+            "required": ["organization_id", "construction_object_id", "workspace_id"],
+            "not": {"required": ["platform_scope"]}
+          }
+        }
+      ]
+    }
+  }
+}

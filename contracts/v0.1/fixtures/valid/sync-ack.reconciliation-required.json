@@ -1,0 +1,37 @@
+{
+  "record_type": "sync_ack",
+  "ack_id": "ack.synthetic.001",
+  "sync_message_id": "sync.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "state": "reconciliation_required",
+  "observed_authority_epoch": 1,
+  "observed_workspace_version": 2,
+  "receipt_ref": {"key": "receipt.synthetic.001", "version": "1"},
+  "errors": [
+    {
+      "code": "RECONCILIATION_REQUIRED",
+      "category": "reconciliation",
+      "severity": "error",
+      "retryability": "reconcile_first",
+      "scope": {
+      "scope_kind": "workspace",
+      "organization_id": "org.synthetic.001",
+      "construction_object_id": "oks.synthetic.001",
+      "workspace_id": "ws.synthetic.a"
+      },
+      "source_component": "sync.consumer",
+      "operation": "sync.accept",
+      "evidence_refs": [],
+      "safe_human_message_key": "sync.reconciliation-required",
+      "diagnostic_reference": "diagnostic.synthetic.001",
+      "remediation_contract": {
+        "action": "reconcile.sync-envelope",
+        "requires_new_command": true,
+        "required_inputs": ["current.workspace-version"]
+      },
+      "terminal": false
+    }
+  ],
+  "acknowledged_at": "2026-08-22T00:00:00Z",
+  "digest": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+}

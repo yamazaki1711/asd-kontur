@@ -1,0 +1,30 @@
+{
+  "record_type": "rule_evaluation",
+  "evaluation_id": "evaluation.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "rule_set_version": {"key": "ruleset.synthetic.core", "version": "0.1.0"},
+  "rule_version": {"key": "rule.required-document.synthetic", "version": "0.1.0"},
+  "confirmed_input_refs": [{"key": "fact.synthetic.work-type.001", "version": "1"}],
+  "source_version_refs": [{"key": "source-version.synthetic.001", "version": "1"}],
+  "applicable_edition_refs": [],
+  "applicability": "indeterminate",
+  "outcome": "blocked",
+  "typed_output": {"required_documents": []},
+  "rule_trace": {
+    "trace_id": "rule-trace.synthetic.001",
+    "rule_set_version": {"key": "ruleset.synthetic.core", "version": "0.1.0"},
+    "rule_version": {"key": "rule.required-document.synthetic", "version": "0.1.0"},
+    "policy_versions": [{"key": "policy.conflict", "version": "blocked-0.1.0"}],
+    "confirmed_input_refs": [{"key": "fact.synthetic.work-type.001", "version": "1"}],
+    "evidence_refs": [],
+    "applicability_basis": [],
+    "calculation_steps": [],
+    "missing_inputs": ["normative-edition.applicability"],
+    "uncertainty_refs": ["uncertainty.synthetic.001"],
+    "conflict_policy_refs": [],
+    "evaluator_binding": {"key": "evaluator.synthetic", "version": "0.1.0"},
+    "deterministic_fingerprint": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+  },
+  "evaluated_at": "2026-08-22T00:00:00Z",
+  "deterministic_fingerprint": "sha256:8888888888888888888888888888888888888888888888888888888888888888"
+}

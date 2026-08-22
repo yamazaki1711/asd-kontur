@@ -1,0 +1,8 @@
+{
+  "test_vector": "mutable_latest_is_not_storable_version",
+  "contract_reference": {
+    "key": "command.envelope",
+    "version": "latest"
+  },
+  "expected_error_code": "CONTRACT_INCOMPATIBLE_VERSION"
+}

@@ -1,0 +1,58 @@
+{
+  "record_type": "candidate_version",
+  "candidate_id": "candidate.synthetic.001",
+  "candidate_version": 2,
+  "workspace_id": "ws.synthetic.a",
+  "parent_candidate_version": 1,
+  "purpose": "extract.synthetic.material",
+  "origin": "vlm",
+  "attempt_ref": {"key": "execution-attempt.synthetic.001", "version": "1"},
+  "fields": [
+    {
+      "field_key": "material.name",
+      "value_type": "text",
+      "value": "Обезличенный материал",
+      "unit": null,
+      "model_self_confidence": 0.91,
+      "evidence_refs": [
+        {
+          "evidence_id": "evidence.synthetic.001",
+          "evidence_version": "1",
+          "scope_kind": "workspace",
+          "workspace_id": "ws.synthetic.a"
+        }
+      ],
+      "source_locators": [
+        {
+          "source_version_id": "source-version.synthetic.001",
+          "locator_kind": "page",
+          "locator_value": {"page": 1}
+        }
+      ],
+      "validation_state": "valid",
+      "uncertainty_refs": []
+    }
+  ],
+  "status": "validated_candidate",
+  "validation_result_refs": [
+    {"key": "validation-result.synthetic.001", "version": "1"}
+  ],
+  "provenance": {
+    "created_by": {"identity_id": "service.candidate-builder", "identity_kind": "service"},
+    "created_at": "2026-08-22T00:00:00Z",
+    "contract_refs": [
+      {"key": "candidate.version", "version": "0.1.0"}
+    ],
+    "source_locators": [
+      {
+        "source_version_id": "source-version.synthetic.001",
+        "locator_kind": "page",
+        "locator_value": {"page": 1}
+      }
+    ],
+    "parent_refs": [
+      {"key": "provider-execution-result.synthetic.001", "version": "1"}
+    ]
+  },
+  "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+}

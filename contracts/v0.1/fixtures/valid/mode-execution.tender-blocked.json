@@ -1,0 +1,24 @@
+{
+  "record_type": "mode_execution",
+  "mode_execution_id": "mode.synthetic.tender.001",
+  "workspace_id": "ws.synthetic.a",
+  "mode": "Tender",
+  "input_manifest_ref": {"key": "input-manifest.synthetic.001", "version": "1"},
+  "required_source_classes": ["contract", "project_documentation", "working_documentation", "normative_document"],
+  "policy_versions": [
+    {"key": "policy.retention-profile", "version": "production-blocked-2026-08-22.1"}
+  ],
+  "rule_set_version": {"key": "ruleset.synthetic.tender", "version": "0.1.0"},
+  "status": "blocked",
+  "progress": {
+    "completed_units": 0,
+    "total_units_known": false,
+    "total_units": null
+  },
+  "blocker_refs": [{"key": "blocker.synthetic.retention.001", "version": "1"}],
+  "uncertainty_refs": [],
+  "draft_deliverable_refs": [],
+  "validation_refs": [],
+  "terminal_outcome": "blocked",
+  "digest": "sha256:1717171717171717171717171717171717171717171717171717171717171717"
+}

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:message",
+  "title": "ASD-KONTUR Commands, Outcomes and Events v0.1",
+  "$defs": {
+    "command": {
+      "allOf": [
+        {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/messageEnvelope"},
+        {
+          "type": "object",
+          "required": ["requested_at", "idempotency_key", "payload", "requested_side_effects"],
+          "properties": {
+            "contract_name": {"const": "command.envelope"}
+          },
+          "anyOf": [
+            {"required": ["actor_identity"]},
+            {"required": ["service_identity"]}
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "commandOutcome": {
+      "type": "object",
+      "required": ["contract_name", "contract_version", "schema_id", "schema_version", "outcome_id", "command_id", "status", "recorded_at", "errors", "side_effects", "digest"],
+      "properties": {
+        "contract_name": {"const": "command.outcome"},
+        "contract_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "schema_id": {"type": "string", "format": "uri"},
+        "schema_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "outcome_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "command_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "status": {"enum": ["accepted_completed", "duplicate_completed", "rejected", "accepted_failed", "accepted_pending"]},
+        "recorded_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "aggregate_version": {"type": "integer", "minimum": 0},
+        "domain_result_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "errors": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"}},
+        "side_effects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["effect_id", "state", "input_digest"],
+            "properties": {
+              "effect_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+              "state": {"enum": ["planned", "running", "succeeded", "failed", "unknown"]},
+              "input_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+              "result_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "original_outcome_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "duplicate_completed"}}},
+          "then": {"required": ["original_outcome_ref"]}
+        },
+        {
+          "if": {"properties": {"status": {"enum": ["rejected", "accepted_failed"]}}},
+          "then": {"properties": {"errors": {"minItems": 1}}}
+        }
+      ],
+      "additionalProperties": false
+    },
+    "event": {
+      "allOf": [
+        {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/messageEnvelope"},
+        {
+          "type": "object",
+          "required": ["occurred_at", "aggregate_id", "aggregate_version", "causation_id", "payload"],
+          "properties": {
+            "contract_name": {"enum": ["domain.event", "integration.event"]},
+            "destination": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+            "source_event_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+            "redaction_profile_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"contract_name": {"const": "integration.event"}}},
+              "then": {"required": ["destination", "source_event_id", "redaction_profile_version"]},
+              "else": {
+                "not": {
+                  "anyOf": [
+                    {"required": ["destination"]},
+                    {"required": ["source_event_id"]},
+                    {"required": ["redaction_profile_version"]}
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "deliveryRecord": {
+      "type": "object",
+      "required": ["delivery_id", "message_id", "consumer_id", "attempt", "state", "received_at", "checkpoint", "digest"],
+      "properties": {
+        "delivery_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "message_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "consumer_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "attempt": {"type": "integer", "minimum": 1},
+        "state": {"enum": ["pending", "delivered", "acknowledged", "retry_scheduled", "dead_lettered", "quarantined", "reconciliation_required"]},
+        "received_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "next_attempt_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "checkpoint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "error": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/command"},
+    {"$ref": "#/$defs/commandOutcome"},
+    {"$ref": "#/$defs/event"},
+    {"$ref": "#/$defs/deliveryRecord"}
+  ]
+}

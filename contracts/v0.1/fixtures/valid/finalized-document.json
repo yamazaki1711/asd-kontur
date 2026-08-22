@@ -1,0 +1,18 @@
+{
+  "record_type": "finalized_document",
+  "finalized_document_id": "finalized-document.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "candidate_ref": {"key": "generated-document-candidate.synthetic.001", "version": "1"},
+  "candidate_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "print_validation_ref": {"key": "print-validation.synthetic.001", "version": "1"},
+  "professional_review_decision_ref": {"key": "professional-review.synthetic.001", "version": "1"},
+  "authority_reference": {
+    "grant_id": "grant.synthetic.finalize-document",
+    "capability": "document.finalize",
+    "decision_id": "authorization.synthetic.002",
+    "qualification_ref": "qualification.synthetic.002"
+  },
+  "export_eligible": true,
+  "finalized_at": "2026-08-22T00:00:00Z",
+  "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:geometry",
+  "title": "ASD-KONTUR Geometry and Executive Scheme Eligibility v0.1",
+  "$defs": {
+    "geometryContext": {
+      "type": "object",
+      "required": ["crs_ref", "reference_frame_ref", "unit_profile_ref", "precision_profile_ref"],
+      "properties": {
+        "crs_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "reference_frame_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "unit_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "precision_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}
+      },
+      "additionalProperties": false
+    },
+    "geometryVersion": {
+      "type": "object",
+      "required": ["record_type", "geometry_id", "geometry_version", "workspace_id", "geometry_kind", "geometry_context", "source_version_refs", "evidence_refs", "confirmation_decision_refs", "representation_ref", "status", "digest"],
+      "properties": {
+        "record_type": {"const": "geometry_version"},
+        "geometry_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "geometry_version": {"type": "integer", "minimum": 1},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "geometry_kind": {"enum": ["design_geometry", "as_built_observation", "derived_geometry"]},
+        "geometry_context": {"$ref": "#/$defs/geometryContext"},
+        "source_version_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "confirmation_decision_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "representation_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "status": {"enum": ["candidate", "confirmed", "superseded", "rejected"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "transformationCalculation": {
+      "type": "object",
+      "required": ["record_type", "calculation_id", "workspace_id", "input_geometry_refs", "source_context", "target_context", "transformation_profile_ref", "calculation_rule_version", "steps", "result_geometry_ref", "deterministic_fingerprint", "digest"],
+      "properties": {
+        "record_type": {"const": "geometry_transformation_calculation"},
+        "calculation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "input_geometry_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "source_context": {"$ref": "#/$defs/geometryContext"},
+        "target_context": {"$ref": "#/$defs/geometryContext"},
+        "transformation_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "calculation_rule_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "steps": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "result_geometry_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "deterministic_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "toleranceEvaluation": {
+      "type": "object",
+      "required": ["record_type", "evaluation_id", "workspace_id", "design_geometry_ref", "as_built_geometry_ref", "tolerance_profile_ref", "rule_version_ref", "measured_deviations", "boundary_results", "outcome", "conflict_refs", "rule_trace_ref", "digest"],
+      "properties": {
+        "record_type": {"const": "tolerance_evaluation"},
+        "evaluation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "design_geometry_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "as_built_geometry_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "tolerance_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "rule_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "measured_deviations": {"type": "array", "items": {"type": "object"}},
+        "boundary_results": {"type": "array", "items": {"type": "object"}},
+        "outcome": {"enum": ["within_tolerance", "outside_tolerance", "blocked", "conflict", "indeterminate"]},
+        "conflict_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "rule_trace_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "schemeEligibility": {
+      "type": "object",
+      "required": ["record_type", "eligibility_id", "workspace_id", "design_geometry_refs", "confirmed_as_built_geometry_refs", "geometry_context", "transformation_refs", "tolerance_evaluation_refs", "evidence_refs", "conflict_refs", "result", "authority_reference", "digest"],
+      "properties": {
+        "record_type": {"const": "executive_scheme_eligibility"},
+        "eligibility_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "design_geometry_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "confirmed_as_built_geometry_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "geometry_context": {"$ref": "#/$defs/geometryContext"},
+        "transformation_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "tolerance_evaluation_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "conflict_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "result": {"enum": ["eligible", "blocked", "conflict", "indeterminate"]},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/geometryVersion"},
+    {"$ref": "#/$defs/transformationCalculation"},
+    {"$ref": "#/$defs/toleranceEvaluation"},
+    {"$ref": "#/$defs/schemeEligibility"}
+  ]
+}

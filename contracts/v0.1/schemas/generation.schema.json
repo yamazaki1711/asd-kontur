@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:generation",
+  "title": "ASD-KONTUR ID Generation and Template Platform v0.1",
+  "$defs": {
+    "templateSource": {
+      "type": "object",
+      "required": ["record_type", "template_source_id", "source_object_ref", "source_digest", "format", "acquisition_evidence_refs", "authority_status", "digest"],
+      "properties": {
+        "record_type": {"const": "template_source"},
+        "template_source_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_object_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "source_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "format": {"enum": ["DOCX", "XLSX", "PDF_FILLABLE", "PDF_OVERLAY", "DXF", "SVG", "PDF_SCHEME"]},
+        "acquisition_evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "authority_status": {"enum": ["unverified", "verified", "rejected"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "templateVersion": {
+      "type": "object",
+      "required": ["record_type", "template_id", "template_version", "template_source_ref", "lineage_kind", "format", "field_schema_ref", "binding_rule_refs", "renderer_profile_ref", "validation_profile_ref", "state", "digest"],
+      "properties": {
+        "record_type": {"const": "template_version"},
+        "template_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "template_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/semanticVersion"},
+        "template_source_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "parent_template_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "lineage_kind": {"enum": ["source_original", "parameterized_derivative", "sanitized_promotion_derivative"]},
+        "format": {"enum": ["DOCX", "XLSX", "PDF_FILLABLE", "PDF_OVERLAY", "DXF", "SVG", "PDF_SCHEME"]},
+        "field_schema_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "binding_rule_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "renderer_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "validation_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "state": {"enum": ["discovered", "quarantined", "candidate", "qualified", "active", "superseded", "withdrawn", "rejected"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "templateActivationDecision": {
+      "type": "object",
+      "required": ["record_type", "decision_id", "template_version_ref", "qualification_ref", "decision", "authority_reference", "effective_interval_ref", "decided_at", "digest"],
+      "properties": {
+        "record_type": {"const": "template_activation_decision"},
+        "decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "template_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "qualification_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "decision": {"enum": ["activate", "reject", "withdraw", "supersede"]},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "effective_interval_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "decided_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "templateIntakeQualification": {
+      "type": "object",
+      "required": ["record_type", "template_source_ref", "template_version_ref", "format", "source_lineage", "authority_evidence_refs", "qualification_profile_ref", "status", "activation_decision_ref", "digest"],
+      "properties": {
+        "record_type": {"const": "template_qualification"},
+        "template_source_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "template_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "format": {"enum": ["DOCX", "XLSX", "PDF_FILLABLE", "PDF_OVERLAY", "DXF", "SVG", "PDF_SCHEME"]},
+        "source_lineage": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "authority_evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "qualification_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "status": {"enum": ["discovered", "quarantined", "candidate", "qualified", "active", "superseded", "withdrawn", "rejected"]},
+        "activation_decision_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "fieldResolution": {
+      "type": "object",
+      "required": ["field_key", "state", "value_type", "normalized_value", "display_value", "evidence_bindings", "transformation_trace"],
+      "properties": {
+        "field_key": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "state": {"enum": ["confirmed", "candidate", "conflict", "missing", "not_applicable", "redacted_for_view"]},
+        "value_type": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "normalized_value": {},
+        "display_value": {},
+        "unit": {"type": ["string", "null"]},
+        "fact_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "evidence_bindings": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "conflict_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "applicability_decision_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "transformation_trace": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}}
+      },
+      "additionalProperties": false
+    },
+    "evidenceBinding": {
+      "type": "object",
+      "required": ["record_type", "binding_id", "workspace_id", "field_key", "fact_version_ref", "evidence_refs", "source_locators", "confirmation_decision_ref", "resolver_rule_ref", "digest"],
+      "properties": {
+        "record_type": {"const": "evidence_binding"},
+        "binding_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "field_key": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "fact_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "source_locators": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/sourceLocator"}},
+        "confirmation_decision_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "resolver_rule_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "generationRequest": {
+      "type": "object",
+      "required": ["record_type", "generation_request_id", "workspace_id", "mode_execution_id", "required_document_type_ref", "purpose", "requested_format", "rule_set_version", "policy_versions", "authority_reference", "idempotency_key", "requested_at", "digest"],
+      "properties": {
+        "record_type": {"const": "generation_request"},
+        "generation_request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "mode_execution_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "required_document_type_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "purpose": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "requested_format": {"enum": ["DOCX", "XLSX", "PDF_FILLABLE", "PDF_OVERLAY", "DXF", "SVG", "PDF_SCHEME"]},
+        "rule_set_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "policy_versions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "requested_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "bindingPlan": {
+      "type": "object",
+      "required": ["record_type", "binding_plan_id", "binding_plan_version", "template_version_ref", "field_schema_ref", "binding_rule_refs", "target_mappings", "applicability_decision_ref", "digest"],
+      "properties": {
+        "record_type": {"const": "binding_plan"},
+        "binding_plan_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "binding_plan_version": {"type": "integer", "minimum": 1},
+        "template_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "field_schema_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "binding_rule_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "target_mappings": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "applicability_decision_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "generationRun": {
+      "type": "object",
+      "required": ["record_type", "generation_request_id", "generation_run_id", "workspace_id", "mode_execution_id", "required_document_type_ref", "template_version_ref", "field_schema_ref", "binding_plan_ref", "renderer_profile_ref", "validation_profile_ref", "rule_set_version", "policy_versions", "input_fingerprint", "fresh_document_instance", "field_resolutions", "format_adapter", "status", "digest"],
+      "properties": {
+        "record_type": {"const": "generation_run"},
+        "generation_request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "generation_run_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "mode_execution_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "required_document_type_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "template_version_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "field_schema_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "binding_plan_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "renderer_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "validation_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "rule_set_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "policy_versions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "input_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "fresh_document_instance": {"const": true},
+        "field_resolutions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fieldResolution"}},
+        "format_adapter": {
+          "type": "object",
+          "required": ["format", "adapter_ref", "source_immutable"],
+          "properties": {
+            "format": {"enum": ["DOCX", "XLSX", "PDF_FILLABLE", "PDF_OVERLAY", "DXF", "SVG", "PDF_SCHEME"]},
+            "adapter_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+            "source_immutable": {"const": true}
+          },
+          "additionalProperties": false
+        },
+        "status": {"enum": ["planned", "resolving", "rendering", "validating", "blocked", "failed", "candidate_created"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "generatedCandidate": {
+      "type": "object",
+      "required": ["record_type", "generated_candidate_id", "workspace_id", "generation_run_ref", "document_object_ref", "document_digest", "render_artifact_refs", "validation_report_ref", "print_validation_result_ref", "status", "digest"],
+      "properties": {
+        "record_type": {"const": "generated_document_candidate"},
+        "generated_candidate_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "generation_run_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "document_object_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "document_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "render_artifact_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "validation_report_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "print_validation_result_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "status": {"const": "non_final_candidate"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "renderArtifact": {
+      "type": "object",
+      "required": ["record_type", "render_artifact_id", "workspace_id", "generation_run_ref", "source_object_ref", "format", "renderer_profile_ref", "toolchain_profile_ref", "page_or_sheet_manifest", "content_digest", "status"],
+      "properties": {
+        "record_type": {"const": "render_artifact"},
+        "render_artifact_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "generation_run_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "source_object_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "format": {"enum": ["DOCX", "XLSX", "PDF", "DXF", "SVG", "PAGE_IMAGE"]},
+        "renderer_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "toolchain_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "page_or_sheet_manifest": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "content_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "status": {"enum": ["created", "verified", "failed", "quarantined"]}
+      },
+      "additionalProperties": false
+    },
+    "validationReport": {
+      "type": "object",
+      "required": ["record_type", "validation_report_id", "workspace_id", "candidate_ref", "validation_profile_ref", "layers", "blockers", "outcome", "validated_at", "digest"],
+      "properties": {
+        "record_type": {"const": "generation_validation_report"},
+        "validation_report_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "candidate_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "validation_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "layers": {"type": "array", "minItems": 1, "items": {"enum": ["source_authority", "structural", "binding", "evidence", "content", "cross_document", "geometry", "layout_print", "security_privacy", "finalization"]}},
+        "blockers": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"}},
+        "outcome": {"enum": ["passed", "failed", "blocked", "indeterminate"]},
+        "validated_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "printValidation": {
+      "type": "object",
+      "required": ["record_type", "print_validation_result_id", "workspace_id", "candidate_ref", "canonical_render_refs", "renderer_profile_ref", "validation_profile_ref", "checks", "blockers", "result", "validated_at", "digest"],
+      "properties": {
+        "record_type": {"const": "print_validation_result"},
+        "print_validation_result_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "candidate_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "canonical_render_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "renderer_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "validation_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "checks": {"type": "array", "minItems": 1, "items": {"type": "object"}},
+        "blockers": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:error"}},
+        "result": {"enum": ["print_ready", "failed", "blocked", "indeterminate"]},
+        "validated_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "finalizedDocument": {
+      "type": "object",
+      "required": ["record_type", "finalized_document_id", "workspace_id", "candidate_ref", "candidate_digest", "print_validation_ref", "professional_review_decision_ref", "authority_reference", "export_eligible", "finalized_at", "digest"],
+      "properties": {
+        "record_type": {"const": "finalized_document"},
+        "finalized_document_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "candidate_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "candidate_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "print_validation_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "professional_review_decision_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "export_eligible": {"const": true},
+        "finalized_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "professionalReviewDecision": {
+      "type": "object",
+      "required": ["record_type", "review_decision_id", "workspace_id", "candidate_ref", "candidate_digest", "validation_result_refs", "decision", "reviewer_identity", "authority_reference", "decided_at", "digest"],
+      "properties": {
+        "record_type": {"const": "professional_review_decision"},
+        "review_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "candidate_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "candidate_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "validation_result_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "decision": {"enum": ["approved", "rejected", "changes_required", "blocked"]},
+        "reviewer_identity": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/identity"},
+        "authority_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "decided_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "exportPackage": {
+      "type": "object",
+      "required": ["record_type", "export_package_id", "workspace_id", "finalized_document_refs", "manifest_ref", "object_refs", "validation_refs", "authorization_reference", "integrity", "status"],
+      "properties": {
+        "record_type": {"const": "generation_export_package"},
+        "export_package_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "finalized_document_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "manifest_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "object_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "validation_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "authorization_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "integrity": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "status": {"enum": ["planned", "created", "verified", "failed"]}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/templateSource"},
+    {"$ref": "#/$defs/templateVersion"},
+    {"$ref": "#/$defs/templateActivationDecision"},
+    {"$ref": "#/$defs/templateIntakeQualification"},
+    {"$ref": "#/$defs/evidenceBinding"},
+    {"$ref": "#/$defs/generationRequest"},
+    {"$ref": "#/$defs/bindingPlan"},
+    {"$ref": "#/$defs/generationRun"},
+    {"$ref": "#/$defs/generatedCandidate"},
+    {"$ref": "#/$defs/renderArtifact"},
+    {"$ref": "#/$defs/validationReport"},
+    {"$ref": "#/$defs/printValidation"},
+    {"$ref": "#/$defs/professionalReviewDecision"},
+    {"$ref": "#/$defs/finalizedDocument"},
+    {"$ref": "#/$defs/exportPackage"}
+  ]
+}

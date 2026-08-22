@@ -1,0 +1,58 @@
+{
+  "contract_name": "domain.event",
+  "contract_version": "0.1.0",
+  "schema_id": "urn:asd-kontur:contracts:v0.1:schema:message",
+  "schema_version": "0.1.0",
+  "message_id": "event.synthetic.fact-confirmed.001",
+  "scope_kind": "workspace",
+  "organization_id": "org.synthetic.001",
+  "construction_object_id": "oks.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "mode_execution_id": "mode.synthetic.support.001",
+  "aggregate_id": "fact.synthetic.001",
+  "aggregate_version": 1,
+  "actor_identity": {
+    "identity_id": "human.synthetic.engineer.001",
+    "identity_kind": "human",
+    "identity_version": "1"
+  },
+  "authority_reference": {
+    "grant_id": "grant.synthetic.fact-confirm.001",
+    "capability": "fact.confirm",
+    "decision_id": "authz.synthetic.fact-confirm.001"
+  },
+  "purpose": "fact.confirmation",
+  "classification": "workspace_restricted",
+  "correlation_id": "process.synthetic.001",
+  "causation_id": "cmd.synthetic.fact-confirm.001",
+  "occurred_at": "2026-08-22T00:01:00Z",
+  "policy_versions": [
+    {"key": "policy.human-confirmation", "version": "architecture-2026-08-22.1"}
+  ],
+  "rule_set_version": {"key": "ruleset.synthetic.core", "version": "0.1.0"},
+  "payload": {
+    "event_type": "FactConfirmed",
+    "fact_version_id": "fact-version.synthetic.001",
+    "confirmation_decision_id": "confirmation.synthetic.001"
+  },
+  "evidence_refs": [
+    {
+      "evidence_id": "evidence.synthetic.001",
+      "evidence_version": "1",
+      "scope_kind": "workspace",
+      "workspace_id": "ws.synthetic.a"
+    }
+  ],
+  "uncertainty_refs": [],
+  "retention_class": "workspace.domain-event",
+  "provenance": {
+    "created_by": {
+      "identity_id": "service.synthetic.domain-core",
+      "identity_kind": "service",
+      "identity_version": "1"
+    },
+    "created_at": "2026-08-22T00:01:00Z",
+    "contract_refs": [{"key": "domain.event", "version": "0.1.0"}]
+  },
+  "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+}
