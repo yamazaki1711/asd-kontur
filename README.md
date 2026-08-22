@@ -91,6 +91,10 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   выполненной qualification.
 - `G-07B distributed/external execution` — **BLOCKED** до WP-09, G-02B,
   production egress/terms/budgets/qualification и реальных provider adapters.
+- `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
+  общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
+  проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
+  это не означает готовность режима или результата.
 
 Ключевые документы:
 
@@ -105,6 +109,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [G-05 Platform Knowledge Foundation](docs/implementation/G05_PLATFORM_KNOWLEDGE_FOUNDATION_v0.1.md)
 - [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
 - [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
+- [WP-11 Common Domain Process Kernel](docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -122,9 +127,9 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   immutable G-06 версия content-free DestructionAttestation;
   `contracts/v1.1/` — additive G-07 render/batch/qualification/raw-artifact
   extension.
-- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07:
+- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07 и WP‑11:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
-  workspace lifecycle/AI-VLM Harness foundations без mode workflows.
+  workspace lifecycle/AI-VLM Harness/common process foundations без mode workflows.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег

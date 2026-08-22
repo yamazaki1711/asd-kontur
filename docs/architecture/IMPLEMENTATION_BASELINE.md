@@ -1,6 +1,6 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted implementation baseline — G-04/G-05/G-06/G-07A PASS`
+- **Статус:** `Accepted implementation baseline — G-04/G-05/G-06/G-07A/WP-11 PASS`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
@@ -33,6 +33,9 @@ implementation foundation:
   validators/repair, qualification, batch/reconciliation, migration and
   lifecycle/reset integration; G-07B и production qualification/egress
   остаются `BLOCKED`;
+- `WP-11 Common Domain Process Kernel` — `PASS 2026-08-23`: Candidate→Fact
+  authority, common process chain, four-mode reuse and reset isolation passed
+  local PostgreSQL 17 and canonical PostgreSQL 18 CI;
 - mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
@@ -72,9 +75,11 @@ tree без новых контрактов, проверки scope/provenance �
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-Следующий work package определяется `IMPLEMENTATION_PLAN_v0.1.md` как WP-11
-Common domain process kernel; G‑07 не активирует production policy instances
-и не отменяет `G-02B BLOCKED`.
+WP-11 принят как implementation foundation по local и canonical CI evidence.
+Следующий work package определяется
+`IMPLEMENTATION_PLAN_v0.1.md` как WP-12 Tender slice; он не начинается
+автоматически. G‑07/WP‑11 не активируют production policy instances и не
+отменяют `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline
 
