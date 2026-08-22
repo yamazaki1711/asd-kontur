@@ -1,0 +1,29 @@
+"""Stable failure vocabulary for G-07."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class HarnessErrorCode(StrEnum):
+    SCOPE_VIOLATION = "HARNESS_SCOPE_VIOLATION"
+    LIFECYCLE_BLOCKED = "HARNESS_LIFECYCLE_BLOCKED"
+    SOURCE_STALE = "SOURCE_STALE"
+    POLICY_BLOCKED = "HARNESS_POLICY_BLOCKED"
+    EXTERNAL_EGRESS_DENIED = "EXTERNAL_EGRESS_DENIED"
+    PROVIDER_FAILURE = "PROVIDER_FAILURE"
+    PROVIDER_RESULT_INTEGRITY_FAILED = "PROVIDER_RESULT_INTEGRITY_FAILED"
+    PROVIDER_UNKNOWN_OUTCOME = "PROVIDER_UNKNOWN_OUTCOME"
+    QUALIFICATION_REQUIRED = "QUALIFICATION_REQUIRED"
+    BUDGET_BLOCKED = "BUDGET_BLOCKED"
+    INVALID_CANDIDATE = "INVALID_CANDIDATE"
+    REPAIR_NOT_ALLOWED = "REPAIR_NOT_ALLOWED"
+    REPAIR_NO_PROGRESS = "REPAIR_NO_PROGRESS"
+    BATCH_SCOPE_VIOLATION = "BATCH_SCOPE_VIOLATION"
+
+
+class HarnessError(RuntimeError):
+    def __init__(self, code: HarnessErrorCode, safe_message: str) -> None:
+        super().__init__(safe_message)
+        self.code = code
+        self.safe_message = safe_message

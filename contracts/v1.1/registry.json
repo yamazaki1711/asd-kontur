@@ -1,0 +1,25 @@
+{
+  "registry_version": "1.1.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-23T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0"],
+    "notes": "Adds G-07 records without mutating earlier persisted schemas."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v1.1:schema:vlm-harness",
+      "path": "schemas/vlm-harness.schema.json",
+      "digest": "sha256:d2d7f4cc76ee11d3db83543b870b1b8ded937d7410f59320893f07ddd370105d"
+    }
+  ],
+  "contract_keys": [
+    "vlm.render-lineage",
+    "vlm.batch-manifest",
+    "vlm.qualification-decision",
+    "vlm.raw-artifact-reference"
+  ]
+}
