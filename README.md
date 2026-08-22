@@ -71,7 +71,10 @@ production-среды, отдельного режима или генерато
   нормативный профиль;
 - `G-02B production instance readiness` — **BLOCKED** до утверждённых
   evidence-backed policy instances и проверок;
-- `G-03 Contract Pack` — **NEXT / OPEN**;
+- `G-03 Contract Pack` — **PASS** как accepted normative contracts и
+  machine-readable schema/fixture baseline;
+- `G-04 Persistence Foundation` — **NEXT / BLOCKED** до отдельного разрешения
+  на реализацию;
 - прикладная реализация, ORM, DDL и migrations — **NOT STARTED**.
 
 Ключевые документы:
@@ -81,6 +84,8 @@ production-среды, отдельного режима или генерато
 - [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v0.1.md)
 - [Logical Data Model](docs/architecture/LOGICAL_DATA_MODEL_v0.1.md)
 - [Deployment and Policy Profiles](docs/architecture/DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md)
+- [Contract Pack](docs/architecture/CONTRACT_PACK_v0.1.md)
+- [Machine-readable contracts](contracts/v0.1/README.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -94,6 +99,8 @@ production-среды, отдельного режима или генерато
 - `docs/architecture/` — нормативная архитектура и plan gates;
 - `docs/architecture/decisions/` — ADR-0001…ADR-0010;
 - `docs/reports/` — проверенные audit/inventory/transition records.
+- `contracts/v0.1/` — accepted G-03 registry, JSON Schemas и обезличенные
+  valid/invalid contract fixtures.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег

@@ -882,7 +882,7 @@ above; their concrete data/policy instances remain governed and fail-closed
 where evidence is absent. `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes G-02 as the complete
 fail-closed profile contract. Its concrete production values remain blocked.
-The next normative artifact is G-03 Contract Pack. ORM, DDL and migrations
-remain prohibited until G-03 and a later implementation authorization;
-deployment and external egress additionally require active evidence-backed
-production instances.
+`CONTRACT_PACK_v0.1.md` and `contracts/v0.1/` close G-03. The next gate is
+G-04 Persistence Foundation, but ORM, DDL and migrations remain prohibited
+until separate implementation authorization; deployment and external egress
+additionally require active evidence-backed production instances.

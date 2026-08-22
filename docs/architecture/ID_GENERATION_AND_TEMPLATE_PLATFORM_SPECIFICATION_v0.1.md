@@ -576,15 +576,15 @@ tooling или workspace dataset не переносится в контроли
   renderer/font/toolchain, geometry, print-ready, retention, authority и
   resource policies имеют complete fail-closed schemas, а отсутствующие
   production instances остаются `UNSET/BLOCKED`.
-- `G-03`: `OPEN`; generation, template, evidence, storage, render и
-  authorization contracts ещё должны быть опубликованы как Contract Pack до
-  persistence.
+- `G-03`: `PASS 2026-08-22`; generation, template, evidence, storage, render,
+  print, professional review, finalization и authorization contracts
+  опубликованы в `CONTRACT_PACK_v0.1.md` и `contracts/v0.1/`.
 - `Template Migration Qualification`: выполняется по asset batches после
   contracts, goldens, authority и leakage review.
 
-Эта редакция и закрытие архитектурной части G-02 не разрешают начинать ORM,
-DDL, migrations или прикладную реализацию в обход G-03, активации обязательных
-production policy instances и общей Blueprint-очереди.
+Закрытие G-03 не разрешает начинать ORM, DDL, migrations или прикладную
+реализацию без отдельной implementation authority; production operations
+дополнительно требуют активации обязательных policy instances.
 
 ## 25. Открытые evidence-dependent вопросы
 

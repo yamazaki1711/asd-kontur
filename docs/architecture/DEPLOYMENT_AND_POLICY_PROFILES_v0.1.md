@@ -33,7 +33,7 @@ qualification, budgets, fallback, cost и golden/regression governance.
 | G-02A: architecture и profile contract | **PASS, 2026-08-22** | Все обязательные profiles, policy families, поля evidence, unknown-value records и deny behavior определены. |
 | G-02B: конкретная production local-first hybrid instance | **BLOCKED** | Нет утверждённых S3/VPS/security/recovery/retention/authority/resource instances и drill evidence. |
 | Внешний VLM route, включая планируемый `polza.ai` | **BLOCKED / deny** | Provider terms, exact model/profile, region, retention, deletion, allowlist, budgets, cost и route qualification не подтверждены. |
-| G-03 Contract Pack | **OPEN** | Machine-readable schemas/fixtures ещё не созданы; этот документ к G-03 не переходит. |
+| G-03 Contract Pack | **PASS, 2026-08-22** | Приняты `CONTRACT_PACK_v0.1.md` и `contracts/v0.1/`; G-02 production blockers сохранены. |
 | Implementation/deployment authority | **CLOSED** | G-02 не разрешает ORM, DDL, migrations, infrastructure или application implementation. |
 
 `Invariant`: architecture PASS нельзя отображать как production readiness.
@@ -392,11 +392,12 @@ them:
 | tests | Applicable `DP-AT-*` plus referenced RD/DR/HV/TA catalogues | Tests must pass before `approved/active` |
 | `canonical_digest` | Required SHA-256 of canonical instance envelope | Required SHA-256 of canonical placeholder envelope |
 
-G-02 specifies the digest field and covered semantic envelope. G-03 must
-define canonical serialization and emit the literal digest. Until that exists,
-none of these narrative declarations may be loaded as a runtime allow-policy;
-the effective operational result remains deny. This is the deliberate
-boundary between G-02 profiles and G-03 machine-readable contracts.
+G-02 specifies the digest field and covered semantic envelope. G-03 now defines
+canonical serialization and machine-readable contract identities. Narrative
+declarations still are not runtime PolicyInstances: only an exact approved
+instance may emit its literal digest. Until that exists, the effective
+operational result remains deny. This is the deliberate boundary between an
+accepted contract and an activated policy value.
 
 ### 4.3. Resolution and precedence
 
@@ -455,7 +456,7 @@ does not impersonate provider, legal, professional or production approver.
 | `policy.backup-pitr-residues` | Base/WAL/logical/object/snapshot schedule, retention, expiry/crypto-erase, inventory and restore horizon | Layered TA mechanism active; numeric values/provider/drill `UNSET` | Backup readiness/RPO/RTO/destroy attestation blocked |
 | `policy.object-storage-placement` | Environment×scope×class×purpose tier, region/residency, version/lock, credential and replication | MBP/S3 logical tiers active; exact S3 provider/accounts/regions `UNSET` | Production object admission/archive/recovery blocked |
 | `policy.encryption-key-reference` | Data class, envelope/server encryption, algorithms/profile, DEK/KEK refs, escrow/recovery, rotation/revocation | Hybrid envelope requirement active; products/key refs/intervals `UNSET` | Sensitive S3/VPS movement and production backup blocked |
-| `policy.archive-import` | Authorization, manifest/schema/signature/integrity/compatibility, new workspace, ID mapping and cleanup | IA-OD-03/B active: always new workspace; no implementation/profile | Import execution blocked until G-03/G-06 and exact policy |
+| `policy.archive-import` | Authorization, manifest/schema/signature/integrity/compatibility, new workspace, ID mapping and cleanup | IA-OD-03/B active: always new workspace; no implementation/profile | Import execution blocked until G-06 implementation and exact active policy |
 
 ### 5.3. Authority, rules, signatures, templates and geometry
 
@@ -700,6 +701,6 @@ artifact, not the blocked capability.
 The production local-first hybrid instance, external VLM route, recovery/
 failover, field sync, print-ready ID and professional paths remain `BLOCKED`
 until their concrete instances are approved and tested. `G-03 Contract Pack`
-is the single next normative step on the critical path, but it is not started
-by this task. G-04 implementation, ORM, DDL, migrations, PostgreSQL/S3/VPS
-deployment and application code remain prohibited.
+закрыт отдельным accepted artifact. G-04 implementation, ORM, DDL, migrations,
+PostgreSQL/S3/VPS deployment и application code остаются запрещены до
+отдельной authority.

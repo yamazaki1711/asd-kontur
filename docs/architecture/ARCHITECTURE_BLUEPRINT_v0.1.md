@@ -297,8 +297,11 @@ profiles с `default deny` до утверждения.
     формализованы.
 11. **Deployment and Policy Profiles v0.1** — принят 2026-08-22 и закрывает
     архитектурный G-02 как полный fail-closed profile contract. Concrete
-    production instances остаются `BLOCKED`; следующий артефакт — G-03
-    Contract Pack.
+    production instances остаются `BLOCKED`.
+12. **Contract Pack v0.1** — принят 2026-08-22 и закрывает G-03: stable
+    registry, Draft 2020-12 schemas, valid/hostile fixtures, compatibility,
+    scope/provenance/authority/error contracts. Runtime implementation не
+    начата.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -368,10 +371,10 @@ G-00 не означает готовность инфраструктуры и�
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` как полный fail-closed profile
 contract; конкретная production local-first hybrid instance, external egress,
 recovery/failover и professional/renderer/provider policy instances остаются
-`BLOCKED` до evidence и applicable authority. Остаётся обязательный
-предреализационный G-03 — machine-readable Contract Pack.
+`BLOCKED` до evidence и applicable authority. G-03 закрыт принятым
+machine-readable Contract Pack.
 
-ORM, DDL, migrations и persistence modules запрещены до прохождения G-03 и
-отдельной implementation authority. Deployment и external egress отдельно
-запрещены до active production policy instances. Следующий нормативный
-артефакт по critical path — Contract Pack (G-03); он этой задачей не начат.
+ORM, DDL, migrations и persistence modules запрещены до отдельной
+implementation authority. Deployment и external egress отдельно запрещены до
+active production policy instances. Следующий gate по critical path — G-04
+Persistence Foundation; G-03 PASS не начинает его автоматически.

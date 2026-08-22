@@ -1164,10 +1164,10 @@ isolation или retention, а не при заполнении разрешён
 
 Эта редакция принята как часть G-00 и не разрешает реализацию.
 Authorization/Audit, Rules, Harness, Information Architecture, Technical
-Architecture v0.3 и Implementation Plan приняты и синхронизированы. G-01
-Logical Data Model и архитектурная часть G-02 Profiles закрыты; gate к
-персистентности остаётся закрытым до G-03 Contract Pack, evidence-backed
-активации обязательных production policy instances и явного начала реализации.
+Architecture v0.3 и Implementation Plan приняты и синхронизированы. G-01,
+архитектурная часть G-02 и G-03 Contract Pack закрыты; gate к persistence
+implementation остаётся закрытым до отдельной authority. Production deployment
+и external egress дополнительно требуют evidence-backed policy instances.
 
 До этого запрещено создавать ORM, миграции, PostgreSQL schema/RLS,
 outbox/inbox, broker/queue/workflow runtime и изменять прикладной код под эту
