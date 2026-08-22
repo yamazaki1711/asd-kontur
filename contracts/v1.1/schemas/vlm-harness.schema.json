@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.1:schema:vlm-harness",
+  "title": "ASD-KONTUR G-07 Harness Extension v1.1",
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["organization_id", "workspace_id"],
+      "properties": {
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "renderLineage": {
+      "type": "object",
+      "required": ["record_type", "render_id", "scope", "source_version_id", "source_locator", "source_digest", "renderer", "renderer_version", "rendering_profile_version", "page_box", "source_rotation", "applied_rotation", "dpi", "pixel_dimensions", "color_space", "image_format", "preprocessing_version", "source_to_render", "render_to_source", "render_digest"],
+      "properties": {
+        "record_type": {"const": "vlm_render_lineage"},
+        "render_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "source_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_locator": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/sourceLocator"},
+        "source_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "renderer": {"type": "string", "minLength": 1},
+        "renderer_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "rendering_profile_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "page_box": {"type": "array", "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}, {"type": "number"}], "items": false},
+        "source_rotation": {"type": "integer"},
+        "applied_rotation": {"type": "integer"},
+        "dpi": {"type": "integer", "minimum": 1},
+        "pixel_dimensions": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 1}], "items": false},
+        "color_space": {"type": "string", "minLength": 1},
+        "image_format": {"enum": ["png", "jpeg", "webp"]},
+        "preprocessing_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "source_to_render": {"$ref": "#/$defs/matrix"},
+        "render_to_source": {"$ref": "#/$defs/matrix"},
+        "render_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "matrix": {"type": "array", "minItems": 9, "maxItems": 9, "items": {"type": "number"}},
+    "batchManifest": {
+      "type": "object",
+      "required": ["record_type", "batch_id", "scope", "manifest_version", "item_ids", "concurrency_limit", "execution_profile_version", "state", "manifest_digest"],
+      "properties": {
+        "record_type": {"const": "vlm_batch_manifest"},
+        "batch_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "manifest_version": {"type": "string", "const": "1.1.0"},
+        "item_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "concurrency_limit": {"type": "integer", "minimum": 1},
+        "execution_profile_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "state": {"enum": ["pending", "running", "partial", "completed", "stopped", "cancelled", "unknown", "failed"]},
+        "manifest_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "qualificationDecision": {
+      "type": "object",
+      "required": ["record_type", "qualification_profile_id", "profile_version", "execution_identity_fingerprint", "corpus_version", "strata", "metrics", "zero_tolerance_blockers", "environment", "decision", "valid_from", "valid_until", "digest"],
+      "properties": {
+        "record_type": {"const": "vlm_qualification_decision"},
+        "qualification_profile_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "profile_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "execution_identity_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "corpus_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "strata": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "metrics": {"type": "array", "items": {"type": "object"}},
+        "zero_tolerance_blockers": {"type": "object"},
+        "environment": {"enum": ["development", "qualification", "production"]},
+        "decision": {"enum": ["unqualified", "evaluation_only", "qualified", "suspended", "revoked", "blocked"]},
+        "approved_by_human": {"type": ["string", "null"]},
+        "valid_from": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "valid_until": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [{"if": {"properties": {"decision": {"const": "qualified"}}}, "then": {"required": ["approved_by_human"], "properties": {"approved_by_human": {"type": "string", "minLength": 1}}}}],
+      "additionalProperties": false
+    },
+    "rawArtifactReference": {
+      "type": "object",
+      "required": ["record_type", "artifact_id", "scope", "artifact_kind", "classification", "retention_class", "storage_policy", "content_digest"],
+      "properties": {
+        "record_type": {"const": "vlm_raw_artifact_reference"},
+        "artifact_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "artifact_kind": {"enum": ["request", "provider_response", "prompt", "render", "candidate", "validation", "repair", "batch", "cost", "cache"]},
+        "classification": {"type": "string", "minLength": 1},
+        "retention_class": {"type": "string", "minLength": 1},
+        "storage_policy": {"enum": ["workspace_encrypted", "no_raw_storage"]},
+        "scoped_object_ref": {"type": ["string", "null"]},
+        "encryption_key_ref": {"type": ["string", "null"]},
+        "content_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [{"if": {"properties": {"storage_policy": {"const": "no_raw_storage"}}}, "then": {"properties": {"scoped_object_ref": {"type": "null"}, "encryption_key_ref": {"type": "null"}}}}],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/renderLineage"}, {"$ref": "#/$defs/batchManifest"}, {"$ref": "#/$defs/qualificationDecision"}, {"$ref": "#/$defs/rawArtifactReference"}]
+}

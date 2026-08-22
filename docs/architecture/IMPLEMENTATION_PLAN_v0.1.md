@@ -155,7 +155,7 @@ provider/region или численные RPO/RTO. TA-TD-18 не разреша�
 | G-04 Persistence Foundation | G-01…03 | PostgreSQL schemas/migrations/repositories/RLS/audit/object ledger/inbox-outbox adapters and isolation tests | Implementation authority after gates | `PASS 2026-08-23` |
 | G-05 Platform Knowledge Foundation | G-04 | Source/Evidence Ledger, official registry, NTD editions/units, canon, rules, FTS/vector/typed graph, Gateway, Promotion Gate | Knowledge/rule authorities; RuleVersion only qualified human | `PASS 2026-08-23` |
 | G-06 Workspace Lifecycle Foundation | G-04 and required G-05 source contracts | Provision/isolate/ModeExecution/archive/export/reset/destroy/restore/import; distributed residue tests | Lifecycle request/confirm/verify separation | `PASS 2026-08-23` |
-| G-07 AI/VLM Harness | G-03…06, approved qualification/policy profiles | native-first, local Qwen3.8-27B, provider-neutral controlled route, Candidate lifecycle, validators/repair/budgets/raw retention | Harness/security/qualified confirmation authorities | `BLOCKED` |
+| G-07 AI/VLM Harness | G-03…06, approved qualification/policy profiles | native-first, local Qwen3.8-27B, provider-neutral controlled route, Candidate lifecycle, validators/repair/budgets/raw retention | Harness/security/qualified confirmation authorities | `G-07A PASS 2026-08-23`; `G-07B BLOCKED` |
 | G-08 Four-mode Product Slices | G-04…07 and common process kernel | Four separate E2E suites through same core; no mode-specific core/store | Product acceptance authorities per mode | `BLOCKED` |
 | G-09 Three Product Deliverables | G-08 | Industrial acceptance R-1, R-2, R-3; R-3 geometry gate is hard blocker | Qualified legal/engineering/geometry roles as applicable | `BLOCKED` |
 | G-10 ProductReady | G-00…09 plus cross-mode, recovery, security and operations evidence | `ProductReady=true` only if every mode and cross-mode scenario passes; infra health is insufficient | Product owner on evidence; no AI authority | `BLOCKED` |
@@ -334,7 +334,7 @@ enter only as labeled test data after universal contracts.
 | Field | Plan |
 |---|---|
 | Capability; inputs; scope | Native-first extraction, local Qwen3.8-27B, provider-neutral external route, validators/repair/qualification; M4/R123 |
-| Dependencies / DoR | WP-05…09, Rule runtime, G-02 qualification/budget/egress/raw policies |
+| Dependencies / DoR | G-07A local/synthetic foundation: WP-05…08 and fail-closed G-02 policy contracts; G-07B distributed external route: additionally WP-09 and active G-02B qualification/budget/egress/raw policy instances |
 | Actions / artifacts | Provider contract implementations, router, immutable attempts, Candidate lifecycle, targeted bounded repair, corpus governance |
 | Tests | Prompt scope attack, provider 200 invalid/false, qualification identity, budget exhaustion, no silent fallback, raw purge, Candidate-no-Fact |
 | DoD | Only typed Candidate/draft exits Harness; every route qualified; geometry/legal/volume confirmation remains outside AI |
@@ -593,8 +593,10 @@ blocked.
 Следующий gate critical path после отдельного разрешения на реализацию:
 
 `G-06 Workspace Lifecycle Foundation` закрыт 2026-08-23 по local PostgreSQL 17
-и canonical PostgreSQL 18 evidence. Следующий gate — G-07 — не начинается
-автоматически.
+и canonical PostgreSQL 18 evidence. `G-07A AI/VLM Harness Foundation` закрыт
+2026-08-23 по synthetic/local implementation evidence; `G-07B` distributed
+external execution остаётся `BLOCKED` до WP-09 и G-02B. Следующий work package
+— WP-11 Common domain process kernel — не начинается автоматически.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02

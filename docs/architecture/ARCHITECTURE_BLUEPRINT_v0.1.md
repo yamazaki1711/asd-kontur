@@ -316,6 +316,12 @@ profiles с `default deny` до утверждения.
     adapter-bound reset/destroy, recovery/quarantine и content-free
     DestructionAttestation прошли local PostgreSQL 17.10 и canonical
     PostgreSQL 18.6 + pgvector 0.8.6 CI.
+16. **G-07 AI/VLM Harness v0.1** — G-07A accepted implementation foundation
+    2026-08-23: native-first, provider-neutral local/synthetic execution,
+    Candidate-only lifecycle, validators/repair, qualification,
+    batch/reconciliation and workspace retention integration. G-07B,
+    production qualification/egress и реальный external provider остаются
+    `BLOCKED`.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -393,5 +399,6 @@ machine-readable Contract Pack.
 active production policy instances. G-04 Persistence Foundation закрыт
 2026-08-23 на PostgreSQL/Contract Pack evidence. G‑05 закрыт 2026-08-23 по
 локальному и canonical CI evidence. G‑06 закрыт 2026-08-23 по local и
-canonical CI evidence; G‑07 не начинается автоматически и production policy
-instances остаются `BLOCKED`.
+canonical CI evidence. G‑07A закрыт 2026-08-23 как synthetic/local foundation;
+G‑07B и production policy instances остаются `BLOCKED`. WP-11 не начинается
+автоматически.

@@ -8,6 +8,7 @@ on:
       - implementation/g04-persistence-foundation-v0.1
       - implementation/g05-platform-knowledge-foundation-v0.1
       - implementation/g06-workspace-lifecycle-foundation-v0.1
+      - implementation/g07-ai-vlm-harness-v0.1
 
 permissions:
   contents: read
@@ -60,3 +61,8 @@ jobs:
 
       - name: Whitespace check
         run: git diff --check
+
+      - name: Reject secrets, project fixtures, and model artifacts
+        run: |
+          ! find . -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' -o -name '*.safetensors' -o -name '*.gguf' \) -print | grep .
+          ! rg -n 'TM.?35|Левашово|Игнатьево|BEGIN (RSA|OPENSSH|PRIVATE)' src tests contracts

@@ -15,6 +15,7 @@ dependencies = [
   "jsonschema[format]>=4.25,<5",
   "pgvector>=0.4,<1",
   "psycopg[binary]>=3.2,<4",
+  "pypdf>=6.0,<7",
   "referencing>=0.36,<1",
   "rfc8785>=0.1.4,<1",
   "sqlalchemy>=2.0.43,<3",
@@ -49,6 +50,8 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*.py" = ["E501"]
 "tests/integration/test_platform_knowledge.py" = ["E501"]
+"tests/integration/test_ai_vlm_harness.py" = ["E501"]
+"tests/unit/test_ai_vlm_harness.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

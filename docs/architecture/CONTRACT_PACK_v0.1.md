@@ -714,3 +714,12 @@ No ORM, DDL, migration, API, queue, repository, deployment or model execution
 is authorized by this document. The next critical-path step in the accepted
 Implementation Plan is G-04 Foundation Kernel, and it requires a separate
 explicit implementation authority.
+
+## 26. Immutable implementation extensions
+
+G-06 added the separate `contracts/v1.0` content-free
+DestructionAttestation schema. G-07 adds the additive `contracts/v1.1`
+Harness extension for render lineage, one-workspace batch manifests,
+qualification decisions and raw-artifact retention references. Neither
+release mutates a v0.1 schema or changes the G-03 persisted semantics; their
+registries declare exact compatibility and fingerprints.

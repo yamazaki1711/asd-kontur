@@ -84,6 +84,13 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   receipts, residual scans и content-free attestation проверены локально и в
   canonical PostgreSQL 18 CI; production retention/destruction readiness
   остаётся `BLOCKED`.
+- `G-07A AI/VLM Harness Foundation` — **PASS 2026-08-23**: native-first,
+  provider-neutral execution, Candidate-only lifecycle, validators/repair,
+  qualification, batch/reconciliation, migration и lifecycle/reset integration
+  приняты на synthetic/local evidence; реальный Qwen inference smoke не является
+  выполненной qualification.
+- `G-07B distributed/external execution` — **BLOCKED** до WP-09, G-02B,
+  production egress/terms/budgets/qualification и реальных provider adapters.
 
 Ключевые документы:
 
@@ -97,6 +104,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [G-04 Persistence Foundation](docs/implementation/G04_PERSISTENCE_FOUNDATION_v0.1.md)
 - [G-05 Platform Knowledge Foundation](docs/implementation/G05_PLATFORM_KNOWLEDGE_FOUNDATION_v0.1.md)
 - [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
+- [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -111,10 +119,12 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `docs/architecture/decisions/` — ADR-0001…ADR-0010;
 - `docs/reports/` — проверенные audit/inventory/transition records.
 - `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
-  immutable G-06 версия content-free DestructionAttestation.
-- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑06:
+  immutable G-06 версия content-free DestructionAttestation;
+  `contracts/v1.1/` — additive G-07 render/batch/qualification/raw-artifact
+  extension.
+- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
-  workspace lifecycle foundation без mode workflows.
+  workspace lifecycle/AI-VLM Harness foundations без mode workflows.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег
