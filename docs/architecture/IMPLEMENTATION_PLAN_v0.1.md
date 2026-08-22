@@ -343,7 +343,7 @@ enter only as labeled test data after universal contracts.
 
 ### WP-11 — Common domain process kernel
 
-**Implementation status 2026-08-23:** `candidate; local PASS, canonical PostgreSQL 18 CI pending`.
+**Implementation status 2026-08-23:** `PASS — accepted implementation foundation`.
 Implementation record: `docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md`.
 
 | Field | Plan |
@@ -599,9 +599,9 @@ blocked.
 и canonical PostgreSQL 18 evidence. `G-07A AI/VLM Harness Foundation` закрыт
 2026-08-23 по synthetic/local implementation evidence; `G-07B` distributed
 external execution остаётся `BLOCKED` до WP-09 и G-02B. Следующий work package
-— WP-11 Common domain process kernel — реализован как проверенный local candidate;
-accepted status требует зелёного canonical PostgreSQL 18 CI. WP-12 не начинается
-автоматически.
+— WP-11 Common domain process kernel — принят по local PostgreSQL 17 и зелёному
+canonical PostgreSQL 18 CI. Следующий work package — WP-12 Tender slice — не
+начинается автоматически.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02

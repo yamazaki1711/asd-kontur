@@ -91,9 +91,10 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   выполненной qualification.
 - `G-07B distributed/external execution` — **BLOCKED** до WP-09, G-02B,
   production egress/terms/budgets/qualification и реальных provider adapters.
-- `WP-11 Common Domain Process Kernel` — **implementation candidate; canonical CI pending**:
+- `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
-  реализованы без mode-specific core; это не означает готовность режима или результата.
+  проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
+  это не означает готовность режима или результата.
 
 Ключевые документы:
 

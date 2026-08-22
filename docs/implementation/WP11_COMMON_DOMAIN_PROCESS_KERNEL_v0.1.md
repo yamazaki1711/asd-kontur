@@ -1,6 +1,6 @@
 # WP-11 Common Domain Process Kernel v0.1
 
-- **Status:** `Implementation candidate — local PASS; canonical CI pending`
+- **Status:** `Accepted implementation foundation — WP-11 PASS`
 - **Owner:** Oleg Shcherbakov
 - **Date:** 2026-08-23
 - **Authority:** delegated implementation and ordinary architecture authority in the WP-11 task
@@ -204,24 +204,25 @@ Local PostgreSQL 17.10 evidence before publication:
 - scoped reset, workspace-B survival and platform-memory survival;
 - clean migration and disposable downgrade/upgrade.
 
-Canonical PostgreSQL 18 + pgvector CI evidence is recorded only after the pull-request workflow
-succeeds.
+Pull request #8 produced two successful canonical workflow runs (branch push and PR) on PostgreSQL
+18 + pgvector. The same locked, Ruff, mypy, migration, Contract Pack and `171 passed` pytest suite
+completed without failed, skipped or cancelled checks.
 
 ## 12. Gate self-check and blockers
 
-| WP-11 criterion | Status before PR CI |
+| WP-11 criterion | Status |
 |---|---|
-| Candidate-to-Fact authority boundary | PASS locally |
-| Common structure/work/MTR/control/evidence/ID/volume/KS/payment chain | PASS locally |
-| Typed findings, issues and deliverable inputs | PASS locally |
-| Deterministic calculations and source-to-result lineage | PASS locally |
-| Four modes use one kernel/store/lifecycle | PASS locally |
-| Concurrency, idempotency and immutable history | PASS locally |
-| Non-owner RLS, A/B isolation and lifecycle fence | PASS locally |
-| G-06 reset integration and platform-memory preservation | PASS locally |
-| PostgreSQL 18 + pgvector canonical CI | PENDING |
+| Candidate-to-Fact authority boundary | PASS |
+| Common structure/work/MTR/control/evidence/ID/volume/KS/payment chain | PASS |
+| Typed findings, issues and deliverable inputs | PASS |
+| Deterministic calculations and source-to-result lineage | PASS |
+| Four modes use one kernel/store/lifecycle | PASS |
+| Concurrency, idempotency and immutable history | PASS |
+| Non-owner RLS, A/B isolation and lifecycle fence | PASS |
+| G-06 reset integration and platform-memory preservation | PASS |
+| PostgreSQL 18 + pgvector canonical CI | PASS |
 
-WP-11 becomes an accepted implementation foundation only after the canonical PR workflow is green.
-G-02B, G-07B, production policies/authority, all four mode E2E suites, three production
+`WP-11 = PASS` is an accepted implementation foundation on synthetic/disposable evidence. G-02B,
+G-07B, production policies/authority, all four mode E2E suites, three production
 deliverables and ProductReady remain `BLOCKED`. The next work package is WP-12 Tender slice and does
 not start automatically.
