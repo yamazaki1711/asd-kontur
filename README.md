@@ -99,7 +99,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   clause/risk/conflict/gap analysis, пять typed Tender outputs,
   Candidate→Fact→qualified legal authority boundary и archive/reset isolation
   прошли локально на disposable PostgreSQL 17 и в canonical PostgreSQL 18 CI.
-  Support, Audit и Restoration не начаты; ProductReady = false.
+  Audit и Restoration не начаты; ProductReady = false.
+- `WP-13 Support Slice` — **ACCEPTANCE CANDIDATE 2026-08-23**: common-kernel
+  work/MTR/control/evidence, ID completeness/generation, confirmed geometry и
+  volume/KS/payment trace прошли local PostgreSQL 17; canonical PostgreSQL 18 CI
+  ещё требуется до `PASS`. Production print-ready и policy instances blocked.
 
 Ключевые документы:
 
@@ -116,6 +120,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
 - [WP-11 Common Domain Process Kernel](docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md)
 - [WP-12 Tender Slice](docs/implementation/WP12_TENDER_SLICE_v0.1.md)
+- [WP-13 Support Slice](docs/implementation/WP13_SUPPORT_SLICE_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -132,12 +137,13 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
   immutable G-06 версия content-free DestructionAttestation;
   `contracts/v1.1/` — additive G-07 render/batch/qualification/raw-artifact
-  extension; `contracts/v1.2/` — additive WP‑12 typed Tender extension.
+  extension; `contracts/v1.2/` — additive WP‑12 typed Tender extension;
+  `contracts/v1.3/` — additive WP‑13 Support/generation/geometry extension.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
-  WP‑11 и WP‑12:
+  WP‑11, WP‑12 и WP‑13:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
   workspace lifecycle/AI-VLM Harness/common process foundations и первый
-  Tender implementation slice.
+  Tender и Support implementation slices.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег
