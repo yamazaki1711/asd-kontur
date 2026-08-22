@@ -1,6 +1,6 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted baseline through WP-12 Tender implementation slice`
+- **Статус:** `Accepted baseline through WP-13 Support implementation slice`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
@@ -39,8 +39,10 @@ implementation foundation:
 - `WP-12 Tender Slice` — `PASS 2026-08-23`: AT-PE-41, typed outputs, legal
   authority, archive/reset and isolation passed on local PostgreSQL 17 and in
   canonical PostgreSQL 18 CI;
-- Support, Audit, Restoration, production deployment и ProductReady —
-  `NOT STARTED`.
+- `WP-13 Support Slice` — `PASS 2026-08-23`: AT-PE-42,
+  work/MTR/control/evidence, ID generation mechanics, confirmed geometry,
+  volume/KS/payment and scoped reset passed locally and in canonical CI;
+- Audit, Restoration, production deployment и ProductReady — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
 assets и бинарный DOCX удалены из active tree. Они остаются в Git history,
@@ -80,9 +82,9 @@ tree без новых контрактов, проверки scope/provenance �
 - использование pilot-specific paths или одного режима как product core.
 
 WP-11 принят как implementation foundation по local и canonical CI evidence.
-WP-12 принят только как Tender implementation slice. Он не активирует
-production policy instances, не отменяет `G-02B/G-07B BLOCKED` и не начинает
-WP-13 автоматически.
+WP-12 и WP-13 приняты только как Tender/Support implementation slices. Они не
+активируют production policy instances, не
+отменяют `G-02B/G-07B BLOCKED` и не начинают WP-14 автоматически.
 
 ## 4. Воспроизводимость baseline
 

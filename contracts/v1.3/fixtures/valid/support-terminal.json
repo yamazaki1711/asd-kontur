@@ -1,0 +1,14 @@
+{
+  "record_type": "support_terminal_outcome",
+  "contract_version": "1.3.0",
+  "scope": {"organization_id": "org_demo", "workspace_id": "ws_demo", "mode_execution_id": "mode_support"},
+  "support_process_id": "support_demo",
+  "process_revision": 12,
+  "outcome": "completed",
+  "deliverable_refs": ["id-package:1", "payment-trace:1"],
+  "blocker_codes": [],
+  "uncertainty_codes": ["PRINT_RENDER_PRODUCTION_UNQUALIFIED"],
+  "archive_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "product_ready": false,
+  "fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

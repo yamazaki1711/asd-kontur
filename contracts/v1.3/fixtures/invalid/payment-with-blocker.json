@@ -1,0 +1,15 @@
+{
+  "record_type": "support_commercial_readiness",
+  "contract_version": "1.3.0",
+  "scope": {"organization_id": "org_demo", "workspace_id": "ws_demo", "mode_execution_id": "mode_support"},
+  "presented_volume_ref": "presented:1",
+  "work_volume_ref": "work-volume:1",
+  "id_package_ref": "id-package:1",
+  "ks_line_ref": "ks-line:1",
+  "payment_claim_ref": "payment-claim:1",
+  "presented_eligible": true,
+  "ks_consistent": true,
+  "payment_ready": true,
+  "blocker_codes": ["ID_PACKAGE_INCOMPLETE"],
+  "fingerprint": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+}

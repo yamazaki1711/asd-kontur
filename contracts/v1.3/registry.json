@@ -1,0 +1,26 @@
+{
+  "registry_version": "1.3.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-23T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0"],
+    "notes": "Adds typed WP-13 Support execution, generation, geometry, and commercial readiness records without mutating earlier persisted schemas."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v1.3:schema:support",
+      "path": "schemas/support.schema.json",
+      "digest": "sha256:7b19442692f2c0033b7092e62fbdfc71d80fd05018acc926c7d6e29b2e8df495"
+    }
+  ],
+  "contract_keys": [
+    "support.process-event",
+    "support.generation-outcome",
+    "support.executive-scheme",
+    "support.commercial-readiness",
+    "support.terminal-outcome"
+  ]
+}

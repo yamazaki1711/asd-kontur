@@ -331,6 +331,10 @@ profiles с `default deny` до утверждения.
     qualified legal authority, five typed outputs and scoped archive/reset pass
     disposable PostgreSQL 17 and canonical PostgreSQL 18 CI. It does not
     establish Support/Audit/Restoration readiness or ProductReady.
+19. **WP-13 Support Slice v0.1** — accepted implementation slice 2026-08-23: common
+    WP-11 kernel work/MTR/control/evidence chain, synthetic ID generation,
+    confirmed geometry and volume/KS/payment trace passed local PostgreSQL 17
+    and canonical PostgreSQL 18 CI.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -409,5 +413,5 @@ active production policy instances. G-04 Persistence Foundation закрыт
 2026-08-23 на PostgreSQL/Contract Pack evidence. G‑05 закрыт 2026-08-23 по
 локальному и canonical CI evidence. G‑06 закрыт 2026-08-23 по local и
 canonical CI evidence. G‑07A закрыт 2026-08-23 как synthetic/local foundation;
-G‑07B и production policy instances остаются `BLOCKED`. WP-11 принят; WP-12
-принят только как Tender implementation slice и не начинает WP-13.
+G‑07B и production policy instances остаются `BLOCKED`. WP-11, WP-12 и WP-13
+приняты; WP-13 не начинает WP-14.

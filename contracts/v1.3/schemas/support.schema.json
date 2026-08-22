@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.3:schema:support",
+  "title": "ASD-KONTUR WP-13 Support contracts v1.3",
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["organization_id", "workspace_id", "mode_execution_id"],
+      "properties": {
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "mode_execution_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "processEvent": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "event_name", "support_process_id", "aggregate_version", "rule_set_version_id", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "support_process_event"},
+        "contract_version": {"const": "1.3.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "event_name": {"enum": ["SupportScopeConfigured", "PlannedWorkCreated", "WorkReadinessEvaluated", "WorkFactConfirmed", "MaterialBatchAccepted", "MaterialBatchApplied", "ControlEventRecorded", "EvidenceVerified", "IdCompletenessEvaluated", "GenerationRunStarted", "IdPackageFormed", "VolumeReadinessEvaluated", "ExecutiveSchemeFinalized", "PresentedVolumeTraced", "PaymentReadinessEvaluated", "SupportDeliverableFinalized"]},
+        "support_process_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "aggregate_version": {"type": "integer", "minimum": 1},
+        "rule_set_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "fieldResolution": {
+      "type": "object",
+      "required": ["field_key", "state", "material", "fact_version_ref", "evidence_refs", "source_locator_refs"],
+      "properties": {
+        "field_key": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "state": {"enum": ["confirmed", "candidate", "conflict", "missing", "not_applicable", "redacted_for_view"]},
+        "material": {"type": "boolean"},
+        "normalized_value": {"type": ["string", "number", "null"]},
+        "fact_version_ref": {"type": ["string", "null"]},
+        "evidence_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "source_locator_refs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "confirmed"}}}, "then": {"properties": {"fact_version_ref": {"type": "string", "minLength": 1}, "evidence_refs": {"minItems": 1}, "source_locator_refs": {"minItems": 1}}}},
+        {"if": {"properties": {"material": {"const": true}, "state": {"enum": ["candidate", "conflict", "missing"]}}}, "then": {"properties": {"normalized_value": {"type": "null"}}}}
+      ],
+      "additionalProperties": false
+    },
+    "generationOutcome": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "generation_run_id", "required_document_type_ref", "template_version_ref", "field_schema_version", "binding_plan_version", "renderer_profile_version", "validator_profile_version", "fresh_document_instance", "field_resolutions", "semantic_fingerprint", "status", "qualification_level"],
+      "properties": {
+        "record_type": {"const": "support_generation_outcome"},
+        "contract_version": {"const": "1.3.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "generation_run_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "required_document_type_ref": {"type": "string", "minLength": 1},
+        "template_version_ref": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "field_schema_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "binding_plan_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "renderer_profile_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "validator_profile_version": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+        "fresh_document_instance": {"const": true},
+        "field_resolutions": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fieldResolution"}},
+        "semantic_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "candidate_digest": {"type": ["string", "null"]},
+        "status": {"enum": ["blocked", "candidate_created", "synthetic_semantic_final", "production_print_ready"]},
+        "qualification_level": {"enum": ["synthetic_structural_only", "synthetic_semantic_final", "production_print_ready"]},
+        "blocker_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"enum": ["candidate_created", "synthetic_semantic_final", "production_print_ready"]}}}, "then": {"required": ["candidate_digest"], "properties": {"candidate_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}, "blocker_codes": {"maxItems": 0}}}},
+        {"if": {"properties": {"status": {"const": "production_print_ready"}}}, "then": {"properties": {"qualification_level": {"const": "production_print_ready"}}}}
+      ],
+      "additionalProperties": false
+    },
+    "executiveScheme": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "executive_scheme_id", "scheme_version", "design_geometry_ref", "as_built_geometry_ref", "crs_ref", "reference_frame_ref", "unit_code", "precision_scale", "calibration_ref", "tolerance_rule_trace_id", "semantic_fingerprint", "status", "blocker_codes"],
+      "properties": {
+        "record_type": {"const": "support_executive_scheme"},
+        "contract_version": {"const": "1.3.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "executive_scheme_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scheme_version": {"type": "integer", "minimum": 1},
+        "design_geometry_ref": {"type": "string", "minLength": 1, "not": {"pattern": "^(model|vlm):"}},
+        "as_built_geometry_ref": {"type": "string", "minLength": 1, "not": {"pattern": "^(model|vlm):"}},
+        "crs_ref": {"type": "string", "minLength": 1},
+        "reference_frame_ref": {"type": "string", "minLength": 1},
+        "unit_code": {"type": "string", "minLength": 1},
+        "precision_scale": {"type": "integer", "minimum": 0},
+        "calibration_ref": {"type": "string", "minLength": 1},
+        "tolerance_rule_trace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "semantic_fingerprint": {"type": ["string", "null"]},
+        "status": {"enum": ["semantic_finalized", "rendered_candidate", "blocked"]},
+        "blocker_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"enum": ["semantic_finalized", "rendered_candidate"]}}}, "then": {"properties": {"semantic_fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}, "blocker_codes": {"maxItems": 0}}}},
+        {"if": {"properties": {"status": {"const": "blocked"}}}, "then": {"properties": {"semantic_fingerprint": {"type": "null"}, "blocker_codes": {"minItems": 1}}}}
+      ],
+      "additionalProperties": false
+    },
+    "commercialReadiness": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "presented_volume_ref", "work_volume_ref", "id_package_ref", "ks_line_ref", "payment_claim_ref", "presented_eligible", "ks_consistent", "payment_ready", "blocker_codes", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "support_commercial_readiness"},
+        "contract_version": {"const": "1.3.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "presented_volume_ref": {"type": "string", "minLength": 1},
+        "work_volume_ref": {"type": "string", "minLength": 1},
+        "id_package_ref": {"type": "string", "minLength": 1},
+        "ks_line_ref": {"type": "string", "minLength": 1},
+        "payment_claim_ref": {"type": "string", "minLength": 1},
+        "presented_eligible": {"type": "boolean"},
+        "ks_consistent": {"type": "boolean"},
+        "payment_ready": {"type": "boolean"},
+        "blocker_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"payment_ready": {"const": true}}}, "then": {"properties": {"presented_eligible": {"const": true}, "ks_consistent": {"const": true}, "blocker_codes": {"maxItems": 0}}}}
+      ],
+      "additionalProperties": false
+    },
+    "terminalOutcome": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "support_process_id", "process_revision", "outcome", "deliverable_refs", "blocker_codes", "uncertainty_codes", "archive_manifest_digest", "product_ready", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "support_terminal_outcome"},
+        "contract_version": {"const": "1.3.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "support_process_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "process_revision": {"type": "integer", "minimum": 1},
+        "outcome": {"enum": ["completed", "blocked", "failed", "quarantined"]},
+        "deliverable_refs": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "blocker_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "uncertainty_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "archive_manifest_digest": {"type": ["string", "null"]},
+        "product_ready": {"const": false},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"outcome": {"const": "completed"}}}, "then": {"properties": {"deliverable_refs": {"minItems": 1}, "blocker_codes": {"maxItems": 0}, "archive_manifest_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}}}},
+        {"if": {"properties": {"outcome": {"enum": ["blocked", "failed", "quarantined"]}}}, "then": {"properties": {"blocker_codes": {"minItems": 1}}}}
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/processEvent"},
+    {"$ref": "#/$defs/generationOutcome"},
+    {"$ref": "#/$defs/executiveScheme"},
+    {"$ref": "#/$defs/commercialReadiness"},
+    {"$ref": "#/$defs/terminalOutcome"}
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "record_type": "support_executive_scheme",
+  "contract_version": "1.3.0",
+  "scope": {"organization_id": "org_demo", "workspace_id": "ws_demo", "mode_execution_id": "mode_support"},
+  "executive_scheme_id": "scheme_demo",
+  "scheme_version": 1,
+  "design_geometry_ref": "fact:design@1",
+  "as_built_geometry_ref": "model:vlm-region@1",
+  "crs_ref": "CRS:synthetic-local@1",
+  "reference_frame_ref": "frame_demo",
+  "unit_code": "mm",
+  "precision_scale": 1,
+  "calibration_ref": "calibration_demo",
+  "tolerance_rule_trace_id": "trace_demo",
+  "semantic_fingerprint": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "status": "semantic_finalized",
+  "blocker_codes": []
+}

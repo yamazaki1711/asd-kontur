@@ -11,6 +11,7 @@ on:
       - implementation/g07-ai-vlm-harness-v0.1
       - implementation/wp11-common-domain-process-kernel-v0.1
       - implementation/wp12-tender-slice-v0.1
+      - implementation/wp13-support-slice-v0.1
 
 permissions:
   contents: read
