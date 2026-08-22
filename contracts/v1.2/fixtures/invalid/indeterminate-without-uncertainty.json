@@ -1,0 +1,18 @@
+{
+  "record_type": "tender_deliverable",
+  "contract_version": "1.2.0",
+  "scope": {"organization_id": "org-synthetic", "workspace_id": "workspace-synthetic-a", "mode_execution_id": "mode-synthetic-tender"},
+  "deliverable_id": "deliverable-synthetic-gap",
+  "deliverable_version": 1,
+  "deliverable_kind": "tender_risk_register",
+  "state": "draft",
+  "typed_items": [{"finding_id":"finding-synthetic-1","finding_version":1,"kind":"contract_risk","subject":"payment","severity":"high","applicability":"indeterminate","clause":{"clause_id":"clause-synthetic-1","clause_version":1,"locator_label":"clause.synthetic.1","source_version_id":"source-synthetic-1","source_locator_id":"locator-synthetic-1","fact_id":"fact-synthetic-1","fact_version":1,"text_digest":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","authority_layer":"contract","edition_ref":null},"evidence":[{"source_version_id":"source-synthetic-1","source_locator_id":"locator-synthetic-1","evidence_link_id":"evidence-synthetic-1"}],"rule_set_version_id":"ruleset-synthetic-1","rule_trace_id":"trace-synthetic-1","uncertainty_code":null,"recommended_change":null,"consequence_code":"PAYMENT_UNKNOWN","professional_status":"blocked","fingerprint":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}],
+  "source_manifest_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "evidence_manifest_digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "rule_set_version_id": "ruleset-synthetic-1",
+  "blocker_ids": ["finding-synthetic-1"],
+  "uncertainty_ids": [],
+  "review_decision_id": null,
+  "finalization_decision_id": null,
+  "fingerprint": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+}

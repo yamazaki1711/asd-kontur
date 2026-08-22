@@ -783,6 +783,23 @@ class PostgresWorkspaceStorageAdapter:
     """Restricted exact-relation purge adapter; never drops/truncates a schema."""
 
     TABLES = (
+        "workspace.tender_terminal_outcomes",
+        "workspace.tender_review_decisions",
+        "workspace.tender_deliverable_versions",
+        "workspace.tender_revised_clause_versions",
+        "workspace.tender_revised_contract_versions",
+        "workspace.tender_disagreement_items",
+        "workspace.tender_disagreement_protocol_versions",
+        "workspace.tender_finding_confirmation_decisions",
+        "workspace.tender_professional_grants",
+        "workspace.tender_issue_evidence",
+        "workspace.tender_issue_versions",
+        "workspace.tender_requirement_versions",
+        "workspace.tender_clause_versions",
+        "workspace.tender_completeness_assessments",
+        "workspace.tender_corpus_items",
+        "workspace.tender_scope_versions",
+        "workspace.tender_processes",
         "workspace.deliverable_inputs",
         "workspace.kernel_finding_versions",
         "workspace.kernel_issue_versions",

@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.2:schema:tender",
+  "title": "ASD-KONTUR WP-12 Tender contracts v1.2",
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "required": ["organization_id", "workspace_id", "mode_execution_id"],
+      "properties": {
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "mode_execution_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "exactVersion": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+    "evidenceRef": {
+      "type": "object",
+      "required": ["source_version_id", "source_locator_id", "evidence_link_id"],
+      "properties": {
+        "source_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_locator_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "evidence_link_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+      },
+      "additionalProperties": false
+    },
+    "clauseRef": {
+      "type": "object",
+      "required": ["clause_id", "clause_version", "locator_label", "source_version_id", "source_locator_id", "fact_id", "fact_version", "text_digest", "authority_layer"],
+      "properties": {
+        "clause_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "clause_version": {"type": "integer", "minimum": 1},
+        "locator_label": {"type": "string", "minLength": 1},
+        "source_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_locator_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "fact_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "fact_version": {"type": "integer", "minimum": 1},
+        "text_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "authority_layer": {"enum": ["ntd", "legislation", "contract", "customer_regulation", "judicial_practice", "expert_opinion"]},
+        "edition_ref": {"type": ["string", "null"]}
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "required": ["finding_id", "finding_version", "kind", "subject", "severity", "applicability", "clause", "evidence", "rule_set_version_id", "rule_trace_id", "consequence_code", "professional_status", "fingerprint"],
+      "properties": {
+        "finding_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "finding_version": {"type": "integer", "minimum": 1},
+        "kind": {"enum": ["contract_risk", "conflict", "gap", "uncertainty", "blocker", "missing_work", "missing_material", "geometry_blocker"]},
+        "subject": {"enum": ["responsibility", "deadline", "acceptance", "payment", "price", "volume", "material", "technical_requirement", "authority", "termination", "geometry", "source_completeness"]},
+        "severity": {"enum": ["info", "low", "medium", "high", "blocking"]},
+        "applicability": {"enum": ["applicable", "not_applicable", "indeterminate"]},
+        "clause": {"$ref": "#/$defs/clauseRef"},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidenceRef"}},
+        "rule_set_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "rule_trace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "uncertainty_code": {"type": ["string", "null"]},
+        "recommended_change": {"type": ["string", "null"]},
+        "consequence_code": {"type": "string", "minLength": 1},
+        "professional_status": {"enum": ["draft", "validated", "confirmed", "blocked"]},
+        "confirmation_decision_id": {"type": ["string", "null"]},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"applicability": {"const": "indeterminate"}}}, "then": {"required": ["uncertainty_code"], "properties": {"uncertainty_code": {"type": "string", "minLength": 1}}}},
+        {"if": {"properties": {"professional_status": {"const": "confirmed"}}}, "then": {"required": ["confirmation_decision_id"], "properties": {"confirmation_decision_id": {"type": "string", "minLength": 1}}}}
+      ],
+      "additionalProperties": false
+    },
+    "disagreementItem": {
+      "type": "object",
+      "required": ["item_id", "ordinal", "source_clause", "finding_id", "finding_version", "finding_decision_id", "proposed_clause_text", "consequence_code", "evidence", "rule_trace_id"],
+      "properties": {
+        "item_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "source_clause": {"$ref": "#/$defs/clauseRef"},
+        "finding_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "finding_version": {"type": "integer", "minimum": 1},
+        "finding_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "proposed_clause_text": {"type": "string", "minLength": 1},
+        "consequence_code": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidenceRef"}},
+        "rule_trace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "uncertainty_ids": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}}
+      },
+      "additionalProperties": false
+    },
+    "deliverable": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "deliverable_id", "deliverable_version", "deliverable_kind", "state", "typed_items", "source_manifest_digest", "evidence_manifest_digest", "rule_set_version_id", "blocker_ids", "uncertainty_ids", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "tender_deliverable"},
+        "contract_version": {"const": "1.2.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "deliverable_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "deliverable_version": {"type": "integer", "minimum": 1},
+        "deliverable_kind": {"enum": ["disagreement_protocol", "revised_contract", "tender_risk_register", "tender_gap_register", "tender_pd_rd_analysis"]},
+        "state": {"enum": ["draft", "reviewed", "finalized", "blocked"]},
+        "typed_items": {"type": "array", "minItems": 1, "items": {"oneOf": [{"$ref": "#/$defs/finding"}, {"$ref": "#/$defs/disagreementItem"}]}},
+        "source_manifest_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "evidence_manifest_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "rule_set_version_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "blocker_ids": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "uncertainty_ids": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "review_decision_id": {"type": ["string", "null"]},
+        "finalization_decision_id": {"type": ["string", "null"]},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "finalized"}}}, "then": {"required": ["review_decision_id", "finalization_decision_id"], "properties": {"blocker_ids": {"maxItems": 0}, "review_decision_id": {"type": "string", "minLength": 1}, "finalization_decision_id": {"type": "string", "minLength": 1}}}}
+      ],
+      "additionalProperties": false
+    },
+    "processEvent": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "event_name", "tender_process_id", "aggregate_version", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "tender_process_event"},
+        "contract_version": {"const": "1.2.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "event_name": {"enum": ["TenderProcessRequested", "TenderCorpusAssessed", "TenderRequirementsDetermined", "TenderAnalyzed", "TenderDrafted", "TenderWaitingForAuthority", "TenderBlocked", "TenderDeliverableFinalized"]},
+        "tender_process_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "aggregate_version": {"type": "integer", "minimum": 1},
+        "fingerprint": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/deliverable"}, {"$ref": "#/$defs/processEvent"}]
+}

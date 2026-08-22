@@ -1,0 +1,27 @@
+{
+  "registry_version": "1.2.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-23T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0"],
+    "notes": "Adds typed WP-12 Tender deliverables and process events without mutating earlier persisted schemas."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v1.2:schema:tender",
+      "path": "schemas/tender.schema.json",
+      "digest": "sha256:2a71a9c0aeffd9c8017bb84bc0d63a1678fe4d12f045177b460f3e803bb6972a"
+    }
+  ],
+  "contract_keys": [
+    "tender.process-event",
+    "tender.disagreement-protocol",
+    "tender.revised-contract",
+    "tender.risk-register",
+    "tender.gap-register",
+    "tender.pd-rd-analysis"
+  ]
+}

@@ -95,6 +95,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
   это не означает готовность режима или результата.
+- `WP-12 Tender Slice` — **PASS 2026-08-23**: object-independent
+  clause/risk/conflict/gap analysis, пять typed Tender outputs,
+  Candidate→Fact→qualified legal authority boundary и archive/reset isolation
+  прошли локально на disposable PostgreSQL 17 и в canonical PostgreSQL 18 CI.
+  Support, Audit и Restoration не начаты; ProductReady = false.
 
 Ключевые документы:
 
@@ -110,6 +115,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
 - [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
 - [WP-11 Common Domain Process Kernel](docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md)
+- [WP-12 Tender Slice](docs/implementation/WP12_TENDER_SLICE_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -126,10 +132,12 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
   immutable G-06 версия content-free DestructionAttestation;
   `contracts/v1.1/` — additive G-07 render/batch/qualification/raw-artifact
-  extension.
-- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07 и WP‑11:
+  extension; `contracts/v1.2/` — additive WP‑12 typed Tender extension.
+- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
+  WP‑11 и WP‑12:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
-  workspace lifecycle/AI-VLM Harness/common process foundations без mode workflows.
+  workspace lifecycle/AI-VLM Harness/common process foundations и первый
+  Tender implementation slice.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег

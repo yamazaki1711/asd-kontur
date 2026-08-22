@@ -1,0 +1,30 @@
+{
+  "record_type": "tender_deliverable",
+  "contract_version": "1.2.0",
+  "scope": {"organization_id": "org-synthetic", "workspace_id": "workspace-synthetic-a", "mode_execution_id": "mode-synthetic-tender"},
+  "deliverable_id": "deliverable-synthetic-protocol",
+  "deliverable_version": 1,
+  "deliverable_kind": "disagreement_protocol",
+  "state": "reviewed",
+  "typed_items": [{
+    "item_id": "item-synthetic-001",
+    "ordinal": 1,
+    "source_clause": {"clause_id": "clause-synthetic-001", "clause_version": 1, "locator_label": "clause.synthetic.1", "source_version_id": "source-synthetic-contract-v1", "source_locator_id": "locator-synthetic-clause-1", "fact_id": "fact-synthetic-clause-1", "fact_version": 1, "text_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "authority_layer": "contract", "edition_ref": null},
+    "finding_id": "finding-synthetic-risk-1",
+    "finding_version": 1,
+    "finding_decision_id": "decision-synthetic-risk-1",
+    "proposed_clause_text": "Synthetic proposed wording for professional review.",
+    "consequence_code": "UNALLOCATED_PAYMENT_RISK",
+    "evidence": [{"source_version_id": "source-synthetic-contract-v1", "source_locator_id": "locator-synthetic-clause-1", "evidence_link_id": "evidence-synthetic-clause-1"}],
+    "rule_trace_id": "rule-trace-synthetic-1",
+    "uncertainty_ids": []
+  }],
+  "source_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "evidence_manifest_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "rule_set_version_id": "ruleset-synthetic-1",
+  "blocker_ids": [],
+  "uncertainty_ids": [],
+  "review_decision_id": "review-synthetic-1",
+  "finalization_decision_id": null,
+  "fingerprint": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

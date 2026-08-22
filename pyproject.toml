@@ -54,6 +54,8 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 "tests/integration/test_common_domain_kernel.py" = ["E501"]
 "tests/unit/test_ai_vlm_harness.py" = ["E501"]
 "src/asd_kontur/kernel/postgres.py" = ["E501"]
+"src/asd_kontur/tender/postgres.py" = ["E501"]
+"tests/integration/test_tender_slice.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

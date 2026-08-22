@@ -1,0 +1,18 @@
+{
+  "record_type": "tender_deliverable",
+  "contract_version": "1.2.0",
+  "scope": {"organization_id": "org-synthetic", "workspace_id": "workspace-synthetic-a", "mode_execution_id": "mode-synthetic-tender"},
+  "deliverable_id": "deliverable-synthetic-invalid",
+  "deliverable_version": 1,
+  "deliverable_kind": "revised_contract",
+  "state": "finalized",
+  "typed_items": [],
+  "source_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "evidence_manifest_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "rule_set_version_id": "ruleset-synthetic-1",
+  "blocker_ids": ["blocker-synthetic-1"],
+  "uncertainty_ids": [],
+  "review_decision_id": "model:draft-provider",
+  "finalization_decision_id": null,
+  "fingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}
