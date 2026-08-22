@@ -35,6 +35,8 @@ def test_repository_contains_no_private_key_or_live_token_shape(
         relative = path.relative_to(repository_root)
         if not path.is_file() or any(part in ignored_roots for part in relative.parts):
             continue
+        if path == Path(__file__):
+            continue
         if path.suffix not in {".json", ".py", ".md", ".toml", ".yml", ".yaml"}:
             continue
         text = path.read_text(encoding="utf-8", errors="ignore").lower()
