@@ -100,10 +100,10 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   Candidate→Fact→qualified legal authority boundary и archive/reset isolation
   прошли локально на disposable PostgreSQL 17 и в canonical PostgreSQL 18 CI.
   Audit и Restoration не начаты; ProductReady = false.
-- `WP-13 Support Slice` — **ACCEPTANCE CANDIDATE 2026-08-23**: common-kernel
+- `WP-13 Support Slice` — **PASS 2026-08-23**: common-kernel
   work/MTR/control/evidence, ID completeness/generation, confirmed geometry и
-  volume/KS/payment trace прошли local PostgreSQL 17; canonical PostgreSQL 18 CI
-  ещё требуется до `PASS`. Production print-ready и policy instances blocked.
+  volume/KS/payment trace прошли local PostgreSQL 17 и canonical PostgreSQL 18
+  CI. Production print-ready и policy instances остаются blocked.
 
 Ключевые документы:
 

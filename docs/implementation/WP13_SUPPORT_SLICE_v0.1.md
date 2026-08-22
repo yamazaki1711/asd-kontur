@@ -1,6 +1,6 @@
 # WP‑13 Support Slice v0.1
 
-- **Статус:** `WP-13 acceptance candidate — canonical CI pending`
+- **Статус:** `Accepted WP-13 Support implementation slice — PASS`
 - **Владелец продукта:** Олег Щербаков
 - **Дата:** 2026‑08‑23
 - **Ветка:** `implementation/wp13-support-slice-v0.1`
@@ -205,8 +205,8 @@ Local evidence на disposable PostgreSQL 17.10:
 - exact portable archive и scoped reset с platform-template integrity;
 - disposable `0007→0006→0007`.
 
-Canonical PostgreSQL 18 + pgvector CI должен завершиться до перевода статуса в
-`PASS`; текущая запись не выдаёт локальную проверку за canonical acceptance.
+Canonical PostgreSQL 18 + pgvector CI завершён успешно в workflow
+`Core foundation quality`, runs `32603728214` и `32603744590`.
 
 ## 14. Ограничения и blockers
 
@@ -221,8 +221,8 @@ Canonical PostgreSQL 18 + pgvector CI должен завершиться до �
 
 ## 15. Gate self-check
 
-WP‑13 может стать `PASS` только после зелёного canonical CI на PostgreSQL 18.
-При этом PASS означает лишь accepted Support implementation slice на
+WP‑13 имеет статус `PASS` после зелёного canonical CI на PostgreSQL 18. PASS
+означает лишь accepted Support implementation slice на
 synthetic/disposable evidence. Он не подтверждает production print readiness,
 production retention/egress, готовность остальных режимов или продукта.
 

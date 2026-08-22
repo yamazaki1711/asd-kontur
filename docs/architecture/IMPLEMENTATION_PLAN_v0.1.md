@@ -603,9 +603,8 @@ external execution остаётся `BLOCKED` до WP-09 и G-02B. Следую�
 canonical PostgreSQL 18 CI. WP-12 Tender slice принят 2026-08-23: AT-PE-41,
 authority/lineage, five typed outputs, archive/reset and A/B isolation passed
 on disposable PostgreSQL 17 and canonical PostgreSQL 18 CI. WP-13 Support
-реализован как acceptance candidate: AT-PE-42 и required local PostgreSQL 17
-evidence прошли; `PASS` требует зелёного canonical PostgreSQL 18 CI. WP-14 не
-начинается автоматически.
+принят 2026-08-23: AT-PE-42, required local PostgreSQL 17 evidence и canonical
+PostgreSQL 18 CI прошли. WP-14 не начинается автоматически.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02
