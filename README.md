@@ -4,10 +4,10 @@
 строительной документации, управления доказательствами и подготовки
 проверяемых результатов по объектам капитального строительства (**ОКС**).
 
-Репозиторий содержит принятый архитектурный baseline. Реализация нового
-общего ядра ещё не начата; наличие спецификации не означает готовность MVP,
-production-среды, отдельного режима или генератора исполнительной
-документации.
+Репозиторий содержит принятую архитектуру и первый общий persistence
+foundation нового ядра. Наличие схемы БД и runtime-контрактов не означает
+готовность MVP, production-среды, отдельного режима или генератора
+исполнительной документации.
 
 ## Объектная и процессная граница
 
@@ -73,9 +73,11 @@ production-среды, отдельного режима или генерато
   evidence-backed policy instances и проверок;
 - `G-03 Contract Pack` — **PASS** как accepted normative contracts и
   machine-readable schema/fixture baseline;
-- `G-04 Persistence Foundation` — **NEXT / BLOCKED** до отдельного разрешения
-  на реализацию;
-- прикладная реализация, ORM, DDL и migrations — **NOT STARTED**.
+- `G-04 Persistence Foundation` — **PASS 2026-08-23**: Contract Pack runtime,
+  PostgreSQL migrations, composite scope/RLS, audit и inbox/outbox проверены
+  локально и в CI на real PostgreSQL;
+- `G-05 Platform Knowledge Foundation` — **NEXT / BLOCKED** до отдельной
+  authority; бизнес-процессы и production deployment не начаты.
 
 Ключевые документы:
 
@@ -86,6 +88,7 @@ production-среды, отдельного режима или генерато
 - [Deployment and Policy Profiles](docs/architecture/DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md)
 - [Contract Pack](docs/architecture/CONTRACT_PACK_v0.1.md)
 - [Machine-readable contracts](contracts/v0.1/README.md)
+- [G-04 Persistence Foundation](docs/implementation/G04_PERSISTENCE_FOUNDATION_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -101,6 +104,8 @@ production-среды, отдельного режима или генерато
 - `docs/reports/` — проверенные audit/inventory/transition records.
 - `contracts/v0.1/` — accepted G-03 registry, JSON Schemas и обезличенные
   valid/invalid contract fixtures.
+- `src/asd_kontur/`, `migrations/`, `tests/` — минимальное активное ядро G-04:
+  contracts runtime и PostgreSQL persistence foundation без mode workflows.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег
