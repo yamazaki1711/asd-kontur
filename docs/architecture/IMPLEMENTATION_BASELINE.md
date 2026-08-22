@@ -1,6 +1,6 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted implementation baseline — G-04/G-05/G-06 PASS`
+- **Статус:** `Accepted implementation baseline — G-04/G-05/G-06/G-07A PASS`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
@@ -28,6 +28,11 @@ implementation foundation:
 - `G-06 Workspace Lifecycle Foundation` — `PASS 2026-08-23`:
   lifecycle/archive/import/reset/destruction foundation и A/B isolation
   проверены локально и в canonical PostgreSQL 18 CI;
+- `G-07A AI/VLM Harness Foundation` — `PASS 2026-08-23`: native-first,
+  provider-neutral local/synthetic execution, Candidate-only lifecycle,
+  validators/repair, qualification, batch/reconciliation, migration and
+  lifecycle/reset integration; G-07B и production qualification/egress
+  остаются `BLOCKED`;
 - mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
@@ -61,14 +66,15 @@ tree без новых контрактов, проверки scope/provenance �
 
 Без отдельной authority и gate evidence не начинаются:
 
-- последующие после G‑06 gates;
+- последующие после G‑07 gates;
 - PostgreSQL/S3/VPS production deployment;
 - перенос legacy templates, binaries и данных конкретного ОКС;
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-07; G‑06 не
-активирует production policy instances и не отменяет `G-02B BLOCKED`.
+Следующий work package определяется `IMPLEMENTATION_PLAN_v0.1.md` как WP-11
+Common domain process kernel; G‑07 не активирует production policy instances
+и не отменяет `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline
 
