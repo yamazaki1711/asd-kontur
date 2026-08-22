@@ -1,0 +1,38 @@
+{
+  "registry_id": "urn:asd-kontur:contracts:v1.0:registry:lifecycle-attestation",
+  "registry_version": "1.0.0",
+  "status": "accepted_implementation_baseline",
+  "owner": "Oleg Shcherbakov",
+  "decision_date": "2026-08-23",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "network_schema_fetch": "forbidden",
+  "contracts": [
+    {
+      "contract_key": "lifecycle.destruction-attestation",
+      "contract_family": "process_lifecycle",
+      "contract_version": "1.0.0",
+      "schema_id": "urn:asd-kontur:contracts:v1.0:schema:destruction-attestation",
+      "schema_pointer": "#",
+      "status": "accepted",
+      "supersedes": "lifecycle.destruction-attestation@0.1.0",
+      "compatibility": "breaking_major_exact_pin",
+      "retention_class": "content_free_post_reset_attestation",
+      "authority_requirements": [
+        "independent_human_verifier",
+        "exact_deletion_plan",
+        "complete_adapter_registry"
+      ],
+      "schema_path": "schemas/destruction-attestation.schema.json",
+      "schema_digest": "sha256:af32e926b4335d668c67c9f0f78b27154157c93d5cd4c05e06e91f961e449d36"
+    }
+  ],
+  "fixtures": {
+    "valid": ["fixtures/valid/destruction-attestation.development.json"],
+    "invalid": [
+      {
+        "path": "fixtures/invalid/destruction-attestation.contentful.json",
+        "expected": "additional property filename is forbidden"
+      }
+    ]
+  }
+}

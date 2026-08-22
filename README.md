@@ -79,8 +79,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `G-05 Platform Knowledge Foundation` — **PASS 2026-08-23**: WP‑05/06/07,
   PostgreSQL migrations, FTS/pgvector/typed graph, Knowledge Gateway, rules и
   Promotion Gate проверены локально и в canonical PostgreSQL 18 CI;
-- `G-06 Workspace Lifecycle Foundation` — **NEXT / BLOCKED** до отдельной
-  authority. Бизнес-процессы и production deployment не начаты.
+- `G-06 Workspace Lifecycle Foundation` — **PASS 2026-08-23**:
+  synthetic/disposable lifecycle, archive/import, reset/destroy, adapter
+  receipts, residual scans и content-free attestation проверены локально и в
+  canonical PostgreSQL 18 CI; production retention/destruction readiness
+  остаётся `BLOCKED`.
 
 Ключевые документы:
 
@@ -93,6 +96,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [Machine-readable contracts](contracts/v0.1/README.md)
 - [G-04 Persistence Foundation](docs/implementation/G04_PERSISTENCE_FOUNDATION_v0.1.md)
 - [G-05 Platform Knowledge Foundation](docs/implementation/G05_PLATFORM_KNOWLEDGE_FOUNDATION_v0.1.md)
+- [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -106,11 +110,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `docs/architecture/` — нормативная архитектура и plan gates;
 - `docs/architecture/decisions/` — ADR-0001…ADR-0010;
 - `docs/reports/` — проверенные audit/inventory/transition records.
-- `contracts/v0.1/` — accepted G-03 registry, JSON Schemas и обезличенные
-  valid/invalid contract fixtures.
-- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04/G‑05:
-  Contract Pack runtime, PostgreSQL persistence и platform knowledge foundation
-  без mode workflows.
+- `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
+  immutable G-06 версия content-free DestructionAttestation.
+- `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑06:
+  Contract Pack runtime, PostgreSQL persistence, platform knowledge и
+  workspace lifecycle foundation без mode workflows.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег

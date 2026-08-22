@@ -7,6 +7,7 @@ on:
       - main
       - implementation/g04-persistence-foundation-v0.1
       - implementation/g05-platform-knowledge-foundation-v0.1
+      - implementation/g06-workspace-lifecycle-foundation-v0.1
 
 permissions:
   contents: read

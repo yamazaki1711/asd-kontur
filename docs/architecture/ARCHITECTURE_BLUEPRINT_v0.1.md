@@ -311,6 +311,11 @@ profiles с `default deny` до утверждения.
     rebuildable FTS/pgvector/typed graph, six-tool Knowledge Gateway,
     RuleVersion/RuleSet runtime и Promotion Gate прошли local PostgreSQL 17.10
     qualification и canonical PostgreSQL 18.6 + pgvector 0.8.6 CI.
+15. **G-06 Workspace Lifecycle Foundation v0.1** — accepted implementation baseline
+    2026-08-23: единый lifecycle четырёх режимов, portable archive/import,
+    adapter-bound reset/destroy, recovery/quarantine и content-free
+    DestructionAttestation прошли local PostgreSQL 17.10 и canonical
+    PostgreSQL 18.6 + pgvector 0.8.6 CI.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -387,4 +392,6 @@ machine-readable Contract Pack.
 запрещены. Deployment и external egress отдельно запрещены до
 active production policy instances. G-04 Persistence Foundation закрыт
 2026-08-23 на PostgreSQL/Contract Pack evidence. G‑05 закрыт 2026-08-23 по
-локальному и canonical CI evidence. G‑06 не начинается автоматически.
+локальному и canonical CI evidence. G‑06 закрыт 2026-08-23 по local и
+canonical CI evidence; G‑07 не начинается автоматически и production policy
+instances остаются `BLOCKED`.
