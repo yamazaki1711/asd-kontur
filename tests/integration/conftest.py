@@ -22,6 +22,8 @@ class PostgreSQLEnvironment:
     database_name: str
     application_role: str
     application_engine: Engine
+    curator_engine: Engine
+    projection_engine: Engine
     owner_engine: Engine
 
 
@@ -65,6 +67,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
     run_id = str(os.getpid())
     database_name = f"asd_g04_test_{run_id}"
     application_role = f"asd_g04_test_app_{run_id}"
+    curator_role = f"asd_g05_test_curator_{run_id}"
+    projection_role = f"asd_g05_test_projection_{run_id}"
     password = "synthetic-g04-test-only"
     cluster_admin_url = base_url.set(database="postgres")
     cluster_engine = sa.create_engine(cluster_admin_url, isolation_level="AUTOCOMMIT")
@@ -75,15 +79,35 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         run_migration(str(repository_root), owner_url, "head")
         assert application_role.replace("_", "").isalnum()
         with cluster_engine.begin() as connection:
-            connection.exec_driver_sql(
-                f'CREATE ROLE "{application_role}" LOGIN NOSUPERUSER NOCREATEDB '
-                f"NOCREATEROLE INHERIT PASSWORD '{password}'"
-            )
+            for role in (application_role, curator_role, projection_role):
+                assert role.replace("_", "").isalnum()
+                connection.exec_driver_sql(
+                    f'CREATE ROLE "{role}" LOGIN NOSUPERUSER NOCREATEDB '
+                    f"NOCREATEROLE INHERIT PASSWORD '{password}'"
+                )
             connection.exec_driver_sql(f'GRANT asd_app TO "{application_role}"')
+            connection.exec_driver_sql(f'GRANT asd_platform_curator TO "{curator_role}"')
+            connection.exec_driver_sql(f'GRANT asd_projection_builder TO "{projection_role}"')
         application_url = owner_url.set(username=application_role, password=password)
+        curator_url = owner_url.set(username=curator_role, password=password)
+        projection_url = owner_url.set(username=projection_role, password=password)
         application_engine = create_database_engine(
             DatabaseSettings(
                 url=application_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
+        curator_engine = create_database_engine(
+            DatabaseSettings(
+                url=curator_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
+        projection_engine = create_database_engine(
+            DatabaseSettings(
+                url=projection_url.render_as_string(hide_password=False),
                 pool_size=1,
                 max_overflow=0,
             )
@@ -93,12 +117,17 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             database_name=database_name,
             application_role=application_role,
             application_engine=application_engine,
+            curator_engine=curator_engine,
+            projection_engine=projection_engine,
             owner_engine=owner_engine,
         )
         application_engine.dispose()
+        curator_engine.dispose()
+        projection_engine.dispose()
     finally:
         owner_engine.dispose()
         drop_database(cluster_engine, database_name)
         with cluster_engine.begin() as connection:
-            connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{application_role}"')
+            for role in (application_role, curator_role, projection_role):
+                connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
         cluster_engine.dispose()
