@@ -736,6 +736,7 @@ The accepted execution sequence is defined by **Implementation Plan v0.1**.
 G-01 is closed by `LOGICAL_DATA_MODEL_v0.1.md`; G-02 is closed as a complete
 fail-closed profile contract by
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md`, while concrete production instances
-remain blocked. The next normative artifact is G-03 Contract Pack.
-Implementation remains closed until G-03 passes and explicit authorization is
-recorded; deployment/egress additionally require active production instances.
+remain blocked. G-03 is closed by `CONTRACT_PACK_v0.1.md` and
+`contracts/v0.1/`. The next gate is G-04, but implementation remains closed
+until explicit authorization is recorded; deployment/egress additionally
+require active production instances.

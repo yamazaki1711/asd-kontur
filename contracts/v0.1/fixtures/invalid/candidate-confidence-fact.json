@@ -1,0 +1,13 @@
+{
+  "test_vector": "candidate_confidence_cannot_confirm_fact",
+  "workspace_id": "ws.synthetic.a",
+  "candidate_ref": {"key": "candidate.synthetic.001", "version": "1"},
+  "proposed_fact": {
+    "fact_id": "fact.synthetic.invalid.001",
+    "fact_version": 1,
+    "confidence": 0.999,
+    "confirmation_decision_ref": null,
+    "authority_reference": null
+  },
+  "expected_error_code": "CANDIDATE_INVALID"
+}

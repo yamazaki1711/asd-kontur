@@ -1,0 +1,9 @@
+{
+  "test_vector": "reset_without_verified_attestation",
+  "workspace_id": "ws.synthetic.a",
+  "requested_final_state": "RESET_VERIFIED",
+  "destruction_attestation_ref": null,
+  "adapter_receipts": [],
+  "residual_scan_refs": [],
+  "expected_error_code": "RESET_INCOMPLETE"
+}

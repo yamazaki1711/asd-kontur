@@ -1,0 +1,41 @@
+{
+  "evidence_pack_id": "evidence-pack.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "purpose": "knowledge.required-documents",
+  "source_versions": [
+    {
+      "source_artifact_id": "source.synthetic.customer-regulation.001",
+      "source_version_id": "source-version.synthetic.customer-regulation.001",
+      "source_class": "customer_regulation",
+      "scope_kind": "workspace",
+      "workspace_id": "ws.synthetic.a",
+      "physical_object_ref": {"key": "object.synthetic.001", "version": "1"},
+      "acquisition_record_ref": {"key": "acquisition.synthetic.001", "version": "1"},
+      "external_identifiers": [],
+      "effective_from": null,
+      "effective_to": null,
+      "supersedes_source_version_id": null,
+      "registered_at": "2026-08-22T00:00:00Z"
+    }
+  ],
+  "normative_editions": [
+    {"key": "normative-edition.synthetic.001", "version": "1"}
+  ],
+  "locators": [
+    {
+      "source_version_id": "source-version.synthetic.customer-regulation.001",
+      "locator_kind": "page",
+      "locator_value": {"page": 1},
+      "fragment_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+    }
+  ],
+  "permitted_fragments": [],
+  "applicability": "indeterminate",
+  "rule_traces": [],
+  "conflicts": [],
+  "uncertainties": [{"key": "uncertainty.synthetic.001", "version": "1"}],
+  "gaps": ["gap.customer-regulation-conflict-review"],
+  "classification": "workspace_restricted",
+  "generated_at": "2026-08-22T00:00:00Z",
+  "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777"
+}

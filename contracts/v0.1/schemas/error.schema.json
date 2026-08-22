@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:error",
+  "title": "ASD-KONTUR Stable Error v0.1",
+  "type": "object",
+  "required": [
+    "code",
+    "category",
+    "severity",
+    "retryability",
+    "scope",
+    "source_component",
+    "operation",
+    "evidence_refs",
+    "safe_human_message_key",
+    "diagnostic_reference",
+    "remediation_contract",
+    "terminal"
+  ],
+  "properties": {
+    "code": {
+      "enum": [
+        "CONTRACT_INVALID_SCHEMA",
+        "CONTRACT_INCOMPATIBLE_VERSION",
+        "CONTRACT_UNKNOWN_VERSION",
+        "AUTH_UNAUTHORIZED",
+        "POLICY_BLOCKED",
+        "CLASSIFICATION_AMBIGUOUS",
+        "SCOPE_VIOLATION",
+        "WORKSPACE_MISMATCH",
+        "CONCURRENCY_CONFLICT",
+        "IDEMPOTENCY_CONFLICT",
+        "SOURCE_UNAVAILABLE",
+        "SOURCE_INTEGRITY_MISMATCH",
+        "EVIDENCE_MISSING",
+        "CANDIDATE_INVALID",
+        "VALIDATION_BLOCKED",
+        "DECISION_INDETERMINATE",
+        "RULE_UNAVAILABLE",
+        "PROVIDER_FAILURE",
+        "BUDGET_EXHAUSTED",
+        "STORAGE_FAILURE",
+        "RENDER_PRINT_FAILURE",
+        "GEOMETRY_BLOCKED",
+        "ARCHIVE_FAILURE",
+        "ARCHIVE_IMPORT_FAILURE",
+        "RESET_INCOMPLETE",
+        "RESIDUE_DETECTED",
+        "RECONCILIATION_REQUIRED"
+      ]
+    },
+    "category": {
+      "enum": ["contract", "authorization", "policy", "scope", "source", "evidence", "domain", "rule", "provider", "budget", "storage", "render", "geometry", "lifecycle", "reconciliation"]
+    },
+    "severity": {"enum": ["info", "warning", "error", "critical"]},
+    "retryability": {"enum": ["never", "after_input_change", "after_policy_change", "bounded_retry", "reconcile_first"]},
+    "scope": {
+      "$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/scopeReference"
+    },
+    "source_component": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+    "operation": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+    "locator": {
+      "type": "object",
+      "properties": {
+        "field_path": {"type": "string"},
+        "page": {"type": "integer", "minimum": 1},
+        "object_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_locator": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/sourceLocator"}
+      },
+      "minProperties": 1,
+      "additionalProperties": false
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}
+    },
+    "safe_human_message_key": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+    "diagnostic_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+    "remediation_contract": {
+      "type": "object",
+      "required": ["action", "requires_new_command"],
+      "properties": {
+        "action": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "requires_new_command": {"type": "boolean"},
+        "required_inputs": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}}
+      },
+      "additionalProperties": false
+    },
+    "terminal": {"type": "boolean"},
+    "parameters": {"type": "object"}
+  },
+  "additionalProperties": false
+}

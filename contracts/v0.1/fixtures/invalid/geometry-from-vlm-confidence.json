@@ -1,0 +1,12 @@
+{
+  "test_vector": "vlm_confidence_is_not_geometry_evidence",
+  "workspace_id": "ws.synthetic.a",
+  "geometry": {
+    "coordinate": [1.0, 2.0, 3.0],
+    "crs_ref": null,
+    "unit_profile_ref": null,
+    "confirmed_observation_ref": null,
+    "model_confidence": 0.99
+  },
+  "expected_error_code": "GEOMETRY_BLOCKED"
+}

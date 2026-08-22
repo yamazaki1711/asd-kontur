@@ -16,7 +16,10 @@
 - `G-02A Deployment and Policy Profiles` — `PASS` как полный fail-closed
   нормативный профиль;
 - `G-02B production instance readiness` — `BLOCKED`;
-- `G-03 Contract Pack` — `OPEN`, следующий нормативный gate;
+- `G-03 Contract Pack` — `PASS 2026-08-22`; нормативные schemas, registry и
+  fixtures приняты без начала runtime implementation;
+- `G-04 Persistence Foundation` — `BLOCKED`, следующий gate только после
+  отдельной implementation authority;
 - ORM, DDL, migrations, persistence, deployment и прикладное ядро —
   `NOT STARTED`.
 
@@ -38,6 +41,7 @@ ID Generator или продукта.
 - `IMPLEMENTATION_PLAN_v0.1.md`;
 - `LOGICAL_DATA_MODEL_v0.1.md`;
 - `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md`;
+- `CONTRACT_PACK_v0.1.md` и `contracts/v0.1/`;
 - `TECHNICAL_ARCHITECTURE_v0.3.md`;
 - ADR-0001…ADR-0010.
 
@@ -48,7 +52,7 @@ tree без новых контрактов, проверки scope/provenance �
 
 ## 3. Непереходимые границы
 
-До закрытия `G-03` и отдельной implementation authority запрещены:
+Несмотря на закрытие `G-03`, до отдельной implementation authority запрещены:
 
 - прикладной код, ORM, DDL и migrations;
 - persistence repositories и PostgreSQL/S3/VPS deployment;
@@ -56,9 +60,9 @@ tree без новых контрактов, проверки scope/provenance �
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-После `G-03` следующий шаг определяется `IMPLEMENTATION_PLAN_v0.1.md`; сам
-факт прохождения gate не активирует production policy instances и не отменяет
-`G-02B BLOCKED`.
+Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-04; сам факт
+прохождения G-03 не разрешает его реализацию, не активирует production policy
+instances и не отменяет `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline
 

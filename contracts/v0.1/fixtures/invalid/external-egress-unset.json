@@ -1,0 +1,12 @@
+{
+  "test_vector": "external_egress_with_unset_policy",
+  "workspace_id": "ws.synthetic.a",
+  "route": "authorized_external_vlm",
+  "provider_identity": "provider.synthetic.external",
+  "policy_instances": [
+    {"key": "policy.provider-terms", "status": "unset"},
+    {"key": "policy.external-cost-envelope", "status": "blocked"}
+  ],
+  "expected_decision": "deny",
+  "expected_error_code": "POLICY_BLOCKED"
+}

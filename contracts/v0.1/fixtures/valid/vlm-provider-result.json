@@ -1,0 +1,32 @@
+{
+  "record_type": "provider_execution_result",
+  "execution_id": "execution.synthetic.001",
+  "request_id": "request.synthetic.001",
+  "attempt_id": "attempt.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "execution_identity": {
+    "provider_identity": "provider.synthetic.local",
+    "endpoint_profile_version": "local.0.1.0",
+    "model_identity": "model.synthetic.vlm",
+    "model_revision": "revision.synthetic.001",
+    "execution_format": "local.synthetic",
+    "execution_profile_version": "0.1.0",
+    "prompt_template_version": "0.1.0",
+    "output_schema_version": "0.1.0",
+    "preprocessing_profile_version": "0.1.0",
+    "rendering_profile_version": "0.1.0",
+    "verification_policy_version": "0.1.0"
+  },
+  "provider_status": "completed",
+  "finish_reason": "completed",
+  "structured_output_ref": {"key": "raw-output.synthetic.001", "version": "1"},
+  "raw_response_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+  "response_schema_claim": "candidate.synthetic.0.1.0",
+  "timings": {"duration_ms": 1},
+  "usage": {"items": 1},
+  "cost_reconciliation_ref": {"key": "cost.synthetic.none", "version": "1"},
+  "provider_retention_receipt_ref": {"key": "retention.synthetic.local", "version": "1"},
+  "request_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "response_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "received_at": "2026-08-22T00:00:01Z"
+}

@@ -942,9 +942,10 @@ of decisions, and is synchronized narrowly in the baseline/plan/Blueprint/IA.
 Implementation remains closed. G-02 is closed by
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` as a complete fail-closed profile
 contract, but concrete production instances remain blocked; `G-03 Contract
-Pack` is still open. ORM, DDL, migrations, persistence repositories,
+Pack` закрыт принятым registry/schema/fixture baseline. ORM, DDL, migrations,
+persistence repositories,
 PostgreSQL/S3 deployment, runtime configuration, NTD loading, legacy template
 migration, model/API calls and application implementation are not authorized.
 
-The next normative step on the critical path is **G-03 Contract Pack**. It is
-not started by the G-02 task; G-04 implementation remains blocked.
+Следующий gate critical path — **G-04 Persistence Foundation**, но его
+implementation остаётся blocked до отдельной authority; G-03 PASS её не даёт.

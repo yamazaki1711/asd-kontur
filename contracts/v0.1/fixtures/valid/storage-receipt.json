@@ -1,0 +1,27 @@
+{
+  "record_type": "storage_adapter_receipt",
+  "receipt_id": "receipt.synthetic.storage.001",
+  "operation_id": "operation.synthetic.storage.001",
+  "adapter_id": "adapter.synthetic.workspace-object",
+  "workspace_id": "ws.synthetic.a",
+  "status": "succeeded",
+  "object_ref": {
+    "object_id": "object.synthetic.workspace.001",
+    "object_version": "1",
+    "object_class": "workspace_artifact",
+    "scope_kind": "workspace",
+    "workspace_id": "ws.synthetic.a",
+    "storage_tier": "mbp_local",
+    "content_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "size_bytes": 12,
+    "media_type": "application/octet-stream",
+    "access_capability_ref": "object.read.synthetic.001",
+    "encryption_profile_ref": {"key": "encryption.synthetic", "version": "blocked-0.1.0"},
+    "retention_class": "workspace.temporary"
+  },
+  "observed_digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "observed_size_bytes": 12,
+  "verified_at": "2026-08-22T00:00:00Z",
+  "residue_records": [],
+  "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}

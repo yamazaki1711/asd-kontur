@@ -1,0 +1,9 @@
+{
+  "test_vector": "digest_is_not_object_capability",
+  "workspace_id": "ws.synthetic.a",
+  "object_request": {
+    "content_digest": "sha256:1818181818181818181818181818181818181818181818181818181818181818"
+  },
+  "missing": ["object_id", "object_version", "workspace_id", "access_capability_ref"],
+  "expected_error_code": "AUTH_UNAUTHORIZED"
+}

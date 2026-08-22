@@ -1,0 +1,9 @@
+{
+  "test_vector": "file_openable_is_not_finalized",
+  "workspace_id": "ws.synthetic.a",
+  "candidate_ref": {"key": "generated-candidate.synthetic.001", "version": "1"},
+  "file_opened": true,
+  "print_validation_ref": null,
+  "professional_review_decision_ref": null,
+  "expected_error_code": "RENDER_PRINT_FAILURE"
+}

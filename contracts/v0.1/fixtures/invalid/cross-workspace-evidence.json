@@ -1,0 +1,11 @@
+{
+  "test_vector": "cross_workspace_evidence",
+  "operation_workspace_id": "ws.synthetic.a",
+  "evidence_reference": {
+    "evidence_id": "evidence.synthetic.foreign.001",
+    "evidence_version": "1",
+    "scope_kind": "workspace",
+    "workspace_id": "ws.synthetic.b"
+  },
+  "expected_error_code": "WORKSPACE_MISMATCH"
+}

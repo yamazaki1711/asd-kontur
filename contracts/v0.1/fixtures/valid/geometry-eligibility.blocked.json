@@ -1,0 +1,37 @@
+{
+  "record_type": "executive_scheme_eligibility",
+  "eligibility_id": "geometry-eligibility.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "design_geometry_refs": [
+    {"key": "geometry.synthetic.design.001", "version": "1"}
+  ],
+  "confirmed_as_built_geometry_refs": [
+    {"key": "geometry.synthetic.as-built.001", "version": "1"}
+  ],
+  "geometry_context": {
+    "crs_ref": {"key": "crs.synthetic", "version": "blocked-0.1.0"},
+    "reference_frame_ref": {"key": "frame.synthetic", "version": "blocked-0.1.0"},
+    "unit_profile_ref": {"key": "units.synthetic", "version": "0.1.0"},
+    "precision_profile_ref": {"key": "precision.synthetic", "version": "blocked-0.1.0"}
+  },
+  "transformation_refs": [],
+  "tolerance_evaluation_refs": [
+    {"key": "tolerance-evaluation.synthetic.001", "version": "1"}
+  ],
+  "evidence_refs": [
+    {
+      "evidence_id": "evidence.synthetic.geometry.001",
+      "evidence_version": "1",
+      "scope_kind": "workspace",
+      "workspace_id": "ws.synthetic.a"
+    }
+  ],
+  "conflict_refs": [],
+  "result": "blocked",
+  "authority_reference": {
+    "grant_id": "grant.synthetic.geometry-review.001",
+    "capability": "deliverable.draft",
+    "decision_id": "authz.synthetic.geometry.001"
+  },
+  "digest": "sha256:1616161616161616161616161616161616161616161616161616161616161616"
+}

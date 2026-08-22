@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v0.1:schema:authorization-audit",
+  "title": "ASD-KONTUR Authorization and Content-Minimal Audit v0.1",
+  "$defs": {
+    "authorizationRequest": {
+      "type": "object",
+      "required": ["record_type", "authorization_request_id", "actor_identity", "atomic_capability", "scope_kind", "resource_type", "resource_id", "resource_version", "lifecycle_state", "purpose", "classification", "policy_versions", "correlation_id", "causation_id", "requested_at", "digest"],
+      "properties": {
+        "record_type": {"const": "authorization_request"},
+        "authorization_request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "actor_identity": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/identity"},
+        "active_role_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "atomic_capability": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scope_kind": {"enum": ["platform", "organization", "workspace"]},
+        "platform_scope": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "resource_type": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "resource_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "resource_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "lifecycle_state": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "purpose": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "classification": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "source_scope": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/sourceLocator"}},
+        "destination": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "provider_identity": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "model_profile_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "authority_grant_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "policy_versions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "correlation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "causation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "requested_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "authorizationDecision": {
+      "type": "object",
+      "required": ["record_type", "authorization_decision_id", "request_id", "decision", "reason_codes", "considered_policy_versions", "grant_ref", "decided_by", "decided_at", "valid_until", "scope_digest", "digest"],
+      "properties": {
+        "record_type": {"const": "authorization_decision"},
+        "authorization_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "request_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "decision": {"enum": ["allow", "deny", "blocked"]},
+        "reason_codes": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "considered_policy_versions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "grant_ref": {
+          "oneOf": [{"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}, {"type": "null"}]
+        },
+        "decided_by": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/identity"},
+        "decided_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "valid_until": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "scope_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "grant": {
+      "type": "object",
+      "required": ["record_type", "grant_id", "principal_ref", "capabilities", "scope", "effective_from", "effective_to", "issuer_authority_ref", "status", "digest"],
+      "properties": {
+        "record_type": {"const": "grant"},
+        "grant_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "principal_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "capabilities": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "scope": {"type": "object", "minProperties": 1},
+        "professional_qualification_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"},
+        "segregation_constraints": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "effective_from": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "effective_to": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "issuer_authority_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "status": {"enum": ["active", "suspended", "expired", "revoked"]},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "auditRecord": {
+      "type": "object",
+      "required": ["record_type", "audit_record_id", "audit_kind", "scope_kind", "organization_id", "actor_identity", "atomic_capability", "resource_type", "opaque_resource_ref", "purpose", "authorization_decision_id", "outcome", "reason_codes", "policy_versions", "correlation_id", "causation_id", "occurred_at", "recorded_at", "execution_outcome", "integrity"],
+      "properties": {
+        "record_type": {"const": "audit_record"},
+        "audit_record_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "audit_kind": {"enum": ["authorization", "execution", "validation_decision", "domain_transition", "lifecycle", "security"]},
+        "scope_kind": {"enum": ["platform", "organization", "workspace", "post_reset_content_minimal"]},
+        "organization_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "workspace_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "actor_identity": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/identity"},
+        "atomic_capability": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "resource_type": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "opaque_resource_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "resource_version": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "purpose": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "authorization_decision_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "outcome": {"enum": ["allowed", "denied", "blocked", "succeeded", "failed", "pending", "unknown"]},
+        "reason_codes": {"type": "array", "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "policy_versions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/versionReference"}},
+        "lifecycle_state_before": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "lifecycle_state_after": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "correlation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "causation_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "occurred_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "recorded_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "execution_outcome": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "integrity": {
+          "type": "object",
+          "required": ["record_digest", "chain_reference"],
+          "properties": {
+            "record_digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"},
+            "chain_reference": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "legalHold": {
+      "type": "object",
+      "required": ["record_type", "legal_hold_id", "scope", "basis_evidence_refs", "issuer_authority_ref", "status", "effective_from", "recheck_at", "blocked_actions", "digest"],
+      "properties": {
+        "record_type": {"const": "legal_hold"},
+        "legal_hold_id": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"},
+        "scope": {"type": "object", "minProperties": 1},
+        "basis_evidence_refs": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/evidenceReference"}},
+        "issuer_authority_ref": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/authorityReference"},
+        "status": {"enum": ["active", "released", "expired", "unknown"]},
+        "effective_from": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "effective_to": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "recheck_at": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/timestamp"},
+        "blocked_actions": {"type": "array", "minItems": 1, "items": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/typedId"}},
+        "digest": {"$ref": "urn:asd-kontur:contracts:v0.1:schema:common#/$defs/digest"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/authorizationRequest"},
+    {"$ref": "#/$defs/authorizationDecision"},
+    {"$ref": "#/$defs/grant"},
+    {"$ref": "#/$defs/auditRecord"},
+    {"$ref": "#/$defs/legalHold"}
+  ]
+}

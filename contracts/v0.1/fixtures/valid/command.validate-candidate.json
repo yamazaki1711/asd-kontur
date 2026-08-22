@@ -1,0 +1,72 @@
+{
+  "contract_name": "command.envelope",
+  "contract_version": "0.1.0",
+  "schema_id": "urn:asd-kontur:contracts:v0.1:schema:message",
+  "schema_version": "0.1.0",
+  "message_id": "cmd.synthetic.validate-candidate.001",
+  "scope_kind": "workspace",
+  "organization_id": "org.synthetic.001",
+  "construction_object_id": "oks.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "mode_execution_id": "mode.synthetic.support.001",
+  "aggregate_id": "candidate.synthetic.001",
+  "aggregate_version": 1,
+  "expected_version": 1,
+  "actor_identity": {
+    "identity_id": "human.synthetic.reviewer.001",
+    "identity_kind": "human",
+    "identity_version": "1"
+  },
+  "authority_reference": {
+    "grant_id": "grant.synthetic.candidate-review.001",
+    "capability": "candidate.validate",
+    "decision_id": "authz.synthetic.001"
+  },
+  "purpose": "candidate.validation",
+  "classification": "workspace_restricted",
+  "idempotency_key": "ws.synthetic.a:candidate.validate:001",
+  "correlation_id": "process.synthetic.001",
+  "causation_id": null,
+  "requested_at": "2026-08-22T00:00:00Z",
+  "policy_versions": [
+    {
+      "key": "policy.human-confirmation",
+      "version": "architecture-2026-08-22.1",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  ],
+  "rule_set_version": {
+    "key": "ruleset.synthetic.core",
+    "version": "0.1.0",
+    "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "payload": {
+    "candidate_id": "candidate.synthetic.001",
+    "candidate_version": 1,
+    "validator_profile_ref": "validator.synthetic.001"
+  },
+  "evidence_refs": [
+    {
+      "evidence_id": "evidence.synthetic.001",
+      "evidence_version": "1",
+      "scope_kind": "workspace",
+      "workspace_id": "ws.synthetic.a",
+      "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    }
+  ],
+  "uncertainty_refs": [],
+  "requested_side_effects": [],
+  "retention_class": "workspace.command",
+  "provenance": {
+    "created_by": {
+      "identity_id": "service.synthetic.command-api",
+      "identity_kind": "service",
+      "identity_version": "1"
+    },
+    "created_at": "2026-08-22T00:00:00Z",
+    "contract_refs": [
+      {"key": "command.envelope", "version": "0.1.0"}
+    ]
+  },
+  "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444"
+}

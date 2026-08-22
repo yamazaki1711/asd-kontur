@@ -1,0 +1,38 @@
+{
+  "record_type": "generation_run",
+  "generation_request_id": "generation-request.synthetic.001",
+  "generation_run_id": "generation-run.synthetic.001",
+  "workspace_id": "ws.synthetic.a",
+  "mode_execution_id": "mode.synthetic.support.001",
+  "required_document_type_ref": {"key": "required-document.synthetic.001", "version": "1"},
+  "template_version_ref": {"key": "template.synthetic.001", "version": "0.1.0"},
+  "field_schema_ref": {"key": "field-schema.synthetic.001", "version": "0.1.0"},
+  "binding_plan_ref": {"key": "binding-plan.synthetic.001", "version": "0.1.0"},
+  "renderer_profile_ref": {"key": "renderer.synthetic", "version": "blocked-0.1.0"},
+  "validation_profile_ref": {"key": "validation.synthetic", "version": "0.1.0"},
+  "rule_set_version": {"key": "ruleset.synthetic.core", "version": "0.1.0"},
+  "policy_versions": [
+    {"key": "policy.renderer-font-toolchain", "version": "production-blocked-2026-08-22.1"}
+  ],
+  "input_fingerprint": "sha256:1313131313131313131313131313131313131313131313131313131313131313",
+  "fresh_document_instance": true,
+  "field_resolutions": [
+    {
+      "field_key": "work.description",
+      "state": "missing",
+      "value_type": "text",
+      "normalized_value": null,
+      "display_value": null,
+      "unit": null,
+      "evidence_bindings": [],
+      "transformation_trace": []
+    }
+  ],
+  "format_adapter": {
+    "format": "DOCX",
+    "adapter_ref": {"key": "adapter.docx.synthetic", "version": "unqualified-0.1.0"},
+    "source_immutable": true
+  },
+  "status": "blocked",
+  "digest": "sha256:1414141414141414141414141414141414141414141414141414141414141414"
+}

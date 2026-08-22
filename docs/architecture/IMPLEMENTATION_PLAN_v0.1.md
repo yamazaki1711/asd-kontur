@@ -27,8 +27,9 @@ budget и cost envelope. При конфликте с прямым решени�
 
 Этот план не открывает implementation gate. `G-00=PASS`, `G-01=PASS` и
 `G-02=PASS` на уровне полного fail-closed profile contract; конкретная
-production instance G-02 остаётся `BLOCKED`, а `G-03` открыт. До G-03 и
-отдельной implementation authority запрещены ORM, DDL, migrations и
+production instance G-02 остаётся `BLOCKED`, а `G-03` закрыт принятым
+`CONTRACT_PACK_v0.1.md` и `contracts/v0.1/`. До отдельной implementation
+authority запрещены ORM, DDL, migrations и
 persistence implementation; production deployment и external egress также
 запрещены до active evidence-backed instances.
 
@@ -150,7 +151,7 @@ provider/region или численные RPO/RTO. TA-TD-18 не разреша�
 | G-00 Architecture Baseline | Blueprint, Domain/Knowledge, Knowledge/Memory, Lifecycle, Process, Authorization, Rules, Harness, ID Generation, IA, TA v0.3, ADR-0001…0010, IA/TA decisions | Документы согласованы; four-mode/R-1…R-3/one-core/isolation/Candidate invariants traceable | Codex architecture authority; direct owner RD/DR/HV/ADR preserved | `PASS 2026-08-22` |
 | G-01 Logical Data Model v0.1 | G-00; accepted identity/scope/SoR/retention/process contracts | Отдельный reviewed normative artifact; до него нет ORM/DDL/migration | Architecture approval; policy values referenced, not invented | `PASS 2026-08-22` |
 | G-02 Deployment and Policy Profiles v0.1 | G-00 and G-01 scopes; evidence from provider terms, benchmarks, threat/recovery analysis | Complete profiles or fail-closed values; no production deploy/egress without them | Architecture + applicable security/professional/provider-policy authority | `PASS 2026-08-22` profile contract; production instances `BLOCKED` |
-| G-03 Contract Pack | G-01/G-02; schema registry/versioning rules | Machine-readable contracts pass compatibility, negative-scope and round-trip tests | Architecture/API/security owners | `OPEN` |
+| G-03 Contract Pack | G-01/G-02; schema registry/versioning rules | Machine-readable contracts pass compatibility, negative-scope and round-trip tests | Architecture/API/security owners | `PASS 2026-08-22` |
 | G-04 Persistence Foundation | G-01…03 | PostgreSQL schemas/migrations/repositories/RLS/audit/object ledger/inbox-outbox adapters and isolation tests | Implementation authority after gates | `BLOCKED` |
 | G-05 Platform Knowledge Foundation | G-04 | Source/Evidence Ledger, official registry, NTD editions/units, canon, rules, FTS/vector/typed graph, Gateway, Promotion Gate | Knowledge/rule authorities; RuleVersion only qualified human | `BLOCKED` |
 | G-06 Workspace Lifecycle Foundation | G-04 and required G-05 source contracts | Provision/isolate/ModeExecution/archive/export/reset/destroy/restore/import; distributed residue tests | Lifecycle request/confirm/verify separation | `BLOCKED` |
@@ -580,19 +581,19 @@ throughput and scoped estimation.
 
 ## 14. Stop conditions, next artifact and acceptance
 
-Implementation is blocked by the one remaining prerealization artifact G-03
-Contract Pack and still needs explicit authority after it passes. G-02
-Deployment and Policy Profiles is accepted as a complete fail-closed profile
-contract; its concrete production instances remain blocked. External egress,
-provider use, deployment and destructive production actions remain separately
+G-03 Contract Pack закрыт принятым `CONTRACT_PACK_v0.1.md` и
+`contracts/v0.1/`. Implementation всё ещё требует отдельной authority. G-02
+Deployment and Policy Profiles принят как complete fail-closed profile
+contract; concrete production instances остаются blocked. External egress,
+provider use, deployment и destructive production actions остаются отдельно
 blocked.
 
-The next normative architecture artifact on the critical path is:
+Следующий gate critical path после отдельного разрешения на реализацию:
 
-`Contract Pack` (G-03).
+`G-04 Persistence Foundation`.
 
 `LOGICAL_DATA_MODEL_v0.1.md` closes G-01, and
 `DEPLOYMENT_AND_POLICY_PROFILES_v0.1.md` closes the architectural G-02
 acceptance while preserving explicit production blockers. The implementation
 sequence, gates, WP DoR/DoD/tests, migration paths, maturity and risk controls
-remain normative; no later WP is thereby complete.
+remain normative; no later WP is thereby complete. G-03 PASS не начинает G-04.
