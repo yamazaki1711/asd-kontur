@@ -76,11 +76,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `G-04 Persistence Foundation` — **PASS 2026-08-23**: Contract Pack runtime,
   PostgreSQL migrations, composite scope/RLS, audit и inbox/outbox проверены
   локально и в CI на real PostgreSQL;
-- `G-05 Platform Knowledge Foundation` — **IN PROGRESS**: WP‑05/06/07 прошли
-  локальную qualification на real PostgreSQL/pgvector; canonical PostgreSQL 18
-  CI остаётся последним acceptance evidence;
-- `G-06 Workspace Lifecycle Foundation` — **NEXT / BLOCKED** до завершения
-  G‑05 и отдельной authority. Бизнес-процессы и production deployment не начаты.
+- `G-05 Platform Knowledge Foundation` — **PASS 2026-08-23**: WP‑05/06/07,
+  PostgreSQL migrations, FTS/pgvector/typed graph, Knowledge Gateway, rules и
+  Promotion Gate проверены локально и в canonical PostgreSQL 18 CI;
+- `G-06 Workspace Lifecycle Foundation` — **NEXT / BLOCKED** до отдельной
+  authority. Бизнес-процессы и production deployment не начаты.
 
 Ключевые документы:
 

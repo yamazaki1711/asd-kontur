@@ -22,8 +22,9 @@ implementation foundation:
 - `G-04 Persistence Foundation` — `PASS 2026-08-23`; Contract Pack runtime,
   PostgreSQL migrations, RLS, scoped repositories, audit и messaging ledgers
   проверены на real PostgreSQL локально и в CI;
-- `G-05 Platform Knowledge Foundation` — `IN_PROGRESS 2026-08-23`: отдельная
-  authority получена, WP‑05/06/07 локально квалифицированы; canonical CI pending;
+- `G-05 Platform Knowledge Foundation` — `PASS 2026-08-23`: WP‑05/06/07,
+  migrations, pgvector/FTS/graph, Gateway, rules и Promotion Gate проверены
+  локально и в canonical PostgreSQL 18 CI;
 - mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
@@ -63,8 +64,8 @@ tree без новых контрактов, проверки scope/provenance �
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-Текущий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-05; его локальная
-qualification не активирует production policy
+Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-06; закрытие
+G‑05 не активирует production policy
 instances и не отменяет `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline

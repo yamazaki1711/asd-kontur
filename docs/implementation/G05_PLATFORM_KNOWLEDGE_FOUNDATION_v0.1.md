@@ -1,6 +1,6 @@
 # G‑05 Platform Knowledge Foundation v0.1
 
-- **Статус:** `Qualification candidate — local PASS, canonical CI pending`
+- **Статус:** `Accepted implementation baseline — G‑05 PASS`
 - **Gate:** `G‑05 Platform Knowledge Foundation`
 - **Work packages:** `WP‑05`, `WP‑06`, `WP‑07`
 - **Владелец:** Олег Щербаков
@@ -247,7 +247,7 @@ Read-only изучены ранее инвентаризированные `mac_
 
 Локально на одноразовом PostgreSQL 17.10 + pgvector 0.8.6:
 
-- `uv lock --check` — ожидается final verification;
+- `uv lock --check` — PASS;
 - Ruff format/lint — PASS;
 - strict mypy — PASS (`26 source files`);
 - pytest — PASS (`49 passed`), из них `33` unit/contract и `16` real PostgreSQL;
@@ -256,19 +256,20 @@ Read-only изучены ранее инвентаризированные `mac_
 - FTS/vector/typed graph build/search/delete/rebuild — PASS;
 - Contract Pack v0.1 regression fixtures — PASS.
 
-Canonical GitHub Actions на PostgreSQL 18 + pgvector 0.8.6 является последним
-evidence для перевода статуса из qualification candidate в Accepted/PASS.
+Canonical GitHub Actions runs `32578088790` и `32578100005` — PASS. Run
+`32578100005` использовал PostgreSQL 18.6 + pgvector 0.8.6 и выполнил те же
+`49 passed` без skips.
 
 ## 13. Gate self-check
 
-| Sub-gate | Состояние до canonical CI | Evidence |
+| Sub-gate | Состояние | Evidence |
 |---|---|---|
-| WP‑05 Source/Evidence Ledger | `LOCAL PASS` | admission/idempotency/conflict/unavailable/residue/RLS tests |
-| WP‑06 NTD canon/projections/Gateway | `LOCAL PASS` | edition/evidence/gap + real FTS/pgvector/graph + six-tool tests |
-| WP‑07 Rule Registry/runtime | `LOCAL PASS` | lifecycle/authority/three-valued/pin/fingerprint/rule-set tests |
-| Promotion Gate | `LOCAL PASS` | positive/reject/authority/capsule/no-live-FK tests |
-| PostgreSQL 18 CI qualification | `PENDING` | PR workflow must pass without skip |
-| G‑05 overall | `IN_PROGRESS` | becomes PASS only after green canonical CI and clean PR review |
+| WP‑05 Source/Evidence Ledger | `PASS` | admission/idempotency/conflict/unavailable/residue/RLS tests |
+| WP‑06 NTD canon/projections/Gateway | `PASS` | edition/evidence/gap + real FTS/pgvector/graph + six-tool tests |
+| WP‑07 Rule Registry/runtime | `PASS` | lifecycle/authority/three-valued/pin/fingerprint/rule-set tests |
+| Promotion Gate | `PASS` | positive/reject/authority/capsule/no-live-FK tests |
+| PostgreSQL 18 CI qualification | `PASS` | PostgreSQL 18.6 + pgvector 0.8.6, 49 tests, no skips |
+| G‑05 overall | `PASS 2026-08-23` | all three work packages and cross-cutting acceptance evidence complete |
 
 ## 14. Намеренно не реализовано
 
