@@ -1,6 +1,6 @@
 # Базовый уровень реализации АСД-КОНТУР
 
-- **Статус:** `Accepted baseline through WP-11; WP-12 local candidate pending canonical CI`
+- **Статус:** `Accepted baseline through WP-12 Tender implementation slice`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков
 - **Ветка re-baseline:** `architecture/rebaseline-v0.1`
@@ -36,9 +36,9 @@ implementation foundation:
 - `WP-11 Common Domain Process Kernel` — `PASS 2026-08-23`: Candidate→Fact
   authority, common process chain, four-mode reuse and reset isolation passed
   local PostgreSQL 17 and canonical PostgreSQL 18 CI;
-- `WP-12 Tender Slice` — `CANDIDATE 2026-08-23`: local PostgreSQL 17
-  AT-PE-41, typed outputs, legal authority, archive/reset and isolation pass;
-  canonical PostgreSQL 18 CI pending;
+- `WP-12 Tender Slice` — `PASS 2026-08-23`: AT-PE-41, typed outputs, legal
+  authority, archive/reset and isolation passed on local PostgreSQL 17 and in
+  canonical PostgreSQL 18 CI;
 - Support, Audit, Restoration, production deployment и ProductReady —
   `NOT STARTED`.
 
@@ -80,9 +80,9 @@ tree без новых контрактов, проверки scope/provenance �
 - использование pilot-specific paths или одного режима как product core.
 
 WP-11 принят как implementation foundation по local и canonical CI evidence.
-WP-12 реализован как локально проверенный Tender candidate и требует canonical
-CI для acceptance. Он не активирует production policy instances и не отменяет
-`G-02B/G-07B BLOCKED`.
+WP-12 принят только как Tender implementation slice. Он не активирует
+production policy instances, не отменяет `G-02B/G-07B BLOCKED` и не начинает
+WP-13 автоматически.
 
 ## 4. Воспроизводимость baseline
 

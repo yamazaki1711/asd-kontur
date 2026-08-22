@@ -1,6 +1,6 @@
 # WP‑12 Tender Slice v0.1
 
-- **Статус:** `Candidate for acceptance — local PostgreSQL 17 evidence PASS; canonical CI pending`
+- **Статус:** `Accepted WP-12 Tender implementation slice — PASS`
 - **Владелец продукта:** Олег Щербаков
 - **Дата:** 2026‑08‑23
 - **Ветка:** `implementation/wp12-tender-slice-v0.1`
@@ -221,8 +221,10 @@ Local evidence на disposable PostgreSQL 17.10:
 - platform RuleSet integrity;
 - disposable downgrade/upgrade.
 
-Полный repository pytest, PostgreSQL 18 + pgvector canonical CI и post-merge CI
-фиксируются перед переводом статуса в `PASS`.
+Полный repository pytest: `187 passed`, без skips. Canonical PostgreSQL 18 +
+pgvector CI завершён успешно в workflow `Core foundation quality`, run
+`32590824405`. Post-merge workflow проверяется отдельно и не расширяет смысл
+accepted Tender slice до product readiness.
 
 ## 13. Intentionally not implemented / blockers
 
@@ -239,15 +241,16 @@ Local evidence на disposable PostgreSQL 17.10:
 
 | WP‑12 criterion | Status | Evidence |
 |---|---|---|
-| WP‑11 reuse; no Tender-specific kernel/store | `PASS local` | Fact/RuleTrace/kernel finding FKs and tests |
-| Tender corpus/scope/requirements | `PASS local` | typed model, persistence, E2E |
-| Clause risks/conflicts/gaps/uncertainties | `PASS local` | validators + exact lineage |
-| Five typed outputs | `PASS local` | contract v1.2 + versioned DB outputs |
-| Qualified legal confirmation/finalization | `PASS local` | human-only grants, independent decisions |
-| Archive/reset/A-B isolation | `PASS local` | PG17 disposable evidence |
-| AT‑PE‑41 terminal semantics | `PASS local` | E2E success and explicit blockers |
-| Canonical PostgreSQL 18 CI | `PENDING` | GitHub PR check required |
+| WP‑11 reuse; no Tender-specific kernel/store | `PASS` | Fact/RuleTrace/kernel finding FKs and tests |
+| Tender corpus/scope/requirements | `PASS` | typed model, persistence, E2E |
+| Clause risks/conflicts/gaps/uncertainties | `PASS` | validators + exact lineage |
+| Five typed outputs | `PASS` | contract v1.2 + versioned DB outputs |
+| Qualified legal confirmation/finalization | `PASS` | human-only grants, independent decisions |
+| Archive/reset/A-B isolation | `PASS` | PG17 disposable evidence and canonical CI |
+| AT‑PE‑41 terminal semantics | `PASS` | E2E success and explicit blockers |
+| Canonical PostgreSQL 18 CI | `PASS` | `Core foundation quality` run `32590824405` |
 | ProductReady | `FALSE` | DB check and four-mode conjunctive gate |
 
-WP‑12 может стать `PASS` только после зелёного canonical CI. Даже после этого
-статус означает accepted Tender implementation slice, а не готовность продукта.
+`WP‑12 = PASS` означает только accepted Tender implementation slice на
+synthetic/disposable evidence. Support, Audit, Restoration, cross-mode E2E и
+ProductReady этим статусом не приняты.

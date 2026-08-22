@@ -95,11 +95,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
   это не означает готовность режима или результата.
-- `WP-12 Tender Slice` — **CANDIDATE 2026-08-23**: object-independent
+- `WP-12 Tender Slice` — **PASS 2026-08-23**: object-independent
   clause/risk/conflict/gap analysis, пять typed Tender outputs,
   Candidate→Fact→qualified legal authority boundary и archive/reset isolation
-  прошли локально на disposable PostgreSQL 17; canonical PostgreSQL 18 CI
-  ожидается. Support, Audit и Restoration не начаты; ProductReady = false.
+  прошли локально на disposable PostgreSQL 17 и в canonical PostgreSQL 18 CI.
+  Support, Audit и Restoration не начаты; ProductReady = false.
 
 Ключевые документы:
 
