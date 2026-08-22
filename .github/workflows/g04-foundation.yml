@@ -1,4 +1,4 @@
-name: G-04 persistence foundation
+name: Core foundation quality
 
 on:
   pull_request:
@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - implementation/g04-persistence-foundation-v0.1
+      - implementation/g05-platform-knowledge-foundation-v0.1
 
 permissions:
   contents: read
@@ -15,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:18
+        image: pgvector/pgvector:0.8.6-pg18-trixie
         env:
           POSTGRES_DB: postgres
           POSTGRES_PASSWORD: postgres

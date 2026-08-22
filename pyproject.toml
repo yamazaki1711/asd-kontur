@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "asd-kontur"
 version = "0.1.0"
-description = "Persistence foundation for the ASD-KONTUR common core"
+description = "Common-core persistence and platform knowledge foundation for ASD-KONTUR"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = {file = "LICENSE"}
@@ -13,6 +13,7 @@ authors = [{name = "Oleg Shcherbakov"}]
 dependencies = [
   "alembic>=1.16,<2",
   "jsonschema[format]>=4.25,<5",
+  "pgvector>=0.4,<1",
   "psycopg[binary]>=3.2,<4",
   "referencing>=0.36,<1",
   "rfc8785>=0.1.4,<1",
@@ -47,6 +48,7 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 
 [tool.ruff.lint.per-file-ignores]
 "migrations/versions/*.py" = ["E501"]
+"tests/integration/test_platform_knowledge.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -306,6 +306,11 @@ profiles с `default deny` до утверждения.
     scaffold, Contract Pack runtime, PostgreSQL schemas/Alembic, composite
     scope/RLS, Unit of Work, audit, object и messaging ledgers проверены на
     real PostgreSQL локально и в CI; production deployment не создавался.
+14. **G-05 Platform Knowledge Foundation v0.1** — принят 2026-08-23: отдельные
+    platform/workspace source ledgers, NTD canon,
+    rebuildable FTS/pgvector/typed graph, six-tool Knowledge Gateway,
+    RuleVersion/RuleSet runtime и Promotion Gate прошли local PostgreSQL 17.10
+    qualification и canonical PostgreSQL 18.6 + pgvector 0.8.6 CI.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -378,9 +383,8 @@ recovery/failover и professional/renderer/provider policy instances остаю�
 `BLOCKED` до evidence и applicable authority. G-03 закрыт принятым
 machine-readable Contract Pack.
 
-ORM, DDL, migrations и persistence modules запрещены до отдельной
-implementation authority. Deployment и external egress отдельно запрещены до
+Новые ORM/DDL/migrations и persistence modules вне явно разрешённого gate
+запрещены. Deployment и external egress отдельно запрещены до
 active production policy instances. G-04 Persistence Foundation закрыт
-2026-08-23 на PostgreSQL/Contract Pack evidence. Следующий gate по critical
-path — G-05 Platform Knowledge Foundation; G-04 PASS не начинает его
-автоматически.
+2026-08-23 на PostgreSQL/Contract Pack evidence. G‑05 закрыт 2026-08-23 по
+локальному и canonical CI evidence. G‑06 не начинается автоматически.

@@ -22,7 +22,9 @@ implementation foundation:
 - `G-04 Persistence Foundation` — `PASS 2026-08-23`; Contract Pack runtime,
   PostgreSQL migrations, RLS, scoped repositories, audit и messaging ledgers
   проверены на real PostgreSQL локально и в CI;
-- `G-05 Platform Knowledge Foundation` — `BLOCKED` до отдельной authority;
+- `G-05 Platform Knowledge Foundation` — `PASS 2026-08-23`: WP‑05/06/07,
+  migrations, pgvector/FTS/graph, Gateway, rules и Promotion Gate проверены
+  локально и в canonical PostgreSQL 18 CI;
 - mode workflows, production deployment и product deliverables — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
@@ -54,16 +56,16 @@ tree без новых контрактов, проверки scope/provenance �
 
 ## 3. Непереходимые границы
 
-Несмотря на закрытие `G-04`, без следующей отдельной authority не начинаются:
+Несмотря на закрытие `G-04`, без отдельной authority и gate evidence не начинаются:
 
-- Platform Knowledge/Source Evidence implementation и последующие gates;
+- последующие после G‑05 gates;
 - PostgreSQL/S3/VPS production deployment;
 - перенос legacy templates, binaries и данных конкретного ОКС;
 - активация external VLM egress;
 - использование pilot-specific paths или одного режима как product core.
 
-Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-05; сам факт
-прохождения G-04 не разрешает его реализацию, не активирует production policy
+Следующий gate определяется `IMPLEMENTATION_PLAN_v0.1.md` как G-06; закрытие
+G‑05 не активирует production policy
 instances и не отменяет `G-02B BLOCKED`.
 
 ## 4. Воспроизводимость baseline
