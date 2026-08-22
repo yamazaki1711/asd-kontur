@@ -195,7 +195,7 @@ def test_g07_schema_roles_rls_and_migration_chain(
             )
             == "asd_harness_service"
         )
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0004_g07"
+        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0005_wp11"
 
 
 def test_harness_rls_default_deny_and_workspace_isolation(
@@ -367,7 +367,7 @@ def test_reset_adapter_purges_harness_data_but_platform_profile_survives(
         )
 
 
-def test_disposable_0004_to_0003_to_0004(
+def test_disposable_head_to_0003_to_head(
     postgres_environment: PostgreSQLEnvironment, repository_root: str
 ) -> None:
     database_name = f"asd_g04_test_g07_roundtrip_{os.getpid()}"
@@ -381,7 +381,7 @@ def test_disposable_0004_to_0003_to_0004(
         run_migration(repository_root, database_url, "head")
         with sa.create_engine(database_url).connect() as connection:
             assert (
-                connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0004_g07"
+                connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0005_wp11"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)
