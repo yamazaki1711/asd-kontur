@@ -335,6 +335,12 @@ profiles с `default deny` до утверждения.
     WP-11 kernel work/MTR/control/evidence chain, synthetic ID generation,
     confirmed geometry and volume/KS/payment trace passed local PostgreSQL 17
     and canonical PostgreSQL 18 CI.
+20. **WP-14 pdfpipeline evidence assessment v0.1** — accepted requirements
+    refinement 2026-08-23: Levashovo mass-raster experience is practical
+    evidence, not copied architecture; Audit DoR/AT-PE-43 now require
+    reconciled logical-document/page boundaries, Document Delta and causal
+    MTR→incoming-control→admission→work→evidence→ID→signing→KS→payment
+    readiness. WP-14 implementation is not started.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 
@@ -414,4 +420,5 @@ active production policy instances. G-04 Persistence Foundation закрыт
 локальному и canonical CI evidence. G‑06 закрыт 2026-08-23 по local и
 canonical CI evidence. G‑07A закрыт 2026-08-23 как synthetic/local foundation;
 G‑07B и production policy instances остаются `BLOCKED`. WP-11, WP-12 и WP-13
-приняты; WP-13 не начинает WP-14.
+приняты. Evidence assessment уточнил WP-14 DoR, но не начал Audit
+implementation.

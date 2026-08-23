@@ -42,6 +42,10 @@ implementation foundation:
 - `WP-13 Support Slice` — `PASS 2026-08-23`: AT-PE-42,
   work/MTR/control/evidence, ID generation mechanics, confirmed geometry,
   volume/KS/payment and scoped reset passed locally and in canonical CI;
+- `WP-14 pre-implementation evidence assessment` — `COMPLETE 2026-08-23`:
+  legacy pdfpipeline/Левашово practice assessed without source migration;
+  Document Delta, Causal Readiness Delta and expanded AT-PE-43/DoR accepted;
+  no WP-14 code, migration or gate PASS was created;
 - Audit, Restoration, production deployment и ProductReady — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot

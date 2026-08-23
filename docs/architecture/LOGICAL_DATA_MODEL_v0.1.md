@@ -273,6 +273,17 @@ object ownership for project bytes.
 | `EvidencePack` + version | Query/process bundle of exact evidence, conflicts and gaps | purpose/scope/query, source/locator versions, applicability, gaps, digest | Workspace or platform concrete family; immutable response; no authority; canonical process artifact, not source content copy |
 | `EvidenceCapsule` | Minimal sanitized platform evidence after Promotion | capsule ID/version, approved proposition class, non-reconstructive evidence summary, anonymization/regression/decision refs | Created as new platform entity; no workspace ID/live locator/source hash; immutable canonical platform memory |
 
+`SourceArtifact` is not synonymous with a file row. A same-scope physical
+container may carry multiple logical source occurrences only through exact,
+non-overlapping or explicitly conflicting `SourceLocator` boundaries and
+immutable occurrence/derivation decisions. A materialized segment is a new
+`PhysicalObjectVersion` with parent container, locator, tool/profile and
+input/output digest lineage; the original remains immutable. Multiple
+SourceVersions may have byte-equal objects without sharing semantic identity,
+authority, requirement coverage or lifecycle ownership. Missing, overlapping,
+mixed or out-of-range boundaries and unresolved shared-container content are
+typed integrity gaps, never accepted document completeness.
+
 Digest equality permits integrity comparison but cannot grant read, form a FK
 to another workspace or authorize shared physical storage. Cross-workspace
 project-blob deduplication is forbidden even when digests match.
