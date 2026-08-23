@@ -1,6 +1,6 @@
 # Legacy pdfpipeline / Левашово: audit experience v0.1
 
-- **Статус:** `Verified legacy evidence assessment; not an architecture baseline`
+- **Статус:** `CORRECTED; accessible evidence verified; volume coverage PARTIAL`
 - **Дата:** 2026-08-23
 - **Владелец контекста:** Олег Щербаков
 - **Назначение:** восстановить практический опыт массовой обработки растровых
@@ -25,22 +25,61 @@ Legacy evidence не получает нормативного, юридичес
 приоритета автоматически. Путь, имя файла, число совпадений, confidence и
 успешный ответ модели не являются достаточным доказательством доменного факта.
 
-## 2. Обследованный периметр
+## 2. Correction после PR #11
 
-| Host / слой | Что проверено | Результат и ограничение |
-|---|---|---|
-| `king25` | `/home/oleg`, live Markdown, доступные ZIP, рабочие каталоги | **ПРОВЕРЕНО:** 389 live Markdown; 4 ZIP открыты, 26 Markdown-members, 25 term matches. Git repositories в пользовательском дереве не обнаружены. |
-| `king25` block devices | Список локальных томов и mount state | **НЕ ПОДТВЕРЖДЕНО:** несколько NTFS-разделов были не смонтированы; read-only mount потребовал интерактивного polkit authorization. Тома не подключались и не считаются обследованными. |
-| `ms-7e26` | `/home/oleg`, live Markdown, repositories, архивы, source/SQL/tests/config evidence | **ПРОВЕРЕНО:** 14 144 Markdown прочитаны машинным content scan; один transient `ENOENT` на файл snap. 104 ZIP проверены: 95 читаемых, 1 507 Markdown-members, 662 term matches; 9 контейнеров не открылись как ZIP. |
-| `ms-7e26` removable volume | `/media/oleg/Consultant` | **ПРОВЕРЕНО read-only:** уже был смонтирован до исследования; включён в поиск. Мы его не монтировали, не перемонтировали и не изменяли. Существенного pdfpipeline evidence не найдено. |
-| Git history | Все 14 обнаруженных repositories; углублённо `/home/oleg/MAC_ASD`, backup и `/home/oleg/Qwen_ASD` | **ПРОВЕРЕНО:** Markdown object/path inventory по всем доступным refs всех repositories; content/history review для relevant ASD repositories. Relevant deleted/renamed paths включены в индекс; tags с дополнительным pdfpipeline evidence не обнаружены. Plugin/vendor repositories дали name/path noise, не project evidence. |
-| Локальное evidence предыдущего прохода | 197 Markdown и сохранённые sanitized notes | **ПРОВЕРЕНО повторно:** использовано как вспомогательный индекс, а не замена повторному SSH-обследованию. |
+PR #11 нашёл и скопировал ключевое ТЗ, но отчёт не содержал per-file
+доказательства последовательного чтения до EOF. Формулировка о 42
+«семантически изученных» Markdown поэтому была шире доказанного. После вопроса
+владельца выполнено полное перечитывание ключевого ТЗ и всех отобранных
+high-relevance файлов; отдельно повторён inventory block devices.
 
-Числа описывают разные evidence planes и не суммируются как уникальные
-документы: live tree, Git history и archives содержат дубликаты. Из результатов
-content scan вручную и семантически изучены 42 удалённых Markdown, связанные с
-ними исходники/SQL/dashboard-файлы и 3 локальных evidence notes. Полные списки
-путей и машинные результаты сохранены во внешнем staging.
+Исправление не скрывает две границы:
+
+1. machine content scan означает поиск/индексацию, а не полное чтение каждого
+   Markdown;
+2. шесть ранее пропущенных пользовательских/рабочих NTFS-разделов остаются
+   недоступными: read-only `udisksctl` требует интерактивного polkit действия
+   владельца. Они не считаются searched.
+
+### 2.1. Coverage физических и логических томов
+
+| Host / device | Discovered | Mounted/readable | Searched | Inaccessible / reason | Markdown | Relevant | Fully read |
+|---|---:|---:|---:|---|---:|---:|---:|
+| `king25 /dev/nvme0n1p6` (`/`) | yes | yes | yes | no | 389 | 8 paths | 8 paths |
+| `king25 /dev/sda2` (NTFS, 223 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `king25 /dev/sdb1` (NTFS, 931.5 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `king25 /dev/sdc5` (`931GB`, NTFS, 651.2 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `king25 /dev/sdc6` (`WIN10`, NTFS, 78.1 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `king25 /dev/nvme0n1p4` (`System`, NTFS, 768.6 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `king25` boot/recovery/reserved partitions | yes | not user data | no | filesystem/size classification; not a user/work volume | n/a | n/a | n/a |
+| `ms-7e26 /dev/nvme0n1p5` (`/`) | yes | yes | yes | no | 14 131 current recount | 33 paths | 33 paths |
+| `ms-7e26 /dev/sda1` (`Consultant`) | yes | yes, pre-existing | yes, read-only operations | no relevant evidence | 0 | 0 | 0 |
+| `ms-7e26 /dev/nvme0n1p3` (NTFS, 441.6 GiB) | yes | no | no | interactive polkit required for read-only mount | unknown | unknown | 0 |
+| `ms-7e26` EFI/MSR/recovery partitions | yes | not user data | no | filesystem/partition-type classification | n/a | n/a | n/a |
+
+PR #11 зафиксировал 14 144 live Markdown на `ms-7e26`; correction recount дал
+14 131. Это два dated inventory snapshots, а не основание молча выбрать большее
+число. Один предыдущий scan имел transient `ENOENT` внутри `snap`. На доступном
+perimeter также проверены 104 ZIP: 95 читаемых, 1 507 Markdown-members; девять
+файлов с расширением ZIP не открылись как ZIP.
+
+Ни один mount correction-аудитом не создан, поэтому размонтировать было нечего.
+Том `Consultant` был смонтирован до исследования и оставлен как был. Полный
+cross-volume coverage **не подтверждён** до подключения шести NTFS-разделов.
+
+### 2.2. Coverage Markdown и полное чтение
+
+В staging отобраны 42 remote Markdown paths. Они образуют 37 уникальных
+SHA-256; пять paths — идентичные копии между hosts. Один уникальный файл про
+другой ОКС (`reference_tm35_monitoring_site.md`) классифицирован как
+object-specific outside WP-14 evidence и не использован. Все остальные 36
+уникальных high-relevance Markdown полностью прочитаны до EOF; для каждого
+записаны SHA-256, line count, диапазон чтения и извлечённое требование.
+
+Git history проверен по всем 14 обнаруженным repositories на доступных томах.
+Relevant deleted/renamed Markdown paths вошли в индекс; plugin/vendor noise не
+считался project evidence. Эти числа описывают разные planes — live, archive,
+Git object и staged copy — и не суммируются как уникальные документы.
 
 ## 3. Staging и manifest
 
@@ -59,12 +98,78 @@ Evidence staging создан вне Git repository и не удаляется �
 - `manifests/ms-7e26_MAC_ASD_git_markdown_history_paths.txt`;
 - `manifests/ms-7e26_git_history_markdown_summary.tsv`;
 - `manifests/evidence_manifest.json` и расширенный selected-evidence manifest;
+- `manifests/correction_volume_coverage.tsv`;
+- `manifests/correction_full_read_ledger.tsv`;
+- `manifests/correction_traceability.tsv`;
+- `manifests/tz_levashovo_v9_provenance.tsv`;
 - выбранные Markdown, source, SQL и dashboard evidence.
 
 Staging содержит project-specific evidence и **не предназначен для GitHub**.
 В repository публикуются только обезличенные выводы. Manifest фиксирует host,
 исходный путь/commit/archive member, SHA-256, размер, MIME, причину отбора,
 evidence type, наличие данных ОКС и publishability.
+
+### 3.1. Полное чтение `TZ_Levashovo_v9_0.md`
+
+Три копии идентичны:
+
+| Provenance | Lines | Bytes | SHA-256 |
+|---|---:|---:|---|
+| `king25:/home/oleg/Documents/asd-kontur/TZ_Levashovo_v9_0.md` | 1 165 | 205 795 | `76a1f0ac20633784f0f7a15fa1270c24edac884c14755e09c50ff237d9a90003` |
+| `king25:/home/oleg/Downloads/archive-2026-08-23_02-52-34/archive/TZ_Levashovo_v9_0.md` | 1 165 | 205 795 | тот же |
+| staged `king25/markdown/TZ_Levashovo_v9_0.md` | 1 165 | 205 795 | тот же |
+
+Staged copy прочитана последовательно диапазонами `1–150`, `151–300`,
+`301–450`, `451–600`, `601–750`, `751–825`, `826–900`, `901–1050` и
+`1051–1165`. Проверены разделы: основания и принципы; роли; lifecycle
+документа; packages/tomes; АОСР и схемы; incoming control; data model;
+`Document`, file versions и status history; VK entities/metrics/stages;
+functional requirements; `ActionRequest`; Customer/PTO dashboards; storage,
+NFR, AI/raster processing, requirement matrix, generation/geometry; acceptance;
+stop codes; physical packages; books/tomes; three-level registers/signatures;
+electronic copies; Customer inspection; handover; post-signing stages.
+
+### 3.2. Требования, пропущенные PR #11
+
+Полное чтение выявило положения, которые ранее отсутствовали либо были отражены
+только частично:
+
+- package/folder не равен physical container; `Package`, `Volume/Book` и
+  section — разные identities; document membership many-to-many и ordered;
+- physical package readiness включает copies, registers, professional review,
+  signers, return with comments, re-presentation, handover и acceptance;
+- legacy stop-code фактически требовал action, addressee, affected object,
+  deadline и подтверждение закрытия инициатором;
+- формула ВК `(signed + unsigned) / total` даёт 100% при полном inventory даже
+  при нуле подписанных и потому опасна;
+- «последняя редакция побеждает» несовместима с authority, explicit
+  supersession и conflict preservation;
+- legacy confidence rule несовместим с `Provider result ≠ Candidate ≠
+  validated Candidate ≠ Fact`;
+- reclassification меняла document type, но не восстанавливала обязательные
+  type-specific attributes;
+- signature/seal detection не доказывает signer authority;
+- handed over и accepted — разные состояния, как и found/classified/
+  evidence-bound/packaged/signed.
+
+### 3.3. Traceability correction
+
+| Source / section | Extracted requirement | Report / WP-14 impact | Status |
+|---|---|---|---|
+| TZ lines 215–229, 323–385 | independent Package/Volume/Book and many-to-many membership | §§8, 10; third readiness delta | missing in PR #11; covered now |
+| TZ lines 1059–1091 | stop-code becomes governed ActionRequest | §§10.3, 11 | missing; covered now |
+| TZ lines 1093–1165 | physical assembly, copies, registers, signing, handover, acceptance | §§8, 10.2 | partially covered; completed now |
+| TZ lines 282–300, 440–468 | incoming-control metric dimensions | §10.1 and impact assessment | dangerous legacy formula rejected |
+| TZ version rule | no automatic last-write-wins | §11 | rejected with reason |
+| TZ confidence rule | confidence only prioritizes queue | §§6.5, 11 | rejected with reason |
+| `aosr_aorpi_reclassify_06082026.md` | type change leaves required attrs absent | §§6.5, 10.3 | covered now |
+| `LESSONS_LEVASHOVO.md` | attempt before side effect; no empty success; generation markers | §§6.4, 11 | covered |
+| `papka_200_*` | one file/container has many documents; duplicates not only byte-equal | §§6.1–6.2 | covered |
+| `status_report_*`, `LEVASHOVO_16.md` | process `FINAL` can contradict receipts | §§6.4, 10 | covered |
+| `delta_*`, `kaskad_privyazki_*` | search scope and missing relation are not negative proof | §§7–9 | covered |
+| `Левашово_Паспорт_системы_v28.md` | useful flow/aging/stop projections; direct cell status is weak canon | §§10, 13 | modernized |
+| object-specific stages/copy counts | configurable requirements, not platform constants | §12 | object-specific only |
+| `reference_tm35_monitoring_site.md` | different ОКС and outside pdfpipeline/WP-14 scope | none | rejected from evidence set |
 
 ## 4. Индекс основного evidence
 
@@ -308,6 +413,38 @@ type-specific attributes отсутствовали, а status counters иног
 Audit обязан различать `document found`, `content extracted`, `evidence
 validated`, `requirement covered`, `signable`, `presentable` и `payment-ready`.
 
+### 8.1. Комплект, том, книга и occurrence документа
+
+**ПРОВЕРЕНО:** legacy ТЗ различало section, комплект/папку, том/книгу и
+документ; стадия была свойством комплекта, а один document мог входить в
+несколько комплектов. Комплект не всегда соответствовал одному physical
+container. Отдельно описывались ordering, приложения, требуемое число
+экземпляров и трёхуровневые реестры.
+
+**ВЫВОД:** совместимая с ASD-КОНТУР модель требует самостоятельных immutable
+versions `Package`, `Volume/Book` и `DocumentMembership/Occurrence`.
+Membership содержит exact document version, package/book, position/order,
+role, required copies, stage/scope and provenance. `SourceArtifact` и
+`SourceVersion` не дублируются при участии одного документа в нескольких
+packages. Section остаётся предметной классификацией, а не package identity.
+
+Физическая готовность — отдельная оценка, а не расширенный file count:
+
+```text
+document found/recognized/classified/evidence-bound
+→ package membership and ordering
+→ required copies/registers/attachments
+→ professional review
+→ signer authority and signatures
+→ handover
+→ returned with comments / re-presented
+→ accepted
+```
+
+Ни один одинарный `ready/final` не может заменить эти состояния. Значения вроде
+конкретного числа листов, книг или копий из Левашово являются object-specific
+requirements и применяются только через exact rule/customer/contract evidence.
+
 ## 9. Причинная связь с КС и оплатой
 
 **ПРОВЕРЕНО:** legacy corpus содержал упоминания форм КС, но проверенные 42
@@ -371,6 +508,43 @@ completeness и act signing. Early FastAPI UI использовал прямы�
 - package/signing status → derived projection from canonical decisions;
 - dashboard rebuild → no canonical state change.
 
+### 10.3. Ложная метрика ВК
+
+**ПРОВЕРЕНО:** legacy использовало формулу `(signed + unsigned) / total`.
+Если `unsigned = total - signed`, результат равен 100% при полном inventory
+даже тогда, когда `signed = 0`. Это измеряет распределение найденных записей по
+двум статусам, но ошибочно называлось readiness.
+
+WP-14 обязан хранить version/provenance numerator и denominator, не включать
+unsigned/unknown/indeterminate в signed readiness, не усреднять разные
+readiness dimensions и показывать counts/causal blockers рядом с процентом.
+Критический blocker не скрывается aggregate percentage. Negative acceptance:
+все documents найдены, ни один не подписан — signed-ID и KS readiness не могут
+быть 100%.
+
+### 10.4. Stop-code и `ActionRequest`
+
+**ПРОВЕРЕНО:** stop-code в legacy задавал не только статус, а запрос действия:
+инициатор, исполнитель/адресат, affected object, reason/evidence, deadline и
+этапы выполнения. Закрытие требовало подтверждения инициатора.
+
+**ВЫВОД:** WP-14 моделирует typed immutable `ActionRequestVersion` и decisions:
+`created → accepted → in_progress → performed → verified_closed` либо
+`rejected/cancelled/superseded/overdue`. Policy задаёт инициатора, исполнителя,
+кто подтверждает устранение и кто может отменить blocker. Исполнитель не может
+сам закрыть запрос, если требуется независимая проверка. Исчезновение файла из
+очереди, reclassification или изменение process counter не закрывает запрос;
+нужны closure evidence, authority decision и audit trail. Notification UI в
+WP-14 не требуется.
+
+### 10.5. Reclassification
+
+Reclassification создаёт новую immutable classification version и сохраняет
+lineage прежней. Затем запускаются validators нового document type,
+вычисляются missing required attributes и создаются targeted repair либо
+`ActionRequest`. Новый label сам по себе не делает документ ready и не закрывает
+Document Delta. High confidence может только приоритизировать review queue.
+
 ## 11. Подтверждённые defects и bottlenecks
 
 | Defect | Практическое последствие | Требование к WP-14 |
@@ -385,6 +559,11 @@ completeness и act signing. Early FastAPI UI использовал прямы�
 | Generic JSON metadata | Type-specific fields missing after reclassification | Versioned typed schema; correction appends version. |
 | Loose refs/no FK | Ghost documents and unresolved attachments | Same-scope composite FK and referential integrity. |
 | File-count progress | Папка выглядела готовой при causal gaps | Evidence coverage and causal readiness projections. |
+| `(signed + unsigned) / total` as readiness | 100% возможно при нуле подписанных | Separate denominators; unsigned/unknown never add to signed readiness. |
+| Package/section/container conflation | Physical assembly/signing/handover state терялся | Typed Package, Volume/Book and ordered DocumentMembership. |
+| Stop-code as mutable status | Blocker исчезал без authority/evidence closure | Typed ActionRequest, SoD, closure evidence and supersession. |
+| Last uploaded revision wins | Поздний файл молча вытеснял prior authority/conflict | Immutable versions, explicit supersession, authority and effective interval. |
+| Reclassification only changed label | Обязательные attrs нового типа оставались пустыми | New classification version, validators and targeted repair/action requests. |
 | Direct UI edits | History/authority unclear | Typed commands, optimistic concurrency, immutable audit. |
 | `FINAL` from process state | False completion despite failed steps | Canonical reconciliation and explicit incomplete/unknown outcome. |
 
@@ -415,9 +594,9 @@ Object-specific, не переносимые автоматически:
 
 | Decision | Legacy lesson |
 |---|---|
-| Preserve | Native/raster distinction; page-level processing; batch manifests; bounded concurrency; retry/resume need; source bytes in object storage; operational dashboard; manual review queue; hashes and reconciliation reports. |
-| Modernize | File/document identity into `SourceArtifact/SourceVersion/PhysicalObject/Locator`; JSON attrs into typed immutable versions; Polza result into provider attempt/result/Candidate; retries into idempotent reconciliation; UI edits into typed commands; progress into evidence and causal readiness deltas. |
-| Reject | Path/hash as authority; global project memory; one nullable/global scope; mutable current JSON as canon; confidence-as-truth; silent JSON repair/empty success; gap-fill that fabricates coverage; broad queue reset; direct SQL corrections; file-count completeness; project-specific rules promoted automatically. |
+| Preserve | Native/raster distinction; page-level processing; batch manifests; bounded concurrency; retry/resume need; source bytes in object storage; operational dashboard; manual review queue; hashes and reconciliation reports; explicit package/book/register/signing/handover vocabulary; action requests. |
+| Modernize | File/document identity into `SourceArtifact/SourceVersion/PhysicalObject/Locator`; package relations into typed immutable Package/Volume/Book/Membership; JSON attrs into typed immutable versions; Polza result into provider attempt/result/Candidate; retries into idempotent reconciliation; stop codes into authority-checked ActionRequest; UI edits into typed commands; progress into three separate readiness deltas. |
+| Reject | Path/hash as authority; global project memory; one nullable/global scope; mutable current JSON as canon; last-write-wins; confidence-as-truth; `(signed + unsigned) / total` as signed readiness; silent JSON repair/empty success; gap-fill that fabricates coverage; broad queue reset; direct SQL corrections; file-count completeness; project-specific rules promoted automatically. |
 
 ## 14. Что не удалось подтвердить
 
@@ -427,6 +606,7 @@ Object-specific, не переносимые автоматически:
 - live state of historical pdfpipe server referenced by notes (сервер не
   обследовался по заданию);
 - contents of unmounted `king25` NTFS volumes;
+- contents of unmounted `ms-7e26 /dev/nvme0n1p3`;
 - nine malformed/non-ZIP archive containers on `ms-7e26`;
 - legal universality of the full VK→ID→KS→payment chain;
 - production users' acceptance of either dashboard;
@@ -434,6 +614,11 @@ Object-specific, не переносимые автоматически:
   and publishing their contents, which was intentionally prohibited.
 
 ## 15. Итог
+
+На доступных томах correction coverage и full-read ledger закрыты. Полный
+cross-volume статус остаётся **PARTIAL**, пока шесть NTFS-разделов не станут
+readable либо владелец не зафиксирует их как недоступные. Поэтому отчёт не
+утверждает «проверены все пользовательские Markdown».
 
 pdfpipeline доказал практическую ценность массового intake, page processing,
 object storage, provider batching и operational visibility. Он одновременно

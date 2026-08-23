@@ -1,6 +1,6 @@
 # WP-14 pdfpipeline architecture impact assessment v0.1
 
-- **Статус:** `Accepted evidence-informed WP-14 requirements refinement`
+- **Статус:** `Corrected WP-14 requirements; accessible evidence verified; volume coverage PARTIAL`
 - **Дата:** 2026-08-23
 - **Исходное evidence:**
   [Legacy pdfpipeline / Левашово audit experience](LEGACY_PDFPIPELINE_AUDIT_EXPERIENCE_v0.1.md)
@@ -14,8 +14,9 @@ mutable JSON/status columns` не принимается как архитект
 Canonical модель уже лучше разделяет stable semantic identity, immutable
 version, physical bytes/object receipt, exact locator, render/attempt,
 Candidate/Fact, authority, workspace scope and retention. WP-14 уточняется
-двумя связанными deterministic deltas — `Document Delta` и `Causal Readiness
-Delta` — и обязательной document/container/page reconciliation. Новый ADR не
+тремя связанными, но не смешанными оценками — `Document Delta`, `Causal
+Readiness Delta` и `Package/Signing/Handover Readiness` — и обязательной
+document/container/page reconciliation. Новый ADR не
 нужен: решение является уточнением уже принятых IA/LDM/HV/RD, а не сменой
 cross-cutting architecture.
 
@@ -63,6 +64,12 @@ entities и downstream impact. Restoration остаётся отдельным �
 | Raw/object integrity drift | `raw_integrity_gap_06082026.md`, `LEVASHOVO_16.md` | Preserve corpus bytes | DB referenced missing S3 objects; local residues existed | ObjectReceipt, adapter inventory, lifecycle residual verification | Modernize | Audit distinguishes unavailable, missing, residue and integrity mismatch; no false negative. |
 | Dashboard/PTO projections | passport and UI source | Coordinate large recovery effort | Operationally useful, canonical coupling unsafe | IA projection plane + typed commands | Preserve UX need | Define Customer and PTO projection contracts, no UI implementation in WP-14. |
 | Incoming-control chain | TZ/status/delta reports + owner context | Determine ID readiness | Early gaps propagated to unsigned/unusable packages | WP-11/WP-13 MTR, ControlOperation, DocumentRequirement, IDPackage, PresentedVolume/KS/PaymentClaim | Preserve causal need | Add Causal Readiness Delta and affected-entity traversal with three-valued applicability. |
+| Package/tom/book identities and many-to-many document membership | `TZ_Levashovo_v9_0.md` §§4.2/4.3/11.12 | Assemble physical ID packages without duplicating document sources | Package readiness and document discovery were conflated | `IDPackage`, `DocumentCoverage`, `FinalizedDocument`, `SourceVersion` cover parts but lack explicit physical membership semantics | Modernize | Add versioned Package, Volume/Book and ordered DocumentMembership; section remains separate. |
+| Physical signing/handover lifecycle | `TZ_Levashovo_v9_0.md` §§11.12.3–11.12.6 | Track copies, registers, signatures, return, re-presentation and acceptance | Filled folder could appear ready before signature/handover acceptance | Professional review/signature evidence exist, but WP-14 had no separate aggregate | Modernize | Add Package/Signing/Handover Readiness with distinct states and denominator. |
+| Stop-code requested external work | `TZ_Levashovo_v9_0.md` stop-code/ActionRequest sections | Route blockers to responsible party and track closure | Mutable status could hide who proved closure | Authorization/SoD, immutable decisions and audit already exist | Modernize | Typed ActionRequest; initiator/executor/verifier, evidence closure, deadline/escalation/supersession. |
+| `(signed + unsigned) / total` metric | legacy VK metric definition | Show documents distributed by signing state | Produced 100% even with zero signed when all items classified | Versioned rebuildable projections | Reject as readiness | Separate found/signed/accepted denominators; blockers and counts beside percentages. |
+| Latest revision wins | legacy version rule | Simplify operator selection | Could silently replace authority and hide conflicts | Immutable versions, effective intervals, explicit supersession | Reject | No LWW; authoritative selection requires decision/authority/reconciliation. |
+| Reclassification changed only document label | AOSR/AORPI correction evidence | Repair taxonomy quickly | Required attrs of new type remained absent | Candidate/Fact and typed schema/version validators | Modernize | Reclassification appends version, reruns validators and creates targeted repair/ActionRequest. |
 | Archive/reset absent from legacy core | SQL/source review | Not a primary legacy concern | Project/global rows and object residues were hard to delimit | G-06 exact adapter inventory, archive, reset verification, RLS | Reject legacy omission | Audit data/artifacts must be workspace-scoped, archived and reset through G-06. |
 
 ## 4. Document/file identity clarification
@@ -83,15 +90,20 @@ The accepted model supports the required cases when interpreted explicitly:
   lineage;
 - replacement bytes create a new `SourceVersion`; corrected classification or
   boundary creates a new typed decision/version, not an in-place rewrite;
-- applications and multi-file packages remain separate SourceArtifacts linked
-  by typed package/attachment relations;
+- applications remain separate SourceArtifacts; `PackageVersion` and nested
+  `VolumeBookVersion` identify assembly scope independently from section or
+  physical container;
+- `DocumentMembershipVersion` relates one exact document/source/finalized
+  version to one or many packages/books with role, ordering, required copies,
+  stage and provenance; membership never duplicates source identity;
 - duplicate bytes prove equality only; document authority, role, signature,
   scope and requirement coverage remain separate.
 
 WP-14 implementation must select a typed physical mapping for logical
 occurrence/boundary lineage and prove it with contracts, persistence and
-integration tests. That choice is an implementation design within current
-IA/LDM unless it changes these invariants.
+integration tests. Package/Volume/Book/Membership are minimal compatible
+extensions of existing `IDPackage`/`DocumentCoverage`, not a return to legacy
+folder-as-canon. That choice remains within current IA/LDM invariants.
 
 ## 5. Document Delta
 
@@ -159,9 +171,61 @@ Each edge records:
 Audit reports impact; it does not create missing facts, backdate control,
 approve materials, sign documents, modify KS or perform Restoration.
 
-## 7. Dashboard projection requirements
+## 7. Package / Signing / Handover Readiness
 
-### 7.1. Customer projection
+For each exact package scope and version, Audit evaluates a third independent
+delta:
+
+```text
+required documents and memberships
+→ package / volume / book structure and ordering
+→ registers / attachments / required copies
+→ professional review
+→ signer requirements, authority and signature evidence
+→ handover receipt
+→ returned-with-comments / re-presentation
+→ acceptance decision
+```
+
+Each version pins its own denominator, exact scope, RuleSetVersion, evidence,
+uncertainties, blockers, downstream impact and semantic fingerprint. Minimum
+states remain distinct: `found`, `recognized`, `classified`, `evidence_bound`,
+`included`, `physically_assembled`, `reviewed`, `ready_for_signature`,
+`signed`, `handed_over`, `returned_with_comments`, `re_presented`, `accepted`.
+Handover is not acceptance; a signed document outside a required membership
+does not cover the package; a missing copy or unverified signer blocks the
+relevant readiness dimension.
+
+Package readiness does not prove Causal Readiness: a physically complete
+folder can still contain an unadmitted batch or untimely evidence. Conversely,
+a causal fact does not prove that required copies, signatures and handover are
+complete. The three deltas may be presented together but never averaged into a
+single percentage.
+
+### 7.1. ActionRequest / stop-code model
+
+An audit blocker may create an immutable `ActionRequestVersion` with typed
+action, initiator, addressee/executor, affected version, evidence, deadline,
+blocking impact, expected closure evidence and authority policy. Completion by
+the executor is only `performed`; closure is a separate authorized verification
+by the initiator or policy-qualified verifier. Cancellation and supersession
+are decisions with audit lineage. Reclassification, queue removal or process
+counter change cannot close it. Overdue/escalation is derived from exact
+deadline and state; notification UI is outside WP-14.
+
+### 7.2. Reclassification and authoritative version selection
+
+Reclassification appends an immutable classification version, reruns the exact
+type-specific validators and emits missing attributes plus targeted repair or
+ActionRequests. It does not mutate prior classification or make the document
+ready. A later upload/version is not authoritative until explicit supersession,
+authority, effective interval, conflict detection and reconciliation succeed.
+Confidence can only prioritize work; it cannot confirm classification, Fact,
+signature, coverage or package readiness.
+
+## 8. Dashboard projection requirements
+
+### 8.1. Customer projection
 
 Required metrics are projections with snapshot/version/freshness and explicit
 denominators:
@@ -175,10 +239,13 @@ denominators:
 - causal blockers and downstream impact;
 - trend and stale/unknown portions.
 
-No single percentage may collapse unknown/inapplicable/blocked states. File
-count can be shown only as inventory, never as completeness.
+No single percentage may collapse unknown/inapplicable/blocked states. Every
+numerator/denominator is versioned and provenance-bound. Unsigned is never in a
+signed-readiness numerator; unknown/indeterminate never adds to ready; distinct
+readiness dimensions are not averaged. Critical blockers and underlying counts
+remain visible beside percentages. File count can be shown only as inventory.
 
-### 7.2. PTO projection and commands
+### 8.2. PTO projection and commands
 
 Projection supports search, classification review, attribute correction,
 document↔batch/work/control linking, missing evidence, duplicates/conflicts,
@@ -187,7 +254,7 @@ Every mutation is a typed authorized command against expected version. Direct
 canonical JSON/SQL editing is prohibited. Projection rebuild must reproduce the
 same canonical fingerprint and must not emit domain changes.
 
-## 8. Refined WP-14 DoR
+## 9. Refined WP-14 DoR
 
 WP-14 implementation may start only when all are true:
 
@@ -201,23 +268,33 @@ WP-14 implementation may start only when all are true:
    classification/version conflict, extraction coverage and Document Delta.
 5. Typed causal traversal covers MaterialBatch→incoming control→admission→work
    →evidence→ID→signing→PresentedVolume→KS→PaymentClaim.
-6. Audit/Restoration boundary and three-valued applicability are explicit.
-7. G-07 provider partial/unknown result semantics are used; real external route
+6. Typed `PackageVersion`, `VolumeBookVersion`, ordered
+   `DocumentMembershipVersion`, signing/handover/acceptance states and
+   `ActionRequestVersion` semantics are fixed without conflating section,
+   package or physical container.
+7. Each of the three deltas has its own versioned denominator, exact scope,
+   evidence, RuleSetVersion, uncertainty, blockers, downstream impact and
+   fingerprint; no aggregate average is authoritative.
+8. Audit/Restoration boundary and three-valued applicability are explicit.
+9. G-07 provider partial/unknown result semantics are used; real external route
    remains G-07B/G-02B BLOCKED.
-8. Workspace RLS/lifecycle/reset and G-06 adapter inventory extension are
+10. Workspace RLS/lifecycle/reset and G-06 adapter inventory extension are
    planned for all new Audit canonical and projection artifacts.
-9. Dashboard is specified as rebuildable projection + typed commands, not UI
+11. Dashboard is specified as rebuildable projection + typed commands, not UI
    or system of record.
-10. Acronym/document taxonomy uses exact sourced identities; `АОПРИ` is not
+12. Acronym/document taxonomy uses exact sourced identities; `АОПРИ` is not
     assumed equivalent to observed `АОРПИ`.
 
-## 9. Refined WP-14 deliverables
+## 10. Refined WP-14 deliverables
 
 - one Audit ModeExecution process over WP-11 kernel;
 - immutable AuditScope/CorpusInventory and reconciliation report;
 - Document Delta versions with exact requirement/source/locator/attempt and
   authority lineage;
 - Causal Readiness Delta versions with affected-entity impact paths;
+- Package/Signing/Handover Readiness versions, Package/Volume/Book ordered
+  memberships and separately versioned denominators;
+- typed ActionRequest lifecycle with authority-checked evidence closure;
 - typed AuditFinding/Gap/Conflict/Uncertainty/Blocker;
 - Customer and PTO projection models with rebuild fingerprints;
 - evidence-rated AuditReport/coverage/limitations and blocking terminal outcome;
@@ -225,7 +302,7 @@ WP-14 implementation may start only when all are true:
 - forward migration, RLS/FORCE RLS, lifecycle fence, archive/reset coverage;
 - synthetic AT-PE-43 corpus and the mandatory scenarios below.
 
-## 10. Mandatory WP-14 acceptance scenarios
+## 11. Mandatory WP-14 acceptance scenarios
 
 1. Thousands of files do not imply completeness.
 2. Successfully recognized PDF does not imply usable evidence.
@@ -271,17 +348,53 @@ WP-14 implementation may start only when all are true:
     altering workspace B or platform NTD/rules/templates.
 30. Identical inputs, exact versions and RuleSet produce identical delta and
     report semantic fingerprints.
+31. All files found but no document signed cannot yield signed-ID or KS
+    readiness.
+32. All documents classified but required type-specific attributes missing
+    remain not ready.
+33. Reclassification creates a new immutable version, reruns validators and
+    creates exact repair requirements.
+34. The latest uploaded version does not win without authority, explicit
+    supersession and conflict reconciliation.
+35. High confidence creates neither Fact nor covered Document Delta.
+36. One exact document may join several packages without duplicating source
+    identity.
+37. Package, Volume/Book and section remain separate identities and scopes.
+38. A package missing one required copy is not handover-ready.
+39. A package with unverified signer authority is not signature-ready.
+40. A signed document outside the required package membership does not cover
+    Package Readiness.
+41. A stop-code creates a typed ActionRequest with exact affected object,
+    addressee, evidence and blocking impact.
+42. An executor cannot self-close a blocker when policy requires initiator or
+    independent verifier confirmation.
+43. ActionRequest closure requires exact evidence and authority decision.
+44. Post-signing rejection appends a new state/version and preserves signed
+    history.
+45. Handover does not imply acceptance.
+46. A projection using `(signed + unsigned) / total` as signed readiness is
+    rejected; zero signed cannot display 100% signed readiness.
+47. Readiness of one package does not imply readiness of the Audit scope.
+48. Physical folder completeness does not prove causal VK/ID/KS readiness.
+49. Dashboard rebuild changes neither canonical Package nor ActionRequest
+    state.
+50. Object-specific legacy stages, copy counts and registers do not become
+    platform rules without Promotion Gate.
 
-## 11. Refined WP-14 DoD
+## 12. Refined WP-14 DoD
 
 WP-14 passes only if:
 
-- AT-PE-43 exercises Document Delta and Causal Readiness Delta end to end;
+- AT-PE-43 exercises Document Delta, Causal Readiness Delta and
+  Package/Signing/Handover Readiness end to end;
 - every result is tied to exact scope, source/version/locator, rule/policy,
   applicability, evidence, authority and reproducible fingerprint;
 - partial/unavailable/ambiguous states stay visible and no empty-success exists;
 - downstream impacts are traced without asserting unsupported legal outcome;
-- dashboard projections rebuild from canonical state without mutation;
+- dashboard projections rebuild from canonical state without mutation and
+  cannot hide blockers through a combined percentage;
+- immutable reclassification, explicit supersession and ActionRequest closure
+  authority/SoD are enforced;
 - independent Audit authority and required SoD are enforced;
 - real PostgreSQL RLS/isolation, lifecycle fence, archive/reset and migration
   tests pass on synthetic disposable data;
@@ -291,7 +404,7 @@ WP-14 passes only if:
 - Audit report can terminally block and does not fabricate completeness or
   silently perform Restoration.
 
-## 12. Почему современная архитектура лучше legacy
+## 13. Почему современная архитектура лучше legacy
 
 The accepted architecture materially improves:
 
@@ -310,11 +423,13 @@ conditions: document boundaries in multi-document PDF, partial-page outcomes,
 evidence coverage versus file count, timely incoming control, document signing
 readiness and downstream causal impact.
 
-## 13. Architecture-change assessment
+## 14. Architecture-change assessment
 
 No accepted RD/DR/HV/IA/TA/ADR is changed. No new ADR is created. Existing
 `SourceArtifact/SourceVersion/PhysicalObject/SourceLocator`, WP-11/WP-13 domain
-chain, G-07 attempts and G-06 lifecycle provide the necessary primitives.
+chain, G-07 attempts and G-06 lifecycle provide most primitives. Explicit
+Package/Volume/Book/Membership and ActionRequest versions are additive LDM/IA
+clarifications, not a legacy folder model and not a cross-cutting ADR change.
 
 The implementation task must prove a typed occurrence/boundary mapping. If
 physical design later demonstrates that existing primitives cannot preserve
@@ -322,14 +437,18 @@ many-logical-documents-per-container and many-representations-per-document
 without identity ambiguity, that specific cross-cutting gap must be escalated
 before migration; it is not assumed now.
 
-## 14. Remaining blockers and next step
+## 15. Remaining blockers and next step
 
 - actual WP-14 code, contracts, migration and tests are intentionally absent;
 - production Audit RuleSet, customer-specific requirement matrix and authority
   grants remain uninstantiated;
 - real external pdfpipeline/Polza route remains blocked by G-07B/G-02B;
-- inaccessible `king25` volumes and unverified source documents remain outside
-  evidence coverage.
+- five `king25` and one `ms-7e26` user/work NTFS volumes remain outside
+  evidence coverage because read-only mount requires interactive polkit;
+- production Package/Signing/Handover rules, copy counts, register hierarchy
+  and ActionRequest authority policies remain uninstantiated.
 
-The only next step is a separately authorized **WP-14 Audit Slice
-implementation** against this refined DoR and acceptance set.
+The semantic DoR is now explicit, but correction coverage is not fully closed
+until inaccessible volumes are searched or formally recorded unavailable by
+the owner. After that coverage decision and acceptance of this correction, the
+only next step is a separately authorized **WP-14 Audit Slice implementation**.
