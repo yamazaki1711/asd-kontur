@@ -1,7 +1,7 @@
 # WP-14 Audit Slice v0.1
 
-**Status:** implementation complete on synthetic evidence; canonical CI evidence
-is recorded before merge. **ProductReady:** `false`.
+**Status:** `PASS` as a synthetic/disposable implementation slice on local
+PostgreSQL 17 and canonical PostgreSQL 18 + pgvector CI. **ProductReady:** `false`.
 
 ## 1. Scope and boundary
 
@@ -185,8 +185,9 @@ strict mypy passed; the complete suite passed as `258 passed` against disposable
 PostgreSQL 17. The v1.4 registry fingerprint and all positive/negative fixtures,
 Markdown relative links, whitespace and publication-safety scans also passed.
 
-Canonical PostgreSQL 18 + pgvector workflow evidence is recorded in the PR and
-final gate update. Test count is supporting evidence, not the acceptance reason.
+Canonical PostgreSQL 18 + pgvector workflow run `32617040985` passed all lock,
+format, lint, type, test, whitespace and publication-safety checks for PR #13.
+Test count is supporting evidence, not the acceptance reason.
 
 ## 11. Rollback and risk
 

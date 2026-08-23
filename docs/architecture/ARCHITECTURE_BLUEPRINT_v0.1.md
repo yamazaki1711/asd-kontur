@@ -341,8 +341,9 @@ profiles с `default deny` до утверждения.
     reconciled logical-document/page boundaries, Document Delta and causal
     MTR→incoming-control→admission→work→evidence→ID→signing→KS→payment
     readiness.
-21. **WP-14 Audit Slice v0.1** — implemented locally 2026-08-23, canonical CI
-    pending: shared four-mode collection/corpus capability, streaming preflight,
+21. **WP-14 Audit Slice v0.1** — accepted 2026-08-23 on local PostgreSQL 17 and
+    canonical PostgreSQL 18 + pgvector CI: shared four-mode collection/corpus
+    capability, streaming preflight,
     resource-aware page/shard planning, exact receipt reconciliation,
     evidence-rated CorpusSnapshot and three independent Audit deltas. This does
     not qualify G-07B, Restoration or ProductReady.

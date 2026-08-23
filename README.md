@@ -107,11 +107,11 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `WP-14 pre-implementation evidence assessment` — **COMPLETE 2026-08-23**:
   legacy pdfpipeline/Левашово использован как partial practical evidence, а не
   переносимая архитектура.
-- `WP-14 Audit Slice` — **IMPLEMENTED / CANONICAL CI PENDING 2026-08-23**:
+- `WP-14 Audit Slice` — **PASS 2026-08-23**:
   общий four-mode acquisition/corpus pipeline, streamed preflight,
   page/shard/reconciliation, `CorpusSnapshot` и три независимые Audit delta
-  прошли полный local PostgreSQL 17 suite. G-07B, Restoration и ProductReady
-  остаются blocked/not ready.
+  прошли полный local PostgreSQL 17 и canonical PostgreSQL 18 + pgvector CI.
+  G-07B, Restoration и ProductReady остаются blocked/not ready.
 
 Ключевые документы:
 
