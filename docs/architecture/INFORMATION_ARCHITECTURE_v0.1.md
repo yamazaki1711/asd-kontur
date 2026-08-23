@@ -145,6 +145,19 @@ flowchart TB
 
 Физическая cross-workspace deduplication project blobs запрещена принятыми retention-следствиями: одинаковые bytes разных workspace имеют отдельное владение и физическую lifecycle boundary. Platform artifact может иметь собственный platform blob; workspace лишь ссылается на разрешённую platform identity, но не приобретает право удалить её. `SourceArtifact` project scope всегда включает `workspace_id`.
 
+File/container boundary не задаёт semantic document identity. Один physical
+object может содержать zero/one/many logical source occurrences, а один
+logical source может иметь несколько immutable representations/versions.
+Logical occurrence связывается с exact parent `SourceVersion` и immutable
+page/region `SourceLocator`; derivation/materialization сохраняет parent,
+boundary, tool/profile and input/output digests. Filename/path остаются
+locators/attributes, SHA-256 подтверждает только equality bytes. Gap, overlap,
+mixing, out-of-range page или unresolved materialization запрещают трактовать
+row как доступный/полный document. Изменение boundary/classification создаёт
+новую version/decision, а не переписывает прежнюю запись. Это уточнение
+подтверждено legacy pdfpipeline assessment и не вводит правило
+`one document = one file`.
+
 Повторная работа с тем же ОКС не открывает прежний archive автоматически. Нужны отдельная authorization decision, archive integrity verification и выбранный IA-OD-03 import/read contract. После reset прямой поиск по workspace ID, hash и текстовому фрагменту не должен раскрывать project content.
 
 ## 5. Полный информационный каталог
