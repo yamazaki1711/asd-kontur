@@ -105,9 +105,13 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   volume/KS/payment trace прошли local PostgreSQL 17 и canonical PostgreSQL 18
   CI. Production print-ready и policy instances остаются blocked.
 - `WP-14 pre-implementation evidence assessment` — **COMPLETE 2026-08-23**:
-  legacy pdfpipeline/Левашово изучен как practical evidence; DoR и AT-PE-43
-  уточнены двумя связанными дельтами — Document Delta и Causal Readiness Delta.
-  Код WP-14 не начат; Audit/Restoration/ProductReady остаются not ready.
+  legacy pdfpipeline/Левашово использован как partial practical evidence, а не
+  переносимая архитектура.
+- `WP-14 Audit Slice` — **IMPLEMENTED / CANONICAL CI PENDING 2026-08-23**:
+  общий four-mode acquisition/corpus pipeline, streamed preflight,
+  page/shard/reconciliation, `CorpusSnapshot` и три независимые Audit delta
+  прошли полный local PostgreSQL 17 suite. G-07B, Restoration и ProductReady
+  остаются blocked/not ready.
 
 Ключевые документы:
 
@@ -127,6 +131,7 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - [WP-13 Support Slice](docs/implementation/WP13_SUPPORT_SLICE_v0.1.md)
 - [Legacy pdfpipeline / Левашово audit experience](docs/reports/LEGACY_PDFPIPELINE_AUDIT_EXPERIENCE_v0.1.md)
 - [WP-14 pdfpipeline architecture impact assessment](docs/reports/WP14_PDFPIPELINE_ARCHITECTURE_IMPACT_ASSESSMENT_v0.1.md)
+- [WP-14 Audit Slice implementation](docs/implementation/WP14_AUDIT_SLICE_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)

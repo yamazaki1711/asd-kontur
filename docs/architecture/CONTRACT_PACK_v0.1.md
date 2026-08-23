@@ -723,3 +723,11 @@ Harness extension for render lineage, one-workspace batch manifests,
 qualification decisions and raw-artifact retention references. Neither
 release mutates a v0.1 schema or changes the G-03 persisted semantics; their
 registries declare exact compatibility and fingerprints.
+
+WP-12, WP-13 and WP-14 add immutable additive releases `contracts/v1.2`,
+`contracts/v1.3` and `contracts/v1.4`. Version 1.4 defines shared collection,
+physical-object/page inspection, processing plan/shard/receipt, boundary,
+reconciliation and `CorpusSnapshot` records plus the three separately
+denominated Audit delta/report contracts. It preserves v0.1–v1.3 and explicitly
+rejects empty-complete reconciliation, unresolved-complete snapshots,
+confidence-based authority and `ProductReady`.

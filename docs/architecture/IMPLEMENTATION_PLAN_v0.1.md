@@ -385,10 +385,10 @@ Implementation record: `docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0
 | Field | Plan |
 |---|---|
 | Capability; inputs; results | Audit E2E, mainly R-2 and verification of R-1/R-3 evidence; three linked but independent outputs: `Document Delta`, `Causal Readiness Delta` from MTR/incoming control through ID/KS/payment, and `Package/Signing/Handover Readiness` |
-| Dependencies / DoR | WP-11 and WP-13 causal entities; exact Audit scope/corpus manifest; completeness/conflict/geometry rules; typed document-occurrence/page-boundary reconciliation; Package/Volume/Book/Membership and ActionRequest semantics; pinned RuleSet/ConflictPolicy/authority; Audit/Restoration boundary; G-07 partial-result and G-06 reset semantics |
-| Actions / artifacts | Reconciled physical-object/logical-document/page inventory; required↔found↔recognized↔classified↔versioned↔evidence-bound↔applicable Document Delta; MTR→control→admission→work→evidence→ID→presentation→KS→payment impact paths; package/book/order/copies/review/signature/handover/acceptance delta; typed ActionRequests; gaps/conflicts/uncertainties/blockers; Customer/PTO rebuildable projections; evidence-rated audit report |
-| Tests | Incomplete and very large corpus; multi-document split/mixing; package many-to-many membership; copy/signature/handover gaps; ActionRequest SoD/closure; false 100% readiness; reclassification missing attrs; no last-write-wins/confidence Fact; partial/unknown provider results; duplicate bytes vs authority; conflicting versions; untimely incoming-control evidence; batch/work/ID/KS/payment impact; dashboard rebuild; geometry without CRS; archive/reset/A-B isolation |
-| DoD | AT-PE-43 proves all three deltas end to end on synthetic corpus; each has exact scope, own versioned denominator, source/locator/rule/authority/fingerprint lineage; partial/unknown states visible; downstream impact traced without unsupported legal conclusion; Audit never performs Restoration or fabricates completeness |
+| Dependencies / DoR | WP-11 and WP-13 causal entities; shared collection/admission/object-ledger capability; deterministic physical-object/page preflight; resource-aware exact ProcessingPlan; page/shard receipt reconciliation and evidence-rated CorpusSnapshot; exact Audit scope; completeness/conflict/geometry rules; typed document-occurrence/page-boundary reconciliation; Package/Volume/Book/Membership and ActionRequest semantics; pinned RuleSet/ConflictPolicy/authority; Audit/Restoration boundary; G-07 partial-result and G-06 reset semantics |
+| Actions / artifacts | Common four-mode CollectionMission/Scope/Source, AcquisitionBatch/CustodyReceipt, streamed PhysicalObjectInspection, page-addressable ProcessingPlan/Shard/Receipt, validated container→logical-document boundaries and exact CorpusSnapshot; required↔found↔recognized↔classified↔versioned↔evidence-bound↔applicable Document Delta; MTR→control→admission→work→evidence→ID→presentation→KS→payment impact paths; package/book/order/copies/review/signature/handover/acceptance delta; typed ActionRequests; gaps/conflicts/uncertainties/blockers; Customer/PTO rebuildable projections; evidence-rated audit report |
+| Tests | Organized and hostile/chaotic intake through one capability; streaming preflight; synthetic 360 MiB/726-page metadata plan without large fixture; mixed native/raster route; bounded adaptive shards; page resume/checkpoint; incomplete receipts/all-shard failure/unknown/duplicate results; uncertain/out-of-range/gapped/overlapping boundaries; exact snapshot without whole-ОКС completeness claim; package many-to-many membership; copy/signature/handover gaps; ActionRequest SoD/closure; false 100% readiness; reclassification missing attrs; no last-write-wins/confidence Fact; duplicate bytes vs authority; conflicting versions; untimely incoming-control evidence; batch/work/ID/KS/payment impact; dashboard rebuild; geometry without CRS; archive/reset/A-B isolation |
+| DoD | AT-PE-43 proves shared acquisition→preflight→plan→receipts→reconciliation→CorpusSnapshot and all three Audit deltas end to end on synthetic corpus; each delta has exact scope, own versioned denominator, source/locator/rule/authority/fingerprint lineage; partial/unknown/unreadable/unassigned states visible; external-unavailable huge work is blocked/deferred rather than hidden local fallback; downstream impact traced without unsupported legal conclusion; Audit never performs Restoration or fabricates completeness |
 | Risks / rollback | Retrieval/file count/process status mistaken for canon; rebuild projection, pin prior source/rule/result versions, quarantine boundary/integrity conflict and issue a new immutable audit result |
 | Memory / retention | Audit definitions platform; inspected corpus/findings workspace; final report archive/delete policy |
 
@@ -421,6 +421,14 @@ Before implementation, WP-14 must have:
 9. projection-only Customer/PTO dashboard contracts and typed correction
    commands;
 10. workspace RLS/lifecycle/archive/reset coverage for all Audit artifacts.
+11. one shared four-mode acquisition model that accepts both organized and
+    chaotic inputs without prior complete manual sorting;
+12. streaming deterministic preflight and resource policy able to plan a
+    synthetic 360 MiB/726-page raster container without loading or committing it;
+13. immutable one-based page/shard/receipt checkpoints, bounded resume and exact
+    reconciliation before any `CorpusSnapshot`;
+14. an explicit statement that a snapshot proves the observed collection scope,
+    not completeness of the whole construction object.
 
 Mandatory scenarios supplement `AT-PE-43`: thousands of files and successful
 recognition do not imply completeness; unlinked or untimely incoming-control
@@ -439,6 +447,9 @@ projection rebuild preserves canonical fingerprints; Audit does not perform
 Restoration; project-specific rules are not promoted automatically. The
 complete normative scenario list and refined DoD are in the impact assessment
 §§11–12.
+
+Implementation evidence and the exact migration/contract boundary are recorded
+in [`WP14_AUDIT_SLICE_v0.1.md`](../implementation/WP14_AUDIT_SLICE_v0.1.md).
 
 ### WP-15 — Restoration slice
 

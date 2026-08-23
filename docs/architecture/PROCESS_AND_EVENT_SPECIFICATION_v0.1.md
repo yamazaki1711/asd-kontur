@@ -361,6 +361,22 @@ Terminal condition зависит от выбранного deliverable scope и
 
 ### 5.4. Audit
 
+Before Audit-specific comparison, the shared four-mode corpus process executes
+`StartCollectionMission`, `RecordPhysicalObjectInspection`,
+`ApproveProcessingPlan`, page/shard execution through G-07 contracts,
+`ValidateLogicalDocumentBoundary`, `ReconcileCorpus` and
+`PublishCorpusSnapshot`. Organized and chaotic inputs use the same commands.
+The process is native-first, page-addressable and resumable; it never turns a
+global process counter into `complete`. Missing, failed, unknown, duplicate and
+unassigned receipts remain terminally visible. `CorpusSnapshotPublished`
+attests the observed collection scope only, not completeness of the whole ОКС.
+
+For a huge predominantly raster container, the ProcessingPlan uses exact
+resource/provider/egress policy. An unavailable external route is
+`blocked/deferred`; local failure does not widen egress and no blind full local
+run is implied. Processing overlap is context only and is deduplicated before
+logical-document acceptance.
+
 Основные команды: `EstablishAuditScope`, `ReconcileAuditCorpus`,
 `CompareRequiredAndActualEvidence`, `EvaluateCausalReadiness`,
 `EvaluatePackageReadiness`, `CreateActionRequest`, `PerformActionRequest`,
