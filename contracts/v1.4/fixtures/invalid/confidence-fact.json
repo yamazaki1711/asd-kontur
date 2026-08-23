@@ -1,0 +1,18 @@
+{
+  "record_type": "boundary_candidate",
+  "contract_version": "1.4.0",
+  "scope": {
+    "organization_id": "018f0000-0000-7000-8000-000000000001",
+    "workspace_id": "018f0000-0000-7000-8000-000000000002"
+  },
+  "boundary_candidate_id": "018f0000-0000-7000-8000-000000000010",
+  "container_source_version_id": "018f0000-0000-7000-8000-000000000011",
+  "start_page": 1,
+  "end_page": 2,
+  "method": "model_candidate",
+  "confidence": 0.999,
+  "evidence_receipt_ids": [],
+  "disposition": "accepted",
+  "authority_decision_ref": null,
+  "creates_fact": true
+}

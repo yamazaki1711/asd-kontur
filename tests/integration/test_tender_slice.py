@@ -232,7 +232,7 @@ def test_wp12_schema_role_rls_and_migration_head(
         "tender_terminal_outcomes",
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0007_wp13"
+        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0008_wp14"
         assert (
             connection.scalar(
                 sa.text("SELECT rolname FROM pg_roles WHERE rolname='asd_tender_service'")

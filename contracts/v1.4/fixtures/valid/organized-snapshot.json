@@ -1,0 +1,32 @@
+{
+  "record_type": "corpus_snapshot",
+  "contract_version": "1.4.0",
+  "scope": {
+    "organization_id": "018f0000-0000-7000-8000-000000000001",
+    "workspace_id": "018f0000-0000-7000-8000-000000000002"
+  },
+  "corpus_snapshot_id": "018f0000-0000-7000-8000-000000000003",
+  "version": 1,
+  "collection_scope_version": 1,
+  "physical_object_count": 3,
+  "physical_objects": [
+    {"physical_object_id": "018f0000-0000-7000-8000-000000000020", "physical_object_version": 1},
+    {"physical_object_id": "018f0000-0000-7000-8000-000000000021", "physical_object_version": 1},
+    {"physical_object_id": "018f0000-0000-7000-8000-000000000022", "physical_object_version": 1}
+  ],
+  "page_count": 12,
+  "page_inventory": [
+    {"inspection_id": "018f0000-0000-7000-8000-000000000023", "page_number": 1}
+  ],
+  "accepted_logical_document_count": 3,
+  "logical_occurrence_ids": ["018f0000-0000-7000-8000-000000000024"],
+  "unresolved_item_count": 0,
+  "unresolved_items": [],
+  "duplicate_groups": [],
+  "conflicting_source_version_ids": [],
+  "coverage_denominator_version": "synthetic-organized-1.0.0",
+  "reconciliation_ids": ["018f0000-0000-7000-8000-000000000004"],
+  "outcome": "complete",
+  "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "claims_complete_oks": false
+}

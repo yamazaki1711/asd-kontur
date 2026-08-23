@@ -1,0 +1,19 @@
+{
+  "record_type": "corpus_reconciliation",
+  "contract_version": "1.4.0",
+  "scope": {
+    "organization_id": "018f0000-0000-7000-8000-000000000001",
+    "workspace_id": "018f0000-0000-7000-8000-000000000002"
+  },
+  "reconciliation_id": "018f0000-0000-7000-8000-000000000005",
+  "plan_id": "018f0000-0000-7000-8000-000000000006",
+  "plan_version": 1,
+  "expected_pages": [1, 2, 3, 4],
+  "validated_pages": [1, 2],
+  "failed_pages": [3],
+  "unknown_pages": [4],
+  "duplicate_pages": [],
+  "unresolved_segments": [[3, 4]],
+  "outcome": "unresolved",
+  "receipt_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

@@ -1,0 +1,18 @@
+{
+  "record_type": "audit_report",
+  "contract_version": "1.4.0",
+  "scope": {
+    "organization_id": "018f0000-0000-7000-8000-000000000001",
+    "workspace_id": "018f0000-0000-7000-8000-000000000002"
+  },
+  "audit_report_id": "018f0000-0000-7000-8000-000000000012",
+  "version": 1,
+  "corpus_snapshot_ref": "snapshot:1",
+  "document_delta_ref": "document:1",
+  "causal_delta_ref": "causal:1",
+  "package_readiness_ref": "package:1",
+  "outcome": "complete",
+  "unresolved_codes": [],
+  "product_ready": true,
+  "fingerprint": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+}
