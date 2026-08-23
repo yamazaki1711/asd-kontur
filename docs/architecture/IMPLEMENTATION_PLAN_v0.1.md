@@ -384,11 +384,11 @@ Implementation record: `docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0
 
 | Field | Plan |
 |---|---|
-| Capability; inputs; results | Audit E2E, mainly R-2 and verification of R-1/R-3 evidence; two linked outputs: `Document Delta` and `Causal Readiness Delta` from MTR/incoming control through ID/signing/KS/payment readiness |
-| Dependencies / DoR | WP-11 and WP-13 causal entities; exact Audit scope/corpus manifest; completeness/conflict/geometry rules; typed document-occurrence/page-boundary reconciliation; pinned RuleSet/ConflictPolicy/authority; Audit/Restoration boundary; G-07 partial-result and G-06 reset semantics |
-| Actions / artifacts | Reconciled physical-object/logical-document/page inventory; required↔found↔recognized↔classified↔versioned↔evidence-bound↔applicable↔signed Document Delta; MTR→control→admission→work→evidence→ID→presentation→KS→payment impact paths; gaps/conflicts/uncertainties/blockers; Customer/PTO rebuildable projections; evidence-rated audit report |
-| Tests | Incomplete and very large corpus; multi-document split/mixing; partial/unknown provider results; duplicate bytes vs authority; conflicting versions; untimely incoming-control evidence; batch/work/ID/KS/payment impact; false signatures; dashboard rebuild; geometry without CRS; no-evidence “complete” denial; archive/reset/A-B isolation |
-| DoD | AT-PE-43 proves both deltas end to end on synthetic corpus; exact scope/source/locator/rule/authority/fingerprint lineage; partial/unknown states visible; downstream impact traced without unsupported legal conclusion; Audit never performs Restoration or fabricates completeness |
+| Capability; inputs; results | Audit E2E, mainly R-2 and verification of R-1/R-3 evidence; three linked but independent outputs: `Document Delta`, `Causal Readiness Delta` from MTR/incoming control through ID/KS/payment, and `Package/Signing/Handover Readiness` |
+| Dependencies / DoR | WP-11 and WP-13 causal entities; exact Audit scope/corpus manifest; completeness/conflict/geometry rules; typed document-occurrence/page-boundary reconciliation; Package/Volume/Book/Membership and ActionRequest semantics; pinned RuleSet/ConflictPolicy/authority; Audit/Restoration boundary; G-07 partial-result and G-06 reset semantics |
+| Actions / artifacts | Reconciled physical-object/logical-document/page inventory; required↔found↔recognized↔classified↔versioned↔evidence-bound↔applicable Document Delta; MTR→control→admission→work→evidence→ID→presentation→KS→payment impact paths; package/book/order/copies/review/signature/handover/acceptance delta; typed ActionRequests; gaps/conflicts/uncertainties/blockers; Customer/PTO rebuildable projections; evidence-rated audit report |
+| Tests | Incomplete and very large corpus; multi-document split/mixing; package many-to-many membership; copy/signature/handover gaps; ActionRequest SoD/closure; false 100% readiness; reclassification missing attrs; no last-write-wins/confidence Fact; partial/unknown provider results; duplicate bytes vs authority; conflicting versions; untimely incoming-control evidence; batch/work/ID/KS/payment impact; dashboard rebuild; geometry without CRS; archive/reset/A-B isolation |
+| DoD | AT-PE-43 proves all three deltas end to end on synthetic corpus; each has exact scope, own versioned denominator, source/locator/rule/authority/fingerprint lineage; partial/unknown states visible; downstream impact traced without unsupported legal conclusion; Audit never performs Restoration or fabricates completeness |
 | Risks / rollback | Retrieval/file count/process status mistaken for canon; rebuild projection, pin prior source/rule/result versions, quarantine boundary/integrity conflict and issue a new immutable audit result |
 | Memory / retention | Audit definitions platform; inspected corpus/findings workspace; final report archive/delete policy |
 
@@ -411,11 +411,16 @@ Before implementation, WP-14 must have:
 4. exact `DocumentRequirement` coverage dimensions, including signer/authority;
 5. causal evaluation from MaterialBatch and incoming control through admission,
    work/evidence, ID/signing, PresentedVolume, KS and PaymentClaim readiness;
-6. three-valued applicability and typed downstream gap/conflict/blocker/
+6. separate Package/Volume/Book identity, ordered many-to-many document
+   membership, required copies/registers, professional review, signer,
+   handover and acceptance states;
+7. typed `ActionRequest` with initiator/executor/verifier authority, closure
+   evidence, deadline, escalation and supersession;
+8. three-valued applicability and typed downstream gap/conflict/blocker/
    uncertainty, never an unsupported legal conclusion;
-7. projection-only Customer/PTO dashboard contracts and typed correction
+9. projection-only Customer/PTO dashboard contracts and typed correction
    commands;
-8. workspace RLS/lifecycle/archive/reset coverage for all Audit artifacts.
+10. workspace RLS/lifecycle/archive/reset coverage for all Audit artifacts.
 
 Mandatory scenarios supplement `AT-PE-43`: thousands of files and successful
 recognition do not imply completeness; unlinked or untimely incoming-control
@@ -424,10 +429,16 @@ documents/workspaces are not mixed; duplicate bytes do not imply authority;
 conflicting versions remain visible; provider partial/all-window failure cannot
 become empty-success; missing applicable АВК/АОРПИ/journal evidence traces to
 affected MTR/work/ID/KS/payment readiness; GeneratedDocumentCandidate or filled
-folders are not signed ID; PTO corrections append versions/audit; projection
-rebuild preserves canonical fingerprints; Audit does not perform Restoration;
-project-specific rules are not promoted automatically. The complete normative
-scenario list and refined DoD are in the impact assessment §10–11.
+folders are not signed ID; package/book/section are distinct and one document
+may join multiple packages; missing copy, signer authority, handover or
+acceptance remains visible; stop-code closure requires typed ActionRequest,
+evidence and policy authority; reclassification appends a version and reruns
+validators; last upload and high confidence create no authority; PTO
+corrections append versions/audit; false signed-readiness formulas are rejected;
+projection rebuild preserves canonical fingerprints; Audit does not perform
+Restoration; project-specific rules are not promoted automatically. The
+complete normative scenario list and refined DoD are in the impact assessment
+§§11–12.
 
 ### WP-15 — Restoration slice
 
