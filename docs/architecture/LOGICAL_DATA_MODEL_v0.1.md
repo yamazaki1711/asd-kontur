@@ -432,6 +432,11 @@ WorkType → WorkInstance/WorkVolume → MaterialRequirement/MaterialBatch
 | `SignerRequirement` + version | Workspace requirement for roles/authority at event date | RequiredDocumentType/DocumentRequirement, role classes, effective interval, RuleTrace; does not assign a human |
 | `IDPackage` + version | Workspace completeness aggregate for a work/period/presentation | required vs actual documents/evidence, gaps/blockers, state; FinalizedDocument membership through association |
 | `DocumentCoverage` | DocumentRequirement↔candidate/finalized document association | Same workspace; coverage status/evidence; one file cannot silently satisfy incompatible requirements |
+| `Package` + immutable version | Workspace identity of an assembled ID/document set; not a physical folder, section or source file | Exact scope/stage/purpose/required structure/version/rules; 1→N VolumeBookVersions and memberships; completeness/signing/handover derived separately |
+| `VolumeBook` + immutable version | Ordered nested volume/book within one PackageVersion | Same-scope composite relation to package; ordering, register level and copy requirement; cannot own or duplicate SourceVersion identity |
+| `DocumentMembership` + immutable version | Exact document/finalized version occurrence in Package/VolumeBook | Many-to-many; role, order, required copy count, membership evidence and effective interval; signed document outside required membership does not cover package |
+| `PackageReadinessEvaluation` | Immutable Package/Signing/Handover delta | Own denominator and exact package version; structure/copies/registers/review/signers/signatures/handover/acceptance states, blockers, RuleTrace and fingerprint; never averaged with Document/Causal Delta |
+| `ActionRequest` + immutable version | Governed request raised by typed gap/blocker/stop code | Initiator, addressee/executor, affected object version, action/evidence/deadline/impact, verifier policy, state and supersession; performed is not verified closure; SoD and audit required |
 | `PresentedVolume` + version | Workspace volume claimed for acceptance | Links exact WorkVolumeVersion, evidence/ID package and contract context; never inferred from KS total alone |
 | `KsDocument` + version | Typed КС source/generated/final record, not generic document | KS type/period/contract/source/finalized-document refs; workspace canonical metadata |
 | `KsLine` + version | PresentedVolume↔KS line association | Exact quantity/unit/rate/amount/calculation trace, same workspace; totals reproducible |
@@ -441,6 +446,14 @@ WorkType → WorkInstance/WorkVolume → MaterialRequirement/MaterialBatch
 All numeric quantities declare unit registry/version, precision, rounding and
 boundary semantics. Binary float is not a logical type for money, critical
 quantity, tolerance or coordinate.
+
+Classification correction never mutates the prior classification. It appends
+an immutable classification version, reruns the exact type-specific validators
+and records missing required attributes plus targeted repair/ActionRequests.
+The latest upload/version is not authoritative without explicit supersession,
+authority, effective interval and conflict reconciliation. Model confidence is
+queue-priority metadata only and never creates Fact, coverage, signature or
+package readiness.
 
 ## 10. Geometry model
 

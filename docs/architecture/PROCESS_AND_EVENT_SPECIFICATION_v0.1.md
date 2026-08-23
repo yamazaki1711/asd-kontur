@@ -178,7 +178,7 @@ audit» запрещено.
 | P-11 | Contract Risk and Disagreement Protocol | contract, ПД/РД, НТД, facts | protocol + revised contract draft | Tender/Support | 1 |
 | P-12 | PD/RD Error and Collision Analysis | verified geometry/specifications/rules | collision/error/risk findings | Tender/Support/Audit | 2 |
 | P-13 | Executive Scheme Formation | confirmed project and actual geometry | evidence-backed executive scheme | Support/Restoration | 3 |
-| P-14 | Audit Delta Formation | required matrix + reconciled physical/logical corpus + applicable causal chain | Document Delta + Causal Readiness Delta + audit findings | Audit | 1, 2, 3 |
+| P-14 | Audit Delta Formation | required matrix + reconciled physical/logical corpus + applicable causal and package/signing/handover chains | Document Delta + Causal Readiness Delta + Package/Signing/Handover Readiness + audit findings | Audit | 1, 2, 3 |
 | P-15 | Restoration of Missing Evidence | delta + lawful available evidence | restored draft or explicit unrecoverable gap | Restoration | 2, 3 |
 | P-16 | Deliverable Formation and Finalization | confirmed facts/findings/uncertainties | finalized deliverable version | общий + overlay templates | все |
 | P-17 | Knowledge Retrieval | typed query + scope | EvidencePack with gaps/provenance | общий | все |
@@ -315,7 +315,7 @@ validation/confirmation process; исполнительная схема исп�
 |---|---|---|---|---|---|---|
 | Tender | Решить условия участия и защитить подрядчика до договора | tender docs, contract draft, ПД/РД доступной полноты, customer rules, НТД | P-11, ранние P-06…P-09/P-12, P-16 | полевые факты, KS/payment, executive scheme | финализированы evidence-backed risk/disagreement outputs; gaps явны | 1, частично 2 |
 | Support | Вести доказательную цепочку исполнения | полный рабочий корпус, договор, customer rules, НТД, field evidence | P-05…P-13, P-16 | ничего из применимого kernel | требуемые deliverables сформированы; blockers/uncertainties разрешены либо явно допустимы | 1, 2, 3 |
-| Audit | Установить document/evidence delta и downstream readiness impact существующего корпуса | фактический corpus manifest, ПД/РД, contract/customer rules, НТД, MTR/work/control/ID/KS/payment versions по scope | P-09, P-10, P-12, P-14, P-16 | создание operational work execution, восстановление/подмена отсутствующего evidence | финализированы Document Delta и Causal Readiness Delta с evidence/scope/limitations | 1, 2, 3 по scope |
+| Audit | Установить document/evidence delta, causal impact и физическую package/signing/handover readiness существующего корпуса | фактический corpus manifest, ПД/РД, contract/customer rules, НТД, MTR/work/control/ID/KS/payment и package versions по scope | P-09, P-10, P-12, P-14, P-16 | создание operational work execution, восстановление/подмена отсутствующего evidence | финализированы три независимые delta с evidence/scope/limitations | 1, 2, 3 по scope |
 | Restoration | Законно восстановить недостающее из существующих доказательств | audit delta, available archives/facts, ПД/РД, НТД | P-15, P-13, P-16 | prospective tender analysis, live construction control | восстановленный пакет или доказанный список невосстановимого; ничего не выдумано | 2, 3 |
 
 ### 5.1.1. Контракт промышленной готовности по режимам
@@ -330,7 +330,7 @@ uncertainty, а не упрощённый режим.
 |---|---|---|---|---|---|---|---|---|
 | `Tender` | tender package; contract draft; доступные версии ПД/РД; customer regulations; applicable НТД; workspace/policy/authority context | K-01…K-09 + P-11/P-12/P-16 в tender scope | pinned manifest с common source/applicability/conflict rules и approved Tender contract-risk/deliverable rules | evidence-backed протокол разногласий; переработанный договор; risk/gap register; scoped PD/RD findings | missing/ambiguous terms, editions, authority or PD/RD; unresolved legal conflict; incomplete scope; всё материальное блокирует соответствующий вывод | authorized tender/legal/technical reviewers и finalizer по class/scope; model/service не утверждает | `AT-PE-41` плюс общие isolation/rule/authorization tests | все обязательные Tender outputs финализированы по утверждённому scope; blockers отсутствуют; допустимые gaps перечислены; provenance/authority/RuleTrace полны |
 | `Support` | рабочий корпус ПД/РД; contract/customer rules; applicable НТД; structure/work plan; confirmed field/MTR/control/geometry evidence | K-01…K-10 + P-05…P-13/P-16 | pinned manifest с common rules и approved Support work/MTR/control/ID/KS/geometry rules | agreement/contract findings по применимости; PD/RD findings; evidence/ID packages; executive schemes; presented-volume/KS/payment trace | missing source/evidence, unsafe sequence, unapproved MTR, geometry/authority conflict, unresolved rule conflict; material blockers fail-closed | authorized engineering, PTO, control, geodesy, contract and deliverable roles by action; SoD enforced | `AT-PE-42` плюс общие suites | полный заявленный Support scope прошёл E2E от sources/facts до обязательных outputs; ни один material blocker не скрыт; schemes use confirmed geometry only |
-| `Audit` | fixed audit scope; reconciled physical/logical corpus; applicable ПД/РД, contract, customer regulations and НТД; MTR/work/control/ID/KS/payment versions in scope | K-01…K-09 + P-09/P-10/P-12/P-14/P-16 | pinned manifest с common rules и approved Audit completeness/delta/collision/trace rules | audit report; Document Delta; Causal Readiness Delta; PD/RD/volume/payment findings; Customer/PTO projections; coverage and limitation statement | unavailable/partial/mixed artifacts, sampling boundary, disputed identity/authenticity/timeliness/applicability, unresolved conflict; no claim outside scope | independent authorized auditor/reviewers and finalizer; source owners cannot self-resolve required SoD decisions | `AT-PE-43` плюс общие suites | audit scope/corpus reconciliation зафиксированы; document and causal deltas traced; downstream impact/coverage/limitations explicit; blockers resolved or terminally reported as blocking outcome; Audit не выполняет Restoration |
+| `Audit` | fixed audit scope; reconciled physical/logical corpus; applicable ПД/РД, contract, customer regulations and НТД; MTR/work/control/ID/KS/payment/package versions in scope | K-01…K-09 + P-09/P-10/P-12/P-14/P-16 | pinned manifest с common rules и approved Audit completeness/delta/collision/trace rules | audit report; Document Delta; Causal Readiness Delta; Package/Signing/Handover Readiness; PD/RD/volume/payment findings; Customer/PTO projections; coverage and limitation statement | unavailable/partial/mixed artifacts, sampling boundary, disputed identity/authenticity/timeliness/applicability, unresolved conflict; no claim outside scope | independent authorized auditor/reviewers and finalizer; source owners cannot self-resolve required SoD decisions | `AT-PE-43` плюс общие suites | audit scope/corpus reconciliation зафиксированы; all three deltas traced with separate denominators; downstream impact/coverage/limitations explicit; blockers resolved or terminally reported as blocking outcome; Audit не выполняет Restoration |
 | `Restoration` | approved restoration scope; confirmed audit delta; lawful archives/facts/measurements; applicable ПД/РД and НТД; authority context | K-01…K-09 + P-15/P-13/P-16 | pinned manifest с common rules и approved Restoration/evidence sufficiency/geometry/document rules | evidence-backed restored drafts/schemes; provenance package; explicit unrecoverable-gap register | missing lawful evidence, unverifiable date/signature/measurement, conflicting sources, insufficient geometry; guessing prohibited | authorized restoration specialists, evidence confirmers and finalizer with required independence; model/service cannot create fact | `AT-PE-44` плюс общие suites | каждый scoped gap закрыт подтверждённым результатом либо declared unrecoverable with evidence; no fabricated fact; all outputs traced and authorized |
 
 `ProductReady` может быть установлен только будущим отдельным authority-
@@ -363,10 +363,14 @@ Terminal condition зависит от выбранного deliverable scope и
 
 Основные команды: `EstablishAuditScope`, `ReconcileAuditCorpus`,
 `CompareRequiredAndActualEvidence`, `EvaluateCausalReadiness`,
-`ConfirmAuditFinding`, `FormAuditDelta`, `FinalizeAuditReport`. Ключевые
+`EvaluatePackageReadiness`, `CreateActionRequest`, `PerformActionRequest`,
+`VerifyActionRequestClosure`, `ReclassifyDocument`, `ConfirmAuditFinding`,
+`FormAuditDelta`, `FinalizeAuditReport`. Ключевые
 события: `AuditScopeEstablished`, `AuditCorpusReconciled`,
 `EvidenceGapDetected`, `CausalReadinessImpactEvaluated`,
-`AuditFindingConfirmed`, `AuditDeltaFinalized`.
+`PackageReadinessEvaluated`, `ActionRequested`, `ActionPerformed`,
+`ActionRequestClosed`, `DocumentReclassified`, `AuditFindingConfirmed`,
+`AuditDeltaFinalized`.
 
 `ReconcileAuditCorpus` различает physical object/file occurrence, semantic
 source/version, logical-document boundary, exact page/region, render и
@@ -383,6 +387,27 @@ signer/authority. `EvaluateCausalReadiness` формирует `Causal Readiness
 → control/evidence → ID/signing → PresentedVolume → KS → payment readiness.
 Applicability остаётся three-valued; каждый разрыв содержит RuleTrace,
 affected downstream entities и typed gap/conflict/blocker/uncertainty.
+
+`EvaluatePackageReadiness` сохраняет отдельный denominator и проверяет exact
+Package/Volume/Book versions, ordered memberships, registers/attachments,
+required copies, professional review, signer authority/signatures, handover,
+return/re-presentation и acceptance. `found`, `classified`, `included`,
+`ready_for_signature`, `signed`, `handed_over` и `accepted` не являются
+синонимами. Physical folder completeness не доказывает Causal Readiness; три
+delta не усредняются в один показатель.
+
+Stop-code создаёт immutable typed `ActionRequest`: инициатор, исполнитель,
+affected version, action/evidence/deadline/impact и policy-qualified verifier.
+Исполнение не равно закрытию; closure требует evidence и отдельную authority
+decision, если policy требует инициатора/независимого verifier. Queue removal,
+повторная classification и process counter не закрывают blocker. Overdue,
+cancel и supersession сохраняют lineage.
+
+`ReclassifyDocument` создаёт новую classification version, запускает validators
+target type и формирует missing attributes/targeted repair/ActionRequest. Оно
+не изменяет прежнюю version и не делает latest upload authoritative. Explicit
+supersession, authority, effective interval и conflict reconciliation
+обязательны; confidence никогда не создаёт Fact, signature или coverage.
 
 Uncertainty сохраняет границу выборки, недоступный источник, неразрешённую
 терминологию и непроверенную применимость. Audit report не объявляет полноту
@@ -1170,7 +1195,7 @@ isolation или retention, а не при заполнении разрешён
 | AT-PE-40 | external VLM audit inspected | digests/versions присутствуют; credentials/full document/prompt/response отсутствуют |
 | AT-PE-41 | Tender E2E на репрезентативном qualification corpus | обязательные входы и pinned RuleSet определены; protocol/revised-contract/risk outputs traced; gaps не превращены в `NO_RISK`; authority/finalization guards пройдены |
 | AT-PE-42 | Support E2E через sources → works/MTR/control → evidence/ID → presented volumes/KS/payment | все применимые outputs и RuleTrace воспроизводимы; blocker останавливает material transition; executive geometry только confirmed |
-| AT-PE-43 | Audit E2E: reconciled corpus → Document Delta + MTR/incoming-control/admission/work/evidence/ID/signing/KS/payment Causal Readiness Delta | physical/logical/page inventory, partial outcomes and scope явны; file count/recognition/generated candidate не означают completeness/signing; каждая delta/finding/downstream impact имеет exact version/locator/evidence/rule/authority trace; duplicate bytes, conflicting versions and untimely/unlinked evidence remain visible; dashboard rebuild preserves canonical fingerprint; вывод вне scope и Restoration action запрещены |
+| AT-PE-43 | Audit E2E: reconciled corpus → Document Delta + MTR/incoming-control/admission/work/evidence/ID/KS/payment Causal Readiness Delta + Package/Signing/Handover Readiness | physical/logical/page inventory, partial outcomes and scope явны; file count/recognition/generated candidate/confidence не означают Fact/completeness/signing; package/book/section distinct, ordered many-to-many memberships/copies/review/signer/handover/acceptance checked; ActionRequest closure requires evidence/authority; reclassification appends version/validators; no last-write-wins; each delta has its own denominator and exact version/locator/evidence/rule/authority/fingerprint; false 100% projection rejected; dashboard rebuild preserves canonical package/action state; вывод вне scope и Restoration action запрещены |
 | AT-PE-44 | Restoration E2E с восстановимыми и невосстановимыми gaps | подтверждённые данные дают versioned draft; отсутствие evidence даёт unrecoverable/uncertainty, но не сгенерированный факт |
 | AT-PE-45 | product readiness при трёх готовых режимах и одном failing/not-qualified | `ProductReady` отклонён; готовность возможна только при terminal readiness Tender + Support + Audit + Restoration и общих platform gates |
 | AT-PE-46 | external request без exact data-class×purpose allowlist либо со stale classification | deny до side effect |

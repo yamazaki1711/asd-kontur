@@ -158,6 +158,14 @@ row как доступный/полный document. Изменение boundary
 подтверждено legacy pdfpipeline assessment и не вводит правило
 `one document = one file`.
 
+Package/folder, Volume/Book, section and physical container are also distinct.
+One exact document version may have ordered typed memberships in several
+packages without duplicating source identity. Reclassification appends a
+classification version, invokes the target type validators and exposes missing
+attributes; latest upload and model confidence confer no authority. Package,
+signing and handover readiness is an independent canonical evaluation, not a
+file-count projection or an average with document/causal readiness.
+
 Повторная работа с тем же ОКС не открывает прежний archive автоматически. Нужны отдельная authorization decision, archive integrity verification и выбранный IA-OD-03 import/read contract. После reset прямой поиск по workspace ID, hash и текстовому фрагменту не должен раскрывать project content.
 
 ## 5. Полный информационный каталог
@@ -197,6 +205,7 @@ row как доступный/полный document. Изменение boundary
 | WorkspaceFact | fact key + immutable fact version; workspace | C/PostgreSQL | confirmation authority, source/evidence, effective/recorded times, supersession | Purge/reset; egress default-deny; EvidencePack within same workspace; all modes. |
 | Confirmation | decision ID; workspace | C/PostgreSQL; I | ConfirmationPolicy, actor authority, subject version, outcome/reason | Cannot be model identity; archive with facts; purge. |
 | Uncertainty / Blocker | stable issue key + versions; workspace | C/PostgreSQL | missing inputs, severity, affected operation, owner, resolution | Cannot be hidden or coerced to pass; deliverable policy; all modes. |
+| ActionRequest / version | governed remediation request; workspace | C/PostgreSQL; I versions | initiator, addressee/executor, affected version, action, evidence, deadline, impact, verifier/SoD, supersession | Queue removal is not closure; performed requires separate evidence/authority verification; audit and workspace reset. |
 | FieldObservation / Measurement | observation/version identity; workspace | C/PostgreSQL | device/human/source, locator, time, unit, precision, conditions | Candidate until confirmation; sensitive/local-only where classified. |
 | Unit / CRS | semantic registry/version; platform | C/PostgreSQL/reference registry | authority, definitions, conversions/effective status | Platform; no model-created units/CRS. |
 | GeometryEntity / GeometryVersion | geometry identity/version; workspace | C/PostgreSQL + permitted binary/vector object | confirmed inputs, CRS, units, precision, topology, calculation trace, professional authority | Blocked if evidence missing; no external egress by HV-01 default; executive-scheme input. |
@@ -241,6 +250,9 @@ row как доступный/полный document. Изменение boundary
 | PromotionCandidate | candidate ID; workspace | C/PostgreSQL | anonymization plan, proposed applicability, source evidence refs | Must resolve before purge by policy; never auto-promoted. |
 | PromotionDecision | immutable decision ID; platform+origin workflow | C/PostgreSQL | qualified human, outcome, tests/conflicts/applicability | Content-minimal audit survives as allowed; rejected/unresolved project payload purged. |
 | EvidenceCapsule | platform artifact/version | C/PostgreSQL/object only if needed | RD-05 minimal assertion, source type/version, locator/digest, applicability, anonymization, tests, decision/authority/validity | No full document, project memory, embeddings or live workspace link. |
+| Package / VolumeBook version | assembled document-set and nested ordered structure; workspace | C/PostgreSQL; I versions | exact purpose/stage/scope/rules, register hierarchy, copy requirements; distinct from section/container | Support/Audit/Restoration; archive/reset scoped; object-specific layout only by evidence. |
+| DocumentMembership version | exact document occurrence in package/book; workspace | C/PostgreSQL; I | document/finalized version, role/order/copies, membership evidence/effective interval | Many-to-many without source duplication; correction appends version. |
+| PackageReadinessEvaluation | package/signing/handover delta; workspace | C/PostgreSQL; I evaluation | own denominator, structure/copies/review/signers/signatures/handover/acceptance, blockers/rules/fingerprint | Audit/Support; never averaged with Document/Causal Delta; reset with workspace. |
 | DisagreementProtocolVersion | deliverable version; workspace | C/PostgreSQL metadata + object output | clauses, proposed changes, legal evidence, rules, authorities, uncertainty | Tender primarily; versioned/finalized/exported/archived/purged. |
 | RevisedContractVersion | deliverable version; workspace | C + object output | source contract lineage, changes, authority, RuleSet | Tender; unresolved legal blocker prevents finalization. |
 | PDRDAnalysisVersion | deliverable version; workspace | C + object output | collisions, omissions, risks, evidence, calculations, uncertainties | Tender/Audit/Support; explicit gaps. |
@@ -596,7 +608,7 @@ flowchart LR
 |---|---|---|---|---|
 | Tender | Tender/contract package, customer requirements, available PD/RD, NTD → source ledger, structure/work/MTR/control/evidence chain | SourceVersion, contract clauses, WorkspaceFacts, RuleSet, ConflictPolicy; legal/domain authority | Missing edition/authority/scope, unresolved legal conflict, inconsistent quantities | DisagreementProtocol, RevisedContract, PD/RD risk analysis. Terminal only when required inputs inventoried, every proposed change traced, blockers resolved or explicitly terminal per policy, finalized/exportable. Workspace retention. E2E: source-to-clause-to-change lineage and no unsupported obligation. |
 | Support | Confirmed contract/PD/RD/customer/NTD plus execution evidence/measurements | ОКС structure, work, MTR, controls, required docs, facts, volume/KS/payment trace; engineers/survey/legal roles | Missing evidence, disputed applicability, geometry/volume mismatch, unsigned authority | Updated registers, required ID, presentation/KS/payment trace, analyses and executive schemes. Terminal when governed scope complete and all material blockers handled. E2E: work→MTR→control→evidence→ID→volume→KS→payment. |
-| Audit | Frozen available corpus and declared audit scope | Same sources/facts/rules plus reconstruction evaluations and completeness delta; independent audit authority | Missing data is visible, conflicts cannot be hidden, no inferred facts | PDRDAnalysis/AuditDelta with evidence and uncertainty. Terminal when inventory and tested scope are complete, every conclusion traceable, residual gaps explicit. Archive/retention workspace. |
+| Audit | Frozen available corpus and declared audit scope | Same sources/facts/rules plus Document Delta, Causal Readiness Delta and Package/Signing/Handover Readiness; independent audit authority | Missing data is visible, conflicts cannot be hidden, no inferred facts; the three denominators are not averaged | PDRDAnalysis/AuditDelta with evidence and uncertainty. Terminal when inventory and tested scope are complete, every conclusion traceable, residual gaps explicit. Archive/retention workspace. |
 | Restoration | Available historic sources, verified observations/measurements and required-document matrix | Same facts/evidence/rules; restoration candidates and professional confirmations | Absent evidence, unverifiable event/signature/geometry blocks factual restoration | Candidate reconstructed documents, gap register, evidence-backed finalized artifacts only. Terminal when each required item is confirmed, rejected or explicit gap; never fabricated. E2E tests reject invented dates/signatures/geometry. |
 
 Mode-specific structures are overlays in one workspace model, not separate databases. Each ModeExecution declares mandatory inputs, process definition version, RuleSetVersion, authorities, outputs, blockers and terminal condition. All four mode E2E catalogues are required before product readiness under ADR-0007.
