@@ -31,6 +31,7 @@ class PostgreSQLEnvironment:
     kernel_engine: Engine
     tender_engine: Engine
     support_engine: Engine
+    audit_engine: Engine
     owner_engine: Engine
 
 
@@ -83,6 +84,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
     kernel_role = f"asd_wp11_test_kernel_{run_id}"
     tender_role = f"asd_wp12_test_tender_{run_id}"
     support_role = f"asd_wp13_test_support_{run_id}"
+    audit_role = f"asd_wp14_test_audit_{run_id}"
     password = "synthetic-g04-test-only"
     cluster_admin_url = base_url.set(database="postgres")
     cluster_engine = sa.create_engine(cluster_admin_url, isolation_level="AUTOCOMMIT")
@@ -104,6 +106,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 kernel_role,
                 tender_role,
                 support_role,
+                audit_role,
             ):
                 assert role.replace("_", "").isalnum()
                 connection.exec_driver_sql(
@@ -120,6 +123,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             connection.exec_driver_sql(f'GRANT asd_kernel_service TO "{kernel_role}"')
             connection.exec_driver_sql(f'GRANT asd_tender_service TO "{tender_role}"')
             connection.exec_driver_sql(f'GRANT asd_support_service TO "{support_role}"')
+            connection.exec_driver_sql(f'GRANT asd_audit_service TO "{audit_role}"')
         application_url = owner_url.set(username=application_role, password=password)
         curator_url = owner_url.set(username=curator_role, password=password)
         projection_url = owner_url.set(username=projection_role, password=password)
@@ -130,6 +134,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         kernel_url = owner_url.set(username=kernel_role, password=password)
         tender_url = owner_url.set(username=tender_role, password=password)
         support_url = owner_url.set(username=support_role, password=password)
+        audit_url = owner_url.set(username=audit_role, password=password)
         application_engine = create_database_engine(
             DatabaseSettings(
                 url=application_url.render_as_string(hide_password=False),
@@ -200,6 +205,13 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 max_overflow=0,
             )
         )
+        audit_engine = create_database_engine(
+            DatabaseSettings(
+                url=audit_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
         yield PostgreSQLEnvironment(
             cluster_admin_url=cluster_admin_url,
             database_name=database_name,
@@ -214,6 +226,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             kernel_engine=kernel_engine,
             tender_engine=tender_engine,
             support_engine=support_engine,
+            audit_engine=audit_engine,
             owner_engine=owner_engine,
         )
         application_engine.dispose()
@@ -226,6 +239,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         kernel_engine.dispose()
         tender_engine.dispose()
         support_engine.dispose()
+        audit_engine.dispose()
     finally:
         owner_engine.dispose()
         drop_database(cluster_engine, database_name)
@@ -241,6 +255,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 kernel_role,
                 tender_role,
                 support_role,
+                audit_role,
             ):
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
         cluster_engine.dispose()

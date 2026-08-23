@@ -242,6 +242,11 @@ file-count projection or an average with document/causal readiness.
 | ProviderTermsProfile | provider terms version | C policy registry | source/version, region, retention, training/subprocessors/deletion | Unknown/change = deny/suspend qualification. |
 | ConfirmationPolicy | versioned risk/field matrix | C policy registry | field classes, automatic/human rules, authorities | HV-05; high confidence cannot bypass. |
 | RetentionProfile / BasisRegistry entry | immutable policy versions | C policy registry | per-class triggers/periods/archive/purge/backup and deletion basis | Missing applicable value blocks finalize/purge/destroy. |
+| CollectionMission / Scope / Source | mission and immutable scope versions; workspace | C/PostgreSQL; I versions | collector, locations/media, original/copy claim, custody, declared collection coverage | Shared Tender/Support/Audit/Restoration intake; location is provenance, not identity; reset scoped. |
+| PhysicalObjectInspection / PageManifest | physical object/version and one-based pages; workspace | C/PostgreSQL; I inspection | streaming digest/magic/readability/encryption/page box/rotation/native/raster/signature claims | Deterministic preflight before model; no whole huge-file memory requirement. |
+| ProcessingPlan / Shard / Receipt | exact immutable profile/plan/version and page list | C/PostgreSQL; I versions/receipts | resource route, provider/egress qualification, costs, idempotency, attempts, validation | Shard is not document; partial/unknown remain visible; resume skips validated pages. |
+| BoundaryCandidate / LogicalDocumentOccurrence | container SourceVersion and exact page range; workspace | C/PostgreSQL; I candidate/decision | method/confidence, receipt evidence, validator, authority, SourceArtifact/Version/Locator | Confidence never accepts boundary; unresolved segment is preserved. |
+| CorpusSnapshot | immutable reconciled observed corpus; workspace | C/PostgreSQL; I versions | objects/pages/logical occurrences/duplicates/conflicts/unreadable/unresolved, denominator, receipts, fingerprint | Input to all mode analysis; does not claim whole-ОКС completeness; archive/reset scoped. |
 
 ### 5.5. Promotion, deliverables and lifecycle artifacts
 

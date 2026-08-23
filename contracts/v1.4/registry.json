@@ -1,0 +1,46 @@
+{
+  "registry_version": "1.4.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-23T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0"],
+    "notes": "Adds shared acquisition/corpus reconciliation and WP-14 Audit delta records without mutating earlier persisted schemas."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v1.4:schema:audit",
+      "path": "schemas/audit.schema.json",
+      "digest": "sha256:cad960f384065bcba25368b8ef0de54fc6970effc388c14f483e1ce39fb6c6c7"
+    }
+  ],
+  "contract_keys": [
+    "corpus.collection-mission",
+    "corpus.physical-object-inspection",
+    "corpus.page-manifest",
+    "corpus.processing-plan",
+    "corpus.processing-shard",
+    "corpus.processing-receipt",
+    "corpus.boundary-candidate",
+    "corpus.reconciliation",
+    "corpus.snapshot",
+    "audit.delta",
+    "audit.report"
+  ],
+  "fixtures": {
+    "manifest": "fixtures/manifest.json",
+    "valid": [
+      "fixtures/valid/organized-snapshot.json",
+      "fixtures/valid/chaotic-partial.json",
+      "fixtures/valid/audit-delta.json"
+    ],
+    "invalid": [
+      {"path": "fixtures/invalid/empty-complete.json", "reason": "No empty complete reconciliation."},
+      {"path": "fixtures/invalid/complete-with-unresolved.json", "reason": "Complete snapshots have no unresolved items."},
+      {"path": "fixtures/invalid/confidence-fact.json", "reason": "Model confidence creates no authority."},
+      {"path": "fixtures/invalid/product-ready.json", "reason": "WP-14 is not ProductReady."}
+    ]
+  }
+}

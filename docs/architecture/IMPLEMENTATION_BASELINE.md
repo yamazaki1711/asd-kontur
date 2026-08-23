@@ -45,8 +45,13 @@ implementation foundation:
 - `WP-14 pre-implementation evidence assessment` — `COMPLETE 2026-08-23`:
   legacy pdfpipeline/Левашово practice assessed without source migration;
   Document Delta, Causal Readiness Delta and expanded AT-PE-43/DoR accepted;
-  no WP-14 code, migration or gate PASS was created;
-- Audit, Restoration, production deployment и ProductReady — `NOT STARTED`.
+  historical archive coverage remains intentionally `PARTIAL`.
+- `WP-14 Audit Slice` — `PASS 2026-08-23`:
+  common collection/preflight/page-shard/reconciliation/CorpusSnapshot capability,
+  three independent Audit deltas, migration `0008_wp14`, Contract Pack v1.4 and
+  PostgreSQL 17 local plus canonical PostgreSQL 18 + pgvector CI evidence are
+  complete;
+- Restoration, production deployment и ProductReady — `NOT STARTED`.
 
 Старый prototype, его `src/`, tests, tools, runtime configuration, pilot
 assets и бинарный DOCX удалены из active tree. Они остаются в Git history,

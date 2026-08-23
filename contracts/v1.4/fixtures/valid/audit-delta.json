@@ -1,0 +1,22 @@
+{
+  "record_type": "audit_delta",
+  "contract_version": "1.4.0",
+  "scope": {
+    "organization_id": "018f0000-0000-7000-8000-000000000001",
+    "workspace_id": "018f0000-0000-7000-8000-000000000002"
+  },
+  "delta_id": "018f0000-0000-7000-8000-000000000007",
+  "version": 1,
+  "delta_kind": "causal_readiness",
+  "denominator_id": "018f0000-0000-7000-8000-000000000008",
+  "denominator_version": 1,
+  "rule_set_version_id": "018f0000-0000-7000-8000-000000000009",
+  "item_count": 2,
+  "satisfied_count": 1,
+  "missing_count": 1,
+  "conflict_count": 0,
+  "indeterminate_count": 0,
+  "blocker_codes": ["INCOMING_CONTROL_EVIDENCE_MISSING"],
+  "downstream_impacts": ["ID_READINESS_UNPROVEN", "PAYMENT_READINESS_UNPROVEN"],
+  "fingerprint": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+}

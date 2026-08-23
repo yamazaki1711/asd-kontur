@@ -1,0 +1,15 @@
+{
+  "contract_version": "1.4.0",
+  "synthetic_only": true,
+  "valid": [
+    "valid/organized-snapshot.json",
+    "valid/chaotic-partial.json",
+    "valid/audit-delta.json"
+  ],
+  "invalid": [
+    {"path": "invalid/empty-complete.json", "reason": "Empty expected pages cannot reconcile as complete."},
+    {"path": "invalid/complete-with-unresolved.json", "reason": "Complete snapshot cannot retain unresolved items."},
+    {"path": "invalid/confidence-fact.json", "reason": "Confidence cannot accept a boundary or create a Fact."},
+    {"path": "invalid/product-ready.json", "reason": "WP-14 cannot assert ProductReady."}
+  ]
+}

@@ -401,6 +401,27 @@ JSON/property bags and polymorphic references are not canonical facts.
 
 ## 9. Construction domain model
 
+### 9.0. Shared acquisition and evidence-rated corpus
+
+Before mode analysis, all four modes may use the same workspace capability:
+
+```text
+CollectionMission/Scope/Source → AcquisitionBatch/CollectedItem/CustodyReceipt
+→ PhysicalObjectInspection/PageManifest → ProcessingPlan/Shard/Receipt
+→ BoundaryCandidate/Validation → LogicalDocumentOccurrence
+→ CorpusReconciliation → CorpusSnapshot
+```
+
+`PhysicalObjectVersion` remains byte identity in the G-04/G-05 ledger. A path,
+folder, box or disk is acquisition provenance, not document identity or
+authority. `ProcessingShard` is a transport window, never a logical document.
+Accepted logical occurrence requires an exact SourceVersion/SourceLocator page
+range and accepted boundary validation; uncertain pages remain explicit.
+`CorpusSnapshot` is immutable, has a versioned coverage denominator and exact
+receipts/unresolved items, and never claims completeness outside its collection
+scope. Corpus/path/render/attempt state is workspace memory and is reset through
+the G-06 exact adapter inventory.
+
 The common kernel supports the chain:
 
 ```text
@@ -437,6 +458,8 @@ WorkType → WorkInstance/WorkVolume → MaterialRequirement/MaterialBatch
 | `DocumentMembership` + immutable version | Exact document/finalized version occurrence in Package/VolumeBook | Many-to-many; role, order, required copy count, membership evidence and effective interval; signed document outside required membership does not cover package |
 | `PackageReadinessEvaluation` | Immutable Package/Signing/Handover delta | Own denominator and exact package version; structure/copies/registers/review/signers/signatures/handover/acceptance states, blockers, RuleTrace and fingerprint; never averaged with Document/Causal Delta |
 | `ActionRequest` + immutable version | Governed request raised by typed gap/blocker/stop code | Initiator, addressee/executor, affected object version, action/evidence/deadline/impact, verifier policy, state and supersession; performed is not verified closure; SoD and audit required |
+| `DocumentDelta` + immutable version | Required↔observed document/evidence assessment | Own denominator and scope; found/recognized/classified/versioned/evidence-bound/applicable states, gaps and downstream impact; file count/confidence cannot satisfy it |
+| `CausalReadinessDelta` + immutable version | Evidence chain from MTR/incoming control to payment readiness | Exact MaterialBatch/control/admission/work/evidence/ID/PresentedVolume/KS/Payment versions; three-valued state, RuleTrace, gaps/blockers and fingerprint |
 | `PresentedVolume` + version | Workspace volume claimed for acceptance | Links exact WorkVolumeVersion, evidence/ID package and contract context; never inferred from KS total alone |
 | `KsDocument` + version | Typed КС source/generated/final record, not generic document | KS type/period/contract/source/finalized-document refs; workspace canonical metadata |
 | `KsLine` + version | PresentedVolume↔KS line association | Exact quantity/unit/rate/amount/calculation trace, same workspace; totals reproducible |

@@ -340,7 +340,13 @@ profiles с `default deny` до утверждения.
     evidence, not copied architecture; Audit DoR/AT-PE-43 now require
     reconciled logical-document/page boundaries, Document Delta and causal
     MTR→incoming-control→admission→work→evidence→ID→signing→KS→payment
-    readiness. WP-14 implementation is not started.
+    readiness.
+21. **WP-14 Audit Slice v0.1** — accepted 2026-08-23 on local PostgreSQL 17 and
+    canonical PostgreSQL 18 + pgvector CI: shared four-mode collection/corpus
+    capability, streaming preflight,
+    resource-aware page/shard planning, exact receipt reconciliation,
+    evidence-rated CorpusSnapshot and three independent Audit deltas. This does
+    not qualify G-07B, Restoration or ProductReady.
 
 ## 12. Принятые решения и evidence-dependent policy gates
 

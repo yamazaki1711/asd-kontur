@@ -1,0 +1,308 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.4:schema:audit",
+  "title": "ASD-KONTUR WP-14 acquisition, corpus and Audit contracts v1.4",
+  "$defs": {
+    "id": {"type": "string", "format": "uuid"},
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "exactVersion": {"type": "string", "minLength": 1, "not": {"const": "latest"}},
+    "scope": {
+      "type": "object",
+      "required": ["organization_id", "workspace_id"],
+      "properties": {
+        "organization_id": {"$ref": "#/$defs/id"},
+        "workspace_id": {"$ref": "#/$defs/id"}
+      },
+      "additionalProperties": false
+    },
+    "collectionMission": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "collection_mission_id", "collection_scope_version", "collector_identity_id", "state"],
+      "properties": {
+        "record_type": {"const": "collection_mission"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "collection_mission_id": {"$ref": "#/$defs/id"},
+        "collection_scope_version": {"type": "integer", "minimum": 1},
+        "collector_identity_id": {"type": "string", "minLength": 1},
+        "state": {"enum": ["collecting", "reconciling", "snapshotted", "blocked", "quarantined"]}
+      },
+      "additionalProperties": false
+    },
+    "physicalObjectInspection": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "inspection_id", "physical_object_id", "physical_object_version", "digest", "size_bytes", "media_type", "readable", "encrypted", "page_count", "composition", "inspection_profile_version"],
+      "properties": {
+        "record_type": {"const": "physical_object_inspection"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "inspection_id": {"$ref": "#/$defs/id"},
+        "physical_object_id": {"$ref": "#/$defs/id"},
+        "physical_object_version": {"type": "integer", "minimum": 1},
+        "digest": {"$ref": "#/$defs/digest"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "media_type": {"type": "string", "minLength": 1},
+        "readable": {"type": "boolean"},
+        "encrypted": {"type": "boolean"},
+        "page_count": {"type": "integer", "minimum": 0},
+        "composition": {"enum": ["native", "raster", "mixed", "unknown"]},
+        "inspection_profile_version": {"$ref": "#/$defs/exactVersion"},
+        "error_codes": {"type": "array", "items": {"type": "string", "minLength": 1}}
+      },
+      "additionalProperties": false
+    },
+    "pageManifest": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "inspection_id", "page_number", "width_points", "height_points", "rotation", "native_text_characters", "raster_objects", "readable", "page_digest"],
+      "properties": {
+        "record_type": {"const": "page_manifest"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "inspection_id": {"$ref": "#/$defs/id"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "width_points": {"type": "number", "exclusiveMinimum": 0},
+        "height_points": {"type": "number", "exclusiveMinimum": 0},
+        "rotation": {"type": "integer"},
+        "native_text_characters": {"type": "integer", "minimum": 0},
+        "raster_objects": {"type": "integer", "minimum": 0},
+        "readable": {"type": "boolean"},
+        "page_digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "processingPlan": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "processing_plan_id", "version", "inspection_id", "purpose", "classification", "policy_version", "page_count", "estimated_cost_units", "state", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "processing_plan"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "processing_plan_id": {"$ref": "#/$defs/id"},
+        "version": {"type": "integer", "minimum": 1},
+        "inspection_id": {"$ref": "#/$defs/id"},
+        "purpose": {"type": "string", "minLength": 1},
+        "classification": {"type": "string", "minLength": 1},
+        "policy_version": {"$ref": "#/$defs/exactVersion"},
+        "page_count": {"type": "integer", "minimum": 1},
+        "estimated_cost_units": {"type": "integer", "minimum": 0},
+        "state": {"enum": ["complete", "partial", "blocked", "unresolved"]},
+        "fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "processingShard": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "shard_id", "plan_id", "ordinal", "page_numbers", "context_overlap_pages", "route", "idempotency_key"],
+      "properties": {
+        "record_type": {"const": "processing_shard"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "shard_id": {"$ref": "#/$defs/id"},
+        "plan_id": {"$ref": "#/$defs/id"},
+        "ordinal": {"type": "integer", "minimum": 1},
+        "page_numbers": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "context_overlap_pages": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "route": {"enum": ["native", "deterministic", "local_vlm", "external_eligible"]},
+        "idempotency_key": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "processingReceipt": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "receipt_id", "plan_id", "plan_version", "shard_id", "page_number", "attempt_id", "idempotency_key", "status", "result_digest", "validation_codes"],
+      "properties": {
+        "record_type": {"const": "processing_receipt"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "receipt_id": {"$ref": "#/$defs/id"},
+        "plan_id": {"$ref": "#/$defs/id"},
+        "plan_version": {"type": "integer", "minimum": 1},
+        "shard_id": {"$ref": "#/$defs/id"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "attempt_id": {"$ref": "#/$defs/id"},
+        "idempotency_key": {"type": "string", "minLength": 1},
+        "status": {"enum": ["validated", "failed", "unknown", "cancelled", "rejected"]},
+        "result_digest": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+        "validation_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "context_only": {"type": "boolean"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "validated"}}}, "then": {"properties": {"result_digest": {"$ref": "#/$defs/digest"}}}}
+      ],
+      "additionalProperties": false
+    },
+    "boundaryCandidate": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "boundary_candidate_id", "container_source_version_id", "start_page", "end_page", "method", "evidence_receipt_ids", "disposition", "authority_decision_ref"],
+      "properties": {
+        "record_type": {"const": "boundary_candidate"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "boundary_candidate_id": {"$ref": "#/$defs/id"},
+        "container_source_version_id": {"$ref": "#/$defs/id"},
+        "start_page": {"type": "integer", "minimum": 1},
+        "end_page": {"type": "integer", "minimum": 1},
+        "method": {"enum": ["deterministic", "model_candidate", "human"]},
+        "confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "evidence_receipt_ids": {"type": "array", "items": {"$ref": "#/$defs/id"}},
+        "disposition": {"enum": ["accepted", "rejected", "unresolved"]},
+        "authority_decision_ref": {"type": ["string", "null"]}
+      },
+      "allOf": [
+        {"if": {"properties": {"disposition": {"const": "accepted"}}}, "then": {"properties": {"evidence_receipt_ids": {"minItems": 1}, "authority_decision_ref": {"type": "string", "minLength": 1}}}}
+      ],
+      "additionalProperties": false
+    },
+    "corpusReconciliation": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "reconciliation_id", "plan_id", "plan_version", "expected_pages", "validated_pages", "failed_pages", "unknown_pages", "duplicate_pages", "unresolved_segments", "outcome", "receipt_fingerprint"],
+      "properties": {
+        "record_type": {"const": "corpus_reconciliation"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "reconciliation_id": {"$ref": "#/$defs/id"},
+        "plan_id": {"$ref": "#/$defs/id"},
+        "plan_version": {"type": "integer", "minimum": 1},
+        "expected_pages": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "validated_pages": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "failed_pages": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "unknown_pages": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "duplicate_pages": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1}},
+        "unresolved_segments": {"type": "array", "items": {"type": "array", "prefixItems": [{"type": "integer", "minimum": 1}, {"type": "integer", "minimum": 1}], "items": false}},
+        "outcome": {"enum": ["complete", "partial", "blocked", "unresolved", "provider_failed", "recovery_required", "quarantined"]},
+        "receipt_fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"outcome": {"const": "complete"}}}, "then": {"properties": {"failed_pages": {"maxItems": 0}, "unknown_pages": {"maxItems": 0}, "duplicate_pages": {"maxItems": 0}, "unresolved_segments": {"maxItems": 0}}}}
+      ],
+      "additionalProperties": false
+    },
+    "corpusSnapshot": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "corpus_snapshot_id", "version", "collection_scope_version", "physical_object_count", "physical_objects", "page_count", "page_inventory", "accepted_logical_document_count", "logical_occurrence_ids", "unresolved_item_count", "unresolved_items", "duplicate_groups", "conflicting_source_version_ids", "coverage_denominator_version", "reconciliation_ids", "outcome", "fingerprint", "claims_complete_oks"],
+      "properties": {
+        "record_type": {"const": "corpus_snapshot"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "corpus_snapshot_id": {"$ref": "#/$defs/id"},
+        "version": {"type": "integer", "minimum": 1},
+        "collection_scope_version": {"type": "integer", "minimum": 1},
+        "physical_object_count": {"type": "integer", "minimum": 0},
+        "physical_objects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["physical_object_id", "physical_object_version"],
+            "properties": {
+              "physical_object_id": {"$ref": "#/$defs/id"},
+              "physical_object_version": {"type": "integer", "minimum": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "page_count": {"type": "integer", "minimum": 0},
+        "page_inventory": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["inspection_id", "page_number"],
+            "properties": {
+              "inspection_id": {"$ref": "#/$defs/id"},
+              "page_number": {"type": "integer", "minimum": 1}
+            },
+            "additionalProperties": false
+          }
+        },
+        "accepted_logical_document_count": {"type": "integer", "minimum": 0},
+        "logical_occurrence_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "unresolved_item_count": {"type": "integer", "minimum": 0},
+        "unresolved_items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["reason_code", "affected_locator", "blocking"],
+            "properties": {
+              "reason_code": {"type": "string", "minLength": 1},
+              "affected_locator": {"type": "string", "minLength": 1},
+              "blocking": {"type": "boolean"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "duplicate_groups": {"type": "array", "items": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/id"}}},
+        "conflicting_source_version_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "coverage_denominator_version": {"$ref": "#/$defs/exactVersion"},
+        "reconciliation_ids": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/id"}},
+        "outcome": {"enum": ["complete", "partial", "blocked", "unresolved", "provider_failed", "recovery_required", "quarantined"]},
+        "fingerprint": {"$ref": "#/$defs/digest"},
+        "claims_complete_oks": {"const": false}
+      },
+      "allOf": [
+        {"if": {"properties": {"outcome": {"const": "complete"}}}, "then": {"properties": {"unresolved_item_count": {"const": 0}, "unresolved_items": {"maxItems": 0}}}}
+      ],
+      "additionalProperties": false
+    },
+    "delta": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "delta_id", "version", "delta_kind", "denominator_id", "denominator_version", "rule_set_version_id", "item_count", "satisfied_count", "missing_count", "conflict_count", "indeterminate_count", "blocker_codes", "downstream_impacts", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "audit_delta"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "delta_id": {"$ref": "#/$defs/id"},
+        "version": {"type": "integer", "minimum": 1},
+        "delta_kind": {"enum": ["document", "causal_readiness", "package_signing_handover"]},
+        "denominator_id": {"$ref": "#/$defs/id"},
+        "denominator_version": {"type": "integer", "minimum": 1},
+        "rule_set_version_id": {"$ref": "#/$defs/id"},
+        "item_count": {"type": "integer", "minimum": 0},
+        "satisfied_count": {"type": "integer", "minimum": 0},
+        "missing_count": {"type": "integer", "minimum": 0},
+        "conflict_count": {"type": "integer", "minimum": 0},
+        "indeterminate_count": {"type": "integer", "minimum": 0},
+        "blocker_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "downstream_impacts": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "auditReport": {
+      "type": "object",
+      "required": ["record_type", "contract_version", "scope", "audit_report_id", "version", "corpus_snapshot_ref", "document_delta_ref", "causal_delta_ref", "package_readiness_ref", "outcome", "unresolved_codes", "product_ready", "fingerprint"],
+      "properties": {
+        "record_type": {"const": "audit_report"},
+        "contract_version": {"const": "1.4.0"},
+        "scope": {"$ref": "#/$defs/scope"},
+        "audit_report_id": {"$ref": "#/$defs/id"},
+        "version": {"type": "integer", "minimum": 1},
+        "corpus_snapshot_ref": {"type": "string", "minLength": 1},
+        "document_delta_ref": {"type": "string", "minLength": 1},
+        "causal_delta_ref": {"type": "string", "minLength": 1},
+        "package_readiness_ref": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["complete", "partial", "blocked", "unresolved"]},
+        "unresolved_codes": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "product_ready": {"const": false},
+        "fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {"if": {"properties": {"outcome": {"const": "complete"}}}, "then": {"properties": {"unresolved_codes": {"maxItems": 0}}}}
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {"$ref": "#/$defs/collectionMission"},
+    {"$ref": "#/$defs/physicalObjectInspection"},
+    {"$ref": "#/$defs/pageManifest"},
+    {"$ref": "#/$defs/processingPlan"},
+    {"$ref": "#/$defs/processingShard"},
+    {"$ref": "#/$defs/processingReceipt"},
+    {"$ref": "#/$defs/boundaryCandidate"},
+    {"$ref": "#/$defs/corpusReconciliation"},
+    {"$ref": "#/$defs/corpusSnapshot"},
+    {"$ref": "#/$defs/delta"},
+    {"$ref": "#/$defs/auditReport"}
+  ]
+}
