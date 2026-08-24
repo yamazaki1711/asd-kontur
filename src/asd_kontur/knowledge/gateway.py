@@ -11,7 +11,9 @@ from .errors import KnowledgeError, KnowledgeErrorCode
 
 SUPPORTED_CONTRACT_VERSION = "0.1.0"
 SUPPORTED_SCHEMA_ID = "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge"
-TOOLS = frozenset(
+GUIDANCE_CONTRACT_VERSION = "1.5.0"
+GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.5:schema:practice-guidance"
+BASE_TOOLS = frozenset(
     {
         "knowledge.search",
         "knowledge.get_source_fragment",
@@ -21,6 +23,16 @@ TOOLS = frozenset(
         "knowledge.get_required_documents",
     }
 )
+GUIDANCE_TOOLS = frozenset(
+    {
+        "knowledge.get_id_guidance",
+        "knowledge.get_form_guidance",
+        "knowledge.get_field_guidance",
+        "knowledge.trace_guidance",
+        "knowledge.explain_guidance_conflict",
+    }
+)
+TOOLS = BASE_TOOLS | GUIDANCE_TOOLS
 
 
 class GatewayStatus(StrEnum):
@@ -65,6 +77,7 @@ class EvidenceItem:
     structural_unit_locator: str
     content_digest: str
     access_reference: str
+    authority_layer: str = "normative_or_canonical_knowledge"
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,10 +126,18 @@ class KnowledgeGateway:
                 KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,
                 "Unknown Knowledge Tool contract.",
             )
+        expected_contract = (
+            GUIDANCE_CONTRACT_VERSION
+            if request.tool in GUIDANCE_TOOLS
+            else SUPPORTED_CONTRACT_VERSION
+        )
+        expected_schema = (
+            GUIDANCE_SCHEMA_ID if request.tool in GUIDANCE_TOOLS else SUPPORTED_SCHEMA_ID
+        )
         if (
-            request.contract_version != SUPPORTED_CONTRACT_VERSION
-            or request.schema_version != SUPPORTED_CONTRACT_VERSION
-            or request.schema_id != SUPPORTED_SCHEMA_ID
+            request.contract_version != expected_contract
+            or request.schema_version != expected_contract
+            or request.schema_id != expected_schema
         ):
             raise KnowledgeError(
                 KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,

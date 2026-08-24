@@ -451,6 +451,24 @@ complete normative scenario list and refined DoD are in the impact assessment
 Implementation evidence and the exact migration/contract boundary are recorded
 in [`WP14_AUDIT_SLICE_v0.1.md`](../implementation/WP14_AUDIT_SLICE_v0.1.md).
 
+### KG-ID-01 — ID Practice Guide Knowledge Ingestion
+
+| Field | Plan |
+|---|---|
+| Capability; inputs; results | Cross-cutting native-first ingestion of a verified methodological ID practice guide into permanent platform knowledge; exact page/region guidance for Support, Audit, Restoration and ID Generation; never NTD, RuleVersion or workspace Fact |
+| Dependencies / DoR | G-05 platform source/evidence ledger and Knowledge Gateway; G-07A exact local Qwen profile, Candidate-only boundary, validators and retention; verified source bytes/custody; owner curator authority |
+| Actions / artifacts | Exact PageManifest and renders; one-session bounded Pass A; deterministic grounding/integrity checks; independent bounded Pass B; immutable candidates/corrections/receipts; 425-page reconciliation; human-curated publication; exact/FTS guidance Gateway; fresh-session memory acceptance |
+| Tests | Stratified real local Qwen qualification; truncation/locator/printed-page negatives; 425 terminal receipts; malformed/empty/duplicate/conflict handling; model/service publication denial; guidance-vs-NTD conflict boundary; reset survival; at least 25 fresh-session exact-citation tasks plus adversarial authority/evidence cases |
+| DoD | Every physical page has a terminal receipt; supported units have deterministic validation, Pass-B evidence and human publication; permanent local platform instance serves exact page-region EvidencePacks to a new Qwen session without the PDF; source content absent from Git |
+| Risks / rollback | Methodological example mistaken for norm, model hallucination, partial pass claimed complete, source leakage; suspend exact edition/profile, retain immutable candidates/receipts, rebuild projections, never auto-activate rules |
+| Memory / retention | Source PDF, guide canon and verified guidance are platform memory; raw prompts/responses/renders remain restricted local artifacts; no live workspace links |
+
+KG-ID-01 is a prerequisite inserted by owner decision before WP-15. Its exact
+implementation and measured local-Qwen evidence are recorded in
+[`KG_ID_PRACTICE_GUIDE_INGESTION_v0.1.md`](../implementation/KG_ID_PRACTICE_GUIDE_INGESTION_v0.1.md).
+Production model qualification, G-07B, embeddings and professional ID authority
+remain separate blocked capabilities.
+
 ### WP-15 — Restoration slice
 
 | Field | Plan |

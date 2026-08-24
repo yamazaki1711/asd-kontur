@@ -65,6 +65,13 @@ RAG является поисковым механизмом. KAG — спосо
 получения, SHA-256 и точный locator; статус действия и применимость не
 выводятся из имени файла, а отменённая редакция остаётся в provenance.
 
+Методические руководства принимаются отдельным source kind
+`MethodologicalPracticeGuide`. Для них обязательны те же immutable bytes,
+`SourceVersion`, object receipt, acquisition provenance и page/region lineage,
+но official-NTD registry и нормативная authority не присваиваются. Exact local
+model/render/validation profiles и terminal page receipts составляют отдельный
+platform ingestion ledger.
+
 ### 3.2. Canonical Knowledge Model
 
 Канонические сущности:
@@ -78,6 +85,12 @@ RAG является поисковым механизмом. KAG — спосо
 - `required_document_type`, `acceptance_event`;
 - `contract_requirement`, `customer_regulation`;
 - `knowledge_assertion` с интервалом действия и обязательным provenance.
+
+Отдельный canonical authority layer `methodological_guidance` содержит
+`PracticeGuideEdition`, structural units, typed ID/form/field/workflow
+guidance, evidence, uncertainties и явные conflicts. Он не является
+`KnowledgeAssertion` нормативного слоя и не может изменять НТД или активную
+`RuleVersion`. Пример заполнения не становится универсальным требованием.
 
 НТД, договорные требования, правила заказчика и знания конкретного ОКС не смешиваются. На запросе применяются дата, юрисдикция, стадия, вид работ и договорный контекст.
 
@@ -149,6 +162,17 @@ RequiredDocumentMatrix, проверки комплектности, завис�
 - `knowledge.explain_conflict`;
 - `knowledge.get_required_documents`.
 
+Additive methodological-guidance contract предоставляет:
+
+- `knowledge.get_id_guidance`;
+- `knowledge.get_form_guidance`;
+- `knowledge.get_field_guidance`;
+- `knowledge.trace_guidance`;
+- `knowledge.explain_guidance_conflict`.
+
+Эти tools всегда возвращают authority layer `methodological_guidance` и exact
+page/region EvidencePack. Внешний provider прямого доступа к ним не получает.
+
 Gateway строит **Evidence Pack**:
 
 - формулировка найденного знания;
@@ -176,7 +200,9 @@ trusted application layer выполняет retrieval/validation локальн
 - утверждённые правила;
 - общие классификаторы и онтология;
 - обезличенные и утверждённые паттерны ошибок;
-- тестовые наборы и оценки качества.
+- тестовые наборы и оценки качества;
+- проверенные методические руководства и опубликованные guidance units с
+  отдельной ненормативной authority.
 
 ### Workspace-память ОКС
 

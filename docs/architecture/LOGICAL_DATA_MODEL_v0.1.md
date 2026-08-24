@@ -326,6 +326,19 @@ Customer regulation is deliberately absent from this table. It is a
 a workspace `Conflict`, and cannot update `NormativeEdition`,
 `KnowledgeAssertion` or `RuleVersion`.
 
+### 7.1a. Methodological practice-guide passports
+
+| Entity | Purpose/scope/identity | Mandatory attributes/lifecycle | Relations, integrity, provenance, retention/status |
+|---|---|---|---|
+| `PracticeGuide` / `PracticeGuideEdition` | Stable platform methodological source and immutable byte edition; not NTD | exact PlatformSourceArtifact/Version, digest, pages, acquisition/object receipt provenance, authority layer `methodological_guidance` | Survives workspace reset; changed bytes create an edition; no official-NTD or workspace identity |
+| `GuideStructuralUnit` | Addressable book/part/chapter/section/topic/page-region | edition, structural path, page interval, title, parent/order, integrity digest | Same-edition hierarchy; a page-region unit may remain leaf evidence when higher hierarchy is uncertain |
+| `GuidePageManifest` | Deterministic one-based technical inventory before model semantics | page/content/render digests, box/rotation, native/raster composition, render requirement, previous/next lineage | Exactly one immutable row per physical page; model classification cannot rewrite it |
+| `GuidanceCandidateVersion` | Qwen-extracted typed workflow/form/field/evidence/signer/error/example candidate | exact source/page/region, kind, conditions/limitations/uncertainties, model/profile/prompt/schema/render provenance, parent version | Pass A/B/model confidence never publishes it; correction appends version and requires revalidation |
+| `PracticeGuidanceUnit` | Human-published, deterministically valid methodological knowledge | candidate/verification/publication refs, typed content, validation status, integrity digest | Canonical platform layer distinct from `KnowledgeAssertion`; exact EvidenceLinks required |
+| `GuidanceConflict` / `GuidanceUncertainty` | Explicit mismatch or applicability/evidence gap | exact guidance unit version, other authority subject/evidence, state, decision or content-minimal parameters | Model cannot resolve; normative source retains precedence according to applicable policy/authority |
+| `GuidePageTerminalReceipt` / `GuideIngestionReconciliation` | Proof that every physical page has a typed terminal outcome | exact attempts/digests, per-page state/counts, expected/terminal totals, fingerprint, verifier | Partial/failed/unresolved cannot become complete; append-only platform evidence |
+| `PracticeGuidanceLexicalVersion` | Rebuildable exact/FTS projection | canonical source fingerprint, contract version, state/count | Delete/rebuild does not change guidance canon; vector readiness needs a separately qualified embedding profile |
+
 ### 7.2. Deterministic rule passports
 
 | Entity | Purpose/scope/identity | Mandatory attributes/lifecycle | Relations, constraints, retention/status |

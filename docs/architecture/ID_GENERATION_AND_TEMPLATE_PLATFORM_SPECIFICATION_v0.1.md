@@ -47,6 +47,13 @@ policy data: архитектурное принятие не делает на�
 `validation → GeneratedDocumentCandidate → professional authority →`
 `FinalizedDocument → export/print/archive`.
 
+`methodological_guidance` из проверенного `MethodologicalPracticeGuide` может
+помогать определить workflow, RequiredInput, EvidenceRequirement, form/field
+completion guidance, common errors и review questions. Оно приходит только
+через Knowledge Gateway с exact page/region EvidencePack. Оно не выбирает
+применимость формы, не подменяет `FieldSchema`/`BindingPlan`, не создаёт Fact и
+не заполняет неизвестное значение.
+
 `GeneratedDocumentCandidate` никогда не равен `FinalizedDocument`. Успешная
 запись файла, открытие ZIP или отсутствие exception не являются финализацией
 и не доказывают print-ready.
@@ -128,6 +135,7 @@ Platform memory может владеть:
 - applicability rules и RequiredDocumentType catalog;
 - sanitized fixtures, qualified goldens и compatibility baselines;
 - authority, edition, rights и activation decisions;
+- verified methodological guide sources/guidance with non-normative authority;
 - universal parsers/renderers без project values.
 
 ### 5.2. Workspace scope

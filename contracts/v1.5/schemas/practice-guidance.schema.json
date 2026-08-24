@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.5:schema:practice-guidance",
+  "title": "KG-ID-01 methodological practice guide contracts",
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/$defs/pageManifest"},
+    {"$ref": "#/$defs/guidanceCandidate"},
+    {"$ref": "#/$defs/pageTerminalReceipt"},
+    {"$ref": "#/$defs/gatewayRequest"},
+    {"$ref": "#/$defs/gatewayResponse"}
+  ],
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "region": {
+      "type": "array",
+      "prefixItems": [
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "number", "minimum": 0, "maximum": 1},
+        {"type": "number", "minimum": 0, "maximum": 1}
+      ],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "pageManifest": {
+      "type": "object",
+      "required": ["source_version_id", "page_number", "page_digest", "content_kind", "render_required"],
+      "properties": {
+        "source_version_id": {"$ref": "#/$defs/uuid"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "page_digest": {"$ref": "#/$defs/digest"},
+        "content_kind": {"enum": ["native_text", "raster_image", "mixed", "blank_or_technical"]},
+        "render_required": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    },
+    "guidanceCandidate": {
+      "type": "object",
+      "required": [
+        "candidate_id", "version", "source_version_id", "page_number", "region",
+        "guidance_kind", "instruction", "model_profile_fingerprint", "status",
+        "authority_layer"
+      ],
+      "properties": {
+        "candidate_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "source_version_id": {"$ref": "#/$defs/uuid"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "region": {"$ref": "#/$defs/region"},
+        "guidance_kind": {"type": "string", "minLength": 1},
+        "instruction": {"type": "string", "minLength": 1},
+        "model_profile_fingerprint": {"$ref": "#/$defs/digest"},
+        "status": {"enum": ["unverified", "validating", "verified_candidate", "unresolved", "rejected"]},
+        "authority_layer": {"const": "methodological_guidance"}
+      },
+      "additionalProperties": false
+    },
+    "pageTerminalReceipt": {
+      "type": "object",
+      "required": ["ingestion_run_id", "source_version_id", "page_number", "terminal_state", "receipt_digest"],
+      "properties": {
+        "ingestion_run_id": {"$ref": "#/$defs/uuid"},
+        "source_version_id": {"$ref": "#/$defs/uuid"},
+        "page_number": {"type": "integer", "minimum": 1},
+        "terminal_state": {"enum": ["verified", "no_methodological_content", "unresolved", "model_failed", "technically_blocked"]},
+        "receipt_digest": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "gatewayRequest": {
+      "type": "object",
+      "required": ["tool", "contract_version", "schema_id", "schema_version", "payload"],
+      "properties": {
+        "tool": {"enum": ["knowledge.get_id_guidance", "knowledge.get_form_guidance", "knowledge.get_field_guidance", "knowledge.trace_guidance", "knowledge.explain_guidance_conflict"]},
+        "contract_version": {"const": "1.5.0"},
+        "schema_id": {"const": "urn:asd-kontur:contracts:v1.5:schema:practice-guidance"},
+        "schema_version": {"const": "1.5.0"},
+        "payload": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "gatewayResponse": {
+      "type": "object",
+      "required": ["tool", "contract_version", "status", "result", "evidence_pack"],
+      "properties": {
+        "tool": {"enum": ["knowledge.get_id_guidance", "knowledge.get_form_guidance", "knowledge.get_field_guidance", "knowledge.trace_guidance", "knowledge.explain_guidance_conflict"]},
+        "contract_version": {"const": "1.5.0"},
+        "status": {"enum": ["ok", "no_result", "index_unavailable", "knowledge_incomplete"]},
+        "result": {"type": "object"},
+        "evidence_pack": {
+          "type": "object",
+          "required": ["evidence", "applicability", "conflicts", "gaps", "uncertainties"],
+          "properties": {
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source_version_id", "structural_unit_locator", "content_digest", "authority_layer"],
+                "properties": {
+                  "source_version_id": {"$ref": "#/$defs/uuid"},
+                  "structural_unit_locator": {"type": "string", "pattern": "^page:[1-9][0-9]*:region:"},
+                  "content_digest": {"$ref": "#/$defs/digest"},
+                  "authority_layer": {"const": "methodological_guidance"}
+                },
+                "additionalProperties": true
+              }
+            },
+            "applicability": {"type": "array"},
+            "conflicts": {"type": "array"},
+            "gaps": {"type": "array"},
+            "uncertainties": {"type": "array"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

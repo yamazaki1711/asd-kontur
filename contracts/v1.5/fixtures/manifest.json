@@ -1,0 +1,29 @@
+{
+  "fixtures": [
+    {
+      "path": "valid/guidance-request.json",
+      "schema_pointer": "/$defs/gatewayRequest",
+      "expected": "valid"
+    },
+    {
+      "path": "valid/guidance-candidate.json",
+      "schema_pointer": "/$defs/guidanceCandidate",
+      "expected": "valid"
+    },
+    {
+      "path": "valid/guidance-response.json",
+      "schema_pointer": "/$defs/gatewayResponse",
+      "expected": "valid"
+    },
+    {
+      "path": "invalid/normative-authority.json",
+      "schema_pointer": "/$defs/guidanceCandidate",
+      "expected": "invalid"
+    },
+    {
+      "path": "invalid/complete-without-all-pages.json",
+      "schema_pointer": "/$defs/pageTerminalReceipt",
+      "expected": "invalid"
+    }
+  ]
+}
