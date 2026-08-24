@@ -3,6 +3,10 @@
   "contract_version": "1.5.0",
   "status": "ok",
   "result": {
+    "coverage_manifest_version": 1,
+    "coverage_manifest_id": "0198f8ae-c954-7000-8000-000000000004",
+    "coverage_status": "partial_with_explicit_gaps",
+    "reconciliation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
     "guidance": [
       {
         "guidance_unit_id": "0198f8ae-c954-7000-8000-000000000003",

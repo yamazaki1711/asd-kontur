@@ -71,7 +71,7 @@
         "ingestion_run_id": {"$ref": "#/$defs/uuid"},
         "source_version_id": {"$ref": "#/$defs/uuid"},
         "page_number": {"type": "integer", "minimum": 1},
-        "terminal_state": {"enum": ["verified", "no_methodological_content", "unresolved", "model_failed", "technically_blocked"]},
+        "terminal_state": {"enum": ["verified", "partial_with_gaps", "no_methodological_content", "unresolved", "insufficient_evidence", "model_failed", "technically_blocked"]},
         "receipt_digest": {"$ref": "#/$defs/digest"}
       },
       "additionalProperties": false
@@ -95,7 +95,17 @@
         "tool": {"enum": ["knowledge.get_id_guidance", "knowledge.get_form_guidance", "knowledge.get_field_guidance", "knowledge.trace_guidance", "knowledge.explain_guidance_conflict"]},
         "contract_version": {"const": "1.5.0"},
         "status": {"enum": ["ok", "no_result", "index_unavailable", "knowledge_incomplete"]},
-        "result": {"type": "object"},
+        "result": {
+          "type": "object",
+          "required": ["coverage_manifest_version"],
+          "properties": {
+            "coverage_manifest_version": {"type": ["integer", "null"], "minimum": 1},
+            "coverage_manifest_id": {"$ref": "#/$defs/uuid"},
+            "coverage_status": {"enum": ["complete", "partial_with_explicit_gaps"]},
+            "reconciliation_fingerprint": {"$ref": "#/$defs/digest"}
+          },
+          "additionalProperties": true
+        },
         "evidence_pack": {
           "type": "object",
           "required": ["evidence", "applicability", "conflicts", "gaps", "uncertainties"],

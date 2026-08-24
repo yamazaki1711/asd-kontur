@@ -7,6 +7,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -17,17 +18,26 @@ from asd_kontur.domain import uuid7
 from asd_kontur.harness.models import digest_of
 
 from .models import (
+    CoverageManifest,
     GuidanceCandidateVersion,
     GuidanceConflict,
     GuidanceCuratorAuthority,
+    GuidanceGap,
     GuidanceVerification,
     GuideExecutionProfile,
     GuideIngestionReconciliation,
+    GuideNtdRelevanceAssertion,
     GuidePageManifest,
     GuidePageTerminalReceipt,
+    GuideSourceRow,
     GuideValidationFailure,
+    NormativeReferenceCandidate,
+    NormativeReferenceResolutionState,
     VerificationDisposition,
 )
+
+if TYPE_CHECKING:
+    from .pipeline import PassAFailedCandidate
 
 
 class PracticeGuideRepository:
@@ -479,6 +489,207 @@ class PracticeGuideRepository:
                 },
             )
 
+    def save_failed_candidate(
+        self,
+        run_id: UUID,
+        source_version_id: UUID,
+        failed: PassAFailedCandidate,
+    ) -> None:
+        fingerprint = digest_of(failed)
+        with Session(self._engine) as session, session.begin():
+            existing = session.execute(
+                sa.text(
+                    "SELECT failed_candidate_fingerprint FROM "
+                    "platform.practice_guide_failed_candidate_versions "
+                    "WHERE guidance_candidate_id=:id AND version=:version"
+                ),
+                {"id": failed.candidate_id, "version": failed.candidate_version},
+            ).scalar_one_or_none()
+            if existing is not None:
+                if str(existing) != fingerprint:
+                    raise ValueError("Failed CandidateVersion identity conflict")
+                return
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guide_failed_candidate_versions "
+                    "(guidance_candidate_id,version,ingestion_run_id,source_version_id,page_number,ordinal,"
+                    "failure_code,failure_field,invalid_region,raw_candidate,failed_candidate_fingerprint,"
+                    "recorded_at) VALUES (:id,:version,:run,:source,:page,:ordinal,:code,:field,"
+                    "CAST(:region AS jsonb),CAST(:candidate AS jsonb),:fingerprint,:now)"
+                ),
+                {
+                    "id": failed.candidate_id,
+                    "version": failed.candidate_version,
+                    "run": run_id,
+                    "source": source_version_id,
+                    "page": failed.page_number,
+                    "ordinal": failed.ordinal,
+                    "code": failed.failure_code,
+                    "field": failed.failure_field,
+                    "region": json.dumps(failed.invalid_region, ensure_ascii=False),
+                    "candidate": json.dumps(failed.raw_candidate, ensure_ascii=False),
+                    "fingerprint": fingerprint,
+                    "now": datetime.now(UTC),
+                },
+            )
+
+    def save_ntd_source_row(self, run_id: UUID, row: GuideSourceRow) -> None:
+        with Session(self._engine) as session, session.begin():
+            existing = session.execute(
+                sa.text(
+                    "SELECT source_row_fingerprint FROM platform.practice_guide_source_rows "
+                    "WHERE source_row_id=:id"
+                ),
+                {"id": row.source_row_id},
+            ).scalar_one_or_none()
+            if existing is not None:
+                if str(existing) != row.fingerprint:
+                    raise ValueError("Guide source-row identity conflicts with persisted geometry")
+                return
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guide_source_rows "
+                    "(source_row_id,parent_guidance_candidate_id,parent_candidate_version,ingestion_run_id,"
+                    "source_version_id,page_number,row_ordinal,region,"
+                    "printed_ntd,work_or_rd_sections,id_note,layout_profile_version,extraction_digest,"
+                    "parent_failed_receipt_digest,source_row_fingerprint,recorded_at) VALUES "
+                    "(:id,:parent_candidate,:parent_version,:run,:source,:page,:ordinal,:region,"
+                    ":ntd,:work,:note,:profile,:extraction,"
+                    ":receipt,:fingerprint,:now)"
+                ),
+                {
+                    "id": row.source_row_id,
+                    "parent_candidate": row.parent_candidate_id,
+                    "parent_version": row.parent_candidate_version,
+                    "run": run_id,
+                    "source": row.source_version_id,
+                    "page": row.page_number,
+                    "ordinal": row.row_ordinal,
+                    "region": list(row.locator.region),
+                    "ntd": row.printed_ntd,
+                    "work": row.work_or_rd_sections,
+                    "note": row.id_note,
+                    "profile": row.layout_profile_version,
+                    "extraction": row.extraction_digest,
+                    "receipt": row.parent_failed_receipt_digest,
+                    "fingerprint": row.fingerprint,
+                    "now": datetime.now(UTC),
+                },
+            )
+
+    def save_ntd_relevance_assertion(self, assertion: GuideNtdRelevanceAssertion) -> None:
+        reference = assertion.normative_reference
+        candidate_version = assertion.parent_candidate_version + 1
+        with Session(self._engine) as session, session.begin():
+            existing_reference = session.execute(
+                sa.text(
+                    "SELECT candidate_fingerprint FROM "
+                    "platform.practice_guide_normative_reference_candidates "
+                    "WHERE normative_reference_candidate_id=:id"
+                ),
+                {"id": reference.reference_candidate_id},
+            ).scalar_one_or_none()
+            if existing_reference is None:
+                session.execute(
+                    sa.text(
+                        "INSERT INTO platform.practice_guide_normative_reference_candidates "
+                        "(normative_reference_candidate_id,source_row_id,printed_identifier,printed_title,"
+                        "candidate_fingerprint,recorded_at) VALUES (:id,:row,:identifier,:title,:fingerprint,:now)"
+                    ),
+                    {
+                        "id": reference.reference_candidate_id,
+                        "row": assertion.source_row_id,
+                        "identifier": reference.printed_identifier,
+                        "title": reference.printed_title,
+                        "fingerprint": reference.identity_fingerprint,
+                        "now": datetime.now(UTC),
+                    },
+                )
+            elif str(existing_reference) != reference.identity_fingerprint:
+                raise ValueError("NormativeReferenceCandidate identity conflict")
+            existing_assertion = session.execute(
+                sa.text(
+                    "SELECT assertion_fingerprint FROM platform.practice_guide_ntd_relevance_assertions "
+                    "WHERE ntd_relevance_assertion_id=:id"
+                ),
+                {"id": assertion.assertion_id},
+            ).scalar_one_or_none()
+            if existing_assertion is not None:
+                if str(existing_assertion) != assertion.fingerprint:
+                    raise ValueError("GuideNtdRelevanceAssertion identity conflict")
+                return
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guide_ntd_relevance_assertions "
+                    "(ntd_relevance_assertion_id,guidance_candidate_id,candidate_version,source_row_id,"
+                    "normative_reference_candidate_id,relevance_summary,document_or_form_type,workflow_stage,"
+                    "applicability_conditions,uncertainty_codes,assertion_fingerprint,recorded_at) VALUES "
+                    "(:id,:candidate,:version,:row,:reference,:summary,:form,:stage,CAST(:conditions AS jsonb),"
+                    "CAST(:uncertainties AS jsonb),:fingerprint,:now)"
+                ),
+                {
+                    "id": assertion.assertion_id,
+                    "candidate": assertion.candidate_id,
+                    "version": candidate_version,
+                    "row": assertion.source_row_id,
+                    "reference": reference.reference_candidate_id,
+                    "summary": assertion.relevance_summary,
+                    "form": assertion.document_or_form_type,
+                    "stage": assertion.workflow_stage,
+                    "conditions": json.dumps(
+                        assertion.applicability_conditions, ensure_ascii=False
+                    ),
+                    "uncertainties": json.dumps(assertion.uncertainty_codes, ensure_ascii=False),
+                    "fingerprint": assertion.fingerprint,
+                    "now": datetime.now(UTC),
+                },
+            )
+
+    def save_normative_reference_resolution(
+        self,
+        reference: NormativeReferenceCandidate,
+        *,
+        resolver_version: str,
+    ) -> None:
+        if reference.resolution_state is NormativeReferenceResolutionState.NOT_ATTEMPTED:
+            raise ValueError("A pending NTD reference is not a resolver result")
+        resolution_fingerprint = digest_of(
+            {"reference": reference, "resolver_version": resolver_version}
+        )
+        with Session(self._engine) as session, session.begin():
+            existing = session.execute(
+                sa.text(
+                    "SELECT resolution_fingerprint FROM "
+                    "platform.practice_guide_normative_reference_resolutions "
+                    "WHERE normative_reference_candidate_id=:candidate"
+                ),
+                {"candidate": reference.reference_candidate_id},
+            ).scalar_one_or_none()
+            if existing is not None:
+                if str(existing) != resolution_fingerprint:
+                    raise ValueError("Normative reference resolution conflicts with prior receipt")
+                return
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guide_normative_reference_resolutions "
+                    "(normative_reference_resolution_id,normative_reference_candidate_id,resolution_state,"
+                    "normative_document_id,normative_edition_id,uncertainty_code,resolver_version,"
+                    "resolution_fingerprint,resolved_at) VALUES "
+                    "(:id,:candidate,:state,:document,:edition,:uncertainty,:resolver,:fingerprint,:now)"
+                ),
+                {
+                    "id": uuid7(),
+                    "candidate": reference.reference_candidate_id,
+                    "state": reference.resolution_state,
+                    "document": reference.normative_document_id,
+                    "edition": reference.normative_edition_id,
+                    "uncertainty": reference.uncertainty_code,
+                    "resolver": resolver_version,
+                    "fingerprint": resolution_fingerprint,
+                    "now": datetime.now(UTC),
+                },
+            )
+
     def save_validation_failures(
         self, failures: tuple[GuideValidationFailure, ...], *, validator_identity: str
     ) -> None:
@@ -596,8 +807,10 @@ class PracticeGuideRepository:
         reconciliation_id = uuid7()
         state_counts = {
             "verified": len(reconciliation.verified_pages),
+            "partial_with_gaps": len(reconciliation.partial_pages),
             "no_methodological_content": len(reconciliation.no_content_pages),
             "unresolved": len(reconciliation.unresolved_pages),
+            "insufficient_evidence": len(reconciliation.insufficient_pages),
             "model_failed": len(reconciliation.failed_pages),
             "technically_blocked": len(reconciliation.blocked_pages),
         }
@@ -954,27 +1167,36 @@ class PracticeGuideRepository:
             uncertainty_ref,
         )
         with Session(self._engine) as session, session.begin():
-            exists = session.execute(
-                sa.text(
-                    "SELECT 1 FROM platform.practice_guidance_units WHERE "
-                    "guidance_unit_id=:id AND version=:version"
-                ),
-                {"id": guidance_unit_id, "version": guidance_unit_version},
-            ).scalar_one_or_none()
-            if exists is None:
+            target = (
+                session.execute(
+                    sa.text(
+                        "SELECT guidance_candidate_id,candidate_version "
+                        "FROM platform.practice_guidance_units WHERE "
+                        "guidance_unit_id=:id AND version=:version"
+                    ),
+                    {"id": guidance_unit_id, "version": guidance_unit_version},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if target is None:
                 raise ValueError("Guidance conflict target does not exist")
             session.execute(
                 sa.text(
                     "INSERT INTO platform.practice_guidance_conflicts "
                     "(guidance_conflict_id,guidance_unit_id,guidance_unit_version,"
+                    "guidance_candidate_id,candidate_version,"
                     "conflicting_authority_layer,conflicting_subject_ref,conflict_type,state,"
                     "uncertainty_ref,decision_ref,recorded_at) VALUES "
-                    "(:id,:unit,:version,:layer,:subject,:type,'open',:uncertainty,NULL,:now)"
+                    "(:id,:unit,:version,:candidate,:candidate_version,:layer,:subject,:type,"
+                    "'open',:uncertainty,NULL,:now)"
                 ),
                 {
                     "id": conflict.conflict_id,
                     "unit": conflict.guidance_unit_id,
                     "version": conflict.guidance_unit_version,
+                    "candidate": target["guidance_candidate_id"],
+                    "candidate_version": target["candidate_version"],
                     "layer": conflict.conflicting_authority_layer,
                     "subject": conflict.conflicting_subject_ref,
                     "type": conflict.conflict_type,
@@ -984,6 +1206,142 @@ class PracticeGuideRepository:
             )
         return conflict.conflict_id
 
+    def record_candidate_guidance_conflict(
+        self,
+        *,
+        candidate: GuidanceCandidateVersion,
+        conflicting_candidate: GuidanceCandidateVersion,
+        conflict_type: str,
+        curator: GuidanceCuratorAuthority,
+    ) -> UUID:
+        curator.require_conflict_recording()
+        if candidate.source_version_id != conflicting_candidate.source_version_id:
+            raise ValueError("Candidate conflict must remain within one source version")
+        conflict_id = uuid7()
+        with Session(self._engine) as session, session.begin():
+            exists = session.execute(
+                sa.text(
+                    "SELECT count(*) FROM platform.practice_guide_candidate_versions WHERE "
+                    "(guidance_candidate_id=:left_id AND version=:left_version) OR "
+                    "(guidance_candidate_id=:right_id AND version=:right_version)"
+                ),
+                {
+                    "left_id": candidate.candidate_id,
+                    "left_version": candidate.version,
+                    "right_id": conflicting_candidate.candidate_id,
+                    "right_version": conflicting_candidate.version,
+                },
+            ).scalar_one()
+            if int(exists) != 2:
+                raise ValueError("Candidate conflict target does not exist")
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guidance_conflicts "
+                    "(guidance_conflict_id,guidance_unit_id,guidance_unit_version,"
+                    "guidance_candidate_id,candidate_version,conflicting_authority_layer,"
+                    "conflicting_subject_ref,conflict_type,state,uncertainty_ref,decision_ref,"
+                    "recorded_at) VALUES "
+                    "(:id,NULL,NULL,:candidate,:version,'methodological_guidance_peer',:subject,"
+                    ":type,'open',:uncertainty,NULL,:now)"
+                ),
+                {
+                    "id": conflict_id,
+                    "candidate": candidate.candidate_id,
+                    "version": candidate.version,
+                    "subject": (
+                        f"candidate:{conflicting_candidate.candidate_id}:"
+                        f"v{conflicting_candidate.version}"
+                    ),
+                    "type": conflict_type,
+                    "uncertainty": f"guidance-conflict:{conflict_id}",
+                    "now": datetime.now(UTC),
+                },
+            )
+        return conflict_id
+
+    def save_coverage_manifest(
+        self,
+        manifest: CoverageManifest,
+        gaps: tuple[GuidanceGap, ...],
+    ) -> None:
+        if any(gap.coverage_manifest_id != manifest.coverage_manifest_id for gap in gaps):
+            raise ValueError("GuidanceGap belongs to another CoverageManifest")
+        if len(gaps) != manifest.gap_count:
+            raise ValueError("CoverageManifest gap count does not reconcile")
+        with Session(self._engine) as session, session.begin():
+            existing = session.execute(
+                sa.text(
+                    "SELECT manifest_fingerprint FROM platform.practice_guidance_coverage_manifests "
+                    "WHERE coverage_manifest_id=:id"
+                ),
+                {"id": manifest.coverage_manifest_id},
+            ).scalar_one_or_none()
+            if existing is not None:
+                if str(existing) != manifest.manifest_fingerprint:
+                    raise ValueError("CoverageManifest identity conflicts with persisted content")
+                return
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guidance_coverage_manifests "
+                    "(coverage_manifest_id,practice_guide_edition_id,ingestion_run_id,"
+                    "coverage_manifest_version,publication_status,expected_page_count,"
+                    "terminal_page_count,page_state_counts,candidate_state_counts,"
+                    "guidance_unit_count,gap_count,conflict_count,reconciliation_fingerprint,"
+                    "manifest_fingerprint,recorded_at) VALUES "
+                    "(:id,:edition,:run,:version,:status,:expected,:terminal,CAST(:pages AS jsonb),"
+                    "CAST(:candidates AS jsonb),:guidance,:gaps,:conflicts,:reconciliation,"
+                    ":fingerprint,:recorded)"
+                ),
+                {
+                    "id": manifest.coverage_manifest_id,
+                    "edition": manifest.practice_guide_edition_id,
+                    "run": manifest.ingestion_run_id,
+                    "version": manifest.version,
+                    "status": manifest.publication_status,
+                    "expected": manifest.expected_page_count,
+                    "terminal": manifest.terminal_page_count,
+                    "pages": json.dumps(manifest.page_state_counts, sort_keys=True),
+                    "candidates": json.dumps(manifest.candidate_state_counts, sort_keys=True),
+                    "guidance": manifest.guidance_unit_count,
+                    "gaps": manifest.gap_count,
+                    "conflicts": manifest.conflict_count,
+                    "reconciliation": manifest.reconciliation_fingerprint,
+                    "fingerprint": manifest.manifest_fingerprint,
+                    "recorded": manifest.recorded_at,
+                },
+            )
+            for gap in gaps:
+                session.execute(
+                    sa.text(
+                        "INSERT INTO platform.practice_guidance_gaps "
+                        "(guidance_gap_id,coverage_manifest_id,source_version_id,page_number,"
+                        "guidance_candidate_id,candidate_version,gap_code,terminal_state,topic,"
+                        "document_or_form_type,field_or_element,searchable_text,"
+                        "content_minimal_parameters,gap_fingerprint,recorded_at) VALUES "
+                        "(:id,:manifest,:source,:page,:candidate,:version,:code,:state,:topic,"
+                        ":form,:field,:search,CAST(:parameters AS jsonb),:fingerprint,:recorded)"
+                    ),
+                    {
+                        "id": gap.guidance_gap_id,
+                        "manifest": gap.coverage_manifest_id,
+                        "source": gap.source_version_id,
+                        "page": gap.page_number,
+                        "candidate": gap.candidate_id,
+                        "version": gap.candidate_version,
+                        "code": gap.gap_code,
+                        "state": gap.terminal_state,
+                        "topic": gap.topic,
+                        "form": gap.document_or_form_type,
+                        "field": gap.field_or_element,
+                        "search": gap.searchable_text,
+                        "parameters": json.dumps(
+                            gap.content_minimal_parameters, ensure_ascii=False, sort_keys=True
+                        ),
+                        "fingerprint": gap.gap_fingerprint,
+                        "recorded": gap.recorded_at,
+                    },
+                )
+
     def rebuild_lexical_projection(self, edition_id: UUID) -> UUID:
         version_id = uuid7()
         with Session(self._engine) as session, session.begin():
@@ -992,7 +1350,10 @@ class PracticeGuideRepository:
                     sa.text(
                         "SELECT guidance_unit_id,version,normalized_instruction,section,topic,"
                         "COALESCE(document_or_form_type,''),COALESCE(field_or_element,'') "
-                        "FROM platform.practice_guidance_units WHERE practice_guide_edition_id=:edition "
+                        "FROM platform.practice_guidance_units u WHERE practice_guide_edition_id=:edition "
+                        "AND NOT EXISTS (SELECT 1 FROM platform.practice_guidance_conflicts c "
+                        "WHERE c.guidance_unit_id=u.guidance_unit_id "
+                        "AND c.guidance_unit_version=u.version AND c.state='open') "
                         "ORDER BY guidance_unit_id,version"
                     ),
                     {"edition": edition_id},

@@ -13,7 +13,7 @@
     {
       "schema_id": "urn:asd-kontur:contracts:v1.5:schema:practice-guidance",
       "path": "schemas/practice-guidance.schema.json",
-      "digest": "sha256:8cb6cd31304b03450982fe63b5ded14af578a26f1be74634ea15270c51569c07"
+      "digest": "sha256:8178f80546326846aa345267c8e9858d424b307e093eedcb3bd9e1cf9e7fd1ec"
     }
   ],
   "contract_keys": [

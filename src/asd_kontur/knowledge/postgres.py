@@ -36,6 +36,27 @@ class NormativeKnowledgeRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
+    def resolve_document_exact_designation(self, printed_identifier: str) -> UUID:
+        """Resolve only an exact canonical designation; never infer or normalize."""
+
+        with Session(self._engine) as session:
+            rows = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT normative_document_id FROM platform.normative_documents "
+                        "WHERE designation=:designation"
+                    ),
+                    {"designation": printed_identifier},
+                ).scalars()
+            )
+        if len(rows) != 1:
+            raise KnowledgeError(
+                KnowledgeErrorCode.EDITION_AMBIGUOUS,
+                "Exact printed NTD designation is absent or ambiguous.",
+                {"candidate_count": len(rows)},
+            )
+        return UUID(str(rows[0]))
+
     def resolve_edition(self, normative_document_id: UUID, on_date: date) -> UUID:
         with Session(self._engine) as session:
             rows = tuple(
@@ -405,40 +426,62 @@ class PostgresKnowledgeQuery:
                 ),
                 {"id": lexical_version_id},
             ).scalar_one_or_none()
-            if state != "ready":
-                return self._guidance_gap(
-                    "knowledge.get_id_guidance",
-                    GatewayStatus.INDEX_UNAVAILABLE,
-                    "guidance_lexical_index_not_ready",
+            rows = (
+                tuple(
+                    session.execute(
+                        sa.text(
+                            "SELECT u.guidance_unit_id,u.version,u.guidance_kind,u.normalized_instruction,"
+                            "u.section,u.topic,u.document_or_form_type,u.workflow_stage,u.field_or_element,"
+                            "u.applicability_conditions,u.limitations "
+                            "FROM projection.practice_guidance_lexical_entries e "
+                            "JOIN platform.practice_guidance_units u ON u.guidance_unit_id=e.guidance_unit_id "
+                            "AND u.version=e.guidance_unit_version WHERE e.lexical_version_id=:index "
+                            "AND e.search_vector @@ plainto_tsquery('russian',:query) "
+                            "AND NOT EXISTS (SELECT 1 FROM platform.practice_guidance_conflicts c "
+                            "WHERE c.guidance_unit_id=u.guidance_unit_id "
+                            "AND c.guidance_unit_version=u.version AND c.state='open') "
+                            "ORDER BY u.guidance_unit_id,u.version LIMIT 100"
+                        ),
+                        {"index": lexical_version_id, "query": query},
+                    ).mappings()
                 )
-            rows = tuple(
-                session.execute(
-                    sa.text(
-                        "SELECT u.guidance_unit_id,u.version,u.guidance_kind,u.normalized_instruction,"
-                        "u.section,u.topic,u.document_or_form_type,u.workflow_stage,u.field_or_element,"
-                        "u.applicability_conditions,u.limitations "
-                        "FROM projection.practice_guidance_lexical_entries e "
-                        "JOIN platform.practice_guidance_units u ON u.guidance_unit_id=e.guidance_unit_id "
-                        "AND u.version=e.guidance_unit_version WHERE e.lexical_version_id=:index "
-                        "AND e.search_vector @@ plainto_tsquery('russian',:query) "
-                        "ORDER BY u.guidance_unit_id,u.version LIMIT 100"
-                    ),
-                    {"index": lexical_version_id, "query": query},
-                ).mappings()
+                if state == "ready"
+                else ()
+            )
+        if state != "ready":
+            return self._guidance_gap(
+                "knowledge.get_id_guidance",
+                GatewayStatus.INDEX_UNAVAILABLE,
+                "guidance_lexical_index_not_ready",
             )
         if not rows:
             return self._guidance_gap(
-                "knowledge.get_id_guidance", GatewayStatus.NO_RESULT, "guidance_not_found"
+                "knowledge.get_id_guidance",
+                GatewayStatus.NO_RESULT,
+                "guidance_not_found",
+                payload,
             )
         identities = tuple(
             (UUID(str(row["guidance_unit_id"])), int(row["version"])) for row in rows
         )
+        coverage, relevant_gaps = self._guidance_coverage(payload)
+        pack = self._guidance_evidence(identities)
         return GatewayResponse(
             "knowledge.get_id_guidance",
             GUIDANCE_CONTRACT_VERSION,
-            GatewayStatus.OK,
-            {"guidance": [dict(row) for row in rows], "retrieval": "exact_fts"},
-            self._guidance_evidence(identities),
+            GatewayStatus.KNOWLEDGE_INCOMPLETE if relevant_gaps else GatewayStatus.OK,
+            {
+                "guidance": [dict(row) for row in rows],
+                "retrieval": "exact_fts",
+                **coverage,
+            },
+            EvidencePack(
+                pack.evidence,
+                pack.applicability,
+                pack.conflicts,
+                (*pack.gaps, *relevant_gaps),
+                pack.uncertainties,
+            ),
         )
 
     def _form_guidance(self, payload: dict[str, Any], _context: GatewayContext) -> GatewayResponse:
@@ -450,7 +493,7 @@ class PostgresKnowledgeQuery:
                 "form_type_missing",
             )
         rows = self._guidance_rows("u.document_or_form_type=:form", {"form": form_type})
-        return self._guidance_rows_response("knowledge.get_form_guidance", rows)
+        return self._guidance_rows_response("knowledge.get_form_guidance", rows, payload)
 
     def _field_guidance(self, payload: dict[str, Any], _context: GatewayContext) -> GatewayResponse:
         form_type = str(payload.get("document_or_form_type", "")).strip()
@@ -465,7 +508,7 @@ class PostgresKnowledgeQuery:
             "u.document_or_form_type=:form AND u.field_or_element=:field",
             {"form": form_type, "field": field},
         )
-        return self._guidance_rows_response("knowledge.get_field_guidance", rows)
+        return self._guidance_rows_response("knowledge.get_field_guidance", rows, payload)
 
     def _trace_guidance(self, payload: dict[str, Any], _context: GatewayContext) -> GatewayResponse:
         guidance_id = payload.get("guidance_unit_id")
@@ -480,7 +523,7 @@ class PostgresKnowledgeQuery:
             "u.guidance_unit_id=:id AND u.version=:version",
             {"id": guidance_id, "version": version},
         )
-        return self._guidance_rows_response("knowledge.trace_guidance", rows)
+        return self._guidance_rows_response("knowledge.trace_guidance", rows, payload)
 
     def _explain_guidance_conflict(
         self, payload: dict[str, Any], _context: GatewayContext
@@ -490,10 +533,18 @@ class PostgresKnowledgeQuery:
             row = (
                 session.execute(
                     sa.text(
-                        "SELECT guidance_conflict_id,guidance_unit_id,guidance_unit_version,"
-                        "conflicting_authority_layer,conflicting_subject_ref,conflict_type,state,"
-                        "uncertainty_ref,decision_ref FROM platform.practice_guidance_conflicts "
-                        "WHERE guidance_conflict_id=:id"
+                        "SELECT c.guidance_conflict_id,c.guidance_unit_id,"
+                        "c.guidance_unit_version,c.guidance_candidate_id,c.candidate_version,"
+                        "c.conflicting_authority_layer,c.conflicting_subject_ref,c.conflict_type,"
+                        "c.state,c.uncertainty_ref,c.decision_ref,v.source_version_id,v.page_number,"
+                        "v.region,sv.content_digest,o.access_capability_ref "
+                        "FROM platform.practice_guidance_conflicts c "
+                        "JOIN platform.practice_guide_candidate_versions v ON "
+                        "v.guidance_candidate_id=c.guidance_candidate_id "
+                        "AND v.version=c.candidate_version "
+                        "JOIN platform.source_versions sv ON sv.source_version_id=v.source_version_id "
+                        "JOIN platform.objects o ON o.object_id=sv.object_id "
+                        "WHERE c.guidance_conflict_id=:id"
                     ),
                     {"id": conflict_id},
                 )
@@ -506,14 +557,33 @@ class PostgresKnowledgeQuery:
                 GatewayStatus.NO_RESULT,
                 "guidance_conflict_not_found",
             )
-        identity = ((UUID(str(row["guidance_unit_id"])), int(row["guidance_unit_version"])),)
+        coverage, _ = self._guidance_coverage({})
+        if row["guidance_unit_id"] is not None:
+            identity = ((UUID(str(row["guidance_unit_id"])), int(row["guidance_unit_version"])),)
+            evidence = self._guidance_evidence(identity).evidence
+        else:
+            region = tuple(float(value) for value in row["region"])
+            locator = "page:{}:region:{}".format(
+                int(row["page_number"]), ",".join(f"{value:.6f}" for value in region)
+            )
+            evidence = (
+                EvidenceItem(
+                    evidence_link_id=str(row["guidance_conflict_id"]),
+                    source_version_id=str(row["source_version_id"]),
+                    edition_id=None,
+                    structural_unit_locator=locator,
+                    content_digest=str(row["content_digest"]),
+                    access_reference=str(row["access_capability_ref"]),
+                    authority_layer="methodological_guidance",
+                ),
+            )
         return GatewayResponse(
             "knowledge.explain_guidance_conflict",
             GUIDANCE_CONTRACT_VERSION,
             GatewayStatus.OK,
-            {"conflict": dict(row)},
+            {"conflict": dict(row), **coverage},
             EvidencePack(
-                self._guidance_evidence(identity).evidence,
+                evidence,
                 (),
                 (dict(row),),
                 (),
@@ -537,7 +607,10 @@ class PostgresKnowledgeQuery:
                         "u.section,u.topic,u.document_or_form_type,u.workflow_stage,u.field_or_element,"
                         "u.required_inputs,u.evidence_requirements,u.author_role_claims,"
                         "u.applicability_conditions,u.limitations,u.authority_layer "
-                        "FROM platform.practice_guidance_units u WHERE "
+                        "FROM platform.practice_guidance_units u WHERE NOT EXISTS "
+                        "(SELECT 1 FROM platform.practice_guidance_conflicts c WHERE "
+                        "c.guidance_unit_id=u.guidance_unit_id AND "
+                        "c.guidance_unit_version=u.version AND c.state='open') AND "
                         + where_clause
                         + " ORDER BY u.guidance_unit_id,u.version"
                     ),
@@ -545,18 +618,90 @@ class PostgresKnowledgeQuery:
                 ).mappings()
             )
 
-    def _guidance_rows_response(self, tool: str, rows: tuple[Any, ...]) -> GatewayResponse:
+    def _guidance_rows_response(
+        self, tool: str, rows: tuple[Any, ...], payload: dict[str, Any]
+    ) -> GatewayResponse:
         if not rows:
-            return self._guidance_gap(tool, GatewayStatus.NO_RESULT, "guidance_not_found")
+            return self._guidance_gap(tool, GatewayStatus.NO_RESULT, "guidance_not_found", payload)
         identities = tuple(
             (UUID(str(row["guidance_unit_id"])), int(row["version"])) for row in rows
         )
+        coverage, relevant_gaps = self._guidance_coverage(payload)
+        pack = self._guidance_evidence(identities)
         return GatewayResponse(
             tool,
             GUIDANCE_CONTRACT_VERSION,
-            GatewayStatus.OK,
-            {"guidance": [dict(row) for row in rows]},
-            self._guidance_evidence(identities),
+            GatewayStatus.KNOWLEDGE_INCOMPLETE if relevant_gaps else GatewayStatus.OK,
+            {"guidance": [dict(row) for row in rows], **coverage},
+            EvidencePack(
+                pack.evidence,
+                pack.applicability,
+                pack.conflicts,
+                (*pack.gaps, *relevant_gaps),
+                pack.uncertainties,
+            ),
+        )
+
+    def _guidance_coverage(
+        self, payload: dict[str, Any]
+    ) -> tuple[dict[str, object], tuple[dict[str, Any], ...]]:
+        with Session(self._engine) as session:
+            coverage = (
+                session.execute(
+                    sa.text(
+                        "SELECT coverage_manifest_id,coverage_manifest_version,"
+                        "publication_status,reconciliation_fingerprint "
+                        "FROM platform.practice_guidance_coverage_manifests "
+                        "ORDER BY coverage_manifest_version DESC LIMIT 1"
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if coverage is None:
+                return (
+                    {"coverage_manifest_version": None},
+                    ({"code": "coverage_manifest_unavailable"},),
+                )
+            query = str(payload.get("query", "")).strip()
+            form_type = str(payload.get("document_or_form_type", "")).strip()
+            field = str(payload.get("field_or_element", "")).strip()
+            conditions = ["g.coverage_manifest_id=:manifest"]
+            parameters: dict[str, object] = {"manifest": coverage["coverage_manifest_id"]}
+            relevance: list[str] = []
+            if query:
+                relevance.append("g.search_vector @@ plainto_tsquery('russian',:query)")
+                parameters["query"] = query
+            if form_type:
+                relevance.append("g.document_or_form_type=:form")
+                parameters["form"] = form_type
+            if field:
+                relevance.append("g.field_or_element=:field")
+                parameters["field"] = field
+            if relevance:
+                conditions.append("(" + " OR ".join(relevance) + ")")
+                rows = tuple(
+                    session.execute(
+                        sa.text(
+                            "SELECT guidance_gap_id,page_number,gap_code,terminal_state,"
+                            "guidance_candidate_id,candidate_version,content_minimal_parameters "
+                            "FROM platform.practice_guidance_gaps g WHERE "
+                            + " AND ".join(conditions)
+                            + " ORDER BY page_number,guidance_gap_id"
+                        ),
+                        parameters,
+                    ).mappings()
+                )
+            else:
+                rows = ()
+        return (
+            {
+                "coverage_manifest_id": str(coverage["coverage_manifest_id"]),
+                "coverage_manifest_version": int(coverage["coverage_manifest_version"]),
+                "coverage_status": str(coverage["publication_status"]),
+                "reconciliation_fingerprint": str(coverage["reconciliation_fingerprint"]),
+            },
+            tuple(dict(row) for row in rows),
         )
 
     def _search(self, payload: dict[str, Any], _context: GatewayContext) -> GatewayResponse:
@@ -814,11 +959,16 @@ class PostgresKnowledgeQuery:
         if not identities:
             return EvidencePack((), (), (), ({"code": "guidance_evidence_unavailable"},), ())
         clauses = []
+        conflict_clauses = []
         parameters: dict[str, object] = {}
         for index, (guidance_id, version) in enumerate(identities):
             clauses.append(
                 f"(ge.guidance_unit_id=:guidance_{index} AND "
                 f"ge.guidance_unit_version=:version_{index})"
+            )
+            conflict_clauses.append(
+                f"(c.guidance_unit_id=:guidance_{index} AND "
+                f"c.guidance_unit_version=:version_{index})"
             )
             parameters[f"guidance_{index}"] = guidance_id
             parameters[f"version_{index}"] = version
@@ -837,6 +987,19 @@ class PostgresKnowledgeQuery:
                     parameters,
                 ).mappings()
             )
+            conflict_rows = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT c.guidance_conflict_id,c.guidance_unit_id,"
+                        "c.guidance_unit_version,c.conflicting_authority_layer,"
+                        "c.conflicting_subject_ref,c.conflict_type,c.state,c.uncertainty_ref "
+                        "FROM platform.practice_guidance_conflicts c WHERE ("
+                        + " OR ".join(conflict_clauses)
+                        + ") AND c.state='open' ORDER BY c.guidance_conflict_id"
+                    ),
+                    parameters,
+                ).mappings()
+            )
         evidence = tuple(
             EvidenceItem(
                 evidence_link_id=str(row["guidance_evidence_id"]),
@@ -850,7 +1013,7 @@ class PostgresKnowledgeQuery:
             for row in rows
         )
         gaps = () if evidence else ({"code": "guidance_evidence_unavailable"},)
-        return EvidencePack(evidence, (), (), gaps, ())
+        return EvidencePack(evidence, (), tuple(dict(row) for row in conflict_rows), gaps, ())
 
     @staticmethod
     def _gap(tool: str, status: GatewayStatus, code: str) -> GatewayResponse:
@@ -862,14 +1025,21 @@ class PostgresKnowledgeQuery:
             EvidencePack((), (), (), ({"code": code},), ()),
         )
 
-    @staticmethod
-    def _guidance_gap(tool: str, status: GatewayStatus, code: str) -> GatewayResponse:
+    def _guidance_gap(
+        self,
+        tool: str,
+        status: GatewayStatus,
+        code: str,
+        payload: dict[str, Any] | None = None,
+    ) -> GatewayResponse:
+        coverage, relevant_gaps = self._guidance_coverage(payload or {})
+        effective_status = GatewayStatus.KNOWLEDGE_INCOMPLETE if relevant_gaps else status
         return GatewayResponse(
             tool,
             GUIDANCE_CONTRACT_VERSION,
-            status,
-            {},
-            EvidencePack((), (), (), ({"code": code},), ()),
+            effective_status,
+            coverage,
+            EvidencePack((), (), (), ({"code": code}, *relevant_gaps), ()),
         )
 
 

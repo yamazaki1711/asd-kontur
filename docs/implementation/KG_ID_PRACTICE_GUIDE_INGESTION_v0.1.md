@@ -99,11 +99,11 @@ development evidence reconciled 34/34 original Pass-B jobs with no remaining
 integrity error. It does not qualify production inference, BF16, another model
 revision, another prompt, or another runtime.
 
-The bounded page-batched Pass-B prompt is separately requalified before the
-full verification pass. A page batch contains no more than the twelve Pass-A
-candidates from that exact page, and reconciliation requires one result for
-every candidate identity. Batching changes transport cost, not the two-pass
-authority or evidence boundary.
+The bounded page-batched Pass-B prompt was separately qualified before the full
+verification pass. Batch transport does not make evaluation page-atomic: every
+syntactically valid disposition is reconciled independently by exact
+CandidateVersion identity. Unknown and duplicate IDs are typed failures and
+are never matched heuristically; malformed JSON is never repaired.
 
 ## 5. Two-pass processing and reconciliation
 
@@ -115,17 +115,46 @@ scope, normalized region bounds, native-text grounding, form/field consistency,
 duplicates and provider integrity.
 
 Pass B is an independent prompt over the same exact page plus CandidateVersion
-and deterministic failure codes. Its outcomes are `supported`, `contradicted`
-or `insufficient`. A correction creates immutable CandidateVersion `n+1` with
-parent lineage and a blocking revalidation requirement; it is not silently
-accepted in the same response.
+and deterministic failure codes. Its terminal candidate outcomes are
+`supported`, `contradicted`, `insufficient` or `model_failed`. A correction
+creates immutable CandidateVersion `n+1` with parent lineage and a blocking
+revalidation requirement; it is not silently accepted in the same response.
+One invalid disposition or correction cannot discard valid siblings. A page
+receipt records `complete`, `partial`, `unresolved` or `model_failed`, while a
+page-level `no_content=true` cannot erase an existing CandidateVersion.
 
-Every physical page must finish with exactly one terminal receipt:
-`verified`, `no_methodological_content`, `unresolved`, `model_failed` or
-`technically_blocked`. `expected_pages=425` is reconciled against exact receipt
-identities; partial or failed processing cannot become `complete` or `ok_empty`.
-Checkpoint/resume skips completed jobs, retains immutable attempt receipts and
-uses targeted retry manifests only.
+The measured full Pass A has 419 valid page results and six typed failures
+(pages 16, 17, 111, 269, 380 and 394). The measured full Pass B completed all
+419 eligible page jobs. Candidate-granular salvage of only the seven integrity
+pages accepted 15 exact dispositions (10 newly recovered beyond the earlier
+page-atomic evaluation) and left 23 exact CandidateVersion identities for
+targeted verification. These are intermediate recovery facts, not a completion
+claim.
+
+Pages 16-17 use a dedicated native-first continued-table recovery. Poppler PDF
+layout supplies deterministic word/line boxes; page 15 is context for the same
+table, not another document. The three printed columns are reconstructed into
+22 independent `GuideSourceRow` records. Qwen receives one complete source row
+at a time for `GuideNtdRelevanceAssertion` semantics and never receives or
+returns coordinates. Exact printed NTD identifiers and titles remain source
+fields. A canonical NTD link can be appended only after exact designation and
+edition resolution; absent or ambiguous editions remain an explicit
+`NormativeReferenceCandidate` uncertainty.
+
+Pages 111, 269, 380 and 394 all passed the native-layout sufficiency classifier.
+Their five invalid locator candidates were re-located by deterministic source
+phrase alignment and created as CandidateVersion `v2` with exact parent
+lineage; no bbox clamping or VLM region recovery was used. Page 380 contains
+non-text control glyphs for visual icons, recorded explicitly while preserving
+the usable native text geometry.
+
+Every physical page must finish with exactly one terminal receipt: `verified`,
+`partial_with_gaps`, `no_methodological_content`, `unresolved`,
+`insufficient_evidence`, `model_failed` or `technically_blocked`.
+`expected_pages=425` is reconciled against exact receipt identities; partial or
+failed processing cannot become `complete` or `ok_empty`. Checkpoint/resume
+skips completed jobs, retains immutable attempt receipts and uses targeted
+candidate manifests only.
 
 Final measured Pass-A, Pass-B, CandidateVersion and terminal-page counts will
 replace this paragraph only after the real 425-page reconciliation finishes.
@@ -139,6 +168,8 @@ platform-scoped, immutable relations for:
 - PracticeGuide, edition, structural units and PageManifest;
 - exact local model/execution profile and ingestion run state history;
 - CandidateVersion, deterministic failures and Qwen verification receipts;
+- deterministic GuideSourceRow geometry, NTD relevance assertions, exact
+  printed reference candidates and separate edition-resolution receipts;
 - per-page terminal receipts and ingestion reconciliation;
 - canonical guidance units, EvidenceLinks, conflicts and uncertainties;
 - rebuildable Russian FTS projection versions and entries.

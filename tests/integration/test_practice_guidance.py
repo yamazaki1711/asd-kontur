@@ -20,6 +20,7 @@ from asd_kontur.knowledge.gateway import (
 from asd_kontur.knowledge.postgres import PostgresKnowledgeAudit, PostgresKnowledgeQuery
 from asd_kontur.knowledge.source_ledger import PlatformSourceAdmission, PlatformSourceLedger
 from asd_kontur.practice_guidance.models import (
+    CoverageManifest,
     GuidanceCandidateVersion,
     GuidanceCuratorAuthority,
     GuidanceKind,
@@ -27,12 +28,17 @@ from asd_kontur.practice_guidance.models import (
     GuideContentKind,
     GuideExecutionProfile,
     GuideLocator,
+    GuideNtdRelevanceAssertion,
     GuidePageManifest,
     GuidePageTerminalReceipt,
+    GuideSourceRow,
     GuideTerminalState,
+    NormativeReferenceCandidate,
+    NormativeReferenceResolutionState,
     VerificationDisposition,
     reconcile_page_receipts,
 )
+from asd_kontur.practice_guidance.pipeline import ntd_assertion_candidate
 from asd_kontur.practice_guidance.postgres import PracticeGuideRepository
 
 from .conftest import (
@@ -154,6 +160,51 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
         profile.fingerprint,
     )
     repository.save_candidate(run_id, candidate)
+    source_row = GuideSourceRow(
+        source_row_id=uuid7(),
+        parent_candidate_id=candidate.candidate_id,
+        parent_candidate_version=candidate.version,
+        source_version_id=admitted.source_version_id,
+        page_number=1,
+        row_ordinal=1,
+        locator=GuideLocator(1, (0.1, 0.1, 0.9, 0.3)),
+        printed_ntd="SYNTHETIC-NTD-1 «Synthetic NTD»",
+        work_or_rd_sections="Synthetic work",
+        id_note="Synthetic ID note",
+        layout_profile_version="guide_ntd_three_column_rows_v0.1",
+        extraction_digest=ZERO,
+        parent_failed_receipt_digest=ZERO,
+    )
+    reference = NormativeReferenceCandidate(
+        uuid7(),
+        "SYNTHETIC-NTD-1",
+        "Synthetic NTD",
+        NormativeReferenceResolutionState.NOT_ATTEMPTED,
+        "NTD_EDITION_RESOLUTION_PENDING",
+    )
+    ntd_assertion = GuideNtdRelevanceAssertion(
+        assertion_id=uuid7(),
+        candidate_id=candidate.candidate_id,
+        parent_candidate_version=candidate.version,
+        source_row_id=source_row.source_row_id,
+        source_version_id=admitted.source_version_id,
+        locator=source_row.locator,
+        printed_identifier=reference.printed_identifier,
+        printed_title=reference.printed_title,
+        work_or_rd_sections=source_row.work_or_rd_sections,
+        id_note=source_row.id_note,
+        relevance_summary="Synthetic NTD is methodologically relevant to ID.",
+        document_or_form_type="synthetic-form",
+        workflow_stage="synthetic-stage",
+        applicability_conditions=("synthetic applicability",),
+        uncertainty_codes=("NTD_EDITION_RESOLUTION_PENDING",),
+        normative_reference=reference,
+        model_profile_fingerprint=profile.fingerprint,
+    )
+    ntd_candidate = ntd_assertion_candidate(ntd_assertion)
+    repository.save_ntd_source_row(run_id, source_row)
+    repository.save_candidate(run_id, ntd_candidate)
+    repository.save_ntd_relevance_assertion(ntd_assertion)
     verification = GuidanceVerification(
         uuid7(),
         candidate.candidate_id,
@@ -204,18 +255,25 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
             frozenset({"methodological_guidance.publish"}),
         ),
     )
-    conflict_id = repository.record_guidance_conflict(
-        guidance_unit_id=unit_id,
-        guidance_unit_version=1,
-        conflicting_authority_layer="normative",
-        conflicting_subject_ref="synthetic-ntd-edition:unit-1",
-        conflict_type="methodological_normative_conflict",
-        uncertainty_ref="uncertainty:synthetic-conflict",
-        curator=GuidanceCuratorAuthority(
-            "identity.synthetic.curator",
-            True,
-            frozenset({"methodological_guidance.conflict.record"}),
+    repository.save_coverage_manifest(
+        CoverageManifest(
+            coverage_manifest_id=uuid7(),
+            practice_guide_edition_id=edition_id,
+            ingestion_run_id=run_id,
+            version=1,
+            publication_status="complete",
+            expected_page_count=1,
+            terminal_page_count=1,
+            page_state_counts={"verified": 1},
+            candidate_state_counts={"supported": 1},
+            guidance_unit_count=1,
+            gap_count=0,
+            conflict_count=0,
+            reconciliation_fingerprint=reconciliation.fingerprint,
+            manifest_fingerprint=ZERO,
+            recorded_at=datetime.now(UTC),
         ),
+        (),
     )
     lexical_version_id = repository.rebuild_lexical_projection(edition_id)
 
@@ -265,6 +323,20 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
     assert trace.status is GatewayStatus.OK
     assert GUIDANCE_SCHEMA_ID.endswith("practice-guidance")
 
+    conflict_id = repository.record_guidance_conflict(
+        guidance_unit_id=unit_id,
+        guidance_unit_version=1,
+        conflicting_authority_layer="normative",
+        conflicting_subject_ref="synthetic-ntd-edition:unit-1",
+        conflict_type="methodological_normative_conflict",
+        uncertainty_ref="uncertainty:synthetic-conflict",
+        curator=GuidanceCuratorAuthority(
+            "identity.synthetic.curator",
+            True,
+            frozenset({"methodological_guidance.conflict.record"}),
+        ),
+    )
+
     explained = gateway.invoke(
         GatewayRequest(
             "knowledge.explain_guidance_conflict",
@@ -302,6 +374,15 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
         ) == ("admitted", "processing", "verified")
         assert (
             session.scalar(sa.text("SELECT count(*) FROM platform.practice_guidance_uncertainties"))
+            == 1
+        )
+        assert (
+            session.scalar(sa.text("SELECT count(*) FROM platform.practice_guide_source_rows")) == 1
+        )
+        assert (
+            session.scalar(
+                sa.text("SELECT count(*) FROM platform.practice_guide_ntd_relevance_assertions")
+            )
             == 1
         )
         assert (

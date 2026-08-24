@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001 -- Russian source-language fixtures intentionally preserve glyphs.
 from __future__ import annotations
 
 import json
@@ -36,11 +37,29 @@ from asd_kontur.practice_guidance.models import (
     VerificationDisposition,
     reconcile_page_receipts,
 )
+from asd_kontur.practice_guidance.native_layout import (
+    NativeBlock,
+    NativeLine,
+    NativePageLayout,
+    NativeWord,
+    locate_source_phrase,
+    reconstruct_ntd_source_rows,
+)
 from asd_kontur.practice_guidance.pipeline import (
+    PassBItemFailureCode,
+    PassBPageEvaluationState,
     candidate_to_wire,
+    corrected_candidate_from_region_recovery,
+    evaluate_pass_a_items,
+    evaluate_pass_b_batch_items,
+    ntd_row_candidate_id,
+    ntd_row_semantic_job,
+    parse_compact_candidate_verification,
+    parse_ntd_row_semantics,
     parse_pass_a,
     parse_pass_b,
     parse_pass_b_batch,
+    parse_region_recovery,
     pass_a_job,
 )
 
@@ -71,6 +90,112 @@ def _profile() -> GuideExecutionProfile:
 def test_four_bit_practice_guide_profile_is_rejected() -> None:
     with pytest.raises(ValueError, match="8-bit or BF16"):
         replace(_profile(), quantization="4bit")
+
+
+def _native_block(text: str, x0: float, y0: float, x1: float, y1: float) -> NativeBlock:
+    return NativeBlock((NativeLine((NativeWord(text, x0, y0, x1, y1),)),))
+
+
+def test_native_ntd_table_rows_use_pdf_geometry_and_allow_blank_middle_column() -> None:
+    layout = NativePageLayout(
+        page_number=16,
+        width_points=400,
+        height_points=600,
+        blocks=(
+            _native_block("Наименование НТД", 70, 40, 160, 50),
+            _native_block("Виды работ или разделы РД", 200, 40, 270, 50),
+            _native_block("Примечание", 300, 40, 360, 50),
+            _native_block("СП 1.2026 «Первый документ».", 55, 80, 180, 100),
+            _native_block("– Форма ИД.", 285, 80, 350, 100),
+            _native_block("ГОСТ Р 2-2026 «Второй документ».", 55, 120, 180, 140),
+            _native_block("Монтаж систем.", 192, 120, 270, 140),
+            _native_block("– Состав ИД.", 285, 120, 350, 140),
+        ),
+        extraction_digest=ZERO,
+    )
+
+    rows = reconstruct_ntd_source_rows(
+        source_version_id=SOURCE_ID,
+        layout=layout,
+        parent_failed_receipt_digest=ZERO,
+    )
+
+    assert len(rows) == 2
+    assert rows[0].work_or_rd_sections == ""
+    assert rows[0].locator.region == pytest.approx((0.1375, 80 / 600, 0.875, 100 / 600))
+    assert rows[1].printed_ntd == "ГОСТ Р 2-2026 «Второй документ»."
+
+
+def test_native_phrase_locator_is_deterministic_and_inside_page() -> None:
+    layout = NativePageLayout(
+        page_number=111,
+        width_points=400,
+        height_points=600,
+        blocks=(
+            NativeBlock(
+                (
+                    NativeLine(
+                        (
+                            NativeWord("Температура", 50, 480, 110, 492),
+                            NativeWord("бетонной", 115, 480, 165, 492),
+                            NativeWord("смеси", 170, 480, 205, 492),
+                            NativeWord("должна", 210, 480, 250, 492),
+                            NativeWord("соответствовать", 255, 480, 345, 492),
+                        )
+                    ),
+                    NativeLine(
+                        (
+                            NativeWord("нормативам,", 50, 495, 120, 507),
+                            NativeWord("а", 125, 495, 130, 507),
+                            NativeWord("также", 135, 495, 165, 507),
+                            NativeWord("ППР.", 170, 495, 195, 507),
+                        )
+                    ),
+                )
+            ),
+        ),
+        extraction_digest=ZERO,
+    )
+
+    locator = locate_source_phrase(
+        layout, "Температура бетонной смеси должна соответствовать нормативам, а также ППР."
+    )
+
+    assert locator.region == pytest.approx((0.125, 0.8, 0.8625, 0.845))
+
+
+def test_ntd_row_semantic_contract_never_exposes_or_accepts_coordinates() -> None:
+    row = reconstruct_ntd_source_rows(
+        source_version_id=SOURCE_ID,
+        layout=NativePageLayout(
+            16,
+            400,
+            600,
+            (
+                _native_block("СП 1.2026 «Документ».", 55, 80, 180, 100),
+                _native_block("Монтаж.", 192, 80, 270, 100),
+                _native_block("– Форма ИД.", 285, 80, 350, 100),
+            ),
+            ZERO,
+        ),
+        parent_failed_receipt_digest=ZERO,
+    )[0]
+    job = ntd_row_semantic_job(row)
+    assert not job.image_paths
+    assert '"region":' not in job.prompt
+    valid = {
+        "source_row_id": str(row.source_row_id),
+        "candidate_id": str(ntd_row_candidate_id(row)),
+        "assertion_type": "guide_ntd_relevance_assertion",
+        "relevance_summary": "Документ связан с формой ИД.",
+        "document_or_form_type": "Форма ИД",
+        "workflow_stage": "Монтаж",
+        "applicability_conditions": ["Монтаж"],
+        "uncertainty_codes": [],
+    }
+    parse_ntd_row_semantics(json.dumps(valid), row=row)
+    with pytest.raises(ValueError, match="strict schema"):
+        parse_ntd_row_semantics(json.dumps({**valid, "region": [0, 0, 1, 1]}), row=row)
 
 
 def _pass_a_payload() -> str:
@@ -135,6 +260,106 @@ def test_pass_a_is_strict_typed_candidate_only() -> None:
     assert candidates[0].locator == GuideLocator(1, (0.1, 0.2, 0.8, 0.9))
     assert not hasattr(candidates[0], "fact")
     assert not hasattr(candidates[0], "rule_version")
+
+
+def test_pass_a_candidate_granularity_preserves_invalid_region_without_clamping() -> None:
+    document = json.loads(_pass_a_payload())
+    failed_raw = {**document["candidates"][0], "region": [0.1, 1.0, 0.8, 1.1]}
+    document["candidates"].append(failed_raw)
+
+    accepted, failed = evaluate_pass_a_items(
+        json.dumps(document),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )
+
+    assert len(accepted) == 1
+    assert len(failed) == 1
+    assert failed[0].failure_code == "LOCATOR_INVALID"
+    assert failed[0].invalid_region == [0.1, 1.0, 0.8, 1.1]
+    assert failed[0].raw_candidate["region"] == [0.1, 1.0, 0.8, 1.1]
+
+
+def test_region_recovery_requires_exact_grounded_schema_and_parent_lineage() -> None:
+    document = json.loads(_pass_a_payload())
+    document["candidates"][0]["region"] = [0.1, 1.0, 0.8, 1.1]
+    _, failed = evaluate_pass_a_items(
+        json.dumps(document),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )
+    recovery_raw = json.dumps(
+        {
+            "page_number": 1,
+            "candidate_id": str(failed[0].candidate_id),
+            "parent_version": 1,
+            "outcome": "corrected_candidate",
+            "reason_codes": ["EXACT_VISUAL_REGION_MATCH"],
+            "corrected_candidate": {
+                "candidate_id": str(failed[0].candidate_id),
+                "version": 2,
+                "parent_version": 1,
+                "region": [0.1, 0.7, 0.8, 0.9],
+                "visual_grounding": "matched",
+                "native_text_grounding": "matched",
+            },
+        }
+    )
+
+    result = parse_region_recovery(
+        recovery_raw,
+        failed_candidate=failed[0],
+        native_text_required=True,
+    )
+    bf16_profile = replace(
+        _profile(),
+        quantization="bf16",
+        execution_profile="guide-region-recovery-bf16-v0.1",
+    )
+    corrected = corrected_candidate_from_region_recovery(
+        failed[0], result, source_version_id=SOURCE_ID, profile=bf16_profile
+    )
+
+    assert corrected.candidate_id == failed[0].candidate_id
+    assert corrected.version == 2
+    assert corrected.parent_version == 1
+    assert corrected.locator.region == (0.1, 0.7, 0.8, 0.9)
+    assert corrected.model_profile_fingerprint == bf16_profile.fingerprint
+
+    substituted = json.loads(recovery_raw)
+    substituted["confidence"] = 0.99
+    with pytest.raises(ValueError, match="substituted"):
+        parse_region_recovery(
+            json.dumps(substituted),
+            failed_candidate=failed[0],
+            native_text_required=True,
+        )
+
+
+def test_compact_verifier_forbids_full_correction_payload() -> None:
+    candidate = parse_pass_a(
+        _pass_a_payload(),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )[0]
+    document = {
+        "page_number": 1,
+        "candidate_id": str(candidate.candidate_id),
+        "candidate_version": 1,
+        "disposition": "contradicted",
+        "reason_codes": ["FIELD_NOT_GROUNDED"],
+        "correction_required": True,
+    }
+
+    result = parse_compact_candidate_verification(json.dumps(document), candidate=candidate)
+
+    assert result.disposition is VerificationDisposition.CONTRADICTED
+    document["corrected_candidate"] = candidate_to_wire(candidate)
+    with pytest.raises(ValueError, match="substituted"):
+        parse_compact_candidate_verification(json.dumps(document), candidate=candidate)
 
 
 def test_markdown_fenced_or_wrong_page_model_output_is_rejected() -> None:
@@ -251,6 +476,138 @@ def test_batched_pass_b_reconciles_every_candidate_once() -> None:
             page_number=1,
             candidates=(candidate,),
         )
+
+
+def test_candidate_granular_pass_b_salvages_valid_neighbor() -> None:
+    first = parse_pass_a(
+        _pass_a_payload(),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )[0]
+    second = replace(
+        first,
+        candidate_id=UUID("0198f8ae-c954-7000-8000-000000000099"),
+        instruction="Second synthetic candidate.",
+    )
+    raw = json.dumps(
+        {
+            "page_number": 1,
+            "page_disposition": "supported",
+            "no_methodological_content": False,
+            "candidate_count": 2,
+            "candidate_results": [
+                {
+                    "candidate_id": str(first.candidate_id),
+                    "candidate_version": 1,
+                    "disposition": "supported",
+                    "reasons": ["exact evidence"],
+                    "corrected_candidate": None,
+                },
+                {
+                    "candidate_id": str(second.candidate_id),
+                    "candidate_version": 1,
+                    "disposition": "answered",
+                    "reasons": ["invalid enum"],
+                    "corrected_candidate": None,
+                },
+            ],
+        }
+    )
+
+    evaluation = evaluate_pass_b_batch_items(raw, page_number=1, candidates=(first, second))
+
+    assert evaluation.state is PassBPageEvaluationState.PARTIAL
+    assert [result.candidate for result in evaluation.candidate_results] == [first]
+    assert [failure.failure_code for failure in evaluation.failures] == [
+        PassBItemFailureCode.DISPOSITION_INVALID
+    ]
+
+
+def test_candidate_granular_pass_b_never_guesses_unknown_identity() -> None:
+    candidate = parse_pass_a(
+        _pass_a_payload(),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )[0]
+    raw = json.dumps(
+        {
+            "page_number": 1,
+            "page_disposition": "supported",
+            "no_methodological_content": False,
+            "candidate_count": 1,
+            "candidate_results": [
+                {
+                    "candidate_id": "0198f8ae-c954-7000-8000-000000000098",
+                    "candidate_version": 1,
+                    "disposition": "supported",
+                    "reasons": ["looks similar but is not exact"],
+                    "corrected_candidate": None,
+                }
+            ],
+        }
+    )
+
+    evaluation = evaluate_pass_b_batch_items(raw, page_number=1, candidates=(candidate,))
+
+    assert evaluation.state is PassBPageEvaluationState.UNRESOLVED
+    assert not evaluation.candidate_results
+    assert {failure.failure_code for failure in evaluation.failures} == {
+        PassBItemFailureCode.CANDIDATE_ID_UNKNOWN,
+        PassBItemFailureCode.CANDIDATE_RESULT_MISSING,
+    }
+
+
+def test_candidate_granular_pass_b_does_not_erase_candidates_on_no_content() -> None:
+    candidate = parse_pass_a(
+        _pass_a_payload(),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )[0]
+    raw = json.dumps(
+        {
+            "page_number": 1,
+            "page_disposition": "supported",
+            "no_methodological_content": True,
+            "candidate_count": 1,
+            "candidate_results": [
+                {
+                    "candidate_id": str(candidate.candidate_id),
+                    "candidate_version": 1,
+                    "disposition": "supported",
+                    "reasons": ["exact evidence"],
+                    "corrected_candidate": None,
+                }
+            ],
+        }
+    )
+
+    evaluation = evaluate_pass_b_batch_items(raw, page_number=1, candidates=(candidate,))
+
+    assert evaluation.state is PassBPageEvaluationState.PARTIAL
+    assert evaluation.candidate_results[0].candidate == candidate
+    assert evaluation.failures[0].failure_code is PassBItemFailureCode.NO_CONTENT_WITH_CANDIDATES
+
+
+def test_candidate_granular_pass_b_never_repairs_malformed_json() -> None:
+    candidate = parse_pass_a(
+        _pass_a_payload(),
+        source_version_id=SOURCE_ID,
+        page_number=1,
+        profile=_profile(),
+    )[0]
+
+    evaluation = evaluate_pass_b_batch_items(
+        '{"page_number": 1, "candidate_results": [',
+        page_number=1,
+        candidates=(candidate,),
+    )
+
+    assert evaluation.state is PassBPageEvaluationState.MODEL_FAILED
+    assert not evaluation.candidate_results
+    assert evaluation.failures[0].failure_code is PassBItemFailureCode.RESPONSE_JSON_INVALID
 
 
 def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority() -> None:

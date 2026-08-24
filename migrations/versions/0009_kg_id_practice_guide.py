@@ -26,6 +26,11 @@ PLATFORM_TABLES = (
     "practice_guide_ingestion_runs",
     "practice_guide_ingestion_run_states",
     "practice_guide_candidate_versions",
+    "practice_guide_failed_candidate_versions",
+    "practice_guide_source_rows",
+    "practice_guide_normative_reference_candidates",
+    "practice_guide_normative_reference_resolutions",
+    "practice_guide_ntd_relevance_assertions",
     "practice_guide_validation_results",
     "practice_guide_verifications",
     "practice_guide_page_terminal_receipts",
@@ -34,6 +39,8 @@ PLATFORM_TABLES = (
     "practice_guidance_evidence",
     "practice_guidance_conflicts",
     "practice_guidance_uncertainties",
+    "practice_guidance_coverage_manifests",
+    "practice_guidance_gaps",
 )
 
 PROJECTION_TABLES = (
@@ -232,9 +239,79 @@ def _create_ingestion_ledger() -> None:
           candidate_fingerprint text NOT NULL CHECK (candidate_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
           created_at timestamptz NOT NULL,
           PRIMARY KEY (guidance_candidate_id,version),
-          FOREIGN KEY (guidance_candidate_id,parent_version) REFERENCES platform.practice_guide_candidate_versions(guidance_candidate_id,version) ON DELETE RESTRICT,
           CHECK (parent_version IS NULL OR parent_version<version),
           CHECK (visual_example_region IS NULL OR cardinality(visual_example_region)=4)
+        );
+        CREATE TABLE platform.practice_guide_failed_candidate_versions (
+          guidance_candidate_id uuid NOT NULL,
+          version bigint NOT NULL CHECK (version>=1),
+          ingestion_run_id uuid NOT NULL REFERENCES platform.practice_guide_ingestion_runs(ingestion_run_id) ON DELETE RESTRICT,
+          source_version_id uuid NOT NULL REFERENCES platform.source_versions(source_version_id) ON DELETE RESTRICT,
+          page_number integer NOT NULL CHECK (page_number>=1),
+          ordinal integer NOT NULL CHECK (ordinal>=1),
+          failure_code text NOT NULL,
+          failure_field text NOT NULL,
+          invalid_region jsonb,
+          raw_candidate jsonb NOT NULL,
+          failed_candidate_fingerprint text NOT NULL UNIQUE CHECK (failed_candidate_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          PRIMARY KEY (guidance_candidate_id,version),
+          UNIQUE (ingestion_run_id,page_number,ordinal)
+        );
+        CREATE TABLE platform.practice_guide_source_rows (
+          source_row_id uuid PRIMARY KEY,
+          parent_guidance_candidate_id uuid NOT NULL,
+          parent_candidate_version bigint NOT NULL,
+          ingestion_run_id uuid NOT NULL REFERENCES platform.practice_guide_ingestion_runs(ingestion_run_id) ON DELETE RESTRICT,
+          source_version_id uuid NOT NULL REFERENCES platform.source_versions(source_version_id) ON DELETE RESTRICT,
+          page_number integer NOT NULL CHECK (page_number>=1),
+          row_ordinal integer NOT NULL CHECK (row_ordinal>=1),
+          region double precision[] NOT NULL CHECK (cardinality(region)=4),
+          printed_ntd text NOT NULL,
+          work_or_rd_sections text NOT NULL,
+          id_note text NOT NULL,
+          layout_profile_version text NOT NULL,
+          extraction_digest text NOT NULL CHECK (extraction_digest ~ '^sha256:[a-f0-9]{64}$'),
+          parent_failed_receipt_digest text NOT NULL CHECK (parent_failed_receipt_digest ~ '^sha256:[a-f0-9]{64}$'),
+          source_row_fingerprint text NOT NULL UNIQUE CHECK (source_row_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          UNIQUE (ingestion_run_id,page_number,row_ordinal)
+        );
+        CREATE TABLE platform.practice_guide_normative_reference_candidates (
+          normative_reference_candidate_id uuid PRIMARY KEY,
+          source_row_id uuid NOT NULL UNIQUE REFERENCES platform.practice_guide_source_rows(source_row_id) ON DELETE RESTRICT,
+          printed_identifier text NOT NULL,
+          printed_title text,
+          candidate_fingerprint text NOT NULL UNIQUE CHECK (candidate_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL
+        );
+        CREATE TABLE platform.practice_guide_normative_reference_resolutions (
+          normative_reference_resolution_id uuid PRIMARY KEY,
+          normative_reference_candidate_id uuid NOT NULL UNIQUE REFERENCES platform.practice_guide_normative_reference_candidates(normative_reference_candidate_id) ON DELETE RESTRICT,
+          resolution_state text NOT NULL CHECK (resolution_state IN ('resolved','not_found','ambiguous')),
+          normative_document_id uuid REFERENCES platform.normative_documents(normative_document_id) ON DELETE RESTRICT,
+          normative_edition_id uuid REFERENCES platform.normative_editions(normative_edition_id) ON DELETE RESTRICT,
+          uncertainty_code text NOT NULL,
+          resolver_version text NOT NULL,
+          resolution_fingerprint text NOT NULL UNIQUE CHECK (resolution_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          resolved_at timestamptz NOT NULL,
+          CHECK ((resolution_state='resolved')=(normative_document_id IS NOT NULL AND normative_edition_id IS NOT NULL)),
+          CHECK ((normative_document_id IS NULL)=(normative_edition_id IS NULL))
+        );
+        CREATE TABLE platform.practice_guide_ntd_relevance_assertions (
+          ntd_relevance_assertion_id uuid PRIMARY KEY,
+          guidance_candidate_id uuid NOT NULL,
+          candidate_version bigint NOT NULL,
+          source_row_id uuid NOT NULL UNIQUE REFERENCES platform.practice_guide_source_rows(source_row_id) ON DELETE RESTRICT,
+          normative_reference_candidate_id uuid NOT NULL UNIQUE REFERENCES platform.practice_guide_normative_reference_candidates(normative_reference_candidate_id) ON DELETE RESTRICT,
+          relevance_summary text NOT NULL,
+          document_or_form_type text,
+          workflow_stage text,
+          applicability_conditions jsonb NOT NULL,
+          uncertainty_codes jsonb NOT NULL,
+          assertion_fingerprint text NOT NULL UNIQUE CHECK (assertion_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          FOREIGN KEY (guidance_candidate_id,candidate_version) REFERENCES platform.practice_guide_candidate_versions(guidance_candidate_id,version) ON DELETE RESTRICT
         );
         CREATE TABLE platform.practice_guide_validation_results (
           validation_result_id uuid PRIMARY KEY,
@@ -255,7 +332,7 @@ def _create_ingestion_ledger() -> None:
           verification_id uuid PRIMARY KEY,
           guidance_candidate_id uuid NOT NULL,
           candidate_version bigint NOT NULL,
-          disposition text NOT NULL CHECK (disposition IN ('supported','contradicted','insufficient')),
+          disposition text NOT NULL CHECK (disposition IN ('supported','contradicted','insufficient','model_failed')),
           source_version_id uuid NOT NULL REFERENCES platform.source_versions(source_version_id) ON DELETE RESTRICT,
           page_number integer NOT NULL CHECK (page_number>=1),
           region double precision[] NOT NULL CHECK (cardinality(region)=4),
@@ -270,7 +347,7 @@ def _create_ingestion_ledger() -> None:
           ingestion_run_id uuid NOT NULL REFERENCES platform.practice_guide_ingestion_runs(ingestion_run_id) ON DELETE RESTRICT,
           page_number integer NOT NULL CHECK (page_number>=1),
           source_version_id uuid NOT NULL REFERENCES platform.source_versions(source_version_id) ON DELETE RESTRICT,
-          terminal_state text NOT NULL CHECK (terminal_state IN ('verified','no_methodological_content','unresolved','model_failed','technically_blocked')),
+          terminal_state text NOT NULL CHECK (terminal_state IN ('verified','partial_with_gaps','no_methodological_content','unresolved','insufficient_evidence','model_failed','technically_blocked')),
           pass_a_attempt_ref text,
           pass_b_attempt_refs text[] NOT NULL,
           candidate_count integer NOT NULL CHECK (candidate_count>=0),
@@ -349,8 +426,10 @@ def _create_guidance_canon() -> None:
         );
         CREATE TABLE platform.practice_guidance_conflicts (
           guidance_conflict_id uuid PRIMARY KEY,
-          guidance_unit_id uuid NOT NULL,
-          guidance_unit_version bigint NOT NULL,
+          guidance_unit_id uuid,
+          guidance_unit_version bigint,
+          guidance_candidate_id uuid NOT NULL,
+          candidate_version bigint NOT NULL,
           conflicting_authority_layer text NOT NULL,
           conflicting_subject_ref text NOT NULL,
           conflict_type text NOT NULL,
@@ -358,7 +437,9 @@ def _create_guidance_canon() -> None:
           uncertainty_ref text NOT NULL,
           decision_ref text,
           recorded_at timestamptz NOT NULL,
-          FOREIGN KEY (guidance_unit_id,guidance_unit_version) REFERENCES platform.practice_guidance_units(guidance_unit_id,version) ON DELETE RESTRICT
+          FOREIGN KEY (guidance_unit_id,guidance_unit_version) REFERENCES platform.practice_guidance_units(guidance_unit_id,version) ON DELETE RESTRICT,
+          FOREIGN KEY (guidance_candidate_id,candidate_version) REFERENCES platform.practice_guide_candidate_versions(guidance_candidate_id,version) ON DELETE RESTRICT,
+          CHECK ((guidance_unit_id IS NULL)=(guidance_unit_version IS NULL))
         );
         CREATE TABLE platform.practice_guidance_uncertainties (
           guidance_uncertainty_id uuid PRIMARY KEY,
@@ -370,6 +451,46 @@ def _create_guidance_canon() -> None:
           recorded_at timestamptz NOT NULL,
           FOREIGN KEY (guidance_unit_id,guidance_unit_version) REFERENCES platform.practice_guidance_units(guidance_unit_id,version) ON DELETE RESTRICT
         );
+        CREATE TABLE platform.practice_guidance_coverage_manifests (
+          coverage_manifest_id uuid PRIMARY KEY,
+          practice_guide_edition_id uuid NOT NULL REFERENCES platform.practice_guide_editions(practice_guide_edition_id) ON DELETE RESTRICT,
+          ingestion_run_id uuid NOT NULL REFERENCES platform.practice_guide_ingestion_runs(ingestion_run_id) ON DELETE RESTRICT,
+          coverage_manifest_version integer NOT NULL CHECK (coverage_manifest_version>=1),
+          publication_status text NOT NULL CHECK (publication_status IN ('complete','partial_with_explicit_gaps')),
+          expected_page_count integer NOT NULL CHECK (expected_page_count>0),
+          terminal_page_count integer NOT NULL CHECK (terminal_page_count>=0),
+          page_state_counts jsonb NOT NULL,
+          candidate_state_counts jsonb NOT NULL,
+          guidance_unit_count integer NOT NULL CHECK (guidance_unit_count>=0),
+          gap_count integer NOT NULL CHECK (gap_count>=0),
+          conflict_count integer NOT NULL CHECK (conflict_count>=0),
+          reconciliation_fingerprint text NOT NULL CHECK (reconciliation_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          manifest_fingerprint text NOT NULL UNIQUE CHECK (manifest_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          UNIQUE (practice_guide_edition_id,coverage_manifest_version),
+          CHECK (terminal_page_count<=expected_page_count)
+        );
+        CREATE TABLE platform.practice_guidance_gaps (
+          guidance_gap_id uuid PRIMARY KEY,
+          coverage_manifest_id uuid NOT NULL REFERENCES platform.practice_guidance_coverage_manifests(coverage_manifest_id) ON DELETE RESTRICT,
+          source_version_id uuid NOT NULL REFERENCES platform.source_versions(source_version_id) ON DELETE RESTRICT,
+          page_number integer NOT NULL CHECK (page_number>=1),
+          guidance_candidate_id uuid,
+          candidate_version bigint,
+          gap_code text NOT NULL,
+          terminal_state text NOT NULL CHECK (terminal_state IN ('partial_with_gaps','insufficient_evidence','model_failed','technically_blocked')),
+          topic text,
+          document_or_form_type text,
+          field_or_element text,
+          searchable_text text NOT NULL,
+          search_vector tsvector GENERATED ALWAYS AS (to_tsvector('russian',searchable_text)) STORED,
+          content_minimal_parameters jsonb NOT NULL,
+          gap_fingerprint text NOT NULL UNIQUE CHECK (gap_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          CHECK ((guidance_candidate_id IS NULL)=(candidate_version IS NULL))
+        );
+        CREATE INDEX practice_guidance_gap_search_idx
+          ON platform.practice_guidance_gaps USING gin(search_vector);
         """
     )
 
