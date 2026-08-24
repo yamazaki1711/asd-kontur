@@ -1217,7 +1217,7 @@ class PracticeGuideRepository:
         curator.require_conflict_recording()
         if candidate.source_version_id != conflicting_candidate.source_version_id:
             raise ValueError("Candidate conflict must remain within one source version")
-        conflict_id = uuid7()
+        subject = f"candidate:{conflicting_candidate.candidate_id}:v{conflicting_candidate.version}"
         with Session(self._engine) as session, session.begin():
             exists = session.execute(
                 sa.text(
@@ -1234,6 +1234,23 @@ class PracticeGuideRepository:
             ).scalar_one()
             if int(exists) != 2:
                 raise ValueError("Candidate conflict target does not exist")
+            existing_conflict = session.execute(
+                sa.text(
+                    "SELECT guidance_conflict_id FROM platform.practice_guidance_conflicts "
+                    "WHERE guidance_candidate_id=:candidate AND candidate_version=:version "
+                    "AND conflicting_authority_layer='methodological_guidance_peer' "
+                    "AND conflicting_subject_ref=:subject AND conflict_type=:type AND state='open'"
+                ),
+                {
+                    "candidate": candidate.candidate_id,
+                    "version": candidate.version,
+                    "subject": subject,
+                    "type": conflict_type,
+                },
+            ).scalar_one_or_none()
+            if existing_conflict is not None:
+                return UUID(str(existing_conflict))
+            conflict_id = uuid7()
             session.execute(
                 sa.text(
                     "INSERT INTO platform.practice_guidance_conflicts "
@@ -1248,10 +1265,7 @@ class PracticeGuideRepository:
                     "id": conflict_id,
                     "candidate": candidate.candidate_id,
                     "version": candidate.version,
-                    "subject": (
-                        f"candidate:{conflicting_candidate.candidate_id}:"
-                        f"v{conflicting_candidate.version}"
-                    ),
+                    "subject": subject,
                     "type": conflict_type,
                     "uncertainty": f"guidance-conflict:{conflict_id}",
                     "now": datetime.now(UTC),

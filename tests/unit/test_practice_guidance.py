@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
-from datetime import UTC, datetime
+from dataclasses import asdict, replace
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID
 
 import pytest
+import sqlalchemy as sa
 from pypdf import PdfWriter
 
 from asd_kontur.knowledge.gateway import (
@@ -20,6 +21,7 @@ from asd_kontur.knowledge.gateway import (
     GatewayStatus,
     KnowledgeGateway,
 )
+from asd_kontur.practice_guidance import commands as guidance_commands
 from asd_kontur.practice_guidance.commands import _corrected_candidate_version
 from asd_kontur.practice_guidance.manifest import inspect_pdf
 from asd_kontur.practice_guidance.memory_acceptance import (
@@ -32,8 +34,11 @@ from asd_kontur.practice_guidance.models import (
     GuideContentKind,
     GuideExecutionProfile,
     GuideLocator,
+    GuideNtdRelevanceAssertion,
     GuidePageTerminalReceipt,
     GuideTerminalState,
+    NormativeReferenceCandidate,
+    NormativeReferenceResolutionState,
     VerificationDisposition,
     reconcile_page_receipts,
 )
@@ -676,6 +681,102 @@ def test_adversarial_memory_request_cannot_activate_guidance_as_rule() -> None:
         scenario,
     )
     assert result.valid
+
+
+def test_exact_ntd_resolver_preserves_printed_identity_and_unresolved_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document_id = UUID("0198f8ae-c954-7000-8000-000000000020")
+    edition_id = UUID("0198f8ae-c954-7000-8000-000000000021")
+
+    class _Engine:
+        def dispose(self) -> None:
+            return None
+
+    class _Resolver:
+        def __init__(self, engine: object) -> None:
+            del engine
+
+        def resolve_document_exact_designation(self, printed_identifier: str) -> UUID:
+            if printed_identifier == "СП 1.2.3-2024":
+                return document_id
+            from asd_kontur.knowledge.errors import (
+                KnowledgeError,
+                KnowledgeErrorCode,
+            )
+
+            raise KnowledgeError(
+                KnowledgeErrorCode.EDITION_AMBIGUOUS,
+                "not found",
+                {"candidate_count": 0},
+            )
+
+        def resolve_edition(self, normative_document_id: UUID, on_date: date) -> UUID:
+            assert normative_document_id == document_id
+            assert on_date == date(2026, 8, 25)
+            return edition_id
+
+    monkeypatch.setattr(sa, "create_engine", lambda _: _Engine())
+    monkeypatch.setattr(guidance_commands, "NormativeKnowledgeRepository", _Resolver)
+
+    def assertion(identifier: str, ordinal: int) -> GuideNtdRelevanceAssertion:
+        reference = NormativeReferenceCandidate(
+            UUID(f"0198f8ae-c954-7000-8000-{ordinal:012d}"),
+            identifier,
+            "Точное печатное название",
+            NormativeReferenceResolutionState.NOT_ATTEMPTED,
+            "NTD_EDITION_RESOLUTION_PENDING",
+        )
+        return GuideNtdRelevanceAssertion(
+            UUID(f"0198f8ae-c954-7000-8001-{ordinal:012d}"),
+            UUID(f"0198f8ae-c954-7000-8002-{ordinal:012d}"),
+            1,
+            UUID(f"0198f8ae-c954-7000-8003-{ordinal:012d}"),
+            SOURCE_ID,
+            GuideLocator(16, (0.1, 0.1, 0.9, 0.2)),
+            identifier,
+            "Точное печатное название",
+            "",
+            "Примечание для ИД",
+            "Релевантно для комплектования ИД.",
+            None,
+            None,
+            (),
+            ("NTD_EDITION_RESOLUTION_PENDING",),
+            reference,
+            ZERO,
+        )
+
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "entries": [
+                    {"assertion": asdict(assertion("СП 1.2.3-2024", 31))},
+                    {"assertion": asdict(assertion("СП НЕ НАЙДЕН", 32))},
+                ]
+            },
+            default=str,
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "resolution.json"
+    guidance_commands.resolve_ntd_references_command(
+        database_url="postgresql://unused",
+        registry_paths=(registry,),
+        as_of_date=date(2026, 8, 25),
+        output=output,
+    )
+    result = json.loads(output.read_text(encoding="utf-8"))
+    references = {
+        item["reference"]["printed_identifier"]: item["reference"] for item in result["results"]
+    }
+    assert references["СП 1.2.3-2024"]["resolution_state"] == "resolved"
+    assert references["СП 1.2.3-2024"]["normative_document_id"] == str(document_id)
+    assert references["СП 1.2.3-2024"]["normative_edition_id"] == str(edition_id)
+    assert references["СП НЕ НАЙДЕН"]["resolution_state"] == "not_found"
+    assert references["СП НЕ НАЙДЕН"]["normative_document_id"] is None
+    assert references["СП НЕ НАЙДЕН"]["normative_edition_id"] is None
 
 
 def test_model_or_service_identity_cannot_publish_methodological_guidance() -> None:

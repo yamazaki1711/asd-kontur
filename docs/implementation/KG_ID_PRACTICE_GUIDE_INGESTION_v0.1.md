@@ -141,6 +141,12 @@ fields. A canonical NTD link can be appended only after exact designation and
 edition resolution; absent or ambiguous editions remain an explicit
 `NormativeReferenceCandidate` uncertainty.
 
+The exact resolver is a separate deterministic stage pinned to an explicit
+`as_of_date`. It neither normalizes the printed designation nor retains a
+partial document-only link when edition resolution fails. The immutable result
+is `resolved`, `not_found` or `ambiguous`; inference cannot choose or repair an
+edition.
+
 Pages 111, 269, 380 and 394 all passed the native-layout sufficiency classifier.
 Their five invalid locator candidates were re-located by deterministic source
 phrase alignment and created as CandidateVersion `v2` with exact parent
@@ -172,6 +178,7 @@ platform-scoped, immutable relations for:
   printed reference candidates and separate edition-resolution receipts;
 - per-page terminal receipts and ingestion reconciliation;
 - canonical guidance units, EvidenceLinks, conflicts and uncertainties;
+- immutable CoverageManifest, searchable GuidanceGap and recovery lineage;
 - rebuildable Russian FTS projection versions and entries.
 
 No relation in this family contains `workspace_id`. Canonical guidance evidence
@@ -187,6 +194,13 @@ grants. Candidate, verification, receipt, reconciliation, publication,
 conflict and uncertainty records are append-only. Canonical publication needs
 an explicit qualified human `methodological_guidance.publish` capability;
 conflict recording has a separate human capability.
+
+`persist-verified-guidance` consumes only the final bounded reconciliation
+artifacts: CoverageManifest, GuidanceGap register and publication manifest with
+exact verification lineage. It does not reread the original page-atomic Pass A
+or Pass B outputs to make publication decisions. Thus an original supported
+version that was superseded, a corrected version without its own supported
+verification, or a quarantined conflict cannot enter authoritative retrieval.
 
 ## 7. Knowledge Gateway
 

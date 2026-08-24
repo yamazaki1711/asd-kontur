@@ -6,7 +6,7 @@ import argparse
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -16,6 +16,7 @@ from pypdf import PdfReader
 from asd_kontur.domain import deterministic_uuid, uuid7
 from asd_kontur.harness.models import digest_of
 from asd_kontur.knowledge import LocalFilesystemObjectStore
+from asd_kontur.knowledge.errors import KnowledgeError
 from asd_kontur.knowledge.gateway import (
     GUIDANCE_CONTRACT_VERSION,
     GUIDANCE_SCHEMA_ID,
@@ -25,7 +26,11 @@ from asd_kontur.knowledge.gateway import (
     GatewayStatus,
     KnowledgeGateway,
 )
-from asd_kontur.knowledge.postgres import PostgresKnowledgeAudit, PostgresKnowledgeQuery
+from asd_kontur.knowledge.postgres import (
+    NormativeKnowledgeRepository,
+    PostgresKnowledgeAudit,
+    PostgresKnowledgeQuery,
+)
 from asd_kontur.knowledge.source_ledger import PlatformSourceAdmission, PlatformSourceLedger
 
 from .manifest import inspect_pdf
@@ -48,6 +53,7 @@ from .models import (
     GuidanceVerification,
     GuideExecutionProfile,
     GuideLocator,
+    GuideNtdRelevanceAssertion,
     GuidePageTerminalReceipt,
     GuideSourceRow,
     GuideTerminalState,
@@ -99,7 +105,6 @@ from .pipeline import (
 from .postgres import PracticeGuideRepository
 from .reconciliation import candidate_conflict_pairs, latest_candidate_versions
 from .validation import (
-    GuideFailureCode,
     GuideValidationContext,
     detect_duplicate_candidates,
     validate_candidate,
@@ -435,6 +440,83 @@ def _source_row_from_document(value: dict[str, object]) -> GuideSourceRow:
         layout_profile_version=str(value["layout_profile_version"]),
         extraction_digest=str(value["extraction_digest"]),
         parent_failed_receipt_digest=str(value["parent_failed_receipt_digest"]),
+    )
+
+
+def _normative_reference_from_document(
+    value: dict[str, object],
+) -> NormativeReferenceCandidate:
+    return NormativeReferenceCandidate(
+        reference_candidate_id=UUID(str(value["reference_candidate_id"])),
+        printed_identifier=str(value["printed_identifier"]),
+        printed_title=(
+            str(value["printed_title"]) if value.get("printed_title") is not None else None
+        ),
+        resolution_state=NormativeReferenceResolutionState(str(value["resolution_state"])),
+        uncertainty_code=str(value["uncertainty_code"]),
+        normative_document_id=(
+            UUID(str(value["normative_document_id"]))
+            if value.get("normative_document_id") is not None
+            else None
+        ),
+        normative_edition_id=(
+            UUID(str(value["normative_edition_id"]))
+            if value.get("normative_edition_id") is not None
+            else None
+        ),
+    )
+
+
+def _ntd_assertion_from_document(value: dict[str, object]) -> GuideNtdRelevanceAssertion:
+    locator_value = value.get("locator")
+    reference_value = value.get("normative_reference")
+    if not isinstance(locator_value, dict) or not isinstance(reference_value, dict):
+        raise ValueError("Guide NTD assertion lineage is malformed")
+    region_value = locator_value.get("region")
+    if not isinstance(region_value, list) or len(region_value) != 4:
+        raise ValueError("Guide NTD assertion locator is malformed")
+    locator_region = (
+        float(region_value[0]),
+        float(region_value[1]),
+        float(region_value[2]),
+        float(region_value[3]),
+    )
+
+    def strings(name: str) -> tuple[str, ...]:
+        items = value.get(name)
+        if not isinstance(items, list) or not all(isinstance(item, str) for item in items):
+            raise ValueError(f"Guide NTD assertion {name} is malformed")
+        return tuple(items)
+
+    return GuideNtdRelevanceAssertion(
+        assertion_id=UUID(str(value["assertion_id"])),
+        candidate_id=UUID(str(value["candidate_id"])),
+        parent_candidate_version=int(str(value["parent_candidate_version"])),
+        source_row_id=UUID(str(value["source_row_id"])),
+        source_version_id=UUID(str(value["source_version_id"])),
+        locator=GuideLocator(
+            int(str(locator_value["page_number"])),
+            locator_region,
+        ),
+        printed_identifier=str(value["printed_identifier"]),
+        printed_title=(
+            str(value["printed_title"]) if value.get("printed_title") is not None else None
+        ),
+        work_or_rd_sections=str(value["work_or_rd_sections"]),
+        id_note=str(value["id_note"]),
+        relevance_summary=str(value["relevance_summary"]),
+        document_or_form_type=(
+            str(value["document_or_form_type"])
+            if value.get("document_or_form_type") is not None
+            else None
+        ),
+        workflow_stage=(
+            str(value["workflow_stage"]) if value.get("workflow_stage") is not None else None
+        ),
+        applicability_conditions=strings("applicability_conditions"),
+        uncertainty_codes=strings("uncertainty_codes"),
+        normative_reference=_normative_reference_from_document(reference_value),
+        model_profile_fingerprint=str(value["model_profile_fingerprint"]),
     )
 
 
@@ -830,6 +912,127 @@ def evaluate_ntd_row_semantics_command(
     if not pass_b_jobs:
         raise ValueError("No valid NTD row candidates are available for targeted Pass B")
     write_job_manifest(pass_b_output, tuple(pass_b_jobs))
+
+
+def resolve_ntd_references_command(
+    *,
+    database_url: str,
+    registry_paths: tuple[Path, ...],
+    as_of_date: date,
+    output: Path,
+) -> None:
+    """Resolve printed NTD identifiers without normalization or model inference."""
+
+    pending: dict[UUID, NormativeReferenceCandidate] = {}
+    for registry_path in registry_paths:
+        document = json.loads(registry_path.read_text(encoding="utf-8"))
+        if not isinstance(document, dict) or not isinstance(document.get("entries"), list):
+            raise ValueError("NTD semantic registry is malformed")
+        for entry in document["entries"]:
+            if not isinstance(entry, dict) or not isinstance(entry.get("assertion"), dict):
+                raise ValueError("NTD semantic registry entry is malformed")
+            assertion = _ntd_assertion_from_document(entry["assertion"])
+            reference = assertion.normative_reference
+            if reference.resolution_state is not NormativeReferenceResolutionState.NOT_ATTEMPTED:
+                raise ValueError("NTD registry must contain an unresolved printed reference")
+            prior = pending.get(reference.reference_candidate_id)
+            if prior is not None and prior.identity_fingerprint != reference.identity_fingerprint:
+                raise ValueError("NTD reference identity conflicts across registries")
+            pending[reference.reference_candidate_id] = reference
+
+    engine = sa.create_engine(database_url)
+    resolver = NormativeKnowledgeRepository(engine)
+    resolver_version = f"practice-guide-exact-edition-resolver-v0.1.0@{as_of_date.isoformat()}"
+    results: list[dict[str, object]] = []
+    try:
+        for reference_id in sorted(pending, key=str):
+            reference = pending[reference_id]
+            state: NormativeReferenceResolutionState
+            document_id: UUID | None = None
+            edition_id: UUID | None = None
+            uncertainty_code: str
+            try:
+                document_id = resolver.resolve_document_exact_designation(
+                    reference.printed_identifier
+                )
+            except KnowledgeError as error:
+                candidate_count = int((error.details or {}).get("candidate_count", 0))
+                state = (
+                    NormativeReferenceResolutionState.NOT_FOUND
+                    if candidate_count == 0
+                    else NormativeReferenceResolutionState.AMBIGUOUS
+                )
+                uncertainty_code = (
+                    "NTD_EXACT_DESIGNATION_NOT_FOUND"
+                    if state is NormativeReferenceResolutionState.NOT_FOUND
+                    else "NTD_EXACT_DESIGNATION_AMBIGUOUS"
+                )
+                document_id = None
+            else:
+                try:
+                    edition_id = resolver.resolve_edition(document_id, as_of_date)
+                except KnowledgeError as error:
+                    candidate_count = int((error.details or {}).get("candidate_count", 0))
+                    state = (
+                        NormativeReferenceResolutionState.NOT_FOUND
+                        if candidate_count == 0
+                        else NormativeReferenceResolutionState.AMBIGUOUS
+                    )
+                    uncertainty_code = (
+                        "NTD_EDITION_NOT_FOUND_FOR_DATE"
+                        if state is NormativeReferenceResolutionState.NOT_FOUND
+                        else "NTD_EDITION_AMBIGUOUS_FOR_DATE"
+                    )
+                    document_id = None
+                else:
+                    state = NormativeReferenceResolutionState.RESOLVED
+                    uncertainty_code = "NTD_EDITION_EXACTLY_RESOLVED"
+            resolved = NormativeReferenceCandidate(
+                reference_candidate_id=reference.reference_candidate_id,
+                printed_identifier=reference.printed_identifier,
+                printed_title=reference.printed_title,
+                resolution_state=state,
+                uncertainty_code=uncertainty_code,
+                normative_document_id=document_id,
+                normative_edition_id=edition_id,
+            )
+            results.append(
+                {
+                    "reference": asdict(resolved),
+                    "identity_fingerprint": resolved.identity_fingerprint,
+                    "resolution_fingerprint": digest_of(
+                        {
+                            "reference": resolved,
+                            "resolver_version": resolver_version,
+                            "as_of_date": as_of_date.isoformat(),
+                        }
+                    ),
+                }
+            )
+    finally:
+        engine.dispose()
+    state_counts = {
+        state.value: 0
+        for state in NormativeReferenceResolutionState
+        if state is not NormativeReferenceResolutionState.NOT_ATTEMPTED
+    }
+    for result in results:
+        reference_value = result.get("reference")
+        if not isinstance(reference_value, dict):
+            raise ValueError("NTD exact-resolution result lost its typed reference")
+        state_counts[str(reference_value["resolution_state"])] += 1
+    _write_json(
+        output,
+        {
+            "contract": "guide-ntd-exact-resolution/0.1.0",
+            "resolver_version": resolver_version,
+            "as_of_date": as_of_date.isoformat(),
+            "reference_count": len(results),
+            "state_counts": state_counts,
+            "results": results,
+            "fingerprint": digest_of(results),
+        },
+    )
 
 
 def prepare_candidate_recovery_command(
@@ -1642,8 +1845,9 @@ def reconcile_bounded_recovery_command(
 
     statuses: dict[tuple[str, int], CandidateTerminalStatus] = {}
     model_dispositions: dict[tuple[str, int], str] = {}
+    verification_lineage: dict[tuple[str, int], dict[str, object]] = {}
 
-    def apply_disposition(result: dict[str, object], *, source: str) -> None:
+    def apply_disposition(result: dict[str, object], *, source: str, prompt_version: str) -> None:
         key = (str(result["candidate_id"]), int(str(result["candidate_version"])))
         if key not in nodes:
             raise ValueError(f"{source} references an unknown CandidateVersion")
@@ -1657,13 +1861,42 @@ def reconcile_bounded_recovery_command(
         if prior is not None and prior is not status:
             raise ValueError("CandidateVersion received conflicting terminal dispositions")
         statuses[key] = status
+        result_digest = str(result.get("response_digest", ""))
+        if not result_digest.startswith("sha256:"):
+            raise ValueError(f"{source} disposition lacks an immutable response digest")
+        lineage: dict[str, object] = {
+            "disposition": disposition.value,
+            "effective_status": status.value,
+            "result_digest": result_digest,
+            "verification_prompt_version": prompt_version,
+            "source": source,
+            "job_id": str(result.get("job_id", "")),
+            "attempt_ref": str(result.get("attempt_ref", "")),
+        }
+        prior_lineage = verification_lineage.get(key)
+        if prior_lineage is not None and (
+            prior_lineage["disposition"] != lineage["disposition"]
+            or prior_lineage["result_digest"] != lineage["result_digest"]
+        ):
+            raise ValueError("CandidateVersion verification lineage conflicts")
+        verification_lineage[key] = lineage
 
     for result in pass_b.get("results", []):
         if isinstance(result, dict) and result.get("kind") == "candidate":
-            apply_disposition(result, source="base Pass B")
+            apply_disposition(
+                result,
+                source="base Pass B",
+                prompt_version=str(pass_b.get("prompt_version", "unknown-pass-b-prompt")),
+            )
     for result in pass_b_salvage.get("results", []):
         if isinstance(result, dict) and result.get("kind") == "candidate":
-            apply_disposition(result, source="candidate-granular salvage")
+            apply_disposition(
+                result,
+                source="candidate-granular salvage",
+                prompt_version=str(
+                    pass_b_salvage.get("prompt_version", "unknown-pass-b-salvage-prompt")
+                ),
+            )
     for evaluation_path in compact_evaluation_paths:
         evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
         if not isinstance(evaluation, dict) or not isinstance(evaluation.get("results"), list):
@@ -1671,7 +1904,13 @@ def reconcile_bounded_recovery_command(
         for result in evaluation["results"]:
             if not isinstance(result, dict):
                 raise ValueError("Compact verification result is malformed")
-            apply_disposition(result, source="compact verification")
+            apply_disposition(
+                result,
+                source="compact verification",
+                prompt_version=str(
+                    evaluation.get("prompt_version", "kg-id-guide-compact-verifier-v0.1.0")
+                ),
+            )
 
     for evaluation_path in region_recovery_evaluation_paths:
         evaluation = json.loads(evaluation_path.read_text(encoding="utf-8"))
@@ -1978,6 +2217,19 @@ def reconcile_bounded_recovery_command(
         for candidate in latest_supported
         if (str(candidate.candidate_id), candidate.version) not in quarantined_keys
     )
+    publication_records: list[dict[str, object]] = []
+    for candidate in publishable:
+        key = (str(candidate.candidate_id), candidate.version)
+        lineage = verification_lineage.get(key)
+        if lineage is None:
+            raise ValueError("Publishable CandidateVersion lacks exact verification lineage")
+        publication_records.append(
+            {
+                "candidate": asdict(candidate),
+                "verification": lineage,
+                "validation_failures": nodes[key].get("validation_failures", ()),
+            }
+        )
     manifest_payload = {
         "coverage_manifest_id": str(coverage_manifest_id),
         "edition_id": str(edition_id),
@@ -2010,6 +2262,11 @@ def reconcile_bounded_recovery_command(
         manifest_fingerprint=digest_of(manifest_payload),
         recorded_at=recorded_at,
     )
+    failed_candidate_documents: list[dict[str, object]] = []
+    for node in nodes.values():
+        failed_candidate = node.get("failed_candidate")
+        if isinstance(failed_candidate, PassAFailedCandidate):
+            failed_candidate_documents.append(asdict(failed_candidate))
     _write_json(
         coverage_output,
         {
@@ -2035,6 +2292,18 @@ def reconcile_bounded_recovery_command(
             "reconciliation_fingerprint": reconciliation_fingerprint,
             "publishable_candidate_count": len(publishable),
             "publishable_candidates": [asdict(candidate) for candidate in publishable],
+            "publication_records": publication_records,
+            "candidate_versions": [asdict(candidate) for candidate in valid_candidates],
+            "failed_candidate_versions": failed_candidate_documents,
+            "verification_records": [
+                {
+                    "candidate_id": key[0],
+                    "candidate_version": key[1],
+                    **lineage,
+                }
+                for key, lineage in sorted(verification_lineage.items())
+            ],
+            "page_receipts": page_receipts,
             "quarantined_candidate_count": len(quarantined_keys),
             "quarantined_candidate_identities": [
                 {"candidate_id": key[0], "candidate_version": key[1]}
@@ -2630,231 +2899,346 @@ def persist_verified_guidance_command(
     *,
     database_url: str,
     platform_identity_path: Path,
-    pass_a_evaluation_path: Path,
-    pass_b_evaluation_path: Path,
+    coverage_manifest_path: Path,
+    gaps_path: Path,
+    publication_manifest_path: Path,
+    ntd_registry_paths: tuple[Path, ...],
+    ntd_resolution_path: Path | None,
     output: Path,
 ) -> None:
     identity = json.loads(platform_identity_path.read_text(encoding="utf-8"))
-    pass_a = json.loads(pass_a_evaluation_path.read_text(encoding="utf-8"))
-    pass_b = json.loads(pass_b_evaluation_path.read_text(encoding="utf-8"))
-    if not all(isinstance(value, dict) for value in (identity, pass_a, pass_b)):
+    coverage_document = json.loads(coverage_manifest_path.read_text(encoding="utf-8"))
+    gaps_document = json.loads(gaps_path.read_text(encoding="utf-8"))
+    publication = json.loads(publication_manifest_path.read_text(encoding="utf-8"))
+    if not all(
+        isinstance(value, dict)
+        for value in (identity, coverage_document, gaps_document, publication)
+    ):
         raise ValueError("Persistence inputs must be JSON objects")
     run_id = UUID(str(identity["ingestion_run_id"]))
     edition_id = UUID(str(identity["practice_guide_edition_id"]))
     source_version_id = UUID(str(identity["source_version_id"]))
     expected_pages = int(identity["page_count"])
-    candidate_results = {
-        str(result["candidate_id"]): result
-        for result in pass_b["results"]
-        if result.get("kind") == "candidate"
-    }
-    page_results = {
-        int(result["page_number"]): result
-        for result in pass_b["results"]
-        if result.get("kind") == "page"
-    }
-    pass_b_error_jobs = {str(item["job_id"]) for item in pass_b.get("integrity_errors", [])}
-    verification_prompt_version = str(pass_b.get("prompt_version", "kg-id-guide-pass-b-v0.1.0"))
-    pass_a_error_pages = {
-        int(str(item["job_id"]).removeprefix("pass-a-page-"))
-        for item in pass_a.get("integrity_errors", [])
-    }
-    duplicate_failures_by_candidate: dict[UUID, list[GuideValidationFailure]] = {}
-    for value in pass_a.get("duplicate_failures", []):
+
+    def parsed_datetime(value: object) -> datetime:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            raise ValueError("Immutable persistence timestamps must include a timezone")
+        return parsed
+
+    coverage = CoverageManifest(
+        coverage_manifest_id=UUID(str(coverage_document["coverage_manifest_id"])),
+        practice_guide_edition_id=UUID(str(coverage_document["practice_guide_edition_id"])),
+        ingestion_run_id=UUID(str(coverage_document["ingestion_run_id"])),
+        version=int(str(coverage_document["version"])),
+        publication_status=str(coverage_document["publication_status"]),
+        expected_page_count=int(str(coverage_document["expected_page_count"])),
+        terminal_page_count=int(str(coverage_document["terminal_page_count"])),
+        page_state_counts={
+            str(key): int(str(value))
+            for key, value in dict(coverage_document["page_state_counts"]).items()
+        },
+        candidate_state_counts={
+            str(key): int(str(value))
+            for key, value in dict(coverage_document["candidate_state_counts"]).items()
+        },
+        guidance_unit_count=int(str(coverage_document["guidance_unit_count"])),
+        gap_count=int(str(coverage_document["gap_count"])),
+        conflict_count=int(str(coverage_document["conflict_count"])),
+        reconciliation_fingerprint=str(coverage_document["reconciliation_fingerprint"]),
+        manifest_fingerprint=str(coverage_document["manifest_fingerprint"]),
+        recorded_at=parsed_datetime(coverage_document["recorded_at"]),
+    )
+    if (
+        coverage.practice_guide_edition_id != edition_id
+        or coverage.ingestion_run_id != run_id
+        or coverage.expected_page_count != expected_pages
+        or str(publication.get("coverage_manifest_id")) != str(coverage.coverage_manifest_id)
+        or str(gaps_document.get("coverage_manifest_id")) != str(coverage.coverage_manifest_id)
+    ):
+        raise ValueError("Persistence manifests do not share one exact platform identity")
+
+    gap_values = gaps_document.get("gaps")
+    if not isinstance(gap_values, list):
+        raise ValueError("GuidanceGap registry is malformed")
+    gaps: list[GuidanceGap] = []
+    for value in gap_values:
         if not isinstance(value, dict):
-            raise ValueError("Duplicate validation result must be an object")
-        failure = _validation_failure_from_document(value)
-        duplicate_failures_by_candidate.setdefault(failure.candidate_id, []).append(failure)
+            raise ValueError("GuidanceGap entry is malformed")
+        parameters = value.get("content_minimal_parameters")
+        if not isinstance(parameters, dict):
+            raise ValueError("GuidanceGap parameters are malformed")
+        gaps.append(
+            GuidanceGap(
+                guidance_gap_id=UUID(str(value["guidance_gap_id"])),
+                coverage_manifest_id=UUID(str(value["coverage_manifest_id"])),
+                source_version_id=UUID(str(value["source_version_id"])),
+                page_number=int(str(value["page_number"])),
+                candidate_id=(
+                    UUID(str(value["candidate_id"]))
+                    if value.get("candidate_id") is not None
+                    else None
+                ),
+                candidate_version=(
+                    int(str(value["candidate_version"]))
+                    if value.get("candidate_version") is not None
+                    else None
+                ),
+                gap_code=str(value["gap_code"]),
+                terminal_state=GuideTerminalState(str(value["terminal_state"])),
+                topic=str(value["topic"]) if value.get("topic") is not None else None,
+                document_or_form_type=(
+                    str(value["document_or_form_type"])
+                    if value.get("document_or_form_type") is not None
+                    else None
+                ),
+                field_or_element=(
+                    str(value["field_or_element"])
+                    if value.get("field_or_element") is not None
+                    else None
+                ),
+                searchable_text=str(value["searchable_text"]),
+                content_minimal_parameters=parameters,
+                gap_fingerprint=str(value["gap_fingerprint"]),
+                recorded_at=parsed_datetime(value["recorded_at"]),
+            )
+        )
+    if len(gaps) != coverage.gap_count:
+        raise ValueError("CoverageManifest gap total does not match its registry")
+
+    candidate_values = publication.get("candidate_versions")
+    verification_values = publication.get("verification_records")
+    page_values = publication.get("page_receipts")
+    publication_values = publication.get("publication_records")
+    failed_values = publication.get("failed_candidate_versions")
+    conflict_values = publication.get("conflicts")
+    if not all(
+        isinstance(value, list)
+        for value in (
+            candidate_values,
+            verification_values,
+            page_values,
+            publication_values,
+            failed_values,
+            conflict_values,
+        )
+    ):
+        raise ValueError("Bounded publication manifest is incomplete")
+    candidates = tuple(
+        _candidate_from_document(value) for value in candidate_values if isinstance(value, dict)
+    )
+    candidate_map = {
+        (str(candidate.candidate_id), candidate.version): candidate for candidate in candidates
+    }
+    if len(candidate_map) != len(candidates):
+        raise ValueError("Publication manifest contains duplicate CandidateVersion identities")
+
     engine = sa.create_engine(database_url)
     repository = PracticeGuideRepository(engine)
     receipts: list[GuidePageTerminalReceipt] = []
-    published = supported = contradicted = insufficient = 0
+    published = 0
     try:
-        pages_by_number = {int(page["page_number"]): page for page in pass_a["pages"]}
-        for page_number in range(1, expected_pages + 1):
-            page_document = pages_by_number.get(page_number)
-            page_result: dict[str, object] | None = None
-            if page_document is None or page_number in pass_a_error_pages:
-                state = GuideTerminalState.MODEL_FAILED
-                candidate_count = verified_count = unresolved_count = 0
-            else:
-                candidates = [
-                    _candidate_from_document(value) for value in page_document["candidates"]
-                ]
-                failures = [
-                    _validation_failure_from_document(value)
-                    for value in page_document["validation_failures"]
-                ]
-                for candidate in candidates:
-                    failures.extend(duplicate_failures_by_candidate.get(candidate.candidate_id, []))
-                failures_by_candidate: dict[UUID, list[GuideValidationFailure]] = {}
-                for failure in failures:
-                    failures_by_candidate.setdefault(failure.candidate_id, []).append(failure)
-                verified_count = unresolved_count = 0
-                for candidate in candidates:
-                    repository.save_candidate(run_id, candidate)
-                    candidate_failures = tuple(
-                        failures_by_candidate.get(candidate.candidate_id, [])
-                    )
-                    repository.save_validation_failures(
-                        candidate_failures,
-                        validator_identity="service.deterministic-guide-validator",
-                    )
-                    result = candidate_results.get(str(candidate.candidate_id))
-                    job_id = (
-                        f"pass-b-page-{page_number:04d}-"
-                        f"{candidate.candidate_id}-v{candidate.version}"
-                    )
-                    if result is None or job_id in pass_b_error_jobs:
-                        unresolved_count += 1
-                        continue
-                    model_disposition = VerificationDisposition(str(result["disposition"]))
-                    effective_disposition = model_disposition
-                    if model_disposition is VerificationDisposition.SUPPORTED and any(
-                        failure.blocking for failure in candidate_failures
-                    ):
-                        effective_disposition = VerificationDisposition.INSUFFICIENT
-                    if effective_disposition is VerificationDisposition.SUPPORTED:
-                        supported += 1
-                        verified_count += 1
-                    elif effective_disposition is VerificationDisposition.CONTRADICTED:
-                        contradicted += 1
-                        unresolved_count += 1
-                    else:
-                        insufficient += 1
-                        unresolved_count += 1
-                    corrected_document = result.get("corrected_candidate")
-                    if corrected_document is not None:
-                        if not isinstance(corrected_document, dict):
-                            raise ValueError("Corrected CandidateVersion must be an object")
-                        corrected_candidate = _candidate_from_document(corrected_document)
-                        repository.save_candidate(run_id, corrected_candidate)
-                        repository.save_validation_failures(
-                            (
-                                GuideValidationFailure(
-                                    GuideFailureCode.CORRECTED_CANDIDATE_REQUIRES_REVALIDATION,
-                                    "kg-id-guide-validator-v0.1.0",
-                                    corrected_candidate.candidate_id,
-                                    corrected_candidate.version,
-                                    "candidate",
-                                    True,
-                                    True,
-                                    {
-                                        "parent_version": candidate.version,
-                                        "required_action": "targeted_pass_b_revalidation",
-                                    },
-                                ),
-                            ),
-                            validator_identity="service.deterministic-guide-validator",
-                        )
-                    verification = GuidanceVerification(
-                        verification_id=uuid7(),
-                        candidate_id=candidate.candidate_id,
-                        candidate_version=candidate.version,
-                        disposition=effective_disposition,
-                        source_version_id=candidate.source_version_id,
-                        locator=candidate.locator,
-                        model_profile_fingerprint=candidate.model_profile_fingerprint,
-                        verification_prompt_version=verification_prompt_version,
-                        result_digest=str(result["response_digest"]),
-                        failures=(
-                            ()
-                            if effective_disposition is VerificationDisposition.SUPPORTED
-                            else candidate_failures
-                        ),
-                        verified_at=datetime.now(UTC),
-                    )
-                    repository.save_verification(verification)
-                    if effective_disposition is VerificationDisposition.SUPPORTED:
-                        repository.publish_verified_candidate(
-                            edition_id=edition_id,
-                            candidate=candidate,
-                            verification=verification,
-                            publication_decision_ref=(
-                                "decision:kg-id-01-owner-authorized-curation"
-                            ),
-                            curator=GuidanceCuratorAuthority(
-                                "human.oleg-owner",
-                                True,
-                                frozenset({"methodological_guidance.publish"}),
-                            ),
-                        )
-                        published += 1
-                candidate_count = len(candidates)
-                page_result = page_results.get(page_number)
-                summary_job = f"pass-b-page-{page_number:04d}-summary"
-                if page_result is None or summary_job in pass_b_error_jobs:
-                    state = GuideTerminalState.MODEL_FAILED
-                elif (
-                    VerificationDisposition(str(page_result["disposition"]))
-                    is not VerificationDisposition.SUPPORTED
+        for failed_value in failed_values:
+            if not isinstance(failed_value, dict):
+                raise ValueError("Failed CandidateVersion publication lineage is malformed")
+            repository.save_failed_candidate(
+                run_id,
+                source_version_id,
+                _failed_candidate_from_document(failed_value),
+            )
+        for candidate in sorted(
+            candidates, key=lambda item: (str(item.candidate_id), item.version)
+        ):
+            repository.save_candidate(run_id, candidate)
+
+        for registry_path in ntd_registry_paths:
+            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            if not isinstance(registry, dict) or not isinstance(registry.get("entries"), list):
+                raise ValueError("NTD semantic registry is malformed")
+            for entry in registry["entries"]:
+                if not isinstance(entry, dict):
+                    raise ValueError("NTD semantic registry entry is malformed")
+                row_value = entry.get("source_row")
+                assertion_value = entry.get("assertion")
+                if not isinstance(row_value, dict) or not isinstance(assertion_value, dict):
+                    raise ValueError("NTD source-row or assertion lineage is missing")
+                row = _source_row_from_document(row_value)
+                assertion = _ntd_assertion_from_document(assertion_value)
+                expected = candidate_map.get(
+                    (str(assertion.candidate_id), assertion.parent_candidate_version + 1)
+                )
+                if (
+                    expected is None
+                    or expected.fingerprint != ntd_assertion_candidate(assertion).fingerprint
                 ):
-                    state = GuideTerminalState.UNRESOLVED
-                elif (
-                    page_document.get("no_methodological_content") is True
-                    and page_result.get("no_methodological_content") is True
-                    and candidate_count == 0
-                    and str(page_result["disposition"]) == VerificationDisposition.SUPPORTED
-                ):
-                    state = GuideTerminalState.NO_METHODOLOGICAL_CONTENT
-                elif verified_count:
-                    state = GuideTerminalState.VERIFIED
-                else:
-                    state = GuideTerminalState.UNRESOLVED
+                    raise ValueError("NTD assertion does not match reconciled CandidateVersion")
+                repository.save_ntd_source_row(run_id, row)
+                repository.save_ntd_relevance_assertion(assertion)
+
+        if ntd_resolution_path is not None:
+            resolutions = json.loads(ntd_resolution_path.read_text(encoding="utf-8"))
+            if not isinstance(resolutions, dict) or not isinstance(
+                resolutions.get("results"), list
+            ):
+                raise ValueError("NTD exact-resolution manifest is malformed")
+            resolver_version = str(resolutions["resolver_version"])
+            for result in resolutions["results"]:
+                if not isinstance(result, dict) or not isinstance(result.get("reference"), dict):
+                    raise ValueError("NTD exact-resolution result is malformed")
+                repository.save_normative_reference_resolution(
+                    _normative_reference_from_document(result["reference"]),
+                    resolver_version=resolver_version,
+                )
+
+        verifications: dict[tuple[str, int], GuidanceVerification] = {}
+        for value in verification_values:
+            if not isinstance(value, dict):
+                raise ValueError("Verification lineage entry is malformed")
+            verification_key = (
+                str(value["candidate_id"]),
+                int(str(value["candidate_version"])),
+            )
+            verified_candidate = candidate_map.get(verification_key)
+            if verified_candidate is None:
+                raise ValueError("Verification lineage references an unknown CandidateVersion")
+            effective = VerificationDisposition(str(value["effective_status"]))
+            saved_verification = GuidanceVerification(
+                verification_id=deterministic_uuid(
+                    f"kg-id-verification:{verification_key[0]}:v{verification_key[1]}:"
+                    f"{value['result_digest']}"
+                ),
+                candidate_id=verified_candidate.candidate_id,
+                candidate_version=verified_candidate.version,
+                disposition=effective,
+                source_version_id=verified_candidate.source_version_id,
+                locator=verified_candidate.locator,
+                model_profile_fingerprint=verified_candidate.model_profile_fingerprint,
+                verification_prompt_version=str(value["verification_prompt_version"]),
+                result_digest=str(value["result_digest"]),
+                failures=(),
+                verified_at=coverage.recorded_at,
+            )
+            repository.save_verification(saved_verification)
+            verifications[verification_key] = saved_verification
+
+        curator = GuidanceCuratorAuthority(
+            "human.oleg-owner",
+            True,
+            frozenset(
+                {
+                    "methodological_guidance.publish",
+                    "methodological_guidance.conflict.record",
+                }
+            ),
+        )
+        recorded_conflicts = 0
+        seen_conflicts: set[tuple[str, int, str, int]] = set()
+        for value in conflict_values:
+            if not isinstance(value, dict):
+                raise ValueError("GuidanceConflict lineage entry is malformed")
+            conflict_key = (
+                str(value["candidate_id"]),
+                int(str(value["candidate_version"])),
+                str(value["conflicting_candidate_id"]),
+                int(str(value["conflicting_candidate_version"])),
+            )
+            if conflict_key in seen_conflicts:
+                raise ValueError("GuidanceConflict identity is duplicated")
+            seen_conflicts.add(conflict_key)
+            conflict_candidate = candidate_map.get((conflict_key[0], conflict_key[1]))
+            conflicting_candidate = candidate_map.get((conflict_key[2], conflict_key[3]))
+            if conflict_candidate is None or conflicting_candidate is None:
+                raise ValueError("GuidanceConflict references an unknown CandidateVersion")
+            repository.record_candidate_guidance_conflict(
+                candidate=conflict_candidate,
+                conflicting_candidate=conflicting_candidate,
+                conflict_type=str(value["conflict_type"]),
+                curator=curator,
+            )
+            recorded_conflicts += 1
+
+        for value in publication_values:
+            if not isinstance(value, dict) or not isinstance(value.get("candidate"), dict):
+                raise ValueError("Publication record is malformed")
+            publication_candidate = _candidate_from_document(value["candidate"])
+            publication_key = (
+                str(publication_candidate.candidate_id),
+                publication_candidate.version,
+            )
+            canonical = candidate_map.get(publication_key)
+            publication_verification = verifications.get(publication_key)
+            if canonical is None or canonical.fingerprint != publication_candidate.fingerprint:
+                raise ValueError("Publication record diverges from reconciled CandidateVersion")
+            if (
+                publication_verification is None
+                or publication_verification.disposition is not VerificationDisposition.SUPPORTED
+            ):
+                raise ValueError("Publication record lacks a supported verification")
+            repository.publish_verified_candidate(
+                edition_id=edition_id,
+                candidate=publication_candidate,
+                verification=publication_verification,
+                publication_decision_ref="decision:kg-id-01-owner-authorized-partial-coverage",
+                curator=curator,
+            )
+            published += 1
+
+        if published != coverage.guidance_unit_count:
+            raise ValueError("Published guidance count diverges from CoverageManifest")
+
+        for page_value in page_values:
+            if not isinstance(page_value, dict):
+                raise ValueError("Terminal page receipt is malformed")
+            page_number = int(str(page_value["page_number"]))
             receipt_payload = {
-                "run_id": str(run_id),
-                "source_version_id": str(source_version_id),
-                "page": page_number,
-                "state": state,
-                "candidate_count": candidate_count,
-                "verified_count": verified_count,
-                "unresolved_count": unresolved_count,
+                "coverage_manifest_id": str(coverage.coverage_manifest_id),
+                **page_value,
+            }
+            receipt_payload = {
+                **receipt_payload,
+                "reconciliation_fingerprint": coverage.reconciliation_fingerprint,
             }
             receipt = GuidePageTerminalReceipt(
                 ingestion_run_id=run_id,
                 source_version_id=source_version_id,
                 page_number=page_number,
-                state=state,
-                pass_a_attempt_id=(
-                    deterministic_uuid(f"runner-attempt:{page_document['attempt_ref']}")
-                    if page_document is not None
-                    else None
-                ),
-                pass_b_attempt_id=(
-                    deterministic_uuid(f"runner-attempt:{page_result['attempt_ref']}")
-                    if page_result is not None
-                    else None
-                ),
-                candidate_count=candidate_count,
-                verified_count=verified_count,
-                unresolved_count=unresolved_count,
+                state=GuideTerminalState(str(page_value["state"])),
+                pass_a_attempt_id=None,
+                pass_b_attempt_id=None,
+                candidate_count=int(str(page_value["candidate_count"])),
+                verified_count=int(str(page_value["verified_count"])),
+                unresolved_count=int(str(page_value["unresolved_count"])),
                 receipt_digest=digest_of(receipt_payload),
-                recorded_at=datetime.now(UTC),
+                recorded_at=coverage.recorded_at,
             )
             repository.save_page_receipt(receipt)
             receipts.append(receipt)
+        if len(receipts) != expected_pages:
+            raise ValueError("Persistence requires all 425 terminal page receipts")
         reconciliation = reconcile_page_receipts(run_id, expected_pages, tuple(receipts))
         repository.save_reconciliation(
             reconciliation,
             actor_identity_id="human.oleg-owner-independent-verifier",
         )
+        repository.save_coverage_manifest(coverage, tuple(gaps))
         lexical_version_id = repository.rebuild_lexical_projection(edition_id)
         _write_json(
             output,
             {
                 "expected_pages": expected_pages,
                 "terminal_pages": len(receipts),
-                "terminal_state_counts": {
-                    state.value: sum(receipt.state is state for receipt in receipts)
-                    for state in GuideTerminalState
-                },
-                "supported_candidates": supported,
-                "contradicted_candidates": contradicted,
-                "insufficient_candidates": insufficient,
+                "terminal_state_counts": coverage.page_state_counts,
+                "candidate_state_counts": coverage.candidate_state_counts,
                 "published_guidance_units": published,
+                "guidance_conflicts": recorded_conflicts,
+                "guidance_gaps": len(gaps),
+                "coverage_manifest_id": str(coverage.coverage_manifest_id),
+                "coverage_manifest_version": coverage.version,
                 "lexical_version_id": str(lexical_version_id),
-                "reconciliation_fingerprint": reconciliation.fingerprint,
+                "page_reconciliation_fingerprint": reconciliation.fingerprint,
+                "bounded_reconciliation_fingerprint": coverage.reconciliation_fingerprint,
                 "page_reconciliation_complete": reconciliation.complete,
+                "publication_status": coverage.publication_status,
                 "production_qualified": False,
             },
         )
@@ -3231,9 +3615,17 @@ def main() -> None:
     persist_parser = subparsers.add_parser("persist-verified-guidance")
     persist_parser.add_argument("--database-url", required=True)
     persist_parser.add_argument("--platform-identity", required=True, type=Path)
-    persist_parser.add_argument("--pass-a-evaluation", required=True, type=Path)
-    persist_parser.add_argument("--pass-b-evaluation", required=True, type=Path)
+    persist_parser.add_argument("--coverage-manifest", required=True, type=Path)
+    persist_parser.add_argument("--gaps", required=True, type=Path)
+    persist_parser.add_argument("--publication-manifest", required=True, type=Path)
+    persist_parser.add_argument("--ntd-registries", type=Path, nargs="*", default=())
+    persist_parser.add_argument("--ntd-resolution", type=Path)
     persist_parser.add_argument("--output", required=True, type=Path)
+    resolve_ntd_parser = subparsers.add_parser("resolve-ntd-references")
+    resolve_ntd_parser.add_argument("--database-url", required=True)
+    resolve_ntd_parser.add_argument("--registries", required=True, type=Path, nargs="+")
+    resolve_ntd_parser.add_argument("--as-of-date", required=True, type=date.fromisoformat)
+    resolve_ntd_parser.add_argument("--output", required=True, type=Path)
     memory_parser = subparsers.add_parser("prepare-memory-acceptance")
     memory_parser.add_argument("--database-url", required=True)
     memory_parser.add_argument("--lexical-version-id", required=True, type=UUID)
@@ -3409,8 +3801,18 @@ def main() -> None:
         persist_verified_guidance_command(
             database_url=args.database_url,
             platform_identity_path=args.platform_identity,
-            pass_a_evaluation_path=args.pass_a_evaluation,
-            pass_b_evaluation_path=args.pass_b_evaluation,
+            coverage_manifest_path=args.coverage_manifest,
+            gaps_path=args.gaps,
+            publication_manifest_path=args.publication_manifest,
+            ntd_registry_paths=tuple(args.ntd_registries),
+            ntd_resolution_path=args.ntd_resolution,
+            output=args.output,
+        )
+    elif args.command == "resolve-ntd-references":
+        resolve_ntd_references_command(
+            database_url=args.database_url,
+            registry_paths=tuple(args.registries),
+            as_of_date=args.as_of_date,
             output=args.output,
         )
     elif args.command == "prepare-memory-acceptance":

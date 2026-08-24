@@ -221,7 +221,6 @@ class GuideNtdRelevanceAssertion:
             value.strip()
             for value in (
                 self.printed_identifier,
-                self.work_or_rd_sections,
                 self.id_note,
                 self.relevance_summary,
             )
