@@ -1,0 +1,27 @@
+{
+  "contract": "system-integrity-superseding-decision/0.1.0",
+  "integrity_decision_id": "f836d943-6dc3-5a17-8dc5-15876ce3bb52",
+  "version": 4,
+  "supersedes_version": 3,
+  "decision_type": "requalification",
+  "status": "pass",
+  "prior_series_id": "MEMORY-INTEGRITY-FIX-01-R6",
+  "canonical_commit": "7f279c9980c6d5eeb75559e78e68ddb9144ee615",
+  "dump_fingerprint": "sha256:0d62ef892d60df0ccf056bf72734dead0afc22900f93be1da82c0d00ab0bbddb",
+  "reconciliation_fingerprint": "sha256:431d6ee4aaf30e79eef1f2aac9ba062171b27e711e0211bb2d4f0a167a926c2c",
+  "defect_identities": [
+    "PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED",
+    "PLATFORM_MEMORY_FINGERPRINT_SCOPE_INCOMPLETE"
+  ],
+  "reason": "Both canonical memory defects are resolved on the terminal code and Contract Pack tree; three fresh consecutive clean-room cycles produced identical semantic fingerprints.",
+  "owner_decision_ref": "MEMORY-INTEGRITY-FIX-01; owner:Oleg Shcherbakov; 2026-08-26",
+  "product_ready": false,
+  "recorded_at": "2026-08-25T21:06:00Z",
+  "decision_fingerprint": "sha256:9ccc8a37709553827d8f4a1615eb47ae8141aa172b6ec3b581afc9569c439066",
+  "effective_system_integrity_status": "PASS / BOUNDED PLATFORM MEMORY INTEGRITY",
+  "fresh_three_cycle_series": true,
+  "historical_series_preserved": true,
+  "trial_ready": false,
+  "oks_ready": false,
+  "product_ready_status": false
+}

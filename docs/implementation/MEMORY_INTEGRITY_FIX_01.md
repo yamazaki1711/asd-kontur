@@ -10,7 +10,7 @@ SYSTEM-INTEGRITY-CYCLE-01 without deleting its three physical-reproducibility
 cycles. The immutable decision is
 `docs/verification/MEMORY_INTEGRITY_SUPERSEDING_DECISION_01.json`. Final
 requalification is recorded by
-`docs/verification/MEMORY_INTEGRITY_FINAL_QUALIFICATION_DECISION_01.json`.
+`docs/verification/MEMORY_INTEGRITY_TERMINAL_DECISION_01.json`.
 
 ## Corrected canonical model
 
@@ -64,7 +64,7 @@ and 7/7 adversarial; task 12 remains an honest knowledge gap and four other
 systemic responses failed exact identity/evidence validation. Thresholds and
 expected answers were not weakened, so historical KG-ID remains PARTIAL.
 
-The final official series is `MEMORY-INTEGRITY-FIX-01-R5`:
+The final official series is `MEMORY-INTEGRITY-FIX-01-R6`:
 
 - C1, C2 and C3 are three consecutive clean-room PASS;
 - active semantic duplicate groups: 0;
@@ -76,15 +76,16 @@ The final official series is `MEMORY-INTEGRITY-FIX-01-R5`:
 - ContextPack binding fingerprint:
   `sha256:595a3ea9716bf772d05d7273b5c9ba1ae196bd036513dcce2779a0b8f3161a07`;
 - each cycle fingerprint:
-  `sha256:d31da3fced3fb0b559f85afd51f2750090e2420c0448d071ce0f4201dd194939`.
+  `sha256:e79eb678116ac0fbddc1a1ce765bb401085ed70bf342d267c6a221a20eab4886`.
 
 Additive migration `0020_knowledge_status` makes Platform Knowledge status
 report the canonical 138 open conflicts and 53 quarantined candidate identities.
 The UI/API derives MEMORY_DATA_DEFECT exclusively from the latest immutable
 qualification: it is now false, while NTD and RuleVersion blockers remain.
 
-Counter resets before the final series: four (R1 environment-owned import,
-R2 whitespace, R4 order-dependent qualification assertion, plus the required
-restart after final schema/status correction). All failure receipts remain
-outside Git. ProductApplicationReady stays PARTIAL; TrialReady, OKSReady and
-ProductReady remain false.
+Restarts before the final series: five. Three were failure resets (R1
+environment-owned import, R2 whitespace, R4 order-dependent qualification
+assertion); R3 and R5 were successful but were superseded after required
+schema/Contract Pack truth-surface changes. All receipts remain outside Git.
+ProductApplicationReady stays PARTIAL; TrialReady, OKSReady and ProductReady
+remain false.

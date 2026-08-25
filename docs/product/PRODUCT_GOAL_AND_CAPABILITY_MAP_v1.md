@@ -5,7 +5,7 @@
 - Machine denominator: [Contract Pack v2.0](../../contracts/v2.0/README.md)
 - Current readiness ledger: [Contract Pack v2.2](../../contracts/v2.2/README.md)
 - Historical rebaseline: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
-- Current decision: [Product Current State v1.1](PRODUCT_CURRENT_STATE_DECISION_v1.1.json)
+- Current decision: [Product Current State v1.2](PRODUCT_CURRENT_STATE_DECISION_v1.2.json)
 
 ## Goal
 

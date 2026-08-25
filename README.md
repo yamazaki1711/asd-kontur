@@ -141,7 +141,7 @@ readiness semantics are defined by
 - `MEMORY-INTEGRITY-FIX-01` — **PASS (bounded platform-memory integrity)
   2026-08-26**: semantic identity исправлена без потери evidence, active release
   содержит 7 111 уникальных versions, fingerprint scope fail-closed, а серия
-  `MEMORY-INTEGRITY-FIX-01-R5` дала три последовательных clean-room PASS.
+  `MEMORY-INTEGRITY-FIX-01-R6` дала три последовательных clean-room PASS.
   Fresh acceptance остаётся 20/25 systemic и 7/7 adversarial, поэтому KG-ID
   `READY_FOR_INTEGRITY_CYCLE` означает только
   участие модуля в harness, не production readiness.
