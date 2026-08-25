@@ -16,6 +16,7 @@ from asd_kontur.integrity.models import (
 )
 from asd_kontur.integrity.qualification import execute_four_mode_fixture
 from asd_kontur.integrity.qwen import SMOKE_CONTRACT, smoke_context, validate_response
+from asd_kontur.integrity.runner import _import_production_packages
 
 
 def test_integrity_contract_pack_fingerprint_and_fixtures() -> None:
@@ -76,6 +77,27 @@ def test_four_mode_qualification_fixture_is_deterministic() -> None:
     assert first["automatic_rule_promotion"] is False
     assert set(first["knowledge_gap_codes"]) == {"official_ntd_subset_empty"}
     assert len(set(first["mode_output_fingerprints"].values())) == 4
+
+
+def test_production_import_qualification_supplies_explicit_runtime_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    required = (
+        "ASD_DATABASE_URL",
+        "ASD_LIFECYCLE_DATABASE_URL",
+        "ASD_WORKER_DATABASE_URL",
+        "ASD_DESTRUCTION_DATABASE_URL",
+        "ASD_OBJECT_STORE_ROOT",
+        "ASD_ARCHIVE_STORE_ROOT",
+        "ASD_AUTH_AUDIT_PEPPER",
+    )
+    for name in required:
+        monkeypatch.delenv(name, raising=False)
+
+    imported = _import_production_packages("postgresql+psycopg://localhost/postgres")
+
+    assert "asd_kontur.web_app.runtime" in imported
+    assert all(name not in __import__("os").environ for name in required)
 
 
 def test_qwen_smoke_validator_accepts_exact_structure_and_rejects_repair() -> None:

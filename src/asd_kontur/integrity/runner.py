@@ -14,6 +14,7 @@ import pkgutil
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -408,6 +409,46 @@ def _scan_tracked_files(repository_root: Path) -> dict[str, int]:
     }
 
 
+def _import_production_packages(database_url: str) -> list[str]:
+    """Import every production module under an explicit non-authoritative runtime profile.
+
+    The ASGI entrypoint intentionally validates its environment when imported.  An
+    integrity cycle must therefore provide a complete disposable profile rather than
+    silently skipping environment-owned production modules or depending on the
+    operator's shell.
+    """
+
+    with tempfile.TemporaryDirectory(prefix="asd-integrity-import-") as directory:
+        root = Path(directory)
+        (root / "objects").mkdir()
+        (root / "archive").mkdir()
+        qualified_environment = {
+            "ASD_DATABASE_URL": database_url,
+            "ASD_LIFECYCLE_DATABASE_URL": database_url,
+            "ASD_WORKER_DATABASE_URL": database_url,
+            "ASD_DESTRUCTION_DATABASE_URL": database_url,
+            "ASD_OBJECT_STORE_ROOT": str(root / "objects"),
+            "ASD_ARCHIVE_STORE_ROOT": str(root / "archive"),
+            "ASD_AUTH_AUDIT_PEPPER": "integrity-import-profile-not-a-runtime-secret",
+            "ASD_SESSION_PROFILE": "development_loopback",
+            "ASD_BIND_HOST": "127.0.0.1",
+        }
+        previous = {name: os.environ.get(name) for name in qualified_environment}
+        os.environ.update(qualified_environment)
+        try:
+            imported: list[str] = []
+            for item in pkgutil.walk_packages(asd_kontur.__path__, asd_kontur.__name__ + "."):
+                __import__(item.name)
+                imported.append(item.name)
+            return imported
+        finally:
+            for name, value in previous.items():
+                if value is None:
+                    os.environ.pop(name, None)
+                else:
+                    os.environ[name] = value
+
+
 class CycleRunner:
     def __init__(self, args: argparse.Namespace) -> None:
         self.args = args
@@ -532,10 +573,9 @@ class CycleRunner:
             self._command("mypy", ["uv", "run", "mypy", "src"]),
             self._command("git-diff-check", ["git", "diff", "--check"]),
         ]
-        imported = []
-        for item in pkgutil.walk_packages(asd_kontur.__path__, asd_kontur.__name__ + "."):
-            __import__(item.name)
-            imported.append(item.name)
+        imported = _import_production_packages(
+            self.cluster_url.render_as_string(hide_password=False)
+        )
         contracts = _contract_inventory(self.root)
         migrations = _migration_inventory(self.root)
         module_manifest = load_module_readiness_manifest(self.args.module_manifest)
