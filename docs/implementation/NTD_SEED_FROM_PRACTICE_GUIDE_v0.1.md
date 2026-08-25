@@ -1,8 +1,8 @@
 # NTD-SEED-01 — bounded official NTD platform memory v0.1
 
 **Status:** PARTIAL — official endpoint access blocked, all seed identities terminal
-**Owner:** Олег Щербаков  
-**Date:** 2026-08-25  
+**Owner:** Олег Щербаков
+**Date:** 2026-08-25
 **Base:** canonical `main` `a807a783c5b7c84270cd6caf22c70f00783fe7c1`
 
 ## Scope and invariants

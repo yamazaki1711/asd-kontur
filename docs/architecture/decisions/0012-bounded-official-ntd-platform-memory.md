@@ -99,4 +99,3 @@ identity сохраняется как `external_reference_gap` и не расш
 - [ADR-0005](0005-knowledge-platform-and-workspace-isolation.md)
 - [ADR-0009](0009-platform-ntd-and-workspace-customer-regulation.md)
 - [ADR-0011](0011-permanent-model-independent-id-practice-intelligence.md)
-
