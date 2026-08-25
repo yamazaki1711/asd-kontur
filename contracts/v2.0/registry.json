@@ -1,0 +1,39 @@
+{
+  "registry_version": "2.0.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_product_goal_rebaseline",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-26T00:00:00+12:00",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"],
+    "notes": "Adds the complete product capability denominator and fail-closed readiness decisions without changing historical receipts."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.0:schema:product-readiness",
+      "path": "schemas/product-readiness.schema.json",
+      "digest": "sha256:5973b24020ad7deb0d93c8fb05b5c7dd2d759609e2c16b79364787dc62e0beae"
+    }
+  ],
+  "contract_keys": [
+    "product.goal", "product.capability", "product.capability-dependency",
+    "product.capability-readiness-decision", "product.mode-readiness-decision",
+    "product.trial-readiness-decision", "product.product-readiness-decision",
+    "product.interaction-surface", "application.durable-job",
+    "qualification.scale-profile", "decision.superseding-lineage"
+  ],
+  "fixtures": {
+    "manifest": "fixtures/manifest.json",
+    "valid": ["fixtures/valid/product-capability-registry.json"],
+    "invalid": [
+      {"path": "fixtures/invalid/missing-mandatory-capability.json", "reason": "Complete denominator is mandatory."},
+      {"path": "fixtures/invalid/capability-ready-without-surface.json", "reason": "CAPABILITY_READY requires a production-shaped surface and E2E evidence."},
+      {"path": "fixtures/invalid/mode-ready-without-e2e.json", "reason": "MODE_READY requires user E2E and output evidence."},
+      {"path": "fixtures/invalid/trial-ready-with-foundations.json", "reason": "TRIAL_READY cannot be inferred from foundations."},
+      {"path": "fixtures/invalid/product-ready-with-missing-mode.json", "reason": "PRODUCT_READY requires four MODE_READY decisions."},
+      {"path": "fixtures/invalid/pass-without-denominator.json", "reason": "PASS requires exact denominator and evidence."},
+      {"path": "fixtures/invalid/real-oks-without-trial-decision.json", "reason": "A real OKS requires TrialReadinessDecision."}
+    ]
+  }
+}

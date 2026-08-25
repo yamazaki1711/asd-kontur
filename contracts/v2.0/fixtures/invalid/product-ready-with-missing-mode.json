@@ -1,0 +1,1 @@
+{"mutation":"product_ready","expected_error":"PRODUCT_READY requires four MODE_READY decisions"}
