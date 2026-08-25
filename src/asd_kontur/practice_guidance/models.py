@@ -152,6 +152,9 @@ class IDPracticeIntelligenceUnit:
     uncertainties: tuple[str, ...]
     evidence: tuple[PracticeIntelligenceEvidence, ...]
     construction_profile_version: str
+    semantic_unit: str | None = None
+    semantic_dimension: str | None = None
+    modality: str = "recommendation"
 
     def __post_init__(self) -> None:
         if self.version < 1 or not self.title.strip() or not self.instruction.strip():
@@ -160,6 +163,8 @@ class IDPracticeIntelligenceUnit:
             raise ValueError("Practice-intelligence units require exact source evidence")
         if not self.construction_profile_version:
             raise ValueError("Practice-intelligence units require a pinned construction profile")
+        if not self.modality.strip():
+            raise ValueError("Practice-intelligence units require an explicit modality")
         if any(item.guidance_unit_version < 1 for item in self.evidence):
             raise ValueError("Practice-intelligence source lineage is incomplete")
 
@@ -281,11 +286,22 @@ class IDPracticeContextPack:
     conflicts: tuple[dict[str, Any], ...]
     uncertainties: tuple[dict[str, Any], ...]
     assembled_at: datetime
+    practice_intelligence_release_id: UUID | None = None
+    practice_intelligence_release_version: int | None = None
     authority_layer: GuideAuthorityLayer = GuideAuthorityLayer.METHODOLOGICAL_PRACTICE
 
     def __post_init__(self) -> None:
         if self.policy_version < 1:
             raise ValueError("IDPracticeContextPack requires an exact policy version")
+        if (self.practice_intelligence_release_id is None) != (
+            self.practice_intelligence_release_version is None
+        ):
+            raise ValueError("IDPracticeContextPack release binding must be complete")
+        if (
+            self.practice_intelligence_release_version is not None
+            and self.practice_intelligence_release_version < 1
+        ):
+            raise ValueError("IDPracticeContextPack requires a positive release version")
         if self.authority_layer is not GuideAuthorityLayer.METHODOLOGICAL_PRACTICE:
             raise ValueError("IDPracticeContextPack cannot change the practice authority layer")
         if self.status is PracticeContextStatus.OK and (

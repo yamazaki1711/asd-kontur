@@ -190,73 +190,641 @@ def schema_fingerprint(engine: Engine) -> str:
     return canonical_digest(schema_inventory(engine))
 
 
-PERMANENT_TABLES = (
-    "source_artifacts",
-    "source_versions",
-    "practice_guides",
-    "practice_guide_editions",
-    "practice_guide_edition_activation_decisions",
-    "practice_guidance_units",
-    "practice_guidance_gaps",
-    "practice_guidance_conflicts",
-    "practice_intelligence_units",
-    "practice_playbooks",
-    "practice_context_assembly_policies",
-    "practice_memory_releases",
-    "practice_guide_normative_references",
-    "ntd_acquisition_receipts",
-    "ntd_gaps",
-    "normative_documents",
-    "normative_editions",
-    "normative_provision_versions",
-    "rule_versions",
-    "rule_version_states",
-    "rule_set_versions",
+PLATFORM_MEMORY_SCHEMA_VERSION = "platform-memory-fingerprint-v2.0.0"
+
+# These are canonical source/history relations.  A relation being empty is valid; a
+# relation being absent is a schema defect and must never be normalized to an empty set.
+PERMANENT_RELATIONS = (
+    ("platform", "source_artifacts"),
+    ("platform", "source_versions"),
+    ("platform", "source_locators"),
+    ("platform", "practice_guides"),
+    ("platform", "practice_guide_editions"),
+    ("platform", "practice_guide_edition_states"),
+    ("platform", "practice_guide_edition_activation_decisions"),
+    ("platform", "practice_guidance_units"),
+    ("platform", "practice_guidance_evidence"),
+    ("platform", "practice_guidance_coverage_manifests"),
+    ("platform", "practice_guidance_gaps"),
+    ("platform", "practice_guidance_conflicts"),
+    ("platform", "practice_guidance_uncertainties"),
+    ("platform", "practice_intelligence_construction_manifests"),
+    # Pre-0018 immutable construction rows remain historical provenance.
+    ("platform", "practice_intelligence_units"),
+    ("platform", "practice_intelligence_sources"),
+    ("platform", "practice_playbooks"),
+    ("platform", "practice_playbook_members"),
+    # 0018 normalized semantic identity/version/evidence layer.
+    ("platform", "practice_intelligence_identities"),
+    ("platform", "practice_intelligence_versions"),
+    ("platform", "practice_intelligence_evidence_links"),
+    ("platform", "practice_playbook_identities"),
+    ("platform", "practice_playbook_versions_v2"),
+    ("platform", "practice_playbook_version_members"),
+    ("platform", "context_assembly_policies"),
+    ("platform", "practice_intelligence_releases"),
+    ("platform", "practice_intelligence_release_memberships"),
+    ("platform", "practice_playbook_release_memberships"),
+    ("platform", "practice_intelligence_release_activation_decisions"),
+    ("platform", "practice_memory_backup_manifests"),
+    ("platform", "practice_guide_normative_references"),
+    ("platform", "practice_guide_ntd_resolution_decisions"),
+    ("platform", "practice_ntd_alignments"),
+    ("platform", "normative_documents"),
+    ("platform", "normative_editions"),
+    ("platform", "normative_artifacts"),
+    ("platform", "normative_edition_relationships"),
+    ("platform", "normative_provision_versions"),
+    ("platform", "normative_activation_decisions"),
+    ("platform", "ntd_gaps"),
+    ("platform", "ntd_conflicts"),
+    ("platform", "rule_versions"),
+    ("platform", "rule_version_states"),
+    ("platform", "rule_set_versions"),
+    ("platform", "rule_set_memberships"),
+    ("platform", "system_integrity_decisions"),
+    ("projection", "practice_intelligence_projection_manifests"),
+)
+
+REBUILDABLE_PROJECTION_RELATIONS = (
+    ("projection", "practice_guidance_lexical_versions"),
+    ("projection", "practice_guidance_lexical_entries"),
+    ("projection", "practice_intelligence_lexical_versions"),
+    ("projection", "practice_intelligence_lexical_entries"),
+    ("projection", "ntd_lexical_versions"),
+    ("projection", "ntd_lexical_entries"),
+)
+
+# Backward-compatible name used by lifecycle checks.  It now contains only actual
+# platform relation names and is never used as an optional inventory.
+PERMANENT_TABLES = tuple(
+    relation for schema, relation in PERMANENT_RELATIONS if schema == "platform"
 )
 
 
-def platform_memory_inventory(engine: Engine) -> dict[str, Any]:
+def memory_relation_inventory(
+    engine: Engine,
+    relations: Iterable[tuple[str, str]],
+) -> dict[str, Any]:
     inspector = sa.inspect(engine)
-    existing = set(inspector.get_table_names(schema="platform"))
-    inventory: dict[str, Any] = {}
+    relation_list = tuple(relations)
+    existing_by_schema = {
+        schema: set(inspector.get_table_names(schema=schema))
+        for schema in {schema for schema, _ in relation_list}
+    }
+    missing = [
+        f"{schema}.{table}"
+        for schema, table in relation_list
+        if table not in existing_by_schema[schema]
+    ]
+    if missing:
+        raise IntegrityFailure(
+            "PLATFORM_MEMORY_SCHEMA_INCOMPLETE",
+            "a required canonical memory relation is absent",
+            evidence={"missing_relations": missing},
+        )
+
+    inventory: dict[str, Any] = {"schema_version": PLATFORM_MEMORY_SCHEMA_VERSION}
     with engine.connect() as connection:
-        for table in PERMANENT_TABLES:
-            if table not in existing:
-                inventory[table] = {"present": False, "rows": []}
-                continue
-            columns = [item["name"] for item in inspector.get_columns(table, schema="platform")]
-            selected = [column for column in columns if not column.endswith("_at")]
+        for schema, table in relation_list:
+            columns = [str(item["name"]) for item in inspector.get_columns(table, schema=schema)]
+            if not columns:
+                raise IntegrityFailure(
+                    "PLATFORM_MEMORY_COLUMNS_UNAVAILABLE",
+                    "canonical memory columns cannot be inspected",
+                    evidence={"relation": f"{schema}.{table}"},
+                )
+            selected = sorted(column for column in columns if not column.endswith("_at"))
+            if not selected:
+                raise IntegrityFailure(
+                    "PLATFORM_MEMORY_SEMANTIC_COLUMNS_EMPTY",
+                    "canonical memory relation has no semantic columns",
+                    evidence={"relation": f"{schema}.{table}"},
+                )
             quoted = ",".join(f'"{column}"' for column in selected)
             rows = [
                 _plain(dict(row._mapping))
-                for row in connection.execute(sa.text(f'SELECT {quoted} FROM platform."{table}"'))
+                for row in connection.execute(sa.text(f'SELECT {quoted} FROM "{schema}"."{table}"'))
             ]
-            rows.sort(key=lambda item: canonical_digest(item))
-            inventory[table] = {"present": True, "rows": rows}
+            rows.sort(key=canonical_digest)
+            inventory[f"{schema}.{table}"] = {
+                "columns": selected,
+                "rows": rows,
+            }
+    return inventory
+
+
+def platform_memory_inventory(engine: Engine) -> dict[str, Any]:
+    """Return fail-closed all-history canonical and projection lineage."""
+
+    inventory = memory_relation_inventory(engine, PERMANENT_RELATIONS)
+    inspector = sa.inspect(engine)
+    projection_bindings: list[dict[str, Any]] = []
+    for schema, table in REBUILDABLE_PROJECTION_RELATIONS:
+        if table not in set(inspector.get_table_names(schema=schema)):
+            raise IntegrityFailure(
+                "PLATFORM_MEMORY_SCHEMA_INCOMPLETE",
+                "a required rebuildable projection relation is absent",
+                evidence={"missing_relations": [f"{schema}.{table}"]},
+            )
+        columns = sorted(
+            str(item["name"]) for item in inspector.get_columns(table, schema=schema)
+        )
+        projection_bindings.append(
+            {
+                "relation": f"{schema}.{table}",
+                "columns": columns,
+            }
+        )
+    inventory["rebuildable_projection_schema_binding"] = {
+        "binding_version": "rebuildable-projection-schema-binding-v1.0.0",
+        "relations": projection_bindings,
+    }
     return inventory
 
 
 def platform_memory_fingerprint(engine: Engine) -> str:
+    """All-history platform-memory fingerprint (legacy public API)."""
+
     return canonical_digest(platform_memory_inventory(engine))
 
 
-def platform_memory_counts(engine: Engine) -> dict[str, int]:
-    inspector = sa.inspect(engine)
-    existing = set(inspector.get_table_names(schema="platform"))
+def _active_release_binding(engine: Engine) -> dict[str, Any]:
     with engine.connect() as connection:
-        return {
-            table: int(connection.scalar(sa.text(f'SELECT count(*) FROM platform."{table}"')))
-            for table in PERMANENT_TABLES
-            if table in existing
+        rows = list(
+            connection.execute(
+                sa.text(
+                    """
+                    WITH selected AS (
+                      SELECT decision.*,
+                             row_number() OVER (
+                               PARTITION BY practice_guide_id ORDER BY version DESC
+                             ) AS selected_rank
+                      FROM platform.practice_intelligence_release_activation_decisions decision
+                    )
+                    SELECT selected.practice_guide_id,
+                           selected.release_activation_decision_id,
+                           selected.version AS release_activation_version,
+                           selected.selected_release_id,
+                           selected.selected_release_version,
+                           selected.decision_fingerprint AS release_activation_fingerprint,
+                           release.construction_manifest_id,
+                           release.practice_guide_edition_id,
+                           release.source_version_id,
+                           release.context_assembly_policy_id,
+                           release.context_assembly_policy_version,
+                           release.canonical_semantic_fingerprint,
+                           release.publication_status,
+                           policy.policy_fingerprint,
+                           policy.state AS policy_state,
+                           construction.construction_fingerprint,
+                           construction.construction_profile_version,
+                           edition_activation.selected_edition_id,
+                           edition_activation.decision_fingerprint
+                             AS edition_activation_fingerprint,
+                           lexical.lexical_version_id,
+                           lexical.projection_contract_version,
+                           lexical.source_fingerprint AS projection_source_fingerprint,
+                           lexical.state AS projection_state
+                    FROM selected
+                    JOIN platform.practice_intelligence_releases release
+                      ON release.release_id=selected.selected_release_id
+                     AND release.version=selected.selected_release_version
+                    JOIN platform.context_assembly_policies policy
+                      ON policy.policy_id=release.context_assembly_policy_id
+                     AND policy.version=release.context_assembly_policy_version
+                    JOIN platform.practice_intelligence_construction_manifests construction
+                      ON construction.construction_manifest_id=release.construction_manifest_id
+                    JOIN LATERAL (
+                      SELECT activation.selected_edition_id,activation.decision_fingerprint
+                      FROM platform.practice_guide_edition_activation_decisions activation
+                      WHERE activation.practice_guide_id=selected.practice_guide_id
+                      ORDER BY activation.version DESC LIMIT 1
+                    ) edition_activation ON true
+                    JOIN LATERAL (
+                      SELECT candidate.lexical_version_id,
+                             candidate.projection_contract_version,
+                             candidate.source_fingerprint,candidate.state
+                      FROM projection.practice_intelligence_lexical_versions candidate
+                      WHERE candidate.construction_manifest_id=release.construction_manifest_id
+                      ORDER BY candidate.built_at DESC NULLS LAST,
+                               candidate.lexical_version_id DESC
+                      LIMIT 1
+                    ) lexical ON true
+                    WHERE selected.selected_rank=1
+                    ORDER BY selected.practice_guide_id
+                    """
+                )
+            )
+        )
+        guide_count = int(
+            connection.scalar(sa.text("SELECT count(*) FROM platform.practice_guides")) or 0
+        )
+        if len(rows) != guide_count or guide_count == 0:
+            raise IntegrityFailure(
+                "ACTIVE_RELEASE_SELECTION_INCOMPLETE",
+                "every PracticeGuide must have exactly one selected release",
+                evidence={"practice_guide_count": guide_count, "binding_count": len(rows)},
+            )
+        bindings = [_plain(dict(row._mapping)) for row in rows]
+        for binding in bindings:
+            if binding["policy_state"] != "active":
+                raise IntegrityFailure(
+                    "ACTIVE_CONTEXT_POLICY_INVALID",
+                    "the selected release is not bound to an active policy",
+                    evidence={"binding": binding},
+                )
+            if binding["projection_state"] != "ready":
+                raise IntegrityFailure(
+                    "ACTIVE_PROJECTION_BINDING_INVALID",
+                    "the selected release has no ready retrieval projection",
+                    evidence={"binding": binding},
+                )
+            if binding["selected_edition_id"] != binding["practice_guide_edition_id"]:
+                raise IntegrityFailure(
+                    "ACTIVE_EDITION_RELEASE_MISMATCH",
+                    "the selected edition and selected release disagree",
+                    evidence={"binding": binding},
+                )
+            intelligence_members = int(
+                connection.scalar(
+                    sa.text(
+                        """
+                        SELECT count(*)
+                        FROM platform.practice_intelligence_release_memberships
+                        WHERE release_id=:release_id AND release_version=:release_version
+                        """
+                    ),
+                    {
+                        "release_id": binding["selected_release_id"],
+                        "release_version": binding["selected_release_version"],
+                    },
+                )
+                or 0
+            )
+            if intelligence_members == 0:
+                raise IntegrityFailure(
+                    "ACTIVE_RELEASE_MEMBERSHIP_EMPTY",
+                    "the selected release has no explicit intelligence membership",
+                    evidence={"binding": binding},
+                )
+            binding["intelligence_membership_count"] = intelligence_members
+            binding["playbook_membership_count"] = int(
+                connection.scalar(
+                    sa.text(
+                        """
+                        SELECT count(*)
+                        FROM platform.practice_playbook_release_memberships
+                        WHERE release_id=:release_id AND release_version=:release_version
+                        """
+                    ),
+                    {
+                        "release_id": binding["selected_release_id"],
+                        "release_version": binding["selected_release_version"],
+                    },
+                )
+                or 0
+            )
+    return {"schema_version": PLATFORM_MEMORY_SCHEMA_VERSION, "bindings": bindings}
+
+
+def active_release_semantic_inventory(engine: Engine) -> dict[str, Any]:
+    binding = _active_release_binding(engine)
+    memberships: list[dict[str, Any]] = []
+    evidence: list[dict[str, Any]] = []
+    playbooks: list[dict[str, Any]] = []
+    with engine.connect() as connection:
+        for selected in binding["bindings"]:
+            parameters = {
+                "release_id": selected["selected_release_id"],
+                "release_version": selected["selected_release_version"],
+            }
+            memberships.extend(
+                _plain(dict(row._mapping))
+                for row in connection.execute(
+                    sa.text(
+                        """
+                        SELECT membership.release_id,membership.release_version,
+                               membership.member_sequence,
+                               membership.intelligence_identity_id,
+                               membership.intelligence_version,
+                               membership.membership_fingerprint,
+                               identity.normalized_semantic_digest,
+                               version.practice_guide_edition_id,
+                               version.canonical_payload,version.semantic_fingerprint
+                        FROM platform.practice_intelligence_release_memberships membership
+                        JOIN platform.practice_intelligence_identities identity USING (
+                          intelligence_identity_id
+                        )
+                        JOIN platform.practice_intelligence_versions version
+                          ON version.intelligence_identity_id=membership.intelligence_identity_id
+                         AND version.version=membership.intelligence_version
+                        WHERE membership.release_id=:release_id
+                          AND membership.release_version=:release_version
+                        """
+                    ),
+                    parameters,
+                )
+            )
+            evidence.extend(
+                _plain(dict(row._mapping))
+                for row in connection.execute(
+                    sa.text(
+                        """
+                        SELECT link.evidence_link_id,link.intelligence_identity_id,
+                               link.intelligence_version,link.source_guidance_unit_id,
+                               link.source_guidance_unit_version,link.source_version_id,
+                               link.source_locator_id,link.guidance_candidate_id,
+                               link.candidate_version,link.evidence_digest,
+                               link.extraction_verification_receipt
+                        FROM platform.practice_intelligence_evidence_links link
+                        JOIN platform.practice_intelligence_release_memberships membership
+                          ON membership.intelligence_identity_id=link.intelligence_identity_id
+                         AND membership.intelligence_version=link.intelligence_version
+                        WHERE membership.release_id=:release_id
+                          AND membership.release_version=:release_version
+                        """
+                    ),
+                    parameters,
+                )
+            )
+            playbooks.extend(
+                _plain(dict(row._mapping))
+                for row in connection.execute(
+                    sa.text(
+                        """
+                        SELECT membership.release_id,membership.release_version,
+                               membership.member_sequence,membership.playbook_identity_id,
+                               membership.playbook_version,membership.membership_fingerprint,
+                               identity.normalized_semantic_digest,
+                               version.canonical_payload,version.semantic_fingerprint
+                        FROM platform.practice_playbook_release_memberships membership
+                        JOIN platform.practice_playbook_identities identity USING (
+                          playbook_identity_id
+                        )
+                        JOIN platform.practice_playbook_versions_v2 version
+                          ON version.playbook_identity_id=membership.playbook_identity_id
+                         AND version.version=membership.playbook_version
+                        WHERE membership.release_id=:release_id
+                          AND membership.release_version=:release_version
+                        """
+                    ),
+                    parameters,
+                )
+            )
+    for rows in (memberships, evidence, playbooks):
+        rows.sort(key=canonical_digest)
+    return {
+        "schema_version": PLATFORM_MEMORY_SCHEMA_VERSION,
+        "release_binding": binding,
+        "intelligence_versions": memberships,
+        "evidence_links": evidence,
+        "playbook_versions": playbooks,
+    }
+
+
+def active_release_semantic_fingerprint(engine: Engine) -> str:
+    return canonical_digest(active_release_semantic_inventory(engine))
+
+
+def active_context_binding_inventory(engine: Engine) -> dict[str, Any]:
+    return _active_release_binding(engine)
+
+
+def active_context_binding_fingerprint(engine: Engine) -> str:
+    return canonical_digest(active_context_binding_inventory(engine))
+
+
+def active_semantic_duplicate_inventory(engine: Engine) -> list[dict[str, Any]]:
+    """Return semantic digests represented more than once in the selected release."""
+
+    binding = _active_release_binding(engine)
+    duplicates: list[dict[str, Any]] = []
+    with engine.connect() as connection:
+        for selected in binding["bindings"]:
+            rows = connection.execute(
+                sa.text(
+                    """
+                    SELECT identity.normalized_semantic_digest,count(*) AS member_count,
+                           array_agg(membership.intelligence_identity_id::text
+                                     ORDER BY membership.intelligence_identity_id::text)
+                             AS intelligence_identity_ids
+                    FROM platform.practice_intelligence_release_memberships membership
+                    JOIN platform.practice_intelligence_identities identity USING (
+                      intelligence_identity_id
+                    )
+                    WHERE membership.release_id=:release_id
+                      AND membership.release_version=:release_version
+                    GROUP BY identity.normalized_semantic_digest
+                    HAVING count(*)>1
+                    ORDER BY identity.normalized_semantic_digest
+                    """
+                ),
+                {
+                    "release_id": selected["selected_release_id"],
+                    "release_version": selected["selected_release_version"],
+                },
+            )
+            duplicates.extend(_plain(dict(row._mapping)) for row in rows)
+    return duplicates
+
+
+def proven_duplicate_evidence_inventory(engine: Engine) -> list[dict[str, Any]]:
+    """Locate the eight owner-reconciled duplicate occurrence groups in active memory."""
+
+    expected = {
+        ("document_dependency_guidance", (240, 241)),
+        ("allowed_practice_variant", (240, 241)),
+        ("practice_rationale", (308, 322)),
+        ("visual_completion_example", (308, 322)),
+        ("visual_completion_example", (309,)),
+        ("attention_point", (309,)),
+        ("practice_rationale", (357, 396)),
+        ("visual_completion_example", (357, 396)),
+    }
+    binding = _active_release_binding(engine)
+    if len(binding["bindings"]) != 1:
+        raise IntegrityFailure(
+            "DUPLICATE_REGRESSION_SCOPE_INVALID",
+            "the bounded regression requires one selected Practice Guide release",
+        )
+    selected = binding["bindings"][0]
+    with engine.connect() as connection:
+        rows = [
+            _plain(dict(row._mapping))
+            for row in connection.execute(
+                sa.text(
+                    """
+                    SELECT identity.intelligence_identity_id,identity.typed_kind,
+                           count(*) AS evidence_link_count,
+                           array_agg(DISTINCT
+                             regexp_replace(locator.locator_key,
+                               '^page:([0-9]+):.*$','\\1')::integer
+                             ORDER BY regexp_replace(locator.locator_key,
+                               '^page:([0-9]+):.*$','\\1')::integer) AS pages
+                    FROM platform.practice_intelligence_release_memberships membership
+                    JOIN platform.practice_intelligence_identities identity USING (
+                      intelligence_identity_id
+                    )
+                    JOIN platform.practice_intelligence_evidence_links evidence
+                      ON evidence.intelligence_identity_id=membership.intelligence_identity_id
+                     AND evidence.intelligence_version=membership.intelligence_version
+                    JOIN platform.source_locators locator
+                      ON locator.source_locator_id=evidence.source_locator_id
+                    WHERE membership.release_id=:release
+                      AND membership.release_version=:release_version
+                    GROUP BY identity.intelligence_identity_id,identity.typed_kind
+                    HAVING count(*)>=2
+                    ORDER BY identity.typed_kind,identity.intelligence_identity_id
+                    """
+                ),
+                {
+                    "release": selected["selected_release_id"],
+                    "release_version": selected["selected_release_version"],
+                },
+            )
+        ]
+    matched = [
+        row
+        for row in rows
+        if (str(row["typed_kind"]), tuple(int(page) for page in row["pages"])) in expected
+    ]
+    matched_keys = {
+        (str(row["typed_kind"]), tuple(int(page) for page in row["pages"])) for row in matched
+    }
+    if matched_keys != expected or len(matched) != 8:
+        raise IntegrityFailure(
+            "SEMANTIC_DUPLICATE_REGRESSION_MISMATCH",
+            "the eight merged semantic groups lost evidence lineage or changed scope",
+            evidence={"expected": sorted(expected), "matched": matched},
+        )
+    return matched
+
+
+def platform_memory_counts(engine: Engine) -> dict[str, int]:
+    binding = _active_release_binding(engine)
+    if len(binding["bindings"]) != 1:
+        raise IntegrityFailure(
+            "MULTIPLE_PRACTICE_GUIDE_COUNTING_SCOPE_UNSUPPORTED",
+            "counter contract currently requires exactly one bounded PracticeGuide",
+        )
+    selected = binding["bindings"][0]
+    parameters = {
+        "release_id": selected["selected_release_id"],
+        "release_version": selected["selected_release_version"],
+        "construction_manifest_id": selected["construction_manifest_id"],
+    }
+    with engine.connect() as connection:
+
+        def scalar(query: str) -> int:
+            return int(connection.scalar(sa.text(query), parameters) or 0)
+
+        active_intelligence = scalar(
+            "SELECT count(*) FROM platform.practice_intelligence_release_memberships "
+            "WHERE release_id=:release_id AND release_version=:release_version"
+        )
+        historical_intelligence = scalar(
+            "SELECT count(*) FROM platform.practice_intelligence_units "
+            "WHERE construction_manifest_id<>:construction_manifest_id"
+        )
+        active_playbooks = scalar(
+            "SELECT count(*) FROM platform.practice_playbook_release_memberships "
+            "WHERE release_id=:release_id AND release_version=:release_version"
+        )
+        historical_playbooks = scalar(
+            "SELECT count(*) FROM platform.practice_playbooks "
+            "WHERE construction_manifest_id<>:construction_manifest_id"
+        )
+        active_gaps = scalar(
+            """
+            SELECT count(*) FROM platform.practice_guidance_gaps gap
+            JOIN platform.practice_intelligence_construction_manifests construction
+              ON construction.coverage_manifest_id=gap.coverage_manifest_id
+            WHERE construction.construction_manifest_id=:construction_manifest_id
+            """
+        )
+        logical_gaps = scalar(
+            """
+            SELECT count(*) FROM (
+              SELECT DISTINCT source_version_id,page_number,guidance_candidate_id,
+                              candidate_version,gap_code,terminal_state,topic,
+                              document_or_form_type,field_or_element
+              FROM platform.practice_guidance_gaps
+            ) logical_gap
+            """
+        )
+        counts = {
+            "source_guidance_identity_count": scalar(
+                "SELECT count(DISTINCT guidance_unit_id) FROM platform.practice_guidance_units"
+            ),
+            "practice_intelligence_identity_count": scalar(
+                "SELECT count(*) FROM platform.practice_intelligence_identities"
+            ),
+            "practice_intelligence_version_row_count": (
+                active_intelligence + historical_intelligence
+            ),
+            "active_release_intelligence_version_count": active_intelligence,
+            "historical_intelligence_version_count": historical_intelligence,
+            "playbook_identity_count": scalar(
+                "SELECT count(*) FROM platform.practice_playbook_identities"
+            ),
+            "playbook_version_row_count": active_playbooks + historical_playbooks,
+            "active_release_playbook_count": active_playbooks,
+            "historical_playbook_count": historical_playbooks,
+            "logical_gap_identity_count": logical_gaps,
+            "active_gap_identity_count": active_gaps,
+            "closed_gap_identity_count": logical_gaps - active_gaps,
+            "gap_snapshot_row_count": scalar(
+                "SELECT count(*) FROM platform.practice_guidance_gaps"
+            ),
+            "conflict_identity_count": scalar(
+                "SELECT count(DISTINCT guidance_conflict_id) "
+                "FROM platform.practice_guidance_conflicts"
+            ),
+            "quarantined_candidate_identity_count": scalar(
+                """
+                SELECT count(DISTINCT (guidance_candidate_id,candidate_version))
+                FROM platform.practice_guidance_conflicts
+                WHERE guidance_unit_id IS NULL AND state='open'
+                """
+            ),
+            "rule_version_count": scalar("SELECT count(*) FROM platform.rule_versions"),
         }
+    if counts["closed_gap_identity_count"] < 0:
+        raise IntegrityFailure(
+            "GAP_COUNT_INVARIANT_FAILED",
+            "active logical gaps exceed all logical gap identities",
+            evidence={"counts": counts},
+        )
+    if (
+        counts["practice_intelligence_version_row_count"]
+        != counts["active_release_intelligence_version_count"]
+        + counts["historical_intelligence_version_count"]
+        or counts["playbook_version_row_count"]
+        != counts["active_release_playbook_count"] + counts["historical_playbook_count"]
+        or counts["logical_gap_identity_count"]
+        != counts["active_gap_identity_count"] + counts["closed_gap_identity_count"]
+    ):
+        raise IntegrityFailure(
+            "PLATFORM_MEMORY_COUNT_INVARIANT_FAILED",
+            "explicit platform-memory denominators do not reconcile",
+            evidence={"counts": counts},
+        )
+    return counts
 
 
 def assert_no_workspace_ownership(engine: Engine) -> None:
     inspector = sa.inspect(engine)
+    existing = set(inspector.get_table_names(schema="platform"))
+    missing = sorted(set(PERMANENT_TABLES) - existing)
+    if missing:
+        raise IntegrityFailure(
+            "PLATFORM_MEMORY_SCHEMA_INCOMPLETE",
+            "workspace-ownership validation cannot omit canonical relations",
+            evidence={"missing_relations": [f"platform.{table}" for table in missing]},
+        )
     violations: list[str] = []
     for table in PERMANENT_TABLES:
-        if table not in set(inspector.get_table_names(schema="platform")):
-            continue
         columns = {item["name"] for item in inspector.get_columns(table, schema="platform")}
         if "workspace_id" in columns or "organization_id" in columns:
             violations.append(table)

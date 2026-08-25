@@ -1,0 +1,17 @@
+{
+  "contract_version": "2.0.0",
+  "platform_semantic_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "counts": {
+    "practice_guidance_units": 2410,
+    "practice_intelligence_units": 13994,
+    "practice_playbooks": 3244,
+    "practice_gaps": 858
+  },
+  "rule_registry": {
+    "rule_version_count": 0,
+    "infrastructure_ready": true,
+    "operational_rule_coverage": true
+  },
+  "system_integrity_status": "PASS",
+  "product_ready": false
+}

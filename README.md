@@ -110,10 +110,18 @@ gap; customer overlay не может ослабить нормативный м
   production egress/terms/budgets/qualification и реальных provider adapters.
 - `KG-ID-01 permanent ID Practice Intelligence` — **PARTIAL 2026-08-25**:
   425/425 страниц reconciled, 2 410 source-guidance опубликованы как
-  `permanent_platform_core`, сформированы 7 113 typed units и 1 644 playbooks;
+  `permanent_platform_core`; historical release с 7 113 typed rows сохранён,
+  а superseding semantic release MEMORY-INTEGRITY-FIX-01 содержит вычисленные
+  7 105 identities/versions и 1 644 playbooks с отдельными evidence links;
   restore и projection rebuild воспроизводимы. Fresh-session acceptance —
   24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
   остаётся `false`.
+- `SYSTEM-INTEGRITY-CYCLE-01` — **PARTIAL / DATA_DEFECT (superseded semantic
+  decision) 2026-08-26**: прежние C1–C3 остаются evidence физической
+  воспроизводимости, но их semantic PASS отозван immutable decision после
+  обнаружения восьми duplicate groups и неполного fingerprint scope. Новая
+  трёхцикловая серия обязательна; `READY_FOR_INTEGRITY_CYCLE` означает только
+  участие модуля в harness, не production readiness.
 - `NTD-SEED-01 bounded official NTD memory` — **PARTIAL 2026-08-25**:
   exact guide geometry reconciled 37 mentions to 25 stable identities; all 25
   official-only attempts terminated as `official_access_blocked`. Migration
@@ -124,6 +132,9 @@ gap; customer overlay не может ослабить нормативный м
   v1.8 и migration `0017` связывают одну ProjectDefinition/WorkRequirementMatrix
   с platform Practice/NTD/Rule memory и четырьмя mode views; 350 local tests,
   включая PostgreSQL integration, прошли. ProductReady остаётся `false`.
+- `Deterministic Rule Registry` — инфраструктурно готов
+  (`infrastructure_ready=true`), но при `RuleVersion=0` содержательное покрытие
+  отсутствует (`operational_rule_coverage=false`).
 - `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;

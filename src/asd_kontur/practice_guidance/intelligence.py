@@ -9,10 +9,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
-from asd_kontur.domain import deterministic_uuid
+from asd_kontur.domain import canonical_semantic_key, deterministic_uuid
 from asd_kontur.harness.models import digest_of
 
 from .models import (
@@ -24,7 +25,8 @@ from .models import (
     PracticePlaybook,
 )
 
-CONSTRUCTION_PROFILE_VERSION = "id-practice-intelligence-deterministic-v0.2.0"
+CONSTRUCTION_PROFILE_VERSION = "id-practice-intelligence-semantic-v0.3.0"
+SEMANTIC_IDENTITY_SCHEMA_VERSION = "practice-intelligence-semantic-identity-v0.1.0"
 
 PRIMARY_KIND = {
     GuidanceKind.ID_WORKFLOW_GUIDANCE: PracticeIntelligenceKind.ID_WORKFLOW_STEP,
@@ -121,6 +123,131 @@ def _contains_any(text: str, markers: Sequence[str]) -> bool:
     return any(marker in folded for marker in markers)
 
 
+def _canonical_terms(values: Sequence[str]) -> tuple[str, ...]:
+    """Canonicalize set-like semantic dimensions independently of processing order."""
+
+    return tuple(sorted({canonical_semantic_key(value) for value in values if value.strip()}))
+
+
+def semantic_identity_payload(
+    unit: IDPracticeIntelligenceUnit,
+    *,
+    practice_guide_id: UUID,
+    authority_layer: str = "methodological_practice",
+) -> dict[str, Any]:
+    """Return the evidence-free typed assertion identity.
+
+    Evidence occurrences, edition/build/release identities, timestamps and source UUIDs are
+    deliberately excluded. Dimensions that can change meaning remain explicit so equal-looking
+    prose with different applicability, modality, units or exclusions does not merge.
+    """
+
+    normative = sorted(
+        (dict(value) for value in unit.normative_references),
+        key=digest_of,
+    )
+    return {
+        "schema_version": SEMANTIC_IDENTITY_SCHEMA_VERSION,
+        "practice_guide_id": str(practice_guide_id),
+        "typed_kind": unit.kind.value,
+        "subject": canonical_semantic_key(unit.title),
+        "predicate": unit.kind.value,
+        "object": canonical_semantic_key(unit.instruction),
+        "unit": canonical_semantic_key(unit.semantic_unit) if unit.semantic_unit else None,
+        "dimension": (
+            canonical_semantic_key(unit.semantic_dimension) if unit.semantic_dimension else None
+        ),
+        "modality": canonical_semantic_key(unit.modality),
+        "applicability": _canonical_terms(unit.applicability_conditions),
+        "qualifiers": {
+            "work_types": _canonical_terms(unit.work_types),
+            "document_types": _canonical_terms(unit.document_types),
+            "form_types": _canonical_terms(unit.form_types),
+            "workflow_stages": _canonical_terms(unit.workflow_stages),
+            "field_elements": _canonical_terms(unit.field_elements),
+            "required_inputs": _canonical_terms(unit.required_inputs),
+            "evidence_requirements": _canonical_terms(unit.evidence_requirements),
+            "allowed_variants": _canonical_terms(unit.allowed_variants),
+            "failure_patterns": _canonical_terms(unit.failure_patterns),
+            "checklist_items": _canonical_terms(unit.checklist_items),
+            "dependency_refs": _canonical_terms(unit.dependency_refs),
+            "normative_references": normative,
+            "rationale": (
+                canonical_semantic_key(unit.rationale) if unit.rationale is not None else None
+            ),
+        },
+        "exclusions": _canonical_terms(unit.uncertainties),
+        "authority_layer": authority_layer,
+    }
+
+
+def semantic_identity_digest(
+    unit: IDPracticeIntelligenceUnit,
+    *,
+    practice_guide_id: UUID,
+    authority_layer: str = "methodological_practice",
+) -> str:
+    return digest_of(
+        semantic_identity_payload(
+            unit,
+            practice_guide_id=practice_guide_id,
+            authority_layer=authority_layer,
+        )
+    )
+
+
+def deduplicate_semantic_units(
+    units: Sequence[IDPracticeIntelligenceUnit], *, practice_guide_id: UUID
+) -> tuple[IDPracticeIntelligenceUnit, ...]:
+    grouped: dict[str, list[IDPracticeIntelligenceUnit]] = defaultdict(list)
+    for unit in units:
+        grouped[semantic_identity_digest(unit, practice_guide_id=practice_guide_id)].append(unit)
+
+    result: list[IDPracticeIntelligenceUnit] = []
+    for semantic_digest, occurrences in sorted(grouped.items()):
+        first = occurrences[0]
+        evidence_by_key: dict[
+            tuple[UUID, int, UUID, int, tuple[float, float, float, float]],
+            PracticeIntelligenceEvidence,
+        ] = {}
+        for occurrence in occurrences:
+            for evidence in occurrence.evidence:
+                key = (
+                    evidence.guidance_unit_id,
+                    evidence.guidance_unit_version,
+                    evidence.source_version_id,
+                    evidence.locator.page_number,
+                    evidence.locator.region,
+                )
+                prior = evidence_by_key.get(key)
+                if prior is not None and prior.fragment_digest != evidence.fragment_digest:
+                    raise ValueError("Semantic identity has conflicting evidence at one locator")
+                evidence_by_key[key] = evidence
+        merged_evidence = tuple(
+            value
+            for _, value in sorted(
+                evidence_by_key.items(),
+                key=lambda item: (
+                    item[0][3],
+                    item[0][4],
+                    str(item[0][0]),
+                    item[0][1],
+                ),
+            )
+        )
+        result.append(
+            replace(
+                first,
+                intelligence_unit_id=deterministic_uuid(
+                    f"{SEMANTIC_IDENTITY_SCHEMA_VERSION}:{practice_guide_id}:{semantic_digest}"
+                ),
+                evidence=merged_evidence,
+                construction_profile_version=CONSTRUCTION_PROFILE_VERSION,
+            )
+        )
+    return tuple(result)
+
+
 def _unit(
     *,
     row: Mapping[str, Any],
@@ -204,6 +331,7 @@ def _unit(
 def construct_practice_intelligence(
     *,
     guidance_rows: Iterable[Mapping[str, Any]],
+    practice_guide_id: UUID,
     edition_id: UUID,
     coverage_manifest_id: UUID,
     publication_status: str,
@@ -285,6 +413,7 @@ def construct_practice_intelligence(
                 )
             )
 
+    units = list(deduplicate_semantic_units(units, practice_guide_id=practice_guide_id))
     units.sort(
         key=lambda value: (value.evidence[0].locator.page_number, str(value.intelligence_unit_id))
     )
@@ -319,10 +448,14 @@ def construct_practice_intelligence(
                 )
             )
         )
+        playbook_semantic_digest = digest_of(
+            {"group": group_key, "workflow": workflow_key, "members": member_refs}
+        )
         playbooks.append(
             PracticePlaybook(
                 playbook_id=deterministic_uuid(
-                    f"kg-id-playbook-v2:{coverage_manifest_id}:{group_key}:{workflow_key}"
+                    "practice-playbook-semantic-v0.1.0:"
+                    f"{practice_guide_id}:{playbook_semantic_digest}"
                 ),
                 version=1,
                 practice_guide_edition_id=edition_id,
@@ -401,6 +534,9 @@ def intelligence_unit_document(unit: IDPracticeIntelligenceUnit) -> dict[str, An
             for item in unit.evidence
         ],
         "construction_profile_version": unit.construction_profile_version,
+        "semantic_unit": unit.semantic_unit,
+        "semantic_dimension": unit.semantic_dimension,
+        "modality": unit.modality,
         "integrity_digest": unit.integrity_digest,
     }
 
@@ -431,6 +567,15 @@ def intelligence_unit_from_document(value: Mapping[str, Any]) -> IDPracticeIntel
         uncertainties=_strings(value.get("uncertainties")),
         evidence=_evidence(value.get("evidence")),
         construction_profile_version=str(value["construction_profile_version"]),
+        semantic_unit=(
+            str(value["semantic_unit"]) if value.get("semantic_unit") is not None else None
+        ),
+        semantic_dimension=(
+            str(value["semantic_dimension"])
+            if value.get("semantic_dimension") is not None
+            else None
+        ),
+        modality=str(value.get("modality", "recommendation")),
     )
 
 

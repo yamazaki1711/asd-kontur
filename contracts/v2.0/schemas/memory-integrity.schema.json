@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.0:schema:memory-integrity",
+  "title": "ASD-KONTUR permanent platform-memory integrity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "all_history_platform_memory_fingerprint",
+    "active_release_semantic_fingerprint",
+    "active_context_pack_binding_fingerprint",
+    "counts",
+    "rule_registry",
+    "system_integrity_status",
+    "product_ready"
+  ],
+  "properties": {
+    "contract_version": {"const": "2.0.0"},
+    "all_history_platform_memory_fingerprint": {"$ref": "#/$defs/digest"},
+    "active_release_semantic_fingerprint": {"$ref": "#/$defs/digest"},
+    "active_context_pack_binding_fingerprint": {"$ref": "#/$defs/digest"},
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_guidance_identity_count",
+        "practice_intelligence_identity_count",
+        "practice_intelligence_version_row_count",
+        "active_release_intelligence_version_count",
+        "historical_intelligence_version_count",
+        "playbook_identity_count",
+        "playbook_version_row_count",
+        "active_release_playbook_count",
+        "historical_playbook_count",
+        "logical_gap_identity_count",
+        "active_gap_identity_count",
+        "closed_gap_identity_count",
+        "gap_snapshot_row_count",
+        "conflict_identity_count",
+        "quarantined_candidate_identity_count"
+      ],
+      "properties": {
+        "source_guidance_identity_count": {"$ref": "#/$defs/count"},
+        "practice_intelligence_identity_count": {"$ref": "#/$defs/count"},
+        "practice_intelligence_version_row_count": {"$ref": "#/$defs/count"},
+        "active_release_intelligence_version_count": {"$ref": "#/$defs/count"},
+        "historical_intelligence_version_count": {"$ref": "#/$defs/count"},
+        "playbook_identity_count": {"$ref": "#/$defs/count"},
+        "playbook_version_row_count": {"$ref": "#/$defs/count"},
+        "active_release_playbook_count": {"$ref": "#/$defs/count"},
+        "historical_playbook_count": {"$ref": "#/$defs/count"},
+        "logical_gap_identity_count": {"$ref": "#/$defs/count"},
+        "active_gap_identity_count": {"$ref": "#/$defs/count"},
+        "closed_gap_identity_count": {"$ref": "#/$defs/count"},
+        "gap_snapshot_row_count": {"$ref": "#/$defs/count"},
+        "conflict_identity_count": {"$ref": "#/$defs/count"},
+        "quarantined_candidate_identity_count": {"$ref": "#/$defs/count"}
+      }
+    },
+    "rule_registry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule_version_count", "infrastructure_ready", "operational_rule_coverage"],
+      "properties": {
+        "rule_version_count": {"$ref": "#/$defs/count"},
+        "infrastructure_ready": {"const": true},
+        "operational_rule_coverage": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"rule_version_count": {"const": 0}}},
+          "then": {"properties": {"operational_rule_coverage": {"const": false}}}
+        }
+      ]
+    },
+    "module_participation_status": {"const": "READY_FOR_INTEGRITY_CYCLE"},
+    "system_integrity_status": {"enum": ["PARTIAL / DATA_DEFECT", "PASS"]},
+    "product_ready": {"const": false}
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0},
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}

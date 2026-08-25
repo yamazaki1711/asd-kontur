@@ -1,0 +1,31 @@
+{
+  "contract_version": "2.0.0",
+  "all_history_platform_memory_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "active_release_semantic_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "active_context_pack_binding_fingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "counts": {
+    "source_guidance_identity_count": 2410,
+    "practice_intelligence_identity_count": 7105,
+    "practice_intelligence_version_row_count": 21099,
+    "active_release_intelligence_version_count": 7105,
+    "historical_intelligence_version_count": 13994,
+    "playbook_identity_count": 1644,
+    "playbook_version_row_count": 4888,
+    "active_release_playbook_count": 1644,
+    "historical_playbook_count": 3244,
+    "logical_gap_identity_count": 547,
+    "active_gap_identity_count": 395,
+    "closed_gap_identity_count": 152,
+    "gap_snapshot_row_count": 858,
+    "conflict_identity_count": 138,
+    "quarantined_candidate_identity_count": 53
+  },
+  "rule_registry": {
+    "rule_version_count": 0,
+    "infrastructure_ready": true,
+    "operational_rule_coverage": false
+  },
+  "module_participation_status": "READY_FOR_INTEGRITY_CYCLE",
+  "system_integrity_status": "PARTIAL / DATA_DEFECT",
+  "product_ready": false
+}

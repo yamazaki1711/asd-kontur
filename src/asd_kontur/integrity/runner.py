@@ -18,12 +18,16 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 import sqlalchemy as sa
 from sqlalchemy.engine import make_url
 
 import asd_kontur
+from asd_kontur.knowledge.gateway import GatewayContext, GatewayStatus
+from asd_kontur.knowledge.postgres import PostgresKnowledgeQuery
 from asd_kontur.ntd.durability import NtdProjectionBuilder
+from asd_kontur.practice_guidance.intelligence_postgres import persist_manifest
 from asd_kontur.practice_guidance.postgres import PracticeGuideRepository
 
 from .models import (
@@ -34,6 +38,9 @@ from .models import (
     write_immutable_json,
 )
 from .postgres import (
+    active_context_binding_fingerprint,
+    active_release_semantic_fingerprint,
+    active_semantic_duplicate_inventory,
     assert_expected_counts,
     assert_no_partial_state,
     assert_no_workspace_ownership,
@@ -43,6 +50,7 @@ from .postgres import (
     migrate,
     platform_memory_counts,
     platform_memory_fingerprint,
+    proven_duplicate_evidence_inventory,
     restore_custom_dump,
     schema_fingerprint,
     schema_inventory,
@@ -50,7 +58,7 @@ from .postgres import (
 from .qualification import execute_four_mode_fixture
 from .qwen import run_bf16_smoke
 
-EXPECTED_HEAD = "0017_unified_harness"
+EXPECTED_HEAD = "0018_memory_integrity"
 EXPECTED_MODEL_DIGEST = "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766"
 HEAD_TABLES = (
     "project_definition_versions",
@@ -65,31 +73,31 @@ HEAD_TABLES = (
     "construction_harness_backup_manifests",
 )
 EXPECTED_PLATFORM_COUNTS = {
-    "source_artifacts": 1,
-    "source_versions": 1,
-    "practice_guides": 1,
-    "practice_guide_editions": 1,
-    "practice_guide_edition_activation_decisions": 1,
-    "practice_guidance_units": 2410,
-    "practice_guidance_gaps": 858,
-    "practice_guidance_conflicts": 138,
-    "practice_intelligence_units": 13994,
-    "practice_playbooks": 3244,
-    "practice_guide_normative_references": 37,
-    "ntd_gaps": 25,
-    "normative_documents": 0,
-    "normative_editions": 0,
-    "normative_provision_versions": 0,
-    "rule_versions": 0,
-    "rule_version_states": 0,
-    "rule_set_versions": 0,
+    "source_guidance_identity_count": 2410,
+    "practice_intelligence_identity_count": 7105,
+    "practice_intelligence_version_row_count": 21099,
+    "active_release_intelligence_version_count": 7105,
+    "historical_intelligence_version_count": 13994,
+    "playbook_identity_count": 1644,
+    "playbook_version_row_count": 4888,
+    "active_release_playbook_count": 1644,
+    "historical_playbook_count": 3244,
+    "logical_gap_identity_count": 547,
+    "active_gap_identity_count": 395,
+    "closed_gap_identity_count": 152,
+    "gap_snapshot_row_count": 858,
+    "conflict_identity_count": 138,
+    "quarantined_candidate_identity_count": 53,
+    "rule_version_count": 0,
 }
 SEMANTIC_KEYS = (
     "code_fingerprint",
     "lock_fingerprint",
     "schema_fingerprint",
     "contract_pack_fingerprint",
-    "platform_semantic_fingerprint",
+    "all_history_platform_memory_fingerprint",
+    "active_release_semantic_fingerprint",
+    "active_context_pack_binding_fingerprint",
     "backup_restore_fingerprint",
     "projection_fingerprint",
     "fixture_source_fingerprint",
@@ -103,6 +111,90 @@ SEMANTIC_KEYS = (
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _qualify_release_selection(engine: sa.Engine) -> dict[str, Any]:
+    with engine.connect() as connection:
+        edition_id = connection.scalar(
+            sa.text(
+                "SELECT selected_edition_id FROM "
+                "platform.practice_guide_edition_activation_decisions "
+                "ORDER BY version DESC LIMIT 1"
+            )
+        )
+        releases = tuple(
+            connection.execute(
+                sa.text(
+                    "SELECT release_id,version FROM platform.practice_intelligence_releases "
+                    "ORDER BY published_at,release_id"
+                )
+            )
+        )
+        selected = connection.execute(
+            sa.text(
+                "SELECT selected_release_id,selected_release_version FROM "
+                "platform.practice_intelligence_release_activation_decisions "
+                "ORDER BY version DESC LIMIT 1"
+            )
+        ).one_or_none()
+    if edition_id is None or selected is None or len(releases) < 2:
+        raise IntegrityFailure(
+            "RELEASE_SELECTION_QUALIFICATION_INCOMPLETE",
+            "active and historical releases must both be present",
+        )
+    query = PostgresKnowledgeQuery(engine)
+    context = GatewayContext(
+        "service.system-integrity-qualifier",
+        "knowledge.get_id_task_guidance.invoke",
+        "id.support",
+        UUID("00000000-0000-0000-0000-000000000099"),
+    )
+    base_payload: dict[str, Any] = {
+        "query": "журнал",
+        "intent": "journal_selection",
+        "practice_guide_edition_id": str(edition_id),
+        "mode": "Support",
+        "purpose": "id.support",
+    }
+    active = query.execute("knowledge.get_id_task_guidance", base_payload, context)
+    historical_release = next(
+        row
+        for row in releases
+        if (str(row[0]), int(row[1])) != (str(selected[0]), int(selected[1]))
+    )
+    historical = query.execute(
+        "knowledge.get_id_task_guidance",
+        {
+            **base_payload,
+            "practice_intelligence_release_id": str(historical_release[0]),
+            "practice_intelligence_release_version": int(historical_release[1]),
+        },
+        context,
+    )
+    acceptable = {GatewayStatus.OK, GatewayStatus.KNOWLEDGE_INCOMPLETE}
+    if (
+        active.status not in acceptable
+        or historical.status not in acceptable
+        or active.result.get("release_selection") != "active_release_decision"
+        or historical.result.get("release_selection") != "historical_exact_pin"
+        or str(active.result.get("practice_intelligence_release_id")) != str(selected[0])
+        or not active.evidence_pack.evidence
+        or not historical.evidence_pack.evidence
+    ):
+        raise IntegrityFailure(
+            "RELEASE_SELECTION_QUALIFICATION_FAILED",
+            "default active selection or exact historical pin failed",
+        )
+    return {
+        "active_release_id": str(selected[0]),
+        "active_release_version": int(selected[1]),
+        "active_result_count": len(active.result.get("practice_intelligence", ())),
+        "historical_release_id": str(historical_release[0]),
+        "historical_release_version": int(historical_release[1]),
+        "historical_result_count": len(historical.result.get("practice_intelligence", ())),
+        "default_selection": "active_release_decision",
+        "historical_selection": "historical_exact_pin",
+    }
 
 
 def _command_version(command_line: list[str]) -> str:
@@ -320,7 +412,7 @@ class CycleRunner:
 
     def _write_phase(self, phase: str, started: str, payload: dict[str, Any]) -> None:
         receipt = {
-            "contract": "system-integrity-phase-receipt/1.9.0",
+            "contract": "system-integrity-phase-receipt/2.0.0",
             "cycle_id": self.args.cycle_id,
             "phase": phase,
             "status": "pass",
@@ -484,14 +576,14 @@ class CycleRunner:
             first = canonical_digest(first_inventory)
             engine.dispose()
             engine = None
-            migrate(self.root, database_url, "0016_ntd_seed")
+            migrate(self.root, database_url, "0017_unified_harness")
             migrate(self.root, database_url, "head")
             engine = sa.create_engine(database_url)
             second = schema_fingerprint(engine)
             if first != second:
                 raise IntegrityFailure(
                     "SCHEMA_ROUNDTRIP_MISMATCH",
-                    "0017 downgrade/upgrade changed schema fingerprint",
+                    "0018 downgrade/upgrade changed schema fingerprint",
                     evidence={"before": first, "after": second},
                 )
             with engine.begin() as connection:
@@ -538,7 +630,9 @@ class CycleRunner:
             drop_database(cluster_engine, database_name)
             cluster_engine.dispose()
 
-    def _restore_platform_snapshot(self, suffix: str) -> tuple[dict[str, int], str, str]:
+    def _restore_platform_snapshot(
+        self, suffix: str
+    ) -> tuple[dict[str, int], str, str, str, str, dict[str, Any]]:
         database_name = f"asd_integrity_{self.args.cycle_id.lower().replace('-', '_')}_{suffix}"
         cluster_engine = sa.create_engine(self.cluster_url, isolation_level="AUTOCOMMIT")
         database_url = self.cluster_url.set(database=database_name)
@@ -551,13 +645,36 @@ class CycleRunner:
             counts = platform_memory_counts(engine)
             assert_expected_counts(counts, EXPECTED_PLATFORM_COUNTS)
             assert_no_workspace_ownership(engine)
-            fingerprint_before = platform_memory_fingerprint(engine)
+            all_history = platform_memory_fingerprint(engine)
+            active_release = active_release_semantic_fingerprint(engine)
+            context_binding = active_context_binding_fingerprint(engine)
+            duplicates = active_semantic_duplicate_inventory(engine)
+            if duplicates:
+                raise IntegrityFailure(
+                    "ACTIVE_SEMANTIC_IDENTITY_DUPLICATED",
+                    "the selected release contains duplicate semantic identities",
+                    evidence={"duplicate_groups": duplicates},
+                )
+            merged_evidence = proven_duplicate_evidence_inventory(engine)
+            release_selection = _qualify_release_selection(engine)
             source_digest = file_digest(self.args.practice_source_object)
             if source_digest != self.args.practice_source_digest:
                 raise IntegrityFailure(
                     "SOURCE_BYTE_FINGERPRINT_MISMATCH", "Practice Guide source bytes changed"
                 )
-            return counts, fingerprint_before, source_digest
+            if len(merged_evidence) != 8:
+                raise IntegrityFailure(
+                    "SEMANTIC_DUPLICATE_REGRESSION_MISMATCH",
+                    "all eight corrected groups must retain occurrence lineage",
+                )
+            return (
+                counts,
+                all_history,
+                active_release,
+                context_binding,
+                source_digest,
+                release_selection,
+            )
         finally:
             if engine is not None:
                 engine.dispose()
@@ -566,15 +683,30 @@ class CycleRunner:
 
     def phase_c(self) -> None:
         started = _now()
-        counts, fingerprint, source_digest = self._restore_platform_snapshot("memory")
-        self.semantic["platform_semantic_fingerprint"] = fingerprint
+        (
+            counts,
+            all_history,
+            active_release,
+            context_binding,
+            source_digest,
+            release_selection,
+        ) = self._restore_platform_snapshot("memory")
+        self.semantic.update(
+            {
+                "all_history_platform_memory_fingerprint": all_history,
+                "active_release_semantic_fingerprint": active_release,
+                "active_context_pack_binding_fingerprint": context_binding,
+            }
+        )
         self._write_phase(
             "C",
             started,
             {
                 "snapshot_digest": file_digest(self.args.platform_snapshot),
                 "source_byte_fingerprint": source_digest,
-                "platform_semantic_fingerprint": fingerprint,
+                "all_history_platform_memory_fingerprint": all_history,
+                "active_release_semantic_fingerprint": active_release,
+                "active_context_pack_binding_fingerprint": context_binding,
                 "counts": counts,
                 "historical_decisions": {
                     "kg_id": "PARTIAL:24/25-systemic:7/7-adversarial",
@@ -582,6 +714,12 @@ class CycleRunner:
                 },
                 "mutable_latest": False,
                 "automatic_rule_promotion": False,
+                "rule_registry": {
+                    "infrastructure_ready": True,
+                    "operational_rule_coverage": False,
+                },
+                "active_semantic_duplicate_groups": 0,
+                "release_selection": release_selection,
                 "workspace_ownership": False,
             },
         )
@@ -706,6 +844,8 @@ class CycleRunner:
             migrate(self.root, database_url, "head")
             engine = sa.create_engine(database_url)
             before = platform_memory_fingerprint(engine)
+            active_before = active_release_semantic_fingerprint(engine)
+            context_before = active_context_binding_fingerprint(engine)
             counts = platform_memory_counts(engine)
             assert_expected_counts(counts, EXPECTED_PLATFORM_COUNTS)
             with engine.connect() as connection:
@@ -754,6 +894,61 @@ class CycleRunner:
                 raise IntegrityFailure(
                     "PROJECTION_REBUILD_MISMATCH", "Practice projection is not reproducible"
                 )
+            construction = json.loads(
+                self.args.practice_construction_manifest.read_text(encoding="utf-8")
+            )
+            if not isinstance(construction, dict):
+                raise IntegrityFailure(
+                    "PRACTICE_CONSTRUCTION_MANIFEST_INVALID",
+                    "active construction manifest must be a JSON object",
+                )
+            with engine.connect() as connection:
+                active_construction_id = connection.scalar(
+                    sa.text(
+                        """
+                        SELECT release.construction_manifest_id
+                        FROM platform.practice_intelligence_release_activation_decisions decision
+                        JOIN platform.practice_intelligence_releases release
+                          ON release.release_id=decision.selected_release_id
+                         AND release.version=decision.selected_release_version
+                        ORDER BY decision.version DESC LIMIT 1
+                        """
+                    )
+                )
+            if str(active_construction_id) != str(construction.get("construction_manifest_id")):
+                raise IntegrityFailure(
+                    "PRACTICE_CONSTRUCTION_RELEASE_MISMATCH",
+                    "projection rebuild manifest is not the selected release construction",
+                )
+            intelligence_rebuilds: list[tuple[str, str, int]] = []
+            for _attempt in range(2):
+                with engine.begin() as connection:
+                    connection.execute(
+                        sa.text(
+                            "DELETE FROM projection.practice_intelligence_lexical_versions "
+                            "WHERE construction_manifest_id=:construction"
+                        ),
+                        {"construction": active_construction_id},
+                    )
+                persisted = persist_manifest(engine, construction)
+                with engine.connect() as connection:
+                    intelligence_rebuilds.append(
+                        tuple(
+                            connection.execute(
+                                sa.text(
+                                    "SELECT source_fingerprint,state,entry_count FROM "
+                                    "projection.practice_intelligence_lexical_versions "
+                                    "WHERE lexical_version_id=:id"
+                                ),
+                                {"id": persisted["lexical_version_id"]},
+                            ).one()
+                        )
+                    )
+            if intelligence_rebuilds[0] != intelligence_rebuilds[1]:
+                raise IntegrityFailure(
+                    "PROJECTION_REBUILD_MISMATCH",
+                    "Practice Intelligence projection is not reproducible",
+                )
             ntd = NtdProjectionBuilder(engine)
             ntd.delete_rebuildable_plane()
             first_ntd = ntd.rebuild(before)
@@ -762,17 +957,32 @@ class CycleRunner:
             if first_ntd != second_ntd:
                 raise IntegrityFailure("PROJECTION_REBUILD_MISMATCH", "NTD projection differs")
             after = platform_memory_fingerprint(engine)
-            if before != after or before != self.semantic["platform_semantic_fingerprint"]:
+            active_after = active_release_semantic_fingerprint(engine)
+            context_after = active_context_binding_fingerprint(engine)
+            if (
+                before != after
+                or before != self.semantic["all_history_platform_memory_fingerprint"]
+                or active_before != active_after
+                or active_before != self.semantic["active_release_semantic_fingerprint"]
+                or context_before != context_after
+                or context_before != self.semantic["active_context_pack_binding_fingerprint"]
+            ):
                 raise IntegrityFailure(
                     "BACKUP_RESTORE_SEMANTIC_MISMATCH", "canonical memory changed during rebuild"
                 )
             projection_fingerprint = canonical_digest(
-                {"practice_guidance": first_guidance, "ntd": first_ntd}
+                {
+                    "practice_guidance": first_guidance,
+                    "practice_intelligence": intelligence_rebuilds[0],
+                    "ntd": first_ntd,
+                }
             )
             backup_restore_fingerprint = canonical_digest(
                 {
                     "backup_digest": file_digest(self.args.platform_snapshot),
-                    "platform_semantic_fingerprint": after,
+                    "all_history_platform_memory_fingerprint": after,
+                    "active_release_semantic_fingerprint": active_after,
+                    "active_context_pack_binding_fingerprint": context_after,
                     "counts": counts,
                 }
             )
@@ -882,7 +1092,7 @@ class CycleRunner:
             self.phase_j()
         except BaseException as error:
             failure = {
-                "contract": "system-integrity-failure-receipt/1.9.0",
+                "contract": "system-integrity-failure-receipt/2.0.0",
                 "cycle_id": self.args.cycle_id,
                 "status": "blocked",
                 "error_code": error.code
@@ -896,7 +1106,7 @@ class CycleRunner:
             write_immutable_json(self.cycle_directory / "failure.json", failure)
             raise
         summary = {
-            "contract": "system-integrity-cycle-summary/1.9.0",
+            "contract": "system-integrity-cycle-summary/2.0.0",
             "cycle_id": self.args.cycle_id,
             "series_id": self.args.series_id,
             "status": "pass",
@@ -964,6 +1174,8 @@ def _child_arguments(args: argparse.Namespace, cycle_id: str) -> list[str]:
         str(args.module_manifest),
         "--platform-snapshot",
         str(args.platform_snapshot),
+        "--practice-construction-manifest",
+        str(args.practice_construction_manifest),
         "--practice-source-object",
         str(args.practice_source_object),
         "--practice-source-digest",
@@ -998,7 +1210,7 @@ def run_series(args: argparse.Namespace) -> None:
             stream.write(completed.stderr)
         if completed.returncode:
             failure = {
-                "contract": "system-integrity-series-failure/1.9.0",
+                "contract": "system-integrity-series-failure/2.0.0",
                 "series_id": args.series_id,
                 "failed_cycle_id": cycle_id,
                 "consecutive_pass_count": 0,
@@ -1020,7 +1232,7 @@ def run_series(args: argparse.Namespace) -> None:
     ]
     if mismatches or len(set(readiness)) != 1:
         failure = {
-            "contract": "system-integrity-series-failure/1.9.0",
+            "contract": "system-integrity-series-failure/2.0.0",
             "series_id": args.series_id,
             "failed_cycle_id": summaries[-1]["cycle_id"],
             "error_code": "INTERCYCLE_FINGERPRINT_MISMATCH",
@@ -1032,7 +1244,7 @@ def run_series(args: argparse.Namespace) -> None:
         write_immutable_json(series_directory / "series-failure.json", failure)
         raise IntegrityFailure("INTERCYCLE_FINGERPRINT_MISMATCH", "semantic fingerprints differ")
     summary = {
-        "contract": "system-integrity-series-summary/1.9.0",
+        "contract": "system-integrity-series-summary/2.0.0",
         "series_id": args.series_id,
         "status": "pass",
         "consecutive_pass_count": 3,
@@ -1056,6 +1268,7 @@ def _add_shared_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--origin-main", required=True)
     parser.add_argument("--module-manifest", required=True, type=Path)
     parser.add_argument("--platform-snapshot", required=True, type=Path)
+    parser.add_argument("--practice-construction-manifest", required=True, type=Path)
     parser.add_argument("--practice-source-object", required=True, type=Path)
     parser.add_argument("--practice-source-digest", required=True)
     parser.add_argument("--mlx-runtime-python", required=True, type=Path)
