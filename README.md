@@ -107,6 +107,12 @@ provider, embeddings или graph не меняет canonical memory; runtime п
   restore и projection rebuild воспроизводимы. Fresh-session acceptance —
   24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
   остаётся `false`.
+- `NTD-SEED-01 bounded official NTD memory` — **PARTIAL 2026-08-25**:
+  exact guide geometry reconciled 37 mentions to 25 stable identities; all 25
+  official-only attempts terminated as `official_access_blocked`. Migration
+  `0016`, Contract Pack v1.7, Gateway gaps, workspace-reset survival,
+  dump/restore, projection rebuild and fresh-session non-fabrication are
+  verified; 0 official editions/provisions are published.
 - `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
@@ -142,6 +148,7 @@ provider, embeddings или graph не меняет canonical memory; runtime п
 - [G-05 Platform Knowledge Foundation](docs/implementation/G05_PLATFORM_KNOWLEDGE_FOUNDATION_v0.1.md)
 - [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
 - [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
+- [NTD-SEED-01 bounded official NTD memory](docs/implementation/NTD_SEED_FROM_PRACTICE_GUIDE_v0.1.md)
 - [WP-11 Common Domain Process Kernel](docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md)
 - [WP-12 Tender Slice](docs/implementation/WP12_TENDER_SLICE_v0.1.md)
 - [WP-13 Support Slice](docs/implementation/WP13_SUPPORT_SLICE_v0.1.md)
@@ -169,7 +176,8 @@ provider, embeddings или graph не меняет canonical memory; runtime п
   `contracts/v1.4/` — additive WP‑14 corpus/Audit extension;
   `contracts/v1.5/` — KG‑ID source-guidance extraction/publication;
   `contracts/v1.6/` — permanent Practice Intelligence, Context Assembly and
-  backup-integrity contracts.
+  backup-integrity contracts; `contracts/v1.7/` — bounded official NTD,
+  edition/provision and normative Knowledge Gateway contracts.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
   WP‑11…WP‑14 и KG‑ID‑01:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
