@@ -1,5 +1,9 @@
 # АСД-КОНТУР
 
+> Current delivery slice: [PRODUCT-APPLICATION-SPINE-01](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
+> adds the first bounded browser/application contour. `MEMORY_DATA_DEFECT` remains open;
+> `TrialReady=false`, `OKSReady=false`, and `ProductReady=false`.
+
 > **Current product status (superseding, 2026-08-26):** the repository contains
 > a `PARTIAL` Platform/Domain Kernel, not a user-ready software complex.
 > Frontend, Application Spine, industrial intake and production operator flows
@@ -187,6 +191,8 @@ readiness semantics are defined by
 - [Legacy pdfpipeline / Левашово audit experience](docs/reports/LEGACY_PDFPIPELINE_AUDIT_EXPERIENCE_v0.1.md)
 - [WP-14 pdfpipeline architecture impact assessment](docs/reports/WP14_PDFPIPELINE_ARCHITECTURE_IMPACT_ASSESSMENT_v0.1.md)
 - [WP-14 Audit Slice implementation](docs/implementation/WP14_AUDIT_SLICE_v0.1.md)
+- [Product Application Spine implementation](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
+- [Product Application Spine local runtime](docs/operations/PRODUCT_APPLICATION_SPINE_LOCAL_RUNTIME_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
 - [ADR index](docs/architecture/decisions/)
@@ -213,7 +219,8 @@ readiness semantics are defined by
   `contracts/v1.8/` — unified multi-work Construction Harness contracts;
   `contracts/v1.9/` — bounded kernel integrity contracts;
   `contracts/v2.0/` — complete product capability denominator and fail-closed
-  readiness contracts.
+  readiness contracts; `contracts/v2.1/` — Product Application Spine API,
+  browser boundary, capability-readiness delta and measured-only scale evidence.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
   WP‑11…WP‑14 и KG‑ID‑01:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
