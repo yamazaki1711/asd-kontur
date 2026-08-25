@@ -1,5 +1,8 @@
 # Базовый уровень реализации АСД-КОНТУР
 
+> **Historical baseline.** Current product delivery and readiness are governed
+> by [Implementation Plan v1](IMPLEMENTATION_PLAN_v1.md) and Contract Pack v2.0.
+
 - **Статус:** `Accepted baseline through WP-13 Support implementation slice`
 - **Дата:** 2026-08-23
 - **Владелец:** Олег Щербаков

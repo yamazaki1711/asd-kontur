@@ -1,5 +1,10 @@
 # АСД-КОНТУР
 
+> **Historical Support-mode design input.** This document preserves the
+> 14-screen Support contour and offline requirements. It is not the complete
+> product functional model and does not prove Support readiness. The current
+> four-mode model is [FOUR_MODE_FUNCTIONAL_MODEL_v1.md](../product/FOUR_MODE_FUNCTIONAL_MODEL_v1.md).
+
 ## Функциональная модель режима «СОПРОВОЖДЕНИЕ» v0.1
 
 **Статус:** проектная редакция Support-среза; не является полной

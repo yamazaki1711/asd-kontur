@@ -1,5 +1,12 @@
 # Продуктовые границы АСД-КОНТУР
 
+> **Superseding navigation:** this historical scope remains valid, but the
+> complete goal, 142-capability denominator and readiness ladder are now fixed
+> by [Product Goal and Capability Map v1](PRODUCT_GOAL_AND_CAPABILITY_MAP_v1.md),
+> [ADR-0013](../architecture/decisions/0013-platform-kernel-to-product-application.md)
+> and Contract Pack v2.0. Current `TrialReady=false`, `OKSReady=false`,
+> `ProductReady=false`.
+
 ## Назначение
 
 АСД-КОНТУР обеспечивает доказательную готовность строительства до совершения необратимых действий и связывает технические требования, фактическое выполнение, контроль, исполнительную документацию и предъявление объёмов к оплате.

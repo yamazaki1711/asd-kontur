@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.0:schema:product-readiness",
+  "title": "ASD-KONTUR Product Goal and Capability Readiness",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "registry_id", "registry_version", "product_goal", "capabilities",
+    "capability_dependencies", "interaction_surfaces", "durable_job_contract",
+    "scale_qualification_profiles", "readiness_decisions", "claims",
+    "superseding_decisions"
+  ],
+  "properties": {
+    "registry_id": {"const": "ASD-KONTUR-PRODUCT-CAPABILITY-REGISTRY"},
+    "registry_version": {"const": "1.0.0"},
+    "product_goal": {"$ref": "#/$defs/productGoal"},
+    "capabilities": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/capability"}
+    },
+    "capability_dependencies": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_field", "edge_count"],
+      "properties": {
+        "source_field": {"const": "capabilities[].dependencies"},
+        "edge_count": {"type": "integer", "minimum": 1}
+      }
+    },
+    "interaction_surfaces": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/interactionSurface"}
+    },
+    "durable_job_contract": {"$ref": "#/$defs/durableJob"},
+    "scale_qualification_profiles": {
+      "type": "array", "minItems": 3,
+      "items": {"$ref": "#/$defs/scaleQualificationProfile"}
+    },
+    "readiness_decisions": {"$ref": "#/$defs/readinessDecisions"},
+    "claims": {"type": "array", "items": {"$ref": "#/$defs/claim"}},
+    "superseding_decisions": {
+      "type": "array", "minItems": 1,
+      "items": {"$ref": "#/$defs/supersedingDecision"}
+    }
+  },
+  "$defs": {
+    "nonEmptyStrings": {
+      "type": "array", "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "readiness": {
+      "enum": [
+        "NOT_IMPLEMENTED", "CONTRACT_ONLY", "FOUNDATION_ONLY", "PARTIAL",
+        "CAPABILITY_READY", "MODE_READY", "TRIAL_READY", "PRODUCT_READY"
+      ]
+    },
+    "productGoal": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "product_goal_id", "version", "issue_url", "object_independent",
+        "local_first", "target_scale", "modes", "product_results"
+      ],
+      "properties": {
+        "product_goal_id": {"const": "PRODUCT-GOAL-ASD-KONTUR"},
+        "version": {"const": "1.0.0"},
+        "issue_url": {"const": "https://github.com/yamazaki1711/asd-kontur/issues/19"},
+        "object_independent": {"const": true},
+        "local_first": {"const": true},
+        "target_scale": {"const": "thousands_of_documents"},
+        "modes": {"const": ["Tender", "Support", "Audit", "Restoration"]},
+        "product_results": {
+          "const": [
+            "contractor_protective_disagreement_protocol_and_revised_contract",
+            "pd_rd_engineering_omissions_collisions_cost_time_analysis",
+            "executive_schemes_from_verified_design_and_as_built_geometry"
+          ]
+        }
+      }
+    },
+    "capability": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "capability_id", "name", "plane", "product_results", "product_modes",
+        "lifecycle_phase", "inputs", "outputs", "dependencies", "canonical_data",
+        "workspace_data", "user_facing_surface", "implementation_evidence",
+        "test_evidence", "current_readiness", "known_gaps", "acceptance_criteria",
+        "scale_profile", "next_delivery_slice", "required_for_trial"
+      ],
+      "properties": {
+        "capability_id": {"type": "string", "pattern": "^[a-z][a-z0-9.-]+$"},
+        "name": {"type": "string", "minLength": 2},
+        "plane": {"type": "string", "minLength": 2},
+        "product_results": {"$ref": "#/$defs/nonEmptyStrings"},
+        "product_modes": {"$ref": "#/$defs/nonEmptyStrings"},
+        "lifecycle_phase": {"type": "string", "minLength": 2},
+        "inputs": {"$ref": "#/$defs/nonEmptyStrings"},
+        "outputs": {"$ref": "#/$defs/nonEmptyStrings"},
+        "dependencies": {"$ref": "#/$defs/nonEmptyStrings"},
+        "canonical_data": {"$ref": "#/$defs/nonEmptyStrings"},
+        "workspace_data": {"$ref": "#/$defs/nonEmptyStrings"},
+        "user_facing_surface": {"$ref": "#/$defs/nonEmptyStrings"},
+        "implementation_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+        "test_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+        "current_readiness": {"$ref": "#/$defs/readiness"},
+        "known_gaps": {"$ref": "#/$defs/nonEmptyStrings"},
+        "acceptance_criteria": {"$ref": "#/$defs/nonEmptyStrings"},
+        "scale_profile": {"type": "string", "minLength": 2},
+        "next_delivery_slice": {"type": "string", "minLength": 2},
+        "required_for_trial": {"type": "boolean"}
+      }
+    },
+    "interactionSurface": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "surface_id", "workspace_scoped", "typed_api_only", "status",
+        "capability_ids", "acceptance"
+      ],
+      "properties": {
+        "surface_id": {"type": "string", "pattern": "^[a-z][a-z0-9.-]+$"},
+        "workspace_scoped": {"type": "boolean"},
+        "typed_api_only": {"const": true},
+        "status": {"$ref": "#/$defs/readiness"},
+        "capability_ids": {"$ref": "#/$defs/nonEmptyStrings"},
+        "acceptance": {"$ref": "#/$defs/nonEmptyStrings"}
+      }
+    },
+    "durableJob": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "contract_id", "version", "authoritative_store", "states",
+        "commands", "invariants"
+      ],
+      "properties": {
+        "contract_id": {"const": "application.durable-job"},
+        "version": {"const": "1.0.0"},
+        "authoritative_store": {"const": "postgresql"},
+        "states": {
+          "const": [
+            "queued", "leased", "running", "pausing", "paused",
+            "cancelling", "cancelled", "retry_wait", "succeeded", "failed",
+            "reconciliation_required"
+          ]
+        },
+        "commands": {"const": ["pause", "resume", "cancel", "retry"]},
+        "invariants": {"$ref": "#/$defs/nonEmptyStrings"}
+      }
+    },
+    "scaleQualificationProfile": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "profile_id", "file_count", "status", "required_evidence",
+        "acceptance"
+      ],
+      "properties": {
+        "profile_id": {"type": "string", "pattern": "^intake\\.scale-(1k|5k|10k)$"},
+        "file_count": {"enum": [1000, 5000, 10000]},
+        "status": {"$ref": "#/$defs/readiness"},
+        "required_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+        "acceptance": {"$ref": "#/$defs/nonEmptyStrings"}
+      }
+    },
+    "modeDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["ready", "decision_id", "e2e_evidence", "output_evidence", "blockers"],
+      "properties": {
+        "ready": {"type": "boolean"},
+        "decision_id": {"type": ["string", "null"]},
+        "e2e_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+        "output_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+        "blockers": {"$ref": "#/$defs/nonEmptyStrings"}
+      }
+    },
+    "readinessDecisions": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "platform_kernel", "product_application", "modes", "trial",
+        "real_oks_admission", "oks_ready", "product"
+      ],
+      "properties": {
+        "platform_kernel": {"$ref": "#/$defs/readiness"},
+        "product_application": {"type": "boolean"},
+        "modes": {
+          "type": "object", "additionalProperties": false,
+          "required": ["Tender", "Support", "Audit", "Restoration"],
+          "properties": {
+            "Tender": {"$ref": "#/$defs/modeDecision"},
+            "Support": {"$ref": "#/$defs/modeDecision"},
+            "Audit": {"$ref": "#/$defs/modeDecision"},
+            "Restoration": {"$ref": "#/$defs/modeDecision"}
+          }
+        },
+        "trial": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ready", "decision_id", "scale_qualification_evidence", "blockers"],
+          "properties": {
+            "ready": {"type": "boolean"},
+            "decision_id": {"type": ["string", "null"]},
+            "scale_qualification_evidence": {"$ref": "#/$defs/nonEmptyStrings"},
+            "blockers": {"$ref": "#/$defs/nonEmptyStrings"}
+          }
+        },
+        "real_oks_admission": {
+          "type": "object", "additionalProperties": false,
+          "required": ["proposed", "allowed", "trial_decision_id"],
+          "properties": {
+            "proposed": {"type": "boolean"},
+            "allowed": {"type": "boolean"},
+            "trial_decision_id": {"type": ["string", "null"]}
+          }
+        },
+        "oks_ready": {"type": "boolean"},
+        "product": {
+          "type": "object", "additionalProperties": false,
+          "required": ["ready", "decision_id", "product_result_evidence", "blockers"],
+          "properties": {
+            "ready": {"type": "boolean"},
+            "decision_id": {"type": ["string", "null"]},
+            "product_result_evidence": {
+              "type": "array", "prefixItems": [
+                {"type": "boolean"}, {"type": "boolean"}, {"type": "boolean"}
+              ], "items": false
+            },
+            "blockers": {"$ref": "#/$defs/nonEmptyStrings"}
+          }
+        }
+      }
+    },
+    "claim": {
+      "type": "object", "additionalProperties": false,
+      "required": ["claim_id", "outcome", "denominator", "evidence_refs", "boundary"],
+      "properties": {
+        "claim_id": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["PASS", "PARTIAL", "BLOCKED", "NOT_RUN"]},
+        "denominator": {"type": "integer", "minimum": 0},
+        "evidence_refs": {"$ref": "#/$defs/nonEmptyStrings"},
+        "boundary": {"type": "string", "minLength": 2}
+      }
+    },
+    "supersedingDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decision_id", "supersedes", "preserves", "new_semantics", "status"],
+      "properties": {
+        "decision_id": {"type": "string", "minLength": 2},
+        "supersedes": {"$ref": "#/$defs/nonEmptyStrings"},
+        "preserves": {"$ref": "#/$defs/nonEmptyStrings"},
+        "new_semantics": {"type": "string", "minLength": 2},
+        "status": {"const": "accepted"}
+      }
+    }
+  }
+}

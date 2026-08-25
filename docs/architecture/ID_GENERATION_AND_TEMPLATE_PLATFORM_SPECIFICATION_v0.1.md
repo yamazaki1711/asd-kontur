@@ -1,5 +1,9 @@
 # АСД-КОНТУР — ID Generation & Template Platform Specification v0.1
 
+> **Foundation specification.** Product UI/API/render/print requirements are
+> added by [v0.2](ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.2.md).
+> v0.1 does not establish a production-ready generator.
+
 - **Статус документа:** `Accepted architecture baseline`
 - **Дата:** 2026-08-22
 - **Владелец продукта:** Олег Щербаков

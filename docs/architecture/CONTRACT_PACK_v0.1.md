@@ -1,5 +1,9 @@
 # АСД-КОНТУР — Contract Pack v0.1
 
+> Contract Pack versions remain immutable and additive. Product Goal,
+> Capability Registry and fail-closed readiness semantics are added by v2.0;
+> v0.1 does not describe the product capability denominator.
+
 Статус: **Accepted architecture baseline**
 
 Gate: **G-03 Contract Pack — PASS**
