@@ -1,5 +1,13 @@
 {
-  "contract_version": "2.0.0",
-  "valid": ["valid/memory-integrity-counters.json"],
-  "invalid": ["invalid/ambiguous-memory-counters.json"]
+  "registry_version": "2.0.0",
+  "valid": ["valid/product-capability-registry.json"],
+  "invalid": [
+    "invalid/missing-mandatory-capability.json",
+    "invalid/capability-ready-without-surface.json",
+    "invalid/mode-ready-without-e2e.json",
+    "invalid/trial-ready-with-foundations.json",
+    "invalid/product-ready-with-missing-mode.json",
+    "invalid/pass-without-denominator.json",
+    "invalid/real-oks-without-trial-decision.json"
+  ]
 }

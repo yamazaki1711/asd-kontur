@@ -1,5 +1,9 @@
 # АСД-КОНТУР — Architecture Blueprint v0.1
 
+> **Historical kernel blueprint.** The current product-plane architecture and
+> readiness denominator are in [Architecture Blueprint v1](ARCHITECTURE_BLUEPRINT_v1.md)
+> and Contract Pack v2.0.
+
 **Статус:** Accepted architecture baseline
 **Дата:** 22 августа 2026
 **Область:** универсальный программный комплекс АСД-КОНТУР; не архитектура пилота ТМ-35.

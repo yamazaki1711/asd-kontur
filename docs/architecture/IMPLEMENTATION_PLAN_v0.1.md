@@ -1,5 +1,9 @@
 # АСД-КОНТУР — Implementation Plan v0.1
 
+> **Historical plan.** Foundation and bounded PASS records remain evidence, but
+> current product delivery/readiness is governed by
+> [Implementation Plan v1](IMPLEMENTATION_PLAN_v1.md) and Contract Pack v2.0.
+
 - **Статус:** `Accepted planning baseline`
 - **Дата:** 2026-08-22
 - **Владелец продукта:** Олег Щербаков

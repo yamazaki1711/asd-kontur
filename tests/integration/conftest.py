@@ -22,6 +22,7 @@ class PostgreSQLEnvironment:
     database_name: str
     application_role: str
     application_engine: Engine
+    document_worker_engine: Engine
     curator_engine: Engine
     projection_engine: Engine
     lifecycle_engine: Engine
@@ -79,6 +80,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
     run_id = str(os.getpid())
     database_name = f"asd_g04_test_{run_id}"
     application_role = f"asd_g04_test_app_{run_id}"
+    document_worker_role = f"asd_spine_test_worker_{run_id}"
     curator_role = f"asd_g05_test_curator_{run_id}"
     projection_role = f"asd_g05_test_projection_{run_id}"
     lifecycle_role = f"asd_g06_test_lifecycle_{run_id}"
@@ -105,6 +107,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         with cluster_engine.begin() as connection:
             for role in (
                 application_role,
+                document_worker_role,
                 curator_role,
                 projection_role,
                 lifecycle_role,
@@ -126,6 +129,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                     f"NOCREATEROLE INHERIT PASSWORD '{password}'"
                 )
             connection.exec_driver_sql(f'GRANT asd_app TO "{application_role}"')
+            connection.exec_driver_sql(f'GRANT asd_document_worker TO "{document_worker_role}"')
             connection.exec_driver_sql(f'GRANT asd_platform_curator TO "{curator_role}"')
             connection.exec_driver_sql(f'GRANT asd_projection_builder TO "{projection_role}"')
             connection.exec_driver_sql(f'GRANT asd_lifecycle_service TO "{lifecycle_role}"')
@@ -145,6 +149,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             connection.exec_driver_sql(f'GRANT asd_ntd_ingestion_service TO "{ntd_ingestion_role}"')
             connection.exec_driver_sql(f'GRANT asd_ntd_gateway_service TO "{ntd_gateway_role}"')
         application_url = owner_url.set(username=application_role, password=password)
+        document_worker_url = owner_url.set(username=document_worker_role, password=password)
         curator_url = owner_url.set(username=curator_role, password=password)
         projection_url = owner_url.set(username=projection_role, password=password)
         lifecycle_url = owner_url.set(username=lifecycle_role, password=password)
@@ -162,6 +167,13 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         application_engine = create_database_engine(
             DatabaseSettings(
                 url=application_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
+        document_worker_engine = create_database_engine(
+            DatabaseSettings(
+                url=document_worker_url.render_as_string(hide_password=False),
                 pool_size=1,
                 max_overflow=0,
             )
@@ -269,6 +281,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             database_name=database_name,
             application_role=application_role,
             application_engine=application_engine,
+            document_worker_engine=document_worker_engine,
             curator_engine=curator_engine,
             projection_engine=projection_engine,
             lifecycle_engine=lifecycle_engine,
@@ -286,6 +299,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             owner_engine=owner_engine,
         )
         application_engine.dispose()
+        document_worker_engine.dispose()
         curator_engine.dispose()
         projection_engine.dispose()
         lifecycle_engine.dispose()
@@ -306,6 +320,7 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         with cluster_engine.begin() as connection:
             for role in (
                 application_role,
+                document_worker_role,
                 curator_role,
                 projection_role,
                 lifecycle_role,

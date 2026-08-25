@@ -1,0 +1,1 @@
+{"mutation":"remove_capability","capability_id":"interaction.frontend-shell","expected_error":"mandatory capabilities missing"}

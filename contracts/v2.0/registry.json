@@ -1,49 +1,39 @@
 {
   "registry_version": "2.0.0",
   "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
-  "status": "qualification_candidate",
+  "status": "accepted_product_goal_rebaseline",
   "owner": "Oleg Shcherbakov",
-  "effective_from": "2026-08-25T12:00:38Z",
+  "effective_from": "2026-08-26T00:00:00+12:00",
   "compatibility": {
     "kind": "additive",
     "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"],
-    "notes": "Adds explicit semantic identity/version/evidence/release denominators and three fail-closed permanent-memory fingerprints. Historical Contract Packs remain immutable."
+    "notes": "Adds the complete product capability denominator and fail-closed readiness decisions without changing historical receipts."
   },
   "schemas": [
     {
-      "schema_id": "urn:asd-kontur:contracts:v2.0:schema:memory-integrity",
-      "path": "schemas/memory-integrity.schema.json",
-      "digest": "sha256:d7c0410a1c41b8d1d26c3975182c62d577c37e4a41bb5fe42ba776f7d8e75645"
-    },
-    {
-      "schema_id": "urn:asd-kontur:contracts:v2.0:schema:practice-intelligence",
-      "path": "schemas/practice-intelligence.schema.json",
-      "digest": "sha256:ac00b894b972fbde5b1a6e00660c7c3834d442c3f6e11f1c224dae3db223d84a"
+      "schema_id": "urn:asd-kontur:contracts:v2.0:schema:product-readiness",
+      "path": "schemas/product-readiness.schema.json",
+      "digest": "sha256:5973b24020ad7deb0d93c8fb05b5c7dd2d759609e2c16b79364787dc62e0beae"
     }
   ],
   "contract_keys": [
-    "platform-memory.semantic-identity",
-    "platform-memory.release-membership",
-    "platform-memory.explicit-counters",
-    "platform-memory.all-history-fingerprint",
-    "platform-memory.active-release-fingerprint",
-    "platform-memory.context-binding-fingerprint"
+    "product.goal", "product.capability", "product.capability-dependency",
+    "product.capability-readiness-decision", "product.mode-readiness-decision",
+    "product.trial-readiness-decision", "product.product-readiness-decision",
+    "product.interaction-surface", "application.durable-job",
+    "qualification.scale-profile", "decision.superseding-lineage"
   ],
   "fixtures": {
     "manifest": "fixtures/manifest.json",
-    "valid": ["fixtures/valid/memory-integrity-counters.json"],
+    "valid": ["fixtures/valid/product-capability-registry.json"],
     "invalid": [
-      {
-        "path": "fixtures/invalid/ambiguous-memory-counters.json",
-        "reason": "Ambiguous table-row counters and one optional fingerprint cannot prove release, history, gaps, or ContextPack binding semantics."
-      }
-    ],
-    "schema_specific": [
-      {
-        "schema_id": "urn:asd-kontur:contracts:v2.0:schema:practice-intelligence",
-        "valid": "fixtures/valid/release-pinned-gateway-request.json",
-        "invalid": "fixtures/invalid/incomplete-release-pin.json"
-      }
+      {"path": "fixtures/invalid/missing-mandatory-capability.json", "reason": "Complete denominator is mandatory."},
+      {"path": "fixtures/invalid/capability-ready-without-surface.json", "reason": "CAPABILITY_READY requires a production-shaped surface and E2E evidence."},
+      {"path": "fixtures/invalid/mode-ready-without-e2e.json", "reason": "MODE_READY requires user E2E and output evidence."},
+      {"path": "fixtures/invalid/trial-ready-with-foundations.json", "reason": "TRIAL_READY cannot be inferred from foundations."},
+      {"path": "fixtures/invalid/product-ready-with-missing-mode.json", "reason": "PRODUCT_READY requires four MODE_READY decisions."},
+      {"path": "fixtures/invalid/pass-without-denominator.json", "reason": "PASS requires exact denominator and evidence."},
+      {"path": "fixtures/invalid/real-oks-without-trial-decision.json", "reason": "A real OKS requires TrialReadinessDecision."}
     ]
   }
 }

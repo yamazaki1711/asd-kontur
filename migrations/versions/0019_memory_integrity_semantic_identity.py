@@ -1,7 +1,7 @@
 """Add semantic practice identities and complete release activation lineage.
 
-Revision ID: 0018_memory_integrity
-Revises: 0017_unified_harness
+Revision ID: 0019_memory_integrity
+Revises: 0018_product_spine
 
 The pre-0018 construction rows and releases are immutable historical evidence.
 This migration adds the normalized canonical layer used by superseding releases.
@@ -13,8 +13,8 @@ import os
 
 from alembic import op
 
-revision = "0018_memory_integrity"
-down_revision = "0017_unified_harness"
+revision = "0019_memory_integrity"
+down_revision = "0018_product_spine"
 branch_labels = None
 depends_on = None
 

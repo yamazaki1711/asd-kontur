@@ -1,5 +1,10 @@
 # UNIFIED-HARNESS-01 — единое детерминированное ядро строительства
 
+> **Superseding readiness notice:** the recorded PASS is a bounded backend
+> implementation result. It does not provide a UI/application process and does
+> not make Tender, Support, Audit or Restoration `MODE_READY`. See
+> [ADR-0013](../architecture/decisions/0013-platform-kernel-to-product-application.md).
+
 Статус: **PASS (bounded implementation)**
 
 Дата: 2026-08-25

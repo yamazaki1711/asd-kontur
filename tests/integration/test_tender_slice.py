@@ -234,7 +234,7 @@ def test_wp12_schema_role_rls_and_migration_head(
     with postgres_environment.owner_engine.connect() as connection:
         assert (
             connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0018_memory_integrity"
+            == "0019_memory_integrity"
         )
         assert (
             connection.scalar(
