@@ -59,7 +59,7 @@ from .postgres import (
 from .qualification import execute_four_mode_fixture
 from .qwen import run_bf16_smoke
 
-EXPECTED_HEAD = "0019_memory_integrity"
+EXPECTED_HEAD = "0020_knowledge_status"
 EXPECTED_MODEL_DIGEST = "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766"
 HEAD_TABLES = (
     "project_definition_versions",
@@ -628,14 +628,14 @@ class CycleRunner:
             first = canonical_digest(first_inventory)
             engine.dispose()
             engine = None
-            migrate(self.root, database_url, "0018_product_spine")
+            migrate(self.root, database_url, "0019_memory_integrity")
             migrate(self.root, database_url, "head")
             engine = sa.create_engine(database_url)
             second = schema_fingerprint(engine)
             if first != second:
                 raise IntegrityFailure(
                     "SCHEMA_ROUNDTRIP_MISMATCH",
-                    "0019 downgrade/upgrade changed schema fingerprint",
+                    "0020 downgrade/upgrade changed schema fingerprint",
                     evidence={"before": first, "after": second},
                 )
             with engine.begin() as connection:

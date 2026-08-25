@@ -214,22 +214,60 @@ def persist_memory_qualification(
         [] if status == "pass" else ["PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED"]
     )
     decision_id = deterministic_uuid("platform-memory-qualification:MEMORY-INTEGRITY-FIX-01")
-    payload = {
-        "qualification_decision_id": str(decision_id),
-        "version": 1,
-        "fingerprint_specification_id": str(FINGERPRINT_SPECIFICATION_ID),
-        "fingerprint_specification_version": 1,
-        "status": status,
-        "all_history_fingerprint": all_history,
-        "active_release_fingerprint": active_release,
-        "context_binding_fingerprint": context_binding,
-        "active_duplicate_group_count": len(duplicates),
-        "missing_component_count": missing_component_count,
-        "blocker_codes": blocker_codes,
-        "qualification_receipt_ref": receipt_ref,
-    }
-    decision_fingerprint = canonical_digest(payload)
     with engine.begin() as connection:
+        connection.execute(
+            sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:identity,0))"),
+            {"identity": str(decision_id)},
+        )
+        latest = (
+            connection.execute(
+                sa.text(
+                    "SELECT version,status,all_history_fingerprint,"
+                    "active_release_fingerprint,context_binding_fingerprint,"
+                    "active_duplicate_group_count,missing_component_count,blocker_codes,"
+                    "qualification_receipt_ref,decision_fingerprint FROM "
+                    "platform.platform_memory_qualification_decisions WHERE "
+                    "qualification_decision_id=:id ORDER BY version DESC LIMIT 1 FOR UPDATE"
+                ),
+                {"id": decision_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        current_semantics = {
+            "status": status,
+            "all_history_fingerprint": all_history,
+            "active_release_fingerprint": active_release,
+            "context_binding_fingerprint": context_binding,
+            "active_duplicate_group_count": len(duplicates),
+            "missing_component_count": missing_component_count,
+            "blocker_codes": blocker_codes,
+            "qualification_receipt_ref": receipt_ref,
+        }
+        if latest is not None and all(
+            (list(latest[key]) if key == "blocker_codes" else latest[key]) == value
+            for key, value in current_semantics.items()
+        ):
+            return {
+                "qualification_decision_id": str(decision_id),
+                "version": int(latest["version"]),
+                "fingerprint_specification_id": str(FINGERPRINT_SPECIFICATION_ID),
+                "fingerprint_specification_version": 1,
+                **current_semantics,
+                "decision_fingerprint": str(latest["decision_fingerprint"]),
+                "specification": specification,
+            }
+        version = 1 if latest is None else int(latest["version"]) + 1
+        supersedes = None if latest is None else int(latest["version"])
+        payload = {
+            "qualification_decision_id": str(decision_id),
+            "version": version,
+            "supersedes_version": supersedes,
+            "fingerprint_specification_id": str(FINGERPRINT_SPECIFICATION_ID),
+            "fingerprint_specification_version": 1,
+            **current_semantics,
+        }
+        decision_fingerprint = canonical_digest(payload)
         connection.execute(
             sa.text(
                 "INSERT INTO platform.platform_memory_qualification_decisions "
@@ -239,12 +277,13 @@ def persist_memory_qualification(
                 "context_binding_fingerprint,active_duplicate_group_count,"
                 "missing_component_count,blocker_codes,qualification_receipt_ref,"
                 "decision_fingerprint,recorded_at) VALUES "
-                "(:id,1,NULL,:spec,1,:status,:history,:active,:context,:duplicates,:missing,"
-                "CAST(:blockers AS jsonb),:receipt,:fingerprint,:recorded) ON CONFLICT "
-                "(qualification_decision_id,version) DO NOTHING"
+                "(:id,:version,:supersedes,:spec,1,:status,:history,:active,:context,"
+                ":duplicates,:missing,CAST(:blockers AS jsonb),:receipt,:fingerprint,:recorded)"
             ),
             {
                 "id": decision_id,
+                "version": version,
+                "supersedes": supersedes,
                 "spec": FINGERPRINT_SPECIFICATION_ID,
                 "status": status,
                 "history": all_history,
@@ -262,9 +301,9 @@ def persist_memory_qualification(
             sa.text(
                 "SELECT decision_fingerprint FROM "
                 "platform.platform_memory_qualification_decisions WHERE "
-                "qualification_decision_id=:id AND version=1"
+                "qualification_decision_id=:id AND version=:version"
             ),
-            {"id": decision_id},
+            {"id": decision_id, "version": version},
         )
     if str(persisted_fingerprint) != decision_fingerprint:
         raise IntegrityFailure(

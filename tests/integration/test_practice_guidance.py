@@ -10,7 +10,9 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
+from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.domain import uuid7
+from asd_kontur.integrity.decisions import persist_memory_qualification
 from asd_kontur.integrity.models import IntegrityFailure
 from asd_kontur.integrity.postgres import (
     active_context_binding_fingerprint,
@@ -457,6 +459,25 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
             )
         )
     assert concurrent == (persistence, persistence)
+    first_qualification = persist_memory_qualification(
+        postgres_environment.owner_engine,
+        receipt_ref="qualification:synthetic-series-1",
+    )
+    repeated_qualification = persist_memory_qualification(
+        postgres_environment.owner_engine,
+        receipt_ref="qualification:synthetic-series-1",
+    )
+    superseding_qualification = persist_memory_qualification(
+        postgres_environment.owner_engine,
+        receipt_ref="qualification:synthetic-series-2",
+    )
+    assert first_qualification["version"] == 1
+    assert (
+        repeated_qualification["decision_fingerprint"]
+        == first_qualification["decision_fingerprint"]
+    )
+    assert superseding_qualification["version"] == 2
+    assert superseding_qualification["supersedes_version"] == 1
     with Session(postgres_environment.owner_engine) as session:
         retention = session.execute(
             sa.text(
@@ -676,6 +697,11 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
     assert explained.evidence_pack.conflicts
     assert explained.result["practice_guide_edition_id"] == str(edition_id)
     assert explained.evidence_pack.evidence[0].authority_layer == "methodological_practice"
+    platform_status = SpinePostgresRepository(
+        postgres_environment.application_engine
+    ).platform_knowledge_status()
+    assert platform_status.conflict_count == 1
+    assert platform_status.quarantine_count == 0
 
     tenant_a = create_tenant(postgres_environment)
     tenant_b = create_tenant(postgres_environment, tenant_a.organization_id)
@@ -958,7 +984,7 @@ def test_disposable_practice_memory_head_to_0008_to_head(
         with disposable_engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0019_memory_integrity"
+                == "0020_knowledge_status"
             )
         with pytest.raises(IntegrityFailure) as missing_relation:
             memory_relation_inventory(

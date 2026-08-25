@@ -1995,6 +1995,9 @@ class SpinePostgresRepository:
     def platform_knowledge_status(self) -> KnowledgeStatus:
         with self._engine.connect() as connection:
             value = connection.scalar(sa.text("SELECT application.get_platform_knowledge_status()"))
+            conflict_status = connection.scalar(
+                sa.text("SELECT application.get_platform_practice_conflict_status()")
+            )
             qualification = (
                 connection.execute(
                     sa.text(
@@ -2028,7 +2031,11 @@ class SpinePostgresRepository:
             )
         if not isinstance(value, dict):
             raise SpinePersistenceError("platform_knowledge_status_unavailable")
+        if not isinstance(conflict_status, dict):
+            raise SpinePersistenceError("platform_practice_conflict_status_unavailable")
         value = dict(value)
+        value["conflict_count"] = int(conflict_status["conflict_count"])
+        value["quarantine_count"] = int(conflict_status["quarantine_count"])
         qualification_passed = qualification is not None and qualification["status"] == "pass"
         blockers = {str(item) for item in value.get("blockers", [])}
         if qualification_passed:
