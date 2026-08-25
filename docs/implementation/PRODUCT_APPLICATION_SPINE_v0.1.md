@@ -26,7 +26,7 @@ The frontend is reimplemented from accepted user-journey semantics. No routes, t
 | Frontend | React `19.2.8`, TypeScript `5.9.3`, Vite `8.2.2` | Strict typecheck, ESLint, Vitest and static production build. No SSR/RSC/CDN/runtime Node. |
 | Server state/navigation | TanStack Query `5.102.3`, React Router `7.18.2` | Canonical state stays on the server; only query/view state is held in the browser. |
 | PDF | pdfjs-dist `6.2.108` | Local bundled worker, custom navigation/text/overlay layer, normalized locator round-trip tests. Viewer is not CAD/geometric authority. |
-| Browser E2E | Playwright `1.62.1` | Browser contract journey covers owner login, A/B creation, multipage PDF.js/evidence navigation, all mode shells, honest knowledge blockers, reset, logout and unauthorized denial. PostgreSQL effects and worker process-loss recovery are independently exercised by the full application integration test; synthetic data only. |
+| Browser E2E | Playwright `1.62.1` | A contract journey and a live-stack journey cover owner login, A/B creation, multipage PDF.js/evidence navigation, all mode shells, honest knowledge blockers, reset, logout and unauthorized denial. The live journey uses a fresh migrated PostgreSQL database, kills a claimed worker process, waits for lease expiry and drains all five jobs through a new process. Synthetic data only. |
 
 FastAPI evidence was checked on 2026-08-26 against the official
 [release list](https://github.com/fastapi/fastapi/releases) and upstream
@@ -133,7 +133,8 @@ are from the corrected path. Numeric acceptance thresholds remain `UNSET`, so `i
   session/CSRF/rate-limit, duplicate admission, lease fencing, process-loss recovery,
   cancellation/retry exhaustion, lifecycle reset and Contract Pack validation.
 - Frontend: strict TypeScript and ESLint pass; 3 Vitest assertions pass; deterministic Vite bundle
-  and generated OpenAPI client are stable; one Playwright browser journey passes.
+  and generated OpenAPI client are stable; two Playwright browser journeys pass, including one
+  end-to-end against live FastAPI, PostgreSQL, static assets and restartable worker processes.
 - Supply chain: `pip-audit` and `npm audit` report zero known vulnerabilities; dependency-license
   inventory contains no incompatible dependency. The repository's own private-project license is
   not inferred by `licensecheck` and is not treated as third-party dependency evidence.
