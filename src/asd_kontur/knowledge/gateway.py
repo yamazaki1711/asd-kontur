@@ -13,6 +13,8 @@ SUPPORTED_CONTRACT_VERSION = "0.1.0"
 SUPPORTED_SCHEMA_ID = "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge"
 GUIDANCE_CONTRACT_VERSION = "1.6.0"
 GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence"
+NTD_CONTRACT_VERSION = "1.7.0"
+NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge"
 BASE_TOOLS = frozenset(
     {
         "knowledge.search",
@@ -34,7 +36,18 @@ GUIDANCE_TOOLS = frozenset(
         "knowledge.get_practice_playbook",
     }
 )
-TOOLS = BASE_TOOLS | GUIDANCE_TOOLS
+NTD_TOOLS = frozenset(
+    {
+        "knowledge.resolve_ntd",
+        "knowledge.get_ntd_document",
+        "knowledge.get_ntd_edition",
+        "knowledge.get_ntd_provision",
+        "knowledge.search_ntd",
+        "knowledge.get_ntd_evidence_pack",
+        "knowledge.get_practice_ntd_alignment",
+    }
+)
+TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS
 
 
 class GatewayStatus(StrEnum):
@@ -45,6 +58,9 @@ class GatewayStatus(StrEnum):
     EDITION_AMBIGUOUS = "edition_ambiguous"
     EDITION_MISMATCH = "edition_mismatch"
     GUIDANCE_NORMATIVE_CONFLICT = "guidance_normative_conflict"
+    NORMATIVE_CONFLICT = "normative_conflict"
+    KNOWLEDGE_GAP = "knowledge_gap"
+    APPLICABILITY_INDETERMINATE = "applicability_indeterminate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,14 +146,15 @@ class KnowledgeGateway:
                 KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,
                 "Unknown Knowledge Tool contract.",
             )
-        expected_contract = (
-            GUIDANCE_CONTRACT_VERSION
-            if request.tool in GUIDANCE_TOOLS
-            else SUPPORTED_CONTRACT_VERSION
-        )
-        expected_schema = (
-            GUIDANCE_SCHEMA_ID if request.tool in GUIDANCE_TOOLS else SUPPORTED_SCHEMA_ID
-        )
+        if request.tool in GUIDANCE_TOOLS:
+            expected_contract = GUIDANCE_CONTRACT_VERSION
+            expected_schema = GUIDANCE_SCHEMA_ID
+        elif request.tool in NTD_TOOLS:
+            expected_contract = NTD_CONTRACT_VERSION
+            expected_schema = NTD_SCHEMA_ID
+        else:
+            expected_contract = SUPPORTED_CONTRACT_VERSION
+            expected_schema = SUPPORTED_SCHEMA_ID
         if (
             request.contract_version != expected_contract
             or request.schema_version != expected_contract

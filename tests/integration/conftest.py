@@ -34,6 +34,8 @@ class PostgreSQLEnvironment:
     audit_engine: Engine
     guidance_ingestion_engine: Engine
     guidance_gateway_engine: Engine
+    ntd_ingestion_engine: Engine
+    ntd_gateway_engine: Engine
     owner_engine: Engine
 
 
@@ -89,6 +91,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
     audit_role = f"asd_wp14_test_audit_{run_id}"
     guidance_ingestion_role = f"asd_kgid_test_ingestion_{run_id}"
     guidance_gateway_role = f"asd_kgid_test_gateway_{run_id}"
+    ntd_ingestion_role = f"asd_ntd_test_ingestion_{run_id}"
+    ntd_gateway_role = f"asd_ntd_test_gateway_{run_id}"
     password = "synthetic-g04-test-only"
     cluster_admin_url = base_url.set(database="postgres")
     cluster_engine = sa.create_engine(cluster_admin_url, isolation_level="AUTOCOMMIT")
@@ -113,6 +117,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 audit_role,
                 guidance_ingestion_role,
                 guidance_gateway_role,
+                ntd_ingestion_role,
+                ntd_gateway_role,
             ):
                 assert role.replace("_", "").isalnum()
                 connection.exec_driver_sql(
@@ -136,6 +142,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             connection.exec_driver_sql(
                 f'GRANT asd_guidance_gateway_service TO "{guidance_gateway_role}"'
             )
+            connection.exec_driver_sql(f'GRANT asd_ntd_ingestion_service TO "{ntd_ingestion_role}"')
+            connection.exec_driver_sql(f'GRANT asd_ntd_gateway_service TO "{ntd_gateway_role}"')
         application_url = owner_url.set(username=application_role, password=password)
         curator_url = owner_url.set(username=curator_role, password=password)
         projection_url = owner_url.set(username=projection_role, password=password)
@@ -149,6 +157,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         audit_url = owner_url.set(username=audit_role, password=password)
         guidance_ingestion_url = owner_url.set(username=guidance_ingestion_role, password=password)
         guidance_gateway_url = owner_url.set(username=guidance_gateway_role, password=password)
+        ntd_ingestion_url = owner_url.set(username=ntd_ingestion_role, password=password)
+        ntd_gateway_url = owner_url.set(username=ntd_gateway_role, password=password)
         application_engine = create_database_engine(
             DatabaseSettings(
                 url=application_url.render_as_string(hide_password=False),
@@ -240,6 +250,20 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 max_overflow=0,
             )
         )
+        ntd_ingestion_engine = create_database_engine(
+            DatabaseSettings(
+                url=ntd_ingestion_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
+        ntd_gateway_engine = create_database_engine(
+            DatabaseSettings(
+                url=ntd_gateway_url.render_as_string(hide_password=False),
+                pool_size=1,
+                max_overflow=0,
+            )
+        )
         yield PostgreSQLEnvironment(
             cluster_admin_url=cluster_admin_url,
             database_name=database_name,
@@ -257,6 +281,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
             audit_engine=audit_engine,
             guidance_ingestion_engine=guidance_ingestion_engine,
             guidance_gateway_engine=guidance_gateway_engine,
+            ntd_ingestion_engine=ntd_ingestion_engine,
+            ntd_gateway_engine=ntd_gateway_engine,
             owner_engine=owner_engine,
         )
         application_engine.dispose()
@@ -272,6 +298,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
         audit_engine.dispose()
         guidance_ingestion_engine.dispose()
         guidance_gateway_engine.dispose()
+        ntd_ingestion_engine.dispose()
+        ntd_gateway_engine.dispose()
     finally:
         owner_engine.dispose()
         drop_database(cluster_engine, database_name)
@@ -290,6 +318,8 @@ def postgres_environment(repository_root: object) -> Iterator[PostgreSQLEnvironm
                 audit_role,
                 guidance_ingestion_role,
                 guidance_gateway_role,
+                ntd_ingestion_role,
+                ntd_gateway_role,
             ):
                 connection.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
         cluster_engine.dispose()

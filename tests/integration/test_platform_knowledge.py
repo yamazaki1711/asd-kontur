@@ -88,7 +88,7 @@ def _admit_source(
         "metadata-v1",
         "application/pdf",
         "platform-public",
-        "platform-permanent",
+        "permanent_platform_core",
         "identity.synthetic.curator",
         correlation,
     )

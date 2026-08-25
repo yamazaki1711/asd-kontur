@@ -1,0 +1,7 @@
+{
+  "tool": "knowledge.resolve_ntd",
+  "contract_version": "1.7.0",
+  "schema_id": "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge",
+  "schema_version": "1.7.0",
+  "payload": {"identifier": "СП 543.1325800.2024", "as_of": "2026-08-25"}
+}

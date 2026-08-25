@@ -1,0 +1,37 @@
+{
+  "registry_version": "1.7.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-25T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0"],
+    "notes": "Adds permanent official NTD identity, edition, artifact, provision and Gateway contracts without changing historical KG-ID decisions."
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge",
+      "path": "schemas/normative-knowledge.schema.json",
+      "digest": "sha256:fe31ebbda3d1659f36a82ad782a0d173bb7af733ac9266446181a207745db95f"
+    }
+  ],
+  "contract_keys": [
+    "knowledge.ntd.seed-manifest",
+    "knowledge.ntd.acquisition-receipt",
+    "knowledge.ntd.provision",
+    "knowledge.ntd.backup-manifest",
+    "knowledge.ntd.gateway"
+  ],
+  "fixtures": {
+    "manifest": "fixtures/manifest.json",
+    "valid": [
+      "fixtures/valid/gateway-request.json",
+      "fixtures/valid/gateway-response.json"
+    ],
+    "invalid": [
+      {"path": "fixtures/invalid/mutable-latest.json", "reason": "Edition identities cannot use mutable latest."},
+      {"path": "fixtures/invalid/verified-without-evidence.json", "reason": "Verified provisions require exact official evidence."}
+    ]
+  }
+}

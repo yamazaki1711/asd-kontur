@@ -924,7 +924,7 @@ def test_disposable_practice_memory_head_to_0008_to_head(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0015_practice_authority"
+                == "0016_ntd_seed"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

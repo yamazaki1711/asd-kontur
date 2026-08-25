@@ -17,6 +17,9 @@ from asd_kontur.knowledge.gateway import (
     GUIDANCE_CONTRACT_VERSION,
     GUIDANCE_SCHEMA_ID,
     GUIDANCE_TOOLS,
+    NTD_CONTRACT_VERSION,
+    NTD_SCHEMA_ID,
+    NTD_TOOLS,
     TOOLS,
     EvidencePack,
     GatewayStatus,
@@ -53,8 +56,15 @@ class AuditSpy:
 def test_all_allowlisted_tools_require_exact_capability_and_version(tool: str) -> None:
     audit = AuditSpy()
     gateway = KnowledgeGateway(QueryStub(), audit)
-    contract_version = GUIDANCE_CONTRACT_VERSION if tool in GUIDANCE_TOOLS else "0.1.0"
-    schema_id = GUIDANCE_SCHEMA_ID if tool in GUIDANCE_TOOLS else SCHEMA_ID
+    if tool in GUIDANCE_TOOLS:
+        contract_version = GUIDANCE_CONTRACT_VERSION
+        schema_id = GUIDANCE_SCHEMA_ID
+    elif tool in NTD_TOOLS:
+        contract_version = NTD_CONTRACT_VERSION
+        schema_id = NTD_SCHEMA_ID
+    else:
+        contract_version = "0.1.0"
+        schema_id = SCHEMA_ID
     response = gateway.invoke(
         GatewayRequest(tool, contract_version, schema_id, contract_version, {}),
         GatewayContext("human", f"{tool}.invoke", "qualification", uuid7()),
@@ -62,6 +72,22 @@ def test_all_allowlisted_tools_require_exact_capability_and_version(tool: str) -
     assert response.tool == tool
     assert response.status is GatewayStatus.NO_RESULT
     assert audit.records == [(tool, str(GatewayStatus.NO_RESULT))]
+
+
+def test_ntd_gateway_contract_rejects_unpinned_version() -> None:
+    audit = AuditSpy()
+    gateway = KnowledgeGateway(QueryStub(), audit)
+    with pytest.raises(KnowledgeError):
+        gateway.invoke(
+            GatewayRequest(
+                "knowledge.resolve_ntd",
+                "latest",
+                NTD_SCHEMA_ID,
+                "latest",
+                {"identifier": "СП 543.1325800.2024", "as_of": "2026-08-25"},
+            ),
+            GatewayContext("human", "knowledge.resolve_ntd.invoke", "normative_context", uuid7()),
+        )
 
 
 def test_access_denied_is_explicit_and_audited() -> None:
