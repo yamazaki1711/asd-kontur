@@ -1,16 +1,13 @@
 {
-  "contract": "practice-intelligence-semantic-regression/0.1.0",
+  "contract": "practice-intelligence-semantic-regression/0.2.0",
   "positive_groups": [
-    {"case": "nrs-240-241-dependency", "kind": "document_dependency_guidance", "pages": [240, 241], "statement": "nrs-reference-check"},
-    {"case": "nrs-240-241-variant", "kind": "allowed_practice_variant", "pages": [240, 241], "statement": "nrs-reference-check"},
-    {"case": "qr-308-322-rationale", "kind": "practice_rationale", "pages": [308, 322], "statement": "qr-current-forms"},
-    {"case": "qr-308-322-example", "kind": "visual_completion_example", "pages": [308, 322], "statement": "qr-current-forms"},
     {"case": "example-309-two-candidates", "kind": "visual_completion_example", "pages": [309, 309], "statement": "foundation-concreting-example"},
-    {"case": "example-309-attention", "kind": "attention_point", "pages": [309, 309], "statement": "foundation-example-not-universal"},
-    {"case": "qr-357-396-rationale", "kind": "practice_rationale", "pages": [357, 396], "statement": "qr-current-forms-and-examples"},
-    {"case": "qr-357-396-example", "kind": "visual_completion_example", "pages": [357, 396], "statement": "qr-current-forms-and-examples"}
+    {"case": "example-309-attention", "kind": "attention_point", "pages": [309, 309], "statement": "foundation-example-not-universal"}
   ],
   "negative_cases": [
+    "different_exact_locator",
+    "different_source_version",
+    "different_guide_edition",
     "different_applicability",
     "different_work_type",
     "different_condition_or_exclusion",

@@ -109,10 +109,25 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
     try:
         run_migration(str(repository_root), database_url, "head")
         before = _schema_fingerprint(database_engine)
-        run_migration(str(repository_root), database_url, "0017_unified_harness")
+        prior = os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE")
+        os.environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = "1"
+        try:
+            run_migration(str(repository_root), database_url, "0018_product_spine")
+        finally:
+            if prior is None:
+                os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)
+            else:
+                os.environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = prior
         with database_engine.connect() as connection:
             assert (
-                connection.scalar(sa.text("SELECT to_regclass('workspace.durable_jobs')")) is None
+                connection.scalar(sa.text("SELECT to_regclass('workspace.durable_jobs')"))
+                is not None
+            )
+            assert (
+                connection.scalar(
+                    sa.text("SELECT to_regclass('platform.practice_intelligence_identities')")
+                )
+                is None
             )
         run_migration(str(repository_root), database_url, "head")
         after = _schema_fingerprint(database_engine)

@@ -1,0 +1,57 @@
+{
+  "registry_version": "2.2.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "memory_integrity_reconciled",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": [
+      "0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0",
+      "1.6.0", "1.7.0", "1.8.0", "1.9.0", "2.0.0", "2.1.0"
+    ]
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.2:schema:memory-integrity",
+      "path": "schemas/memory-integrity.schema.json",
+      "digest": "sha256:087b1dc71df814835b89648722301bbab49258ab1efc65e255b2f53e25436aa4"
+    },
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence",
+      "path": "schemas/practice-intelligence.schema.json",
+      "digest": "sha256:49ba81b4f1a025bac91a6fa589277aeb387a5a1e8901c98b43cf4e43e2bfe86b"
+    },
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.2:schema:capability-current-state",
+      "path": "schemas/capability-current-state.schema.json",
+      "digest": "sha256:45b8846801783a1efc6d1be34115703dee70704f6b8ad7f709ef224261aaaa0b"
+    }
+  ],
+  "contract_keys": [
+    "knowledge.practice-intelligence-semantic-identity@2.2.0",
+    "knowledge.practice-intelligence-evidence-link@2.2.0",
+    "knowledge.practice-intelligence-release-activation@2.2.0",
+    "knowledge.platform-memory-fingerprint-specification@2.2.0",
+    "knowledge.platform-memory-qualification-decision@2.2.0",
+    "knowledge.platform-memory-counters@2.2.0",
+    "product.capability-current-state@2.2.0"
+  ],
+  "fixtures": {
+    "valid": [
+      "fixtures/valid/memory-integrity-counters.json",
+      "fixtures/valid/capability-current-state.json"
+    ],
+    "invalid": [
+      {
+        "path": "fixtures/invalid/ambiguous-memory-counters.json",
+        "schema_id": "urn:asd-kontur:contracts:v2.2:schema:memory-integrity"
+      }
+    ],
+    "schema_specific": [
+      {
+        "schema_id": "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence",
+        "valid": "fixtures/valid/release-pinned-gateway-request.json",
+        "invalid": "fixtures/invalid/incomplete-release-pin.json"
+      }
+    ]
+  }
+}

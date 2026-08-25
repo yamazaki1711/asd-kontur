@@ -58,7 +58,7 @@ from .postgres import (
 from .qualification import execute_four_mode_fixture
 from .qwen import run_bf16_smoke
 
-EXPECTED_HEAD = "0018_memory_integrity"
+EXPECTED_HEAD = "0019_memory_integrity"
 EXPECTED_MODEL_DIGEST = "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766"
 HEAD_TABLES = (
     "project_definition_versions",
@@ -74,9 +74,9 @@ HEAD_TABLES = (
 )
 EXPECTED_PLATFORM_COUNTS = {
     "source_guidance_identity_count": 2410,
-    "practice_intelligence_identity_count": 7105,
-    "practice_intelligence_version_row_count": 21099,
-    "active_release_intelligence_version_count": 7105,
+    "practice_intelligence_identity_count": 7111,
+    "practice_intelligence_version_row_count": 21105,
+    "active_release_intelligence_version_count": 7111,
     "historical_intelligence_version_count": 13994,
     "playbook_identity_count": 1644,
     "playbook_version_row_count": 4888,
@@ -269,13 +269,20 @@ def _contract_inventory(repository_root: Path) -> dict[str, Any]:
                 )
             schema_ids[identity] = relative
             schema_path = registry_path.parent / str(schema["path"])
-            if file_digest(schema_path) != schema["digest"]:
+            actual_digest = file_digest(schema_path)
+            expected_digest = schema.get("digest")
+            if expected_digest is not None and actual_digest != expected_digest:
                 raise IntegrityFailure(
                     "CONTRACT_FINGERPRINT_MISMATCH",
                     "registered schema digest differs",
                     evidence={"path": str(schema_path.relative_to(repository_root))},
                 )
-            files.append((str(schema_path.relative_to(repository_root)), file_digest(schema_path)))
+            if expected_digest is None and registry.get("registry_version") == "2.2.0":
+                raise IntegrityFailure(
+                    "CONTRACT_FINGERPRINT_MISSING",
+                    "current Contract Pack schema lacks a registered digest",
+                    evidence={"path": str(schema_path.relative_to(repository_root))},
+                )
         for key in registry.get("contract_keys", []):
             key = str(key)
             if key in contract_keys:
@@ -285,6 +292,11 @@ def _contract_inventory(repository_root: Path) -> dict[str, Any]:
                     evidence={"contract_key": key, "registries": [contract_keys[key], relative]},
                 )
             contract_keys[key] = relative
+    files = [
+        (str(path.relative_to(repository_root)), file_digest(path))
+        for path in sorted((repository_root / "contracts").glob("v*/**/*"))
+        if path.is_file()
+    ]
     return {
         "registry_count": len(tuple((repository_root / "contracts").glob("v*/registry.json"))),
         "schema_ids": sorted(schema_ids),
@@ -576,14 +588,14 @@ class CycleRunner:
             first = canonical_digest(first_inventory)
             engine.dispose()
             engine = None
-            migrate(self.root, database_url, "0017_unified_harness")
+            migrate(self.root, database_url, "0018_product_spine")
             migrate(self.root, database_url, "head")
             engine = sa.create_engine(database_url)
             second = schema_fingerprint(engine)
             if first != second:
                 raise IntegrityFailure(
                     "SCHEMA_ROUNDTRIP_MISMATCH",
-                    "0018 downgrade/upgrade changed schema fingerprint",
+                    "0019 downgrade/upgrade changed schema fingerprint",
                     evidence={"before": first, "after": second},
                 )
             with engine.begin() as connection:
@@ -662,10 +674,10 @@ class CycleRunner:
                 raise IntegrityFailure(
                     "SOURCE_BYTE_FINGERPRINT_MISMATCH", "Practice Guide source bytes changed"
                 )
-            if len(merged_evidence) != 8:
+            if len(merged_evidence) != 2:
                 raise IntegrityFailure(
                     "SEMANTIC_DUPLICATE_REGRESSION_MISMATCH",
-                    "all eight corrected groups must retain occurrence lineage",
+                    "both exact duplicate groups must retain occurrence lineage",
                 )
             return (
                 counts,

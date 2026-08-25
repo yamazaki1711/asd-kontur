@@ -20,6 +20,8 @@ depends_on = None
 
 TABLES = (
     "system_integrity_decisions",
+    "platform_memory_fingerprint_specifications",
+    "platform_memory_qualification_decisions",
     "practice_intelligence_identities",
     "practice_intelligence_versions",
     "practice_intelligence_evidence_links",
@@ -29,6 +31,7 @@ TABLES = (
     "practice_playbook_version_members",
     "practice_playbook_release_memberships",
     "practice_intelligence_release_activation_decisions",
+    "practice_intelligence_reconciliation_decisions",
 )
 
 
@@ -65,10 +68,66 @@ def upgrade() -> None:
           )
         );
 
+        CREATE TABLE platform.platform_memory_fingerprint_specifications (
+          fingerprint_specification_id uuid NOT NULL,
+          version bigint NOT NULL CHECK (version>=1),
+          schema_version text NOT NULL,
+          included_components jsonb NOT NULL,
+          excluded_components jsonb NOT NULL,
+          canonicalization_contract jsonb NOT NULL,
+          specification_fingerprint text NOT NULL UNIQUE
+            CHECK (specification_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          owner_decision_ref text NOT NULL,
+          recorded_at timestamptz NOT NULL,
+          PRIMARY KEY (fingerprint_specification_id,version)
+        );
+
+        CREATE TABLE platform.platform_memory_qualification_decisions (
+          qualification_decision_id uuid NOT NULL,
+          version bigint NOT NULL CHECK (version>=1),
+          supersedes_version bigint,
+          fingerprint_specification_id uuid NOT NULL,
+          fingerprint_specification_version bigint NOT NULL,
+          status text NOT NULL CHECK (status IN ('pass','data_defect','blocked')),
+          all_history_fingerprint text NOT NULL
+            CHECK (all_history_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          active_release_fingerprint text NOT NULL
+            CHECK (active_release_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          context_binding_fingerprint text NOT NULL
+            CHECK (context_binding_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          active_duplicate_group_count bigint NOT NULL CHECK (active_duplicate_group_count>=0),
+          missing_component_count bigint NOT NULL CHECK (missing_component_count>=0),
+          blocker_codes jsonb NOT NULL,
+          qualification_receipt_ref text NOT NULL,
+          decision_fingerprint text NOT NULL UNIQUE
+            CHECK (decision_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          PRIMARY KEY (qualification_decision_id,version),
+          FOREIGN KEY (qualification_decision_id,supersedes_version)
+            REFERENCES platform.platform_memory_qualification_decisions(
+              qualification_decision_id,version
+            ) ON DELETE RESTRICT,
+          FOREIGN KEY (fingerprint_specification_id,fingerprint_specification_version)
+            REFERENCES platform.platform_memory_fingerprint_specifications(
+              fingerprint_specification_id,version
+            ) ON DELETE RESTRICT,
+          CHECK (
+            (version=1 AND supersedes_version IS NULL)
+            OR (version>1 AND supersedes_version=version-1)
+          ),
+          CHECK (
+            status<>'pass'
+            OR (active_duplicate_group_count=0 AND missing_component_count=0)
+          )
+        );
+
         CREATE TABLE platform.practice_intelligence_identities (
           intelligence_identity_id uuid PRIMARY KEY,
           practice_guide_id uuid NOT NULL
             REFERENCES platform.practice_guides(practice_guide_id) ON DELETE RESTRICT,
+          practice_guide_edition_id uuid NOT NULL
+            REFERENCES platform.practice_guide_editions(practice_guide_edition_id)
+            ON DELETE RESTRICT,
           typed_kind text NOT NULL,
           subject text NOT NULL,
           predicate text NOT NULL,
@@ -79,12 +138,18 @@ def upgrade() -> None:
           applicability jsonb NOT NULL,
           qualifiers jsonb NOT NULL,
           exclusions jsonb NOT NULL,
+          evidence_scope jsonb NOT NULL,
+          evidence_scope_digest text NOT NULL
+            CHECK (evidence_scope_digest ~ '^sha256:[a-f0-9]{64}$'),
           authority_layer text NOT NULL CHECK (authority_layer='methodological_practice'),
           semantic_schema_version text NOT NULL,
           normalized_semantic_digest text NOT NULL UNIQUE
             CHECK (normalized_semantic_digest ~ '^sha256:[a-f0-9]{64}$'),
           created_at timestamptz NOT NULL,
-          UNIQUE (practice_guide_id,typed_kind,normalized_semantic_digest)
+          UNIQUE (
+            practice_guide_id,practice_guide_edition_id,typed_kind,
+            normalized_semantic_digest
+          )
         );
 
         CREATE TABLE platform.practice_intelligence_versions (
@@ -256,6 +321,29 @@ def upgrade() -> None:
             OR (version>1 AND supersedes_version=version-1)
           )
         );
+
+        CREATE TABLE platform.practice_intelligence_reconciliation_decisions (
+          reconciliation_decision_id uuid NOT NULL,
+          version bigint NOT NULL CHECK (version>=1),
+          canonical_intelligence_identity_id uuid NOT NULL,
+          canonical_intelligence_version bigint NOT NULL,
+          decision_type text NOT NULL CHECK (decision_type IN (
+            'equivalent_duplicate','semantic_ambiguity','not_equivalent'
+          )),
+          legacy_intelligence_unit_ids jsonb NOT NULL,
+          source_guidance_occurrences jsonb NOT NULL,
+          identity_contract_version text NOT NULL,
+          reason_code text NOT NULL,
+          implementation_version text NOT NULL,
+          decision_fingerprint text NOT NULL UNIQUE
+            CHECK (decision_fingerprint ~ '^sha256:[a-f0-9]{64}$'),
+          recorded_at timestamptz NOT NULL,
+          PRIMARY KEY (reconciliation_decision_id,version),
+          FOREIGN KEY (canonical_intelligence_identity_id,canonical_intelligence_version)
+            REFERENCES platform.practice_intelligence_versions(
+              intelligence_identity_id,version
+            ) ON DELETE RESTRICT
+        );
         """
     )
     op.execute(
@@ -269,6 +357,12 @@ def upgrade() -> None:
         )
         op.execute(f"GRANT SELECT ON platform.{table} TO asd_guidance_gateway_service")
         op.execute(f"GRANT SELECT,INSERT ON platform.{table} TO asd_guidance_ingestion_service")
+    op.execute(
+        "GRANT SELECT ON platform.platform_memory_qualification_decisions,"
+        "platform.practice_intelligence_release_activation_decisions,"
+        "platform.practice_intelligence_release_memberships,"
+        "platform.practice_playbook_release_memberships TO asd_app"
+    )
 
 
 def downgrade() -> None:

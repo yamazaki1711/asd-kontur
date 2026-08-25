@@ -1995,8 +1995,59 @@ class SpinePostgresRepository:
     def platform_knowledge_status(self) -> KnowledgeStatus:
         with self._engine.connect() as connection:
             value = connection.scalar(sa.text("SELECT application.get_platform_knowledge_status()"))
+            qualification = (
+                connection.execute(
+                    sa.text(
+                        "SELECT status,all_history_fingerprint,active_release_fingerprint,"
+                        "context_binding_fingerprint,blocker_codes FROM "
+                        "platform.platform_memory_qualification_decisions "
+                        "ORDER BY recorded_at DESC,version DESC LIMIT 1"
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+            active_release = (
+                connection.execute(
+                    sa.text(
+                        "WITH selected AS (SELECT *,row_number() OVER (PARTITION BY "
+                        "practice_guide_id ORDER BY version DESC) rank FROM "
+                        "platform.practice_intelligence_release_activation_decisions) "
+                        "SELECT (SELECT count(*) FROM "
+                        "platform.practice_intelligence_release_memberships m WHERE "
+                        "m.release_id=selected.selected_release_id AND "
+                        "m.release_version=selected.selected_release_version) intelligence_count,"
+                        "(SELECT count(*) FROM platform.practice_playbook_release_memberships m "
+                        "WHERE m.release_id=selected.selected_release_id AND "
+                        "m.release_version=selected.selected_release_version) playbook_count "
+                        "FROM selected WHERE rank=1"
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
         if not isinstance(value, dict):
             raise SpinePersistenceError("platform_knowledge_status_unavailable")
+        value = dict(value)
+        qualification_passed = qualification is not None and qualification["status"] == "pass"
+        blockers = {str(item) for item in value.get("blockers", [])}
+        if qualification_passed:
+            blockers.discard("MEMORY_DATA_DEFECT")
+        else:
+            blockers.add("MEMORY_DATA_DEFECT")
+        if qualification is not None:
+            value["semantic_fingerprints"] = {
+                **dict(value.get("semantic_fingerprints", {})),
+                "all_history": str(qualification["all_history_fingerprint"]),
+                "active_release": str(qualification["active_release_fingerprint"]),
+                "context_binding": str(qualification["context_binding_fingerprint"]),
+            }
+            blockers.update(str(item) for item in qualification["blocker_codes"])
+        if active_release is not None:
+            value["active_intelligence_count"] = int(active_release["intelligence_count"])
+            value["active_playbook_count"] = int(active_release["playbook_count"])
+        value["memory_data_defect"] = not qualification_passed
+        value["blockers"] = sorted(blockers)
         backup_at_raw = value.get("last_verified_backup_at")
         backup_at = (
             datetime.fromisoformat(str(backup_at_raw).replace("Z", "+00:00"))

@@ -1,13 +1,15 @@
 # АСД-КОНТУР
 
 > Current delivery slice: [PRODUCT-APPLICATION-SPINE-01](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
-> adds the first bounded browser/application contour. `MEMORY_DATA_DEFECT` remains open;
+> adds the first bounded browser/application contour. MEMORY-INTEGRITY-FIX-01
+> now owns the superseding memory qualification decision;
 > `TrialReady=false`, `OKSReady=false`, and `ProductReady=false`.
 
 > **Current product status (superseding, 2026-08-26):** the repository contains
-> a `PARTIAL` Platform/Domain Kernel, not a user-ready software complex.
-> Frontend, Application Spine, industrial intake and production operator flows
-> are not implemented. `TrialReady=false`, `OKSReady=false`,
+> a `PARTIAL` Platform/Domain Kernel and `PARTIAL` Product Application, not a
+> user-ready software complex. The bounded browser/Application Spine exists;
+> industrial document understanding and production mode flows remain incomplete.
+> `TrialReady=false`, `OKSReady=false`,
 > `ProductReady=false`. The canonical denominator is the
 > [Product Goal and Capability Map](docs/product/PRODUCT_GOAL_AND_CAPABILITY_MAP_v1.md)
 > and [Contract Pack v2.0](contracts/v2.0/README.md).
@@ -129,15 +131,17 @@ readiness semantics are defined by
   425/425 страниц reconciled, 2 410 source-guidance опубликованы как
   `permanent_platform_core`; historical release с 7 113 typed rows сохранён,
   а superseding semantic release MEMORY-INTEGRITY-FIX-01 содержит вычисленные
-  7 105 identities/versions и 1 644 playbooks с отдельными evidence links;
+  7 111 identities/versions и 1 644 playbooks с отдельными evidence links;
   restore и projection rebuild воспроизводимы. Fresh-session acceptance —
   24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
   остаётся `false`.
 - `SYSTEM-INTEGRITY-CYCLE-01` — **PARTIAL / DATA_DEFECT (superseded semantic
   decision) 2026-08-26**: прежние C1–C3 остаются evidence физической
   воспроизводимости, но их semantic PASS отозван immutable decision после
-  обнаружения восьми duplicate groups и неполного fingerprint scope. Новая
-  трёхцикловая серия обязательна; `READY_FOR_INTEGRITY_CYCLE` означает только
+  обнаружения двух exact duplicate groups (четыре active physical rows) и
+  неполного fingerprint scope. Шесть equal-text пар с разными exact locators
+  не объединяются. Новая трёхцикловая серия обязательна;
+  `READY_FOR_INTEGRITY_CYCLE` означает только
   участие модуля в harness, не production readiness.
 - `NTD-SEED-01 bounded official NTD memory` — **PARTIAL 2026-08-25**:
   exact guide geometry reconciled 37 mentions to 25 stable identities; all 25

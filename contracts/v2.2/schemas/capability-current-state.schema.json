@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.2:schema:capability-current-state",
+  "title": "ASD-KONTUR canonical capability current state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "base_registry_version",
+    "readiness_delta_version",
+    "denominator",
+    "distribution",
+    "capability_ready_ids",
+    "next_delivery_slice",
+    "trial_ready",
+    "oks_ready",
+    "product_ready"
+  ],
+  "properties": {
+    "contract_version": {"const": "2.2.0"},
+    "base_registry_version": {"const": "2.0.0"},
+    "readiness_delta_version": {"const": "2.1.0"},
+    "denominator": {"const": 142},
+    "distribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "CAPABILITY_READY", "PARTIAL", "FOUNDATION_ONLY", "CONTRACT_ONLY", "NOT_IMPLEMENTED"
+      ],
+      "properties": {
+        "CAPABILITY_READY": {"const": 16},
+        "PARTIAL": {"const": 10},
+        "FOUNDATION_ONLY": {"const": 45},
+        "CONTRACT_ONLY": {"const": 64},
+        "NOT_IMPLEMENTED": {"const": 7}
+      }
+    },
+    "capability_ready_ids": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"}
+    },
+    "next_delivery_slice": {"const": "INDUSTRIAL-DOCUMENT-UNDERSTANDING-01"},
+    "trial_ready": {"const": false},
+    "oks_ready": {"const": false},
+    "product_ready": {"const": false}
+  }
+}

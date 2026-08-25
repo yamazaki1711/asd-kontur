@@ -25,8 +25,8 @@ from .models import (
     PracticePlaybook,
 )
 
-CONSTRUCTION_PROFILE_VERSION = "id-practice-intelligence-semantic-v0.3.0"
-SEMANTIC_IDENTITY_SCHEMA_VERSION = "practice-intelligence-semantic-identity-v0.1.0"
+CONSTRUCTION_PROFILE_VERSION = "id-practice-intelligence-semantic-v0.4.0"
+SEMANTIC_IDENTITY_SCHEMA_VERSION = "practice-intelligence-semantic-identity-v0.2.0"
 
 PRIMARY_KIND = {
     GuidanceKind.ID_WORKFLOW_GUIDANCE: PracticeIntelligenceKind.ID_WORKFLOW_STEP,
@@ -135,20 +135,46 @@ def semantic_identity_payload(
     practice_guide_id: UUID,
     authority_layer: str = "methodological_practice",
 ) -> dict[str, Any]:
-    """Return the evidence-free typed assertion identity.
+    """Return the canonical evidence-bound identity of one practice assertion.
 
-    Evidence occurrences, edition/build/release identities, timestamps and source UUIDs are
-    deliberately excluded. Dimensions that can change meaning remain explicit so equal-looking
-    prose with different applicability, modality, units or exclusions does not merge.
+    Attempt/candidate/guidance UUIDs, build/release identities, timestamps and processing order
+    are excluded.  Edition, exact source version, locator, fragment digest and every typed
+    semantic dimension are included.  Consequently an idempotent duplicate occurrence at the
+    same evidence location converges, while equal prose at another location or edition does not.
     """
 
     normative = sorted(
         (dict(value) for value in unit.normative_references),
         key=digest_of,
     )
+    evidence_scope = sorted(
+        {
+            digest_of(
+                {
+                    "practice_guide_edition_id": str(unit.practice_guide_edition_id),
+                    "source_version_id": str(evidence.source_version_id),
+                    "page_number": evidence.locator.page_number,
+                    "region": list(evidence.locator.region),
+                    "fragment_digest": evidence.fragment_digest,
+                }
+            ): {
+                "practice_guide_edition_id": str(unit.practice_guide_edition_id),
+                "source_version_id": str(evidence.source_version_id),
+                "page_number": evidence.locator.page_number,
+                "region": list(evidence.locator.region),
+                "fragment_digest": evidence.fragment_digest,
+            }
+            for evidence in unit.evidence
+        }.values(),
+        key=digest_of,
+    )
+    if not evidence_scope:
+        raise ValueError("PracticeIntelligence identity requires exact source evidence")
     return {
         "schema_version": SEMANTIC_IDENTITY_SCHEMA_VERSION,
         "practice_guide_id": str(practice_guide_id),
+        "practice_guide_edition_id": str(unit.practice_guide_edition_id),
+        "evidence_scope": evidence_scope,
         "typed_kind": unit.kind.value,
         "subject": canonical_semantic_key(unit.title),
         "predicate": unit.kind.value,

@@ -1,0 +1,35 @@
+{
+  "contract_version": "2.2.0",
+  "base_registry_version": "2.0.0",
+  "readiness_delta_version": "2.1.0",
+  "denominator": 142,
+  "distribution": {
+    "CAPABILITY_READY": 16,
+    "PARTIAL": 10,
+    "FOUNDATION_ONLY": 45,
+    "CONTRACT_ONLY": 64,
+    "NOT_IMPLEMENTED": 7
+  },
+  "capability_ready_ids": [
+    "application.authentication",
+    "application.durable-job-orchestration",
+    "application.http-api",
+    "application.session-handling",
+    "intake.batch-upload",
+    "intake.crash-recovery",
+    "intake.deduplication",
+    "intake.mime-content-validation",
+    "intake.pdf-page-inventory",
+    "intake.streamed-hashing",
+    "interaction.document-registry",
+    "interaction.four-mode-navigation",
+    "interaction.frontend-shell",
+    "interaction.gaps-conflicts-blockers",
+    "interaction.workspace-selector",
+    "operations.document-worker"
+  ],
+  "next_delivery_slice": "INDUSTRIAL-DOCUMENT-UNDERSTANDING-01",
+  "trial_ready": false,
+  "oks_ready": false,
+  "product_ready": false
+}

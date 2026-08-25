@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -446,6 +447,16 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
         construction,
     )
     assert repeated_persistence == persistence
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        concurrent = tuple(
+            pool.map(
+                lambda _: persist_manifest(
+                    postgres_environment.guidance_ingestion_engine, construction
+                ),
+                range(2),
+            )
+        )
+    assert concurrent == (persistence, persistence)
     with Session(postgres_environment.owner_engine) as session:
         retention = session.execute(
             sa.text(

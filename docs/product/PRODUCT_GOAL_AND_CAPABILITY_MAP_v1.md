@@ -3,6 +3,7 @@
 - Product Goal: `PRODUCT-GOAL-ASD-KONTUR@1.0.0`
 - Owner source: [GitHub issue #19](https://github.com/yamazaki1711/asd-kontur/issues/19)
 - Machine denominator: [Contract Pack v2.0](../../contracts/v2.0/README.md)
+- Current readiness ledger: [Contract Pack v2.2](../../contracts/v2.2/README.md)
 - Current decision: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
 
 ## Goal
@@ -45,7 +46,20 @@ independent required list prevents a capability from disappearing silently.
 | Document/CAD Output | 11 | `output.*` | 9 CONTRACT_ONLY, 2 FOUNDATION_ONLY |
 | Field/Offline | 10 | `field.*` | 10 CONTRACT_ONLY |
 | Operations | 14 | `operations.*` | 9 CONTRACT_ONLY, 5 FOUNDATION_ONLY |
-| **Total** | **142** | — | **21 NOT_IMPLEMENTED, 70 CONTRACT_ONLY, 50 FOUNDATION_ONLY, 1 PARTIAL** |
+| **Rebaseline total (v2.0)** | **142** | — | **21 NOT_IMPLEMENTED, 70 CONTRACT_ONLY, 50 FOUNDATION_ONLY, 1 PARTIAL** |
+
+The per-plane table above preserves the v2.0 rebaseline. The effective
+post-Spine distribution is the additive v2.1 delta reconciled by v2.2; no stable
+capability identity was added, removed or renamed.
+
+| Effective readiness after Product Application Spine | Count |
+|---|---:|
+| `CAPABILITY_READY` | 16 |
+| `PARTIAL` | 10 |
+| `FOUNDATION_ONLY` | 45 |
+| `CONTRACT_ONLY` | 64 |
+| `NOT_IMPLEMENTED` | 7 |
+| **Denominator** | **142** |
 
 The complete stable-ID list and per-capability product result, modes, lifecycle,
 inputs, outputs, dependencies, canonical/workspace data, surface, evidence,
@@ -76,19 +90,20 @@ No real OKS is proposed before an exact `TrialReadinessDecision`.
 ## Current truth
 
 - `PlatformKernelReady=PARTIAL`;
-- `ProductApplicationReady=false`;
+- `ProductApplicationReady=PARTIAL`;
 - `TrialReady=false`;
 - `OKSReady=false`;
 - `ProductReady=false`.
 
-SYSTEM-INTEGRITY-CYCLE-01 proves bounded kernel reproducibility only. Its
-semantic integrity claim is also superseded by the open memory DATA_DEFECT.
+SYSTEM-INTEGRITY-CYCLE-01 proves bounded kernel reproducibility only. Its old
+semantic claim was superseded by the memory DATA_DEFECT; MEMORY-INTEGRITY-FIX-01
+may close only that bounded defect after its own qualification series.
 Rule Registry has infrastructure but zero operational rules.
 
 ## Delivery order
 
 1. complete `MEMORY-INTEGRITY-FIX-01` in its separate worktree;
-2. implement `PRODUCT-APPLICATION-SPINE-01` exactly as specified in the
+2. implement `INDUSTRIAL-DOCUMENT-UNDERSTANDING-01` exactly as specified in the
    [Implementation Plan](../architecture/IMPLEMENTATION_PLAN_v1.md);
 3. deliver capability streams that end in visible professional outputs;
 4. perform Trial Readiness qualification before any real OKS.

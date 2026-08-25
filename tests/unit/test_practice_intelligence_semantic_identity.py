@@ -48,18 +48,20 @@ def _unit(
     semantic_unit: str | None = None,
     semantic_dimension: str | None = None,
     fragment_digest: str = ZERO,
+    edition_id: UUID = EDITION_ID,
+    source_id: UUID = SOURCE_ID,
 ) -> IDPracticeIntelligenceUnit:
     evidence = PracticeIntelligenceEvidence(
         guidance_unit_id=UUID(int=identity),
         guidance_unit_version=1,
-        source_version_id=SOURCE_ID,
+        source_version_id=source_id,
         locator=GuideLocator(page, (0.1, 0.2, 0.8, 0.9)),
         fragment_digest=fragment_digest,
     )
     return IDPracticeIntelligenceUnit(
         intelligence_unit_id=UUID(int=identity + 1000),
         version=1,
-        practice_guide_edition_id=EDITION_ID,
+        practice_guide_edition_id=edition_id,
         coverage_manifest_id=COVERAGE_ID,
         kind=PracticeIntelligenceKind(kind),
         title=statement,
@@ -87,7 +89,7 @@ def _unit(
 
 
 @pytest.mark.parametrize("case", POSITIVE_GROUPS)
-def test_eight_proven_duplicate_groups_merge_identity_and_preserve_evidence(
+def test_exact_duplicate_occurrences_merge_identity_and_preserve_evidence(
     case: dict[str, object],
 ) -> None:
     pages = [cast(int, value) for value in cast(list[object], case["pages"])]
@@ -105,7 +107,7 @@ def test_eight_proven_duplicate_groups_merge_identity_and_preserve_evidence(
 
     assert len(merged) == 1
     assert len(merged[0].evidence) == 2
-    assert [item.locator.page_number for item in merged[0].evidence] == sorted(pages)
+    assert [item.locator.page_number for item in merged[0].evidence] == pages
     assert {item.guidance_unit_id for item in merged[0].evidence} == {
         item.evidence[0].guidance_unit_id for item in inputs
     }
@@ -133,6 +135,15 @@ def test_eight_proven_duplicate_groups_merge_identity_and_preserve_evidence(
             _unit(identity=13, uncertainties=("verified",), fragment_digest=ZERO),
             _unit(identity=14, uncertainties=("evidence-contradicted",), fragment_digest=ONE),
         ),
+        (_unit(identity=15, page=240), _unit(identity=16, page=241)),
+        (
+            _unit(identity=17),
+            _unit(identity=18, source_id=UUID("0198f8ae-c954-7000-8000-000000000105")),
+        ),
+        (
+            _unit(identity=19),
+            _unit(identity=21, edition_id=UUID("0198f8ae-c954-7000-8000-000000000106")),
+        ),
     ),
 )
 def test_semantic_dimensions_prevent_false_merge(
@@ -154,10 +165,10 @@ def test_authority_layer_is_part_of_semantic_identity() -> None:
     assert practice != normative
 
 
-def test_occurrence_build_release_and_source_identity_do_not_change_semantic_identity() -> None:
-    first = _unit(identity=30, page=240)
+def test_occurrence_and_build_identity_do_not_change_semantic_identity() -> None:
+    first = _unit(identity=30, page=309)
     second = replace(
-        _unit(identity=31, page=241),
+        _unit(identity=31, page=309),
         coverage_manifest_id=UUID("0198f8ae-c954-7000-8000-000000000199"),
     )
     assert semantic_identity_digest(first, practice_guide_id=GUIDE_ID) == (

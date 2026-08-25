@@ -190,7 +190,7 @@ def schema_fingerprint(engine: Engine) -> str:
     return canonical_digest(schema_inventory(engine))
 
 
-PLATFORM_MEMORY_SCHEMA_VERSION = "platform-memory-fingerprint-v2.0.0"
+PLATFORM_MEMORY_SCHEMA_VERSION = "platform-memory-fingerprint-v2.1.0"
 
 # These are canonical source/history relations.  A relation being empty is valid; a
 # relation being absent is a schema defect and must never be normalized to an empty set.
@@ -202,6 +202,18 @@ PERMANENT_RELATIONS = (
     ("platform", "practice_guide_editions"),
     ("platform", "practice_guide_edition_states"),
     ("platform", "practice_guide_edition_activation_decisions"),
+    ("platform", "practice_guide_candidate_versions"),
+    ("platform", "practice_guide_failed_candidate_versions"),
+    ("platform", "practice_guide_validation_results"),
+    ("platform", "practice_guide_verifications"),
+    ("platform", "practice_guide_verification_selection_decisions"),
+    ("platform", "practice_guide_ingestion_reconciliations"),
+    ("platform", "practice_guide_page_manifests"),
+    ("platform", "practice_guide_source_rows"),
+    ("platform", "practice_guide_structural_units"),
+    ("platform", "practice_guide_normative_reference_candidates"),
+    ("platform", "practice_guide_normative_reference_resolutions"),
+    ("platform", "practice_guide_ntd_relevance_assertions"),
     ("platform", "practice_guidance_units"),
     ("platform", "practice_guidance_evidence"),
     ("platform", "practice_guidance_coverage_manifests"),
@@ -226,7 +238,8 @@ PERMANENT_RELATIONS = (
     ("platform", "practice_intelligence_release_memberships"),
     ("platform", "practice_playbook_release_memberships"),
     ("platform", "practice_intelligence_release_activation_decisions"),
-    ("platform", "practice_memory_backup_manifests"),
+    ("platform", "practice_intelligence_reconciliation_decisions"),
+    ("platform", "platform_memory_fingerprint_specifications"),
     ("platform", "practice_guide_normative_references"),
     ("platform", "practice_guide_ntd_resolution_decisions"),
     ("platform", "practice_ntd_alignments"),
@@ -234,17 +247,125 @@ PERMANENT_RELATIONS = (
     ("platform", "normative_editions"),
     ("platform", "normative_artifacts"),
     ("platform", "normative_edition_relationships"),
+    ("platform", "normative_edition_states"),
+    ("platform", "normative_references"),
+    ("platform", "normative_provision_candidates"),
     ("platform", "normative_provision_versions"),
     ("platform", "normative_activation_decisions"),
+    ("platform", "normative_applicability_decisions"),
+    ("platform", "normative_seed_outcomes"),
+    ("platform", "normative_conflicts"),
     ("platform", "ntd_gaps"),
     ("platform", "ntd_conflicts"),
     ("platform", "rule_versions"),
     ("platform", "rule_version_states"),
     ("platform", "rule_set_versions"),
     ("platform", "rule_set_memberships"),
-    ("platform", "system_integrity_decisions"),
-    ("projection", "practice_intelligence_projection_manifests"),
+    ("platform", "rules"),
+    ("platform", "rule_evidence"),
+    ("platform", "rule_reviews"),
+    ("platform", "rule_approvals"),
 )
+
+NON_SEMANTIC_COLUMNS = frozenset(
+    {
+        "created_at",
+        "recorded_at",
+        "constructed_at",
+        "published_at",
+        "built_at",
+        "rebuilt_at",
+        "updated_at",
+        "generated_at",
+        "completed_at",
+        "search_vector",
+    }
+)
+
+RELATION_NON_SEMANTIC_COLUMNS: dict[tuple[str, str], frozenset[str]] = {
+    ("platform", "practice_intelligence_release_memberships"): frozenset({"member_sequence"}),
+    ("platform", "practice_playbook_release_memberships"): frozenset({"member_sequence"}),
+}
+
+REQUIRED_SEMANTIC_COLUMNS: dict[tuple[str, str], frozenset[str]] = {
+    ("platform", "source_versions"): frozenset(
+        {"source_version_id", "source_artifact_id", "object_id", "content_digest"}
+    ),
+    ("platform", "source_locators"): frozenset(
+        {"source_locator_id", "source_version_id", "locator_key", "locator_value"}
+    ),
+    ("platform", "practice_guide_editions"): frozenset(
+        {"practice_guide_edition_id", "practice_guide_id", "source_version_id"}
+    ),
+    ("platform", "practice_guidance_units"): frozenset(
+        {"guidance_unit_id", "version", "guidance_candidate_id", "candidate_version"}
+    ),
+    ("platform", "practice_guidance_evidence"): frozenset(
+        {"guidance_unit_id", "guidance_unit_version", "source_version_id", "fragment_digest"}
+    ),
+    ("platform", "practice_intelligence_identities"): frozenset(
+        {
+            "intelligence_identity_id",
+            "practice_guide_edition_id",
+            "evidence_scope_digest",
+            "normalized_semantic_digest",
+        }
+    ),
+    ("platform", "practice_intelligence_versions"): frozenset(
+        {"intelligence_identity_id", "version", "canonical_payload", "semantic_fingerprint"}
+    ),
+    ("platform", "practice_intelligence_evidence_links"): frozenset(
+        {
+            "evidence_link_id",
+            "intelligence_identity_id",
+            "intelligence_version",
+            "source_version_id",
+            "source_locator_id",
+            "guidance_candidate_id",
+        }
+    ),
+    ("platform", "practice_intelligence_releases"): frozenset(
+        {
+            "release_id",
+            "version",
+            "practice_guide_edition_id",
+            "context_assembly_policy_id",
+            "canonical_semantic_fingerprint",
+        }
+    ),
+    ("platform", "practice_intelligence_release_activation_decisions"): frozenset(
+        {"practice_guide_id", "selected_release_id", "selected_release_version"}
+    ),
+    ("platform", "context_assembly_policies"): frozenset(
+        {"policy_id", "version", "practice_guide_edition_id", "policy_fingerprint", "state"}
+    ),
+    ("platform", "normative_editions"): frozenset(
+        {"normative_edition_id", "normative_document_id", "source_version_id"}
+    ),
+    ("platform", "normative_provision_versions"): frozenset(
+        {"normative_provision_id", "version", "normative_edition_id", "semantic_fingerprint"}
+    ),
+    ("platform", "rule_versions"): frozenset(
+        {"rule_version_id", "rule_id", "version", "integrity_digest"}
+    ),
+}
+
+EXCLUDED_MEMORY_RELATIONS = {
+    "workspace-specific-data": "workspace schemas are outside permanent platform memory",
+    "AI request/response artifacts": "processing receipts do not define canonical semantics",
+    "platform.practice_guide_ingestion_runs": "runtime attempt state",
+    "platform.practice_guide_ingestion_run_states": "runtime attempt state",
+    "platform.practice_guide_page_terminal_receipts": "processing receipt metadata",
+    "platform.practice_memory_backup_manifests": "backup operation receipt",
+    "platform.ntd_backup_manifests": "backup operation receipt",
+    "platform.ntd_catalogue_query_receipts": "acquisition operation receipt",
+    "platform.ntd_parse_receipts": "parser operation receipt",
+    "platform.system_integrity_decisions": "qualification status, not knowledge semantics",
+    "platform.platform_memory_qualification_decisions": (
+        "qualification result references fingerprints and is excluded to avoid recursion"
+    ),
+    "projection rows": "FTS/vector/graph/runtime projection content is rebuildable",
+}
 
 REBUILDABLE_PROJECTION_RELATIONS = (
     ("projection", "practice_guidance_lexical_versions"),
@@ -284,7 +405,15 @@ def memory_relation_inventory(
             evidence={"missing_relations": missing},
         )
 
-    inventory: dict[str, Any] = {"schema_version": PLATFORM_MEMORY_SCHEMA_VERSION}
+    inventory: dict[str, Any] = {
+        "schema_version": PLATFORM_MEMORY_SCHEMA_VERSION,
+        "canonicalization": {
+            "row_order": "canonical_digest",
+            "value_encoding": "typed-json-v1",
+            "non_semantic_columns": sorted(NON_SEMANTIC_COLUMNS),
+        },
+        "components": {},
+    }
     with engine.connect() as connection:
         for schema, table in relation_list:
             columns = [str(item["name"]) for item in inspector.get_columns(table, schema=schema)]
@@ -294,7 +423,22 @@ def memory_relation_inventory(
                     "canonical memory columns cannot be inspected",
                     evidence={"relation": f"{schema}.{table}"},
                 )
-            selected = sorted(column for column in columns if not column.endswith("_at"))
+            missing_columns = sorted(
+                REQUIRED_SEMANTIC_COLUMNS.get((schema, table), frozenset()) - set(columns)
+            )
+            if missing_columns:
+                raise IntegrityFailure(
+                    "PLATFORM_MEMORY_SCHEMA_INCOMPLETE",
+                    "a required canonical memory column is absent",
+                    evidence={
+                        "relation": f"{schema}.{table}",
+                        "missing_columns": missing_columns,
+                    },
+                )
+            excluded = NON_SEMANTIC_COLUMNS | RELATION_NON_SEMANTIC_COLUMNS.get(
+                (schema, table), frozenset()
+            )
+            selected = sorted(column for column in columns if column not in excluded)
             if not selected:
                 raise IntegrityFailure(
                     "PLATFORM_MEMORY_SEMANTIC_COLUMNS_EMPTY",
@@ -307,10 +451,14 @@ def memory_relation_inventory(
                 for row in connection.execute(sa.text(f'SELECT {quoted} FROM "{schema}"."{table}"'))
             ]
             rows.sort(key=canonical_digest)
-            inventory[f"{schema}.{table}"] = {
-                "columns": selected,
+            component = {
+                "included_columns": selected,
+                "excluded_columns": sorted(set(columns) - set(selected)),
+                "row_count": len(rows),
                 "rows": rows,
             }
+            component["fingerprint"] = canonical_digest(component)
+            inventory["components"][f"{schema}.{table}"] = component
     return inventory
 
 
@@ -328,7 +476,15 @@ def platform_memory_inventory(engine: Engine) -> dict[str, Any]:
                 evidence={"missing_relations": [f"{schema}.{table}"]},
             )
         columns = sorted(
-            str(item["name"]) for item in inspector.get_columns(table, schema=schema)
+            [
+                {
+                    "name": str(item["name"]),
+                    "type": str(item["type"]),
+                    "nullable": bool(item["nullable"]),
+                }
+                for item in inspector.get_columns(table, schema=schema)
+            ],
+            key=canonical_digest,
         )
         projection_bindings.append(
             {
@@ -340,6 +496,20 @@ def platform_memory_inventory(engine: Engine) -> dict[str, Any]:
         "binding_version": "rebuildable-projection-schema-binding-v1.0.0",
         "relations": projection_bindings,
     }
+    with engine.connect() as connection:
+        projection_versions = [
+            _plain(dict(row._mapping))
+            for row in connection.execute(
+                sa.text(
+                    "SELECT release_id,release_version,projection_kind,projection_version,"
+                    "source_semantic_fingerprint FROM "
+                    "projection.practice_intelligence_projection_manifests"
+                )
+            )
+        ]
+    projection_versions.sort(key=canonical_digest)
+    inventory["rebuildable_projection_version_binding"] = projection_versions
+    inventory["excluded_components"] = EXCLUDED_MEMORY_RELATIONS
     return inventory
 
 
@@ -418,7 +588,15 @@ def _active_release_binding(engine: Engine) -> dict[str, Any]:
             )
         )
         guide_count = int(
-            connection.scalar(sa.text("SELECT count(*) FROM platform.practice_guides")) or 0
+            connection.scalar(
+                sa.text(
+                    "SELECT count(DISTINCT edition.practice_guide_id) FROM "
+                    "platform.practice_intelligence_releases release JOIN "
+                    "platform.practice_guide_editions edition ON "
+                    "edition.practice_guide_edition_id=release.practice_guide_edition_id"
+                )
+            )
+            or 0
         )
         if len(rows) != guide_count or guide_count == 0:
             raise IntegrityFailure(
@@ -630,17 +808,11 @@ def active_semantic_duplicate_inventory(engine: Engine) -> list[dict[str, Any]]:
 
 
 def proven_duplicate_evidence_inventory(engine: Engine) -> list[dict[str, Any]]:
-    """Locate the eight owner-reconciled duplicate occurrence groups in active memory."""
+    """Locate exact duplicate occurrences reconciled under the evidence-bound contract."""
 
     expected = {
-        ("document_dependency_guidance", (240, 241)),
-        ("allowed_practice_variant", (240, 241)),
-        ("practice_rationale", (308, 322)),
-        ("visual_completion_example", (308, 322)),
         ("visual_completion_example", (309,)),
         ("attention_point", (309,)),
-        ("practice_rationale", (357, 396)),
-        ("visual_completion_example", (357, 396)),
     }
     binding = _active_release_binding(engine)
     if len(binding["bindings"]) != 1:
@@ -692,10 +864,10 @@ def proven_duplicate_evidence_inventory(engine: Engine) -> list[dict[str, Any]]:
     matched_keys = {
         (str(row["typed_kind"]), tuple(int(page) for page in row["pages"])) for row in matched
     }
-    if matched_keys != expected or len(matched) != 8:
+    if matched_keys != expected or len(matched) != 2:
         raise IntegrityFailure(
             "SEMANTIC_DUPLICATE_REGRESSION_MISMATCH",
-            "the eight merged semantic groups lost evidence lineage or changed scope",
+            "the two exact duplicate groups lost evidence lineage or changed scope",
             evidence={"expected": sorted(expected), "matched": matched},
         )
     return matched

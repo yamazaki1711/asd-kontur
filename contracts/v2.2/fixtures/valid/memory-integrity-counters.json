@@ -1,13 +1,16 @@
 {
-  "contract_version": "2.0.0",
+  "contract_version": "2.2.0",
   "all_history_platform_memory_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
   "active_release_semantic_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
   "active_context_pack_binding_fingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "fingerprint_specification_version": "platform-memory-fingerprint-v2.1.0",
+  "active_semantic_duplicate_group_count": 0,
+  "missing_fingerprint_component_count": 0,
   "counts": {
     "source_guidance_identity_count": 2410,
-    "practice_intelligence_identity_count": 7105,
-    "practice_intelligence_version_row_count": 21099,
-    "active_release_intelligence_version_count": 7105,
+    "practice_intelligence_identity_count": 7111,
+    "practice_intelligence_version_row_count": 21105,
+    "active_release_intelligence_version_count": 7111,
     "historical_intelligence_version_count": 13994,
     "playbook_identity_count": 1644,
     "playbook_version_row_count": 4888,
@@ -26,6 +29,6 @@
     "operational_rule_coverage": false
   },
   "module_participation_status": "READY_FOR_INTEGRITY_CYCLE",
-  "system_integrity_status": "PARTIAL / DATA_DEFECT",
+  "system_integrity_status": "PASS",
   "product_ready": false
 }

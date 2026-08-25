@@ -12,27 +12,37 @@ cycles. The immutable decision is
 
 ## Corrected canonical model
 
-`PracticeIntelligenceIdentity` is computed from guide identity, typed kind,
-canonical subject/predicate/object, unit/dimension, modality, applicability,
-qualifiers, exclusions and authority layer. It excludes CoverageManifest,
-construction/release identity, evidence occurrence UUIDs, timestamps and input
-order. `PracticeIntelligenceVersion` pins the exact guide edition, construction
-profile and canonical payload. Each occurrence is retained as an immutable
+`PracticeIntelligenceIdentity` is computed from guide and exact edition, typed
+kind, canonical subject/predicate/object, unit/dimension, modality,
+applicability, qualifiers, exclusions, authority layer, SourceVersion, exact
+page/region locator and source-fragment digest. It excludes CoverageManifest,
+construction/release identity, Candidate/Guidance occurrence UUIDs, timestamps
+and input order. `PracticeIntelligenceVersion` pins the construction profile and
+canonical payload. Each occurrence is retained as an immutable
 `PracticeIntelligenceEvidenceLink`; releases only select exact versions.
 
-The eight proven duplicate groups (NRS 240/241, form QR 308/322, two page-309
-candidates and form QR 357/396, each in two typed kinds) are regression fixtures.
-The construction validator computes the denominator; it does not hard-code
-`7113 - 8`.
+The read-only reconciliation disproved the earlier eight-group assumption. Six
+equal-text pairs have different exact locators (pages 240/241, 308/322 and
+357/396) and remain separate identities. Two page-309 groups have identical
+edition, SourceVersion, locator, fragment and typed meaning; each converges to
+one identity with two Candidate/Guidance evidence links. The validator computes
+the denominator (`7,111` in the qualified snapshot); it does not hard-code a
+subtraction.
 
 ## Integrity semantics
 
-Contract Pack v2.0 names identities, version rows, active release membership,
+Contract Pack v2.2 names identities, version rows, active release membership,
 history, logical gaps, gap snapshots, conflicts and quarantined candidates
 separately. The fingerprint implementation validates actual
 `context_assembly_policies` and `practice_intelligence_releases` relations and
 fails closed if required schema, release selection, edition selection, policy or
 projection binding is absent.
+
+The all-history specification enumerates every canonical relation and selected
+semantic column. It excludes workspace state, processing receipts, wall-clock
+metadata and rebuildable projection rows. Projection schema/version binding is
+included without projection contents. The qualification decision itself is
+excluded from the root to avoid a self-referential fingerprint.
 
 Three fingerprints are independent:
 

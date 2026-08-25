@@ -13,7 +13,7 @@ recovery and export—not a test-count claim.
 This rebaseline does not modify or hide its DATA_DEFECT. Product Application
 work starts only from the resulting canonical main.
 
-## Next slice: PRODUCT-APPLICATION-SPINE-01
+## Completed bounded slice: PRODUCT-APPLICATION-SPINE-01
 
 Purpose: establish the minimum user-operable application boundary without
 claiming any mode ready.
@@ -49,9 +49,24 @@ intelligence, G-07B or legacy code copy. Dependencies are pinned only after the
 
 ### Terminal condition
 
-The Spine ends with selected application/interaction/intake foundations and
+The Spine ended with selected application/interaction/intake foundations and
 their capability E2E. It may advance individual capabilities to
 `CAPABILITY_READY`; it cannot set ModeReady, TrialReady or ProductReady.
+
+## Next slice: INDUSTRIAL-DOCUMENT-UNDERSTANDING-01
+
+Purpose: turn admitted ПЗ/ПД/РД/ВОР/estimate documents into an evidence-bound,
+visible project model without changing memory integrity or claiming a ready
+mode.
+
+`admitted documents → document/page classification → ProjectDefinition → OKS
+structure → work/quantity/MTR candidates → ConstructionWorkPackages →
+WorkRequirementMatrix → visible evidence-bound UI result`.
+
+This slice starts only after MEMORY-INTEGRITY-FIX-01 is merged. It must use the
+existing Product Application Spine, durable jobs, workspace isolation,
+Knowledge Gateway and exact locators. It does not authorize a real OKS,
+recursive NTD acquisition, CAD/Drawing Intelligence or external VLM routing.
 
 ## Subsequent streams
 

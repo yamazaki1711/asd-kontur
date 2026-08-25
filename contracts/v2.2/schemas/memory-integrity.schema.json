@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:asd-kontur:contracts:v2.0:schema:memory-integrity",
+  "$id": "urn:asd-kontur:contracts:v2.2:schema:memory-integrity",
   "title": "ASD-KONTUR permanent platform-memory integrity",
   "type": "object",
   "additionalProperties": false,
@@ -9,16 +9,22 @@
     "all_history_platform_memory_fingerprint",
     "active_release_semantic_fingerprint",
     "active_context_pack_binding_fingerprint",
+    "fingerprint_specification_version",
+    "active_semantic_duplicate_group_count",
+    "missing_fingerprint_component_count",
     "counts",
     "rule_registry",
     "system_integrity_status",
     "product_ready"
   ],
   "properties": {
-    "contract_version": {"const": "2.0.0"},
+    "contract_version": {"const": "2.2.0"},
     "all_history_platform_memory_fingerprint": {"$ref": "#/$defs/digest"},
     "active_release_semantic_fingerprint": {"$ref": "#/$defs/digest"},
     "active_context_pack_binding_fingerprint": {"$ref": "#/$defs/digest"},
+    "fingerprint_specification_version": {"const": "platform-memory-fingerprint-v2.1.0"},
+    "active_semantic_duplicate_group_count": {"const": 0},
+    "missing_fingerprint_component_count": {"const": 0},
     "counts": {
       "type": "object",
       "additionalProperties": false,
@@ -74,7 +80,7 @@
       ]
     },
     "module_participation_status": {"const": "READY_FOR_INTEGRITY_CYCLE"},
-    "system_integrity_status": {"enum": ["PARTIAL / DATA_DEFECT", "PASS"]},
+    "system_integrity_status": {"const": "PASS"},
     "product_ready": {"const": false}
   },
   "$defs": {
