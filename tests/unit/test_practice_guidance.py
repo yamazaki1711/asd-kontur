@@ -11,9 +11,11 @@ import pytest
 import sqlalchemy as sa
 from pypdf import PdfWriter
 
+from asd_kontur.domain import uuid7
 from asd_kontur.knowledge.gateway import (
     GUIDANCE_CONTRACT_VERSION,
     GUIDANCE_SCHEMA_ID,
+    EvidenceItem,
     EvidencePack,
     GatewayContext,
     GatewayRequest,
@@ -23,13 +25,31 @@ from asd_kontur.knowledge.gateway import (
 )
 from asd_kontur.practice_guidance import commands as guidance_commands
 from asd_kontur.practice_guidance.commands import _corrected_candidate_version
+from asd_kontur.practice_guidance.context import (
+    IDPracticeContextAssembler,
+    IDPracticeContextRequest,
+    IDRelatedVlmContextGate,
+)
+from asd_kontur.practice_guidance.intelligence import construct_practice_intelligence
+from asd_kontur.practice_guidance.intelligence_acceptance import (
+    PracticeIntelligenceScenario,
+    PracticeScenarioKind,
+    _terms,
+    evaluate_scenario_response,
+    refresh_grounding_terms,
+)
 from asd_kontur.practice_guidance.manifest import inspect_pdf
 from asd_kontur.practice_guidance.memory_acceptance import (
     MemoryAcceptanceScenario,
     MemoryScenarioKind,
     evaluate_memory_response,
 )
+from asd_kontur.practice_guidance.memory_backup import (
+    build_backup_manifest,
+    verify_restored_practice_memory,
+)
 from asd_kontur.practice_guidance.models import (
+    ContextAssemblyPolicy,
     GuidanceCuratorAuthority,
     GuideContentKind,
     GuideExecutionProfile,
@@ -39,6 +59,8 @@ from asd_kontur.practice_guidance.models import (
     GuideTerminalState,
     NormativeReferenceCandidate,
     NormativeReferenceResolutionState,
+    PracticeContextStatus,
+    PracticeIntelligenceKind,
     VerificationDisposition,
     reconcile_page_receipts,
 )
@@ -634,7 +656,7 @@ def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority()
                 "answer": "Используются подтвержденные исходные данные.",
                 "citations": [citation],
                 "source_version_ids": [str(SOURCE_ID)],
-                "authority_layer": "methodological_guidance",
+                "authority_layer": "methodological_practice",
                 "limitations": ["not normative"],
             }
         ),
@@ -679,7 +701,7 @@ def test_adversarial_memory_request_cannot_activate_guidance_as_rule() -> None:
                 "answer": "Методическая рекомендация не активирует RuleVersion.",
                 "citations": [],
                 "source_version_ids": [],
-                "authority_layer": "methodological_guidance",
+                "authority_layer": "methodological_practice",
                 "limitations": ["human rule authority required"],
             }
         ),
@@ -784,10 +806,10 @@ def test_exact_ntd_resolver_preserves_printed_identity_and_unresolved_state(
     assert references["СП НЕ НАЙДЕН"]["normative_edition_id"] is None
 
 
-def test_model_or_service_identity_cannot_publish_methodological_guidance() -> None:
+def test_model_or_service_identity_cannot_publish_methodological_practice() -> None:
     for authority in (
         GuidanceCuratorAuthority(
-            "model.qwen3.8-27b", False, frozenset({"methodological_guidance.publish"})
+            "model.qwen3.8-27b", False, frozenset({"methodological_practice.publish"})
         ),
         GuidanceCuratorAuthority("service.ingestion", False, frozenset()),
     ):
@@ -797,7 +819,7 @@ def test_model_or_service_identity_cannot_publish_methodological_guidance() -> N
         GuidanceCuratorAuthority(
             "model.qwen3.8-27b",
             False,
-            frozenset({"methodological_guidance.conflict.record"}),
+            frozenset({"methodological_practice.conflict.record"}),
         ).require_conflict_recording()
 
 
@@ -858,6 +880,406 @@ def test_page_level_gap_does_not_invent_candidate_identity() -> None:
     assert receipt.unresolved_count == 1
 
 
+def test_verified_guidance_constructs_typed_intelligence_and_playbook() -> None:
+    guidance_id = UUID("0198f8ae-c954-7000-8000-000000000030")
+    edition_id = UUID("0198f8ae-c954-7000-8000-000000000031")
+    coverage_id = UUID("0198f8ae-c954-7000-8000-000000000032")
+    units, playbooks = construct_practice_intelligence(
+        guidance_rows=(
+            {
+                "guidance_unit_id": guidance_id,
+                "version": 1,
+                "guidance_kind": "form_field_guidance",
+                "normalized_instruction": (
+                    "Для общего журнала можно вести отдельный журнал, чтобы сохранить связь работ."
+                ),
+                "section": "Журналы работ",
+                "topic": "Выбор журнала",
+                "document_or_form_type": "Общий журнал работ",
+                "workflow_stage": "комплектование",
+                "field_or_element": "вид работ",
+                "required_inputs": ["перечень видов работ"],
+                "evidence_requirements": ["связь с исполнительной схемой"],
+                "common_error": "Журнал выбран без учета вида работ.",
+                "recommended_practice": "Вариант фиксируют до начала заполнения.",
+                "applicability_conditions": ["несколько видов работ"],
+                "limitations": ["методическая рекомендация"],
+                "uncertainties": [],
+                "normative_references": [],
+                "evidence": [
+                    {
+                        "guidance_unit_id": guidance_id,
+                        "guidance_unit_version": 1,
+                        "source_version_id": SOURCE_ID,
+                        "page_number": 7,
+                        "region": [0.1, 0.2, 0.8, 0.9],
+                        "fragment_digest": ZERO,
+                    }
+                ],
+            },
+        ),
+        edition_id=edition_id,
+        coverage_manifest_id=coverage_id,
+        publication_status="partial_with_explicit_gaps",
+    )
+    kinds = {unit.kind for unit in units}
+    assert PracticeIntelligenceKind.FIELD_COMPLETION_GUIDANCE in kinds
+    assert PracticeIntelligenceKind.JOURNAL_SELECTION_GUIDANCE in kinds
+    assert PracticeIntelligenceKind.ALLOWED_PRACTICE_VARIANT in kinds
+    assert PracticeIntelligenceKind.COMMON_FAILURE_PATTERN in kinds
+    assert PracticeIntelligenceKind.VERIFICATION_CHECKLIST in kinds
+    assert PracticeIntelligenceKind.COMPLETENESS_GUIDANCE in kinds
+    assert all(unit.evidence[0].source_version_id == SOURCE_ID for unit in units)
+    assert len(playbooks) == 1
+    assert "COVERAGE_MANIFEST_PARTIAL" in playbooks[0].uncertainties
+
+
+def test_completion_and_signer_guidance_remain_distinct_canonical_types() -> None:
+    edition_id = uuid7()
+    coverage_id = uuid7()
+
+    def source_row(guidance_id: UUID, guidance_kind: str, instruction: str) -> dict[str, object]:
+        return {
+            "guidance_unit_id": guidance_id,
+            "version": 1,
+            "guidance_kind": guidance_kind,
+            "normalized_instruction": instruction,
+            "section": "Оформление ИД",
+            "topic": "Заполнение и подписание",
+            "document_or_form_type": "АОСР",
+            "workflow_stage": "оформление",
+            "field_or_element": "подпись",
+            "required_inputs": [],
+            "evidence_requirements": [],
+            "common_error": None,
+            "recommended_practice": None,
+            "applicability_conditions": [],
+            "limitations": [],
+            "uncertainties": [],
+            "normative_references": [],
+            "evidence": [
+                {
+                    "guidance_unit_id": guidance_id,
+                    "guidance_unit_version": 1,
+                    "source_version_id": SOURCE_ID,
+                    "page_number": 8,
+                    "region": [0.1, 0.2, 0.8, 0.9],
+                    "fragment_digest": ZERO,
+                }
+            ],
+        }
+
+    units, _playbooks = construct_practice_intelligence(
+        guidance_rows=(
+            source_row(uuid7(), "completion_instruction", "Заполните поле из исходных данных."),
+            source_row(uuid7(), "signer_role_guidance", "Проверьте роль подписанта."),
+        ),
+        edition_id=edition_id,
+        coverage_manifest_id=coverage_id,
+        publication_status="complete",
+    )
+    kinds = {unit.kind for unit in units}
+    assert PracticeIntelligenceKind.COMPLETION_INSTRUCTION in kinds
+    assert PracticeIntelligenceKind.SIGNER_ROLE_GUIDANCE in kinds
+
+
+def test_systemic_practice_acceptance_requires_exact_lineage_and_authority_boundary() -> None:
+    intelligence_id = "0198f8ae-c954-7000-8000-000000000041"
+    playbook_id = "0198f8ae-c954-7000-8000-000000000042"
+    edition_id = "0198f8ae-c954-7000-8000-000000000043"
+    citation = "page:7:region:0.100000,0.200000,0.800000,0.900000"
+    scenario = PracticeIntelligenceScenario(
+        task_id="practice-intelligence-01-workflow",
+        kind=PracticeScenarioKind.WORKFLOW,
+        question="Составьте порядок формирования ИД.",
+        allowed_intelligence_ids=(intelligence_id,),
+        allowed_playbook_ids=(playbook_id,),
+        allowed_citations=(citation,),
+        allowed_source_version_ids=(str(SOURCE_ID),),
+        practice_guide_edition_id=edition_id,
+        expected_grounding_terms=("исходные",),
+        required_output="workflow_steps",
+        requires_layer_composition=False,
+        adversarial=False,
+    )
+    result = evaluate_scenario_response(
+        json.dumps(
+            {
+                "task_id": scenario.task_id,
+                "disposition": "answered",
+                "answer": "Сначала проверяются исходные данные.",
+                "practice_guide_edition_id": edition_id,
+                "selected_intelligence_ids": [intelligence_id],
+                "selected_playbook_ids": [playbook_id],
+                "citations": [citation],
+                "source_version_ids": [str(SOURCE_ID)],
+                "evidence": [
+                    {
+                        "intelligence_unit_id": intelligence_id,
+                        "source_version_id": str(SOURCE_ID),
+                        "citation": citation,
+                    }
+                ],
+                "uncertainty_status": ["NORMATIVE_REFERENCE_NOT_ASSERTED"],
+                "conflict_status": [],
+                "workflow_steps": ["Проверить исходные данные"],
+                "selected_forms_or_journals": [],
+                "allowed_variants": [],
+                "rationales": [],
+                "failure_patterns": [],
+                "field_instructions": [],
+                "checklist": [],
+                "dependencies": [],
+                "visual_examples": [],
+                "limitations": ["не является НТД"],
+                "authority_classification": {
+                    "normative_authority": "not supplied",
+                    "methodological_practice": "practical methodology",
+                    "workspace_facts": "not supplied",
+                    "deterministic_rules": "not activated",
+                },
+                "methodology_is_normative": False,
+                "rule_version_activated": False,
+            },
+            ensure_ascii=False,
+        ),
+        scenario,
+    )
+    assert result.valid
+
+    escalated = evaluate_scenario_response(
+        json.dumps(
+            {
+                "task_id": scenario.task_id,
+                "disposition": "answered",
+                "answer": "Обязательная норма.",
+                "selected_intelligence_ids": [intelligence_id],
+                "citations": [citation],
+                "source_version_ids": [str(SOURCE_ID)],
+                "workflow_steps": ["Активировать правило"],
+                "authority_classification": {},
+                "methodology_is_normative": True,
+                "rule_version_activated": True,
+            }
+        ),
+        scenario,
+    )
+    assert not escalated.valid
+    assert "METHODOLOGY_ESCALATED_TO_NORM" in escalated.failure_codes
+    assert "RULE_VERSION_ACTIVATED" in escalated.failure_codes
+
+
+def test_acceptance_grounding_terms_are_not_arbitrarily_alphabetically_truncated() -> None:
+    letters = "абвгдежзийклмнопрстуфхцчшщэюя"
+    terms = _terms(
+        [
+            {
+                "title": "Пример оформления продольного профиля",
+                "instruction": " ".join(
+                    f"термин{first}{second}" for first in letters[:2] for second in letters
+                ),
+            }
+        ]
+    )
+    assert len(terms) > 40
+    assert "оформления" in terms
+    assert "продольного" in terms
+
+
+def test_grounding_refresh_preserves_scenario_identity_and_exact_allowed_units() -> None:
+    refreshed = refresh_grounding_terms(
+        [
+            {
+                "task_id": "systemic",
+                "adversarial": False,
+                "allowed_intelligence_ids": ["unit-1"],
+                "expected_grounding_terms": ["stale"],
+            },
+            {
+                "task_id": "adversarial",
+                "adversarial": True,
+                "allowed_intelligence_ids": [],
+                "expected_grounding_terms": ["stale"],
+            },
+        ],
+        {"unit-1": {"title": "Пример оформления", "instruction": "Проверить документ"}},
+    )
+    assert refreshed[0]["task_id"] == "systemic"
+    assert refreshed[0]["allowed_intelligence_ids"] == ["unit-1"]
+    assert "оформления" in refreshed[0]["expected_grounding_terms"]
+    assert refreshed[1]["expected_grounding_terms"] == []
+
+
+def test_unreceived_job_selection_is_bounded_and_does_not_repeat_receipts(
+    tmp_path: Path,
+) -> None:
+    manifest = tmp_path / "jobs.json"
+    receipts = tmp_path / "receipts.jsonl"
+    output = tmp_path / "selected.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "contract": "practice-guide-runner/0.1.0",
+                "jobs": [
+                    {"job_id": "job-1", "prompt": "one", "image_paths": []},
+                    {"job_id": "job-2", "prompt": "two", "image_paths": []},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    receipts.write_text(
+        json.dumps(
+            {
+                "job_id": "job-1",
+                "attempt_id": "sha256:" + "1" * 64,
+                "attempt_number": 1,
+                "state": "completed",
+                "request_digest": ZERO,
+                "response_digest": ZERO,
+                "response": "{}",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    guidance_commands.select_unreceived_jobs_command(
+        job_manifest=manifest,
+        receipt_paths=(receipts,),
+        output=output,
+    )
+
+    selected = json.loads(output.read_text(encoding="utf-8"))
+    assert [job["job_id"] for job in selected["jobs"]] == ["job-2"]
+
+
+def test_failed_acceptance_selection_excludes_jobs_without_receipts(tmp_path: Path) -> None:
+    manifest = tmp_path / "jobs.json"
+    evaluation = tmp_path / "evaluation.json"
+    output = tmp_path / "selected.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "contract": "practice-guide-runner/0.1.0",
+                "jobs": [
+                    {"job_id": "failed", "prompt": "retry", "image_paths": []},
+                    {"job_id": "missing", "prompt": "later", "image_paths": []},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    evaluation.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {"task_id": "failed", "valid": False, "failure_codes": ["SCHEMA"]},
+                    {
+                        "task_id": "missing",
+                        "valid": False,
+                        "failure_codes": ["TERMINAL_RECEIPT_MISSING"],
+                    },
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    guidance_commands.select_failed_acceptance_jobs_command(
+        job_manifest=manifest,
+        evaluation=evaluation,
+        output=output,
+    )
+
+    selected = json.loads(output.read_text(encoding="utf-8"))
+    assert [job["job_id"] for job in selected["jobs"]] == ["failed"]
+
+    receipts = tmp_path / "receipts.jsonl"
+    receipts.write_text(
+        json.dumps(
+            {
+                "job_id": "failed",
+                "attempt_id": "sha256:" + "2" * 64,
+                "attempt_number": 1,
+                "state": "completed",
+                "request_digest": ZERO,
+                "response_digest": ZERO,
+                "response": "{}",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    guidance_commands.select_acceptance_followup_jobs_command(
+        job_manifest=manifest,
+        evaluation=evaluation,
+        receipt_paths=(receipts,),
+        output=output,
+    )
+    followup = json.loads(output.read_text(encoding="utf-8"))
+    assert [job["job_id"] for job in followup["jobs"]] == ["failed", "missing"]
+
+
+def test_acceptance_scenario_merge_supersedes_only_failed_and_adds_new(tmp_path: Path) -> None:
+    base = tmp_path / "base.json"
+    followup = tmp_path / "followup.json"
+    evaluation = tmp_path / "evaluation.json"
+    output = tmp_path / "merged.json"
+    common = {"adversarial": False}
+    base.write_text(
+        json.dumps(
+            {
+                "contract": "acceptance/0.2.0",
+                "scenarios": [
+                    {**common, "task_id": "valid", "marker": "base"},
+                    {**common, "task_id": "failed", "marker": "base"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    followup.write_text(
+        json.dumps(
+            {
+                "contract": "acceptance/0.3.0",
+                "scenarios": [
+                    {**common, "task_id": "valid", "marker": "new"},
+                    {**common, "task_id": "failed", "marker": "new"},
+                    {"adversarial": True, "task_id": "added", "marker": "new"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    evaluation.write_text(
+        json.dumps(
+            {
+                "results": [
+                    {"task_id": "valid", "valid": True, "failure_codes": []},
+                    {"task_id": "failed", "valid": False, "failure_codes": ["SCHEMA"]},
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    guidance_commands.merge_acceptance_scenarios_command(
+        base_scenarios=base,
+        followup_scenarios=followup,
+        evaluation=evaluation,
+        output=output,
+    )
+
+    merged = json.loads(output.read_text(encoding="utf-8"))
+    assert [(item["task_id"], item["marker"]) for item in merged["scenarios"]] == [
+        ("valid", "base"),
+        ("failed", "new"),
+        ("added", "new"),
+    ]
+    assert merged["superseded_failed_task_ids"] == ["failed"]
+
+
 class _Query:
     def execute(
         self, tool: str, payload: dict[str, object], context: GatewayContext
@@ -867,7 +1289,7 @@ class _Query:
             tool,
             GUIDANCE_CONTRACT_VERSION,
             GatewayStatus.OK,
-            {"authority_layer": "methodological_guidance"},
+            {"authority_layer": "methodological_practice"},
             EvidencePack((), (), (), (), ()),
         )
 
@@ -895,8 +1317,210 @@ def test_guidance_gateway_requires_exact_contract_and_capability() -> None:
     )
     response = gateway.invoke(request, context)
     assert response.status is GatewayStatus.OK
-    assert response.result["authority_layer"] == "methodological_guidance"
+    assert response.result["authority_layer"] == "methodological_practice"
 
     wrong = GatewayRequest(tool, "0.1.0", GUIDANCE_SCHEMA_ID, "0.1.0", {})
     with pytest.raises(Exception, match="exact supported contract"):
         gateway.invoke(wrong, context)
+
+
+class _ContextQuery:
+    def __init__(self, edition_id: UUID, unit_id: UUID) -> None:
+        self.edition_id = edition_id
+        self.unit_id = unit_id
+        self.calls = 0
+
+    def execute(
+        self, tool: str, payload: dict[str, object], context: GatewayContext
+    ) -> GatewayResponse:
+        del context
+        self.calls += 1
+        assert payload["practice_guide_edition_id"] == str(self.edition_id)
+        return GatewayResponse(
+            tool,
+            GUIDANCE_CONTRACT_VERSION,
+            GatewayStatus.OK,
+            {
+                "practice_guide_edition_id": str(self.edition_id),
+                "practice_intelligence": [
+                    {
+                        "intelligence_unit_id": str(self.unit_id),
+                        "version": 1,
+                        "instruction": "Проверить исходные данные.",
+                    }
+                ],
+                "practice_playbooks": [],
+                "authority_composition": {
+                    "normative_authority": {"references": []},
+                    "methodological_practice": {"status": "primary_id_practice_context"},
+                },
+            },
+            EvidencePack(
+                (
+                    EvidenceItem(
+                        "evidence-1",
+                        str(SOURCE_ID),
+                        None,
+                        "page:7:region:0.100000,0.200000,0.800000,0.900000",
+                        ZERO,
+                        "platform-object:synthetic",
+                        "methodological_practice",
+                    ),
+                ),
+                (),
+                (),
+                (),
+                (),
+            ),
+        )
+
+
+def _context_policy(edition_id: UUID) -> ContextAssemblyPolicy:
+    return ContextAssemblyPolicy(
+        UUID("0198f8ae-c954-7000-8000-000000000051"),
+        1,
+        edition_id,
+        "id-practice-context-v0.1.0",
+        ("Support",),
+        ("id.support",),
+        ("document_type", "form_type", "field", "mode", "purpose"),
+        12,
+        8,
+    )
+
+
+def test_context_assembly_is_mandatory_source_pinned_and_model_independent() -> None:
+    edition_id = UUID("0198f8ae-c954-7000-8000-000000000052")
+    unit_id = UUID("0198f8ae-c954-7000-8000-000000000053")
+    query = _ContextQuery(edition_id, unit_id)
+    policy = _context_policy(edition_id)
+    assembler = IDPracticeContextAssembler(KnowledgeGateway(query, _Audit()), policy)
+    context_request = IDPracticeContextRequest(
+        UUID("0198f8ae-c954-7000-8000-000000000054"),
+        "Support",
+        "id.support",
+        "field_completion",
+        "поле акта",
+        edition_id,
+        document_type="АОСР",
+        form_type="акт",
+        field="номер",
+    )
+    pack = assembler.assemble(
+        request=context_request,
+        gateway_context=GatewayContext(
+            "service.id-context",
+            "knowledge.get_id_task_guidance.invoke",
+            "id.support",
+            UUID("0198f8ae-c954-7000-8000-000000000055"),
+        ),
+        lexical_version_id=UUID("0198f8ae-c954-7000-8000-000000000056"),
+    )
+    assert query.calls == 1
+    assert pack.status is PracticeContextStatus.OK
+    assert pack.intelligence_unit_refs == ((unit_id, 1),)
+    assert pack.authority_layer.value == "methodological_practice"
+    local = IDRelatedVlmContextGate.prepare(
+        context_pack=pack,
+        model_profile_fingerprint=ZERO,
+    )
+    external = IDRelatedVlmContextGate.prepare(
+        context_pack=pack,
+        model_profile_fingerprint="sha256:" + "1" * 64,
+    )
+    assert local.context_pack_fingerprint == external.context_pack_fingerprint
+    assert local.evidence_document == external.evidence_document
+    partial = replace(
+        pack,
+        status=PracticeContextStatus.KNOWLEDGE_INCOMPLETE,
+        gaps=({"code": "partial_coverage"},),
+    )
+    prepared_partial = IDRelatedVlmContextGate.prepare(
+        context_pack=partial,
+        model_profile_fingerprint=ZERO,
+    )
+    assert prepared_partial.context_status is PracticeContextStatus.KNOWLEDGE_INCOMPLETE
+    assert prepared_partial.evidence_document["gaps"] == [{"code": "partial_coverage"}]
+    with pytest.raises(PermissionError, match="knowledge_incomplete"):
+        IDRelatedVlmContextGate.prepare(
+            context_pack=replace(
+                partial,
+                intelligence_unit_refs=(),
+                source_version_ids=(),
+                source_locators=(),
+                practice_advice=(),
+            ),
+            model_profile_fingerprint=ZERO,
+        )
+    with pytest.raises(PermissionError, match="id_context_assembly_required"):
+        IDRelatedVlmContextGate.prepare(context_pack=None, model_profile_fingerprint=ZERO)
+
+
+def test_context_assembly_returns_edition_mismatch_without_gateway_call() -> None:
+    edition_id = UUID("0198f8ae-c954-7000-8000-000000000057")
+    query = _ContextQuery(edition_id, uuid7())
+    assembler = IDPracticeContextAssembler(
+        KnowledgeGateway(query, _Audit()), _context_policy(edition_id)
+    )
+    request = IDPracticeContextRequest(
+        uuid7(),
+        "Support",
+        "id.support",
+        "workflow",
+        "порядок ИД",
+        UUID("0198f8ae-c954-7000-8000-000000000058"),
+    )
+    pack = assembler.assemble(
+        request=request,
+        gateway_context=GatewayContext(
+            "service.id-context",
+            "knowledge.get_id_task_guidance.invoke",
+            "id.support",
+            uuid7(),
+        ),
+        lexical_version_id=uuid7(),
+    )
+    assert pack.status is PracticeContextStatus.EDITION_MISMATCH
+    assert query.calls == 0
+    with pytest.raises(PermissionError, match="edition_mismatch"):
+        IDRelatedVlmContextGate.prepare(context_pack=pack, model_profile_fingerprint=ZERO)
+
+
+def test_practice_memory_backup_verifies_byte_and_semantic_fingerprints() -> None:
+    edition_id = UUID("0198f8ae-c954-7000-8000-000000000059")
+    policy = _context_policy(edition_id)
+    source = b"synthetic permanent practice source"
+    manifest = build_backup_manifest(
+        practice_guide_edition_id=edition_id,
+        source_version_id=SOURCE_ID,
+        source_bytes=source,
+        construction_manifest_id=uuid7(),
+        construction_fingerprint=ZERO,
+        coverage_manifest_fingerprint=ZERO,
+        activation_decision_id=uuid7(),
+        activation_decision_version=1,
+        intelligence_unit_digests=(ZERO,),
+        playbook_digests=("sha256:" + "1" * 64,),
+        context_policy=policy,
+        projection_fingerprints=({"projection_kind": "fts", "fingerprint": "sha256:" + "2" * 64},),
+        backup_object_reference="platform-backup:synthetic-practice-v1",
+    )
+    verify_restored_practice_memory(
+        manifest=manifest,
+        restored_source_bytes=source,
+        construction_fingerprint=ZERO,
+        coverage_manifest_fingerprint=ZERO,
+        intelligence_unit_digests=(ZERO,),
+        playbook_digests=("sha256:" + "1" * 64,),
+        context_policy=policy,
+    )
+    with pytest.raises(ValueError, match="source_digest_mismatch"):
+        verify_restored_practice_memory(
+            manifest=manifest,
+            restored_source_bytes=b"corrupt",
+            construction_fingerprint=ZERO,
+            coverage_manifest_fingerprint=ZERO,
+            intelligence_unit_digests=(ZERO,),
+            playbook_digests=("sha256:" + "1" * 64,),
+            context_policy=policy,
+        )

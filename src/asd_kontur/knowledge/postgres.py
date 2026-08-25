@@ -29,6 +29,46 @@ from .gateway import (
 )
 from .rules import AuthorityIdentity, RuleLifecycle, RuleState, RuleVersionDefinition
 
+PRACTICE_INTENT_KINDS = {
+    "workflow": ("id_workflow_step", "id_practice_principle", "document_dependency_guidance"),
+    "form_selection": (
+        "form_completion_guidance",
+        "journal_selection_guidance",
+        "document_dependency_guidance",
+    ),
+    "form_completion": (
+        "form_completion_guidance",
+        "field_completion_guidance",
+        "completion_instruction",
+        "attention_point",
+        "visual_completion_example",
+    ),
+    "required_inputs": ("completeness_guidance", "document_dependency_guidance"),
+    "preflight_check": (
+        "verification_checklist",
+        "attention_point",
+        "common_failure_pattern",
+    ),
+    "rationale": ("practice_rationale", "id_practice_principle"),
+    "allowed_variants": ("allowed_practice_variant",),
+    "journal_selection": ("journal_selection_guidance",),
+    "failure_detection": ("common_failure_pattern", "verification_checklist"),
+    "dependencies": ("document_dependency_guidance", "completeness_guidance"),
+    "completeness": (
+        "completeness_guidance",
+        "verification_checklist",
+        "document_dependency_guidance",
+    ),
+    "field_completion": (
+        "field_completion_guidance",
+        "completion_instruction",
+        "attention_point",
+        "common_failure_pattern",
+    ),
+    "signing": ("signer_role_guidance", "attention_point", "verification_checklist"),
+    "visual_examples": ("visual_completion_example",),
+}
+
 
 class NormativeKnowledgeRepository:
     """Curator-facing canonical NTD writes and exact edition resolution."""
@@ -406,6 +446,8 @@ class PostgresKnowledgeQuery:
             "knowledge.get_field_guidance": self._field_guidance,
             "knowledge.trace_guidance": self._trace_guidance,
             "knowledge.explain_guidance_conflict": self._explain_guidance_conflict,
+            "knowledge.get_id_task_guidance": self._id_task_guidance,
+            "knowledge.get_practice_playbook": self._practice_playbook,
         }
         return dispatch[tool](payload, context)
 
@@ -537,12 +579,15 @@ class PostgresKnowledgeQuery:
                         "c.guidance_unit_version,c.guidance_candidate_id,c.candidate_version,"
                         "c.conflicting_authority_layer,c.conflicting_subject_ref,c.conflict_type,"
                         "c.state,c.uncertainty_ref,c.decision_ref,v.source_version_id,v.page_number,"
-                        "v.region,sv.content_digest,o.access_capability_ref "
+                        "v.region,sv.content_digest,o.access_capability_ref,"
+                        "e.practice_guide_edition_id "
                         "FROM platform.practice_guidance_conflicts c "
                         "JOIN platform.practice_guide_candidate_versions v ON "
                         "v.guidance_candidate_id=c.guidance_candidate_id "
                         "AND v.version=c.candidate_version "
                         "JOIN platform.source_versions sv ON sv.source_version_id=v.source_version_id "
+                        "JOIN platform.practice_guide_editions e ON "
+                        "e.source_version_id=v.source_version_id "
                         "JOIN platform.objects o ON o.object_id=sv.object_id "
                         "WHERE c.guidance_conflict_id=:id"
                     ),
@@ -574,14 +619,18 @@ class PostgresKnowledgeQuery:
                     structural_unit_locator=locator,
                     content_digest=str(row["content_digest"]),
                     access_reference=str(row["access_capability_ref"]),
-                    authority_layer="methodological_guidance",
+                    authority_layer="methodological_practice",
                 ),
             )
         return GatewayResponse(
             "knowledge.explain_guidance_conflict",
             GUIDANCE_CONTRACT_VERSION,
             GatewayStatus.OK,
-            {"conflict": dict(row), **coverage},
+            {
+                "conflict": dict(row),
+                "practice_guide_edition_id": str(row["practice_guide_edition_id"]),
+                **coverage,
+            },
             EvidencePack(
                 evidence,
                 (),
@@ -589,6 +638,465 @@ class PostgresKnowledgeQuery:
                 (),
                 ({"code": str(row["uncertainty_ref"])},),
             ),
+        )
+
+    @staticmethod
+    def _practice_authority_composition(
+        units: tuple[Any, ...], context: GatewayContext
+    ) -> dict[str, object]:
+        normative_references = tuple(
+            reference
+            for unit in units
+            for reference in (unit.get("normative_references") or ())
+            if isinstance(reference, dict)
+        )
+        return {
+            "normative_authority": {
+                "role": "what_is_required",
+                "status": "references_only_not_evaluated",
+                "references": normative_references,
+            },
+            "methodological_practice": {
+                "role": "how_to_perform_and_what_to_check",
+                "status": "primary_id_practice_context",
+                "may_activate_rule_version": False,
+            },
+            "workspace_facts": {
+                "role": "object_specific_documents_facts_and_conditions",
+                "status": (
+                    "workspace_scope_present"
+                    if context.workspace_id is not None
+                    else "workspace_scope_not_supplied"
+                ),
+                "workspace_id": str(context.workspace_id) if context.workspace_id else None,
+            },
+            "deterministic_rules": {
+                "role": "applicability_completeness_and_blockers",
+                "status": "not_evaluated_by_this_tool",
+                "requires_separate_rule_evidence": True,
+            },
+        }
+
+    def _id_task_guidance(
+        self, payload: dict[str, Any], context: GatewayContext
+    ) -> GatewayResponse:
+        query = str(payload.get("query", "")).strip()
+        lexical_version_id = payload.get("lexical_version_id")
+        edition_id = payload.get("practice_guide_edition_id")
+        policy_id = payload.get("context_assembly_policy_id")
+        policy_version = payload.get("context_assembly_policy_version")
+        intent = str(payload.get("intent", "workflow")).strip()
+        if (
+            not query
+            or lexical_version_id is None
+            or edition_id is None
+            or policy_id is None
+            or not isinstance(policy_version, int)
+            or intent not in PRACTICE_INTENT_KINDS
+        ):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "practice_query_index_or_intent_invalid",
+                payload,
+            )
+        statement = sa.text(
+            "SELECT u.intelligence_unit_id,u.version,u.practice_guide_edition_id,"
+            "u.intelligence_kind,u.title,u.instruction,"
+            "u.rationale,u.applicability_conditions,u.work_types,u.document_types,u.form_types,"
+            "u.workflow_stages,u.field_elements,u.required_inputs,u.evidence_requirements,"
+            "u.allowed_variants,u.failure_patterns,u.checklist_items,u.dependency_refs,"
+            "u.normative_references,u.uncertainties,u.authority_layer,u.coverage_manifest_id,"
+            "EXISTS (SELECT 1 FROM platform.practice_intelligence_sources src "
+            "JOIN platform.practice_guidance_conflicts conflict ON "
+            "conflict.guidance_unit_id=src.guidance_unit_id AND "
+            "conflict.guidance_unit_version=src.guidance_unit_version "
+            "WHERE src.intelligence_unit_id=u.intelligence_unit_id AND "
+            "src.intelligence_unit_version=u.version AND conflict.state='open') "
+            "AS has_open_conflict "
+            "FROM projection.practice_intelligence_lexical_entries e "
+            "JOIN platform.practice_intelligence_units u ON "
+            "u.intelligence_unit_id=e.entity_id AND u.version=e.entity_version "
+            "WHERE e.lexical_version_id=:index AND e.entity_kind='intelligence_unit' "
+            "AND u.practice_guide_edition_id=:edition "
+            "AND e.intelligence_kind IN :kinds "
+            "AND e.search_vector @@ plainto_tsquery('russian',:query) "
+            "ORDER BY ts_rank_cd(e.search_vector,plainto_tsquery('russian',:query)) DESC,"
+            "u.intelligence_kind,u.intelligence_unit_id,u.version LIMIT :unit_limit"
+        ).bindparams(sa.bindparam("kinds", expanding=True))
+        with Session(self._engine) as session:
+            activation = (
+                session.execute(
+                    sa.text(
+                        "SELECT d.activation_decision_id,d.version,d.selected_edition_id FROM "
+                        "platform.practice_guide_editions e JOIN LATERAL "
+                        "(SELECT activation_decision_id,version,selected_edition_id FROM "
+                        "platform.practice_guide_edition_activation_decisions "
+                        "WHERE practice_guide_id=e.practice_guide_id ORDER BY version DESC LIMIT 1) d "
+                        "ON true WHERE e.practice_guide_edition_id=:edition"
+                    ),
+                    {"edition": edition_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if activation is None or str(activation["selected_edition_id"]) != str(edition_id):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.EDITION_MISMATCH,
+                "edition_mismatch",
+                payload,
+            )
+        with Session(self._engine) as session:
+            policy = (
+                session.execute(
+                    sa.text(
+                        "SELECT practice_guide_edition_id,allowed_modes,allowed_purposes,"
+                        "max_intelligence_units,max_playbooks,state "
+                        "FROM platform.context_assembly_policies WHERE policy_id=:id "
+                        "AND version=:version"
+                    ),
+                    {"id": policy_id, "version": policy_version},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if policy is None or policy["state"] != "active":
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "context_assembly_policy_unavailable",
+                payload,
+            )
+        if str(policy["practice_guide_edition_id"]) != str(edition_id):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.EDITION_MISMATCH,
+                "edition_mismatch",
+                payload,
+            )
+        if payload.get("mode") not in (policy["allowed_modes"] or ()) or payload.get(
+            "purpose"
+        ) not in (policy["allowed_purposes"] or ()):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "context_assembly_scope_not_allowed",
+                payload,
+            )
+        with Session(self._engine) as session:
+            state = session.execute(
+                sa.text(
+                    "SELECT lv.state FROM projection.practice_intelligence_lexical_versions lv "
+                    "JOIN platform.practice_intelligence_releases r ON "
+                    "r.construction_manifest_id=lv.construction_manifest_id "
+                    "WHERE lv.lexical_version_id=:id AND r.practice_guide_edition_id=:edition "
+                    "AND r.context_assembly_policy_id=:policy AND "
+                    "r.context_assembly_policy_version=:policy_version AND "
+                    "r.activation_decision_id=:activation AND "
+                    "r.activation_decision_version=:activation_version"
+                ),
+                {
+                    "id": lexical_version_id,
+                    "edition": edition_id,
+                    "policy": policy_id,
+                    "policy_version": policy_version,
+                    "activation": activation["activation_decision_id"],
+                    "activation_version": activation["version"],
+                },
+            ).scalar_one_or_none()
+            matched_rows = (
+                tuple(
+                    session.execute(
+                        statement,
+                        {
+                            "index": lexical_version_id,
+                            "edition": edition_id,
+                            "kinds": PRACTICE_INTENT_KINDS[intent],
+                            "query": query,
+                            "unit_limit": int(policy["max_intelligence_units"]),
+                        },
+                    ).mappings()
+                )
+                if state == "ready"
+                else ()
+            )
+            rows = tuple(row for row in matched_rows if not bool(row["has_open_conflict"]))
+            conflicting_rows = tuple(row for row in matched_rows if bool(row["has_open_conflict"]))
+            identities = tuple(
+                (UUID(str(row["intelligence_unit_id"])), int(row["version"])) for row in rows
+            )
+            conflicting_identities = tuple(
+                (UUID(str(row["intelligence_unit_id"])), int(row["version"]))
+                for row in conflicting_rows
+            )
+            playbooks = self._playbooks_for_units(session, identities, int(policy["max_playbooks"]))
+        if state != "ready":
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.INDEX_UNAVAILABLE,
+                "practice_intelligence_index_not_ready",
+                payload,
+            )
+        if not matched_rows:
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.NO_RESULT,
+                "practice_intelligence_not_found",
+                payload,
+            )
+        coverage, relevant_gaps = self._guidance_coverage(payload)
+        pack = self._intelligence_evidence(identities)
+        conflict_pack = self._intelligence_evidence(conflicting_identities)
+        effective_status = (
+            GatewayStatus.GUIDANCE_NORMATIVE_CONFLICT
+            if conflict_pack.conflicts
+            else GatewayStatus.KNOWLEDGE_INCOMPLETE
+            if relevant_gaps
+            else GatewayStatus.OK
+        )
+        return GatewayResponse(
+            "knowledge.get_id_task_guidance",
+            GUIDANCE_CONTRACT_VERSION,
+            effective_status,
+            {
+                "intent": intent,
+                "practice_guide_edition_id": str(edition_id),
+                "activation_decision_id": str(activation["activation_decision_id"]),
+                "activation_decision_version": int(activation["version"]),
+                "context_assembly_policy_id": str(policy_id),
+                "context_assembly_policy_version": policy_version,
+                "practice_intelligence": [
+                    {key: value for key, value in dict(row).items() if key != "has_open_conflict"}
+                    for row in rows
+                ],
+                "practice_playbooks": [dict(row) for row in playbooks],
+                "quarantined_conflict_match_count": len(conflicting_rows),
+                "authority_composition": self._practice_authority_composition(rows, context),
+                "retrieval": "exact_fts_with_typed_intent",
+                **coverage,
+            },
+            EvidencePack(
+                (*pack.evidence, *conflict_pack.evidence),
+                pack.applicability,
+                conflict_pack.conflicts,
+                (*pack.gaps, *conflict_pack.gaps, *relevant_gaps),
+                (*pack.uncertainties, *conflict_pack.uncertainties),
+            ),
+        )
+
+    def _practice_playbook(
+        self, payload: dict[str, Any], context: GatewayContext
+    ) -> GatewayResponse:
+        playbook_id = payload.get("playbook_id")
+        version = payload.get("version")
+        if playbook_id is None or not isinstance(version, int):
+            return self._guidance_gap(
+                "knowledge.get_practice_playbook",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "playbook_identity_or_version_missing",
+                payload,
+            )
+        with Session(self._engine) as session:
+            playbook = (
+                session.execute(
+                    sa.text(
+                        "SELECT playbook_id,version,title,purpose,applicability_conditions,"
+                        "work_types,document_types,form_types,workflow_stages,uncertainties,"
+                        "authority_layer,coverage_manifest_id FROM platform.practice_playbooks "
+                        "WHERE playbook_id=:id AND version=:version"
+                    ),
+                    {"id": playbook_id, "version": version},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            members = (
+                tuple(
+                    session.execute(
+                        sa.text(
+                            "SELECT m.member_sequence,m.member_role,u.intelligence_unit_id,u.version,"
+                            "u.intelligence_kind,u.title,u.instruction,u.rationale,"
+                            "u.applicability_conditions,u.required_inputs,u.evidence_requirements,"
+                            "u.allowed_variants,u.failure_patterns,u.checklist_items,u.dependency_refs,"
+                            "u.normative_references,u.uncertainties,u.authority_layer "
+                            "FROM platform.practice_playbook_members m "
+                            "JOIN platform.practice_intelligence_units u ON "
+                            "u.intelligence_unit_id=m.intelligence_unit_id "
+                            "AND u.version=m.intelligence_unit_version WHERE m.playbook_id=:id "
+                            "AND m.playbook_version=:version ORDER BY m.member_sequence LIMIT 100"
+                        ),
+                        {"id": playbook_id, "version": version},
+                    ).mappings()
+                )
+                if playbook is not None
+                else ()
+            )
+        if playbook is None:
+            return self._guidance_gap(
+                "knowledge.get_practice_playbook",
+                GatewayStatus.NO_RESULT,
+                "practice_playbook_not_found",
+                payload,
+            )
+        identities = tuple(
+            (UUID(str(row["intelligence_unit_id"])), int(row["version"])) for row in members
+        )
+        coverage_payload = dict(payload)
+        document_types = playbook["document_types"] or ()
+        if document_types:
+            coverage_payload["document_or_form_type"] = str(document_types[0])
+        coverage, relevant_gaps = self._guidance_coverage(coverage_payload)
+        pack = self._intelligence_evidence(identities)
+        playbook_partial = "COVERAGE_MANIFEST_PARTIAL" in (playbook["uncertainties"] or ())
+        playbook_gaps = ({"code": "playbook_coverage_partial"},) if playbook_partial else ()
+        return GatewayResponse(
+            "knowledge.get_practice_playbook",
+            GUIDANCE_CONTRACT_VERSION,
+            (
+                GatewayStatus.KNOWLEDGE_INCOMPLETE
+                if relevant_gaps or playbook_partial
+                else GatewayStatus.OK
+            ),
+            {
+                "practice_playbook": dict(playbook),
+                "members": [dict(row) for row in members],
+                "member_limit": 100,
+                "authority_composition": self._practice_authority_composition(members, context),
+                **coverage,
+            },
+            EvidencePack(
+                pack.evidence,
+                pack.applicability,
+                pack.conflicts,
+                (*pack.gaps, *playbook_gaps, *relevant_gaps),
+                pack.uncertainties,
+            ),
+        )
+
+    @staticmethod
+    def _playbooks_for_units(
+        session: Session, identities: tuple[tuple[UUID, int], ...], limit: int
+    ) -> tuple[Any, ...]:
+        if not identities:
+            return ()
+        clauses = []
+        parameters: dict[str, object] = {}
+        for index, (unit_id, version) in enumerate(identities):
+            clauses.append(
+                f"(m.intelligence_unit_id=:unit_{index} AND "
+                f"m.intelligence_unit_version=:unit_version_{index})"
+            )
+            parameters[f"unit_{index}"] = unit_id
+            parameters[f"unit_version_{index}"] = version
+        return tuple(
+            session.execute(
+                sa.text(
+                    "SELECT DISTINCT p.playbook_id,p.version,p.title,p.purpose,p.document_types,"
+                    "p.form_types,p.workflow_stages,p.uncertainties,p.authority_layer "
+                    "FROM platform.practice_playbook_members m JOIN platform.practice_playbooks p "
+                    "ON p.playbook_id=m.playbook_id AND p.version=m.playbook_version WHERE "
+                    + " OR ".join(clauses)
+                    + " ORDER BY p.playbook_id,p.version LIMIT :playbook_limit"
+                ),
+                {**parameters, "playbook_limit": limit},
+            ).mappings()
+        )
+
+    def _intelligence_evidence(self, identities: tuple[tuple[UUID, int], ...]) -> EvidencePack:
+        if not identities:
+            return EvidencePack((), (), (), ({"code": "practice_intelligence_unavailable"},), ())
+        clauses = []
+        unit_clauses = []
+        parameters: dict[str, object] = {}
+        for index, (unit_id, version) in enumerate(identities):
+            clauses.append(
+                f"(s.intelligence_unit_id=:unit_{index} AND "
+                f"s.intelligence_unit_version=:version_{index})"
+            )
+            unit_clauses.append(
+                f"(u.intelligence_unit_id=:unit_{index} AND u.version=:version_{index})"
+            )
+            parameters[f"unit_{index}"] = unit_id
+            parameters[f"version_{index}"] = version
+        with Session(self._engine) as session:
+            rows = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT s.intelligence_source_id,s.intelligence_unit_id,"
+                        "s.source_version_id,sl.locator_key,sv.content_digest,"
+                        "o.access_capability_ref FROM platform.practice_intelligence_sources s "
+                        "JOIN platform.source_locators sl ON sl.source_locator_id=s.source_locator_id "
+                        "JOIN platform.source_versions sv ON sv.source_version_id=s.source_version_id "
+                        "JOIN platform.objects o ON o.object_id=sv.object_id WHERE "
+                        + " OR ".join(clauses)
+                        + " ORDER BY s.intelligence_source_id"
+                    ),
+                    parameters,
+                ).mappings()
+            )
+            unit_rows = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT u.intelligence_unit_id,u.applicability_conditions,"
+                        "u.normative_references,u.uncertainties FROM "
+                        "platform.practice_intelligence_units u WHERE "
+                        + " OR ".join(unit_clauses)
+                        + " ORDER BY u.intelligence_unit_id"
+                    ),
+                    parameters,
+                ).mappings()
+            )
+            conflict_rows = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT c.guidance_conflict_id,c.conflicting_authority_layer,"
+                        "c.conflicting_subject_ref,c.conflict_type,c.state,c.uncertainty_ref "
+                        "FROM platform.practice_intelligence_sources s JOIN "
+                        "platform.practice_guidance_conflicts c ON "
+                        "c.guidance_unit_id=s.guidance_unit_id AND "
+                        "c.guidance_unit_version=s.guidance_unit_version WHERE ("
+                        + " OR ".join(clauses)
+                        + ") AND c.state='open' ORDER BY c.guidance_conflict_id"
+                    ),
+                    parameters,
+                ).mappings()
+            )
+        evidence = tuple(
+            EvidenceItem(
+                evidence_link_id=str(row["intelligence_source_id"]),
+                source_version_id=str(row["source_version_id"]),
+                edition_id=None,
+                structural_unit_locator=str(row["locator_key"]),
+                content_digest=str(row["content_digest"]),
+                access_reference=str(row["access_capability_ref"]),
+                authority_layer="methodological_practice",
+            )
+            for row in rows
+        )
+        applicability = tuple(
+            {
+                "intelligence_unit_id": str(row["intelligence_unit_id"]),
+                "conditions": row["applicability_conditions"],
+            }
+            for row in unit_rows
+            if row["applicability_conditions"]
+        )
+        uncertainties = tuple(
+            {
+                "intelligence_unit_id": str(row["intelligence_unit_id"]),
+                "code": code,
+            }
+            for row in unit_rows
+            for code in (row["uncertainties"] or ())
+        )
+        gaps = () if evidence else ({"code": "practice_intelligence_evidence_unavailable"},)
+        return EvidencePack(
+            evidence,
+            applicability,
+            tuple(dict(row) for row in conflict_rows),
+            gaps,
+            uncertainties,
         )
 
     def _guidance_rows(self, where_clause: str, parameters: dict[str, object]) -> tuple[Any, ...]:
@@ -632,7 +1140,12 @@ class PostgresKnowledgeQuery:
             tool,
             GUIDANCE_CONTRACT_VERSION,
             GatewayStatus.KNOWLEDGE_INCOMPLETE if relevant_gaps else GatewayStatus.OK,
-            {"guidance": [dict(row) for row in rows], **coverage},
+            {
+                "guidance": [
+                    {**dict(row), "authority_layer": "methodological_practice"} for row in rows
+                ],
+                **coverage,
+            },
             EvidencePack(
                 pack.evidence,
                 pack.applicability,
@@ -1008,7 +1521,7 @@ class PostgresKnowledgeQuery:
                 structural_unit_locator=str(row["locator_key"]),
                 content_digest=str(row["content_digest"]),
                 access_reference=str(row["access_capability_ref"]),
-                authority_layer="methodological_guidance",
+                authority_layer="methodological_practice",
             )
             for row in rows
         )
@@ -1033,12 +1546,30 @@ class PostgresKnowledgeQuery:
         payload: dict[str, Any] | None = None,
     ) -> GatewayResponse:
         coverage, relevant_gaps = self._guidance_coverage(payload or {})
-        effective_status = GatewayStatus.KNOWLEDGE_INCOMPLETE if relevant_gaps else status
+        effective_status = (
+            GatewayStatus.KNOWLEDGE_INCOMPLETE
+            if relevant_gaps
+            and status
+            not in {
+                GatewayStatus.EDITION_MISMATCH,
+                GatewayStatus.GUIDANCE_NORMATIVE_CONFLICT,
+            }
+            else status
+        )
+        pinned_context = {
+            key: payload[key]
+            for key in (
+                "practice_guide_edition_id",
+                "context_assembly_policy_id",
+                "context_assembly_policy_version",
+            )
+            if payload is not None and payload.get(key) is not None
+        }
         return GatewayResponse(
             tool,
             GUIDANCE_CONTRACT_VERSION,
             effective_status,
-            coverage,
+            {**coverage, **pinned_context},
             EvidencePack((), (), (), ({"code": code}, *relevant_gaps), ()),
         )
 

@@ -14,7 +14,7 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from asd_kontur.domain import uuid7
+from asd_kontur.domain import deterministic_uuid, uuid7
 from asd_kontur.harness.models import digest_of
 
 from .models import (
@@ -33,6 +33,7 @@ from .models import (
     GuideValidationFailure,
     NormativeReferenceCandidate,
     NormativeReferenceResolutionState,
+    PracticeGuideEditionActivationDecision,
     VerificationDisposition,
 )
 
@@ -62,18 +63,37 @@ class PracticeGuideRepository:
         guide_id, edition_id = uuid7(), uuid7()
         provenance_digest = digest_of(provenance)
         with Session(self._engine) as session, session.begin():
-            existing = session.execute(
-                sa.text(
-                    "SELECT practice_guide_id FROM platform.practice_guides WHERE guide_key=:key"
-                ),
-                {"key": guide_key},
-            ).scalar_one_or_none()
-            if existing is None:
+            existing_guides = tuple(
+                session.execute(
+                    sa.text(
+                        "SELECT practice_guide_id,source_artifact_id,guide_key,title "
+                        "FROM platform.practice_guides "
+                        "WHERE guide_key=:key OR source_artifact_id=:artifact"
+                    ),
+                    {"key": guide_key, "artifact": source_artifact_id},
+                ).mappings()
+            )
+            if len(existing_guides) > 1:
+                raise ValueError(
+                    "PracticeGuide key and SourceArtifact resolve to different identities"
+                )
+            if existing_guides:
+                existing_guide = existing_guides[0]
+                if (
+                    str(existing_guide["guide_key"]) != guide_key
+                    or UUID(str(existing_guide["source_artifact_id"])) != source_artifact_id
+                    or str(existing_guide["title"]) != title
+                ):
+                    raise ValueError(
+                        "PracticeGuide stable identity conflicts with existing metadata"
+                    )
+                guide_id = UUID(str(existing_guide["practice_guide_id"]))
+            else:
                 session.execute(
                     sa.text(
                         "INSERT INTO platform.practice_guides "
                         "(practice_guide_id,source_artifact_id,guide_key,title,authority_layer,status,created_by_identity_id,created_at) "
-                        "VALUES (:id,:artifact,:key,:title,'methodological_guidance','active',:actor,:now)"
+                        "VALUES (:id,:artifact,:key,:title,'methodological_practice','active',:actor,:now)"
                     ),
                     {
                         "id": guide_id,
@@ -84,13 +104,35 @@ class PracticeGuideRepository:
                         "now": datetime.now(UTC),
                     },
                 )
-            else:
-                guide_id = UUID(str(existing))
+            source_edition = (
+                session.execute(
+                    sa.text(
+                        "SELECT practice_guide_edition_id,practice_guide_id,edition_label,"
+                        "source_digest,page_count,provenance_digest "
+                        "FROM platform.practice_guide_editions WHERE source_version_id=:source"
+                    ),
+                    {"source": source_version_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if source_edition is not None:
+                if (
+                    UUID(str(source_edition["practice_guide_id"])) != guide_id
+                    or str(source_edition["edition_label"]) != edition_label
+                    or str(source_edition["source_digest"]) != source_digest
+                    or int(source_edition["page_count"]) != page_count
+                    or str(source_edition["provenance_digest"]) != provenance_digest
+                ):
+                    raise ValueError(
+                        "SourceVersion already belongs to a different immutable edition"
+                    )
+                return guide_id, UUID(str(source_edition["practice_guide_edition_id"]))
             existing_edition = (
                 session.execute(
                     sa.text(
-                        "SELECT practice_guide_edition_id,source_digest,page_count,provenance_digest "
-                        "FROM platform.practice_guide_editions "
+                        "SELECT practice_guide_edition_id,source_version_id,source_digest,page_count,"
+                        "provenance_digest FROM platform.practice_guide_editions "
                         "WHERE practice_guide_id=:guide AND edition_label=:label"
                     ),
                     {"guide": guide_id, "label": edition_label},
@@ -99,13 +141,9 @@ class PracticeGuideRepository:
                 .one_or_none()
             )
             if existing_edition is not None:
-                if (
-                    str(existing_edition["source_digest"]) != source_digest
-                    or int(existing_edition["page_count"]) != page_count
-                    or str(existing_edition["provenance_digest"]) != provenance_digest
-                ):
-                    raise ValueError("PracticeGuideEdition identity conflicts with source bytes")
-                return guide_id, UUID(str(existing_edition["practice_guide_edition_id"]))
+                raise ValueError(
+                    "PracticeGuideEdition label is already bound to another SourceVersion"
+                )
             ordinal = int(
                 session.execute(
                     sa.text(
@@ -162,6 +200,153 @@ class PracticeGuideRepository:
                 },
             )
         return guide_id, edition_id
+
+    def activate_guide_edition(
+        self,
+        *,
+        practice_guide_id: UUID,
+        selected_edition_id: UUID,
+        reason_code: str,
+        owner_decision_ref: str,
+        authority_identity_id: str,
+    ) -> PracticeGuideEditionActivationDecision:
+        """Append an explicit activation decision; no implicit mutable latest exists."""
+
+        activation_id = deterministic_uuid(f"practice-guide-activation:{practice_guide_id}")
+        with Session(self._engine) as session, session.begin():
+            session.execute(
+                sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:guide_text,0))"),
+                {"guide_text": str(practice_guide_id)},
+            )
+            session.execute(
+                sa.text(
+                    "SELECT practice_guide_id FROM platform.practice_guides "
+                    "WHERE practice_guide_id=:guide"
+                ),
+                {"guide": practice_guide_id},
+            ).scalar_one()
+            edition_guide = session.execute(
+                sa.text(
+                    "SELECT practice_guide_id FROM platform.practice_guide_editions "
+                    "WHERE practice_guide_edition_id=:edition"
+                ),
+                {"edition": selected_edition_id},
+            ).scalar_one()
+            if UUID(str(edition_guide)) != practice_guide_id:
+                raise ValueError("Activation decision crossed PracticeGuide identity")
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT activation_decision_id,version,practice_guide_id,selected_edition_id,"
+                        "supersedes_version,reason_code,owner_decision_ref,authority_identity_id,"
+                        "recorded_at FROM platform.practice_guide_edition_activation_decisions "
+                        "WHERE practice_guide_id=:guide AND selected_edition_id=:edition "
+                        "AND reason_code=:reason AND owner_decision_ref=:owner_ref "
+                        "AND authority_identity_id=:actor"
+                    ),
+                    {
+                        "guide": practice_guide_id,
+                        "edition": selected_edition_id,
+                        "reason": reason_code,
+                        "owner_ref": owner_decision_ref,
+                        "actor": authority_identity_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if existing is not None:
+                return PracticeGuideEditionActivationDecision(
+                    UUID(str(existing["activation_decision_id"])),
+                    int(existing["version"]),
+                    UUID(str(existing["practice_guide_id"])),
+                    UUID(str(existing["selected_edition_id"])),
+                    (
+                        int(existing["supersedes_version"])
+                        if existing["supersedes_version"] is not None
+                        else None
+                    ),
+                    str(existing["reason_code"]),
+                    str(existing["owner_decision_ref"]),
+                    str(existing["authority_identity_id"]),
+                    existing["recorded_at"],
+                )
+            prior_version = int(
+                session.execute(
+                    sa.text(
+                        "SELECT COALESCE(max(version),0) FROM "
+                        "platform.practice_guide_edition_activation_decisions "
+                        "WHERE practice_guide_id=:guide"
+                    ),
+                    {"guide": practice_guide_id},
+                ).scalar_one()
+            )
+            recorded_at = datetime.now(UTC)
+            decision = PracticeGuideEditionActivationDecision(
+                activation_id,
+                prior_version + 1,
+                practice_guide_id,
+                selected_edition_id,
+                prior_version or None,
+                reason_code,
+                owner_decision_ref,
+                authority_identity_id,
+                recorded_at,
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_guide_edition_activation_decisions "
+                    "(activation_decision_id,version,practice_guide_id,selected_edition_id,"
+                    "supersedes_version,reason_code,owner_decision_ref,authority_identity_id,"
+                    "decision_fingerprint,recorded_at) VALUES "
+                    "(:id,:version,:guide,:edition,:supersedes,:reason,:owner_ref,:actor,"
+                    ":fingerprint,:recorded_at)"
+                ),
+                {
+                    "id": decision.activation_decision_id,
+                    "version": decision.version,
+                    "guide": decision.practice_guide_id,
+                    "edition": decision.selected_edition_id,
+                    "supersedes": decision.supersedes_version,
+                    "reason": decision.reason_code,
+                    "owner_ref": decision.owner_decision_ref,
+                    "actor": decision.authority_identity_id,
+                    "fingerprint": decision.fingerprint,
+                    "recorded_at": decision.recorded_at,
+                },
+            )
+            return decision
+
+    def resolve_edition_activation(
+        self, *, activation_decision_id: UUID, version: int
+    ) -> PracticeGuideEditionActivationDecision:
+        """Resolve only an exact pinned activation decision; mutable latest is forbidden."""
+
+        with Session(self._engine) as session:
+            value = (
+                session.execute(
+                    sa.text(
+                        "SELECT activation_decision_id,version,practice_guide_id,selected_edition_id,"
+                        "supersedes_version,reason_code,owner_decision_ref,authority_identity_id,"
+                        "recorded_at FROM platform.practice_guide_edition_activation_decisions "
+                        "WHERE activation_decision_id=:id AND version=:version"
+                    ),
+                    {"id": activation_decision_id, "version": version},
+                )
+                .mappings()
+                .one()
+            )
+        return PracticeGuideEditionActivationDecision(
+            UUID(str(value["activation_decision_id"])),
+            int(value["version"]),
+            UUID(str(value["practice_guide_id"])),
+            UUID(str(value["selected_edition_id"])),
+            int(value["supersedes_version"]) if value["supersedes_version"] is not None else None,
+            str(value["reason_code"]),
+            str(value["owner_decision_ref"]),
+            str(value["authority_identity_id"]),
+            value["recorded_at"],
+        )
 
     def save_page_manifest(self, edition_id: UUID, pages: tuple[GuidePageManifest, ...]) -> None:
         if not pages:
@@ -718,74 +903,161 @@ class PracticeGuideRepository:
                     },
                 )
 
-    def save_verification(self, verification: GuidanceVerification) -> None:
+    def save_verification(self, verification: GuidanceVerification) -> UUID:
         with Session(self._engine) as session, session.begin():
+            session.execute(
+                sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:identity,0))"),
+                {"identity": f"{verification.candidate_id}:{verification.candidate_version}"},
+            )
             existing = (
                 session.execute(
                     sa.text(
-                        "SELECT disposition,result_digest FROM platform.practice_guide_verifications "
-                        "WHERE guidance_candidate_id=:candidate AND candidate_version=:version"
+                        "SELECT verification_id,disposition,result_digest FROM "
+                        "platform.practice_guide_verifications WHERE "
+                        "guidance_candidate_id=:candidate AND candidate_version=:version "
+                        "AND result_digest=:digest"
                     ),
                     {
                         "candidate": verification.candidate_id,
                         "version": verification.candidate_version,
+                        "digest": verification.result_digest,
                     },
                 )
                 .mappings()
                 .one_or_none()
             )
             if existing is not None:
-                if (
-                    str(existing["disposition"]) != verification.disposition
-                    or str(existing["result_digest"]) != verification.result_digest
-                ):
-                    raise ValueError("Pass B verification conflicts with persisted receipt")
-                return
+                if str(existing["disposition"]) != verification.disposition:
+                    raise ValueError("Verification result digest has divergent disposition")
+                verification_id = UUID(str(existing["verification_id"]))
+            else:
+                verification_id = verification.verification_id
+                session.execute(
+                    sa.text(
+                        "INSERT INTO platform.practice_guide_verifications "
+                        "(verification_id,guidance_candidate_id,candidate_version,disposition,"
+                        "source_version_id,page_number,region,model_profile_fingerprint,"
+                        "verification_prompt_version,result_digest,verified_at) VALUES "
+                        "(:id,:candidate,:version,:disposition,:source,:page,:region,:profile,"
+                        ":prompt,:digest,:at)"
+                    ),
+                    {
+                        "id": verification_id,
+                        "candidate": verification.candidate_id,
+                        "version": verification.candidate_version,
+                        "disposition": verification.disposition,
+                        "source": verification.source_version_id,
+                        "page": verification.locator.page_number,
+                        "region": list(verification.locator.region),
+                        "profile": verification.model_profile_fingerprint,
+                        "prompt": verification.verification_prompt_version,
+                        "digest": verification.result_digest,
+                        "at": verification.verified_at,
+                    },
+                )
+            prior = (
+                session.execute(
+                    sa.text(
+                        "SELECT selection_decision_id,version,selected_verification_id FROM "
+                        "platform.practice_guide_verification_selection_decisions WHERE "
+                        "guidance_candidate_id=:candidate AND candidate_version=:candidate_version "
+                        "ORDER BY version DESC LIMIT 1"
+                    ),
+                    {
+                        "candidate": verification.candidate_id,
+                        "candidate_version": verification.candidate_version,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if (
+                prior is not None
+                and UUID(str(prior["selected_verification_id"])) == verification_id
+            ):
+                return verification_id
+            selection_id = deterministic_uuid(
+                f"kg-id-verification-selection:{verification.candidate_id}:"
+                f"v{verification.candidate_version}"
+            )
+            selection_version = int(prior["version"]) + 1 if prior is not None else 1
+            recorded_at = datetime.now(UTC)
+            selection_payload = {
+                "selection_decision_id": str(selection_id),
+                "version": selection_version,
+                "guidance_candidate_id": str(verification.candidate_id),
+                "candidate_version": verification.candidate_version,
+                "selected_verification_id": str(verification_id),
+                "supersedes_version": int(prior["version"]) if prior is not None else None,
+                "reason_code": "NEW_IMMUTABLE_VERIFICATION_ATTEMPT_SELECTED",
+                "recorded_at": recorded_at.isoformat(),
+            }
             session.execute(
                 sa.text(
-                    "INSERT INTO platform.practice_guide_verifications "
-                    "(verification_id,guidance_candidate_id,candidate_version,disposition,source_version_id,"
-                    "page_number,region,model_profile_fingerprint,verification_prompt_version,result_digest,verified_at) "
-                    "VALUES (:id,:candidate,:version,:disposition,:source,:page,:region,:profile,:prompt,:digest,:at)"
+                    "INSERT INTO platform.practice_guide_verification_selection_decisions "
+                    "(selection_decision_id,version,guidance_candidate_id,candidate_version,"
+                    "selected_verification_id,supersedes_version,reason_code,decision_fingerprint,"
+                    "recorded_at) VALUES (:id,:version,:candidate,:candidate_version,:verification,"
+                    ":supersedes,:reason,:fingerprint,:at)"
                 ),
                 {
-                    "id": verification.verification_id,
+                    "id": selection_id,
+                    "version": selection_version,
                     "candidate": verification.candidate_id,
-                    "version": verification.candidate_version,
-                    "disposition": verification.disposition,
-                    "source": verification.source_version_id,
-                    "page": verification.locator.page_number,
-                    "region": list(verification.locator.region),
-                    "profile": verification.model_profile_fingerprint,
-                    "prompt": verification.verification_prompt_version,
-                    "digest": verification.result_digest,
-                    "at": verification.verified_at,
+                    "candidate_version": verification.candidate_version,
+                    "verification": verification_id,
+                    "supersedes": selection_payload["supersedes_version"],
+                    "reason": selection_payload["reason_code"],
+                    "fingerprint": digest_of(selection_payload),
+                    "at": recorded_at,
                 },
             )
+            return verification_id
 
     def save_page_receipt(self, receipt: GuidePageTerminalReceipt) -> None:
         with Session(self._engine) as session, session.begin():
-            existing = session.execute(
-                sa.text(
-                    "SELECT receipt_digest FROM platform.practice_guide_page_terminal_receipts "
-                    "WHERE ingestion_run_id=:run AND page_number=:page"
-                ),
-                {"run": receipt.ingestion_run_id, "page": receipt.page_number},
-            ).scalar_one_or_none()
+            session.execute(
+                sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:identity,0))"),
+                {"identity": f"{receipt.ingestion_run_id}:{receipt.page_number}"},
+            )
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT receipt_version,receipt_digest FROM "
+                        "platform.practice_guide_page_terminal_receipts WHERE "
+                        "ingestion_run_id=:run AND page_number=:page "
+                        "ORDER BY receipt_version DESC LIMIT 1"
+                    ),
+                    {"run": receipt.ingestion_run_id, "page": receipt.page_number},
+                )
+                .mappings()
+                .one_or_none()
+            )
             if existing is not None:
-                if str(existing) != receipt.receipt_digest:
-                    raise ValueError("Page terminal receipt conflicts with persisted state")
-                return
+                if str(existing["receipt_digest"]) == receipt.receipt_digest:
+                    return
+                receipt_version = int(existing["receipt_version"]) + 1
+                supersedes_version = int(existing["receipt_version"])
+                supersession_reason = "BOUNDED_RECOVERY_SUPERSEDING_RECEIPT"
+            else:
+                receipt_version = 1
+                supersedes_version = None
+                supersession_reason = "INITIAL_TERMINAL_RECEIPT"
             session.execute(
                 sa.text(
                     "INSERT INTO platform.practice_guide_page_terminal_receipts "
-                    "(ingestion_run_id,page_number,source_version_id,terminal_state,pass_a_attempt_ref,"
+                    "(ingestion_run_id,page_number,receipt_version,supersedes_receipt_version,"
+                    "supersession_reason,source_version_id,terminal_state,pass_a_attempt_ref,"
                     "pass_b_attempt_refs,candidate_count,verified_count,unresolved_count,receipt_digest,recorded_at) "
-                    "VALUES (:run,:page,:source,:state,:pass_a,:pass_b,:candidates,:verified,:unresolved,:digest,:at)"
+                    "VALUES (:run,:page,:receipt_version,:supersedes,:reason,:source,:state,"
+                    ":pass_a,:pass_b,:candidates,:verified,:unresolved,:digest,:at)"
                 ),
                 {
                     "run": receipt.ingestion_run_id,
                     "page": receipt.page_number,
+                    "receipt_version": receipt_version,
+                    "supersedes": supersedes_version,
+                    "reason": supersession_reason,
                     "source": receipt.source_version_id,
                     "state": receipt.state,
                     "pass_a": str(receipt.pass_a_attempt_id) if receipt.pass_a_attempt_id else None,
@@ -823,12 +1095,16 @@ class PracticeGuideRepository:
             else "partial"
         )
         with Session(self._engine) as session, session.begin():
+            session.execute(
+                sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:identity,0))"),
+                {"identity": str(reconciliation.ingestion_run_id)},
+            )
             existing = (
                 session.execute(
                     sa.text(
-                        "SELECT ingestion_reconciliation_id,reconciliation_fingerprint FROM "
+                        "SELECT ingestion_reconciliation_id,version,reconciliation_fingerprint FROM "
                         "platform.practice_guide_ingestion_reconciliations "
-                        "WHERE ingestion_run_id=:run"
+                        "WHERE ingestion_run_id=:run ORDER BY version DESC LIMIT 1"
                     ),
                     {"run": reconciliation.ingestion_run_id},
                 )
@@ -836,19 +1112,30 @@ class PracticeGuideRepository:
                 .one_or_none()
             )
             if existing is not None:
-                if str(existing["reconciliation_fingerprint"]) != reconciliation.fingerprint:
-                    raise ValueError("Ingestion reconciliation conflicts with persisted state")
-                return UUID(str(existing["ingestion_reconciliation_id"]))
+                if str(existing["reconciliation_fingerprint"]) == reconciliation.fingerprint:
+                    return UUID(str(existing["ingestion_reconciliation_id"]))
+                version = int(existing["version"]) + 1
+                supersedes_version = int(existing["version"])
+                supersession_reason = "BOUNDED_RECOVERY_RECONCILIATION"
+            else:
+                version = 1
+                supersedes_version = None
+                supersession_reason = "INITIAL_RECONCILIATION"
             session.execute(
                 sa.text(
                     "INSERT INTO platform.practice_guide_ingestion_reconciliations "
-                    "(ingestion_reconciliation_id,ingestion_run_id,expected_page_count,terminal_page_count,state_counts,"
+                    "(ingestion_reconciliation_id,ingestion_run_id,version,supersedes_version,"
+                    "supersession_reason,expected_page_count,terminal_page_count,state_counts,"
                     "complete,reconciliation_fingerprint,reconciled_by_identity_id,reconciled_at) VALUES "
-                    "(:id,:run,:expected,:terminal,CAST(:states AS jsonb),:complete,:fingerprint,:actor,:now)"
+                    "(:id,:run,:version,:supersedes,:reason,:expected,:terminal,"
+                    "CAST(:states AS jsonb),:complete,:fingerprint,:actor,:now)"
                 ),
                 {
                     "id": reconciliation_id,
                     "run": reconciliation.ingestion_run_id,
+                    "version": version,
+                    "supersedes": supersedes_version,
+                    "reason": supersession_reason,
                     "expected": reconciliation.expected_pages,
                     "terminal": len(reconciliation.terminal_pages),
                     "states": json.dumps(state_counts, sort_keys=True),
@@ -915,6 +1202,19 @@ class PracticeGuideRepository:
             raise ValueError("Publication verification does not match CandidateVersion")
         unit_id, evidence_id, locator_id, structural_unit_id = uuid7(), uuid7(), uuid7(), uuid7()
         with Session(self._engine) as session, session.begin():
+            selected_verification_id = session.execute(
+                sa.text(
+                    "SELECT selected_verification_id FROM "
+                    "platform.practice_guide_verification_selection_decisions WHERE "
+                    "guidance_candidate_id=:id AND candidate_version=:version "
+                    "ORDER BY version DESC LIMIT 1"
+                ),
+                {"id": candidate.candidate_id, "version": candidate.version},
+            ).scalar_one_or_none()
+            if selected_verification_id is None or UUID(str(selected_verification_id)) != (
+                verification.verification_id
+            ):
+                raise ValueError("Publication requires the selected immutable verification attempt")
             existing_unit = session.execute(
                 sa.text(
                     "SELECT guidance_unit_id FROM platform.practice_guidance_units WHERE "
@@ -1022,7 +1322,7 @@ class PracticeGuideRepository:
                     "curator_identity_id,integrity_digest,published_at) VALUES "
                     "(:id,1,:edition,:structural_unit,:candidate,:candidate_version,:kind,:instruction,:section,:topic,:form,:stage,:field,"
                     "CAST(:inputs AS jsonb),CAST(:evidence AS jsonb),CAST(:roles AS jsonb),:error,:practice,"
-                    "CAST(:applicability AS jsonb),CAST(:limitations AS jsonb),'methodological_guidance','verified',"
+                    "CAST(:applicability AS jsonb),CAST(:limitations AS jsonb),'methodological_practice','verified',"
                     ":decision,:curator,:digest,:now)"
                 ),
                 {
@@ -1238,7 +1538,8 @@ class PracticeGuideRepository:
                 sa.text(
                     "SELECT guidance_conflict_id FROM platform.practice_guidance_conflicts "
                     "WHERE guidance_candidate_id=:candidate AND candidate_version=:version "
-                    "AND conflicting_authority_layer='methodological_guidance_peer' "
+                    "AND conflicting_authority_layer IN "
+                    "('methodological_guidance_peer','methodological_practice_peer') "
                     "AND conflicting_subject_ref=:subject AND conflict_type=:type AND state='open'"
                 ),
                 {
@@ -1258,7 +1559,7 @@ class PracticeGuideRepository:
                     "guidance_candidate_id,candidate_version,conflicting_authority_layer,"
                     "conflicting_subject_ref,conflict_type,state,uncertainty_ref,decision_ref,"
                     "recorded_at) VALUES "
-                    "(:id,NULL,NULL,:candidate,:version,'methodological_guidance_peer',:subject,"
+                    "(:id,NULL,NULL,:candidate,:version,'methodological_practice_peer',:subject,"
                     ":type,'open',:uncertainty,NULL,:now)"
                 ),
                 {

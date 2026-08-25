@@ -205,6 +205,69 @@ def test_changed_inventory_hold_and_same_actor_authorization_fail_closed() -> No
     assert held.value.code is LifecycleErrorCode.LEGAL_HOLD_ACTIVE
 
 
+def test_workspace_deletion_cannot_address_permanent_practice_memory() -> None:
+    coordinator, _adapter = coordinator_with_item()
+    requester, _confirmer, _executor, _verifier = authorities()
+    permanent_profile = RetentionProfile(
+        ExactVersionReference("retention.invalid-platform-core", "0.1.0"),
+        "development",
+        frozenset({"workspace_object_store", "permanent_platform_core"}),
+        True,
+        False,
+    )
+    with pytest.raises(LifecycleError) as blocked:
+        coordinator.plan(
+            operation_kind="reset",
+            organization_id=ORGANIZATION_ID,
+            workspace_id=WORKSPACE_A,
+            lifecycle_version=1,
+            workspace_revision=1,
+            profile=permanent_profile,
+            basis=basis(),
+            requester=requester,
+            legal_hold_active=False,
+            now=NOW,
+            expires_at=NOW + timedelta(hours=1),
+        )
+    assert blocked.value.code is LifecycleErrorCode.POLICY_BLOCKED
+
+
+def test_workspace_deletion_registry_rejects_platform_scoped_adapter() -> None:
+    platform_definition = StorageAdapterDefinition(
+        "platform.practice-memory",
+        "0.1.0",
+        "platform_object_store",
+        "authoritative",
+        "platform",
+        True,
+        True,
+        False,
+        True,
+        False,
+        "1.0.0",
+    )
+    adapter = InMemoryStorageAdapter(platform_definition)
+    coordinator = DestructionCoordinator(
+        RegistrySnapshot(ExactVersionReference("adapters.invalid", "0.1.0"), (adapter,))
+    )
+    requester, _confirmer, _executor, _verifier = authorities()
+    with pytest.raises(LifecycleError) as blocked:
+        coordinator.plan(
+            operation_kind="reset",
+            organization_id=ORGANIZATION_ID,
+            workspace_id=WORKSPACE_A,
+            lifecycle_version=1,
+            workspace_revision=1,
+            profile=profile(),
+            basis=basis(),
+            requester=requester,
+            legal_hold_active=False,
+            now=NOW,
+            expires_at=NOW + timedelta(hours=1),
+        )
+    assert blocked.value.code is LifecycleErrorCode.PLAN_INVALID
+
+
 def test_partial_adapter_failure_never_attests_verified() -> None:
     coordinator, adapter = coordinator_with_item()
     requester, confirmer, executor, verifier = authorities()

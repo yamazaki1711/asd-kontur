@@ -1,0 +1,22 @@
+{
+  "record_type": "IDPracticeContextPack",
+  "context_pack_id": "0198f8ae-c954-7000-8000-000000000103",
+  "context_request_id": "0198f8ae-c954-7000-8000-000000000104",
+  "policy_id": "0198f8ae-c954-7000-8000-000000000101",
+  "policy_version": 1,
+  "practice_guide_edition_id": "0198f8ae-c954-7000-8000-000000000102",
+  "status": "ok",
+  "intelligence_unit_refs": [],
+  "playbook_refs": [],
+  "source_version_ids": [],
+  "citations": [],
+  "normative_requirements": [],
+  "practice_advice": [],
+  "workspace_fact_refs": [],
+  "deterministic_rule_refs": [],
+  "gaps": [],
+  "conflicts": [],
+  "uncertainties": [],
+  "authority_layer": "methodological_practice",
+  "pack_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

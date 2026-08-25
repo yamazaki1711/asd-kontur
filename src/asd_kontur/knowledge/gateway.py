@@ -11,8 +11,8 @@ from .errors import KnowledgeError, KnowledgeErrorCode
 
 SUPPORTED_CONTRACT_VERSION = "0.1.0"
 SUPPORTED_SCHEMA_ID = "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge"
-GUIDANCE_CONTRACT_VERSION = "1.5.0"
-GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.5:schema:practice-guidance"
+GUIDANCE_CONTRACT_VERSION = "1.6.0"
+GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence"
 BASE_TOOLS = frozenset(
     {
         "knowledge.search",
@@ -30,6 +30,8 @@ GUIDANCE_TOOLS = frozenset(
         "knowledge.get_field_guidance",
         "knowledge.trace_guidance",
         "knowledge.explain_guidance_conflict",
+        "knowledge.get_id_task_guidance",
+        "knowledge.get_practice_playbook",
     }
 )
 TOOLS = BASE_TOOLS | GUIDANCE_TOOLS
@@ -41,6 +43,8 @@ class GatewayStatus(StrEnum):
     INDEX_UNAVAILABLE = "index_unavailable"
     KNOWLEDGE_INCOMPLETE = "knowledge_incomplete"
     EDITION_AMBIGUOUS = "edition_ambiguous"
+    EDITION_MISMATCH = "edition_mismatch"
+    GUIDANCE_NORMATIVE_CONFLICT = "guidance_normative_conflict"
 
 
 @dataclass(frozen=True, slots=True)

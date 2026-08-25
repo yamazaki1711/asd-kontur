@@ -366,7 +366,7 @@ def test_wp11_schema_role_and_migration_head(postgres_environment: PostgreSQLEnv
     with postgres_environment.owner_engine.connect() as connection:
         assert (
             connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0010_kg_id_compat"
+            == "0015_practice_authority"
         )
         assert (
             connection.scalar(
@@ -783,7 +783,7 @@ def test_disposable_0005_downgrade_upgrade(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0010_kg_id_compat"
+                == "0015_practice_authority"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

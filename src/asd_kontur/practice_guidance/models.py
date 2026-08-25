@@ -16,7 +16,12 @@ from asd_kontur.harness.models import digest_of
 
 
 class GuideAuthorityLayer(StrEnum):
+    METHODOLOGICAL_PRACTICE = "methodological_practice"
+    # Immutable Contract Pack v1.5 and migration 0009 compatibility only.
     METHODOLOGICAL_GUIDANCE = "methodological_guidance"
+
+
+PERMANENT_PRACTICE_RETENTION_CLASS = "permanent_platform_core"
 
 
 class GuideContentKind(StrEnum):
@@ -80,6 +85,272 @@ class CandidateTerminalStatus(StrEnum):
     MODEL_FAILED = "model_failed"
 
 
+class PracticeIntelligenceKind(StrEnum):
+    ID_PRACTICE_PRINCIPLE = "id_practice_principle"
+    ID_WORKFLOW_STEP = "id_workflow_step"
+    FORM_COMPLETION_GUIDANCE = "form_completion_guidance"
+    FIELD_COMPLETION_GUIDANCE = "field_completion_guidance"
+    ATTENTION_POINT = "attention_point"
+    ALLOWED_PRACTICE_VARIANT = "allowed_practice_variant"
+    PRACTICE_RATIONALE = "practice_rationale"
+    COMMON_FAILURE_PATTERN = "common_failure_pattern"
+    VERIFICATION_CHECKLIST = "verification_checklist"
+    COMPLETENESS_GUIDANCE = "completeness_guidance"
+    JOURNAL_SELECTION_GUIDANCE = "journal_selection_guidance"
+    DOCUMENT_DEPENDENCY_GUIDANCE = "document_dependency_guidance"
+    COMPLETION_INSTRUCTION = "completion_instruction"
+    SIGNER_ROLE_GUIDANCE = "signer_role_guidance"
+    VISUAL_COMPLETION_EXAMPLE = "visual_completion_example"
+
+
+class PracticeContextStatus(StrEnum):
+    OK = "ok"
+    KNOWLEDGE_INCOMPLETE = "knowledge_incomplete"
+    GUIDANCE_NORMATIVE_CONFLICT = "guidance_normative_conflict"
+    EDITION_MISMATCH = "edition_mismatch"
+    MEMORY_UNAVAILABLE = "memory_unavailable"
+
+
+@dataclass(frozen=True, slots=True)
+class PracticeIntelligenceEvidence:
+    guidance_unit_id: UUID
+    guidance_unit_version: int
+    source_version_id: UUID
+    locator: GuideLocator
+    fragment_digest: str
+
+    def __post_init__(self) -> None:
+        if self.guidance_unit_version < 1:
+            raise ValueError("Practice-intelligence evidence requires an exact guidance version")
+        if not self.fragment_digest.startswith("sha256:"):
+            raise ValueError("Practice-intelligence evidence requires an immutable digest")
+
+
+@dataclass(frozen=True, slots=True)
+class IDPracticeIntelligenceUnit:
+    intelligence_unit_id: UUID
+    version: int
+    practice_guide_edition_id: UUID
+    coverage_manifest_id: UUID
+    kind: PracticeIntelligenceKind
+    title: str
+    instruction: str
+    rationale: str | None
+    applicability_conditions: tuple[str, ...]
+    work_types: tuple[str, ...]
+    document_types: tuple[str, ...]
+    form_types: tuple[str, ...]
+    workflow_stages: tuple[str, ...]
+    field_elements: tuple[str, ...]
+    required_inputs: tuple[str, ...]
+    evidence_requirements: tuple[str, ...]
+    allowed_variants: tuple[str, ...]
+    failure_patterns: tuple[str, ...]
+    checklist_items: tuple[str, ...]
+    dependency_refs: tuple[str, ...]
+    normative_references: tuple[dict[str, Any], ...]
+    uncertainties: tuple[str, ...]
+    evidence: tuple[PracticeIntelligenceEvidence, ...]
+    construction_profile_version: str
+
+    def __post_init__(self) -> None:
+        if self.version < 1 or not self.title.strip() or not self.instruction.strip():
+            raise ValueError("Practice-intelligence units require identity, title and instruction")
+        if not self.evidence:
+            raise ValueError("Practice-intelligence units require exact source evidence")
+        if not self.construction_profile_version:
+            raise ValueError("Practice-intelligence units require a pinned construction profile")
+        if any(item.guidance_unit_version < 1 for item in self.evidence):
+            raise ValueError("Practice-intelligence source lineage is incomplete")
+
+    @property
+    def integrity_digest(self) -> str:
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class PracticePlaybook:
+    playbook_id: UUID
+    version: int
+    practice_guide_edition_id: UUID
+    coverage_manifest_id: UUID
+    title: str
+    purpose: str
+    applicability_conditions: tuple[str, ...]
+    work_types: tuple[str, ...]
+    document_types: tuple[str, ...]
+    form_types: tuple[str, ...]
+    workflow_stages: tuple[str, ...]
+    member_refs: tuple[tuple[UUID, int, str], ...]
+    uncertainties: tuple[str, ...]
+    construction_profile_version: str
+
+    def __post_init__(self) -> None:
+        if self.version < 1 or not self.title.strip() or not self.purpose.strip():
+            raise ValueError("PracticePlaybook requires identity, title and purpose")
+        if not self.member_refs:
+            raise ValueError("PracticePlaybook cannot be empty")
+        if not self.construction_profile_version:
+            raise ValueError("PracticePlaybook requires a pinned construction profile")
+
+    @property
+    def integrity_digest(self) -> str:
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class ContextAssemblyPolicy:
+    policy_id: UUID
+    version: int
+    practice_guide_edition_id: UUID
+    policy_key: str
+    allowed_modes: tuple[str, ...]
+    allowed_purposes: tuple[str, ...]
+    selector_dimensions: tuple[str, ...]
+    max_intelligence_units: int
+    max_playbooks: int
+    authority_layer: GuideAuthorityLayer = GuideAuthorityLayer.METHODOLOGICAL_PRACTICE
+    retention_class: str = PERMANENT_PRACTICE_RETENTION_CLASS
+
+    def __post_init__(self) -> None:
+        if self.version < 1 or not self.policy_key.strip():
+            raise ValueError("ContextAssemblyPolicy requires an exact stable version")
+        if not self.allowed_modes or not self.allowed_purposes or not self.selector_dimensions:
+            raise ValueError("ContextAssemblyPolicy requires bounded applicability dimensions")
+        if self.max_intelligence_units < 1 or self.max_playbooks < 0:
+            raise ValueError("ContextAssemblyPolicy requires positive deterministic bounds")
+        if self.authority_layer is not GuideAuthorityLayer.METHODOLOGICAL_PRACTICE:
+            raise ValueError("ContextAssemblyPolicy must select methodological practice")
+        if self.retention_class != PERMANENT_PRACTICE_RETENTION_CLASS:
+            raise ValueError("ContextAssemblyPolicy is permanent platform core")
+
+    @property
+    def fingerprint(self) -> str:
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class PracticeGuideEditionActivationDecision:
+    activation_decision_id: UUID
+    version: int
+    practice_guide_id: UUID
+    selected_edition_id: UUID
+    supersedes_version: int | None
+    reason_code: str
+    owner_decision_ref: str
+    authority_identity_id: str
+    recorded_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.version < 1:
+            raise ValueError("PracticeGuide activation requires a positive version")
+        if (self.version == 1) != (self.supersedes_version is None):
+            raise ValueError("PracticeGuide activation supersession lineage is invalid")
+        if self.supersedes_version is not None and self.supersedes_version != self.version - 1:
+            raise ValueError(
+                "PracticeGuide activation must supersede the immediately prior version"
+            )
+        if not all(
+            value.strip()
+            for value in (self.reason_code, self.owner_decision_ref, self.authority_identity_id)
+        ):
+            raise ValueError("PracticeGuide activation requires explicit authority and reason")
+
+    @property
+    def fingerprint(self) -> str:
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class IDPracticeContextPack:
+    context_pack_id: UUID
+    context_request_id: UUID
+    policy_id: UUID
+    policy_version: int
+    practice_guide_edition_id: UUID
+    status: PracticeContextStatus
+    intelligence_unit_refs: tuple[tuple[UUID, int], ...]
+    playbook_refs: tuple[tuple[UUID, int], ...]
+    source_version_ids: tuple[UUID, ...]
+    source_locators: tuple[str, ...]
+    normative_requirements: tuple[dict[str, Any], ...]
+    practice_advice: tuple[dict[str, Any], ...]
+    workspace_fact_refs: tuple[str, ...]
+    deterministic_rule_refs: tuple[str, ...]
+    gaps: tuple[dict[str, Any], ...]
+    conflicts: tuple[dict[str, Any], ...]
+    uncertainties: tuple[dict[str, Any], ...]
+    assembled_at: datetime
+    authority_layer: GuideAuthorityLayer = GuideAuthorityLayer.METHODOLOGICAL_PRACTICE
+
+    def __post_init__(self) -> None:
+        if self.policy_version < 1:
+            raise ValueError("IDPracticeContextPack requires an exact policy version")
+        if self.authority_layer is not GuideAuthorityLayer.METHODOLOGICAL_PRACTICE:
+            raise ValueError("IDPracticeContextPack cannot change the practice authority layer")
+        if self.status is PracticeContextStatus.OK and (
+            not self.intelligence_unit_refs
+            or not self.source_version_ids
+            or not self.source_locators
+            or self.gaps
+            or self.conflicts
+        ):
+            raise ValueError("Successful IDPracticeContextPack requires exact evidence and no gaps")
+        if self.status is not PracticeContextStatus.OK and not (self.gaps or self.conflicts):
+            raise ValueError("A degraded IDPracticeContextPack requires a typed gap or conflict")
+
+    @property
+    def fingerprint(self) -> str:
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class PracticeMemoryBackupManifest:
+    backup_manifest_id: UUID
+    version: int
+    practice_guide_edition_id: UUID
+    source_version_id: UUID
+    source_object_digest: str
+    construction_manifest_id: UUID
+    construction_fingerprint: str
+    coverage_manifest_fingerprint: str
+    activation_decision_id: UUID
+    activation_decision_version: int
+    context_assembly_policy_id: UUID
+    context_assembly_policy_version: int
+    context_assembly_policy_fingerprint: str
+    canonical_semantic_fingerprint: str
+    projection_fingerprints: tuple[dict[str, str], ...]
+    backup_object_reference: str
+    recorded_at: datetime
+    retention_class: str = PERMANENT_PRACTICE_RETENTION_CLASS
+
+    def __post_init__(self) -> None:
+        if (
+            self.version < 1
+            or self.activation_decision_version < 1
+            or self.context_assembly_policy_version < 1
+        ):
+            raise ValueError("Practice memory backup requires exact positive versions")
+        for value in (
+            self.source_object_digest,
+            self.construction_fingerprint,
+            self.coverage_manifest_fingerprint,
+            self.context_assembly_policy_fingerprint,
+            self.canonical_semantic_fingerprint,
+        ):
+            if not value.startswith("sha256:"):
+                raise ValueError("Practice memory backup requires immutable SHA-256 fingerprints")
+        if not self.backup_object_reference.strip():
+            raise ValueError("Practice memory backup requires a provider-neutral object reference")
+        if self.retention_class != PERMANENT_PRACTICE_RETENTION_CLASS:
+            raise ValueError("Practice memory backup is permanent platform core")
+
+    @property
+    def fingerprint(self) -> str:
+        return digest_of(self)
+
+
 @dataclass(frozen=True, slots=True)
 class GuidanceCuratorAuthority:
     identity_id: str
@@ -87,13 +358,13 @@ class GuidanceCuratorAuthority:
     capabilities: frozenset[str]
 
     def require_publication(self) -> None:
-        if not self.is_human or "methodological_guidance.publish" not in self.capabilities:
+        if not self.is_human or "methodological_practice.publish" not in self.capabilities:
             raise PermissionError(
                 "Publishing canonical methodological guidance requires qualified human authority"
             )
 
     def require_conflict_recording(self) -> None:
-        if not self.is_human or "methodological_guidance.conflict.record" not in self.capabilities:
+        if not self.is_human or "methodological_practice.conflict.record" not in self.capabilities:
             raise PermissionError(
                 "Recording a guidance/authority conflict requires qualified human authority"
             )
@@ -410,7 +681,10 @@ class GuidanceConflict:
     def __post_init__(self) -> None:
         if self.guidance_unit_version < 1:
             raise ValueError("Guidance conflict requires an exact positive unit version")
-        if self.conflicting_authority_layer == GuideAuthorityLayer.METHODOLOGICAL_GUIDANCE:
+        if self.conflicting_authority_layer in {
+            GuideAuthorityLayer.METHODOLOGICAL_GUIDANCE,
+            GuideAuthorityLayer.METHODOLOGICAL_PRACTICE,
+        }:
             raise ValueError("Cross-authority conflict must identify another authority layer")
 
     @property

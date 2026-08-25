@@ -1,6 +1,18 @@
 """Platform methodological-practice-guide ingestion and retrieval."""
 
+from .context import (
+    IDPracticeContextAssembler,
+    IDPracticeContextRequest,
+    IDRelatedVlmContextGate,
+    PreparedIDVlmContext,
+)
+from .memory_backup import (
+    build_backup_manifest,
+    canonical_semantic_fingerprint,
+    verify_restored_practice_memory,
+)
 from .models import (
+    ContextAssemblyPolicy,
     GuidanceCandidateVersion,
     GuidanceConflict,
     GuidanceCuratorAuthority,
@@ -14,11 +26,20 @@ from .models import (
     GuidePageManifest,
     GuidePageTerminalReceipt,
     GuideTerminalState,
+    IDPracticeContextPack,
+    IDPracticeIntelligenceUnit,
+    PracticeContextStatus,
+    PracticeGuideEditionActivationDecision,
+    PracticeIntelligenceEvidence,
+    PracticeIntelligenceKind,
+    PracticeMemoryBackupManifest,
+    PracticePlaybook,
     VerificationDisposition,
     reconcile_page_receipts,
 )
 
 __all__ = [
+    "ContextAssemblyPolicy",
     "GuidanceCandidateVersion",
     "GuidanceConflict",
     "GuidanceCuratorAuthority",
@@ -32,6 +53,21 @@ __all__ = [
     "GuidePageManifest",
     "GuidePageTerminalReceipt",
     "GuideTerminalState",
+    "IDPracticeContextAssembler",
+    "IDPracticeContextPack",
+    "IDPracticeContextRequest",
+    "IDPracticeIntelligenceUnit",
+    "IDRelatedVlmContextGate",
+    "PracticeContextStatus",
+    "PracticeGuideEditionActivationDecision",
+    "PracticeIntelligenceEvidence",
+    "PracticeIntelligenceKind",
+    "PracticeMemoryBackupManifest",
+    "PracticePlaybook",
+    "PreparedIDVlmContext",
     "VerificationDisposition",
+    "build_backup_manifest",
+    "canonical_semantic_fingerprint",
     "reconcile_page_receipts",
+    "verify_restored_practice_memory",
 ]

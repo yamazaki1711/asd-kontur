@@ -731,3 +731,11 @@ reconciliation and `CorpusSnapshot` records plus the three separately
 denominated Audit delta/report contracts. It preserves v0.1–v1.3 and explicitly
 rejects empty-complete reconciliation, unresolved-complete snapshots,
 confidence-based authority and `ProductReady`.
+
+KG-ID-01 adds immutable `contracts/v1.5` extraction/publication contracts and
+the additive `contracts/v1.6` permanent-memory extension. Version 1.6 defines
+typed Practice Intelligence, exact-edition `ContextAssemblyPolicy`,
+`IDPracticeContextPack`, Knowledge Gateway envelopes and the byte/semantic
+integrity backup manifest. It preserves v1.5 receipts and candidates, keeps
+`methodological_practice` distinct from normative authority, rejects silent
+empty retrieval and never promotes practice guidance to `RuleVersion`.

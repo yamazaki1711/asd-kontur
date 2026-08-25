@@ -1,0 +1,21 @@
+{
+  "record_type": "PracticeMemoryBackupManifest",
+  "backup_manifest_id": "0198f8ae-c954-7000-8000-000000000107",
+  "version": 1,
+  "practice_guide_edition_id": "0198f8ae-c954-7000-8000-000000000102",
+  "source_version_id": "0198f8ae-c954-7000-8000-000000000106",
+  "source_object_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "construction_manifest_id": "0198f8ae-c954-7000-8000-000000000108",
+  "construction_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "coverage_manifest_fingerprint": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+  "activation_decision_id": "0198f8ae-c954-7000-8000-000000000109",
+  "activation_decision_version": 1,
+  "context_assembly_policy_id": "0198f8ae-c954-7000-8000-000000000101",
+  "context_assembly_policy_version": 1,
+  "context_assembly_policy_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+  "canonical_semantic_fingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "projection_fingerprints": [{"kind": "fts", "fingerprint": "sha256:4444444444444444444444444444444444444444444444444444444444444444"}],
+  "backup_object_reference": "platform-backup:practice-memory-v1",
+  "retention_class": "permanent_platform_core",
+  "manifest_fingerprint": "sha256:5555555555555555555555555555555555555555555555555555555555555555"
+}

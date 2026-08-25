@@ -20,6 +20,8 @@ from asd_kontur.domain import uuid7
 from .errors import KnowledgeError, KnowledgeErrorCode
 from .object_store import ObjectStorePort
 
+PERMANENT_PLATFORM_CORE = "permanent_platform_core"
+
 
 def _digest(value: str | bytes) -> str:
     data = value.encode() if isinstance(value, str) else value
@@ -119,6 +121,14 @@ class PlatformSourceLedger:
         return registry_id
 
     def admit(self, request: PlatformSourceAdmission, content: bytes) -> AdmittedSourceVersion:
+        if (
+            request.source_kind == "methodological_practice_guide"
+            and request.retention_class != PERMANENT_PLATFORM_CORE
+        ):
+            raise KnowledgeError(
+                KnowledgeErrorCode.RETENTION_CLASS_INVALID,
+                "A methodological practice guide must use permanent platform-core retention.",
+            )
         artifact_id, attempt_id = self._begin_attempt(request)
         content_digest = _digest(content)
         with Session(self._engine) as session:

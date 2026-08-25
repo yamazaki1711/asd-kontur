@@ -12,6 +12,7 @@ import argparse
 import fcntl
 import hashlib
 import importlib
+import importlib.metadata
 import json
 import os
 import re
@@ -107,6 +108,44 @@ def _attempt_counts(path: Path) -> dict[str, int]:
     return counts
 
 
+def _competing_heavy_processes() -> list[dict[str, object]]:
+    completed = subprocess.run(
+        ["ps", "-axo", "pid=,ppid=,rss=,command="],
+        capture_output=True,
+        check=True,
+        text=True,
+        timeout=10,
+    )
+    rows: list[tuple[int, int, int, str]] = []
+    parents: dict[int, int] = {}
+    for line in completed.stdout.splitlines():
+        fields = line.strip().split(maxsplit=3)
+        if len(fields) != 4:
+            continue
+        pid, parent_pid, rss, command = (
+            int(fields[0]),
+            int(fields[1]),
+            int(fields[2]),
+            fields[3],
+        )
+        rows.append((pid, parent_pid, rss, command))
+        parents[pid] = parent_pid
+    ancestors = {os.getpid()}
+    ancestor = os.getpid()
+    while ancestor in parents and parents[ancestor] not in ancestors:
+        ancestor = parents[ancestor]
+        ancestors.add(ancestor)
+    competing: list[dict[str, object]] = []
+    markers = ("mlx_vlm.server", "qwen_session_runner.py", "_mlx_vlm_")
+    for pid, _parent_pid, rss, command in rows:
+        if pid in ancestors or not any(marker in command for marker in markers):
+            continue
+        competing.append(
+            {"pid": pid, "resident_kib": rss, "command_digest": _sha256(command.encode())}
+        )
+    return competing
+
+
 def _append_receipt(path: Path, value: dict[str, object]) -> None:
     line = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     with path.open("a", encoding="utf-8") as stream:
@@ -123,20 +162,46 @@ def run(
     max_tokens: int,
     max_battery_celsius: float,
     max_job_seconds: int,
+    profile_path: Path | None,
+    session_receipt_path: Path | None,
 ) -> None:
     jobs = _read_jobs(request_path)
+    competing = _competing_heavy_processes()
+    if competing:
+        raise RuntimeError("HEAVY_MODEL_SESSION_ALREADY_ACTIVE")
     completed = _completed_job_ids(receipt_path)
     attempt_counts = _attempt_counts(receipt_path)
+    profile: dict[str, object] | None = None
+    profile_digest: str | None = None
+    if profile_path is not None:
+        profile_value = json.loads(profile_path.read_text(encoding="utf-8"))
+        if not isinstance(profile_value, dict):
+            raise ValueError("Execution profile must be a JSON object")
+        if profile_value.get("quantization") != "bf16":
+            raise ValueError("Bounded BF16 execution requires an exact BF16 profile")
+        if profile_value.get("deterministic_decoding") is not True:
+            raise ValueError("Bounded BF16 execution requires deterministic decoding")
+        profile = profile_value
+        profile_digest = _sha256(profile_path.read_bytes())
+    session_started_at = datetime.now(UTC)
+    session_started_monotonic = time.monotonic()
+    initial_thermal = _thermal_gate(max_battery_celsius)
     mlx_vlm = importlib.import_module("mlx_vlm")
     prompt_utils = importlib.import_module("mlx_vlm.prompt_utils")
     model, processor = mlx_vlm.load(str(model_path))
     config = model.config
+    loaded_model_identity = str(getattr(config, "_name_or_path", model_path))
     for job in jobs:
         job_id = str(job["job_id"])
         if job_id in completed:
             continue
         attempt_number = attempt_counts.get(job_id, 0) + 1
-        attempt_id = _sha256(f"{job_id}:{attempt_number}".encode())
+        request_digest = _sha256(
+            json.dumps(job, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        )
+        attempt_id = _sha256(
+            f"{job_id}:{attempt_number}:{request_digest}:{profile_digest}".encode()
+        )
         started_at = datetime.now(UTC)
         started_monotonic = time.monotonic()
         thermal = _thermal_gate(max_battery_celsius)
@@ -174,9 +239,7 @@ def run(
                     "attempt_id": attempt_id,
                     "attempt_number": attempt_number,
                     "state": "failed",
-                    "request_digest": _sha256(
-                        json.dumps(job, ensure_ascii=False, sort_keys=True).encode("utf-8")
-                    ),
+                    "request_digest": request_digest,
                     "response_digest": _sha256(b""),
                     "response": "",
                     "error_code": type(error).__name__,
@@ -184,6 +247,9 @@ def run(
                     "started_at": started_at.isoformat(),
                     "completed_at": datetime.now(UTC).isoformat(),
                     "duration_seconds": round(time.monotonic() - started_monotonic, 6),
+                    "execution_profile_digest": profile_digest,
+                    "model_identity": profile.get("model_identity") if profile else None,
+                    "model_revision": profile.get("model_revision") if profile else None,
                 },
             )
             raise
@@ -191,9 +257,6 @@ def run(
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous_handler)
         text = str(result.text)
-        request_digest = _sha256(
-            json.dumps(job, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        )
         _append_receipt(
             receipt_path,
             {
@@ -208,7 +271,51 @@ def run(
                 "started_at": started_at.isoformat(),
                 "completed_at": datetime.now(UTC).isoformat(),
                 "duration_seconds": round(time.monotonic() - started_monotonic, 6),
+                "execution_profile_digest": profile_digest,
+                "model_identity": profile.get("model_identity") if profile else None,
+                "model_revision": profile.get("model_revision") if profile else None,
             },
+        )
+    if session_receipt_path is not None:
+        if profile is None or profile_digest is None:
+            raise ValueError("A session receipt requires an exact execution profile")
+        if session_receipt_path.exists():
+            raise FileExistsError("Immutable session receipt already exists")
+        session_payload = {
+            "contract": "local-mlx-session-receipt/0.2.0",
+            "process_id": os.getpid(),
+            "provider": profile.get("provider"),
+            "model_identity": profile.get("model_identity"),
+            "model_revision": profile.get("model_revision"),
+            "model_digest": profile.get("model_digest"),
+            "model_path": str(model_path.resolve()),
+            "loaded_model_identity": loaded_model_identity,
+            "execution_profile": profile.get("execution_profile"),
+            "execution_profile_digest": profile_digest,
+            "prompt_version": profile.get("prompt_version"),
+            "schema_version": profile.get("schema_version"),
+            "verification_policy_version": profile.get("verification_policy_version"),
+            "runtime": {
+                "mlx_vlm": importlib.metadata.version("mlx-vlm"),
+                "mlx": importlib.metadata.version("mlx"),
+                "transformers": importlib.metadata.version("transformers"),
+            },
+            "request_manifest_digest": _sha256(request_path.read_bytes()),
+            "receipt_stream_digest": _sha256(receipt_path.read_bytes()),
+            "job_count": len(jobs),
+            "temperature": 0,
+            "max_tokens": max_tokens,
+            "max_job_seconds": max_job_seconds,
+            "initial_thermal": initial_thermal,
+            "competing_heavy_processes": competing,
+            "started_at": session_started_at.isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
+            "duration_seconds": round(time.monotonic() - session_started_monotonic, 6),
+        }
+        session_receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        session_receipt_path.write_text(
+            json.dumps(session_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
         )
 
 
@@ -220,12 +327,16 @@ def main() -> None:
     parser.add_argument("--max-tokens", required=True, type=int)
     parser.add_argument("--max-battery-celsius", type=float, default=45.0)
     parser.add_argument("--max-job-seconds", type=int, default=900)
+    parser.add_argument("--profile", type=Path)
+    parser.add_argument("--session-receipt", type=Path)
     parser.add_argument(
         "--lock-file",
         type=Path,
         default=Path(tempfile.gettempdir()) / "asd-kontur-qwen-heavy-session.lock",
     )
     args = parser.parse_args()
+    if (args.profile is None) != (args.session_receipt is None):
+        parser.error("--profile and --session-receipt must be supplied together")
     args.lock_file.parent.mkdir(parents=True, exist_ok=True)
     with args.lock_file.open("a+b") as lock_stream:
         try:
@@ -239,6 +350,8 @@ def main() -> None:
             max_tokens=args.max_tokens,
             max_battery_celsius=args.max_battery_celsius,
             max_job_seconds=args.max_job_seconds,
+            profile_path=args.profile,
+            session_receipt_path=args.session_receipt,
         )
 
 

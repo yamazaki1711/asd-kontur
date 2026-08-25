@@ -30,7 +30,7 @@ PASS_A_PROMPT_VERSION = "kg-id-guide-pass-a-v0.2.0"
 PASS_B_PROMPT_VERSION = "kg-id-guide-pass-b-v0.1.0"
 PASS_B_BATCH_PROMPT_VERSION = "kg-id-guide-pass-b-batched-v0.2.0"
 REGION_RECOVERY_PROMPT_VERSION = "guide_region_candidate_recovery_v0.1"
-COMPACT_VERIFIER_PROMPT_VERSION = "guide_candidate_verifier_v0.1"
+COMPACT_VERIFIER_PROMPT_VERSION = "guide_candidate_verifier_v0.2"
 NTD_ROW_SEMANTIC_PROMPT_VERSION = "guide_ntd_row_semantic_v0.1"
 OUTPUT_SCHEMA_VERSION = "1.5.0"
 
@@ -214,7 +214,7 @@ def pass_a_job(
 ) -> QwenJob:
     _guard_untrusted_native_text(native_text)
     prompt = f"""You are the semantic reader in a controlled evidence-ingestion
-pipeline. The source authority layer is methodological_guidance, never normative
+pipeline. The source authority layer is methodological_practice, never normative
 law or a project fact. Analyze only source_version_id={source_version_id},
 page={page_number}, and the attached exact page image.
 The JSON page_number MUST be the authorized one-based PDF locator
@@ -450,11 +450,16 @@ reason_codes, correction_required. disposition is supported, contradicted,
 insufficient, or model_failed. reason_codes is a unique array of 1..8 UPPER_SNAKE_CASE
 codes, each at most 64 characters. correction_required is boolean. Never return a
 corrected candidate or any long semantic field. Confidence is not evidence. Do not
-broaden applicability or turn methodological guidance into a mandatory norm."""
+broaden applicability or turn methodological guidance into a mandatory norm.
+The required response identity is exactly
+<required_response_identity>{{"page_number":{page_number},"candidate_id":"{candidate.candidate_id}","candidate_version":{candidate.version}}}</required_response_identity>.
+`page_number` is the one-based physical PDF page supplied above. Ignore any printed page
+number visible in the image or native text. Copy all three identity values exactly and
+never substitute source_version_id for candidate_version."""
     return QwenJob(
         job_id=(
             f"candidate-{purpose}-page-{page_number:04d}-"
-            f"{candidate.candidate_id}-v{candidate.version}"
+            f"{candidate.candidate_id}-v{candidate.version}-cv02"
         ),
         page_number=page_number,
         pass_name=f"candidate-{purpose}",
