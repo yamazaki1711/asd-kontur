@@ -1,0 +1,26 @@
+{
+  "contract_version": "1.8.0",
+  "schema_id": "urn:asd-kontur:contracts:v1.8:schema:construction-harness",
+  "workspace_id": "018ff001-0000-7000-8000-000000000001",
+  "work_packages": [
+    {"work_package_id": "018ff001-0000-7000-8000-000000000101", "work_type_key": "earthworks", "work_type_version": "work-taxonomy-v1.0.0", "title": "Земляные работы", "quantities": [{"value": "120", "unit": "m3"}], "materials": [], "normative_references": [{"identifier": "СП unresolved"}]},
+    {"work_package_id": "018ff001-0000-7000-8000-000000000102", "work_type_key": "reinforced-concrete", "work_type_version": "work-taxonomy-v1.0.0", "title": "Железобетонная конструкция", "quantities": [{"value": "24", "unit": "m3"}], "materials": [{"key": "concrete"}, {"key": "rebar"}], "normative_references": []},
+    {"work_package_id": "018ff001-0000-7000-8000-000000000103", "work_type_key": "pipeline-installation", "work_type_version": "work-taxonomy-v1.0.0", "title": "Монтаж трубопровода", "quantities": [{"value": "80", "unit": "m"}], "materials": [{"key": "steel-pipe"}], "normative_references": []}
+  ],
+  "matrix": {"matrix_id": "018ff001-0000-7000-8000-000000000201", "version": 1, "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "work_package_ids": ["018ff001-0000-7000-8000-000000000101", "018ff001-0000-7000-8000-000000000102", "018ff001-0000-7000-8000-000000000103"]},
+  "context_pack": {
+    "workspace_facts": ["project-definition:v1"],
+    "methodological_practice": ["practice-intelligence:verified"],
+    "normative_authority": [],
+    "deterministic_rules": [],
+    "knowledge_gaps": [{"code": "official_ntd_subset_empty"}],
+    "evidence": [{"source_version_id": "018ff001-0000-7000-8000-000000000301", "locator": "pdf:page=7;section=ПЗ", "content_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "evidence_link_id": "018ff001-0000-7000-8000-000000000302"}]
+  },
+  "mode_views": {
+    "Tender": {"quantity_or_material_delta": true, "unresolved_ntd": true},
+    "Support": {"id_requirements": 3},
+    "Audit": {"missing_or_incomplete": 2},
+    "Restoration": {"recoverable": 1, "non_recoverable": 1, "fabrication_prohibited": true}
+  },
+  "automatic_rule_promotion": false
+}

@@ -1,0 +1,10 @@
+{
+  "contract_version": "1.8.0",
+  "schema_id": "urn:asd-kontur:contracts:v1.8:schema:construction-harness",
+  "workspace_id": "018ff001-0000-7000-8000-000000000001",
+  "work_packages": [{"work_package_id": "018ff001-0000-7000-8000-000000000101", "work_type_key": "earthworks", "work_type_version": "work-taxonomy-v1.0.0", "title": "Земляные работы", "quantities": [{}], "materials": [], "normative_references": []}],
+  "matrix": {"matrix_id": "018ff001-0000-7000-8000-000000000201", "version": 1, "fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "work_package_ids": ["018ff001-0000-7000-8000-000000000101"]},
+  "context_pack": {"workspace_facts": ["one"], "methodological_practice": [], "normative_authority": [], "deterministic_rules": [], "knowledge_gaps": [], "evidence": []},
+  "mode_views": {"Tender": {"quantity_or_material_delta": false, "unresolved_ntd": false}, "Support": {"id_requirements": 0}, "Audit": {"missing_or_incomplete": 0}, "Restoration": {"recoverable": 0, "non_recoverable": 0, "fabrication_prohibited": true}},
+  "automatic_rule_promotion": false
+}

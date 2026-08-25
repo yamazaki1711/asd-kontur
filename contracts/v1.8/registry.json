@@ -1,0 +1,15 @@
+{
+  "registry_version": "1.8.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "accepted_implementation_extension",
+  "owner": "Oleg Shcherbakov",
+  "effective_from": "2026-08-25T00:00:00Z",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["0.1.0", "1.0.0", "1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"],
+    "notes": "Adds one project/work/matrix/context contract shared by Tender, Support, Audit and Restoration."
+  },
+  "schemas": [{"schema_id": "urn:asd-kontur:contracts:v1.8:schema:construction-harness", "path": "schemas/construction-harness.schema.json", "digest": "sha256:cc8218a99edc985f6f2643af352556f88479a49e16af1c66f236edc14c8cee76"}],
+  "contract_keys": ["construction.harness.project-definition", "construction.harness.work-requirement-matrix", "construction.harness.context-pack", "construction.harness.mode-views", "knowledge.construction-harness.gateway"],
+  "fixtures": {"manifest": "fixtures/manifest.json", "valid": ["fixtures/valid/multi-work-harness.json", "fixtures/valid/gateway-request.json"], "invalid": [{"path": "fixtures/invalid/single-work-acceptance.json", "reason": "Cross-mode acceptance must cover at least three related work packages."}, {"path": "fixtures/invalid/customer-weakening.json", "reason": "Customer regulation is additive-only."}]}
+}

@@ -172,7 +172,8 @@ def test_wp13_schema_roles_rls_and_migration_head(
     )
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0016_ntd_seed"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+            == "0017_unified_harness"
         )
         assert (
             connection.scalar(
@@ -405,7 +406,7 @@ def test_disposable_0007_to_0006_to_0007(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0016_ntd_seed"
+                == "0017_unified_harness"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

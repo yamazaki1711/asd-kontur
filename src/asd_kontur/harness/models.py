@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -133,6 +134,7 @@ class ExecutionRequest:
     idempotency_key: str
     correlation_id: UUID
     causation_id: UUID
+    base_context_pack_id: UUID | None = None
     parent_attempt_id: UUID | None = None
     payload_digest: str = ""
     request_digest: str = field(init=False)
@@ -144,6 +146,8 @@ class ExecutionRequest:
             raise ValueError("all authorized locators must belong to the exact SourceVersion")
         if not self.idempotency_key:
             raise ValueError("idempotency key is required")
+        if self.purpose.startswith(("id.", "construction.")) and self.base_context_pack_id is None:
+            raise ValueError("substantive ID/construction execution requires a base ContextPack")
         if any(
             value.lower() == "latest" for value in (*self.policy_versions, self.rule_set_version)
         ):
@@ -282,6 +286,6 @@ def _jsonable(value: Any) -> Any:
         return {str(key): _jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_jsonable(item) for item in value]
-    if isinstance(value, (UUID, date, datetime, StrEnum)):
+    if isinstance(value, (UUID, date, datetime, Decimal, StrEnum)):
         return str(value)
     return value

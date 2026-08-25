@@ -196,7 +196,8 @@ def test_g07_schema_roles_rls_and_migration_chain(
             == "asd_harness_service"
         )
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0016_ntd_seed"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+            == "0017_unified_harness"
         )
 
 
@@ -384,7 +385,7 @@ def test_disposable_head_to_0003_to_head(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0016_ntd_seed"
+                == "0017_unified_harness"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

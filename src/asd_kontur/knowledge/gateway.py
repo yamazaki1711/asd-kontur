@@ -15,6 +15,8 @@ GUIDANCE_CONTRACT_VERSION = "1.6.0"
 GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence"
 NTD_CONTRACT_VERSION = "1.7.0"
 NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge"
+HARNESS_CONTRACT_VERSION = "1.8.0"
+HARNESS_SCHEMA_ID = "urn:asd-kontur:contracts:v1.8:schema:construction-harness"
 BASE_TOOLS = frozenset(
     {
         "knowledge.search",
@@ -47,7 +49,13 @@ NTD_TOOLS = frozenset(
         "knowledge.get_practice_ntd_alignment",
     }
 )
-TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS
+HARNESS_TOOLS = frozenset(
+    {
+        "knowledge.get_construction_harness_context",
+        "knowledge.trace_work_requirement",
+    }
+)
+TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | HARNESS_TOOLS
 
 
 class GatewayStatus(StrEnum):
@@ -135,6 +143,24 @@ class KnowledgeAuditPort(Protocol):
     ) -> None: ...
 
 
+class CompositeKnowledgeQueryService:
+    """Route typed tool families while retaining one common Knowledge Gateway."""
+
+    def __init__(self, routes: dict[str, KnowledgeQueryPort]) -> None:
+        self._routes = dict(routes)
+
+    def execute(
+        self, tool: str, payload: dict[str, Any], context: GatewayContext
+    ) -> GatewayResponse:
+        query = self._routes.get(tool)
+        if query is None:
+            raise KnowledgeError(
+                KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,
+                "No query service is registered for the exact Knowledge Tool.",
+            )
+        return query.execute(tool, payload, context)
+
+
 class KnowledgeGateway:
     def __init__(self, query: KnowledgeQueryPort, audit: KnowledgeAuditPort) -> None:
         self._query = query
@@ -146,7 +172,10 @@ class KnowledgeGateway:
                 KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,
                 "Unknown Knowledge Tool contract.",
             )
-        if request.tool in GUIDANCE_TOOLS:
+        if request.tool in HARNESS_TOOLS:
+            expected_contract = HARNESS_CONTRACT_VERSION
+            expected_schema = HARNESS_SCHEMA_ID
+        elif request.tool in GUIDANCE_TOOLS:
             expected_contract = GUIDANCE_CONTRACT_VERSION
             expected_schema = GUIDANCE_SCHEMA_ID
         elif request.tool in NTD_TOOLS:
