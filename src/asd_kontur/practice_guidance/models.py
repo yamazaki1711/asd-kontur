@@ -522,8 +522,8 @@ class GuidePageTerminalReceipt:
             raise ValueError("Terminal receipts use one-based pages")
         if min(self.candidate_count, self.verified_count, self.unresolved_count) < 0:
             raise ValueError("Terminal receipt counts cannot be negative")
-        if self.verified_count + self.unresolved_count > self.candidate_count:
-            raise ValueError("Terminal receipt candidate totals do not reconcile")
+        if self.verified_count > self.candidate_count:
+            raise ValueError("Verified receipt candidates exceed the candidate total")
         if self.state is GuideTerminalState.VERIFIED and self.verified_count == 0:
             raise ValueError("Verified pages require at least one verified guidance unit")
         if self.state is GuideTerminalState.PARTIAL_WITH_GAPS and (

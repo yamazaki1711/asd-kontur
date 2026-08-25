@@ -121,7 +121,10 @@ def test_wp14_schema_role_rls_and_force_rls(
         "audit_report_versions",
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0009_kg_id"
+        assert (
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+            == "0010_kg_id_compat"
+        )
         assert (
             connection.scalar(
                 sa.text("SELECT rolname FROM pg_roles WHERE rolname='asd_audit_service'")
@@ -387,7 +390,7 @@ def test_disposable_0008_to_0007_to_0008(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0009_kg_id"
+                == "0010_kg_id_compat"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

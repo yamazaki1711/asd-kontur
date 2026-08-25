@@ -356,7 +356,7 @@ def _create_ingestion_ledger() -> None:
           receipt_digest text NOT NULL CHECK (receipt_digest ~ '^sha256:[a-f0-9]{64}$'),
           recorded_at timestamptz NOT NULL,
           PRIMARY KEY (ingestion_run_id,page_number),
-          CHECK (verified_count+unresolved_count<=candidate_count),
+          CHECK (verified_count<=candidate_count),
           CHECK (terminal_state<>'verified' OR verified_count>0),
           CHECK (terminal_state<>'no_methodological_content' OR candidate_count=0)
         );

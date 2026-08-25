@@ -421,7 +421,7 @@ def test_disposable_0009_to_0008_to_0009(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0009_kg_id"
+                == "0010_kg_id_compat"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

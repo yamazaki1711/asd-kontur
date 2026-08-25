@@ -649,9 +649,18 @@ def prepare_native_first_recovery_command(
                     source_version_id, page_manifests[page], native_text, (page,)
                 ),
             )
+            pass_b_job = compact_candidate_verifier_job(
+                source_version_id=source_version_id,
+                native_text=native_text,
+                image_path=image_path,
+                candidate=corrected,
+                purpose="pass_a_salvage",
+                validation_failure_codes=tuple(str(failure.failure_code) for failure in failures),
+            )
             native_candidates.append(corrected)
             native_entries.append(
                 {
+                    "job_id": pass_b_job.job_id,
                     "candidate": asdict(corrected),
                     "parent_failed_candidate": asdict(failed),
                     "parent_failed_receipt": receipt_lineage[page],
@@ -660,18 +669,7 @@ def prepare_native_first_recovery_command(
                     "validation_failures": [asdict(failure) for failure in failures],
                 }
             )
-            native_pass_b_jobs.append(
-                compact_candidate_verifier_job(
-                    source_version_id=source_version_id,
-                    native_text=native_text,
-                    image_path=image_path,
-                    candidate=corrected,
-                    purpose="pass_a_salvage",
-                    validation_failure_codes=tuple(
-                        str(failure.failure_code) for failure in failures
-                    ),
-                )
-            )
+            native_pass_b_jobs.append(pass_b_job)
 
     _write_json(
         layout_output,
@@ -1385,13 +1383,23 @@ def evaluate_compact_verification_command(
     entries = registry_document.get("candidates")
     if entries is None:
         entries = registry_document.get("accepted_candidates")
+    if entries is None:
+        entries = registry_document.get("entries")
     if not isinstance(entries, list) or not entries:
         raise ValueError("Compact verification registry has no candidates")
     registry: dict[str, dict[str, object]] = {}
     for entry in entries:
         if not isinstance(entry, dict) or not isinstance(entry.get("candidate"), dict):
             raise ValueError("Compact verification registry entry is malformed")
-        job_id = str(entry["job_id"])
+        candidate = _candidate_from_document(entry["candidate"])
+        job_id_value = entry.get("job_id")
+        if job_id_value is None:
+            job_id = (
+                f"candidate-pass_a_salvage-page-{candidate.locator.page_number:04d}-"
+                f"{candidate.candidate_id}-v{candidate.version}"
+            )
+        else:
+            job_id = str(job_id_value)
         if job_id in registry:
             raise ValueError("Compact verification registry contains duplicate jobs")
         registry[job_id] = entry
@@ -1477,6 +1485,101 @@ def evaluate_compact_verification_command(
             "receipt_count": len(receipts),
             "disposition_counts": counts,
             "all_terminal": len(results) == len(registry),
+            "results": results,
+            "fingerprint": digest_of(results),
+        },
+    )
+
+
+def terminalize_compact_after_profile_failure_command(
+    *,
+    registry_path: Path,
+    qualification_evaluation_path: Path,
+    page_numbers: tuple[int, ...],
+    output: Path,
+) -> None:
+    """Close an exact bounded queue when its required model profile failed qualification."""
+
+    registry_document = json.loads(registry_path.read_text(encoding="utf-8"))
+    qualification = json.loads(qualification_evaluation_path.read_text(encoding="utf-8"))
+    if not isinstance(registry_document, dict) or not isinstance(qualification, dict):
+        raise ValueError("Terminalization inputs must be JSON objects")
+    entries = registry_document.get("candidates")
+    if entries is None:
+        entries = registry_document.get("accepted_candidates")
+    if entries is None:
+        entries = registry_document.get("entries")
+    if not isinstance(entries, list) or not entries:
+        raise ValueError("Terminalization registry has no exact candidates")
+    qualification_results = qualification.get("results")
+    if not isinstance(qualification_results, list) or not qualification_results:
+        raise ValueError("Profile qualification has no candidate results")
+    if any(
+        not isinstance(result, dict)
+        or str(result.get("disposition")) != VerificationDisposition.MODEL_FAILED
+        or "MODEL_RESPONSE_INTEGRITY_FAILED" not in result.get("failure_codes", [])
+        for result in qualification_results
+    ):
+        raise ValueError("Profile qualification is not an all-item integrity failure")
+    qualification_digest = (
+        f"sha256:{hashlib.sha256(qualification_evaluation_path.read_bytes()).hexdigest()}"
+    )
+    results: list[dict[str, object]] = []
+    identities: set[tuple[str, int]] = set()
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("candidate"), dict):
+            raise ValueError("Terminalization registry entry is malformed")
+        candidate = _candidate_from_document(entry["candidate"])
+        if page_numbers and candidate.locator.page_number not in page_numbers:
+            continue
+        identity = (str(candidate.candidate_id), candidate.version)
+        if identity in identities:
+            raise ValueError("Terminalization registry contains duplicate identities")
+        identities.add(identity)
+        job_id_value = entry.get("job_id")
+        if not isinstance(job_id_value, str) or not job_id_value:
+            raise ValueError("Unrun terminalization requires an explicit original job identity")
+        result_digest = digest_of(
+            {
+                "candidate_id": identity[0],
+                "candidate_version": identity[1],
+                "job_id": job_id_value,
+                "qualification_digest": qualification_digest,
+                "terminal_reason": "BF16_QUALIFICATION_FAILED",
+            }
+        )
+        results.append(
+            {
+                "job_id": job_id_value,
+                "purpose": entry.get("purpose"),
+                "candidate_id": identity[0],
+                "candidate_version": identity[1],
+                "page_number": candidate.locator.page_number,
+                "model_disposition": VerificationDisposition.MODEL_FAILED,
+                "disposition": VerificationDisposition.MODEL_FAILED,
+                "reason_codes": ["BF16_QUALIFICATION_FAILED"],
+                "correction_required": False,
+                "failure_codes": ["BF16_QUALIFICATION_FAILED"],
+                "response_digest": result_digest,
+                "attempt_ref": None,
+            }
+        )
+    _write_json(
+        output,
+        {
+            "evaluation_policy_version": "compact-profile-failure-terminalization-v0.1.0",
+            "qualification_evaluation_digest": qualification_digest,
+            "selected_pages": sorted(set(page_numbers)),
+            "expected_candidates": len(results),
+            "terminal_candidates": len(results),
+            "receipt_count": 0,
+            "disposition_counts": {
+                disposition.value: (
+                    len(results) if disposition is VerificationDisposition.MODEL_FAILED else 0
+                )
+                for disposition in VerificationDisposition
+            },
+            "all_terminal": True,
             "results": results,
             "fingerprint": digest_of(results),
         },
@@ -1957,7 +2060,10 @@ def reconcile_bounded_recovery_command(
                 raise ValueError("CandidateVersion parent lineage is missing")
     missing_statuses = sorted(key for key in nodes if key not in statuses)
     if missing_statuses:
-        raise ValueError(f"CandidateVersion terminal statuses missing: {len(missing_statuses)}")
+        raise ValueError(
+            "CandidateVersion terminal statuses missing: "
+            f"{len(missing_statuses)} identities={missing_statuses}"
+        )
 
     valid_candidate_values: list[GuidanceCandidateVersion] = []
     for node in nodes.values():
@@ -3421,6 +3527,9 @@ def evaluate_memory_acceptance_command(
             allowed_citations=tuple(str(item) for item in value["allowed_citations"]),
             expected_grounding_terms=tuple(str(item) for item in value["expected_grounding_terms"]),
             evidence_count=int(value["evidence_count"]),
+            allowed_source_version_ids=tuple(
+                str(item) for item in value.get("allowed_source_version_ids", ())
+            ),
         )
         for value in document["scenarios"]
         if isinstance(value, dict)
@@ -3569,6 +3678,11 @@ def main() -> None:
     compact_evaluate_parser.add_argument("--registry", required=True, type=Path)
     compact_evaluate_parser.add_argument("--receipts", required=True, type=Path, nargs="+")
     compact_evaluate_parser.add_argument("--output", required=True, type=Path)
+    compact_terminal_parser = subparsers.add_parser("terminalize-compact-after-profile-failure")
+    compact_terminal_parser.add_argument("--registry", required=True, type=Path)
+    compact_terminal_parser.add_argument("--qualification-evaluation", required=True, type=Path)
+    compact_terminal_parser.add_argument("--pages", type=int, nargs="*", default=())
+    compact_terminal_parser.add_argument("--output", required=True, type=Path)
     region_evaluate_parser = subparsers.add_parser("evaluate-region-recovery")
     region_evaluate_parser.add_argument("--pdf", required=True, type=Path)
     region_evaluate_parser.add_argument("--source-version-id", required=True, type=UUID)
@@ -3744,6 +3858,13 @@ def main() -> None:
         evaluate_compact_verification_command(
             registry_path=args.registry,
             receipt_paths=tuple(args.receipts),
+            output=args.output,
+        )
+    elif args.command == "terminalize-compact-after-profile-failure":
+        terminalize_compact_after_profile_failure_command(
+            registry_path=args.registry,
+            qualification_evaluation_path=args.qualification_evaluation,
+            page_numbers=tuple(args.pages),
             output=args.output,
         )
     elif args.command == "evaluate-region-recovery":

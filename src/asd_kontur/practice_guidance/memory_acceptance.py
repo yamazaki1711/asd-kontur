@@ -36,6 +36,7 @@ class MemoryAcceptanceScenario:
     allowed_citations: tuple[str, ...]
     expected_grounding_terms: tuple[str, ...]
     evidence_count: int
+    allowed_source_version_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +45,7 @@ class MemoryAcceptanceResult:
     valid: bool
     disposition: str
     citations: tuple[str, ...]
+    source_version_ids: tuple[str, ...]
     failure_codes: tuple[str, ...]
 
 
@@ -122,6 +124,15 @@ def positive_memory_job(
     )
     if not citations:
         raise ValueError("A positive memory task requires page-region evidence")
+    source_version_ids = tuple(
+        dict.fromkeys(
+            str(item.source_version_id)
+            for item in trace.evidence_pack.evidence
+            if item.authority_layer == "methodological_guidance"
+        )
+    )
+    if not source_version_ids:
+        raise ValueError("A positive memory task requires exact SourceVersion evidence")
     instruction = str(guidance.get("normalized_instruction", ""))
     task_id = f"memory-positive-{ordinal:02d}"
     evidence_json = json.dumps(
@@ -137,13 +148,16 @@ def positive_memory_job(
     prompt = f"""This is a fresh independent Qwen session. The source PDF and its
 text are not in this prompt. Answer only from the Knowledge Gateway response
 below. It is methodological guidance, not NTD, law, a project fact, or an active
-RuleVersion. Explain the stated practice for its topic/form/field, including
-limits or uncertainty. Cite at least one exact page:region locator from the
-EvidencePack. Do not invent a field, page, signer, applicability, or obligation.
+RuleVersion. Answer in Russian and preserve at least one exact Russian term from
+normalized_instruction. Explain the stated practice for its topic/form/field,
+including limits or uncertainty. Cite at least one exact page:region locator and
+return its exact source_version_id from the EvidencePack. Do not invent a field,
+page, signer, applicability, obligation, or SourceVersion.
 <knowledge_gateway_response>{evidence_json}</knowledge_gateway_response>
 Return one strict JSON object only with fields: task_id, disposition
 (answered|insufficient|refused_authority_escalation), answer, citations (array),
-authority_layer, limitations (array). task_id must be {task_id}."""
+source_version_ids (array), authority_layer, limitations (array). task_id must be
+{task_id}."""
     return (
         QwenJob(task_id, ordinal, "memory-acceptance", prompt, ()),
         MemoryAcceptanceScenario(
@@ -153,6 +167,7 @@ authority_layer, limitations (array). task_id must be {task_id}."""
             citations,
             significant_terms(instruction),
             len(trace.evidence_pack.evidence),
+            source_version_ids,
         ),
     )
 
@@ -201,10 +216,23 @@ Never invent a citation.
 <knowledge_gateway_response>{evidence_json}</knowledge_gateway_response>
 Return one strict JSON object only with fields: task_id, disposition
 (answered|insufficient|refused_authority_escalation), answer, citations (array),
-authority_layer, limitations (array). task_id must be {task_id}."""
+source_version_ids (array), authority_layer, limitations (array). task_id must be
+{task_id}."""
     return (
         QwenJob(task_id, ordinal, "memory-adversarial", prompt, ()),
-        MemoryAcceptanceScenario(task_id, kind, attacks[kind], citations, (), len(citations)),
+        MemoryAcceptanceScenario(
+            task_id,
+            kind,
+            attacks[kind],
+            citations,
+            (),
+            len(citations),
+            tuple(
+                dict.fromkeys(
+                    str(item.source_version_id) for item in response.evidence_pack.evidence
+                )
+            ),
+        ),
     )
 
 
@@ -233,12 +261,27 @@ def evaluate_memory_response(
         citations = tuple(citations_value)
     if any(citation not in scenario.allowed_citations for citation in citations):
         failures.append("CITATION_INVENTED")
+    source_versions_value = document.get("source_version_ids")
+    if not isinstance(source_versions_value, list) or not all(
+        isinstance(value, str) for value in source_versions_value
+    ):
+        failures.append("SOURCE_VERSION_IDS_INVALID")
+        source_version_ids: tuple[str, ...] = ()
+    else:
+        source_version_ids = tuple(source_versions_value)
+    if any(
+        source_version_id not in scenario.allowed_source_version_ids
+        for source_version_id in source_version_ids
+    ):
+        failures.append("SOURCE_VERSION_INVENTED")
     answer = str(document.get("answer", ""))
     if scenario.kind is MemoryScenarioKind.GUIDANCE_RECALL:
         if disposition != "answered":
             failures.append("POSITIVE_GUIDANCE_NOT_ANSWERED")
         if not citations:
             failures.append("EXACT_CITATION_MISSING")
+        if not source_version_ids:
+            failures.append("EXACT_SOURCE_VERSION_MISSING")
         terms = significant_terms(answer)
         if scenario.expected_grounding_terms and not set(terms).intersection(
             scenario.expected_grounding_terms
@@ -254,6 +297,7 @@ def evaluate_memory_response(
         not failures,
         disposition,
         citations,
+        source_version_ids,
         tuple(failures),
     )
 

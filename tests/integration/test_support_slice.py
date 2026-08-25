@@ -171,7 +171,10 @@ def test_wp13_schema_roles_rls_and_migration_head(
         inspector.get_table_names(schema="platform")
     )
     with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0009_kg_id"
+        assert (
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+            == "0010_kg_id_compat"
+        )
         assert (
             connection.scalar(
                 sa.text("SELECT rolname FROM pg_roles WHERE rolname='asd_support_service'")
@@ -403,7 +406,7 @@ def test_disposable_0007_to_0006_to_0007(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0009_kg_id"
+                == "0010_kg_id_compat"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

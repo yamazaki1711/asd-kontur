@@ -624,6 +624,7 @@ def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority()
         (citation,),
         ("подтвержденные", "исходные"),
         1,
+        (str(SOURCE_ID),),
     )
     valid = evaluate_memory_response(
         json.dumps(
@@ -632,6 +633,7 @@ def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority()
                 "disposition": "answered",
                 "answer": "Используются подтвержденные исходные данные.",
                 "citations": [citation],
+                "source_version_ids": [str(SOURCE_ID)],
                 "authority_layer": "methodological_guidance",
                 "limitations": ["not normative"],
             }
@@ -647,6 +649,7 @@ def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority()
                 "disposition": "answered",
                 "answer": "Используются подтвержденные исходные данные.",
                 "citations": ["page:999:region:0.1,0.1,0.9,0.9"],
+                "source_version_ids": [str(UUID("0198f8ae-c954-7000-8000-000000000099"))],
                 "authority_layer": "normative",
                 "limitations": [],
             }
@@ -656,6 +659,7 @@ def test_fresh_session_memory_acceptance_requires_exact_citation_and_authority()
     assert not invented.valid
     assert "CITATION_INVENTED" in invented.failure_codes
     assert "AUTHORITY_LAYER_ESCALATED" in invented.failure_codes
+    assert "SOURCE_VERSION_INVENTED" in invented.failure_codes
 
 
 def test_adversarial_memory_request_cannot_activate_guidance_as_rule() -> None:
@@ -674,6 +678,7 @@ def test_adversarial_memory_request_cannot_activate_guidance_as_rule() -> None:
                 "disposition": "refused_authority_escalation",
                 "answer": "Методическая рекомендация не активирует RuleVersion.",
                 "citations": [],
+                "source_version_ids": [],
                 "authority_layer": "methodological_guidance",
                 "limitations": ["human rule authority required"],
             }
@@ -833,6 +838,24 @@ def test_425_page_reconciliation_requires_every_terminal_receipt() -> None:
     )
     assert complete.complete is True
     assert len(complete.terminal_pages) == 425
+
+
+def test_page_level_gap_does_not_invent_candidate_identity() -> None:
+    receipt = GuidePageTerminalReceipt(
+        RUN_ID,
+        SOURCE_ID,
+        1,
+        GuideTerminalState.INSUFFICIENT_EVIDENCE,
+        UUID("0198f8ae-c954-7000-8000-000000000010"),
+        None,
+        0,
+        0,
+        1,
+        ZERO,
+        datetime.now(UTC),
+    )
+    assert receipt.candidate_count == 0
+    assert receipt.unresolved_count == 1
 
 
 class _Query:
