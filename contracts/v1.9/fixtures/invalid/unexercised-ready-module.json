@@ -1,0 +1,21 @@
+{
+  "contract_version": "1.9.0",
+  "manifest_id": "SYSTEM-INTEGRITY-MODULE-READINESS-v0.1",
+  "code_baseline": "synthetic-invalid",
+  "product_ready": false,
+  "modules": [
+    {
+      "module_id": "invalid.ready-without-evidence",
+      "version": "0.1.0",
+      "purpose": "Prove that a file is not readiness evidence.",
+      "inputs": [], "outputs": [], "dependencies": [], "schema_relations": [], "contract_keys": [],
+      "qualification_checks": [],
+      "lifecycle_participation": "none",
+      "backup_participation": "none",
+      "implemented_status": "file exists",
+      "qualification_status": "READY_FOR_INTEGRITY_CYCLE",
+      "known_gaps": [],
+      "cycle_steps": []
+    }
+  ]
+}

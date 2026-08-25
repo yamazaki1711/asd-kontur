@@ -396,7 +396,11 @@ class ConstructionHarnessContextPack:
                 HarnessErrorCode.EVIDENCE_REQUIRED,
                 "A Harness ContextPack requires pinned contracts and exact source evidence",
             )
-        object.__setattr__(self, "fingerprint", _fingerprint_without(self, "fingerprint"))
+        object.__setattr__(
+            self,
+            "fingerprint",
+            _fingerprint_without(self, "fingerprint", "assembled_at"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -490,7 +494,11 @@ class HarnessBackupManifest:
         )
 
 
-def _fingerprint_without(value: Any, excluded: str) -> str:
+def _fingerprint_without(value: Any, *excluded: str) -> str:
     return digest_of(
-        {item.name: getattr(value, item.name) for item in fields(value) if item.name != excluded}
+        {
+            item.name: getattr(value, item.name)
+            for item in fields(value)
+            if item.name not in excluded
+        }
     )

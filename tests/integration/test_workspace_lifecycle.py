@@ -10,6 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
 
 from asd_kontur.domain import uuid7
+from asd_kontur.integrity.postgres import schema_fingerprint
 from asd_kontur.lifecycle import (
     AdapterHealth,
     ArchiveImportGuard,
@@ -772,6 +773,35 @@ def test_full_disposable_reset_keeps_platform_memory_and_removes_workspace_a_onl
         else:
             assert remaining_a == ()
         assert len(remaining_b) == 1
+    tenant_c = create_tenant(postgres_environment, tenant_a.organization_id)
+    with postgres_environment.owner_engine.connect() as connection:
+        assert (
+            connection.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.mode_executions WHERE workspace_id=:workspace"
+                ),
+                {"workspace": tenant_c.workspace_id},
+            )
+            == 0
+        )
+        for table in (
+            "candidates",
+            "workspace_facts",
+            "work_requirement_matrix_versions",
+            "construction_harness_mode_views",
+            "vlm_execution_requests",
+            "vlm_execution_attempts",
+            "vlm_provider_results",
+            "vlm_raw_artifacts",
+            "vlm_render_artifacts",
+        ):
+            assert (
+                connection.scalar(
+                    sa.text(f'SELECT count(*) FROM workspace."{table}" WHERE workspace_id=:id'),
+                    {"id": tenant_a.workspace_id},
+                )
+                == 0
+            )
 
 
 def test_disposable_migration_round_trip_in_real_postgresql(
@@ -786,6 +816,11 @@ def test_disposable_migration_round_trip_in_real_postgresql(
     disposable_url = postgres_environment.cluster_admin_url.set(database=database_name)
     try:
         run_migration(str(repository_root), disposable_url, "head")
+        first_engine = sa.create_engine(disposable_url)
+        try:
+            first_schema_fingerprint = schema_fingerprint(first_engine)
+        finally:
+            first_engine.dispose()
         previous = __import__("os").environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE")
         __import__("os").environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = "1"
         try:
@@ -796,6 +831,11 @@ def test_disposable_migration_round_trip_in_real_postgresql(
                 __import__("os").environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)
             else:
                 __import__("os").environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = previous
+        second_engine = sa.create_engine(disposable_url)
+        try:
+            assert schema_fingerprint(second_engine) == first_schema_fingerprint
+        finally:
+            second_engine.dispose()
     finally:
         drop_database(cluster_engine, database_name)
         cluster_engine.dispose()
