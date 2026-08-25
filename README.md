@@ -61,6 +61,13 @@ source-pinned `IDPracticeContextPack` через Knowledge Gateway. Смена Q
 provider, embeddings или graph не меняет canonical memory; runtime получает
 раздельно требования НТД, советы пособия, факты ОКС и gaps/conflicts.
 
+`UNIFIED-HARNESS-01` расширяет эту границу на все существенные строительные
+AI/VLM-операции: один `ConstructionHarnessContextPack` и одна versioned
+`WorkRequirementMatrix` связывают ПД/РД, смету/ВОР, договор, дополнения регламента
+Заказчика, Practice Intelligence, verified NTD и qualified RuleVersion для
+Tender, Support, Audit и Restoration. Отсутствующий NTD subset остаётся явным
+gap; customer overlay не может ослабить нормативный минимум.
+
 Любой OCR/VLM/LLM создаёт только `Candidate` или draft. Модель не подтверждает
 факт, нормативную применимость, юридическое решение, геометрию, подписанта,
 финализацию или destructive operation.
@@ -113,6 +120,10 @@ provider, embeddings или graph не меняет canonical memory; runtime п
   `0016`, Contract Pack v1.7, Gateway gaps, workspace-reset survival,
   dump/restore, projection rebuild and fresh-session non-fabrication are
   verified; 0 official editions/provisions are published.
+- `UNIFIED-HARNESS-01` — **PASS (bounded implementation) 2026-08-25**: additive Contract Pack
+  v1.8 и migration `0017` связывают одну ProjectDefinition/WorkRequirementMatrix
+  с platform Practice/NTD/Rule memory и четырьмя mode views; 350 local tests,
+  включая PostgreSQL integration, прошли. ProductReady остаётся `false`.
 - `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
@@ -149,6 +160,7 @@ provider, embeddings или graph не меняет canonical memory; runtime п
 - [G-06 Workspace Lifecycle Foundation](docs/implementation/G06_WORKSPACE_LIFECYCLE_FOUNDATION_v0.1.md)
 - [G-07 AI/VLM Harness](docs/implementation/G07_AI_VLM_HARNESS_v0.1.md)
 - [NTD-SEED-01 bounded official NTD memory](docs/implementation/NTD_SEED_FROM_PRACTICE_GUIDE_v0.1.md)
+- [UNIFIED-HARNESS-01](docs/implementation/UNIFIED_CONSTRUCTION_HARNESS_v0.1.md)
 - [WP-11 Common Domain Process Kernel](docs/implementation/WP11_COMMON_DOMAIN_PROCESS_KERNEL_v0.1.md)
 - [WP-12 Tender Slice](docs/implementation/WP12_TENDER_SLICE_v0.1.md)
 - [WP-13 Support Slice](docs/implementation/WP13_SUPPORT_SLICE_v0.1.md)
@@ -177,7 +189,8 @@ provider, embeddings или graph не меняет canonical memory; runtime п
   `contracts/v1.5/` — KG‑ID source-guidance extraction/publication;
   `contracts/v1.6/` — permanent Practice Intelligence, Context Assembly and
   backup-integrity contracts; `contracts/v1.7/` — bounded official NTD,
-  edition/provision and normative Knowledge Gateway contracts.
+  edition/provision and normative Knowledge Gateway contracts;
+  `contracts/v1.8/` — unified multi-work Construction Harness contracts.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
   WP‑11…WP‑14 и KG‑ID‑01:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и

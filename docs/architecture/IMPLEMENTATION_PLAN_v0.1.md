@@ -485,6 +485,22 @@ The bounded implementation evidence is recorded in
 No recursive NTD expansion, TM-35 processing or G-07B work is authorized by
 this item.
 
+### UNIFIED-HARNESS-01 — Unified Construction Harness
+
+| Field | Value |
+|---|---|
+| Objective | One deterministic `ProjectDefinition → ConstructionWorkPackage → WorkRequirementMatrix` process shared by Tender, Support, Audit and Restoration |
+| Memory boundary | Workspace project/contract/customer facts + permanent Practice Intelligence + verified NTD + qualified RuleVersion; no new knowledge subsystem |
+| AI boundary | Mandatory source-pinned `ConstructionHarnessContextPack`; typed Knowledge Gateway only; model/provider-independent canonical memory |
+| Customer overlay | Additive workspace-only requirements; no normative weakening, edition replacement or cross-workspace reuse |
+| NTD gap behavior | Preserve work structure and perform only evidence-sufficient calculations; return explicit knowledge gap and no normative confirmation/rule activation |
+| Current status | `PASS (bounded implementation) 2026-08-25`; Contract Pack v1.8, migration `0017_unified_harness`, 350 local tests including PostgreSQL integration |
+| ProductReady | `false` |
+
+The existing KG-ID and NTD historical PARTIAL decisions remain immutable. The
+previously parsed `king25` work-type artifact and future CAD/Drawing Intelligence
+are technical debt, not inputs or blockers for this bounded implementation.
+
 ### WP-15 — Restoration slice
 
 | Field | Plan |
