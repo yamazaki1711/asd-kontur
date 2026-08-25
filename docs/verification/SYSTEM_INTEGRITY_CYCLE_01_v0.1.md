@@ -1,6 +1,6 @@
 # SYSTEM-INTEGRITY-CYCLE-01
 
-**Status:** qualification candidate
+**Status:** PASS — three consecutive clean-room cycles
 
 **Owner:** Oleg Shcherbakov
 
@@ -73,6 +73,23 @@ Expected historical partial states are invariants, not failures:
   verified official edition or provision;
 - Guidance/NTD candidates are never promoted automatically to RuleVersion.
 
-The final three-cycle result is recorded outside Git before PR creation and is
-reported with exact cycle IDs and fingerprints. This bounded integrity PASS, if
-obtained, does not imply product or field readiness.
+## Qualified result
+
+Series `SIC01-20260825-R1` ran against qualification candidate commit
+`cb8460f1ea019944e3c52a394a004c8a33c37791` and completed three consecutive
+PASS cycles:
+
+- `SIC01-20260825-R1-C1`;
+- `SIC01-20260825-R1-C2`;
+- `SIC01-20260825-R1-C3`.
+
+Each Phase J full suite completed 357 tests with no skip, deselection, xfail or
+xpass. All cycle semantic fingerprints, environment fingerprints and final
+cycle fingerprints matched. Each BF16 smoke returned the same strict JSON,
+request/response digests and structural fingerprint. No disposable database,
+heavy model process, unfinished job or dirty tracked file remained.
+
+The content-minimal [series summary](SYSTEM_INTEGRITY_CYCLE_01_SUMMARY.json) is
+stored in Git. Full phase receipts, command logs, PostgreSQL snapshot and model
+exchange remain outside Git. This bounded integrity PASS does not imply product
+or field readiness and does not authorize a real OKS.
