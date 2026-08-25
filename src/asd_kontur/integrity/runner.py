@@ -255,6 +255,7 @@ def _scan_tracked_files(repository_root: Path) -> dict[str, int]:
     forbidden_name_fragments = ("raw-receipt", "raw_response", "page-render", "ocr-output")
     binary_or_raw: list[str] = []
     secret_hits: list[str] = []
+    trailing_whitespace: list[str] = []
     secret_patterns = (
         re.compile(rb"pza_[A-Za-z0-9]{20,}"),
         re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
@@ -271,6 +272,10 @@ def _scan_tracked_files(repository_root: Path) -> dict[str, int]:
         if not path.is_file() or path.stat().st_size > 5 * 1024 * 1024:
             continue
         value = path.read_bytes()
+        if b"\0" not in value:
+            for line_number, line in enumerate(value.splitlines(), 1):
+                if line.endswith((b" ", b"\t")):
+                    trailing_whitespace.append(f"{relative}:{line_number}")
         if any(pattern.search(value) for pattern in secret_patterns):
             secret_hits.append(relative)
     if binary_or_raw:
@@ -285,7 +290,18 @@ def _scan_tracked_files(repository_root: Path) -> dict[str, int]:
             "credential-like material is tracked",
             evidence={"paths": secret_hits},
         )
-    return {"tracked_files": len(files), "secret_hits": 0, "forbidden_artifacts": 0}
+    if trailing_whitespace:
+        raise IntegrityFailure(
+            "TRAILING_WHITESPACE_DETECTED",
+            "tracked text files contain trailing whitespace",
+            evidence={"paths": trailing_whitespace[:50], "count": len(trailing_whitespace)},
+        )
+    return {
+        "tracked_files": len(files),
+        "secret_hits": 0,
+        "forbidden_artifacts": 0,
+        "trailing_whitespace": 0,
+    }
 
 
 class CycleRunner:

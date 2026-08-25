@@ -1,8 +1,11 @@
 # SYSTEM-INTEGRITY-CYCLE-01
 
-**Status:** qualification candidate  
-**Owner:** Oleg Shcherbakov  
-**Date:** 2026-08-25  
+**Status:** qualification candidate
+
+**Owner:** Oleg Shcherbakov
+
+**Date:** 2026-08-25
+
 **ProductReady:** `false`
 
 ## Purpose and boundary
