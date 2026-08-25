@@ -12,6 +12,7 @@ on:
       - implementation/wp11-common-domain-process-kernel-v0.1
       - implementation/wp12-tender-slice-v0.1
       - implementation/wp13-support-slice-v0.1
+      - implementation/product-application-spine-v0.1
 
 permissions:
   contents: read
@@ -42,6 +43,12 @@ jobs:
           enable-cache: true
           version: "0.10.11"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
       - name: Install locked dependencies
         run: uv sync --locked --all-groups
 
@@ -61,6 +68,44 @@ jobs:
         env:
           ASD_TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/postgres
         run: uv run pytest -ra
+
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Regenerate OpenAPI and typed client
+        run: |
+          uv run python tools/export_product_spine_openapi.py --output contracts/v2.1/openapi/product-spine-v1.json
+          npm --prefix frontend run generate:api
+          git diff --exit-code -- contracts/v2.1/openapi/product-spine-v1.json frontend/src/api/schema.ts
+
+      - name: Frontend strict checks and production bundle
+        working-directory: frontend
+        run: |
+          npm run format:check
+          npm run typecheck
+          npm run lint
+          npm test
+          npm run build
+
+      - name: Install browser used by Product Spine E2E
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Product Spine browser E2E
+        working-directory: frontend
+        run: npm run e2e
+
+      - name: Python dependency security and license checks
+        run: |
+          uv run pip-audit
+          uv run licensecheck
+
+      - name: Frontend dependency security and license inventory
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=high
+          npm ls --all --json > /tmp/asd-kontur-frontend-package-inventory.json
 
       - name: Whitespace check
         run: git diff --check

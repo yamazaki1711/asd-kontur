@@ -1,0 +1,249 @@
+"""Operational entrypoint for the local Product Application Spine."""
+
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+import sqlalchemy as sa
+import uvicorn
+from alembic import command
+from alembic.config import Config
+
+from .auth import OwnerAuthService
+from .config import SpineSettings
+from .object_store import WorkspaceObjectStore
+from .postgres import SpinePostgresRepository
+from .worker import DocumentWorker
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="asd-kontur-spine")
+    subcommands = parser.add_subparsers(dest="command", required=True)
+    bootstrap = subcommands.add_parser("bootstrap-owner")
+    bootstrap.add_argument("--username", required=True)
+    bootstrap.add_argument("--display-name", required=True)
+    subcommands.add_parser("database-preflight")
+    subcommands.add_parser("migrate")
+    subcommands.add_parser("frontend-build")
+    subcommands.add_parser("serve-api")
+    worker = subcommands.add_parser("run-worker")
+    worker.add_argument("--identity", default=f"document-worker:{os.getpid()}")
+    subcommands.add_parser("status")
+    subcommands.add_parser("health")
+    stop = subcommands.add_parser("stop")
+    stop.add_argument("--service", choices=("api", "worker", "all"), default="all")
+    logs = subcommands.add_parser("logs")
+    logs.add_argument("--service", choices=("api", "worker", "all"), default="all")
+    logs.add_argument("--lines", type=int, default=100)
+    launchd = subcommands.add_parser("render-launchd")
+    launchd.add_argument("--output", type=Path, required=True)
+    args = parser.parse_args(argv)
+    settings = SpineSettings.from_env()
+    if args.command == "database-preflight":
+        return _database_preflight(settings)
+    if args.command == "migrate":
+        return _migrate(settings)
+    if args.command == "frontend-build":
+        return _frontend_build()
+    if args.command == "bootstrap-owner":
+        password = getpass.getpass("Owner password: ")
+        repeated = getpass.getpass("Repeat owner password: ")
+        if password != repeated:
+            raise SystemExit("passwords_do_not_match")
+        engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
+        try:
+            identity = OwnerAuthService(engine, settings).bootstrap_owner(
+                username=args.username,
+                password=password,
+                display_name=args.display_name,
+            )
+        finally:
+            engine.dispose()
+        print(json.dumps({"status": "owner_available", "owner_identity_id": identity}))
+        return 0
+    if args.command == "serve-api":
+        uvicorn.run(
+            "asd_kontur.web_app.runtime:app",
+            host=settings.bind_host,
+            port=settings.bind_port,
+            log_config=None,
+            access_log=False,
+        )
+        return 0
+    if args.command == "run-worker":
+        engine = sa.create_engine(settings.worker_database_url, pool_pre_ping=True)
+        store = WorkspaceObjectStore(
+            settings.object_store_root,
+            chunk_bytes=settings.upload_chunk_bytes,
+            max_file_bytes=settings.max_file_bytes,
+        )
+        worker_instance = DocumentWorker(
+            SpinePostgresRepository(engine),
+            store,
+            worker_identity=args.identity,
+            lease_seconds=settings.job_lease_seconds,
+        )
+        try:
+            worker_instance.run_forever()
+        finally:
+            engine.dispose()
+        return 0
+    if args.command in {"status", "health"}:
+        return _http_status(settings)
+    if args.command == "stop":
+        return _stop_launchd(args.service)
+    if args.command == "logs":
+        return _show_logs(settings, args.service, args.lines)
+    if args.command == "render-launchd":
+        _render_launchd(args.output, settings)
+        return 0
+    raise AssertionError("unreachable")
+
+
+def _database_preflight(settings: SpineSettings) -> int:
+    checks: dict[str, object] = {}
+    for name, url in (
+        ("application", settings.database_url),
+        ("lifecycle", settings.lifecycle_database_url),
+        ("worker", settings.worker_database_url),
+    ):
+        engine = sa.create_engine(url, pool_pre_ping=True)
+        try:
+            with engine.connect() as connection:
+                checks[name] = {
+                    "reachable": bool(connection.scalar(sa.text("SELECT true"))),
+                    "migration_head": connection.scalar(
+                        sa.text("SELECT version_num FROM alembic_version")
+                    ),
+                }
+        finally:
+            engine.dispose()
+    checks["object_store"] = {
+        "exists": settings.object_store_root.is_dir(),
+        "is_symlink": settings.object_store_root.is_symlink(),
+    }
+    print(json.dumps(checks, default=str, sort_keys=True))
+    application_ok = bool(checks["application"]["reachable"])  # type: ignore[index]
+    lifecycle_ok = bool(checks["lifecycle"]["reachable"])  # type: ignore[index]
+    worker_ok = bool(checks["worker"]["reachable"])  # type: ignore[index]
+    object_store_ok = bool(checks["object_store"]["exists"])  # type: ignore[index]
+    return 0 if application_ok and lifecycle_ok and worker_ok and object_store_ok else 1
+
+
+def _migrate(settings: SpineSettings) -> int:
+    repository = Path(__file__).resolve().parents[3]
+    configuration = Config(str(repository / "alembic.ini"))
+    configuration.set_main_option("sqlalchemy.url", settings.database_url)
+    command.upgrade(configuration, "head")
+    return 0
+
+
+def _frontend_build() -> int:
+    repository = Path(__file__).resolve().parents[3]
+    frontend = repository / "frontend"
+    subprocess.run(["npm", "ci"], cwd=frontend, check=True)
+    subprocess.run(["npm", "run", "generate:api"], cwd=frontend, check=True)
+    subprocess.run(["npm", "run", "build"], cwd=frontend, check=True)
+    return 0
+
+
+def _http_status(settings: SpineSettings) -> int:
+    url = f"http://{settings.bind_host}:{settings.bind_port}/api/v1/health/ready"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as response:
+            payload = json.loads(response.read(65536))
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        print(json.dumps({"status": "unavailable", "exception_type": type(exc).__name__}))
+        return 1
+    print(json.dumps(payload, sort_keys=True))
+    return 0 if payload.get("status") == "ready" else 1
+
+
+def _log_root() -> Path:
+    value = os.environ.get("ASD_LOG_ROOT")
+    if not value:
+        raise ValueError("ASD_LOG_ROOT is required for supervised logs")
+    result = Path(value)
+    if not result.is_absolute():
+        raise ValueError("ASD_LOG_ROOT must be absolute")
+    return result
+
+
+def _stop_launchd(service: str) -> int:
+    names = ("api", "worker") if service == "all" else (service,)
+    outcomes: dict[str, str] = {}
+    for name in names:
+        label = f"ru.asd-kontur.spine.{name}"
+        completed = subprocess.run(
+            ["launchctl", "kill", "TERM", f"gui/{os.getuid()}/{label}"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        outcomes[name] = "signal_sent" if completed.returncode == 0 else "not_loaded"
+    print(json.dumps({"services": outcomes}, sort_keys=True))
+    return 0 if all(value == "signal_sent" for value in outcomes.values()) else 1
+
+
+def _show_logs(settings: SpineSettings, service: str, lines: int) -> int:
+    del settings
+    if lines < 1 or lines > 1000:
+        raise ValueError("log line count must be between 1 and 1000")
+    names = ("api", "worker") if service == "all" else (service,)
+    root = _log_root()
+    missing = False
+    for name in names:
+        path = root / f"{name}.log"
+        print(json.dumps({"service": name, "path": str(path)}, sort_keys=True))
+        if not path.is_file():
+            print("log_unavailable")
+            missing = True
+            continue
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        for line in content[-lines:]:
+            print(line)
+    return 1 if missing else 0
+
+
+def _render_launchd(output: Path, settings: SpineSettings) -> None:
+    if not output.is_absolute() or output.exists():
+        raise ValueError("launchd output must be a new absolute path")
+    output.mkdir(parents=True, mode=0o700)
+    executable = Path(sys.executable).resolve()
+    log_root = _log_root()
+    for name, command_name in (("api", "serve-api"), ("worker", "run-worker")):
+        log_path = log_root / f"{name}.log"
+        content = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+            '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+            '<plist version="1.0"><dict>'
+            f"<key>Label</key><string>ru.asd-kontur.spine.{name}</string>"
+            "<key>ProgramArguments</key><array>"
+            f"<string>{escape(str(executable))}</string><string>-m</string>"
+            "<string>asd_kontur.application_spine.runtime</string>"
+            f"<string>{command_name}</string></array>"
+            f"<key>StandardOutPath</key><string>{escape(str(log_path))}</string>"
+            f"<key>StandardErrorPath</key><string>{escape(str(log_path))}</string>"
+            "<key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>5</integer>"
+            "<key>ProcessType</key><string>Background</string>"
+            "</dict></plist>\n"
+        )
+        (output / f"ru.asd-kontur.spine.{name}.plist").write_text(content, encoding="utf-8")
+    rotation = "\n".join(
+        f"{log_root / f'{name}.log'}  640  10  10240  *  J" for name in ("api", "worker")
+    )
+    (output / "asd-kontur-spine.newsyslog.conf").write_text(rotation + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

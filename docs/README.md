@@ -23,8 +23,11 @@ Architecture detail:
 Machine truth:
 
 - [Contract Pack v2.0](../contracts/v2.0/README.md)
+- [Product Application Spine Contract Pack v2.1](../contracts/v2.1/README.md)
 - [Product Goal Rebaseline Decision](product/PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
 - [Implementation record](implementation/PRODUCT_GOAL_REBASELINE_v1.md)
+- [Product Application Spine implementation](implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
+- [Product Application Spine local runtime](operations/PRODUCT_APPLICATION_SPINE_LOCAL_RUNTIME_v0.1.md)
 
 Earlier documents and reports are retained as historical evidence. A newer
 version or superseding notice controls current readiness semantics.

@@ -294,7 +294,7 @@ def test_unified_harness_schema_role_rls_and_scoped_repository(
     with postgres_environment.owner_engine.connect() as connection:
         assert (
             connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0017_unified_harness"
+            == "0018_product_spine"
         )
         assert (
             connection.scalar(
