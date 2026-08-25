@@ -7,11 +7,12 @@ Infrastructure micro-gates cannot displace the product path. Every capability
 stream ends in a visible professional result with source/evidence, blockers,
 recovery and export—not a test-count claim.
 
-## Current prerequisite
+## Completed prerequisite
 
-`MEMORY-INTEGRITY-FIX-01` continues independently in its existing worktree.
-This rebaseline does not modify or hide its DATA_DEFECT. Product Application
-work starts only from the resulting canonical main.
+`MEMORY-INTEGRITY-FIX-01` resolved the two canonical memory defects and passed
+three final consecutive clean-room cycles. The historical defect and failed
+series receipts remain immutable. This bounded PASS does not change product
+readiness.
 
 ## Completed bounded slice: PRODUCT-APPLICATION-SPINE-01
 

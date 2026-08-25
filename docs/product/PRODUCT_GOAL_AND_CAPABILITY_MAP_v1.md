@@ -4,7 +4,8 @@
 - Owner source: [GitHub issue #19](https://github.com/yamazaki1711/asd-kontur/issues/19)
 - Machine denominator: [Contract Pack v2.0](../../contracts/v2.0/README.md)
 - Current readiness ledger: [Contract Pack v2.2](../../contracts/v2.2/README.md)
-- Current decision: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
+- Historical rebaseline: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
+- Current decision: [Product Current State v1.1](PRODUCT_CURRENT_STATE_DECISION_v1.1.json)
 
 ## Goal
 
@@ -96,13 +97,14 @@ No real OKS is proposed before an exact `TrialReadinessDecision`.
 - `ProductReady=false`.
 
 SYSTEM-INTEGRITY-CYCLE-01 proves bounded kernel reproducibility only. Its old
-semantic claim was superseded by the memory DATA_DEFECT; MEMORY-INTEGRITY-FIX-01
-may close only that bounded defect after its own qualification series.
+semantic claim was superseded by the memory DATA_DEFECT. MEMORY-INTEGRITY-FIX-01
+closed that bounded defect through immutable requalification and three fresh
+clean-room cycles; this does not promote any product capability or mode.
 Rule Registry has infrastructure but zero operational rules.
 
 ## Delivery order
 
-1. complete `MEMORY-INTEGRITY-FIX-01` in its separate worktree;
+1. preserve the qualified MEMORY-INTEGRITY-FIX-01 release and fingerprints;
 2. implement `INDUSTRIAL-DOCUMENT-UNDERSTANDING-01` exactly as specified in the
    [Implementation Plan](../architecture/IMPLEMENTATION_PLAN_v1.md);
 3. deliver capability streams that end in visible professional outputs;

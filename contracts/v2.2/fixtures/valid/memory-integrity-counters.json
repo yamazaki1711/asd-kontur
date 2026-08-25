@@ -1,8 +1,8 @@
 {
   "contract_version": "2.2.0",
-  "all_history_platform_memory_fingerprint": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
-  "active_release_semantic_fingerprint": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-  "active_context_pack_binding_fingerprint": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+  "all_history_platform_memory_fingerprint": "sha256:d78a22e94a87fc32b885fb71a338e3416310b95f562246db045091fa1fbce132",
+  "active_release_semantic_fingerprint": "sha256:0006d0bd2d09ae4713a7ee9692b55d0afc0c9a830d018bc4e8c342e548de4fe4",
+  "active_context_pack_binding_fingerprint": "sha256:595a3ea9716bf772d05d7273b5c9ba1ae196bd036513dcce2779a0b8f3161a07",
   "fingerprint_specification_version": "platform-memory-fingerprint-v2.1.0",
   "active_semantic_duplicate_group_count": 0,
   "missing_fingerprint_component_count": 0,

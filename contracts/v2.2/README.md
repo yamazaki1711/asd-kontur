@@ -3,6 +3,8 @@
 This additive pack defines the evidence-bound Practice Intelligence identity, explicit release
 activation, fail-closed platform-memory fingerprint scope, unambiguous counters, and the canonical
 post-Spine capability current state. It preserves all earlier packs and historical releases.
+The valid counter fixture contains the exact qualified all-history, active-release and ContextPack
+binding fingerprints rather than illustrative values.
 
 The semantic identity includes the exact PracticeGuideEdition, SourceVersion, page/region locator,
 fragment digest, typed meaning, applicability, modality, units, exclusions, and authority layer.

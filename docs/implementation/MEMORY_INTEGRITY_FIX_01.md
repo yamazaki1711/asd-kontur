@@ -1,6 +1,6 @@
 # MEMORY-INTEGRITY-FIX-01
 
-Status: `IN PROGRESS`
+Status: `PASS — bounded platform-memory integrity`
 Owner: Олег Щербаков
 Date: 2026-08-26
 ProductReady: `false`
@@ -8,7 +8,9 @@ ProductReady: `false`
 This bounded correction supersedes the semantic decision of
 SYSTEM-INTEGRITY-CYCLE-01 without deleting its three physical-reproducibility
 cycles. The immutable decision is
-`docs/verification/MEMORY_INTEGRITY_SUPERSEDING_DECISION_01.json`.
+`docs/verification/MEMORY_INTEGRITY_SUPERSEDING_DECISION_01.json`. Final
+requalification is recorded by
+`docs/verification/MEMORY_INTEGRITY_FINAL_QUALIFICATION_DECISION_01.json`.
 
 ## Corrected canonical model
 
@@ -57,8 +59,32 @@ coverage is absent.
 ## Qualification gate
 
 Focused migration, deduplication, release, Gateway, durability and security
-checks precede a fresh BF16 acceptance. Because canonical memory and fingerprint
-scope changed, completion requires a new series of three consecutive clean-room
-cycles C1–C3. Any failure resets that series. Historical KG-ID acceptance remains
-24/25 systemic and 7/7 adversarial unless a genuinely new run reaches 25/25 and
-7/7; expected answers and thresholds are not weakened.
+checks preceded fresh BF16 acceptance. The full rerun produced 20/25 systemic
+and 7/7 adversarial; task 12 remains an honest knowledge gap and four other
+systemic responses failed exact identity/evidence validation. Thresholds and
+expected answers were not weakened, so historical KG-ID remains PARTIAL.
+
+The final official series is `MEMORY-INTEGRITY-FIX-01-R5`:
+
+- C1, C2 and C3 are three consecutive clean-room PASS;
+- active semantic duplicate groups: 0;
+- missing fingerprint components: 0;
+- all-history fingerprint:
+  `sha256:d78a22e94a87fc32b885fb71a338e3416310b95f562246db045091fa1fbce132`;
+- active-release fingerprint:
+  `sha256:0006d0bd2d09ae4713a7ee9692b55d0afc0c9a830d018bc4e8c342e548de4fe4`;
+- ContextPack binding fingerprint:
+  `sha256:595a3ea9716bf772d05d7273b5c9ba1ae196bd036513dcce2779a0b8f3161a07`;
+- each cycle fingerprint:
+  `sha256:d31da3fced3fb0b559f85afd51f2750090e2420c0448d071ce0f4201dd194939`.
+
+Additive migration `0020_knowledge_status` makes Platform Knowledge status
+report the canonical 138 open conflicts and 53 quarantined candidate identities.
+The UI/API derives MEMORY_DATA_DEFECT exclusively from the latest immutable
+qualification: it is now false, while NTD and RuleVersion blockers remain.
+
+Counter resets before the final series: four (R1 environment-owned import,
+R2 whitespace, R4 order-dependent qualification assertion, plus the required
+restart after final schema/status correction). All failure receipts remain
+outside Git. ProductApplicationReady stays PARTIAL; TrialReady, OKSReady and
+ProductReady remain false.

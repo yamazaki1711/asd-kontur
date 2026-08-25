@@ -15,7 +15,8 @@ controlled local reset. It neither changes canonical Practice/NTD memory nor inv
 At the time of this historical bounded PASS, `MEMORY_DATA_DEFECT` remained an
 explicit platform blocker. Its current state is derived from the latest
 immutable platform-memory qualification decision; it is never hardcoded by the
-application.
+application. MEMORY-INTEGRITY-FIX-01 later superseded that blocker with a PASS
+qualification; this historical Spine status is not rewritten.
 
 The frontend is reimplemented from accepted user-journey semantics. No routes, templates,
 `app_state`, fallback records, or demo domain data were copied from `mac_asd`.

@@ -26,6 +26,7 @@ Machine truth:
 - [Product Application Spine Contract Pack v2.1](../contracts/v2.1/README.md)
 - [Memory Integrity Contract Pack v2.2](../contracts/v2.2/README.md)
 - [Product Goal Rebaseline Decision](product/PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
+- [Product Current State Decision v1.1](product/PRODUCT_CURRENT_STATE_DECISION_v1.1.json)
 - [Implementation record](implementation/PRODUCT_GOAL_REBASELINE_v1.md)
 - [Product Application Spine implementation](implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
 - [Memory Integrity Fix implementation](implementation/MEMORY_INTEGRITY_FIX_01.md)

@@ -1,8 +1,8 @@
 # АСД-КОНТУР
 
-> Current delivery slice: [PRODUCT-APPLICATION-SPINE-01](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
-> adds the first bounded browser/application contour. MEMORY-INTEGRITY-FIX-01
-> now owns the superseding memory qualification decision;
+> Current completed correction: [MEMORY-INTEGRITY-FIX-01](docs/implementation/MEMORY_INTEGRITY_FIX_01.md)
+> requalifies permanent platform memory after the bounded Product Application
+> Spine. The next separate slice is `INDUSTRIAL-DOCUMENT-UNDERSTANDING-01`;
 > `TrialReady=false`, `OKSReady=false`, and `ProductReady=false`.
 
 > **Current product status (superseding, 2026-08-26):** the repository contains
@@ -135,12 +135,14 @@ readiness semantics are defined by
   restore и projection rebuild воспроизводимы. Fresh-session acceptance —
   24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
   остаётся `false`.
-- `SYSTEM-INTEGRITY-CYCLE-01` — **PARTIAL / DATA_DEFECT (superseded semantic
-  decision) 2026-08-26**: прежние C1–C3 остаются evidence физической
-  воспроизводимости, но их semantic PASS отозван immutable decision после
-  обнаружения двух exact duplicate groups (четыре active physical rows) и
-  неполного fingerprint scope. Шесть equal-text пар с разными exact locators
-  не объединяются. Новая трёхцикловая серия обязательна;
+- `SYSTEM-INTEGRITY-CYCLE-01` — историческая серия сохранена как evidence
+  физической воспроизводимости; её прежний semantic PASS был отозван после
+  обнаружения двух exact duplicate groups и неполного fingerprint scope.
+- `MEMORY-INTEGRITY-FIX-01` — **PASS (bounded platform-memory integrity)
+  2026-08-26**: semantic identity исправлена без потери evidence, active release
+  содержит 7 111 уникальных versions, fingerprint scope fail-closed, а серия
+  `MEMORY-INTEGRITY-FIX-01-R5` дала три последовательных clean-room PASS.
+  Fresh acceptance остаётся 20/25 systemic и 7/7 adversarial, поэтому KG-ID
   `READY_FOR_INTEGRITY_CYCLE` означает только
   участие модуля в harness, не production readiness.
 - `NTD-SEED-01 bounded official NTD memory` — **PARTIAL 2026-08-25**:
@@ -207,6 +209,7 @@ readiness semantics are defined by
 - [WP-14 pdfpipeline architecture impact assessment](docs/reports/WP14_PDFPIPELINE_ARCHITECTURE_IMPACT_ASSESSMENT_v0.1.md)
 - [WP-14 Audit Slice implementation](docs/implementation/WP14_AUDIT_SLICE_v0.1.md)
 - [Product Application Spine implementation](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
+- [Memory Integrity Fix implementation](docs/implementation/MEMORY_INTEGRITY_FIX_01.md)
 - [Product Application Spine local runtime](docs/operations/PRODUCT_APPLICATION_SPINE_LOCAL_RUNTIME_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)
