@@ -1,6 +1,14 @@
 # SYSTEM-INTEGRITY-CYCLE-01
 
-**Status:** PASS — three consecutive clean-room cycles
+**Historical status:** PASS — three consecutive bounded Platform Kernel
+clean-room cycles
+
+> **Superseding semantics (2026-08-26):** this series proved physical
+> reproducibility of the bounded Platform Kernel, not system/product integrity.
+> MEMORY-INTEGRITY-RECONCILIATION-01 subsequently found a semantic DATA_DEFECT;
+> the active semantic status is `PARTIAL / DATA_DEFECT`. Historical receipts
+> remain immutable. See
+> [Product Goal Rebaseline Decision](../product/PRODUCT_GOAL_REBASELINE_DECISION_v1.json).
 
 **Owner:** Oleg Shcherbakov
 

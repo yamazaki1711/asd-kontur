@@ -1,0 +1,52 @@
+{
+  "decision_id": "PRODUCT-GOAL-REBASELINE-DECISION-v1",
+  "status": "accepted",
+  "owner": "Oleg Shcherbakov",
+  "effective_at": "2026-08-26T00:00:00+12:00",
+  "canonical_base_commit": "81207e60b05137668575cc5d214fc2ea335fc715",
+  "product_goal_id": "PRODUCT-GOAL-ASD-KONTUR",
+  "product_goal_version": "1.0.0",
+  "issue": "https://github.com/yamazaki1711/asd-kontur/issues/19",
+  "current_state": {
+    "implementation_class": "platform_domain_kernel",
+    "platform_kernel_ready": "PARTIAL",
+    "product_application_ready": false,
+    "trial_ready": false,
+    "oks_ready": false,
+    "product_ready": false,
+    "frontend": "NOT_IMPLEMENTED",
+    "http_api_application": "NOT_IMPLEMENTED",
+    "operator_console": "NOT_IMPLEMENTED",
+    "industrial_intake": "NOT_IMPLEMENTED",
+    "project_understanding_from_real_documents": "NOT_IMPLEMENTED",
+    "official_normative_edition_count": 0,
+    "verified_normative_provision_count": 0,
+    "rule_version_count": 0,
+    "tender_support_audit": "bounded_backend_slices",
+    "restoration_workflow": "NOT_IMPLEMENTED",
+    "production_document_rendering_print": "NOT_IMPLEMENTED",
+    "drawing_cad_intelligence": "CONTRACT_ONLY",
+    "field_offline_client": "NOT_IMPLEMENTED",
+    "product_scale_acceptance": "NOT_RUN"
+  },
+  "supersedes_semantics": [
+    {
+      "identity": "SYSTEM-INTEGRITY-CYCLE-01",
+      "preserved_fact": "three cycles demonstrated bounded Platform Kernel physical reproducibility",
+      "withdrawn_interpretation": "system-wide or product integrity",
+      "current_status": "PARTIAL / DATA_DEFECT",
+      "reason": "MEMORY-INTEGRITY-RECONCILIATION-01 found PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED and PLATFORM_MEMORY_FINGERPRINT_SCOPE_INCOMPLETE"
+    },
+    {
+      "identity": "UNIFIED-HARNESS-01",
+      "preserved_fact": "bounded implementation PASS",
+      "withdrawn_interpretation": "user-operable four-mode product"
+    }
+  ],
+  "legacy_policy": {
+    "name": "selective_engineering_reuse",
+    "rule": "Preserve proven semantics, algorithms, assets and tests from mac_asd only after a Legacy Component Decision Gate; mechanical copy-paste and automatic adoption of the legacy stack are forbidden."
+  },
+  "next_delivery_slice": "PRODUCT-APPLICATION-SPINE-01",
+  "product_ready": false
+}

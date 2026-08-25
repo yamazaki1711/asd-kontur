@@ -1,5 +1,9 @@
 # АСД-КОНТУР — Technical Architecture v0.3
 
+> **Historical kernel/distributed topology.** Product Application, UI, intake,
+> native operations and modern technology decisions are added by
+> [Technical Architecture v1](TECHNICAL_ARCHITECTURE_v1.md) and ADR-0014.
+
 - **Статус:** `Accepted architecture baseline`; не реализовано
 - **Дата:** 2026-08-22
 - **Владелец документа:** ведущий системный архитектор

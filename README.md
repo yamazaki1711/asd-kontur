@@ -1,5 +1,13 @@
 # АСД-КОНТУР
 
+> **Current product status (superseding, 2026-08-26):** the repository contains
+> a `PARTIAL` Platform/Domain Kernel, not a user-ready software complex.
+> Frontend, Application Spine, industrial intake and production operator flows
+> are not implemented. `TrialReady=false`, `OKSReady=false`,
+> `ProductReady=false`. The canonical denominator is the
+> [Product Goal and Capability Map](docs/product/PRODUCT_GOAL_AND_CAPABILITY_MAP_v1.md)
+> and [Contract Pack v2.0](contracts/v2.0/README.md).
+
 **АСД-КОНТУР** — объектно-независимый программный комплекс для анализа
 строительной документации, управления доказательствами и подготовки
 проверяемых результатов по объектам капитального строительства (**ОКС**).
@@ -80,7 +88,12 @@ gap; customer overlay не может ослабить нормативный м
 - failover — только ручной, с fencing; automatic promotion и split-brain
   запрещены.
 
-## Архитектурная зрелость
+## Исторические foundation/bounded gates
+
+The PASS labels below preserve what their exact bounded gates proved. They do
+not mean `CAPABILITY_READY`, `MODE_READY`, TrialReady or ProductReady. Current
+readiness semantics are defined by
+[ADR-0013](docs/architecture/decisions/0013-platform-kernel-to-product-application.md).
 
 - `G-00 Architecture Baseline` — **PASS**;
 - `G-01 Logical Data Model` — **PASS**;
@@ -148,6 +161,13 @@ gap; customer overlay не может ослабить нормативный м
 
 Ключевые документы:
 
+- [Documentation index](docs/README.md)
+- [Product Goal and Capability Map v1](docs/product/PRODUCT_GOAL_AND_CAPABILITY_MAP_v1.md)
+- [Four-mode Functional Model v1](docs/product/FOUR_MODE_FUNCTIONAL_MODEL_v1.md)
+- [Architecture Blueprint v1](docs/architecture/ARCHITECTURE_BLUEPRINT_v1.md)
+- [Implementation Plan v1](docs/architecture/IMPLEMENTATION_PLAN_v1.md)
+- [Trial Readiness Specification v1](docs/product/TRIAL_READINESS_SPECIFICATION_v1.md)
+- [Legacy Component Decision Matrix](docs/architecture/LEGACY_COMPONENT_DECISION_MATRIX_v1.md)
 - [Product Scope](docs/product/PRODUCT_SCOPE.md)
 - [Architecture Blueprint](docs/architecture/ARCHITECTURE_BLUEPRINT_v0.1.md)
 - [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v0.1.md)
@@ -178,7 +198,7 @@ gap; customer overlay не может ослабить нормативный м
 - `docs/mvp/` — исторически названные функциональные срезы и сценарии,
   подчинённые четырёхрежимной границе готовности;
 - `docs/architecture/` — нормативная архитектура и plan gates;
-- `docs/architecture/decisions/` — ADR-0001…ADR-0011;
+- `docs/architecture/decisions/` — ADR-0001…ADR-0014;
 - `docs/reports/` — проверенные audit/inventory/transition records.
 - `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
   immutable G-06 версия content-free DestructionAttestation;
@@ -190,7 +210,10 @@ gap; customer overlay не может ослабить нормативный м
   `contracts/v1.6/` — permanent Practice Intelligence, Context Assembly and
   backup-integrity contracts; `contracts/v1.7/` — bounded official NTD,
   edition/provision and normative Knowledge Gateway contracts;
-  `contracts/v1.8/` — unified multi-work Construction Harness contracts.
+  `contracts/v1.8/` — unified multi-work Construction Harness contracts;
+  `contracts/v1.9/` — bounded kernel integrity contracts;
+  `contracts/v2.0/` — complete product capability denominator and fail-closed
+  readiness contracts.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
   WP‑11…WP‑14 и KG‑ID‑01:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
