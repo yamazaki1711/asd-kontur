@@ -1,8 +1,8 @@
 # MEMORY-INTEGRITY-FIX-01
 
-Status: `IN PROGRESS`  
-Owner: Олег Щербаков  
-Date: 2026-08-26  
+Status: `IN PROGRESS`
+Owner: Олег Щербаков
+Date: 2026-08-26
 ProductReady: `false`
 
 This bounded correction supersedes the semantic decision of
