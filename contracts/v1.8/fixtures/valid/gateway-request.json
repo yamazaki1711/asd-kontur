@@ -1,0 +1,7 @@
+{
+  "tool": "knowledge.get_construction_harness_context",
+  "contract_version": "1.8.0",
+  "schema_id": "urn:asd-kontur:contracts:v1.8:schema:construction-harness",
+  "schema_version": "1.8.0",
+  "payload": {"context_pack_id": "018ff001-0000-7000-8000-000000000401"}
+}

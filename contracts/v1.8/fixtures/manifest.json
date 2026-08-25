@@ -1,0 +1,8 @@
+{
+  "fixtures": [
+    {"path": "valid/multi-work-harness.json", "schema_pointer": "/$defs/verticalFixture", "expected": "valid"},
+    {"path": "valid/gateway-request.json", "schema_pointer": "/$defs/gatewayRequest", "expected": "valid"},
+    {"path": "invalid/single-work-acceptance.json", "schema_pointer": "/$defs/verticalFixture", "expected": "invalid"},
+    {"path": "invalid/customer-weakening.json", "schema_pointer": "/$defs/customerAddition", "expected": "invalid"}
+  ]
+}

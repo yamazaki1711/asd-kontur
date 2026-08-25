@@ -17,6 +17,9 @@ from asd_kontur.knowledge.gateway import (
     GUIDANCE_CONTRACT_VERSION,
     GUIDANCE_SCHEMA_ID,
     GUIDANCE_TOOLS,
+    HARNESS_CONTRACT_VERSION,
+    HARNESS_SCHEMA_ID,
+    HARNESS_TOOLS,
     NTD_CONTRACT_VERSION,
     NTD_SCHEMA_ID,
     NTD_TOOLS,
@@ -56,7 +59,10 @@ class AuditSpy:
 def test_all_allowlisted_tools_require_exact_capability_and_version(tool: str) -> None:
     audit = AuditSpy()
     gateway = KnowledgeGateway(QueryStub(), audit)
-    if tool in GUIDANCE_TOOLS:
+    if tool in HARNESS_TOOLS:
+        contract_version = HARNESS_CONTRACT_VERSION
+        schema_id = HARNESS_SCHEMA_ID
+    elif tool in GUIDANCE_TOOLS:
         contract_version = GUIDANCE_CONTRACT_VERSION
         schema_id = GUIDANCE_SCHEMA_ID
     elif tool in NTD_TOOLS:

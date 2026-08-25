@@ -783,6 +783,17 @@ class PostgresWorkspaceStorageAdapter:
     """Restricted exact-relation purge adapter; never drops/truncates a schema."""
 
     TABLES = (
+        "projection.construction_harness_matrix_entries",
+        "workspace.construction_harness_mode_views",
+        "workspace.construction_harness_backup_manifests",
+        "workspace.knowledge_consistency_defects",
+        "workspace.construction_harness_context_packs",
+        "workspace.customer_regulation_additions",
+        "workspace.work_requirement_matrix_versions",
+        "workspace.construction_work_package_versions",
+        "workspace.verified_project_characteristics",
+        "workspace.project_characteristic_candidates",
+        "workspace.project_definition_versions",
         "workspace.audit_projection_versions",
         "workspace.audit_report_versions",
         "workspace.audit_classification_versions",
