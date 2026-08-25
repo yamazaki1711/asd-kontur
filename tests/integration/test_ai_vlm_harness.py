@@ -196,8 +196,7 @@ def test_g07_schema_roles_rls_and_migration_chain(
             == "asd_harness_service"
         )
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0016_ntd_seed"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0016_ntd_seed"
         )
 
 
