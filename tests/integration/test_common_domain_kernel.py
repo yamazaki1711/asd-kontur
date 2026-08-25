@@ -364,7 +364,10 @@ def test_wp11_schema_role_and_migration_head(postgres_environment: PostgreSQLEnv
         "kernel_finding_versions",
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
-        assert connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0008_wp14"
+        assert (
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+            == "0015_practice_authority"
+        )
         assert (
             connection.scalar(
                 sa.text("SELECT rolname FROM pg_roles WHERE rolname='asd_kernel_service'")
@@ -779,7 +782,8 @@ def test_disposable_0005_downgrade_upgrade(
         run_migration(str(repository_root), database_url, "head")
         with sa.create_engine(database_url).connect() as connection:
             assert (
-                connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0008_wp14"
+                connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+                == "0015_practice_authority"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

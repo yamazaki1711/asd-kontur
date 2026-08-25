@@ -451,6 +451,24 @@ complete normative scenario list and refined DoD are in the impact assessment
 Implementation evidence and the exact migration/contract boundary are recorded
 in [`WP14_AUDIT_SLICE_v0.1.md`](../implementation/WP14_AUDIT_SLICE_v0.1.md).
 
+### KG-ID-01 — ID Practice Guide Knowledge Ingestion
+
+| Field | Plan |
+|---|---|
+| Capability; inputs; results | Cross-cutting native-first construction of permanent, model-independent ID Practice Intelligence: verified source knowledge → typed practice model → deterministic Context Assembly → Knowledge Gateway → any VLM; never NTD, RuleVersion or workspace Fact |
+| Dependencies / DoR | G-05 platform source/evidence ledger and Knowledge Gateway; G-07A exact local Qwen profile, Candidate-only boundary, validators and retention; verified source bytes/custody; owner curator authority |
+| Actions / artifacts | Exact PageManifest and bounded extraction evidence; deterministic grounding/integrity; independent candidate verification; immutable reconciliation; typed principles/workflows/form-field guidance/attention/variants/rationale/failures/checklists/dependencies/examples/playbooks; permanent source/canon; versioned ContextAssemblyPolicy; exact/FTS Gateway; scenario memory acceptance |
+| Tests | 425 terminal receipts and candidate terminal states; malformed/empty/duplicate/conflict handling; model/service publication denial; NTD/practice/workspace separation; reset/destroy survival; model/provider independence; projection rebuild; backup/restore fingerprints; mandatory context; at least 25 scenario exact-citation tasks plus adversarial gaps/conflicts/edition/authority cases |
+| DoD | Verified source subset is converted to canonical versioned Practice Intelligence; every ID-related VLM path requires deterministic Context Assembly; permanent local instance serves exact source-pinned context to a new interchangeable VLM; reset/destroy and retrieval rebuild preserve canon; source content absent from Git |
+| Risks / rollback | Methodological example mistaken for norm, model hallucination, partial pass claimed complete, source leakage; suspend exact edition/profile, retain immutable candidates/receipts, rebuild projections, never auto-activate rules |
+| Memory / retention | Source PDF in platform object plane and canonical intelligence in PostgreSQL platform schema have `permanent_platform_core`; retrieval projections are rebuildable, runtime packs ephemeral; raw prompts/responses/renders follow separate processing retention; no live workspace links |
+
+KG-ID-01 is a prerequisite inserted by owner decision before WP-15. Its exact
+implementation and measured local-Qwen evidence are recorded in
+[`KG_ID_PRACTICE_GUIDE_INGESTION_v0.1.md`](../implementation/KG_ID_PRACTICE_GUIDE_INGESTION_v0.1.md).
+Production model qualification, G-07B, embeddings and professional ID authority
+remain separate blocked capabilities.
+
 ### WP-15 — Restoration slice
 
 | Field | Plan |

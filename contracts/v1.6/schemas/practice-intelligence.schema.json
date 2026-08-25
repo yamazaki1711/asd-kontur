@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence",
+  "title": "Permanent model-independent ID Practice Intelligence contracts",
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/$defs/contextAssemblyPolicy"},
+    {"$ref": "#/$defs/idPracticeContextPack"},
+    {"$ref": "#/$defs/practiceMemoryBackupManifest"},
+    {"$ref": "#/$defs/gatewayRequest"},
+    {"$ref": "#/$defs/gatewayResponse"}
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "uuid": {"type": "string", "format": "uuid"},
+    "authorityLayer": {"const": "methodological_practice"},
+    "retentionClass": {"const": "permanent_platform_core"},
+    "contextAssemblyPolicy": {
+      "type": "object",
+      "required": [
+        "record_type", "policy_id", "version", "practice_guide_edition_id",
+        "policy_key", "allowed_modes", "allowed_purposes", "selector_dimensions",
+        "max_intelligence_units", "max_playbooks", "authority_layer",
+        "retention_class", "policy_fingerprint"
+      ],
+      "properties": {
+        "record_type": {"const": "ContextAssemblyPolicy"},
+        "policy_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "practice_guide_edition_id": {"$ref": "#/$defs/uuid"},
+        "policy_key": {"type": "string", "minLength": 1},
+        "allowed_modes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["Tender", "Support", "Audit", "Restoration", "IDGenerator"]}},
+        "allowed_purposes": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "selector_dimensions": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "max_intelligence_units": {"type": "integer", "minimum": 1, "maximum": 100},
+        "max_playbooks": {"type": "integer", "minimum": 0, "maximum": 20},
+        "authority_layer": {"$ref": "#/$defs/authorityLayer"},
+        "retention_class": {"$ref": "#/$defs/retentionClass"},
+        "policy_fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "idPracticeContextPack": {
+      "type": "object",
+      "required": [
+        "record_type", "context_pack_id", "context_request_id", "policy_id",
+        "policy_version", "practice_guide_edition_id", "status",
+        "intelligence_unit_refs", "playbook_refs", "source_version_ids",
+        "citations", "normative_requirements", "practice_advice",
+        "workspace_fact_refs", "deterministic_rule_refs", "gaps", "conflicts",
+        "uncertainties", "authority_layer", "pack_fingerprint"
+      ],
+      "properties": {
+        "record_type": {"const": "IDPracticeContextPack"},
+        "context_pack_id": {"$ref": "#/$defs/uuid"},
+        "context_request_id": {"$ref": "#/$defs/uuid"},
+        "policy_id": {"$ref": "#/$defs/uuid"},
+        "policy_version": {"type": "integer", "minimum": 1},
+        "practice_guide_edition_id": {"$ref": "#/$defs/uuid"},
+        "status": {"enum": ["ok", "knowledge_incomplete", "guidance_normative_conflict", "edition_mismatch", "memory_unavailable"]},
+        "intelligence_unit_refs": {"type": "array", "items": {"$ref": "#/$defs/versionRef"}},
+        "playbook_refs": {"type": "array", "items": {"$ref": "#/$defs/versionRef"}},
+        "source_version_ids": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/uuid"}},
+        "citations": {"type": "array", "uniqueItems": true, "items": {"type": "string", "pattern": "^page:[1-9][0-9]*:region:"}},
+        "normative_requirements": {"type": "array"},
+        "practice_advice": {"type": "array"},
+        "workspace_fact_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "deterministic_rule_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "gaps": {"type": "array"},
+        "conflicts": {"type": "array"},
+        "uncertainties": {"type": "array"},
+        "authority_layer": {"$ref": "#/$defs/authorityLayer"},
+        "pack_fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "ok"}}},
+          "then": {
+            "properties": {
+              "intelligence_unit_refs": {"minItems": 1},
+              "source_version_ids": {"minItems": 1},
+              "citations": {"minItems": 1},
+              "gaps": {"maxItems": 0},
+              "conflicts": {"maxItems": 0}
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "practiceMemoryBackupManifest": {
+      "type": "object",
+      "required": [
+        "record_type", "backup_manifest_id", "version", "practice_guide_edition_id",
+        "source_version_id", "source_object_digest", "construction_manifest_id",
+        "construction_fingerprint", "coverage_manifest_fingerprint",
+        "activation_decision_id",
+        "activation_decision_version", "context_assembly_policy_id",
+        "context_assembly_policy_version", "context_assembly_policy_fingerprint",
+        "canonical_semantic_fingerprint", "projection_fingerprints",
+        "backup_object_reference", "retention_class", "manifest_fingerprint"
+      ],
+      "properties": {
+        "record_type": {"const": "PracticeMemoryBackupManifest"},
+        "backup_manifest_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "practice_guide_edition_id": {"$ref": "#/$defs/uuid"},
+        "source_version_id": {"$ref": "#/$defs/uuid"},
+        "source_object_digest": {"$ref": "#/$defs/digest"},
+        "construction_manifest_id": {"$ref": "#/$defs/uuid"},
+        "construction_fingerprint": {"$ref": "#/$defs/digest"},
+        "coverage_manifest_fingerprint": {"$ref": "#/$defs/digest"},
+        "activation_decision_id": {"$ref": "#/$defs/uuid"},
+        "activation_decision_version": {"type": "integer", "minimum": 1},
+        "context_assembly_policy_id": {"$ref": "#/$defs/uuid"},
+        "context_assembly_policy_version": {"type": "integer", "minimum": 1},
+        "context_assembly_policy_fingerprint": {"$ref": "#/$defs/digest"},
+        "canonical_semantic_fingerprint": {"$ref": "#/$defs/digest"},
+        "projection_fingerprints": {"type": "array"},
+        "backup_object_reference": {"type": "string", "minLength": 1},
+        "retention_class": {"$ref": "#/$defs/retentionClass"},
+        "manifest_fingerprint": {"$ref": "#/$defs/digest"}
+      },
+      "additionalProperties": false
+    },
+    "versionRef": {
+      "type": "object",
+      "required": ["id", "version"],
+      "properties": {
+        "id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1}
+      },
+      "additionalProperties": false
+    },
+    "gatewayRequest": {
+      "type": "object",
+      "required": ["tool", "contract_version", "schema_id", "schema_version", "payload"],
+      "properties": {
+        "tool": {"enum": ["knowledge.get_id_guidance", "knowledge.get_form_guidance", "knowledge.get_field_guidance", "knowledge.trace_guidance", "knowledge.explain_guidance_conflict", "knowledge.get_id_task_guidance", "knowledge.get_practice_playbook"]},
+        "contract_version": {"const": "1.6.0"},
+        "schema_id": {"const": "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence"},
+        "schema_version": {"const": "1.6.0"},
+        "payload": {"type": "object"}
+      },
+      "additionalProperties": false
+    },
+    "gatewayResponse": {
+      "type": "object",
+      "required": ["tool", "contract_version", "status", "result", "evidence_pack"],
+      "properties": {
+        "tool": {"enum": ["knowledge.get_id_guidance", "knowledge.get_form_guidance", "knowledge.get_field_guidance", "knowledge.trace_guidance", "knowledge.explain_guidance_conflict", "knowledge.get_id_task_guidance", "knowledge.get_practice_playbook"]},
+        "contract_version": {"const": "1.6.0"},
+        "status": {"enum": ["ok", "no_result", "index_unavailable", "knowledge_incomplete", "edition_mismatch", "guidance_normative_conflict"]},
+        "result": {"type": "object"},
+        "evidence_pack": {
+          "type": "object",
+          "required": ["evidence", "applicability", "conflicts", "gaps", "uncertainties"],
+          "properties": {
+            "evidence": {"type": "array", "items": {"type": "object", "required": ["source_version_id", "structural_unit_locator", "content_digest", "authority_layer"], "properties": {"source_version_id": {"$ref": "#/$defs/uuid"}, "structural_unit_locator": {"type": "string", "pattern": "^page:[1-9][0-9]*:region:"}, "content_digest": {"$ref": "#/$defs/digest"}, "authority_layer": {"$ref": "#/$defs/authorityLayer"}}, "additionalProperties": true}},
+            "applicability": {"type": "array"},
+            "conflicts": {"type": "array"},
+            "gaps": {"type": "array"},
+            "uncertainties": {"type": "array"}
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

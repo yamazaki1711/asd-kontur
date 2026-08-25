@@ -26,6 +26,7 @@ class KnowledgeErrorCode(StrEnum):
     INVALID_TRANSITION = "knowledge.invalid_transition"
     PROMOTION_BLOCKED = "knowledge.promotion_blocked"
     CONTRACT_VERSION_UNSUPPORTED = "knowledge.contract_version_unsupported"
+    RETENTION_CLASS_INVALID = "knowledge.retention_class_invalid"
 
 
 @dataclass

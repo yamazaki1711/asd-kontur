@@ -1,0 +1,12 @@
+{
+  "candidate_id": "0198f8ae-c954-7000-8000-000000000001",
+  "version": 1,
+  "source_version_id": "0198f8ae-c954-7000-8000-000000000002",
+  "page_number": 1,
+  "region": [0.1, 0.1, 0.9, 0.9],
+  "guidance_kind": "completion_instruction",
+  "instruction": "Synthetic guidance only.",
+  "model_profile_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "status": "verified_candidate",
+  "authority_layer": "normative"
+}

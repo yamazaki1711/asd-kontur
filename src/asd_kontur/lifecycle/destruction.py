@@ -35,6 +35,7 @@ RESET_EXECUTE_CAPABILITY: Final = "workspace.purge.execute"
 DESTROY_EXECUTE_CAPABILITY: Final = "workspace.destroy.execute"
 RESET_VERIFY_CAPABILITY: Final = "workspace.reset.verify"
 DESTROY_VERIFY_CAPABILITY: Final = "workspace.destroy.verify"
+PERMANENT_PLATFORM_CORE: Final = "permanent_platform_core"
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,6 +103,16 @@ class DestructionCoordinator:
             raise LifecycleError(
                 LifecycleErrorCode.POLICY_BLOCKED,
                 "The RetentionProfile is incomplete.",
+            )
+        if PERMANENT_PLATFORM_CORE in profile.data_classes:
+            raise LifecycleError(
+                LifecycleErrorCode.POLICY_BLOCKED,
+                "A workspace RetentionProfile cannot address permanent platform core.",
+            )
+        if any(adapter.definition.scope != "workspace" for adapter in self._registry.adapters):
+            raise LifecycleError(
+                LifecycleErrorCode.PLAN_INVALID,
+                "A workspace deletion registry cannot contain a platform-scoped adapter.",
             )
         if profile.environment == "production" and not profile.production_approved:
             raise LifecycleError(

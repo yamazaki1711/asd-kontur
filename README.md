@@ -46,10 +46,20 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 ## Память, ИИ и размещение
 
 `Platform memory` сохраняет официальные НТД со всеми редакциями,
-квалифицированные правила, справочники и универсальные шаблоны. ПД/РД,
+квалифицированные правила, справочники, универсальные шаблоны и постоянный
+versioned `ID Practice Intelligence` из «Пособия по ИД». Пособие хранится как
+`methodological_practice`: оно объясняет профессиональную практику, но не
+становится нормативной обязанностью. Исходная edition и canonical intelligence
+имеют retention class `permanent_platform_core` и переживают reset/destroy
+любого workspace. ПД/РД,
 договор, регламент Заказчика, факты, результаты и VLM-артефакты принадлежат
 конкретному workspace и уничтожаются по его retention/lifecycle. Регламент
 Заказчика не является НТД и не может её перезаписывать.
+
+Перед любой ID-related VLM операцией платформа детерминированно собирает
+source-pinned `IDPracticeContextPack` через Knowledge Gateway. Смена Qwen,
+provider, embeddings или graph не меняет canonical memory; runtime получает
+раздельно требования НТД, советы пособия, факты ОКС и gaps/conflicts.
 
 Любой OCR/VLM/LLM создаёт только `Candidate` или draft. Модель не подтверждает
 факт, нормативную применимость, юридическое решение, геометрию, подписанта,
@@ -91,6 +101,12 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
   выполненной qualification.
 - `G-07B distributed/external execution` — **BLOCKED** до WP-09, G-02B,
   production egress/terms/budgets/qualification и реальных provider adapters.
+- `KG-ID-01 permanent ID Practice Intelligence` — **PARTIAL 2026-08-25**:
+  425/425 страниц reconciled, 2 410 source-guidance опубликованы как
+  `permanent_platform_core`, сформированы 7 113 typed units и 1 644 playbooks;
+  restore и projection rebuild воспроизводимы. Fresh-session acceptance —
+  24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
+  остаётся `false`.
 - `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
@@ -143,18 +159,22 @@ foundation нового ядра. Наличие схемы БД и runtime-ко
 - `docs/mvp/` — исторически названные функциональные срезы и сценарии,
   подчинённые четырёхрежимной границе готовности;
 - `docs/architecture/` — нормативная архитектура и plan gates;
-- `docs/architecture/decisions/` — ADR-0001…ADR-0010;
+- `docs/architecture/decisions/` — ADR-0001…ADR-0011;
 - `docs/reports/` — проверенные audit/inventory/transition records.
 - `contracts/v0.1/` — accepted G-03 registry; `contracts/v1.0/` — узкая
   immutable G-06 версия content-free DestructionAttestation;
   `contracts/v1.1/` — additive G-07 render/batch/qualification/raw-artifact
   extension; `contracts/v1.2/` — additive WP‑12 typed Tender extension;
-  `contracts/v1.3/` — additive WP‑13 Support/generation/geometry extension.
+  `contracts/v1.3/` — additive WP‑13 Support/generation/geometry extension;
+  `contracts/v1.4/` — additive WP‑14 corpus/Audit extension;
+  `contracts/v1.5/` — KG‑ID source-guidance extraction/publication;
+  `contracts/v1.6/` — permanent Practice Intelligence, Context Assembly and
+  backup-integrity contracts.
 - `src/asd_kontur/`, `migrations/`, `tests/` — активное общее ядро G‑04…G‑07,
-  WP‑11, WP‑12 и WP‑13:
+  WP‑11…WP‑14 и KG‑ID‑01:
   Contract Pack runtime, PostgreSQL persistence, platform knowledge и
-  workspace lifecycle/AI-VLM Harness/common process foundations и первый
-  Tender и Support implementation slices.
+  workspace lifecycle/AI-VLM Harness/common process foundations, four-mode
+  slices и постоянную Practice Intelligence.
 
 Старый прикладной prototype доступен через Git history, ветку
 `archive/pre-rebaseline-prototype-2026-08-22` и тег

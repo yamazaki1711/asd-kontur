@@ -1,0 +1,9 @@
+{
+  "fixtures": [
+    {"path": "valid/context-policy.json", "schema_pointer": "/$defs/contextAssemblyPolicy", "expected": "valid"},
+    {"path": "valid/context-pack.json", "schema_pointer": "/$defs/idPracticeContextPack", "expected": "valid"},
+    {"path": "valid/backup-manifest.json", "schema_pointer": "/$defs/practiceMemoryBackupManifest", "expected": "valid"},
+    {"path": "invalid/empty-success.json", "schema_pointer": "/$defs/idPracticeContextPack", "expected": "invalid"},
+    {"path": "invalid/normative-practice.json", "schema_pointer": "/$defs/contextAssemblyPolicy", "expected": "invalid"}
+  ]
+}

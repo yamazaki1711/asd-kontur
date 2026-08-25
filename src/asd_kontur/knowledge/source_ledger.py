@@ -20,6 +20,8 @@ from asd_kontur.domain import uuid7
 from .errors import KnowledgeError, KnowledgeErrorCode
 from .object_store import ObjectStorePort
 
+PERMANENT_PLATFORM_CORE = "permanent_platform_core"
+
 
 def _digest(value: str | bytes) -> str:
     data = value.encode() if isinstance(value, str) else value
@@ -39,7 +41,7 @@ class OfficialSourceRegistration:
 
 @dataclass(frozen=True, slots=True)
 class PlatformSourceAdmission:
-    source_family_key: str
+    source_family_key: str | None
     stable_designation: str
     title: str
     issuer: str
@@ -119,6 +121,14 @@ class PlatformSourceLedger:
         return registry_id
 
     def admit(self, request: PlatformSourceAdmission, content: bytes) -> AdmittedSourceVersion:
+        if (
+            request.source_kind == "methodological_practice_guide"
+            and request.retention_class != PERMANENT_PLATFORM_CORE
+        ):
+            raise KnowledgeError(
+                KnowledgeErrorCode.RETENTION_CLASS_INVALID,
+                "A methodological practice guide must use permanent platform-core retention.",
+            )
         artifact_id, attempt_id = self._begin_attempt(request)
         content_digest = _digest(content)
         with Session(self._engine) as session:
@@ -169,13 +179,15 @@ class PlatformSourceLedger:
         artifact_id = uuid7()
         attempt_id = uuid7()
         with Session(self._engine) as session, session.begin():
-            registry_id = session.execute(
-                sa.text(
-                    "SELECT registry_entry_id FROM platform.official_source_registry_entries "
-                    "WHERE source_family_key=:family AND status='registered'"
-                ),
-                {"family": request.source_family_key},
-            ).scalar_one()
+            registry_id = None
+            if request.source_family_key is not None:
+                registry_id = session.execute(
+                    sa.text(
+                        "SELECT registry_entry_id FROM platform.official_source_registry_entries "
+                        "WHERE source_family_key=:family AND status='registered'"
+                    ),
+                    {"family": request.source_family_key},
+                ).scalar_one()
             existing = session.execute(
                 sa.text(
                     "SELECT source_artifact_id FROM platform.source_artifacts "
@@ -254,13 +266,14 @@ class PlatformSourceLedger:
                     "INSERT INTO platform.objects "
                     "(object_id,object_version,content_digest,size_bytes,media_type,storage_adapter_key,"
                     "access_capability_ref,classification,retention_class,created_by_identity_id,correlation_id) "
-                    "VALUES (:id,1,:digest,:size,:media,'test-port',:capability,:classification,:retention,:actor,:correlation)"
+                    "VALUES (:id,1,:digest,:size,:media,:adapter,:capability,:classification,:retention,:actor,:correlation)"
                 ),
                 {
                     "id": object_id,
                     "digest": receipt.digest,
                     "size": receipt.size_bytes,
                     "media": request.media_type,
+                    "adapter": receipt.adapter_key,
                     "capability": f"object-capability:{object_id}",
                     "classification": request.classification,
                     "retention": request.retention_class,
@@ -273,12 +286,13 @@ class PlatformSourceLedger:
                     "INSERT INTO platform.object_receipts "
                     "(object_receipt_id,object_id,object_version,adapter_key,operation_id,status,"
                     "observed_digest,observed_size_bytes,residue_state) "
-                    "VALUES (:receipt,:object,1,'test-port',:operation,'verified',:digest,:size,'none')"
+                    "VALUES (:receipt,:object,1,:adapter,:operation,'verified',:digest,:size,'none')"
                 ),
                 {
                     "receipt": object_receipt_id,
                     "object": object_id,
                     "operation": receipt.operation_id,
+                    "adapter": receipt.adapter_key,
                     "digest": receipt.digest,
                     "size": receipt.size_bytes,
                 },

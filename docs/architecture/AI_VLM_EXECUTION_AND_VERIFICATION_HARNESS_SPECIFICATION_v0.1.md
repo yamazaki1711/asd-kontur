@@ -37,6 +37,16 @@ SourceVersion + locator
   → Candidate Lifecycle / human confirmation / deterministic rules
 ```
 
+Для явно разрешённого platform-source ingestion тот же perception boundary
+используется через физически отдельный platform ingestion ledger: exact
+platform `SourceVersion/page/region → ProviderExecutionResult → platform
+GuidanceCandidateVersion → validators → independent verification → human
+curation → canonical ID Practice Intelligence`. Workspace execution relations
+и nullable universal scope для этого не переиспользуются. Такой Candidate
+может стать только ненормативным `methodological_practice`; он не становится
+workspace Fact, NTD или RuleVersion. Qualification и Pass A/B доказывают метод
+извлечения, но не превращают пособие в qualification corpus или benchmark.
+
 Связи с нормативными документами:
 
 - Source & Evidence Ledger задаёт identity, version, SHA-256 и locator;
@@ -70,7 +80,8 @@ SourceVersion + locator
 8. Material operation fail-closed: `indeterminate`, `conflict`, missing
    critical evidence и validator failure не становятся `pass`.
 9. Проектные artifacts всегда имеют `workspace_id`; cross-workspace batch,
-   cache и контекст запрещены.
+   cache и контекст запрещены. Platform-source ingestion artifacts хранятся в
+   отдельных platform relations без `workspace_id` и без live workspace links.
 10. Qwen или другой provider не получает прямой SQL, прямой storage access,
     human authority или право менять RuleVersion.
 11. Для исполнительной схемы AI не создаёт геометрию, координаты, размеры
@@ -1007,6 +1018,16 @@ audit. Project payload или live-link на уничтоженный workspace 
 platform memory. PostgreSQL — будущий канон метаданных по Domain Model;
 физическая схема, blob adapter и runtime будут определены позднее. Здесь ORM и
 миграции не создаются.
+
+ADR-0011 дополнительно закрепляет provider-independent practice memory.
+Verified guide candidates are construction inputs for immutable typed
+`ID Practice Intelligence`, not independent RAG chunks. Before every
+ID-related provider attempt the trusted application boundary must run a pinned
+deterministic `ContextAssemblyPolicy` and attach the resulting
+`IDPracticeContextPack`. The provider cannot opt out, browse canonical memory,
+or change selected unit identities. Missing context, normative conflict and
+edition mismatch are typed pre-execution outcomes; no model-only fallback is
+allowed. Changing the VLM/profile leaves canonical knowledge unchanged.
 
 ## 26. Сопоставление с текущим кодом `asd_kontur`
 

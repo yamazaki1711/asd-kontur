@@ -1,0 +1,15 @@
+{
+  "record_type": "ContextAssemblyPolicy",
+  "policy_id": "0198f8ae-c954-7000-8000-000000000101",
+  "version": 1,
+  "practice_guide_edition_id": "0198f8ae-c954-7000-8000-000000000102",
+  "policy_key": "id-practice-context-v0.1.0",
+  "allowed_modes": ["Tender", "Support", "Audit", "Restoration", "IDGenerator"],
+  "allowed_purposes": ["id.support"],
+  "selector_dimensions": ["document_type", "form_type", "field", "mode", "purpose"],
+  "max_intelligence_units": 12,
+  "max_playbooks": 8,
+  "authority_layer": "methodological_practice",
+  "retention_class": "permanent_platform_core",
+  "policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

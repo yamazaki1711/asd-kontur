@@ -47,6 +47,22 @@ policy data: архитектурное принятие не делает на�
 `validation → GeneratedDocumentCandidate → professional authority →`
 `FinalizedDocument → export/print/archive`.
 
+`methodological_practice` из проверенного `MethodologicalPracticeGuide`
+обязательно подбирается deterministic Context Assembly до любой ID-related VLM
+операции. `IDPracticeContextPack` может содержать workflow, RequiredInput,
+EvidenceRequirement, form/field completion guidance, common errors, allowed
+variants, rationale, signer guidance, review checklists и visual-example
+locators с exact page/region EvidencePack. Этот слой не выбирает нормативную
+применимость формы, не подменяет `FieldSchema`/`BindingPlan`, не создаёт Fact и
+не заполняет неизвестное значение.
+
+ID Generator rejects a VLM path without an exact `ContextAssemblyPolicy` and
+source-edition pin. Missing relevant practice returns `knowledge_incomplete`;
+a conflict with NTD returns `guidance_normative_conflict` with requirement and
+advice separated; an edition conflict returns `edition_mismatch`. Verified
+practice, NTD requirements and workspace facts remain separate input
+partitions throughout binding, validation and finalization.
+
 `GeneratedDocumentCandidate` никогда не равен `FinalizedDocument`. Успешная
 запись файла, открытие ZIP или отсутствие exception не являются финализацией
 и не доказывают print-ready.
@@ -115,6 +131,12 @@ policy data: архитектурное принятие не делает на�
     renders и caches, но не platform TemplateVersion.
 12. **Invariant:** audit сохраняет identifiers, versions, digests и decisions,
     но после reset не удерживает уничтожаемое project content.
+13. **Invariant:** смена VLM/provider не меняет canonical Practice Intelligence
+    или deterministic field-level `IDPracticeContextPack` для одинаковых
+    inputs и policy pins.
+14. **Invariant:** visual completion example is guidance with an exact locator,
+    never evidence that a workspace field is true or a normative form is
+    applicable.
 
 ## 5. Владение и изоляция
 
@@ -128,6 +150,7 @@ Platform memory может владеть:
 - applicability rules и RequiredDocumentType catalog;
 - sanitized fixtures, qualified goldens и compatibility baselines;
 - authority, edition, rights и activation decisions;
+- verified methodological guide sources/guidance with non-normative authority;
 - universal parsers/renderers без project values.
 
 ### 5.2. Workspace scope

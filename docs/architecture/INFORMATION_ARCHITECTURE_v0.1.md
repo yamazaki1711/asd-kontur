@@ -639,6 +639,22 @@ Typed read-only contracts:
 
 `EvidencePack` schema contains exact SourceVersions, NormativeEditions, locators, permitted fragments/digests, applicability, RuleTrace, conflicts, uncertainties, gaps, classification, workspace scope and generation timestamp. Gateway authenticates service identity, authorizes workspace, applies minimization and records audit. The model receives neither direct SQL nor write capability and cannot declare knowledge, rule or fact applicable.
 
+For ID-related commands ADR-0011 adds mandatory deterministic Context
+Assembly before any VLM invocation. The platform pins a
+`PracticeGuideEdition` and `ContextAssemblyPolicy`, selects exact verified
+`methodological_practice` unit versions, and returns one
+`IDPracticeContextPack` partitioned into normative requirements, practice
+advice, workspace facts and missing information. Selection dimensions include
+mode/task, document/form/field, work type, RD section, construction stage,
+control operation, evidence requirement and package dependency. No caller or
+model may skip this stage or silently convert no result into empty success.
+
+The permanent source and canonical Practice Intelligence are platform-owned;
+exact/FTS/vector/sparse/graph are rebuildable projections; a runtime context
+pack is ephemeral. Therefore changing Qwen/provider or rebuilding an index
+does not change source identities, canonical semantic fingerprints or the
+deterministically selected EvidencePack.
+
 ## 17. Lifecycle, retention and destruction mapping
 
 | State | Canonical information behavior |
@@ -655,6 +671,7 @@ Typed read-only contracts:
 | legal hold | Retention clocks/actions suspended as policy states; purge/destroy denied. |
 | recovery required | Incomplete archive/purge/adapter/audit requires idempotent retry/compensation; no success state. |
 | quarantined | Data isolated from normal reads/processing; evidence and access limited pending decision. |
+| permanent platform core | Practice-guide SourceVersions and canonical ID Practice Intelligence remain immutable/read-only to workspaces and outside every workspace deletion plan. |
 
 RD-01 requires a complete versioned RetentionProfile per class. RD-02 separates portable archive from backup/PITR. RD-03 limits post-reset data. RD-04 requires BasisRegistry, full adapter plan, legal-hold check and independent request/confirmation. RD-05 permits only minimal Evidence Capsule for promoted knowledge.
 

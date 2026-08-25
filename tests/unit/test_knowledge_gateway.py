@@ -13,7 +13,14 @@ from asd_kontur.knowledge import (
     KnowledgeError,
     KnowledgeGateway,
 )
-from asd_kontur.knowledge.gateway import TOOLS, EvidencePack, GatewayStatus
+from asd_kontur.knowledge.gateway import (
+    GUIDANCE_CONTRACT_VERSION,
+    GUIDANCE_SCHEMA_ID,
+    GUIDANCE_TOOLS,
+    TOOLS,
+    EvidencePack,
+    GatewayStatus,
+)
 
 SCHEMA_ID = "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge"
 
@@ -43,11 +50,13 @@ class AuditSpy:
 
 
 @pytest.mark.parametrize("tool", sorted(TOOLS))
-def test_all_six_tools_require_exact_capability_and_version(tool: str) -> None:
+def test_all_allowlisted_tools_require_exact_capability_and_version(tool: str) -> None:
     audit = AuditSpy()
     gateway = KnowledgeGateway(QueryStub(), audit)
+    contract_version = GUIDANCE_CONTRACT_VERSION if tool in GUIDANCE_TOOLS else "0.1.0"
+    schema_id = GUIDANCE_SCHEMA_ID if tool in GUIDANCE_TOOLS else SCHEMA_ID
     response = gateway.invoke(
-        GatewayRequest(tool, "0.1.0", SCHEMA_ID, "0.1.0", {}),
+        GatewayRequest(tool, contract_version, schema_id, contract_version, {}),
         GatewayContext("human", f"{tool}.invoke", "qualification", uuid7()),
     )
     assert response.tool == tool

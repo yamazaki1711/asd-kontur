@@ -1,0 +1,10 @@
+{
+  "tool": "knowledge.get_field_guidance",
+  "contract_version": "1.5.0",
+  "schema_id": "urn:asd-kontur:contracts:v1.5:schema:practice-guidance",
+  "schema_version": "1.5.0",
+  "payload": {
+    "document_or_form_type": "synthetic-form",
+    "field_or_element": "synthetic-field"
+  }
+}

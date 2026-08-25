@@ -1,0 +1,31 @@
+{
+  "tool": "knowledge.trace_guidance",
+  "contract_version": "1.5.0",
+  "status": "ok",
+  "result": {
+    "coverage_manifest_version": 1,
+    "coverage_manifest_id": "0198f8ae-c954-7000-8000-000000000004",
+    "coverage_status": "partial_with_explicit_gaps",
+    "reconciliation_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "guidance": [
+      {
+        "guidance_unit_id": "0198f8ae-c954-7000-8000-000000000003",
+        "version": 1
+      }
+    ]
+  },
+  "evidence_pack": {
+    "evidence": [
+      {
+        "source_version_id": "0198f8ae-c954-7000-8000-000000000002",
+        "structural_unit_locator": "page:1:region:0.100000,0.100000,0.900000,0.900000",
+        "content_digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "authority_layer": "methodological_guidance"
+      }
+    ],
+    "applicability": [],
+    "conflicts": [],
+    "gaps": [],
+    "uncertainties": []
+  }
+}
