@@ -12,19 +12,31 @@ license = {file = "LICENSE"}
 authors = [{name = "Oleg Shcherbakov"}]
 dependencies = [
   "alembic>=1.16,<2",
-  "jsonschema[format]>=4.25,<5",
+  "argon2-cffi==25.1.0",
+  "fastapi==0.139.2",
+  "jsonschema>=4.25,<5",
   "pgvector>=0.4,<1",
   "psycopg[binary]>=3.2,<4",
+  "pydantic==2.13.4",
   "pypdf>=6.0,<7",
+  "python-multipart==0.0.32",
   "referencing>=0.36,<1",
+  "rfc3339-validator>=0.1.4,<1",
   "rfc8785>=0.1.4,<1",
   "sqlalchemy>=2.0.43,<3",
+  "uvicorn==0.52.4",
 ]
+
+[project.scripts]
+asd-kontur-spine = "asd_kontur.application_spine.runtime:main"
 
 [dependency-groups]
 dev = [
+  "httpx==0.28.1",
+  "licensecheck==2026.0.8",
   "mypy>=1.17,<2",
-  "pytest>=8.4,<9",
+  "pip-audit==2.10.1",
+  "pytest>=9.0.3,<10",
   "pytest-cov>=6.2,<7",
   "ruff>=0.12,<1",
   "types-jsonschema>=4.25,<5",
@@ -57,6 +69,8 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 "src/asd_kontur/support/generation.py" = ["E501"]
 "src/asd_kontur/support/postgres.py" = ["E501"]
 "src/asd_kontur/tender/postgres.py" = ["E501"]
+"src/asd_kontur/application_spine/auth.py" = ["E501"]
+"src/asd_kontur/application_spine/postgres.py" = ["E501"]
 "tests/integration/test_tender_slice.py" = ["E501"]
 "tests/integration/test_support_slice.py" = ["E501"]
 

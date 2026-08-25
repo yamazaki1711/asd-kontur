@@ -433,6 +433,7 @@ class PostgresLifecycleRepository:
         package_digest: str,
         manifest_digest: str,
         item_count: int,
+        storage_adapter_key: str = "portable.synthetic",
     ) -> UUID:
         package_id = uuid7()
         with Session(self._engine) as session, session.begin():
@@ -444,7 +445,7 @@ class PostgresLifecycleRepository:
                     "package_version,workspace_revision,package_digest,manifest_digest,"
                     "storage_adapter_key,sealed_at,import_compatibility,state) VALUES "
                     "(:organization,:workspace,:package,:export,'1.0.0',:revision,:package_digest,"
-                    ":manifest_digest,'portable.synthetic',CURRENT_TIMESTAMP,'new_workspace_seed',"
+                    ":manifest_digest,:storage_adapter,CURRENT_TIMESTAMP,'new_workspace_seed',"
                     "'verified')"
                 ),
                 {
@@ -455,6 +456,7 @@ class PostgresLifecycleRepository:
                     "revision": workspace_revision,
                     "package_digest": package_digest,
                     "manifest_digest": manifest_digest,
+                    "storage_adapter": storage_adapter_key,
                 },
             )
             session.execute(
@@ -783,6 +785,21 @@ class PostgresWorkspaceStorageAdapter:
     """Restricted exact-relation purge adapter; never drops/truncates a schema."""
 
     TABLES = (
+        "workspace.reset_confirmation_challenges",
+        "workspace.job_terminal_receipts",
+        "workspace.job_cancellations",
+        "workspace.job_leases",
+        "workspace.job_progress_events",
+        "workspace.durable_job_dependencies",
+        "workspace.durable_job_attempts",
+        "workspace.durable_jobs",
+        "workspace.document_pages",
+        "workspace.document_version_activation_decisions",
+        "workspace.document_processing_states",
+        "workspace.document_versions",
+        "workspace.document_records",
+        "workspace.intake_manifest_items",
+        "workspace.intake_manifests",
         "projection.construction_harness_matrix_entries",
         "workspace.construction_harness_mode_views",
         "workspace.construction_harness_backup_manifests",
@@ -1006,6 +1023,9 @@ class PostgresWorkspaceStorageAdapter:
             return self._receipts[key]
         with self._engine.begin() as connection:
             _set_connection_scope(connection, self._organization_id, workspace_id)
+            connection.execute(
+                sa.select(sa.func.set_config("asd.lifecycle_operation_id", str(operation_id), True))
+            ).one()
             before = int(
                 connection.scalar(
                     sa.text(
@@ -1055,7 +1075,13 @@ class PostgresWorkspaceStorageAdapter:
         known_fragments: frozenset[str],
     ) -> tuple[InventoryItem, ...]:
         del known_ids, known_digests, known_fragments
-        return self.inventory(workspace_id)
+        # Lifecycle transitions append content-minimal control events after the material purge.
+        # They are retained audit/control state, not workspace project payload residue.
+        return tuple(
+            item
+            for item in self.inventory(workspace_id)
+            if item.item_id != "messaging.workspace_outbox"
+        )
 
 
 def _set_connection_scope(
