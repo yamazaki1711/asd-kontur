@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge",
+  "title": "ASD-KONTUR bounded official NTD knowledge",
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "uuid": {"type": "string", "format": "uuid"},
+    "normativeEdition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normative_document_id", "normative_edition_id", "edition_label", "official_catalog_url", "source_version_id", "artifact_digest"],
+      "properties": {
+        "normative_document_id": {"$ref": "#/$defs/uuid"},
+        "normative_edition_id": {"$ref": "#/$defs/uuid"},
+        "edition_label": {"type": "string", "minLength": 1, "not": {"pattern": "(?i)^latest$"}},
+        "official_catalog_url": {"type": "string", "pattern": "^https://minstroyrf\\.gov\\.ru/"},
+        "source_version_id": {"$ref": "#/$defs/uuid"},
+        "artifact_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "normativeProvision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["normative_provision_id", "version", "normative_edition_id", "structural_path", "verbatim_text", "content_digest", "verification_status", "official_evidence"],
+      "properties": {
+        "normative_provision_id": {"$ref": "#/$defs/uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "normative_edition_id": {"$ref": "#/$defs/uuid"},
+        "structural_path": {"type": "string", "minLength": 1},
+        "verbatim_text": {"type": "string", "minLength": 1},
+        "content_digest": {"$ref": "#/$defs/digest"},
+        "verification_status": {"enum": ["candidate", "verified", "quarantined", "rejected"]},
+        "official_evidence": {
+          "type": "object",
+          "required": ["source_version_id", "artifact_digest", "locator"],
+          "properties": {
+            "source_version_id": {"$ref": "#/$defs/uuid"},
+            "artifact_digest": {"$ref": "#/$defs/digest"},
+            "locator": {"type": "string", "minLength": 1}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"verification_status": {"const": "verified"}}},
+          "then": {"properties": {"official_evidence": {"required": ["source_version_id", "artifact_digest", "locator"]}}}
+        }
+      ]
+    },
+    "gatewayRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "contract_version", "schema_id", "schema_version", "payload"],
+      "properties": {
+        "tool": {"enum": ["knowledge.resolve_ntd", "knowledge.get_ntd_document", "knowledge.get_ntd_edition", "knowledge.get_ntd_provision", "knowledge.search_ntd", "knowledge.get_ntd_evidence_pack", "knowledge.get_practice_ntd_alignment"]},
+        "contract_version": {"const": "1.7.0"},
+        "schema_id": {"const": "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge"},
+        "schema_version": {"const": "1.7.0"},
+        "payload": {"type": "object"}
+      }
+    },
+    "gatewayResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "contract_version", "status", "authority_layer", "result", "evidence", "gaps", "conflicts"],
+      "properties": {
+        "tool": {"type": "string", "pattern": "^knowledge\\."},
+        "contract_version": {"const": "1.7.0"},
+        "status": {"enum": ["ok", "no_result", "knowledge_gap", "knowledge_incomplete", "edition_ambiguous", "edition_mismatch", "normative_conflict", "guidance_normative_conflict", "applicability_indeterminate", "index_unavailable"]},
+        "authority_layer": {"const": "normative_authority"},
+        "result": {"type": "object"},
+        "evidence": {"type": "array"},
+        "gaps": {"type": "array"},
+        "conflicts": {"type": "array"}
+      }
+    }
+  }
+}

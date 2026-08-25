@@ -1,0 +1,10 @@
+{
+  "tool": "knowledge.get_ntd_provision",
+  "contract_version": "1.7.0",
+  "status": "ok",
+  "authority_layer": "normative_authority",
+  "result": {"normative": true, "practice_recommendation": null, "deterministic_rule_version": null},
+  "evidence": [{"source_version_id": "17a7370d-3d42-4d56-8229-9e9a50211850", "locator": "7.2", "artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],
+  "gaps": [],
+  "conflicts": []
+}

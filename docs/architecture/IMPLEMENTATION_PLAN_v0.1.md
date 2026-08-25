@@ -469,6 +469,22 @@ implementation and measured local-Qwen evidence are recorded in
 Production model qualification, G-07B, embeddings and professional ID authority
 remain separate blocked capabilities.
 
+### NTD-SEED-01 — bounded official NTD memory from the Practice Guide
+
+| Field | Plan |
+|---|---|
+| Capability; inputs; results | Separate `normative_authority` layer for the exact 25 stable identities discovered on guide PDF pages 15–19; the guide is discovery evidence only |
+| Dependencies / DoR | Completed KG-ID permanent guide edition and geometry; G-05 Source/Evidence Ledger and normative canon; official Minstroy `/docs/` source |
+| Actions / artifacts | 37 immutable guide references; official-only bounded acquisition receipts; stable documents and immutable editions/artifacts; provision candidates and verified versions; explicit activation/applicability; Gateway gaps/conflicts; backup/projection manifests |
+| Tests | Manifest reconciliation; official-only fail-closed acquisition; idempotent/new editions; timeline/as-of; provision locator; RLS/reset; backup/restore; projection rebuild; provider independence; fresh-session non-fabrication |
+| DoD | Every seed identity has an evidence-backed terminal outcome; only exact official verified subsets publish; missing official access remains a typed gap and never empty success |
+| Current status | `PARTIAL 2026-08-25`: 25/25 `official_access_blocked`, 0 editions/artifacts/provisions published; permanent-memory contracts and fail-closed acceptance pass |
+
+The bounded implementation evidence is recorded in
+[`NTD_SEED_FROM_PRACTICE_GUIDE_v0.1.md`](../implementation/NTD_SEED_FROM_PRACTICE_GUIDE_v0.1.md).
+No recursive NTD expansion, TM-35 processing or G-07B work is authorized by
+this item.
+
 ### WP-15 — Restoration slice
 
 | Field | Plan |

@@ -1,0 +1,8 @@
+{
+  "fixtures": [
+    {"path": "valid/gateway-request.json", "schema_pointer": "/$defs/gatewayRequest", "expected": "valid"},
+    {"path": "valid/gateway-response.json", "schema_pointer": "/$defs/gatewayResponse", "expected": "valid"},
+    {"path": "invalid/mutable-latest.json", "schema_pointer": "/$defs/normativeEdition", "expected": "invalid"},
+    {"path": "invalid/verified-without-evidence.json", "schema_pointer": "/$defs/normativeProvision", "expected": "invalid"}
+  ]
+}

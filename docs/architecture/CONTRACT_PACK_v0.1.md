@@ -739,3 +739,10 @@ typed Practice Intelligence, exact-edition `ContextAssemblyPolicy`,
 integrity backup manifest. It preserves v1.5 receipts and candidates, keeps
 `methodological_practice` distinct from normative authority, rejects silent
 empty retrieval and never promotes practice guidance to `RuleVersion`.
+
+NTD-SEED-01 adds immutable `contracts/v1.7` bounded official-NTD contracts.
+Version 1.7 defines exact guide-reference manifests, official acquisition and
+terminal outcomes, immutable editions/artifacts/provisions, explicit
+activation/applicability decisions and separate normative Knowledge Gateway
+envelopes. It rejects mutable `latest`, unofficial substitution and verified
+provisions without exact official evidence, and never creates `RuleVersion`.

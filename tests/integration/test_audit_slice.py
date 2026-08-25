@@ -122,8 +122,7 @@ def test_wp14_schema_role_rls_and_force_rls(
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0015_practice_authority"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == "0016_ntd_seed"
         )
         assert (
             connection.scalar(
@@ -390,7 +389,7 @@ def test_disposable_0008_to_0007_to_0008(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0015_practice_authority"
+                == "0016_ntd_seed"
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

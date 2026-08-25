@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import UUID
@@ -282,6 +282,6 @@ def _jsonable(value: Any) -> Any:
         return {str(key): _jsonable(item) for key, item in value.items()}
     if isinstance(value, (list, tuple, set, frozenset)):
         return [_jsonable(item) for item in value]
-    if isinstance(value, (UUID, datetime, StrEnum)):
+    if isinstance(value, (UUID, date, datetime, StrEnum)):
         return str(value)
     return value

@@ -122,12 +122,18 @@ class PlatformSourceLedger:
 
     def admit(self, request: PlatformSourceAdmission, content: bytes) -> AdmittedSourceVersion:
         if (
-            request.source_kind == "methodological_practice_guide"
+            request.source_kind
+            in {
+                "methodological_practice_guide",
+                "normative_document",
+                "legal_act",
+                "official_reference",
+            }
             and request.retention_class != PERMANENT_PLATFORM_CORE
         ):
             raise KnowledgeError(
                 KnowledgeErrorCode.RETENTION_CLASS_INVALID,
-                "A methodological practice guide must use permanent platform-core retention.",
+                "Permanent platform knowledge requires permanent platform-core retention.",
             )
         artifact_id, attempt_id = self._begin_attempt(request)
         content_digest = _digest(content)
