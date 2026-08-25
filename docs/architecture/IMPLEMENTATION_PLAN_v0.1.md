@@ -505,6 +505,19 @@ The existing KG-ID and NTD historical PARTIAL decisions remain immutable. The
 previously parsed `king25` work-type artifact and future CAD/Drawing Intelligence
 are technical debt, not inputs or blockers for this bounded implementation.
 
+### MEMORY-INTEGRITY-FIX-01 — semantic identities and complete fingerprints
+
+| Field | Value |
+|---|---|
+| Defects | `PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED`; `PLATFORM_MEMORY_FINGERPRINT_SCOPE_INCOMPLETE` |
+| Additive model | Stable semantic identity → immutable version → many evidence links → explicit release membership; old builds/releases remain immutable |
+| Retrieval | Default Knowledge Gateway follows the explicit release activation; historical content requires an exact release pin |
+| Fingerprints | Separate all-history, active-release semantic and active ContextPack-binding fingerprints; required schema/bindings fail closed |
+| Counts | Explicit identity/version/active/history/gap snapshot/conflict/quarantine denominators with deterministic sum invariants |
+| Current status | `IN PROGRESS`; prior SYSTEM-INTEGRITY semantic PASS superseded by `PARTIAL / DATA_DEFECT`; a fresh C1–C3 series is mandatory |
+| Rule Registry | `infrastructure_ready=true`; `operational_rule_coverage=false` at `RuleVersion=0` |
+| ProductReady | `false` |
+
 ### WP-15 — Restoration slice
 
 | Field | Plan |

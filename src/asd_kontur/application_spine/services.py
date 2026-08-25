@@ -379,29 +379,38 @@ class ProductSpineService:
     def knowledge_status(self) -> KnowledgeStatus:
         return self._repository.platform_knowledge_status()
 
-    @staticmethod
-    def capability_status() -> dict[str, Any]:
+    def capability_status(self) -> dict[str, Any]:
+        knowledge = self.knowledge_status()
+        blockers = {
+            "OFFICIAL_NTD_VERIFIED_EDITION_COUNT_ZERO",
+            "RULE_VERSION_COUNT_ZERO",
+            "MODEL_BROKER_NOT_IN_SPINE_SLICE",
+            "SCALE_THRESHOLDS_UNSET",
+        }
+        if knowledge.memory_data_defect:
+            blockers.add("MEMORY_DATA_DEFECT")
         return {
-            "contract_version": "2.1.0",
+            "contract_version": "2.2.0",
             "slice": "PRODUCT-APPLICATION-SPINE-01",
             "implemented": [
-                "application.http_api",
-                "application.owner_authentication",
-                "application.workspace_selector",
-                "intake.streamed_upload",
-                "jobs.postgresql_durable_engine",
-                "interaction.document_registry",
-                "interaction.pdf_evidence_viewer",
-                "interaction.four_mode_shell",
-                "interaction.platform_knowledge_status",
+                "interaction.frontend-shell",
+                "interaction.workspace-selector",
+                "interaction.four-mode-navigation",
+                "interaction.document-registry",
+                "interaction.gaps-conflicts-blockers",
+                "application.http-api",
+                "application.authentication",
+                "application.session-handling",
+                "application.durable-job-orchestration",
+                "intake.batch-upload",
+                "intake.streamed-hashing",
+                "intake.mime-content-validation",
+                "intake.deduplication",
+                "intake.pdf-page-inventory",
+                "intake.crash-recovery",
+                "operations.document-worker",
             ],
-            "blockers": [
-                "MEMORY_DATA_DEFECT",
-                "OFFICIAL_NTD_VERIFIED_EDITION_COUNT_ZERO",
-                "RULE_VERSION_COUNT_ZERO",
-                "MODEL_BROKER_NOT_IN_SPINE_SLICE",
-                "SCALE_THRESHOLDS_UNSET",
-            ],
+            "blockers": sorted(blockers),
             "trial_ready": False,
             "oks_ready": False,
             "product_ready": False,

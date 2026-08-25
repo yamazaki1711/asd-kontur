@@ -11,8 +11,8 @@ from .errors import KnowledgeError, KnowledgeErrorCode
 
 SUPPORTED_CONTRACT_VERSION = "0.1.0"
 SUPPORTED_SCHEMA_ID = "urn:asd-kontur:contracts:v0.1:schema:rules-knowledge"
-GUIDANCE_CONTRACT_VERSION = "1.6.0"
-GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v1.6:schema:practice-intelligence"
+GUIDANCE_CONTRACT_VERSION = "2.2.0"
+GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence"
 NTD_CONTRACT_VERSION = "1.7.0"
 NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge"
 HARNESS_CONTRACT_VERSION = "1.8.0"

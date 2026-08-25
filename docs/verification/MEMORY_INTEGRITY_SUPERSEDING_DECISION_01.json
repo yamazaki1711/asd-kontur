@@ -1,0 +1,24 @@
+{
+  "contract": "system-integrity-superseding-decision/0.1.0",
+  "integrity_decision_id": "f836d943-6dc3-5a17-8dc5-15876ce3bb52",
+  "version": 1,
+  "supersedes_version": null,
+  "decision_type": "superseding_data_defect",
+  "status": "partial_data_defect",
+  "prior_series_id": "SIC01-20260825-R1",
+  "canonical_commit": "81207e60b05137668575cc5d214fc2ea335fc715",
+  "dump_fingerprint": "sha256:416c1a2fe6b54b528e6e823584e78996f258fe02d403128b2a50dbb473263c62",
+  "reconciliation_fingerprint": "sha256:7234d1a853bfb941e3ced25f26138535e0dd5384417c6903d179c485c5cf4352",
+  "defect_identities": [
+    "PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED",
+    "PLATFORM_MEMORY_FINGERPRINT_SCOPE_INCOMPLETE"
+  ],
+  "reason": "Three clean-room cycles proved physical reproducibility, but semantic PASS is withdrawn because DATA_DEFECT was proven.",
+  "owner_decision_ref": "MEMORY-INTEGRITY-FIX-01; owner:Oleg Shcherbakov; 2026-08-25",
+  "product_ready": false,
+  "recorded_at": "2026-08-25T12:00:38Z",
+  "decision_fingerprint": "sha256:4aedacd5c7bfe12f9eec38327aa1e27053c20b3e4a044514ea100c849cf829dd",
+  "effective_system_integrity_status": "PARTIAL / DATA_DEFECT",
+  "requires_fresh_three_cycle_series": true,
+  "historical_series_preserved": true
+}

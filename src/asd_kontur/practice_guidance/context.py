@@ -44,10 +44,16 @@ class IDPracticeContextRequest:
     package_process: str | None = None
     workspace_fact_refs: tuple[str, ...] = ()
     deterministic_rule_refs: tuple[str, ...] = ()
+    practice_intelligence_release_id: UUID | None = None
+    practice_intelligence_release_version: int | None = None
 
     def __post_init__(self) -> None:
         if not self.mode or not self.purpose or not self.intent or not self.query.strip():
             raise ValueError("ID practice context request requires mode, purpose, intent and query")
+        if (self.practice_intelligence_release_id is None) != (
+            self.practice_intelligence_release_version is None
+        ):
+            raise ValueError("Historical context pin requires an exact release identity/version")
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +77,7 @@ class IDPracticeContextAssembler:
         *,
         request: IDPracticeContextRequest,
         gateway_context: GatewayContext,
-        lexical_version_id: UUID,
+        lexical_version_id: UUID | None = None,
     ) -> IDPracticeContextPack:
         if request.mode not in self._policy.allowed_modes:
             return self._degraded(
@@ -94,7 +100,6 @@ class IDPracticeContextAssembler:
         payload: dict[str, object] = {
             "query": request.query,
             "intent": request.intent,
-            "lexical_version_id": str(lexical_version_id),
             "practice_guide_edition_id": str(request.practice_guide_edition_id),
             "context_assembly_policy_id": str(self._policy.policy_id),
             "context_assembly_policy_version": self._policy.version,
@@ -103,6 +108,15 @@ class IDPracticeContextAssembler:
             "mode": request.mode,
             "purpose": request.purpose,
         }
+        if lexical_version_id is not None:
+            payload["lexical_version_id"] = str(lexical_version_id)
+        if request.practice_intelligence_release_id is not None:
+            payload["practice_intelligence_release_id"] = str(
+                request.practice_intelligence_release_id
+            )
+            payload["practice_intelligence_release_version"] = (
+                request.practice_intelligence_release_version
+            )
         for key, value in (
             ("document_type", request.document_type),
             ("form_type", request.form_type),
@@ -213,6 +227,16 @@ class IDPracticeContextAssembler:
             conflicts=conflicts,
             uncertainties=response.evidence_pack.uncertainties,
             assembled_at=datetime.now(UTC),
+            practice_intelligence_release_id=(
+                UUID(str(response.result["practice_intelligence_release_id"]))
+                if response.result.get("practice_intelligence_release_id") is not None
+                else None
+            ),
+            practice_intelligence_release_version=(
+                int(response.result["practice_intelligence_release_version"])
+                if response.result.get("practice_intelligence_release_version") is not None
+                else None
+            ),
         )
 
     def _degraded(
@@ -242,6 +266,8 @@ class IDPracticeContextAssembler:
             conflicts=(),
             uncertainties=(),
             assembled_at=datetime.now(UTC),
+            practice_intelligence_release_id=request.practice_intelligence_release_id,
+            practice_intelligence_release_version=request.practice_intelligence_release_version,
         )
 
 
@@ -279,6 +305,14 @@ class IDRelatedVlmContextGate:
                 "context_status": context_pack.status.value,
                 "authority_layer": context_pack.authority_layer.value,
                 "practice_guide_edition_id": str(context_pack.practice_guide_edition_id),
+                "practice_intelligence_release": (
+                    {
+                        "release_id": str(context_pack.practice_intelligence_release_id),
+                        "version": context_pack.practice_intelligence_release_version,
+                    }
+                    if context_pack.practice_intelligence_release_id is not None
+                    else None
+                ),
                 "policy": {
                     "policy_id": str(context_pack.policy_id),
                     "version": context_pack.policy_version,

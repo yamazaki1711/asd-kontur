@@ -12,7 +12,11 @@ The slice adds a real local browser/application path over the existing Domain/Kn
 opaque owner sessions, isolated workspaces, streamed document admission, PostgreSQL durable jobs,
 document/PDF registry, evidence locators, four honest mode shells, platform-knowledge status, and a
 controlled local reset. It neither changes canonical Practice/NTD memory nor invokes Qwen/MLX.
-`MEMORY_DATA_DEFECT` remains an explicit platform blocker.
+At the time of this historical bounded PASS, `MEMORY_DATA_DEFECT` remained an
+explicit platform blocker. Its current state is derived from the latest
+immutable platform-memory qualification decision; it is never hardcoded by the
+application. MEMORY-INTEGRITY-FIX-01 later superseded that blocker with a PASS
+qualification; this historical Spine status is not rewritten.
 
 The frontend is reimplemented from accepted user-journey semantics. No routes, templates,
 `app_state`, fallback records, or demo domain data were copied from `mac_asd`.

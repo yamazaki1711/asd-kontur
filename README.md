@@ -1,13 +1,15 @@
 # АСД-КОНТУР
 
-> Current delivery slice: [PRODUCT-APPLICATION-SPINE-01](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
-> adds the first bounded browser/application contour. `MEMORY_DATA_DEFECT` remains open;
+> Current completed correction: [MEMORY-INTEGRITY-FIX-01](docs/implementation/MEMORY_INTEGRITY_FIX_01.md)
+> requalifies permanent platform memory after the bounded Product Application
+> Spine. The next separate slice is `INDUSTRIAL-DOCUMENT-UNDERSTANDING-01`;
 > `TrialReady=false`, `OKSReady=false`, and `ProductReady=false`.
 
 > **Current product status (superseding, 2026-08-26):** the repository contains
-> a `PARTIAL` Platform/Domain Kernel, not a user-ready software complex.
-> Frontend, Application Spine, industrial intake and production operator flows
-> are not implemented. `TrialReady=false`, `OKSReady=false`,
+> a `PARTIAL` Platform/Domain Kernel and `PARTIAL` Product Application, not a
+> user-ready software complex. The bounded browser/Application Spine exists;
+> industrial document understanding and production mode flows remain incomplete.
+> `TrialReady=false`, `OKSReady=false`,
 > `ProductReady=false`. The canonical denominator is the
 > [Product Goal and Capability Map](docs/product/PRODUCT_GOAL_AND_CAPABILITY_MAP_v1.md)
 > and [Contract Pack v2.0](contracts/v2.0/README.md).
@@ -127,10 +129,22 @@ readiness semantics are defined by
   production egress/terms/budgets/qualification и реальных provider adapters.
 - `KG-ID-01 permanent ID Practice Intelligence` — **PARTIAL 2026-08-25**:
   425/425 страниц reconciled, 2 410 source-guidance опубликованы как
-  `permanent_platform_core`, сформированы 7 113 typed units и 1 644 playbooks;
+  `permanent_platform_core`; historical release с 7 113 typed rows сохранён,
+  а superseding semantic release MEMORY-INTEGRITY-FIX-01 содержит вычисленные
+  7 111 identities/versions и 1 644 playbooks с отдельными evidence links;
   restore и projection rebuild воспроизводимы. Fresh-session acceptance —
   24/25 systemic и 7/7 adversarial, поэтому gate не закрыт и ProductReady
   остаётся `false`.
+- `SYSTEM-INTEGRITY-CYCLE-01` — историческая серия сохранена как evidence
+  физической воспроизводимости; её прежний semantic PASS был отозван после
+  обнаружения двух exact duplicate groups и неполного fingerprint scope.
+- `MEMORY-INTEGRITY-FIX-01` — **PASS (bounded platform-memory integrity)
+  2026-08-26**: semantic identity исправлена без потери evidence, active release
+  содержит 7 111 уникальных versions, fingerprint scope fail-closed, а серия
+  `MEMORY-INTEGRITY-FIX-01-R6` дала три последовательных clean-room PASS.
+  Fresh acceptance остаётся 20/25 systemic и 7/7 adversarial, поэтому KG-ID
+  `READY_FOR_INTEGRITY_CYCLE` означает только
+  участие модуля в harness, не production readiness.
 - `NTD-SEED-01 bounded official NTD memory` — **PARTIAL 2026-08-25**:
   exact guide geometry reconciled 37 mentions to 25 stable identities; all 25
   official-only attempts terminated as `official_access_blocked`. Migration
@@ -141,6 +155,9 @@ readiness semantics are defined by
   v1.8 и migration `0017` связывают одну ProjectDefinition/WorkRequirementMatrix
   с platform Practice/NTD/Rule memory и четырьмя mode views; 350 local tests,
   включая PostgreSQL integration, прошли. ProductReady остаётся `false`.
+- `Deterministic Rule Registry` — инфраструктурно готов
+  (`infrastructure_ready=true`), но при `RuleVersion=0` содержательное покрытие
+  отсутствует (`operational_rule_coverage=false`).
 - `WP-11 Common Domain Process Kernel` — **PASS 2026-08-23**:
   общий Candidate→Fact authority gate и цепочка structure→work→MTR→control→evidence→ID→volume→KS→payment
   проверены локально и в canonical PostgreSQL 18 CI без mode-specific core;
@@ -192,6 +209,7 @@ readiness semantics are defined by
 - [WP-14 pdfpipeline architecture impact assessment](docs/reports/WP14_PDFPIPELINE_ARCHITECTURE_IMPACT_ASSESSMENT_v0.1.md)
 - [WP-14 Audit Slice implementation](docs/implementation/WP14_AUDIT_SLICE_v0.1.md)
 - [Product Application Spine implementation](docs/implementation/PRODUCT_APPLICATION_SPINE_v0.1.md)
+- [Memory Integrity Fix implementation](docs/implementation/MEMORY_INTEGRITY_FIX_01.md)
 - [Product Application Spine local runtime](docs/operations/PRODUCT_APPLICATION_SPINE_LOCAL_RUNTIME_v0.1.md)
 - [Technical Architecture](docs/architecture/TECHNICAL_ARCHITECTURE_v0.3.md)
 - [ID Generation & Template Platform](docs/architecture/ID_GENERATION_AND_TEMPLATE_PLATFORM_SPECIFICATION_v0.1.md)

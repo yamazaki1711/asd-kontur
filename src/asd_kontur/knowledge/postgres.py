@@ -686,14 +686,7 @@ class PostgresKnowledgeQuery:
         policy_id = payload.get("context_assembly_policy_id")
         policy_version = payload.get("context_assembly_policy_version")
         intent = str(payload.get("intent", "workflow")).strip()
-        if (
-            not query
-            or lexical_version_id is None
-            or edition_id is None
-            or policy_id is None
-            or not isinstance(policy_version, int)
-            or intent not in PRACTICE_INTENT_KINDS
-        ):
+        if not query or edition_id is None or intent not in PRACTICE_INTENT_KINDS:
             return self._guidance_gap(
                 "knowledge.get_id_task_guidance",
                 GatewayStatus.KNOWLEDGE_INCOMPLETE,
@@ -719,6 +712,13 @@ class PostgresKnowledgeQuery:
             "u.intelligence_unit_id=e.entity_id AND u.version=e.entity_version "
             "WHERE e.lexical_version_id=:index AND e.entity_kind='intelligence_unit' "
             "AND u.practice_guide_edition_id=:edition "
+            "AND (NOT EXISTS (SELECT 1 FROM "
+            "platform.practice_intelligence_release_memberships any_member WHERE "
+            "any_member.release_id=:release AND any_member.release_version=:release_version) "
+            "OR EXISTS (SELECT 1 FROM platform.practice_intelligence_release_memberships member "
+            "WHERE member.release_id=:release AND member.release_version=:release_version AND "
+            "member.intelligence_identity_id=u.intelligence_unit_id AND "
+            "member.intelligence_version=u.version)) "
             "AND e.intelligence_kind IN :kinds "
             "AND e.search_vector @@ plainto_tsquery('russian',:query) "
             "ORDER BY ts_rank_cd(e.search_vector,plainto_tsquery('russian',:query)) DESC,"
@@ -728,7 +728,8 @@ class PostgresKnowledgeQuery:
             activation = (
                 session.execute(
                     sa.text(
-                        "SELECT d.activation_decision_id,d.version,d.selected_edition_id FROM "
+                        "SELECT e.practice_guide_id,d.activation_decision_id,d.version,"
+                        "d.selected_edition_id FROM "
                         "platform.practice_guide_editions e JOIN LATERAL "
                         "(SELECT activation_decision_id,version,selected_edition_id FROM "
                         "platform.practice_guide_edition_activation_decisions "
@@ -747,6 +748,96 @@ class PostgresKnowledgeQuery:
                 "edition_mismatch",
                 payload,
             )
+        explicit_release_id = payload.get("practice_intelligence_release_id")
+        explicit_release_version = payload.get("practice_intelligence_release_version")
+        with Session(self._engine) as session:
+            if explicit_release_id is not None or explicit_release_version is not None:
+                if explicit_release_id is None or not isinstance(explicit_release_version, int):
+                    release = None
+                else:
+                    release = (
+                        session.execute(
+                            sa.text(
+                                "SELECT release_id,version,construction_manifest_id,"
+                                "context_assembly_policy_id,context_assembly_policy_version "
+                                "FROM platform.practice_intelligence_releases WHERE "
+                                "release_id=:id AND version=:version AND "
+                                "practice_guide_edition_id=:edition"
+                            ),
+                            {
+                                "id": explicit_release_id,
+                                "version": explicit_release_version,
+                                "edition": edition_id,
+                            },
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
+                release_selection = "historical_exact_pin"
+            else:
+                release = (
+                    session.execute(
+                        sa.text(
+                            "SELECT r.release_id,r.version,r.construction_manifest_id,"
+                            "r.context_assembly_policy_id,r.context_assembly_policy_version "
+                            "FROM platform.practice_intelligence_release_activation_decisions d "
+                            "JOIN platform.practice_intelligence_releases r ON "
+                            "r.release_id=d.selected_release_id AND "
+                            "r.version=d.selected_release_version WHERE "
+                            "d.practice_guide_id=:guide ORDER BY d.version DESC LIMIT 1"
+                        ),
+                        {"guide": activation["practice_guide_id"]},
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                release_selection = "active_release_decision"
+        if release is None:
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "practice_intelligence_release_unavailable",
+                payload,
+            )
+        if policy_id is not None and str(policy_id) != str(release["context_assembly_policy_id"]):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "release_policy_binding_mismatch",
+                payload,
+            )
+        if policy_version is not None and (
+            not isinstance(policy_version, int)
+            or policy_version != int(release["context_assembly_policy_version"])
+        ):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.KNOWLEDGE_INCOMPLETE,
+                "release_policy_binding_mismatch",
+                payload,
+            )
+        policy_id = release["context_assembly_policy_id"]
+        policy_version = int(release["context_assembly_policy_version"])
+        with Session(self._engine) as session:
+            release_lexical_id = session.execute(
+                sa.text(
+                    "SELECT lexical_version_id FROM "
+                    "projection.practice_intelligence_lexical_versions WHERE "
+                    "construction_manifest_id=:manifest AND state='ready' "
+                    "ORDER BY lexical_version_id DESC LIMIT 1"
+                ),
+                {"manifest": release["construction_manifest_id"]},
+            ).scalar_one_or_none()
+        if release_lexical_id is None or (
+            lexical_version_id is not None and str(lexical_version_id) != str(release_lexical_id)
+        ):
+            return self._guidance_gap(
+                "knowledge.get_id_task_guidance",
+                GatewayStatus.INDEX_UNAVAILABLE,
+                "release_projection_binding_mismatch",
+                payload,
+            )
+        lexical_version_id = release_lexical_id
         with Session(self._engine) as session:
             policy = (
                 session.execute(
@@ -787,22 +878,12 @@ class PostgresKnowledgeQuery:
         with Session(self._engine) as session:
             state = session.execute(
                 sa.text(
-                    "SELECT lv.state FROM projection.practice_intelligence_lexical_versions lv "
-                    "JOIN platform.practice_intelligence_releases r ON "
-                    "r.construction_manifest_id=lv.construction_manifest_id "
-                    "WHERE lv.lexical_version_id=:id AND r.practice_guide_edition_id=:edition "
-                    "AND r.context_assembly_policy_id=:policy AND "
-                    "r.context_assembly_policy_version=:policy_version AND "
-                    "r.activation_decision_id=:activation AND "
-                    "r.activation_decision_version=:activation_version"
+                    "SELECT state FROM projection.practice_intelligence_lexical_versions "
+                    "WHERE lexical_version_id=:id AND construction_manifest_id=:manifest"
                 ),
                 {
                     "id": lexical_version_id,
-                    "edition": edition_id,
-                    "policy": policy_id,
-                    "policy_version": policy_version,
-                    "activation": activation["activation_decision_id"],
-                    "activation_version": activation["version"],
+                    "manifest": release["construction_manifest_id"],
                 },
             ).scalar_one_or_none()
             matched_rows = (
@@ -812,6 +893,8 @@ class PostgresKnowledgeQuery:
                         {
                             "index": lexical_version_id,
                             "edition": edition_id,
+                            "release": release["release_id"],
+                            "release_version": release["version"],
                             "kinds": PRACTICE_INTENT_KINDS[intent],
                             "query": query,
                             "unit_limit": int(policy["max_intelligence_units"]),
@@ -866,6 +949,9 @@ class PostgresKnowledgeQuery:
                 "activation_decision_version": int(activation["version"]),
                 "context_assembly_policy_id": str(policy_id),
                 "context_assembly_policy_version": policy_version,
+                "practice_intelligence_release_id": str(release["release_id"]),
+                "practice_intelligence_release_version": int(release["version"]),
+                "release_selection": release_selection,
                 "practice_intelligence": [
                     {key: value for key, value in dict(row).items() if key != "has_open_conflict"}
                     for row in rows

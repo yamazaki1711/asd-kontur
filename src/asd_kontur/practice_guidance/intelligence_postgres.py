@@ -24,6 +24,8 @@ from .intelligence import (
     intelligence_unit_from_document,
     playbook_document,
     playbook_from_document,
+    semantic_identity_digest,
+    semantic_identity_payload,
 )
 from .memory_backup import canonical_semantic_fingerprint
 from .models import (
@@ -34,8 +36,8 @@ from .models import (
     PracticePlaybook,
 )
 
-INTELLIGENCE_PROJECTION_VERSION = "practice-intelligence-lexical-v0.1.0"
-CONTEXT_ASSEMBLY_POLICY_VERSION = "id-practice-context-assembly-v0.1.0"
+INTELLIGENCE_PROJECTION_VERSION = "practice-intelligence-lexical-v0.2.0"
+CONTEXT_ASSEMBLY_POLICY_VERSION = "id-practice-context-assembly-v0.2.0"
 
 
 def default_context_assembly_policy(edition_id: UUID) -> ContextAssemblyPolicy:
@@ -43,7 +45,7 @@ def default_context_assembly_policy(edition_id: UUID) -> ContextAssemblyPolicy:
         policy_id=deterministic_uuid(
             f"id-practice-context-policy:{edition_id}:{CONTEXT_ASSEMBLY_POLICY_VERSION}"
         ),
-        version=1,
+        version=2,
         practice_guide_edition_id=edition_id,
         policy_key=f"{CONTEXT_ASSEMBLY_POLICY_VERSION}:{edition_id}",
         allowed_modes=("Tender", "Support", "Audit", "Restoration", "IDGenerator"),
@@ -253,8 +255,11 @@ def construct_manifest(engine: Engine, coverage_manifest_id: UUID) -> dict[str, 
         coverage = (
             session.execute(
                 sa.text(
-                    "SELECT practice_guide_edition_id,publication_status,manifest_fingerprint FROM "
-                    "platform.practice_guidance_coverage_manifests WHERE coverage_manifest_id=:id"
+                    "SELECT c.practice_guide_edition_id,e.practice_guide_id,c.publication_status,"
+                    "c.manifest_fingerprint FROM platform.practice_guidance_coverage_manifests c "
+                    "JOIN platform.practice_guide_editions e ON "
+                    "e.practice_guide_edition_id=c.practice_guide_edition_id "
+                    "WHERE c.coverage_manifest_id=:id"
                 ),
                 {"id": coverage_manifest_id},
             )
@@ -267,6 +272,7 @@ def construct_manifest(engine: Engine, coverage_manifest_id: UUID) -> dict[str, 
     edition_id = UUID(str(coverage["practice_guide_edition_id"]))
     units, playbooks = construct_practice_intelligence(
         guidance_rows=guidance_rows,
+        practice_guide_id=UUID(str(coverage["practice_guide_id"])),
         edition_id=edition_id,
         coverage_manifest_id=coverage_manifest_id,
         publication_status=str(coverage["publication_status"]),
@@ -421,6 +427,284 @@ def _insert_unit(
         )
 
 
+def _insert_semantic_unit(
+    session: Session,
+    *,
+    construction_manifest_id: UUID,
+    practice_guide_id: UUID,
+    constructed_at: datetime,
+    unit: IDPracticeIntelligenceUnit,
+) -> int:
+    identity_payload = semantic_identity_payload(unit, practice_guide_id=practice_guide_id)
+    semantic_digest = semantic_identity_digest(unit, practice_guide_id=practice_guide_id)
+    evidence_scope = identity_payload["evidence_scope"]
+    evidence_scope_digest = digest_of(evidence_scope)
+    version_payload = {
+        "identity": identity_payload,
+        "practice_guide_edition_id": str(unit.practice_guide_edition_id),
+        "construction_profile_version": unit.construction_profile_version,
+    }
+    version_fingerprint = digest_of(version_payload)
+    session.execute(
+        sa.text(
+            "INSERT INTO platform.practice_intelligence_identities "
+            "(intelligence_identity_id,practice_guide_id,practice_guide_edition_id,"
+            "typed_kind,subject,predicate,"
+            "object_value,unit,dimension,modality,applicability,qualifiers,exclusions,"
+            "evidence_scope,evidence_scope_digest,authority_layer,semantic_schema_version,"
+            "normalized_semantic_digest,created_at) "
+            "VALUES (:id,:guide,:edition,:kind,:subject,:predicate,:object,:unit,:dimension,"
+            ":modality,"
+            "CAST(:applicability AS jsonb),CAST(:qualifiers AS jsonb),CAST(:exclusions AS jsonb),"
+            "CAST(:evidence_scope AS jsonb),:evidence_scope_digest,"
+            "'methodological_practice',:schema,:digest,:at) ON CONFLICT "
+            "(intelligence_identity_id) DO NOTHING"
+        ),
+        {
+            "id": unit.intelligence_unit_id,
+            "guide": practice_guide_id,
+            "edition": unit.practice_guide_edition_id,
+            "kind": unit.kind.value,
+            "subject": identity_payload["subject"],
+            "predicate": identity_payload["predicate"],
+            "object": identity_payload["object"],
+            "unit": identity_payload["unit"],
+            "dimension": identity_payload["dimension"],
+            "modality": identity_payload["modality"],
+            "applicability": _json(identity_payload["applicability"]),
+            "qualifiers": _json(identity_payload["qualifiers"]),
+            "exclusions": _json(identity_payload["exclusions"]),
+            "evidence_scope": _json(evidence_scope),
+            "evidence_scope_digest": evidence_scope_digest,
+            "schema": identity_payload["schema_version"],
+            "digest": semantic_digest,
+            "at": constructed_at,
+        },
+    )
+    persisted_identity = (
+        session.execute(
+            sa.text(
+                "SELECT practice_guide_id,practice_guide_edition_id,"
+                "normalized_semantic_digest,evidence_scope_digest FROM "
+                "platform.practice_intelligence_identities "
+                "WHERE intelligence_identity_id=:id"
+            ),
+            {"id": unit.intelligence_unit_id},
+        )
+        .mappings()
+        .one()
+    )
+    if (
+        str(persisted_identity["practice_guide_id"]) != str(practice_guide_id)
+        or str(persisted_identity["practice_guide_edition_id"])
+        != str(unit.practice_guide_edition_id)
+        or str(persisted_identity["normalized_semantic_digest"]) != semantic_digest
+        or str(persisted_identity["evidence_scope_digest"]) != evidence_scope_digest
+    ):
+        raise ValueError("PracticeIntelligenceIdentity conflicts with persisted semantics")
+    existing_version = session.execute(
+        sa.text(
+            "SELECT version FROM platform.practice_intelligence_versions "
+            "WHERE intelligence_identity_id=:id AND semantic_fingerprint=:fingerprint"
+        ),
+        {"id": unit.intelligence_unit_id, "fingerprint": version_fingerprint},
+    ).scalar_one_or_none()
+    if existing_version is None:
+        session.execute(
+            sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:identity,0))"),
+            {"identity": str(unit.intelligence_unit_id)},
+        )
+        existing_version = session.execute(
+            sa.text(
+                "SELECT version FROM platform.practice_intelligence_versions "
+                "WHERE intelligence_identity_id=:id AND semantic_fingerprint=:fingerprint"
+            ),
+            {"id": unit.intelligence_unit_id, "fingerprint": version_fingerprint},
+        ).scalar_one_or_none()
+    if existing_version is None:
+        version = int(
+            session.execute(
+                sa.text(
+                    "SELECT COALESCE(max(version),0)+1 FROM "
+                    "platform.practice_intelligence_versions "
+                    "WHERE intelligence_identity_id=:id"
+                ),
+                {"id": unit.intelligence_unit_id},
+            ).scalar_one()
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO platform.practice_intelligence_versions "
+                "(intelligence_identity_id,version,practice_guide_edition_id,"
+                "construction_manifest_id,canonical_payload,construction_profile_version,"
+                "semantic_fingerprint,recorded_at) VALUES "
+                "(:id,:version,:edition,:manifest,CAST(:payload AS jsonb),:profile,"
+                ":fingerprint,:at)"
+            ),
+            {
+                "id": unit.intelligence_unit_id,
+                "version": version,
+                "edition": unit.practice_guide_edition_id,
+                "manifest": construction_manifest_id,
+                "payload": _json(version_payload),
+                "profile": unit.construction_profile_version,
+                "fingerprint": version_fingerprint,
+                "at": constructed_at,
+            },
+        )
+    else:
+        version = int(existing_version)
+    for evidence in unit.evidence:
+        guidance = (
+            session.execute(
+                sa.text(
+                    "SELECT guidance_candidate_id,candidate_version,publication_decision_ref "
+                    "FROM platform.practice_guidance_units WHERE guidance_unit_id=:id "
+                    "AND version=:version"
+                ),
+                {"id": evidence.guidance_unit_id, "version": evidence.guidance_unit_version},
+            )
+            .mappings()
+            .one()
+        )
+        locator_id = session.execute(
+            sa.text(
+                "SELECT source_locator_id FROM platform.source_locators "
+                "WHERE source_version_id=:source AND locator_key=:key"
+            ),
+            {"source": evidence.source_version_id, "key": evidence.locator.key},
+        ).scalar_one()
+        link_id = deterministic_uuid(
+            "practice-intelligence-evidence-v1:"
+            f"{unit.intelligence_unit_id}:{version}:{evidence.guidance_unit_id}:"
+            f"{evidence.guidance_unit_version}:{locator_id}"
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO platform.practice_intelligence_evidence_links "
+                "(evidence_link_id,intelligence_identity_id,intelligence_version,"
+                "source_guidance_unit_id,source_guidance_unit_version,source_version_id,"
+                "source_locator_id,guidance_candidate_id,candidate_version,evidence_digest,"
+                "extraction_verification_receipt,recorded_at) VALUES "
+                "(:link,:identity,:version,:guidance,:guidance_version,:source,:locator,"
+                ":candidate,:candidate_version,:digest,:receipt,:at) ON CONFLICT "
+                "(evidence_link_id) DO NOTHING"
+            ),
+            {
+                "link": link_id,
+                "identity": unit.intelligence_unit_id,
+                "version": version,
+                "guidance": evidence.guidance_unit_id,
+                "guidance_version": evidence.guidance_unit_version,
+                "source": evidence.source_version_id,
+                "locator": locator_id,
+                "candidate": guidance["guidance_candidate_id"],
+                "candidate_version": guidance["candidate_version"],
+                "digest": evidence.fragment_digest,
+                "receipt": str(guidance["publication_decision_ref"]),
+                "at": constructed_at,
+            },
+        )
+        persisted_link = (
+            session.execute(
+                sa.text(
+                    "SELECT evidence_digest,source_guidance_unit_id,source_locator_id FROM "
+                    "platform.practice_intelligence_evidence_links "
+                    "WHERE evidence_link_id=:id"
+                ),
+                {"id": link_id},
+            )
+            .mappings()
+            .one()
+        )
+        if (
+            str(persisted_link["evidence_digest"]) != evidence.fragment_digest
+            or str(persisted_link["source_guidance_unit_id"]) != str(evidence.guidance_unit_id)
+            or str(persisted_link["source_locator_id"]) != str(locator_id)
+        ):
+            raise ValueError("PracticeIntelligenceEvidenceLink identity conflict")
+    guidance_occurrences = sorted(
+        {
+            (
+                str(item.guidance_unit_id),
+                item.guidance_unit_version,
+                str(item.source_version_id),
+                item.locator.key,
+                item.fragment_digest,
+            )
+            for item in unit.evidence
+        }
+    )
+    evidence_occurrences = {
+        (source_version_id, locator_key, fragment_digest)
+        for _, _, source_version_id, locator_key, fragment_digest in guidance_occurrences
+    }
+    if len(guidance_occurrences) > 1 and len(evidence_occurrences) == 1:
+        legacy_ids = sorted(
+            str(value)
+            for value in session.execute(
+                sa.text(
+                    "SELECT DISTINCT legacy.intelligence_unit_id FROM "
+                    "platform.practice_intelligence_units legacy JOIN "
+                    "platform.practice_intelligence_sources source ON "
+                    "source.intelligence_unit_id=legacy.intelligence_unit_id AND "
+                    "source.intelligence_unit_version=legacy.version WHERE "
+                    "legacy.construction_manifest_id<>:manifest AND "
+                    "legacy.intelligence_kind=:kind AND "
+                    "legacy.title=:title AND legacy.instruction=:instruction AND "
+                    "source.guidance_unit_id=ANY(CAST(:guidance_ids AS uuid[]))"
+                ),
+                {
+                    "manifest": construction_manifest_id,
+                    "kind": unit.kind.value,
+                    "title": unit.title,
+                    "instruction": unit.instruction,
+                    "guidance_ids": [item[0] for item in guidance_occurrences],
+                },
+            ).scalars()
+        )
+        if len(legacy_ids) > 1:
+            decision_payload = {
+                "canonical_intelligence_identity_id": str(unit.intelligence_unit_id),
+                "canonical_intelligence_version": version,
+                "decision_type": "equivalent_duplicate",
+                "legacy_intelligence_unit_ids": legacy_ids,
+                "source_guidance_occurrences": [list(item) for item in guidance_occurrences],
+                "identity_contract_version": str(identity_payload["schema_version"]),
+                "reason_code": "EXACT_SEMANTICS_EDITION_SOURCE_LOCATOR_AND_FRAGMENT_MATCH",
+                "implementation_version": CONSTRUCTION_PROFILE_VERSION,
+            }
+            decision_fingerprint = digest_of(decision_payload)
+            decision_id = deterministic_uuid(
+                f"practice-intelligence-reconciliation:{decision_fingerprint}"
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_intelligence_reconciliation_decisions "
+                    "(reconciliation_decision_id,version,canonical_intelligence_identity_id,"
+                    "canonical_intelligence_version,decision_type,legacy_intelligence_unit_ids,"
+                    "source_guidance_occurrences,identity_contract_version,reason_code,"
+                    "implementation_version,decision_fingerprint,recorded_at) VALUES "
+                    "(:id,1,:identity,:version,'equivalent_duplicate',CAST(:legacy AS jsonb),"
+                    "CAST(:occurrences AS jsonb),:contract,:reason,:implementation,:fingerprint,"
+                    ":recorded_at) ON CONFLICT (reconciliation_decision_id,version) DO NOTHING"
+                ),
+                {
+                    "id": decision_id,
+                    "identity": unit.intelligence_unit_id,
+                    "version": version,
+                    "legacy": _json(legacy_ids),
+                    "occurrences": _json(decision_payload["source_guidance_occurrences"]),
+                    "contract": identity_payload["schema_version"],
+                    "reason": decision_payload["reason_code"],
+                    "implementation": CONSTRUCTION_PROFILE_VERSION,
+                    "fingerprint": decision_fingerprint,
+                    "recorded_at": constructed_at,
+                },
+            )
+    return version
+
+
 def _insert_playbook(
     session: Session,
     construction_manifest_id: UUID,
@@ -476,6 +760,131 @@ def _insert_playbook(
                 "role": role,
             },
         )
+
+
+def _insert_semantic_playbook(
+    session: Session,
+    *,
+    construction_manifest_id: UUID,
+    practice_guide_id: UUID,
+    constructed_at: datetime,
+    playbook: PracticePlaybook,
+    unit_versions: Mapping[UUID, int],
+) -> int:
+    payload = {
+        "title": playbook.title,
+        "purpose": playbook.purpose,
+        "applicability_conditions": sorted(playbook.applicability_conditions),
+        "work_types": sorted(playbook.work_types),
+        "document_types": sorted(playbook.document_types),
+        "form_types": sorted(playbook.form_types),
+        "workflow_stages": sorted(playbook.workflow_stages),
+        "members": [
+            {
+                "intelligence_identity_id": str(unit_id),
+                "intelligence_version": unit_versions[unit_id],
+                "member_role": role,
+            }
+            for unit_id, _legacy_version, role in playbook.member_refs
+        ],
+        "uncertainties": sorted(playbook.uncertainties),
+        "authority_layer": "methodological_practice",
+    }
+    semantic_digest = digest_of(payload)
+    version_fingerprint = digest_of(
+        {
+            "payload": payload,
+            "practice_guide_edition_id": str(playbook.practice_guide_edition_id),
+            "construction_profile_version": playbook.construction_profile_version,
+        }
+    )
+    session.execute(
+        sa.text(
+            "INSERT INTO platform.practice_playbook_identities "
+            "(playbook_identity_id,practice_guide_id,normalized_semantic_digest,created_at) "
+            "VALUES (:id,:guide,:digest,:at) ON CONFLICT (playbook_identity_id) DO NOTHING"
+        ),
+        {
+            "id": playbook.playbook_id,
+            "guide": practice_guide_id,
+            "digest": semantic_digest,
+            "at": constructed_at,
+        },
+    )
+    persisted_identity = (
+        session.execute(
+            sa.text(
+                "SELECT practice_guide_id,normalized_semantic_digest FROM "
+                "platform.practice_playbook_identities WHERE playbook_identity_id=:id"
+            ),
+            {"id": playbook.playbook_id},
+        )
+        .mappings()
+        .one()
+    )
+    if (
+        str(persisted_identity["practice_guide_id"]) != str(practice_guide_id)
+        or str(persisted_identity["normalized_semantic_digest"]) != semantic_digest
+    ):
+        raise ValueError("PracticePlaybookIdentity conflicts with persisted semantics")
+    existing_version = session.execute(
+        sa.text(
+            "SELECT version FROM platform.practice_playbook_versions_v2 "
+            "WHERE playbook_identity_id=:id AND semantic_fingerprint=:fingerprint"
+        ),
+        {"id": playbook.playbook_id, "fingerprint": version_fingerprint},
+    ).scalar_one_or_none()
+    if existing_version is None:
+        version = int(
+            session.execute(
+                sa.text(
+                    "SELECT COALESCE(max(version),0)+1 FROM "
+                    "platform.practice_playbook_versions_v2 "
+                    "WHERE playbook_identity_id=:id"
+                ),
+                {"id": playbook.playbook_id},
+            ).scalar_one()
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO platform.practice_playbook_versions_v2 "
+                "(playbook_identity_id,version,practice_guide_edition_id,"
+                "construction_manifest_id,canonical_payload,construction_profile_version,"
+                "semantic_fingerprint,recorded_at) VALUES "
+                "(:id,:version,:edition,:manifest,CAST(:payload AS jsonb),:profile,"
+                ":fingerprint,:at)"
+            ),
+            {
+                "id": playbook.playbook_id,
+                "version": version,
+                "edition": playbook.practice_guide_edition_id,
+                "manifest": construction_manifest_id,
+                "payload": _json(payload),
+                "profile": playbook.construction_profile_version,
+                "fingerprint": version_fingerprint,
+                "at": constructed_at,
+            },
+        )
+        for sequence, (unit_id, _legacy_version, role) in enumerate(playbook.member_refs, 1):
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_playbook_version_members "
+                    "(playbook_identity_id,playbook_version,member_sequence,"
+                    "intelligence_identity_id,intelligence_version,member_role) VALUES "
+                    "(:playbook,:version,:sequence,:unit,:unit_version,:role)"
+                ),
+                {
+                    "playbook": playbook.playbook_id,
+                    "version": version,
+                    "sequence": sequence,
+                    "unit": unit_id,
+                    "unit_version": unit_versions[unit_id],
+                    "role": role,
+                },
+            )
+    else:
+        version = int(existing_version)
+    return version
 
 
 def _searchable_unit(unit: IDPracticeIntelligenceUnit) -> str:
@@ -594,6 +1003,110 @@ def _rebuild_lexical_entries(
     )
 
 
+def _activate_release(
+    session: Session,
+    *,
+    practice_guide_id: UUID,
+    release_id: UUID,
+    release_version: int,
+    recorded_at: datetime,
+) -> tuple[UUID, int]:
+    decision_id = deterministic_uuid(
+        f"practice-intelligence-release-activation:{practice_guide_id}"
+    )
+    latest_row = (
+        session.execute(
+            sa.text(
+                "SELECT version,selected_release_id,selected_release_version FROM "
+                "platform.practice_intelligence_release_activation_decisions "
+                "WHERE release_activation_decision_id=:id ORDER BY version DESC LIMIT 1"
+            ),
+            {"id": decision_id},
+        )
+        .mappings()
+        .one_or_none()
+    )
+    latest: dict[str, Any] | None = dict(latest_row) if latest_row is not None else None
+
+    def insert(selected_id: UUID, selected_version: int, version: int, reason: str) -> None:
+        supersedes = version - 1 if version > 1 else None
+        fingerprint = digest_of(
+            {
+                "decision_id": str(decision_id),
+                "version": version,
+                "practice_guide_id": str(practice_guide_id),
+                "selected_release_id": str(selected_id),
+                "selected_release_version": selected_version,
+                "supersedes_version": supersedes,
+                "reason_code": reason,
+                "owner_decision_ref": "MEMORY-INTEGRITY-FIX-01;owner:Oleg Shcherbakov",
+            }
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO platform.practice_intelligence_release_activation_decisions "
+                "(release_activation_decision_id,version,practice_guide_id,selected_release_id,"
+                "selected_release_version,supersedes_version,reason_code,owner_decision_ref,"
+                "authority_identity_id,decision_fingerprint,recorded_at) VALUES "
+                "(:id,:version,:guide,:release,:release_version,:supersedes,:reason,"
+                "'MEMORY-INTEGRITY-FIX-01;owner:Oleg Shcherbakov',"
+                "'owner.oleg-shcherbakov',:fingerprint,:at)"
+            ),
+            {
+                "id": decision_id,
+                "version": version,
+                "guide": practice_guide_id,
+                "release": selected_id,
+                "release_version": selected_version,
+                "supersedes": supersedes,
+                "reason": reason,
+                "fingerprint": fingerprint,
+                "at": recorded_at,
+            },
+        )
+
+    if latest is None:
+        prior = (
+            session.execute(
+                sa.text(
+                    "SELECT r.release_id,r.version FROM platform.practice_intelligence_releases r "
+                    "JOIN platform.practice_guide_editions e ON "
+                    "e.practice_guide_edition_id=r.practice_guide_edition_id "
+                    "WHERE e.practice_guide_id=:guide AND NOT "
+                    "(r.release_id=:release AND r.version=:release_version) "
+                    "ORDER BY r.published_at DESC,r.release_id DESC LIMIT 1"
+                ),
+                {
+                    "guide": practice_guide_id,
+                    "release": release_id,
+                    "release_version": release_version,
+                },
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if prior is not None:
+            insert(
+                UUID(str(prior["release_id"])),
+                int(prior["version"]),
+                1,
+                "HISTORICAL_RELEASE_LINEAGE_ADMISSION",
+            )
+            latest = {
+                "version": 1,
+                "selected_release_id": prior["release_id"],
+                "selected_release_version": prior["version"],
+            }
+    if latest is not None and (
+        str(latest["selected_release_id"]) == str(release_id)
+        and int(latest["selected_release_version"]) == release_version
+    ):
+        return decision_id, int(latest["version"])
+    next_version = 1 if latest is None else int(latest["version"]) + 1
+    insert(release_id, release_version, next_version, "SEMANTIC_IDENTITY_RELEASE_ACTIVATED")
+    return decision_id, next_version
+
+
 def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, Any]:
     manifest_id, coverage_id, constructed_at, units, playbooks = _manifest_values(document)
     fingerprint = str(document["construction_fingerprint"])
@@ -617,6 +1130,21 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
         context_assembly_policy_fingerprint=policy.fingerprint,
     )
     with Session(engine) as session, session.begin():
+        session.execute(
+            sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:manifest,0))"),
+            {"manifest": str(manifest_id)},
+        )
+        practice_guide_id = UUID(
+            str(
+                session.execute(
+                    sa.text(
+                        "SELECT practice_guide_id FROM platform.practice_guide_editions "
+                        "WHERE practice_guide_edition_id=:edition"
+                    ),
+                    {"edition": edition_id},
+                ).scalar_one()
+            )
+        )
         activation = _require_or_create_initial_activation(
             session, edition_id=edition_id, recorded_at=constructed_at
         )
@@ -633,6 +1161,8 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
             ),
             {"id": manifest_id},
         ).scalar_one_or_none()
+        unit_versions: dict[UUID, int] = {}
+        playbook_versions: dict[UUID, int] = {}
         if existing is not None:
             if str(existing) != fingerprint:
                 raise ValueError("ConstructionManifest identity conflicts with persisted content")
@@ -647,6 +1177,30 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
             ).one()
             if (int(counts[0]), int(counts[1])) != (len(units), len(playbooks)):
                 raise ValueError("Persisted intelligence construction is incomplete")
+            unit_versions = {
+                UUID(str(row[0])): int(row[1])
+                for row in session.execute(
+                    sa.text(
+                        "SELECT intelligence_identity_id,version FROM "
+                        "platform.practice_intelligence_versions "
+                        "WHERE construction_manifest_id=:id"
+                    ),
+                    {"id": manifest_id},
+                )
+            }
+            playbook_versions = {
+                UUID(str(row[0])): int(row[1])
+                for row in session.execute(
+                    sa.text(
+                        "SELECT playbook_identity_id,version FROM "
+                        "platform.practice_playbook_versions_v2 "
+                        "WHERE construction_manifest_id=:id"
+                    ),
+                    {"id": manifest_id},
+                )
+            }
+            if len(unit_versions) != len(units) or len(playbook_versions) != len(playbooks):
+                raise ValueError("Persisted semantic construction is incomplete")
         else:
             session.execute(
                 sa.text(
@@ -670,8 +1224,23 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
             )
             for unit in units:
                 _insert_unit(session, manifest_id, constructed_at, unit)
+                unit_versions[unit.intelligence_unit_id] = _insert_semantic_unit(
+                    session,
+                    construction_manifest_id=manifest_id,
+                    practice_guide_id=practice_guide_id,
+                    constructed_at=constructed_at,
+                    unit=unit,
+                )
             for playbook in playbooks:
                 _insert_playbook(session, manifest_id, constructed_at, playbook)
+                playbook_versions[playbook.playbook_id] = _insert_semantic_playbook(
+                    session,
+                    construction_manifest_id=manifest_id,
+                    practice_guide_id=practice_guide_id,
+                    constructed_at=constructed_at,
+                    playbook=playbook,
+                    unit_versions=unit_versions,
+                )
         projection = session.execute(
             sa.text(
                 "SELECT source_fingerprint FROM projection.practice_intelligence_lexical_versions "
@@ -803,6 +1372,67 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
             )
         elif str(existing_release) != semantic_fingerprint:
             raise ValueError("PracticeIntelligence release identity conflict")
+        for sequence, unit in enumerate(units, 1):
+            version = unit_versions[unit.intelligence_unit_id]
+            membership_fingerprint = digest_of(
+                {
+                    "release_id": str(release_id),
+                    "release_version": 1,
+                    "intelligence_identity_id": str(unit.intelligence_unit_id),
+                    "intelligence_version": version,
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_intelligence_release_memberships "
+                    "(release_id,release_version,member_sequence,intelligence_identity_id,"
+                    "intelligence_version,membership_fingerprint) VALUES "
+                    "(:release,1,:sequence,:identity,:version,:fingerprint) ON CONFLICT "
+                    "(release_id,release_version,intelligence_identity_id,intelligence_version) "
+                    "DO NOTHING"
+                ),
+                {
+                    "release": release_id,
+                    "sequence": sequence,
+                    "identity": unit.intelligence_unit_id,
+                    "version": version,
+                    "fingerprint": membership_fingerprint,
+                },
+            )
+        for sequence, playbook in enumerate(playbooks, 1):
+            version = playbook_versions[playbook.playbook_id]
+            membership_fingerprint = digest_of(
+                {
+                    "release_id": str(release_id),
+                    "release_version": 1,
+                    "playbook_identity_id": str(playbook.playbook_id),
+                    "playbook_version": version,
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO platform.practice_playbook_release_memberships "
+                    "(release_id,release_version,member_sequence,playbook_identity_id,"
+                    "playbook_version,membership_fingerprint) VALUES "
+                    "(:release,1,:sequence,:identity,:version,:fingerprint) ON CONFLICT "
+                    "(release_id,release_version,playbook_identity_id,playbook_version) "
+                    "DO NOTHING"
+                ),
+                {
+                    "release": release_id,
+                    "sequence": sequence,
+                    "identity": playbook.playbook_id,
+                    "version": version,
+                    "fingerprint": membership_fingerprint,
+                },
+            )
+        release_activation_id, release_activation_version = _activate_release(
+            session,
+            practice_guide_id=practice_guide_id,
+            release_id=release_id,
+            release_version=1,
+            recorded_at=constructed_at,
+        )
         projection_values = (
             ("exact", "canonical-exact-v0.1.0", semantic_fingerprint, "ready"),
             (
@@ -821,9 +1451,9 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
             ("sparse", "unqualified", None, "absent"),
             ("typed_graph", "unqualified", None, "absent"),
         )
-        for kind, version, projection_fingerprint, state in projection_values:
+        for kind, projection_version, projection_fingerprint, state in projection_values:
             projection_manifest_id = deterministic_uuid(
-                f"id-practice-projection:{release_id}:1:{kind}:{version}"
+                f"id-practice-projection:{release_id}:1:{kind}:{projection_version}"
             )
             session.execute(
                 sa.text(
@@ -837,7 +1467,7 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
                     "id": projection_manifest_id,
                     "release": release_id,
                     "kind": kind,
-                    "version": version,
+                    "version": projection_version,
                     "source": semantic_fingerprint,
                     "projection": projection_fingerprint,
                     "state": state,
@@ -854,6 +1484,8 @@ def persist_manifest(engine: Engine, document: Mapping[str, Any]) -> dict[str, A
         "lexical_entry_count": len(units) + len(playbooks),
         "practice_intelligence_release_id": str(release_id),
         "practice_intelligence_release_version": 1,
+        "release_activation_decision_id": str(release_activation_id),
+        "release_activation_decision_version": release_activation_version,
         "activation_decision_id": str(activation.activation_decision_id),
         "activation_decision_version": activation.version,
         "canonical_semantic_fingerprint": semantic_fingerprint,

@@ -1,0 +1,73 @@
+{
+  "contract": "memory-integrity-defect-manifest/1.0.0",
+  "canonical_base_commit": "8647a163f1b3227098a8809ee692c21c4178e04b",
+  "source_database_class": "canonical_platform_memory_read_only_pre_fix",
+  "source_dump_fingerprint": "sha256:33a938cba080087b4565b3354b442ab326fce353de368175ef4db86b3052e1cc",
+  "before_platform_memory_fingerprint": "sha256:a11065180d4f92f94611094e77b6fa68107ab073b796909c48a4a4113776c00d",
+  "defects": [
+    {
+      "defect_code": "PRACTICE_INTELLIGENCE_SEMANTIC_IDENTITY_DUPLICATED",
+      "active_duplicate_group_count": 2,
+      "active_duplicate_physical_row_count": 4,
+      "all_history_duplicate_physical_row_count": 8,
+      "excess_active_row_count": 2,
+      "exact_evidence": {
+        "practice_guide_edition_id": "01a02d2e-2455-7f63-ac1b-fd68c369b915",
+        "source_version_id": "01a02d2e-1c29-7b5a-8777-f03cd47b9bf7",
+        "source_locator_id": "01a03652-ad8b-7922-ac82-115806cfe8f5",
+        "page_number": 309,
+        "region": [0.15, 0.08, 0.85, 0.85],
+        "fragment_digest": "sha256:fcb5cd2f37b38d660d6e2fbfba95dba255d4ff93fef85a63399f8d118dde744b"
+      },
+      "groups": [
+        {
+          "typed_kind": "attention_point",
+          "active_row_ids": [
+            "4625b6ce-2e9e-5058-81db-90ff63ea48ad",
+            "f0e15793-eca4-5064-bf0c-ce966f96c881"
+          ],
+          "historical_row_ids": [
+            "cad22890-73f0-5a21-b1a6-76879be1340e",
+            "f02e1ed7-11c8-5953-9ca7-a0542602b3b6"
+          ],
+          "canonical_identity_id": "08885ab5-e416-59b7-8a23-867c9685205f"
+        },
+        {
+          "typed_kind": "visual_completion_example",
+          "active_row_ids": [
+            "02f91153-8b1e-5d6d-a71f-1faf1d45eeae",
+            "9b240bb1-54af-5312-8190-dc1279c1ec8c"
+          ],
+          "historical_row_ids": [
+            "7c7a1a9a-59d1-5438-800a-ab991586ba51",
+            "ac938b1e-8daa-56a7-8142-79f5fcbffa9b"
+          ],
+          "canonical_identity_id": "bc962b3e-374a-541c-a39e-893526c7a7e3"
+        }
+      ],
+      "non_duplicate_equal_text_pairs": [
+        {"pages": [240, 241], "typed_kind_count": 2, "reason": "different_exact_locator"},
+        {"pages": [308, 322], "typed_kind_count": 2, "reason": "different_exact_locator"},
+        {"pages": [357, 396], "typed_kind_count": 2, "reason": "different_exact_locator"}
+      ]
+    },
+    {
+      "defect_code": "PLATFORM_MEMORY_FINGERPRINT_SCOPE_INCOMPLETE",
+      "missing_or_misnamed_relations": [
+        "context_assembly_policies",
+        "practice_intelligence_releases"
+      ],
+      "incorrect_legacy_names": [
+        "practice_context_assembly_policies",
+        "practice_memory_releases"
+      ],
+      "incorrectly_included_projection_columns": [
+        "platform.practice_guidance_gaps.search_vector"
+      ],
+      "failure_mode": "absent canonical relations were silently normalized to empty"
+    }
+  ],
+  "historical_releases_preserved": true,
+  "product_ready": false,
+  "manifest_fingerprint": "sha256:431d6ee4aaf30e79eef1f2aac9ba062171b27e711e0211bb2d4f0a167a926c2c"
+}

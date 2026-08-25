@@ -1,0 +1,34 @@
+{
+  "contract_version": "2.2.0",
+  "all_history_platform_memory_fingerprint": "sha256:d78a22e94a87fc32b885fb71a338e3416310b95f562246db045091fa1fbce132",
+  "active_release_semantic_fingerprint": "sha256:0006d0bd2d09ae4713a7ee9692b55d0afc0c9a830d018bc4e8c342e548de4fe4",
+  "active_context_pack_binding_fingerprint": "sha256:595a3ea9716bf772d05d7273b5c9ba1ae196bd036513dcce2779a0b8f3161a07",
+  "fingerprint_specification_version": "platform-memory-fingerprint-v2.1.0",
+  "active_semantic_duplicate_group_count": 0,
+  "missing_fingerprint_component_count": 0,
+  "counts": {
+    "source_guidance_identity_count": 2410,
+    "practice_intelligence_identity_count": 7111,
+    "practice_intelligence_version_row_count": 21105,
+    "active_release_intelligence_version_count": 7111,
+    "historical_intelligence_version_count": 13994,
+    "playbook_identity_count": 1644,
+    "playbook_version_row_count": 4888,
+    "active_release_playbook_count": 1644,
+    "historical_playbook_count": 3244,
+    "logical_gap_identity_count": 547,
+    "active_gap_identity_count": 395,
+    "closed_gap_identity_count": 152,
+    "gap_snapshot_row_count": 858,
+    "conflict_identity_count": 138,
+    "quarantined_candidate_identity_count": 53
+  },
+  "rule_registry": {
+    "rule_version_count": 0,
+    "infrastructure_ready": true,
+    "operational_rule_coverage": false
+  },
+  "module_participation_status": "READY_FOR_INTEGRITY_CYCLE",
+  "system_integrity_status": "PASS",
+  "product_ready": false
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence",
+  "title": "Release-pinned ID Practice Intelligence Gateway contracts",
+  "oneOf": [
+    {"$ref": "#/$defs/gatewayRequest"},
+    {"$ref": "#/$defs/contextPackBinding"}
+  ],
+  "$defs": {
+    "uuid": {"type": "string", "format": "uuid"},
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "gatewayRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tool", "contract_version", "schema_id", "schema_version", "payload"],
+      "properties": {
+        "tool": {"const": "knowledge.get_id_task_guidance"},
+        "contract_version": {"const": "2.2.0"},
+        "schema_id": {"const": "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence"},
+        "schema_version": {"const": "2.2.0"},
+        "payload": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["query", "intent", "practice_guide_edition_id", "mode", "purpose"],
+          "properties": {
+            "query": {"type": "string", "minLength": 1},
+            "intent": {"type": "string", "minLength": 1},
+            "practice_guide_edition_id": {"$ref": "#/$defs/uuid"},
+            "practice_intelligence_release_id": {"$ref": "#/$defs/uuid"},
+            "practice_intelligence_release_version": {"type": "integer", "minimum": 1},
+            "mode": {"enum": ["Tender", "Support", "Audit", "Restoration", "IDGenerator"]},
+            "purpose": {"type": "string", "minLength": 1}
+          },
+          "dependentRequired": {
+            "practice_intelligence_release_id": ["practice_intelligence_release_version"],
+            "practice_intelligence_release_version": ["practice_intelligence_release_id"]
+          }
+        }
+      }
+    },
+    "contextPackBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_type",
+        "practice_guide_edition_id",
+        "practice_intelligence_release_id",
+        "practice_intelligence_release_version",
+        "context_assembly_policy_id",
+        "context_assembly_policy_version",
+        "projection_version_id",
+        "binding_fingerprint"
+      ],
+      "properties": {
+        "record_type": {"const": "IDPracticeContextPackBinding"},
+        "practice_guide_edition_id": {"$ref": "#/$defs/uuid"},
+        "practice_intelligence_release_id": {"$ref": "#/$defs/uuid"},
+        "practice_intelligence_release_version": {"type": "integer", "minimum": 1},
+        "context_assembly_policy_id": {"$ref": "#/$defs/uuid"},
+        "context_assembly_policy_version": {"type": "integer", "minimum": 1},
+        "projection_version_id": {"$ref": "#/$defs/uuid"},
+        "binding_fingerprint": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

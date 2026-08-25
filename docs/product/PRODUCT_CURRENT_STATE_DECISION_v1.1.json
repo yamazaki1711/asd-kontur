@@ -1,0 +1,37 @@
+{
+  "decision_id": "PRODUCT-CURRENT-STATE-DECISION-v1.1",
+  "version": 1,
+  "status": "accepted",
+  "supersedes": "PRODUCT-GOAL-REBASELINE-DECISION-v1",
+  "canonical_base_commit": "8647a163f1b3227098a8809ee692c21c4178e04b",
+  "implementation_commit": "dda214d09c3ad72a8948a8fd1a2befc22d2712bf",
+  "memory_integrity": {
+    "status": "PASS_BOUNDED_PLATFORM_MEMORY_INTEGRITY",
+    "series_id": "MEMORY-INTEGRITY-FIX-01-R5",
+    "cycle_ids": [
+      "MEMORY-INTEGRITY-FIX-01-R5-C1",
+      "MEMORY-INTEGRITY-FIX-01-R5-C2",
+      "MEMORY-INTEGRITY-FIX-01-R5-C3"
+    ],
+    "active_duplicate_group_count": 0,
+    "missing_fingerprint_component_count": 0
+  },
+  "capability_denominator": 142,
+  "readiness_distribution": {
+    "CAPABILITY_READY": 16,
+    "PARTIAL": 10,
+    "FOUNDATION_ONLY": 45,
+    "CONTRACT_ONLY": 64,
+    "NOT_IMPLEMENTED": 7
+  },
+  "platform_kernel_ready": "PARTIAL",
+  "product_application_ready": "PARTIAL",
+  "trial_ready": false,
+  "oks_ready": false,
+  "product_ready": false,
+  "kg_id_status": "PARTIAL",
+  "ntd_seed_status": "PARTIAL",
+  "next_delivery_slice": "INDUSTRIAL-DOCUMENT-UNDERSTANDING-01",
+  "recorded_at": "2026-08-25T20:58:00Z",
+  "decision_fingerprint": "sha256:ae841dd18aa92566ddf29d30b0b5a8c0bbea2885e4c657d8e839202357df907f"
+}

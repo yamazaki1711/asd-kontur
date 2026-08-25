@@ -1,0 +1,14 @@
+{
+  "tool": "knowledge.get_id_task_guidance",
+  "contract_version": "2.2.0",
+  "schema_id": "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence",
+  "schema_version": "2.2.0",
+  "payload": {
+    "query": "synthetic journal guidance",
+    "intent": "journal_selection",
+    "practice_guide_edition_id": "0198f8ae-c954-7000-8000-000000000101",
+    "practice_intelligence_release_id": "0198f8ae-c954-7000-8000-000000000102",
+    "mode": "Support",
+    "purpose": "id.support"
+  }
+}

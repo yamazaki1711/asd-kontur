@@ -248,8 +248,10 @@ def _api_router() -> APIRouter:
         response.delete_cookie(container.settings.csrf_cookie_name, path="/")
 
     @router.get("/capabilities", response_model=CapabilityStatusView, tags=["platform"])
-    def capabilities(_: Annotated[SessionPrincipal, Depends(_principal)]) -> CapabilityStatusView:
-        return CapabilityStatusView(**ProductSpineService.capability_status())
+    def capabilities(
+        request: Request, _: Annotated[SessionPrincipal, Depends(_principal)]
+    ) -> CapabilityStatusView:
+        return CapabilityStatusView(**_container(request).service.capability_status())
 
     @router.get("/workspaces", response_model=list[WorkspaceView], tags=["workspaces"])
     def list_workspaces(

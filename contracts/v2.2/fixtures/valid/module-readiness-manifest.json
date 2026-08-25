@@ -1,0 +1,272 @@
+{
+  "contract_version": "2.0.0",
+  "manifest_id": "MEMORY-INTEGRITY-MODULE-READINESS-v0.1",
+  "code_baseline": "origin/main:81207e60b05137668575cc5d214fc2ea335fc715+MEMORY-INTEGRITY-FIX-01",
+  "product_ready": false,
+  "modules": [
+    {
+      "module_id": "core.identifiers-source-evidence", "version": "0.1.0", "purpose": "Stable identities and exact Source/Evidence lineage.",
+      "inputs": ["source bytes", "official/source metadata", "locator"], "outputs": ["SourceArtifact", "SourceVersion", "EvidenceLink"],
+      "dependencies": ["PostgreSQL", "object ledger"], "schema_relations": ["platform.source_artifacts", "platform.source_versions", "platform.evidence_links"],
+      "contract_keys": ["source-evidence"], "qualification_checks": ["test_identifiers", "test_platform_knowledge", "source byte digest"],
+      "lifecycle_participation": "platform sources survive workspace reset; workspace evidence is scoped", "backup_participation": "canonical source identities and digests included",
+      "implemented_status": "implemented and integration tested", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase A imports/tests", "Phase C source fingerprint", "Phase J full suite"]
+    },
+    {
+      "module_id": "core.contract-pack-runtime", "version": "2.0.0", "purpose": "Exact schema/version validation and semantic invariants.",
+      "inputs": ["contract payload", "exact schema identity/version"], "outputs": ["validated payload", "typed validation issue"],
+      "dependencies": ["JSON Schema 2020-12"], "schema_relations": [], "contract_keys": ["all registered Contract Pack keys"],
+      "qualification_checks": ["registry digest reconciliation", "duplicate key/schema scan", "test_contract_runtime"],
+      "lifecycle_participation": "contracts are platform configuration", "backup_participation": "registry fingerprint included",
+      "implemented_status": "implemented through v2.0 additive packs with explicit memory denominators", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase A registry", "Phase C counter invariants", "Phase H invalid contract", "Phase J full suite"]
+    },
+    {
+      "module_id": "persistence.postgresql-foundation", "version": "0018", "purpose": "Transactional canonical persistence and service-role boundaries.",
+      "inputs": ["validated commands", "workspace/platform scope"], "outputs": ["immutable versions", "typed concurrency outcomes"],
+      "dependencies": ["PostgreSQL 17", "SQLAlchemy"], "schema_relations": ["organization.*", "workspace.*", "platform.*", "audit.*", "messaging.*"],
+      "contract_keys": ["persistence foundation"], "qualification_checks": ["clean database", "rollback injection", "full PostgreSQL integration"],
+      "lifecycle_participation": "workspace rows are purged by registry; platform rows retained", "backup_participation": "canonical schemas participate",
+      "implemented_status": "implemented at migration head", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase B clean build", "Phase J PostgreSQL suite"]
+    },
+    {
+      "module_id": "persistence.migrations", "version": "0018_memory_integrity", "purpose": "Ordered additive physical schema evolution.",
+      "inputs": ["empty database", "previous revision 0016"], "outputs": ["exact head schema"],
+      "dependencies": ["Alembic"], "schema_relations": ["alembic_version"], "contract_keys": [],
+      "qualification_checks": ["base-to-head", "0018-to-0017-to-0018", "idempotent head", "schema fingerprint"],
+      "lifecycle_participation": "schema lifecycle only", "backup_participation": "restore migrated to head",
+      "implemented_status": "18 linear revisions", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase B migration roundtrip", "Phase I restore migration"]
+    },
+    {
+      "module_id": "security.rls-default-deny", "version": "0017", "purpose": "Fail-closed workspace isolation and least-privilege service roles.",
+      "inputs": ["organization/workspace session context", "service role"], "outputs": ["scoped rows", "deny/no_result"],
+      "dependencies": ["PostgreSQL RLS", "authority model"], "schema_relations": ["pg_policies", "workspace scoped tables"],
+      "contract_keys": ["authorization-audit"], "qualification_checks": ["no-context default deny", "A/B isolation", "role grants"],
+      "lifecycle_participation": "hard boundary across reset/destroy", "backup_participation": "policies included in schema fingerprint",
+      "implemented_status": "implemented for current workspace tables", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase B policy inventory", "Phase D isolation", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.object-ledger", "version": "0.1.0", "purpose": "Content-addressed source/object receipts without granting access by digest.",
+      "inputs": ["bytes", "object scope", "storage adapter"], "outputs": ["immutable object receipt", "integrity decision"],
+      "dependencies": ["source ledger", "object store adapter"], "schema_relations": ["platform.objects", "platform.source_artifacts"],
+      "contract_keys": ["storage-sync", "source-evidence"], "qualification_checks": ["digest mismatch", "duplicate bytes", "source byte verification"],
+      "lifecycle_participation": "platform objects retained; workspace objects inventoried", "backup_participation": "object digest and receipt included, bytes external",
+      "implemented_status": "local adapter and ledger implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase C source bytes", "Phase H object unavailable", "Phase I backup restore"]
+    },
+    {
+      "module_id": "lifecycle.workspace", "version": "1.0.0", "purpose": "Admission through archive/reset/destroy with evidence and attestations.",
+      "inputs": ["workspace", "retention profile", "authority decisions"], "outputs": ["state versions", "purge receipts", "attestation"],
+      "dependencies": ["adapter registry", "RLS", "audit"], "schema_relations": ["workspace.workspaces", "workspace.deletion_plans", "workspace.destruction_attestations"],
+      "contract_keys": ["lifecycle", "destruction-attestation"], "qualification_checks": ["A full lifecycle", "B survival", "C no inheritance", "residual scan"],
+      "lifecycle_participation": "owns workspace lifecycle", "backup_participation": "archive/backup residues explicitly classified",
+      "implemented_status": "bounded development/disposable assurance implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase D A/B/C", "Phase H lifecycle fence", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.canonical-memory", "version": "0.1.0", "purpose": "Model-independent platform source, normative, practice and rule canon.",
+      "inputs": ["verified platform knowledge versions"], "outputs": ["pinned canonical knowledge", "gaps/conflicts"],
+      "dependencies": ["source ledger", "PostgreSQL platform schema"], "schema_relations": ["platform.* knowledge tables"],
+      "contract_keys": ["rules-knowledge", "practice intelligence", "normative knowledge", "platform-memory explicit counters and fingerprints"], "qualification_checks": ["explicit active/history counts", "all-history fingerprint", "active-release fingerprint", "ContextPack-binding fingerprint", "no workspace ownership"],
+      "lifecycle_participation": "permanent_platform_core; not deletable by workspace retention", "backup_participation": "canonical rows and semantic fingerprint included",
+      "implemented_status": "implemented with fail-closed schema validation and explicit partial knowledge states", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase C restore and three fingerprints", "Phase D survival", "Phase I restore/rebuild"]
+    },
+    {
+      "module_id": "knowledge.practice-intelligence", "version": "MEMORY-INTEGRITY-FIX-01", "purpose": "Evidence-bound professional methodology and playbooks from the Practice Guide.",
+      "inputs": ["verified source guidance", "exact Guide edition"], "outputs": ["GuidanceUnit", "typed intelligence", "PracticePlaybook", "gaps/conflicts"],
+      "dependencies": ["canonical memory", "Knowledge Gateway"], "schema_relations": ["platform.practice_guidance_units", "platform.practice_intelligence_identities", "platform.practice_intelligence_versions", "platform.practice_intelligence_evidence_links", "platform.practice_intelligence_release_memberships", "platform.practice_playbook_versions_v2"],
+      "contract_keys": ["practice guidance", "practice intelligence", "platform-memory semantic identity and release membership"], "qualification_checks": ["2410 source identities", "7111 active semantic versions", "13994 historical intelligence rows", "1644 active and 3244 historical playbooks", "two exact duplicate regressions", "six different-locator non-merge regressions", "historical acceptance preserved"],
+      "lifecycle_participation": "permanent platform core", "backup_participation": "source/edition/unit/playbook/gap/conflict fingerprints",
+      "implemented_status": "semantic identity fix and superseding release implemented; participation status is not production readiness", "qualification_status": "PARTIAL", "known_gaps": ["historical KG-ID fresh-session decision remains 24/25 until a new 25/25 decision is actually proven"], "cycle_steps": ["Phase C exact active/history snapshot", "Phase G authority separation and BF16", "Phase I projection rebuild", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.ntd-memory", "version": "NTD-SEED-01", "purpose": "Official-source-only normative identities, editions, provisions and gaps.",
+      "inputs": ["official acquisition evidence", "Practice Guide references"], "outputs": ["NormativeDocument/Edition/Provision or typed gap"],
+      "dependencies": ["official source client", "canonical memory"], "schema_relations": ["platform.normative_documents", "platform.normative_editions", "platform.normative_provision_versions", "platform.ntd_gaps"],
+      "contract_keys": ["normative knowledge"], "qualification_checks": ["37 references", "25 access gaps", "0 invented editions/provisions", "NTD projection empty/rebuildable"],
+      "lifecycle_participation": "permanent platform core", "backup_participation": "reference/gap timeline included",
+      "implemented_status": "bounded seed reconciliation and fail-closed memory implemented", "qualification_status": "PARTIAL", "known_gaps": ["official_access_blocked for all 25 identities; zero verified editions/provisions"], "cycle_steps": ["Phase C snapshot", "Phase E unresolved NTD", "Phase I empty projection rebuild", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.rule-registry", "version": "0.1.0", "purpose": "Qualified deterministic RuleVersion lifecycle separated from source assertions.",
+      "inputs": ["RuleCandidate", "qualification and activation decisions"], "outputs": ["RuleVersion", "RuleSetVersion", "state"],
+      "dependencies": ["promotion gate", "authority"], "schema_relations": ["platform.rule_versions", "platform.rule_version_states", "platform.rule_set_versions"],
+      "contract_keys": ["rules-knowledge"], "qualification_checks": ["promotion gate", "zero automatic promotions in snapshot", "defect blocks affected rule"],
+      "lifecycle_participation": "platform rules survive workspace reset", "backup_participation": "versions/states/sets included",
+      "implemented_status": "infrastructure_ready=true; operational_rule_coverage=false because RuleVersion count is zero", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase C no promotion and explicit zero coverage", "Phase E qualified-only use", "Phase H promotion faults", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.gateway", "version": "2.0.0", "purpose": "Typed, audited, no-direct-SQL access to platform and workspace knowledge.",
+      "inputs": ["pinned tool/schema request", "GatewayContext"], "outputs": ["evidence pack", "gap/conflict/no_result"],
+      "dependencies": ["canonical memory", "RLS", "audit"], "schema_relations": ["platform/workspace read models"],
+      "contract_keys": ["knowledge.construction-harness.gateway", "platform-memory release selection"], "qualification_checks": ["default selected release", "exact historical pin", "quarantine exclusion", "mandatory capabilities", "cross-workspace no_result", "gap propagation"],
+      "lifecycle_participation": "read-only platform access and scoped workspace access", "backup_participation": "no independent canon",
+      "implemented_status": "typed services for current knowledge layers", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E context", "Phase G boundary", "Phase I post-rebuild query", "Phase J full suite"]
+    },
+    {
+      "module_id": "ai.vlm-harness", "version": "G-07-A", "purpose": "Provider-neutral immutable request/attempt/result and Candidate boundary.",
+      "inputs": ["authorized request", "ContextPack", "profile", "budget"], "outputs": ["execution result", "Candidate", "typed failure"],
+      "dependencies": ["routing policy", "validators", "provider process"], "schema_relations": ["workspace.vlm_execution_requests", "workspace.vlm_execution_attempts", "workspace.vlm_execution_results"],
+      "contract_keys": ["vlm.harness"], "qualification_checks": ["fake providers", "retry matrix", "invalid response", "one exact local BF16 smoke"],
+      "lifecycle_participation": "workspace attempts/transients purged", "backup_participation": "content-minimal lineage only",
+      "implemented_status": "local bounded harness implemented", "qualification_status": "PARTIAL", "known_gaps": ["external/distributed production profile and broad model qualification are not in canonical main"], "cycle_steps": ["Phase G deterministic plus BF16", "Phase H faults", "Phase J full suite"]
+    },
+    {
+      "module_id": "corpus.intake", "version": "WP-14-foundation", "purpose": "Native-first technical preflight, page planning and reconciliation.",
+      "inputs": ["PhysicalObjectVersion"], "outputs": ["inspection", "PageManifest", "reconciliation"],
+      "dependencies": ["object ledger", "AI harness for bounded fallback"], "schema_relations": ["workspace corpus relations"],
+      "contract_keys": ["audit corpus"], "qualification_checks": ["native preflight", "page boundaries", "all-failure not empty-success"],
+      "lifecycle_participation": "workspace corpus is purged", "backup_participation": "canonical inspected inputs included by workspace backup",
+      "implemented_status": "bounded intake/reconciliation implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase H failure handling", "Phase J corpus/audit tests"]
+    },
+    {
+      "module_id": "process.common-kernel", "version": "WP-11", "purpose": "Shared candidate/fact/process/event authority kernel for all modes.",
+      "inputs": ["source-bound candidates", "authority decisions"], "outputs": ["verified facts", "process events", "mode inputs"],
+      "dependencies": ["persistence", "lifecycle", "rules"], "schema_relations": ["workspace common kernel tables"],
+      "contract_keys": ["candidate-fact", "mode-deliverable"], "qualification_checks": ["candidate-to-fact authority", "four-mode common chain", "reset"],
+      "lifecycle_participation": "workspace-owned and reset-scoped", "backup_participation": "canonical workspace facts/processes included",
+      "implemented_status": "bounded common kernel implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase D reset", "Phase E common chain", "Phase J kernel integration"]
+    },
+    {
+      "module_id": "construction.project-definition", "version": "1.8.0", "purpose": "Verified project definition from source-bound project candidates.",
+      "inputs": ["PD/PZ candidates", "deterministic validation"], "outputs": ["ProjectDefinition", "VerifiedProjectCharacteristic"],
+      "dependencies": ["source evidence", "common kernel"], "schema_relations": ["workspace.project_definition_versions", "workspace.project_characteristic_candidates", "workspace.verified_project_characteristics"],
+      "contract_keys": ["construction.harness.project-definition"], "qualification_checks": ["unverified candidate rejection", "multi-work fixture"],
+      "lifecycle_participation": "workspace-owned and reset-scoped", "backup_participation": "project fingerprint included",
+      "implemented_status": "native/source contract implemented; no CAD analysis", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E fixture", "Phase J unit/integration"]
+    },
+    {
+      "module_id": "construction.work-packages", "version": "1.8.0", "purpose": "One shared typed set of construction works, quantities, materials and dependencies.",
+      "inputs": ["verified project characteristics", "work candidates"], "outputs": ["ConstructionWorkPackage", "WorkQuantity", "MaterialRequirement"],
+      "dependencies": ["ProjectDefinition"], "schema_relations": ["workspace.construction_work_package_versions"],
+      "contract_keys": ["construction.harness.project-definition"], "qualification_checks": ["three related work packages", "source locators", "dependency chain"],
+      "lifecycle_participation": "workspace-owned and reset-scoped", "backup_participation": "project/work fingerprints included",
+      "implemented_status": "multi-work bounded model implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E multi-work chain", "Phase J full suite"]
+    },
+    {
+      "module_id": "construction.requirement-matrix", "version": "1.8.0", "purpose": "Single evidence-bound WorkRequirementMatrix shared by four modes.",
+      "inputs": ["WorkPackages", "verified rules", "practice/NTD gaps", "customer additions"], "outputs": ["WorkRequirementMatrix"],
+      "dependencies": ["Harness Memory", "rule registry"], "schema_relations": ["workspace.work_requirement_matrix_versions"],
+      "contract_keys": ["construction.harness.work-requirement-matrix"], "qualification_checks": ["one identity/fingerprint across modes", "projection rebuild"],
+      "lifecycle_participation": "workspace-owned and reset-scoped", "backup_participation": "matrix semantic fingerprint included",
+      "implemented_status": "bounded matrix implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E matrix", "Phase F four views", "Phase I backup/projection"]
+    },
+    {
+      "module_id": "mode.tender", "version": "WP-12+1.8.0", "purpose": "Evidence-bound bid feasibility and delta analysis.",
+      "inputs": ["shared matrix", "PD/RD work packages", "estimate/VOR"], "outputs": ["quantity/material deltas", "NTD gaps", "feasibility conclusion"],
+      "dependencies": ["common kernel", "WorkRequirementMatrix"], "schema_relations": ["workspace tender tables", "workspace.construction_harness_mode_views"],
+      "contract_keys": ["tender", "construction.harness.mode-views"], "qualification_checks": ["quantity delta", "material delta", "no unsupported conclusion"],
+      "lifecycle_participation": "workspace mode view reset-scoped", "backup_participation": "mode result fingerprint included",
+      "implemented_status": "bounded Tender slice and unified view implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase F Tender", "Phase J Tender integration"]
+    },
+    {
+      "module_id": "mode.support", "version": "WP-13+1.8.0", "purpose": "Control/evidence/ID requirements and completeness during execution.",
+      "inputs": ["shared matrix", "presented evidence"], "outputs": ["control plan", "ID matrix", "blockers"],
+      "dependencies": ["common kernel", "WorkRequirementMatrix"], "schema_relations": ["workspace support tables", "workspace.construction_harness_mode_views"],
+      "contract_keys": ["support", "construction.harness.mode-views"], "qualification_checks": ["controls", "evidence", "ID requirements", "presentation blockers"],
+      "lifecycle_participation": "workspace mode view reset-scoped", "backup_participation": "mode result fingerprint included",
+      "implemented_status": "bounded Support slice and unified view implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase F Support", "Phase J Support integration"]
+    },
+    {
+      "module_id": "mode.audit", "version": "WP-14+1.8.0", "purpose": "Expected/actual document and evidence delta.",
+      "inputs": ["shared matrix", "presented documents"], "outputs": ["present/missing/incomplete/invalid/wrong/duplicate/evidence-gap assessments"],
+      "dependencies": ["corpus", "WorkRequirementMatrix"], "schema_relations": ["workspace audit tables", "workspace.construction_harness_mode_views"],
+      "contract_keys": ["audit", "construction.harness.mode-views"], "qualification_checks": ["all assessment states", "three delta kinds", "projection"],
+      "lifecycle_participation": "workspace data purge; immutable audit headers follow policy", "backup_participation": "mode result fingerprint included",
+      "implemented_status": "bounded Audit slice and unified view implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase F Audit", "Phase J Audit integration"]
+    },
+    {
+      "module_id": "mode.restoration", "version": "1.8.0", "purpose": "Evidence sufficiency and ordered non-fabricating recovery plan.",
+      "inputs": ["shared matrix", "preserved fact keys"], "outputs": ["recoverable/non-recoverable", "restoration order"],
+      "dependencies": ["WorkRequirementMatrix"], "schema_relations": ["workspace.construction_harness_mode_views"],
+      "contract_keys": ["construction.harness.mode-views"], "qualification_checks": ["recoverability split", "missing facts", "fabrication prohibited"],
+      "lifecycle_participation": "workspace mode view reset-scoped", "backup_participation": "mode result fingerprint included",
+      "implemented_status": "unified deterministic view implemented", "qualification_status": "PARTIAL", "known_gaps": ["dedicated WP-15 production Restoration workflow is not implemented"], "cycle_steps": ["Phase F Restoration", "Phase J unified tests"]
+    },
+    {
+      "module_id": "durability.backup-restore", "version": "1.8.0", "purpose": "Byte and semantic restore verification for platform and workspace canon.",
+      "inputs": ["external custom dump", "backup manifests"], "outputs": ["restored canon", "fingerprint decision"],
+      "dependencies": ["PostgreSQL", "object ledger"], "schema_relations": ["platform backup manifests", "workspace.construction_harness_backup_manifests"],
+      "contract_keys": ["practice memory backup", "normative backup", "construction harness backup"], "qualification_checks": ["exact source bytes", "snapshot restore", "counts/semantic fingerprints"],
+      "lifecycle_participation": "platform and qualification-workspace scopes remain distinct", "backup_participation": "owns verification path",
+      "implemented_status": "bounded local backup contracts implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase C restore", "Phase I second restore", "Phase J durability tests"]
+    },
+    {
+      "module_id": "knowledge.projections", "version": "1.8.0", "purpose": "Rebuildable exact/FTS/vector/typed-graph/matrix retrieval plane.",
+      "inputs": ["canonical knowledge/matrix"], "outputs": ["projection versions and entries"],
+      "dependencies": ["PostgreSQL FTS", "pgvector"], "schema_relations": ["projection.*"],
+      "contract_keys": ["rules-knowledge", "practice intelligence", "normative knowledge", "construction harness"], "qualification_checks": ["physical delete", "canonical survival", "rebuild fingerprint", "post-rebuild query"],
+      "lifecycle_participation": "workspace projections purged; platform projections independently rebuildable", "backup_participation": "projection fingerprints, never canonical authority",
+      "implemented_status": "current projection profiles implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase I rebuild", "Phase J projection integration"]
+    },
+    {
+      "module_id": "knowledge.context-assembly", "version": "1.8.0", "purpose": "Mandatory deterministic base ConstructionHarnessContextPack before AI.",
+      "inputs": ["workspace facts", "Practice", "NTD", "RuleVersions", "gaps/defects"], "outputs": ["bounded ContextPack/EvidencePack"],
+      "dependencies": ["Knowledge Gateway", "WorkRequirementMatrix"], "schema_relations": ["workspace.construction_harness_context_packs"],
+      "contract_keys": ["construction.harness.context-pack"], "qualification_checks": ["mandatory pack", "authority separation", "defect rule exclusion", "bounded BF16 smoke"],
+      "lifecycle_participation": "workspace context is ephemeral/reset-scoped", "backup_participation": "context fingerprint in qualification backup",
+      "implemented_status": "base assembly implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E assembly", "Phase G deterministic/model boundary", "Phase I backup"]
+    },
+    {
+      "module_id": "knowledge.provider-model-independence", "version": "1.8.0", "purpose": "Keep canonical memory and ContextPack invariant across model/provider profiles.",
+      "inputs": ["same pinned ContextPack", "different execution profile"], "outputs": ["same canonical/context fingerprint"],
+      "dependencies": ["Gateway", "AI harness"], "schema_relations": ["platform canonical tables", "workspace execution attempts"],
+      "contract_keys": ["vlm.harness", "construction.harness.context-pack"], "qualification_checks": ["local/other profile equality", "fresh BF16 structural output"],
+      "lifecycle_participation": "model attempts are workspace transient; knowledge is platform permanent", "backup_participation": "model identity excluded from canonical semantic fingerprint",
+      "implemented_status": "boundary implemented and bounded-qualified", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase G provider-independent ContextPack", "Phase I canonical fingerprint"]
+    },
+    {
+      "module_id": "documents.generation-contracts", "version": "WP-13", "purpose": "Evidence-bound ID generation candidates and finalization gates.",
+      "inputs": ["verified facts", "template/form version", "field guidance"], "outputs": ["generation candidate", "print/review blockers"],
+      "dependencies": ["Support", "authority gate"], "schema_relations": ["workspace support generation tables"],
+      "contract_keys": ["generation", "support"], "qualification_checks": ["missing field gap", "print/review gate", "full Support tests"],
+      "lifecycle_participation": "workspace generation artifacts reset-scoped", "backup_participation": "approved document lineage only",
+      "implemented_status": "contracts and bounded generation implemented", "qualification_status": "PARTIAL", "known_gaps": ["production template/render/print acceptance remains outside this cycle"], "cycle_steps": ["Phase H invalid/missing data", "Phase J Support tests"]
+    },
+    {
+      "module_id": "geometry.cad-integration", "version": "0.1.0-contract", "purpose": "Future Drawing Intelligence and confirmed geometry boundary.",
+      "inputs": ["drawing/geometry candidates"], "outputs": ["confirmed-source geometry or blocker"],
+      "dependencies": ["future CAD/VLM adapters"], "schema_relations": [], "contract_keys": ["geometry"],
+      "qualification_checks": ["geometry confirmed-source semantic invariant"],
+      "lifecycle_participation": "future workspace data", "backup_participation": "not yet physical",
+      "implemented_status": "contract boundary only", "qualification_status": "CONTRACT_ONLY", "known_gaps": ["CAD parsing and Drawing Intelligence are not implemented"], "cycle_steps": ["Phase A Contract Pack", "Phase J contract tests"]
+    },
+    {
+      "module_id": "operations.cli-tools-scripts", "version": "0.1.0", "purpose": "Bounded operational entrypoints for ingestion, verification and integrity qualification.",
+      "inputs": ["explicit profiles/manifests"], "outputs": ["typed content-minimal summaries", "external receipts"],
+      "dependencies": ["application services"], "schema_relations": [], "contract_keys": ["system integrity qualification"],
+      "qualification_checks": ["runner unit tests", "three-cycle execution", "immutable external receipts"],
+      "lifecycle_participation": "must respect lifecycle and external staging", "backup_participation": "scripts do not become canon",
+      "implemented_status": "task-specific commands implemented; no unified production operator console", "qualification_status": "PARTIAL", "known_gaps": ["production operational orchestration and observability are not complete"], "cycle_steps": ["Phase A runner checks", "Phase A-J orchestration", "Phase J leak reconciliation"]
+    },
+    {
+      "module_id": "construction.customer-regulation-overlay", "version": "1.8.0", "purpose": "Workspace-bound additive-only customer requirements over verified normative minima.",
+      "inputs": ["normative-verified document minimum", "customer addition evidence"], "outputs": ["increased copies/evidence only"],
+      "dependencies": ["WorkRequirementMatrix", "RLS"], "schema_relations": ["workspace.customer_regulation_additions"],
+      "contract_keys": ["construction harness customer addition"], "qualification_checks": ["positive overlay", "negative copies rejected", "unverified basis rejected", "cross-workspace rejected"],
+      "lifecycle_participation": "workspace-local and reset-scoped", "backup_participation": "matrix overlay provenance included",
+      "implemented_status": "model, trigger and tests implemented", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E common chain", "Phase J database constraint tests"]
+    },
+    {
+      "module_id": "construction.unified-harness", "version": "1.8.0", "purpose": "One Harness Memory and deterministic process kernel across four modes.",
+      "inputs": ["ProjectDefinition", "WorkPackages", "Harness Memory"], "outputs": ["shared matrix", "ContextPack", "four mode views"],
+      "dependencies": ["all construction and knowledge modules"], "schema_relations": ["workspace unified harness tables"],
+      "contract_keys": ["construction harness"], "qualification_checks": ["multi-work vertical fixture", "same matrix across modes", "PostgreSQL persistence", "reset/backup/projection"],
+      "lifecycle_participation": "all workspace rows registered for reset", "backup_participation": "project/matrix/context/mode fingerprints",
+      "implemented_status": "bounded implementation merged at canonical baseline", "qualification_status": "READY_FOR_INTEGRITY_CYCLE", "known_gaps": [], "cycle_steps": ["Phase E common chain", "Phase F modes", "Phase I durability", "Phase J full suite"]
+    },
+    {
+      "module_id": "knowledge.ntd-official-acquisition", "version": "NTD-SEED-01", "purpose": "Official Minstroy catalogue resolution and immutable acquisition receipts.",
+      "inputs": ["bounded exact identifier manifest"], "outputs": ["official artifact/edition or typed terminal gap"],
+      "dependencies": ["official endpoint availability"], "schema_relations": ["platform NTD acquisition tables"], "contract_keys": ["normative knowledge"],
+      "qualification_checks": ["historical terminal gaps preserved", "no third-party fallback"],
+      "lifecycle_participation": "platform scope", "backup_participation": "receipts/gaps included; raw downloads external",
+      "implemented_status": "client and bounded reconciliation implemented", "qualification_status": "BLOCKED", "known_gaps": ["official endpoint was inaccessible; acquisition is explicitly excluded from this cycle"], "cycle_steps": ["Phase C historical gap reconciliation", "Phase J client fixture tests"]
+    },
+    {
+      "module_id": "execution.external-distributed", "version": "G-07B-unmerged", "purpose": "Future authorized external raster execution through the same Harness.",
+      "inputs": ["authorized minimized raster shard"], "outputs": ["provider execution result candidate"],
+      "dependencies": ["provider terms", "egress policy", "budget qualification"], "schema_relations": [], "contract_keys": ["G-07 provider-neutral boundary only"],
+      "qualification_checks": ["canonical main has no production external adapter"],
+      "lifecycle_participation": "future workspace attempt scope", "backup_participation": "no canonical memory ownership",
+      "implemented_status": "separate unmerged worktree intentionally untouched", "qualification_status": "NOT_IMPLEMENTED", "known_gaps": ["G-07B is outside canonical main and outside SYSTEM-INTEGRITY-CYCLE-01"], "cycle_steps": ["Phase A confirms canonical imports only"]
+    }
+  ]
+}

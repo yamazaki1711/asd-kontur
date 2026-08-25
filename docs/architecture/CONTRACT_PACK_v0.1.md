@@ -750,3 +750,14 @@ terminal outcomes, immutable editions/artifacts/provisions, explicit
 activation/applicability decisions and separate normative Knowledge Gateway
 envelopes. It rejects mutable `latest`, unofficial substitution and verified
 provisions without exact official evidence, and never creates `RuleVersion`.
+
+UNIFIED-HARNESS-01 and SYSTEM-INTEGRITY-CYCLE-01 add immutable additive
+`contracts/v1.8` and `contracts/v1.9`. MEMORY-INTEGRITY-FIX-01 adds
+`contracts/v2.0` without mutating them. Version 2.0 replaces ambiguous physical
+row labels with explicit source identity, semantic identity/version,
+active-release/history, playbook identity/version, logical gap/snapshot,
+conflict and quarantine denominators. It defines separate all-history,
+active-release semantic and active ContextPack-binding fingerprints. Missing
+canonical relations or selected bindings are typed failures, never empty input.
+`READY_FOR_INTEGRITY_CYCLE` remains participation status only; a zero-row Rule
+Registry is `infrastructure_ready=true` and `operational_rule_coverage=false`.

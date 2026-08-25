@@ -135,9 +135,9 @@ test("owner reaches the four-mode shell and honest blockers", async ({
     }
     if (path === "/api/v1/capabilities") {
       return json(route, {
-        contract_version: "2.1.0",
+        contract_version: "2.2.0",
         slice: "PRODUCT-APPLICATION-SPINE-01",
-        implemented: ["application.http_api"],
+        implemented: ["application.http-api"],
         blockers: ["MEMORY_DATA_DEFECT"],
         trial_ready: false,
         oks_ready: false,

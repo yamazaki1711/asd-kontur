@@ -178,7 +178,14 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             assert mode_response.json()["readiness"] == "FOUNDATION_ONLY"
             assert mode_response.json()["gaps"]
         knowledge_before = client.get("/api/v1/platform/knowledge-status").json()
-        assert knowledge_before["memory_data_defect"] is True
+        with postgres_environment.owner_engine.connect() as connection:
+            qualification_status = connection.scalar(
+                sa.text(
+                    "SELECT status FROM platform.platform_memory_qualification_decisions "
+                    "ORDER BY recorded_at DESC,version DESC LIMIT 1"
+                )
+            )
+        assert knowledge_before["memory_data_defect"] is (qualification_status != "pass")
         assert knowledge_before["knowledge_ready"] is False
 
         prepared = client.post(
