@@ -383,6 +383,56 @@ def test_context_assembly_is_mandatory_separated_and_model_independent() -> None
     )
 
 
+def test_context_assembly_and_customer_overlay_are_semantically_deterministic() -> None:
+    project, matrix = _fixture()
+    memory = HarnessMemorySnapshot(
+        ("practice-guide-edition:v1",),
+        ("practice-unit:v1",),
+        ("playbook:v1",),
+        (),
+        (),
+        (),
+        ({"code": "official_ntd_subset_empty"},),
+    )
+    assembler = ConstructionHarnessContextAssembler()
+    first = assembler.assemble(project=project, matrix=matrix, memory=memory)
+    second = assembler.assemble(project=project, matrix=matrix, memory=memory)
+    assert first.context_pack_id == second.context_pack_id
+    assert first.fingerprint == second.fingerprint
+    assert first.assembled_at == second.assembled_at == matrix.created_at
+
+    changed = assembler.assemble(
+        project=project,
+        matrix=matrix,
+        memory=replace(memory, normative_edition_refs=("normative-edition:v1",)),
+    )
+    assert changed.context_pack_id != first.context_pack_id
+    assert changed.fingerprint != first.fingerprint
+
+    original = replace(
+        matrix.rows[0].documents[0],
+        authority_status=RequirementAuthority.NORMATIVE_VERIFIED,
+    )
+    normative_matrix = replace(
+        matrix,
+        rows=(replace(matrix.rows[0], documents=(original,)), *matrix.rows[1:]),
+    )
+    addition = CustomerRegulationAddition(
+        _id("deterministic-addition"),
+        1,
+        ORG,
+        WORKSPACE,
+        original.document_requirement_id,
+        1,
+        (),
+        _evidence("customer-regulation:p=2"),
+    )
+    overlaid_first = apply_customer_regulation_additions(normative_matrix, (addition,))
+    overlaid_second = apply_customer_regulation_additions(normative_matrix, (addition,))
+    assert overlaid_first.fingerprint == overlaid_second.fingerprint
+    assert overlaid_first.created_at == overlaid_second.created_at == matrix.created_at
+
+
 def test_provider_harness_rejects_construction_request_without_base_pack() -> None:
     identity = ExecutionIdentity(
         "local",

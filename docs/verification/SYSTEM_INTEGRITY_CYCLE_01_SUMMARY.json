@@ -1,0 +1,83 @@
+{
+  "contract": "system-integrity-series-summary/1.9.0",
+  "series_id": "SIC01-20260825-R1",
+  "status": "pass",
+  "qualified_commit": "cb8460f1ea019944e3c52a394a004c8a33c37791",
+  "origin_main_baseline": "318c2c0b1543ead2558dc083d80a20e1f0bc0609",
+  "consecutive_pass_count": 3,
+  "counter_resets_in_this_series": 0,
+  "cycle_ids": [
+    "SIC01-20260825-R1-C1",
+    "SIC01-20260825-R1-C2",
+    "SIC01-20260825-R1-C3"
+  ],
+  "cycle_fingerprints": [
+    "sha256:fb2b91a2eaaa8dd9fd32126ea651b14722f5ee36a384f636fcf23f0f9b76c4b1",
+    "sha256:fb2b91a2eaaa8dd9fd32126ea651b14722f5ee36a384f636fcf23f0f9b76c4b1",
+    "sha256:fb2b91a2eaaa8dd9fd32126ea651b14722f5ee36a384f636fcf23f0f9b76c4b1"
+  ],
+  "environment_fingerprints": [
+    "sha256:1ef01d099bd8be75369ffdb3b2f819272f9ed515048a126f8d89a399a6dde102",
+    "sha256:1ef01d099bd8be75369ffdb3b2f819272f9ed515048a126f8d89a399a6dde102",
+    "sha256:1ef01d099bd8be75369ffdb3b2f819272f9ed515048a126f8d89a399a6dde102"
+  ],
+  "semantic_fingerprints": {
+    "backup_restore_fingerprint": "sha256:1c1989551d104d375a0cf51f79a39c3d5159f324991c00d84241ce380bb6cf13",
+    "code_fingerprint": "sha256:1d9ffb71ecec80462f7810710a547b61b4b55ed48c990e8ba939e84801ab3a64",
+    "context_pack_fingerprint": "sha256:7f4bdaa9fab4c79439dc9d8a476f009dce4371d711d05d85ffcebf78844ed394",
+    "contract_pack_fingerprint": "sha256:1ff20421f8cb5c35ac7c0fef2c19e9a5735c012ea09e91dce4cfc22479a5775a",
+    "fixture_source_fingerprint": "sha256:715699410d2168bb1a849de60a63d4e40ec6e407b2b172fa3373b64d91013bdf",
+    "four_mode_output_fingerprint": "sha256:475fd675dda75e7d4b6ba0cf52a3957e865c771beb264f8d320c38dfc598e47e",
+    "lock_fingerprint": "sha256:3f5ae3fd513ad244d12bd24eb6c4b0201fc17334fd2051f2aaea0b85a8b228cd",
+    "module_readiness_fingerprint": "sha256:f384aabb783a404138f553ca03b9cfb8e6da2fa6afccbebab0ba035435014fd5",
+    "platform_semantic_fingerprint": "sha256:a11065180d4f92f94611094e77b6fa68107ab073b796909c48a4a4113776c00d",
+    "projection_fingerprint": "sha256:59731fc3d65ff24479e9f204110d8b287e8740ba40704c51028f25be56f4b518",
+    "qwen_structural_fingerprint": "sha256:bb49fedbd53caa617d4f130905d6d3a2029cf02a0c9bc74ce0145ca625f0c70c",
+    "schema_fingerprint": "sha256:c4ebe397dcf031b3d7f1a2a15e4647ea571bc7be340b821825dff5b89696658c",
+    "work_requirement_matrix_fingerprint": "sha256:dddd2beb6632fef8ca834e91579fed7bd939528c72b3051cfc9f08e713a7db34"
+  },
+  "module_readiness": {
+    "total": 33,
+    "READY_FOR_INTEGRITY_CYCLE": 24,
+    "PARTIAL": 6,
+    "BLOCKED": 1,
+    "CONTRACT_ONLY": 1,
+    "NOT_IMPLEMENTED": 1
+  },
+  "platform_memory_counts": {
+    "practice_guidance_units": 2410,
+    "practice_intelligence_unit_versions": 13994,
+    "practice_playbook_versions": 3244,
+    "practice_guidance_gaps": 858,
+    "practice_guidance_conflicts": 138,
+    "practice_guide_normative_references": 37,
+    "ntd_gaps": 25,
+    "normative_documents": 0,
+    "normative_editions": 0,
+    "normative_provisions": 0,
+    "rule_versions": 0
+  },
+  "full_suite_passed_per_cycle": [357, 357, 357],
+  "fault_injections_per_cycle": 12,
+  "resource_leaks_per_cycle": [0, 0, 0],
+  "bf16": {
+    "model_digest": "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766",
+    "runtime": {"mlx": "0.32.1", "mlx_vlm": "0.6.15", "transformers": "5.15.1"},
+    "temperature": 0,
+    "request_digest": "sha256:2006fbb880e2b3eb49e75f5faad6434973b1e074003840d5764d326562924191",
+    "response_digest": "sha256:f2d655218b3843f0aefba2b4e9751530cf21f3da3c2c1f7d85c0fd35ce61f085",
+    "structural_fingerprint": "sha256:bb49fedbd53caa617d4f130905d6d3a2029cf02a0c9bc74ce0145ca625f0c70c"
+  },
+  "pre_series_defects": [
+    "CONTEXT_PACK_SEMANTIC_NONDETERMINISM",
+    "SCHEMA_FINGERPRINT_PHYSICAL_ORDINAL_NOISE",
+    "INTEGRITY_RECEIPT_UUID_SERIALIZATION_FAILED",
+    "MLX_RUNTIME_IMPORT_BOUNDARY_VIOLATION",
+    "COMMITTED_WHITESPACE_NOT_SCANNED"
+  ],
+  "historical_states_preserved": {
+    "KG-ID-01": "PARTIAL:24/25-systemic:7/7-adversarial",
+    "NTD-SEED-01": "PARTIAL:25-official_access_blocked:0-editions:0-provisions"
+  },
+  "product_ready": false
+}

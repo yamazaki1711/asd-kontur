@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
 from asd_kontur.domain import deterministic_uuid
+from asd_kontur.harness.models import digest_of
 
 from .models import (
     ConstructionHarnessContextPack,
@@ -108,7 +108,7 @@ def apply_customer_regulation_additions(
         tuple(revised_rows),
         tuple(item.addition_id for item in additions),
         matrix.rule_set_version_id,
-        datetime.now(UTC),
+        matrix.created_at,
     )
 
 
@@ -162,34 +162,53 @@ class ConstructionHarnessContextAssembler:
                     "affected_reference": defect.affected_reference,
                 }
             )
+        workspace_fact_refs = tuple(
+            f"project-characteristic:{item.characteristic_id}:v{item.version}"
+            for item in project.characteristics
+        )
+        customer_addition_refs = tuple(
+            f"customer-regulation:{item.addition_id}:v{item.version}" for item in customer_additions
+        )
+        consistency_defect_ids = tuple(item.defect_id for item in memory.defects)
+        context_identity_material = digest_of(
+            {
+                "contract_version": HARNESS_CONTRACT_VERSION,
+                "organization_id": project.organization_id,
+                "workspace_id": project.workspace_id,
+                "project_definition_ref": (project.project_definition_id, project.version),
+                "matrix_ref": (matrix.matrix_id, matrix.version),
+                "matrix_fingerprint": matrix.fingerprint,
+                "workspace_fact_refs": workspace_fact_refs,
+                "practice_intelligence_refs": memory.practice_intelligence_refs,
+                "practice_playbook_refs": memory.practice_playbook_refs,
+                "normative_edition_refs": memory.normative_edition_refs,
+                "normative_provision_refs": memory.normative_provision_refs,
+                "active_rule_version_refs": safe_rules,
+                "customer_addition_refs": customer_addition_refs,
+                "source_evidence": evidence,
+                "knowledge_gaps": tuple(gaps),
+                "consistency_defect_ids": consistency_defect_ids,
+            }
+        )
         return ConstructionHarnessContextPack(
-            context_pack_id=deterministic_uuid(
-                f"construction-context:{project.fingerprint}:{matrix.fingerprint}:"
-                f"{','.join(memory.practice_intelligence_refs)}:{','.join(safe_rules)}"
-            ),
+            context_pack_id=deterministic_uuid(f"construction-context:{context_identity_material}"),
             contract_version=HARNESS_CONTRACT_VERSION,
             organization_id=project.organization_id,
             workspace_id=project.workspace_id,
             project_definition_ref=(project.project_definition_id, project.version),
             matrix_ref=(matrix.matrix_id, matrix.version),
             matrix_fingerprint=matrix.fingerprint,
-            workspace_fact_refs=tuple(
-                f"project-characteristic:{item.characteristic_id}:v{item.version}"
-                for item in project.characteristics
-            ),
+            workspace_fact_refs=workspace_fact_refs,
             practice_intelligence_refs=memory.practice_intelligence_refs,
             practice_playbook_refs=memory.practice_playbook_refs,
             normative_edition_refs=memory.normative_edition_refs,
             normative_provision_refs=memory.normative_provision_refs,
             active_rule_version_refs=safe_rules,
-            customer_addition_refs=tuple(
-                f"customer-regulation:{item.addition_id}:v{item.version}"
-                for item in customer_additions
-            ),
+            customer_addition_refs=customer_addition_refs,
             source_evidence=evidence,
             knowledge_gaps=tuple(gaps),
-            consistency_defect_ids=tuple(item.defect_id for item in memory.defects),
-            assembled_at=datetime.now(UTC),
+            consistency_defect_ids=consistency_defect_ids,
+            assembled_at=max(project.created_at, matrix.created_at),
         )
 
 

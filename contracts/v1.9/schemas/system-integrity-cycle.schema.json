@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v1.9:schema:system-integrity-cycle",
+  "title": "ASD-KONTUR clean-room system integrity qualification",
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "readinessStatus": {
+      "enum": ["READY_FOR_INTEGRITY_CYCLE", "PARTIAL", "BLOCKED", "CONTRACT_ONLY", "NOT_IMPLEMENTED"]
+    },
+    "moduleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["module_id", "version", "purpose", "inputs", "outputs", "dependencies", "schema_relations", "contract_keys", "qualification_checks", "lifecycle_participation", "backup_participation", "implemented_status", "qualification_status", "known_gaps", "cycle_steps"],
+      "properties": {
+        "module_id": {"type": "string", "pattern": "^[a-z0-9_.-]+$"},
+        "version": {"type": "string", "minLength": 1, "not": {"pattern": "(?i)^latest$"}},
+        "purpose": {"type": "string", "minLength": 1},
+        "inputs": {"type": "array", "items": {"type": "string"}},
+        "outputs": {"type": "array", "items": {"type": "string"}},
+        "dependencies": {"type": "array", "items": {"type": "string"}},
+        "schema_relations": {"type": "array", "items": {"type": "string"}},
+        "contract_keys": {"type": "array", "items": {"type": "string"}},
+        "qualification_checks": {"type": "array", "items": {"type": "string"}},
+        "lifecycle_participation": {"type": "string", "minLength": 1},
+        "backup_participation": {"type": "string", "minLength": 1},
+        "implemented_status": {"type": "string", "minLength": 1},
+        "qualification_status": {"$ref": "#/$defs/readinessStatus"},
+        "known_gaps": {"type": "array", "items": {"type": "string"}},
+        "cycle_steps": {"type": "array", "items": {"pattern": "^Phase [A-J]"}}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"qualification_status": {"const": "READY_FOR_INTEGRITY_CYCLE"}}},
+          "then": {"properties": {"qualification_checks": {"minItems": 1}, "cycle_steps": {"minItems": 1}}}
+        },
+        {
+          "if": {"properties": {"qualification_status": {"enum": ["PARTIAL", "BLOCKED", "CONTRACT_ONLY", "NOT_IMPLEMENTED"]}}},
+          "then": {"properties": {"known_gaps": {"minItems": 1}}}
+        }
+      ]
+    },
+    "moduleManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_version", "manifest_id", "code_baseline", "product_ready", "modules"],
+      "properties": {
+        "contract_version": {"const": "1.9.0"},
+        "manifest_id": {"const": "SYSTEM-INTEGRITY-MODULE-READINESS-v0.1"},
+        "code_baseline": {"type": "string", "minLength": 1},
+        "product_ready": {"const": false},
+        "modules": {"type": "array", "minItems": 25, "items": {"$ref": "#/$defs/moduleEntry"}}
+      }
+    },
+    "cycleSummary": {
+      "type": "object",
+      "required": ["contract", "cycle_id", "series_id", "status", "environment_fingerprint", "semantic_fingerprints", "final_cycle_fingerprint", "product_ready"],
+      "properties": {
+        "contract": {"const": "system-integrity-cycle-summary/1.9.0"},
+        "cycle_id": {"type": "string"},
+        "series_id": {"type": "string"},
+        "status": {"const": "pass"},
+        "environment_fingerprint": {"$ref": "#/$defs/digest"},
+        "semantic_fingerprints": {"type": "object", "minProperties": 13, "additionalProperties": {"$ref": "#/$defs/digest"}},
+        "final_cycle_fingerprint": {"$ref": "#/$defs/digest"},
+        "product_ready": {"const": false}
+      }
+    },
+    "seriesSummary": {
+      "type": "object",
+      "required": ["contract", "series_id", "status", "consecutive_pass_count", "cycle_ids", "semantic_fingerprints", "product_ready"],
+      "properties": {
+        "contract": {"const": "system-integrity-series-summary/1.9.0"},
+        "series_id": {"type": "string"},
+        "status": {"const": "pass"},
+        "consecutive_pass_count": {"const": 3},
+        "cycle_ids": {"type": "array", "minItems": 3, "maxItems": 3, "uniqueItems": true},
+        "semantic_fingerprints": {"type": "object", "minProperties": 13, "additionalProperties": {"$ref": "#/$defs/digest"}},
+        "product_ready": {"const": false}
+      }
+    }
+  }
+}

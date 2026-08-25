@@ -1,0 +1,6 @@
+{
+  "fixtures": [
+    {"path": "valid/module-readiness-manifest.json", "schema_pointer": "/$defs/moduleManifest", "expected": "valid"},
+    {"path": "invalid/unexercised-ready-module.json", "schema_pointer": "/$defs/moduleManifest", "expected": "invalid"}
+  ]
+}
