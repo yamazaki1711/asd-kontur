@@ -731,6 +731,8 @@ Development-профиль с синтетическими данными мож
 | Reset не завершается без residual scan | State transition guard + attestation schema |
 | Очистка охватывает canon, indexes, graph, queues, caches, temp | Adapter Registry completeness test + residual scan |
 | Platform memory не удаляется reset | Separate schema/role + platform hash regression test |
+| `permanent_platform_core` не попадает в workspace deletion plan | Lifecycle adapter registry excludes the class structurally; only whole-platform decommission with a separate owner decision may authorize deletion |
+| Practice source и intelligence восстанавливаются побитово и семантически | Backup manifest pins SourceVersion/object SHA-256/canonical versions/ContextAssemblyPolicy; restore verifies byte and semantic fingerprints before projection rebuild |
 | AI candidate не переживает reset вне Promotion Gate | FK/scope constraints + promotion/reset integration test |
 | Архив невалиден без manifest+integrity | Archive service guard + restore/readability test |
 | Adapter failure не маскируется | Typed aggregate result without catch-all success + fault injection test |
@@ -773,6 +775,17 @@ Development-профиль с синтетическими данными мож
 | LR-AT-25 | MBP cleaned, VPS queue/staging/log residue remains | Attestation `failed/incomplete`; no `RESET_VERIFIED` |
 | LR-AT-26 | S3 delete leaves object version or multipart remnant | Residue reported; destroy/reset not verified |
 | LR-AT-27 | One mandatory MBP/VPS/S3 adapter unavailable | `not_checked` and fail-closed; zero count cannot be inferred |
+| LR-AT-28 | Reset/destroy workspace A при общей practice memory | SourceVersion и canonical Practice Intelligence fingerprints не изменены; B видит те же platform versions без доступа к A |
+| LR-AT-29 | Delete exact/FTS/vector/graph practice projections | Canonical units не меняются; projections rebuild to the pinned semantic fingerprint |
+| LR-AT-30 | Backup/restore permanent practice memory | Object SHA-256, source edition identities, canonical versions, policy and semantic fingerprints exact |
+
+`permanent_platform_core` is not a long workspace retention period. It is a
+separate platform ownership class for the practice-guide source and canonical
+ID Practice Intelligence. Reset, archive, purge and destroy of an OKS
+workspace cannot enumerate this class. Raw prompts/responses/renders keep
+their own processing retention and are not promoted into permanent storage by
+default. Removal of the permanent class is allowed only during decommission of
+the whole platform under a separate explicit owner decision.
 
 ## 17. MBP M5 Max и capacity governance
 

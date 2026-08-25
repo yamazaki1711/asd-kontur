@@ -86,11 +86,27 @@ platform ingestion ledger.
 - `contract_requirement`, `customer_regulation`;
 - `knowledge_assertion` с интервалом действия и обязательным provenance.
 
-Отдельный canonical authority layer `methodological_guidance` содержит
+Отдельный canonical authority layer `methodological_practice` содержит
 `PracticeGuideEdition`, structural units, typed ID/form/field/workflow
 guidance, evidence, uncertainties и явные conflicts. Он не является
 `KnowledgeAssertion` нормативного слоя и не может изменять НТД или активную
 `RuleVersion`. Пример заполнения не становится универсальным требованием.
+
+По ADR-0011 этот слой строится не как RAG-набор независимых chunks, а как
+постоянный versioned `ID Practice Intelligence`. Его физическая архитектура
+состоит из пяти уровней:
+
+1. permanent source bytes/metadata/receipt;
+2. canonical typed Practice Intelligence;
+3. deterministic operationalization и RuleCandidate boundary;
+4. rebuildable exact/FTS/vector/sparse/graph projections;
+5. ephemeral deterministic `IDPracticeContextPack` runtime context.
+
+Исходный `SourceVersion` и canonical intelligence имеют retention class
+`permanent_platform_core`. Workspace lifecycle не может адресовать их для
+удаления. Новые bytes создают новую `PracticeGuideEdition`; прежняя не
+перезаписывается. Backup/restore проверяет object SHA-256 и semantic
+fingerprints до перестроения retrieval plane.
 
 НТД, договорные требования, правила заказчика и знания конкретного ОКС не смешиваются. На запросе применяются дата, юрисдикция, стадия, вид работ и договорный контекст.
 
@@ -170,8 +186,16 @@ Additive methodological-guidance contract предоставляет:
 - `knowledge.trace_guidance`;
 - `knowledge.explain_guidance_conflict`.
 
-Эти tools всегда возвращают authority layer `methodological_guidance` и exact
+Эти tools всегда возвращают authority layer `methodological_practice` и exact
 page/region EvidencePack. Внешний provider прямого доступа к ним не получает.
+
+Любая ID-related операция обязана сначала выполнить version-pinned
+`ContextAssemblyPolicy`. Она выбирает релевантные units по документу,
+форме/полю, виду работ, разделу РД, этапу, контрольной операции, evidence,
+комплектованию, режиму и задаче ID Generator. Модель не решает, вызывать ли
+Gateway, и не получает все страницы пособия. `knowledge_incomplete`,
+`guidance_normative_conflict` и `edition_mismatch` являются typed outcomes;
+silent empty retrieval запрещён.
 
 Gateway строит **Evidence Pack**:
 
@@ -201,8 +225,9 @@ trusted application layer выполняет retrieval/validation локальн
 - общие классификаторы и онтология;
 - обезличенные и утверждённые паттерны ошибок;
 - тестовые наборы и оценки качества;
-- проверенные методические руководства и опубликованные guidance units с
-  отдельной ненормативной authority.
+- immutable редакции методических руководств и versioned ID Practice
+  Intelligence с отдельной ненормативной authority
+  `methodological_practice`.
 
 ### Workspace-память ОКС
 

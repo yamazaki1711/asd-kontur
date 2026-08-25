@@ -330,7 +330,7 @@ a workspace `Conflict`, and cannot update `NormativeEdition`,
 
 | Entity | Purpose/scope/identity | Mandatory attributes/lifecycle | Relations, integrity, provenance, retention/status |
 |---|---|---|---|
-| `PracticeGuide` / `PracticeGuideEdition` | Stable platform methodological source and immutable byte edition; not NTD | exact PlatformSourceArtifact/Version, digest, pages, acquisition/object receipt provenance, authority layer `methodological_guidance` | Survives workspace reset; changed bytes create an edition; no official-NTD or workspace identity |
+| `PracticeGuide` / `PracticeGuideEdition` | Stable permanent platform methodological source and immutable byte edition; not NTD | exact PlatformSourceArtifact/Version, digest, pages, acquisition/object receipt provenance, authority layer `methodological_practice`, retention class `permanent_platform_core` | Survives workspace reset/archive/purge/destroy; changed bytes create a new retained edition; no official-NTD or workspace identity |
 | `GuideStructuralUnit` | Addressable book/part/chapter/section/topic/page-region | edition, structural path, page interval, title, parent/order, integrity digest | Same-edition hierarchy; a page-region unit may remain leaf evidence when higher hierarchy is uncertain |
 | `GuidePageManifest` | Deterministic one-based technical inventory before model semantics | page/content/render digests, box/rotation, native/raster composition, render requirement, previous/next lineage | Exactly one immutable row per physical page; model classification cannot rewrite it |
 | `GuidanceCandidateVersion` | Qwen-extracted typed workflow/form/field/evidence/signer/error/example candidate | exact source/page/region, kind, conditions/limitations/uncertainties, model/profile/prompt/schema/render provenance, parent version | Pass A/B/model confidence never publishes it; correction appends version and requires revalidation |
@@ -338,6 +338,19 @@ a workspace `Conflict`, and cannot update `NormativeEdition`,
 | `GuidanceConflict` / `GuidanceUncertainty` | Explicit mismatch or applicability/evidence gap | exact guidance unit version, other authority subject/evidence, state, decision or content-minimal parameters | Model cannot resolve; normative source retains precedence according to applicable policy/authority |
 | `GuidePageTerminalReceipt` / `GuideIngestionReconciliation` | Proof that every physical page has a typed terminal outcome | exact attempts/digests, per-page state/counts, expected/terminal totals, fingerprint, verifier | Partial/failed/unresolved cannot become complete; append-only platform evidence |
 | `PracticeGuidanceLexicalVersion` | Rebuildable exact/FTS projection | canonical source fingerprint, contract version, state/count | Delete/rebuild does not change guidance canon; vector readiness needs a separately qualified embedding profile |
+| `PracticeIntelligenceUnitVersion` | Common immutable passport for typed principle/workflow/form/field/completion/attention/variant/rationale/failure/checklist/completeness/journal/dependency/signer/visual/playbook knowledge | stable identity/version, exact SourceVersion/page/region and fragment digest, applicability and work/document/form/field relations, NTD candidates, verification/uncertainty/conflict, model/validator lineage | Canonical `methodological_practice`; append-only versions; no active rule or workspace fact side effect |
+| `ContextAssemblyPolicy` | Versioned deterministic selector for ID-related runtime context | exact policy/version, mode/task/document/form/field/work/stage/control/evidence/completeness predicates, source-edition pins, bounds and fingerprint | Platform canonical policy; same inputs produce the same selected unit identities independent of VLM/provider |
+| `IDPracticeContextPack` | Ephemeral evidence-bearing runtime projection for one scoped ID operation | policy/source edition, selected exact unit versions, normative/practice/workspace partitions, gaps/conflicts/edition mismatch and citations | Rebuilt per request; not a source of truth; no cross-workspace data; silent empty success forbidden |
+
+The typed `PracticeIntelligenceUnitVersion` specializations are
+`PracticePrinciple`, `IDWorkflowStep`, `DocumentFormGuidance`,
+`FormFieldGuidance`, `CompletionInstruction`, `AttentionPoint`,
+`AllowedPracticeVariant`, `PracticeRationale`, `CommonFailurePattern`,
+`VerificationChecklist`, `CompletenessGuidance`, `JournalSelectionGuidance`,
+`DocumentDependencyGuidance`, `SignerRoleGuidance`,
+`VisualCompletionExample` and `PracticePlaybook`. A printed NTD designation is
+first a `NormativeReferenceCandidate`; only the exact edition resolver may
+create the canonical `NormativeEdition` relation.
 
 ### 7.2. Deterministic rule passports
 

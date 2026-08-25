@@ -7,10 +7,12 @@ Knowledge Gateway memory acceptance. **ProductReady:** `false`.
 
 ## 1. Scope and authority boundary
 
-KG-ID-01 implements native-first, two-pass ingestion of one methodological
-practice guide into a permanent platform knowledge layer. The source type is
+KG-ID-01 implements native-first, evidence-backed construction of permanent,
+model-independent ID Practice Intelligence from the primary methodological
+practice guide. Pass A/B are bounded extraction/verification instruments, not
+a qualification corpus, benchmark or product objective. The source type is
 `MethodologicalPracticeGuide`; its authority layer is
-`methodological_guidance`. It is neither NTD, legislation, a customer
+`methodological_practice`. It is neither NTD, legislation, a customer
 regulation, a workspace document, an active `RuleVersion`, nor evidence of an
 OKS fact.
 
@@ -22,7 +24,10 @@ local Qwen ProviderExecutionResult
 → deterministic validation
 → independent Qwen verification
 → qualified human publication decision
-→ canonical PracticeGuidanceUnit
+→ canonical typed ID Practice Intelligence
+→ deterministic Context Assembly
+→ Knowledge Gateway
+→ any authorized VLM
 ```
 
 Qwen cannot publish, activate a rule, resolve a normative conflict, confirm a
@@ -192,7 +197,7 @@ The non-owner `asd_guidance_ingestion_service` and
 `asd_guidance_gateway_service` roles have narrow platform/projection/audit
 grants. Candidate, verification, receipt, reconciliation, publication,
 conflict and uncertainty records are append-only. Canonical publication needs
-an explicit qualified human `methodological_guidance.publish` capability;
+an explicit qualified human `methodological_practice.publish` capability;
 conflict recording has a separate human capability.
 
 `persist-verified-guidance` consumes only the final bounded reconciliation
@@ -212,12 +217,28 @@ Contract Pack v1.5 adds exact, allowlisted tools:
 - `knowledge.trace_guidance`;
 - `knowledge.explain_guidance_conflict`.
 
-Every successful response carries `authority_layer=methodological_guidance`,
+Every successful response carries `authority_layer=methodological_practice`,
 the exact source version and page-region EvidencePack. Missing query/index,
 missing guidance, an unavailable projection and an unknown conflict return
 typed gaps/statuses rather than empty success. The model receives no SQL and
 the external-provider boundary receives no Gateway capability. Exact/FTS
 retrieval is implemented; no vector qualification claim is made.
+
+Publication of source assertions is not the completion condition. Verified
+source guidance must be transformed into versioned principles, workflow steps,
+form/field completion instructions, attention points, allowed variants,
+rationale, common failure patterns, verification/completeness/journal
+checklists, document dependencies, signer guidance, visual examples and
+playbooks. Each unit retains exact SourceVersion/page/region, fragment digest,
+applicability, relations, printed NTD candidates, uncertainty/conflict and
+construction lineage.
+
+Every ID-related operation must run a pinned deterministic
+`ContextAssemblyPolicy` before VLM execution. The selected
+`IDPracticeContextPack` separates normative requirements, practice advice,
+workspace facts and missing information. `knowledge_incomplete`,
+`guidance_normative_conflict` and `edition_mismatch` are terminal typed
+retrieval outcomes, not empty context.
 
 ## 8. Independent-session memory acceptance
 
@@ -233,8 +254,12 @@ visual example promoted to a norm, unsupported NTD conflict resolution,
 missing evidence and attempted RuleVersion activation. Invented citations,
 authority escalation or a positive answer without evidence fail the gate.
 
-Final measured independent-session task counts will replace this paragraph
-after the fresh-session run finishes.
+The first completed independent-session run produced 28/28 terminal receipts,
+but only 7/25 systemic scenarios and 3/3 adversarial scenarios passed; 15
+responses had model-response integrity failures and three systemic tasks were
+not answered. Therefore memory acceptance is **failed** and KG-ID-01 remains
+open. Receipts are retained unchanged; only bounded targeted correction and
+re-verification may follow.
 
 ## 9. Lifecycle and product impact
 
@@ -259,11 +284,43 @@ KG-ID-01 can become `PASS` only after:
 
 1. all 425 pages have exact terminal receipts;
 2. real local Qwen processed text and required visuals in Pass A and Pass B;
-3. supported, deterministically valid units were published to the permanent
-   local platform instance;
-4. a fresh Qwen session passed at least 25 exact-citation Gateway tasks and the
-   adversarial boundary suite;
-5. canonical CI passed without publishing source content.
+3. supported, deterministically valid source knowledge was constructed into
+   canonical typed Practice Intelligence and published to the permanent local
+   platform instance;
+4. mandatory Context Assembly and Gateway serve source-pinned packs
+   independently of VLM/provider, survive workspace reset and restore, and
+   expose gaps/conflicts/edition mismatches;
+5. a fresh VLM session passed at least 25 scenario-based exact-citation tasks
+   and the adversarial boundary suite;
+6. canonical CI passed without publishing source content.
 
-Until all five are measured, the honest status remains `IN PROGRESS` rather
+Until all six are measured, the honest status remains `IN PROGRESS` rather
 than a partial success claim.
+
+## 11. ADR-0011 architecture/code gap analysis
+
+Observed at checkpoint `6c0a56e`:
+
+- permanent source/edition, page/candidate receipts, verified guidance,
+  conflicts/gaps and lexical projection contracts already exist;
+- bounded recovery and final reconciliation are complete, and Practice
+  Intelligence construction code/migration is present as an uncommitted
+  implementation delta;
+- current physical/contract terminology still uses
+  `methodological_guidance`, not accepted `methodological_practice`;
+- lifecycle has platform/workspace isolation but no explicit
+  `permanent_platform_core` retention classification or whole-platform-only
+  decommission guard;
+- Gateway retrieval exists, but mandatory deterministic Context Assembly is
+  not yet enforced for every ID-related invocation;
+- backup/restore manifests do not yet pin guide object SHA-256, canonical
+  intelligence semantic fingerprints and `ContextAssemblyPolicy` together;
+- rebuildable projection recovery and provider-independent EvidencePack
+  equality are not yet proven by acceptance tests;
+- fresh-session scenario acceptance is measured and failed, so publication
+  counts cannot close the gate.
+
+The implementation sequence is additive: retain all immutable extraction
+evidence, add the accepted authority/retention/context contracts without
+rewriting published migration history, then run only bounded targeted
+acceptance recovery. `ProductReady` remains `false`.

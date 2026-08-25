@@ -41,9 +41,11 @@ SourceVersion + locator
 используется через физически отдельный platform ingestion ledger: exact
 platform `SourceVersion/page/region → ProviderExecutionResult → platform
 GuidanceCandidateVersion → validators → independent verification → human
-curation`. Workspace execution relations и nullable universal scope для этого
-не переиспользуются. Такой Candidate может стать только ненормативным
-`methodological_guidance`; он не становится workspace Fact, NTD или RuleVersion.
+curation → canonical ID Practice Intelligence`. Workspace execution relations
+и nullable universal scope для этого не переиспользуются. Такой Candidate
+может стать только ненормативным `methodological_practice`; он не становится
+workspace Fact, NTD или RuleVersion. Qualification и Pass A/B доказывают метод
+извлечения, но не превращают пособие в qualification corpus или benchmark.
 
 Связи с нормативными документами:
 
@@ -1016,6 +1018,16 @@ audit. Project payload или live-link на уничтоженный workspace 
 platform memory. PostgreSQL — будущий канон метаданных по Domain Model;
 физическая схема, blob adapter и runtime будут определены позднее. Здесь ORM и
 миграции не создаются.
+
+ADR-0011 дополнительно закрепляет provider-independent practice memory.
+Verified guide candidates are construction inputs for immutable typed
+`ID Practice Intelligence`, not independent RAG chunks. Before every
+ID-related provider attempt the trusted application boundary must run a pinned
+deterministic `ContextAssemblyPolicy` and attach the resulting
+`IDPracticeContextPack`. The provider cannot opt out, browse canonical memory,
+or change selected unit identities. Missing context, normative conflict and
+edition mismatch are typed pre-execution outcomes; no model-only fallback is
+allowed. Changing the VLM/profile leaves canonical knowledge unchanged.
 
 ## 26. Сопоставление с текущим кодом `asd_kontur`
 
