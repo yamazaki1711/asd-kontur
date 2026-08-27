@@ -26,6 +26,7 @@ Machine truth:
 - [Product Application Spine Contract Pack v2.1](../contracts/v2.1/README.md)
 - [Memory Integrity Contract Pack v2.2](../contracts/v2.2/README.md)
 - [Industrial Document Understanding Contract Pack v2.3](../contracts/v2.3/README.md)
+- [Public Product Contour Contract Pack v2.4](../contracts/v2.4/README.md)
 - [FIELD-ANDROID-CLIENT-01 technical debt](implementation/FIELD_ANDROID_CLIENT_01.md)
 - [INDUSTRIAL-DOCUMENT-UNDERSTANDING-01 implementation record](implementation/INDUSTRIAL_DOCUMENT_UNDERSTANDING_01.md)
 - [Product Goal Rebaseline Decision](product/PRODUCT_GOAL_REBASELINE_DECISION_v1.json)

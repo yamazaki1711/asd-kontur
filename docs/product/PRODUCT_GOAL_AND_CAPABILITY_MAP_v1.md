@@ -3,7 +3,7 @@
 - Product Goal: `PRODUCT-GOAL-ASD-KONTUR@1.0.0`
 - Owner source: [GitHub issue #19](https://github.com/yamazaki1711/asd-kontur/issues/19)
 - Machine denominator: [Contract Pack v2.0](../../contracts/v2.0/README.md)
-- Current readiness ledger: [Contract Pack v2.3](../../contracts/v2.3/README.md)
+- Current readiness ledger: [Contract Pack v2.4](../../contracts/v2.4/README.md)
 - Historical rebaseline: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
 - Current decision: [Product Current State v1.2](PRODUCT_CURRENT_STATE_DECISION_v1.2.json)
 
@@ -81,13 +81,21 @@ Its absence blocks the corresponding field acceptance and `ProductReady`.
 Issue and security/offline boundaries are recorded in
 [FIELD-ANDROID-CLIENT-01](../implementation/FIELD_ANDROID_CLIENT_01.md).
 
+Contract Pack v2.4 additively records the evidence-backed Support production-ID
+and public development-contour delta. Eighteen capabilities move to `PARTIAL`;
+none becomes `CAPABILITY_READY`, and no mode or product readiness is promoted.
+The composed distribution is 16 `CAPABILITY_READY`, 28 `PARTIAL`, 40
+`FOUNDATION_ONLY`, 52 `CONTRACT_ONLY`, and 7 `NOT_IMPLEMENTED` across the same
+143-capability denominator.
+
 The complete stable-ID list and per-capability product result, modes, lifecycle,
 inputs, outputs, dependencies, canonical/workspace data, surface, evidence,
 readiness, gaps, acceptance, scale and next slice are in:
 
 - [required-capabilities.json](../../contracts/v2.0/required-capabilities.json);
 - [product-capability-registry.json](../../contracts/v2.0/fixtures/valid/product-capability-registry.json);
-- [v2.3 capability extension](../../contracts/v2.3/fixtures/valid/capability-registry-extension.json).
+- [v2.3 capability extension](../../contracts/v2.3/fixtures/valid/capability-registry-extension.json);
+- [v2.4 readiness delta](../../contracts/v2.4/fixtures/valid/capability-readiness-delta.json).
 
 These files are normative and machine-validated; this page is their navigation
 view, not a second registry.

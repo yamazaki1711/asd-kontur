@@ -1,0 +1,21 @@
+{
+  "registry_version": "2.4.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "public_product_contour_partial",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["2.0.0", "2.1.0", "2.2.0", "2.3.0"]
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.4:schema:capability-readiness-delta",
+      "path": "schemas/capability-readiness-delta.schema.json",
+      "digest": "sha256:928ed896bad47ecaab292c280c5fff1e9828d99ce90f12b854b6f93d970290ed"
+    }
+  ],
+  "contract_keys": ["product.capability-readiness-delta@2.4.0"],
+  "fixtures": {
+    "valid": ["fixtures/valid/capability-readiness-delta.json"],
+    "invalid": []
+  }
+}

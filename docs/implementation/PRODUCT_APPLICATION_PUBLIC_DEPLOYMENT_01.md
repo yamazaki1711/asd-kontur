@@ -20,7 +20,7 @@
 | URL | Назначение | Состояние на checkpoint |
 | --- | --- | --- |
 | `https://asd-kontur.ru` | публичный website ООО «АСД-КОНТУР» | AVAILABLE; внешний Chromium и `king25` подтвердили exact website bytes |
-| `https://app.asd-kontur.ru` | авторизованный Product Application Spine | ingress проверен через VPS; публичные DNS/TLS ещё не активированы |
+| `https://app.asd-kontur.ru` | авторизованный Product Application Spine | AVAILABLE; DNS, TLS и внешний authenticated E2E подтверждены |
 | `https://bi.asd-kontur.ru/levashovo/intake-control/` | изолированный архив прежнего входного контроля | route активен, existing Basic Auth и `noindex` сохранены |
 | `https://tm.asd-kontur.ru` | независимый пилот ТМ-35 | не изменяется |
 
@@ -87,13 +87,21 @@ confined to `/levashovo/intake-control/`.
 - `bi` archive and `tm` unauthenticated states: `401`, both retain
   `X-Robots-Tag: noindex, nofollow`.
 
-The full application proxy was preflighted through the VPS with pinned host
-resolution: login, protected workspace retrieval, readiness, full PDF and
-32-byte Range response all used the real MBP authority channel. Finalized PDF
+The full application proxy is active at the public hostname. Timeweb's four
+authoritative nameservers and independent public resolvers return
+`app.asd-kontur.ru A 147.45.251.207`. The exact Let's Encrypt certificate has
+SAN `app.asd-kontur.ru`, SHA-256 fingerprint
+`85:7C:24:1F:7E:E4:DC:D2:98:DE:C1:85:F1:7D:09:D2:00:6D:F7:16:3C:2C:2B:7F:9E:E6:CD:43:69:AA:E4:52`
+and is valid through 2026-11-25.
+
+External Playwright without host override or TLS bypass passed before and after
+an explicit API/worker restart. It covered login/logout, unauthorized `401`,
+Documents, Evidence, Work Matrix, all four modes, SSE, four immutable
+package/register versions, finalized PDF and a 32-byte Range response. The PDF
 digest remained
 `sha256:6cff1f024c90b6fe5414af417b19f750310c0e4caa15a84b270995c299eafb5a`.
-This preflight is not counted as external acceptance until public DNS and a
-valid `app.asd-kontur.ru` certificate exist.
+After restart the canonical counts remained 4 package versions, 4 volume books,
+4 registers and 1 finalized document.
 
 Миграция `0027_public_deployment` даёт runtime group roles только `SELECT` на
 `alembic_version`, чтобы readiness проверял exact head без owner connection.
@@ -133,7 +141,7 @@ durable PostgreSQL job ledger.
 - `uv lock --check`: PASS;
 - Ruff format/lint: PASS;
 - strict mypy: 153 source files, PASS;
-- PostgreSQL pytest: 480 passed, no skips, one upstream Starlette deprecation
+- PostgreSQL pytest: 485 passed, no skips, one upstream Starlette deprecation
   warning;
 - frontend format/typecheck/lint: PASS;
 - frontend tests: 2 files / 3 tests, PASS;
@@ -141,24 +149,22 @@ durable PostgreSQL job ledger.
 - local live Playwright: 3 passed, one explicit opt-in NTD skip;
 - full PDF response: 200; Range response: 206 / 32 bytes; digest match: PASS;
 - public website desktop/mobile render: PASS;
-- external Playwright contract exists in `frontend/e2e-external/` and cannot be
-  called PASS until it runs against the deployed domains.
+- external Playwright before API/worker restart: 2 passed;
+- external Playwright after API/worker restart: 2 passed;
+- independent `king25`: website SHA exact, app readiness/TLS PASS,
+  unauthenticated app API `401`, BI and TM-35 `401` with `noindex, nofollow`.
 
-## Remaining deployment gates
+The immutable deployment receipt is
+`deployment/public/records/product-application-public-deployment-01.json`.
+Contract Pack v2.4 records only the evidence-backed `PARTIAL` capability delta;
+no mode or product readiness is promoted.
 
-The remaining external blocker is individual and exact: authoritative Timeweb
-DNS has no `app.asd-kontur.ru` record, while neither MBP nor VPS has an active
-Timeweb API/CLI binding or authenticated control-panel session. The prepared
-HTTP ACME server returns `503 tls_not_activated` outside the challenge path.
+## Remaining product gates
 
-Open gates which must not be represented as complete:
-
-1. create the Timeweb `A` record for `app.asd-kontur.ru`;
-2. issue its exact certificate and activate the already tested HTTPS proxy;
-3. run external Playwright without host override or TLS bypass;
-4. restart API/worker through the final public origin and repeat state checks;
-5. create the final version-pinned deployment receipt, merge/redeploy the exact
-   merged commit and comment on issue #19.
+The public development contour is externally usable, but it is not a production
+or real-OKS acceptance. Remaining gaps include incomplete NTD/raster coverage,
+one qualified output family, missing executive scheme and quality documents,
+no complete ready mode, and unqualified real operational personnel/processes.
 
 ## Readiness
 
@@ -166,5 +172,5 @@ Open gates which must not be represented as complete:
 - `OKSReady=false`;
 - `ProductReady=false`.
 
-This record remains **IN PROGRESS** until all four externally observable URL
-outcomes are proven.
+All four externally observable URL outcomes are proven for this deployment
+slice. Product-wide readiness remains unchanged.

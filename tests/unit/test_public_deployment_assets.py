@@ -1,4 +1,5 @@
 import hashlib
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -38,3 +39,25 @@ def test_ingress_and_archive_runtime_bindings_are_explicit() -> None:
     assert "127.0.0.1:18765" in proxy
     assert "ISUID_PUBLIC_PREFIX=/levashovo/intake-control" in archive
     assert "--port 8088" in archive
+
+
+def test_public_deployment_receipt_pins_observed_artifacts() -> None:
+    receipt = json.loads(
+        (DEPLOYMENT / "records/product-application-public-deployment-01.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert receipt["application_source_commit"] == ("45475d4cefee1aff9061397b9ee4bbb76ca8aa0d")
+    assert receipt["nginx_digests"]["application"] == (
+        "sha256:"
+        + hashlib.sha256((DEPLOYMENT / "nginx/app.asd-kontur.ru.conf").read_bytes()).hexdigest()
+    )
+    assert receipt["finalized_pdf"]["sha256"] == (
+        "sha256:6cff1f024c90b6fe5414af417b19f750310c0e4caa15a84b270995c299eafb5a"
+    )
+    assert receipt["external_acceptance"]["playwright_after_restart"] == "PASS 2/2"
+    assert receipt["readiness"] == {
+        "trial_ready": False,
+        "oks_ready": False,
+        "product_ready": False,
+    }
