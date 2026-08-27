@@ -20,14 +20,27 @@ test("public website routes to the isolated Product Application", async ({
   await expect(page).toHaveTitle(/АСД-КОНТУР/);
   await expect(
     page.getByRole("heading", {
-      name: "Доказательная работа со строительной документацией",
+      name: "Аудит и инженерное сопровождение строительства",
     }),
   ).toBeVisible();
   const content = await page.locator("body").innerText();
-  for (const forbidden of ["ИСУИД", "24 337", "24337", "690 томов"])
+  for (const forbidden of [
+    "ИСУИД",
+    "24 337",
+    "24337",
+    "690 томов",
+    "AI",
+    "ИИ",
+    "evidence",
+    "Local-first",
+    "Tender",
+    "Support",
+    "Restoration",
+    "доказательн",
+  ])
     expect(content).not.toContain(forbidden);
   await expect(
-    page.getByRole("link", { name: "Войти в АСД-КОНТУР" }).first(),
+    page.getByRole("link", { name: "Войти в комплекс" }).first(),
   ).toHaveAttribute("href", "https://app.asd-kontur.ru");
 });
 
