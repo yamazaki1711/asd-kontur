@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import plistlib
+import sys
 from pathlib import Path
 from uuid import UUID
 
@@ -52,6 +53,23 @@ def test_settings_fail_closed_for_unsafe_network_and_implicit_database(tmp_path:
             session_profile=SessionProfile.PROTECTED_REMOTE,
             bind_host="0.0.0.0",
         )
+
+
+def test_release_identity_is_explicit_and_version_pinned(tmp_path: Path) -> None:
+    configured = settings(
+        tmp_path,
+        release_commit="0123456789abcdef",
+        release_profile="public-development-contour",
+        deployed_at="2026-08-27T12:00:00+12:00",
+        frontend_build_digest="sha256:frontend",
+        openapi_digest="sha256:openapi",
+        expected_migration_head="0027_public_deployment",
+    )
+    assert configured.release_commit == "0123456789abcdef"
+    assert configured.release_profile == "public-development-contour"
+    assert configured.frontend_build_digest == "sha256:frontend"
+    assert configured.openapi_digest == "sha256:openapi"
+    assert configured.expected_migration_head == "0027_public_deployment"
 
 
 @pytest.mark.parametrize(
@@ -111,7 +129,13 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     api_plist = (output / "ru.asd-kontur.spine.api.plist").read_text(encoding="utf-8")
     assert "StandardOutPath" in api_plist
     assert str(log_root / "api.log") in api_plist
-    assert plistlib.loads(api_plist.encode())["Label"] == "ru.asd-kontur.spine.api"
+    parsed = plistlib.loads(api_plist.encode())
+    assert parsed["Label"] == "ru.asd-kontur.spine.api"
+    assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
+    assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
+    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
+        "0027_public_deployment"
+    )
     assert "10240" in (output / "asd-kontur-spine.newsyslog.conf").read_text(encoding="utf-8")
     assert _show_logs(settings(tmp_path), "all", 2) == 0
     monkeypatch.delenv("ASD_LOG_ROOT")

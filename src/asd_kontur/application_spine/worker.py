@@ -1,19 +1,46 @@
-"""Bounded PostgreSQL document worker for the initial Product Spine job kinds."""
+# ruff: noqa: E501
+"""Bounded PostgreSQL document worker for the Product Spine job kinds."""
 
 from __future__ import annotations
 
 import hashlib
 import io
+import json
 import signal
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import BinaryIO
+from uuid import UUID
 
+import sqlalchemy as sa
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sqlalchemy import exc as sa_exc
+from sqlalchemy.orm import Session
 
-from .models import ClaimedJob, JobKind, JobState
+from asd_kontur.document_understanding.native import NativeExtractionFailure
+from asd_kontur.document_understanding.ocr import (
+    AppleVisionOcrAdapter,
+    OcrFailure,
+    TesseractOcrAdapter,
+)
+from asd_kontur.document_understanding.pipeline import (
+    IndustrialDocumentUnderstandingPipeline,
+    UnderstandingStageFailure,
+    translate_stage_error,
+)
+from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.domain import deterministic_uuid, uuid7
+from asd_kontur.support.models import FieldResolution, ResolutionState
+from asd_kontur.support.production import TemplateBackedDocxRenderer
+from asd_kontur.support.template_qualification import (
+    PdfOverlayBinding,
+    PdfOverlayRenderer,
+)
+
+from .models import ClaimedJob, JobKind, JobState, semantic_digest
 from .object_store import IntakeError, WorkspaceObjectStore
 from .postgres import SpinePersistenceError, SpinePostgresRepository
 
@@ -59,6 +86,13 @@ class DocumentWorker:
         self._worker_identity = worker_identity
         self._lease_seconds = lease_seconds
         self._stopping = False
+        self._understanding = IndustrialDocumentUnderstandingPipeline(
+            IndustrialUnderstandingRepository(repository.engine),
+            apple_vision=AppleVisionOcrAdapter(
+                Path(__file__).resolve().parents[3] / "tools/ocr/apple_vision_ocr.swift"
+            ),
+            tesseract=TesseractOcrAdapter(),
+        )
 
     def request_stop(self) -> None:
         self._stopping = True
@@ -68,7 +102,11 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
-        self._repository.reconcile_unclaimable_jobs()
+        for _ in range(1024):
+            if self._repository.reconcile_unclaimable_jobs() == 0:
+                break
+        else:
+            raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
@@ -115,7 +153,15 @@ class DocumentWorker:
                 {"semantic_effect": False},
             )
         except (OSError, SpinePersistenceError, sa_exc.SQLAlchemyError) as exc:
-            code = getattr(exc, "code", "worker_io_unavailable")
+            code = getattr(exc, "code", None)
+            if not code and isinstance(exc, sa_exc.DBAPIError):
+                code = getattr(exc.orig, "sqlstate", None)
+            if not code and isinstance(exc, OSError) and exc.errno is not None:
+                code = f"worker_os_error_{exc.errno}"
+            if not code and isinstance(exc, sa_exc.SQLAlchemyError):
+                code = f"worker_sqlalchemy_{type(exc).__name__.casefold()}"
+            if not code:
+                code = "worker_io_unavailable"
             return self._terminal(
                 claimed,
                 JobState.RECONCILIATION_REQUIRED,
@@ -137,11 +183,655 @@ class DocumentWorker:
             JobKind.PDF_INVENTORY: self._inventory,
             JobKind.NATIVE_TEXT_EXTRACTION: self._extract_native_text,
             JobKind.EVIDENCE_INDEX_UPDATE: self._index_evidence,
+            JobKind.ID_DOCUMENT_GENERATION: self._generate_id_document,
         }
         handler = handlers.get(claimed.job_kind)
+        if handler is None and claimed.job_kind in {
+            JobKind.DOCUMENT_FORMAT_INVENTORY,
+            JobKind.PDF_PAGE_HEALTH_ANALYSIS,
+            JobKind.NATIVE_LAYOUT_EXTRACTION,
+            JobKind.OCR_ROUTING,
+            JobKind.OCR_EXTRACTION,
+            JobKind.DOCUMENT_PAGE_CLASSIFICATION,
+            JobKind.DOCUMENT_AGGREGATION,
+            JobKind.PROJECT_DEFINITION_EXTRACTION,
+            JobKind.WORK_QUANTITY_MATERIAL_EXTRACTION,
+            JobKind.WORK_PACKAGE_ASSEMBLY,
+            JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
+            JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+        }:
+            try:
+                with self._open_source(claimed) as source:
+                    return self._understanding.execute(claimed, source)
+            except (UnderstandingStageFailure, NativeExtractionFailure, OcrFailure) as exc:
+                raise DeterministicJobFailure(translate_stage_error(exc)) from exc
         if handler is None:
             raise DeterministicJobFailure("job_kind_not_supported_by_document_worker")
         return handler(claimed)
+
+    def _generate_id_document(self, claimed: ClaimedJob) -> dict[str, object]:
+        manifest = claimed.input_manifest
+        run_id = UUID(str(manifest["generation_run_id"]))
+        existing = self._existing_generation_candidate(claimed, run_id)
+        if existing is not None:
+            return existing
+        self._advance_generation(claimed, run_id, "rendering")
+        fields = self._generation_fields(claimed, run_id)
+        try:
+            with self._object_store.open(str(manifest["template_object_key"])) as source:
+                template_bytes = source.read()
+        except FileNotFoundError as exc:
+            raise RetryableJobFailure("template_object_temporarily_unavailable") from exc
+        output_format = str(manifest.get("format", "DOCX"))
+        validation_fingerprint: str | None = None
+        print_ready = False
+        try:
+            if output_format == "PDF_OVERLAY":
+                with self._object_store.open(str(manifest["font_object_key"])) as source:
+                    font_bytes = source.read()
+                rendered, print_receipt = PdfOverlayRenderer().render(
+                    template_bytes=template_bytes,
+                    template_digest=str(manifest["template_digest"]),
+                    fields=fields,
+                    bindings=tuple(
+                        PdfOverlayBinding(
+                            field_key=str(item["field_key"]),
+                            page_index=int(item["page_index"]),
+                            x=float(item["x"]),
+                            y=float(item["y"]),
+                            width=float(item["width"]),
+                            height=float(item["height"]),
+                            font_size=float(item["font_size"]),
+                            line_height=float(item["line_height"]),
+                            alignment=str(item["alignment"]),
+                            material=bool(item.get("material", True)),
+                            required=bool(item.get("required", True)),
+                        )
+                        for item in manifest["bindings"]
+                    ),
+                    font_bytes=font_bytes,
+                    font_digest=str(manifest["font_digest"]),
+                    renderer_profile_version=str(manifest["renderer_profile_version"]),
+                    validator_profile_version=str(manifest["validator_profile_version"]),
+                    semantic_input=dict(manifest["semantic_input"]),
+                )
+                validation_fingerprint = print_receipt.fingerprint
+                print_ready = print_receipt.result == "print_ready"
+            else:
+                rendered = TemplateBackedDocxRenderer().render(
+                    template_bytes=template_bytes,
+                    template_digest=str(manifest["template_digest"]),
+                    fields=fields,
+                    semantic_input=dict(manifest["semantic_input"]),
+                )
+        except ValueError as exc:
+            self._fail_generation(claimed, run_id, str(exc).split(":", 1)[0])
+            raise DeterministicJobFailure(str(exc).split(":", 1)[0]) from exc
+        self._advance_generation(claimed, run_id, "validating")
+        candidate_id = deterministic_uuid(f"support-generated-candidate:{run_id}")
+        extension = "pdf" if output_format == "PDF_OVERLAY" else "docx"
+        object_key = (
+            f"derived/{claimed.organization_id}/{claimed.workspace_id}/generated/"
+            f"{rendered.bytes_digest[7:]}.{extension}"
+        )
+        stored_digest, size = self._object_store.put_derived(
+            object_key=object_key, content=rendered.package_bytes
+        )
+        if stored_digest != rendered.bytes_digest:
+            self._fail_generation(claimed, run_id, "generated_object_digest_mismatch")
+            raise DeterministicJobFailure("generated_object_digest_mismatch")
+        assurance = self._publish_generation_candidate(
+            claimed,
+            run_id=run_id,
+            candidate_id=candidate_id,
+            object_key=object_key,
+            bytes_digest=stored_digest,
+            semantic_fingerprint=rendered.semantic_fingerprint,
+            checks=rendered.structural_checks,
+            output_format="PDF" if output_format == "PDF_OVERLAY" else "DOCX",
+            renderer_profile_version=str(manifest["renderer_profile_version"]),
+            validator_profile_version=str(manifest["validator_profile_version"]),
+            validation_fingerprint=validation_fingerprint,
+            print_ready=print_ready,
+        )
+        return {
+            "generation_run_id": str(run_id),
+            "generated_candidate_id": str(candidate_id),
+            "object_reference": object_key,
+            "bytes_digest": stored_digest,
+            "size_bytes": size,
+            "semantic_fingerprint": rendered.semantic_fingerprint,
+            "assurance": assurance,
+            "finalized": False,
+        }
+
+    def _existing_generation_candidate(
+        self, claimed: ClaimedJob, run_id: UUID
+    ) -> dict[str, object] | None:
+        with Session(self._repository.engine) as session, session.begin():
+            _set_worker_scope(session, claimed)
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT generated_candidate_id,object_reference,bytes_digest,semantic_fingerprint "
+                        "FROM workspace.support_generated_document_candidates WHERE "
+                        "organization_id=:o AND workspace_id=:w AND generation_run_id=:run"
+                    ),
+                    {"o": claimed.organization_id, "w": claimed.workspace_id, "run": run_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            return None
+        return {
+            "generation_run_id": str(run_id),
+            "generated_candidate_id": str(row["generated_candidate_id"]),
+            "object_reference": str(row["object_reference"]),
+            "bytes_digest": str(row["bytes_digest"]),
+            "semantic_fingerprint": str(row["semantic_fingerprint"]),
+            "recovered_idempotently": True,
+            "finalized": False,
+        }
+
+    def _generation_fields(self, claimed: ClaimedJob, run_id: UUID) -> tuple[FieldResolution, ...]:
+        with Session(self._repository.engine) as session, session.begin():
+            _set_worker_scope(session, claimed)
+            rows = session.execute(
+                sa.text(
+                    "SELECT f.*,e.evidence_link_id,e.source_locator_id FROM "
+                    "workspace.support_generation_field_resolutions f LEFT JOIN "
+                    "workspace.support_generation_evidence_bindings e ON "
+                    "e.organization_id=f.organization_id AND e.workspace_id=f.workspace_id AND "
+                    "e.generation_run_id=f.generation_run_id AND e.field_key=f.field_key WHERE "
+                    "f.organization_id=:o AND f.workspace_id=:w AND f.generation_run_id=:run "
+                    "ORDER BY f.field_key"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "run": run_id},
+            ).mappings()
+            return tuple(
+                FieldResolution(
+                    str(row["field_key"]),
+                    ResolutionState(str(row["state"])),
+                    row["normalized_value"],
+                    row["display_value"],
+                    UUID(str(row["fact_id"])) if row["fact_id"] else None,
+                    int(row["fact_version"]) if row["fact_version"] else None,
+                    (UUID(str(row["evidence_link_id"])),) if row["evidence_link_id"] else (),
+                    (UUID(str(row["source_locator_id"])),) if row["source_locator_id"] else (),
+                    bool(row["material"]),
+                )
+                for row in rows
+            )
+
+    def _advance_generation(self, claimed: ClaimedJob, run_id: UUID, target: str) -> None:
+        with Session(self._repository.engine) as session, session.begin():
+            _set_worker_scope(session, claimed)
+            current = session.scalar(
+                sa.text(
+                    "SELECT status FROM workspace.support_generation_runs WHERE "
+                    "organization_id=:o AND workspace_id=:w AND generation_run_id=:run FOR UPDATE"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "run": run_id},
+            )
+            if current == target or current == "candidate_created":
+                return
+            allowed = {
+                "rendering": {"planned", "resolving"},
+                "validating": {"rendering"},
+            }
+            if str(current) not in allowed[target]:
+                raise DeterministicJobFailure("generation_state_transition_invalid")
+            session.execute(
+                sa.select(
+                    sa.func.set_config("asd.generation_operation_id", str(claimed.job_id), True)
+                )
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.support_generation_runs SET status=:target WHERE "
+                    "organization_id=:o AND workspace_id=:w AND generation_run_id=:run"
+                ),
+                {
+                    "target": target,
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "run": run_id,
+                },
+            )
+
+    def _fail_generation(self, claimed: ClaimedJob, run_id: UUID, blocker: str) -> None:
+        with Session(self._repository.engine) as session, session.begin():
+            _set_worker_scope(session, claimed)
+            session.execute(
+                sa.select(
+                    sa.func.set_config("asd.generation_operation_id", str(claimed.job_id), True)
+                )
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.support_generation_runs SET status='failed',"
+                    "blocker_codes=ARRAY[:blocker],completed_at=CURRENT_TIMESTAMP WHERE "
+                    "organization_id=:o AND workspace_id=:w AND generation_run_id=:run AND "
+                    "status IN ('planned','resolving','rendering','validating')"
+                ),
+                {
+                    "blocker": blocker,
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "run": run_id,
+                },
+            )
+
+    def _publish_generation_candidate(
+        self,
+        claimed: ClaimedJob,
+        *,
+        run_id: UUID,
+        candidate_id: UUID,
+        object_key: str,
+        bytes_digest: str,
+        semantic_fingerprint: str,
+        checks: tuple[str, ...],
+        output_format: str,
+        renderer_profile_version: str,
+        validator_profile_version: str,
+        validation_fingerprint: str | None,
+        print_ready: bool,
+    ) -> str:
+        now = datetime.now(UTC)
+        with Session(self._repository.engine) as session, session.begin():
+            _set_worker_scope(session, claimed)
+            template = (
+                session.execute(
+                    sa.text(
+                        "SELECT tv.assurance_class,tv.official_status,tv.qualification_state FROM "
+                        "workspace.support_generation_job_bindings b JOIN platform.template_versions tv "
+                        "ON tv.template_id=b.template_id AND tv.version=b.template_version WHERE "
+                        "b.organization_id=:o AND b.workspace_id=:w AND b.generation_run_id=:run"
+                    ),
+                    {"o": claimed.organization_id, "w": claimed.workspace_id, "run": run_id},
+                )
+                .mappings()
+                .one()
+            )
+            production_template = (
+                template["assurance_class"] == "production"
+                and template["official_status"] == "verified"
+                and template["qualification_state"] == "active"
+            )
+            render_id = deterministic_uuid(f"support-render:{candidate_id}")
+            validation_id = deterministic_uuid(f"support-print-validation:{candidate_id}")
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.support_generated_document_candidates VALUES "
+                    "(:o,:w,:candidate,:run,:object,:format,:semantic,:bytes,'non_final_candidate',:now) "
+                    "ON CONFLICT (organization_id,workspace_id,generation_run_id,bytes_digest) DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "candidate": candidate_id,
+                    "run": run_id,
+                    "object": object_key,
+                    "format": output_format,
+                    "semantic": semantic_fingerprint,
+                    "bytes": bytes_digest,
+                    "now": now,
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.support_render_artifacts VALUES "
+                    "(:o,:w,:render,:candidate,:renderer,:format,"
+                    ":object,:bytes,:assurance,'verified',:now) ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "render": render_id,
+                    "candidate": candidate_id,
+                    "object": object_key,
+                    "bytes": bytes_digest,
+                    "renderer": renderer_profile_version,
+                    "format": output_format,
+                    "assurance": (
+                        "production_qualified"
+                        if production_template and print_ready
+                        else "template_candidate"
+                    ),
+                    "now": now,
+                },
+            )
+            blockers = []
+            if not production_template:
+                blockers.append("TEMPLATE_NOT_PRODUCTION_QUALIFIED")
+            if not print_ready:
+                blockers.append("PRINT_LAYOUT_VALIDATION_NOT_QUALIFIED")
+            result = "print_ready" if not blockers else "blocked"
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.support_print_validation_results VALUES "
+                    "(:o,:w,:validation,:candidate,:render,:validator,"
+                    ":checks,:blockers,:result,:assurance,:digest,:now) ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "validation": validation_id,
+                    "candidate": candidate_id,
+                    "render": render_id,
+                    "checks": list(checks),
+                    "validator": validator_profile_version,
+                    "blockers": blockers,
+                    "result": result,
+                    "assurance": "production" if not blockers else "synthetic_development",
+                    "digest": semantic_digest(
+                        {
+                            "candidate": str(candidate_id),
+                            "checks": checks,
+                            "blockers": blockers,
+                            "layout_receipt": validation_fingerprint,
+                        }
+                    ),
+                    "now": now,
+                },
+            )
+            self._append_generated_package_version(
+                session,
+                claimed,
+                run_id=run_id,
+                candidate_id=candidate_id,
+                candidate_digest=bytes_digest,
+                template_blockers=tuple(blockers),
+                now=now,
+            )
+            session.execute(
+                sa.select(
+                    sa.func.set_config("asd.generation_operation_id", str(claimed.job_id), True)
+                )
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.support_generation_runs SET status='candidate_created',"
+                    "blocker_codes=ARRAY[]::text[],completed_at=:now WHERE organization_id=:o AND "
+                    "workspace_id=:w AND generation_run_id=:run AND status='validating'"
+                ),
+                {
+                    "now": now,
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "run": run_id,
+                },
+            )
+        return "production_qualified" if not blockers else "template_candidate"
+
+    def _append_generated_package_version(
+        self,
+        session: Session,
+        claimed: ClaimedJob,
+        *,
+        run_id: UUID,
+        candidate_id: UUID,
+        candidate_digest: str,
+        template_blockers: tuple[str, ...],
+        now: datetime,
+    ) -> None:
+        binding = (
+            session.execute(
+                sa.text(
+                    "SELECT b.membership_id,b.membership_version,m.id_package_id,m.id_package_version "
+                    "FROM workspace.support_generation_job_bindings b JOIN "
+                    "workspace.id_package_document_membership_versions m ON "
+                    "m.organization_id=b.organization_id AND m.workspace_id=b.workspace_id AND "
+                    "m.membership_id=b.membership_id AND m.version=b.membership_version WHERE "
+                    "b.organization_id=:o AND b.workspace_id=:w AND b.generation_run_id=:run"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "run": run_id},
+            )
+            .mappings()
+            .one()
+        )
+        if session.scalar(
+            sa.text(
+                "SELECT count(*) FROM workspace.id_package_document_membership_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND subject_ref=:candidate"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": str(candidate_id),
+            },
+        ):
+            return
+        old_package = (
+            session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.id_package_versions WHERE organization_id=:o AND "
+                    "workspace_id=:w AND id_package_id=:p AND version=:v"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "p": binding["id_package_id"],
+                    "v": binding["id_package_version"],
+                },
+            )
+            .mappings()
+            .one()
+        )
+        old_books = list(
+            session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.id_package_volume_book_versions WHERE organization_id=:o "
+                    "AND workspace_id=:w AND id_package_id=:p AND id_package_version=:v ORDER BY ordinal"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "p": binding["id_package_id"],
+                    "v": binding["id_package_version"],
+                },
+            ).mappings()
+        )
+        old_members = list(
+            session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.id_package_document_membership_versions WHERE organization_id=:o "
+                    "AND workspace_id=:w AND id_package_id=:p AND id_package_version=:v ORDER BY volume_book_id,ordinal"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "p": binding["id_package_id"],
+                    "v": binding["id_package_version"],
+                },
+            ).mappings()
+        )
+        new_version = int(old_package["version"]) + 1
+        member_documents: list[dict[str, object]] = []
+        transformed: list[dict[str, object]] = []
+        for member in old_members:
+            value = dict(member)
+            value["version"] = int(member["version"]) + 1
+            value["id_package_version"] = new_version
+            value["volume_book_version"] = int(member["volume_book_version"]) + 1
+            if member["membership_id"] == binding["membership_id"]:
+                value["subject_kind"] = "generated_document_candidate"
+                value["subject_ref"] = str(candidate_id)
+                value["state"] = "generated_candidate"
+                value["evidence_refs"] = [*member["evidence_refs"], candidate_digest]
+                value["blocker_codes"] = list(template_blockers)
+            if member["role"] == "register":
+                value["subject_ref"] = (
+                    f"package-register:{old_package['id_package_id']}:v{new_version}"
+                )
+                value["state"] = "generated_candidate"
+            value["semantic_fingerprint"] = semantic_digest(
+                {
+                    key: str(item)
+                    for key, item in value.items()
+                    if key not in {"recorded_at", "semantic_fingerprint"}
+                }
+            )
+            transformed.append(value)
+            if value["role"] != "register":
+                member_documents.append(
+                    {
+                        "ordinal": value["ordinal"],
+                        "membership_id": str(value["membership_id"]),
+                        "membership_version": value["version"],
+                        "role": value["role"],
+                        "subject_kind": value["subject_kind"],
+                        "subject_ref": value["subject_ref"],
+                        "copies": value["required_copy_count"],
+                        "stage": value["stage"],
+                        "state": value["state"],
+                    }
+                )
+        states = [str(item["state"]) for item in transformed if str(item["role"]) != "register"]
+        required = len([state for state in states if state != "not_applicable"])
+        covered = sum(state in {"covered", "finalized"} for state in states)
+        missing = states.count("missing")
+        indeterminate = sum(
+            state in {"required", "generated_candidate", "conflict", "indeterminate", "blocked"}
+            for state in states
+        )
+        package_fingerprint = semantic_digest(
+            {
+                "prior": old_package["calculation_fingerprint"],
+                "version": new_version,
+                "memberships": [item["semantic_fingerprint"] for item in transformed],
+            }
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.id_package_versions VALUES (:o,:w,:p,:v,:scope,:subject,"
+                "'incomplete',:required,:covered,:missing,:indeterminate,:fingerprint,:ruleset,:now)"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "p": old_package["id_package_id"],
+                "v": new_version,
+                "scope": old_package["scope_kind"],
+                "subject": old_package["scope_subject_id"],
+                "required": required,
+                "covered": covered,
+                "missing": missing,
+                "indeterminate": indeterminate,
+                "fingerprint": package_fingerprint,
+                "ruleset": old_package["rule_set_version_id"],
+                "now": now,
+            },
+        )
+        for book in old_books:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.id_package_volume_book_versions VALUES "
+                    "(:o,:w,:p,:pv,:book,:v,:ordinal,:title,:level,:copies,:fingerprint,:now)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "p": old_package["id_package_id"],
+                    "pv": new_version,
+                    "book": book["volume_book_id"],
+                    "v": int(book["version"]) + 1,
+                    "ordinal": book["ordinal"],
+                    "title": book["title"],
+                    "level": book["register_level"],
+                    "copies": book["required_copy_count"],
+                    "fingerprint": semantic_digest(
+                        {"prior": book["semantic_fingerprint"], "package_version": new_version}
+                    ),
+                    "now": now,
+                },
+            )
+        for transformed_member in transformed:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.id_package_document_membership_versions VALUES "
+                    "(:organization_id,:workspace_id,:membership_id,:version,:id_package_id,"
+                    ":id_package_version,:volume_book_id,:volume_book_version,:matrix_id,:matrix_version,"
+                    ":document_requirement_id,:document_requirement_version,:role,:ordinal,"
+                    ":required_copy_count,:stage,:subject_kind,:subject_ref,:state,:evidence_refs,"
+                    ":blocker_codes,:semantic_fingerprint,:recorded_at)"
+                ),
+                {**transformed_member, "recorded_at": now},
+            )
+        register_member = transformed[0]
+        register_manifest = {
+            "package_id": str(old_package["id_package_id"]),
+            "package_version": new_version,
+            "volume_book_id": str(register_member["volume_book_id"]),
+            "volume_book_version": register_member["volume_book_version"],
+            "register_membership_id": str(register_member["membership_id"]),
+            "documents": member_documents,
+            "fingerprint": semantic_digest(member_documents),
+        }
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.support_register_candidates VALUES "
+                "(:o,:w,:register,1,:p,:pv,:book,:bv,:membership,:mv,CAST(:manifest AS jsonb),"
+                ":fingerprint,'structured_candidate',ARRAY['REGISTER_TEMPLATE_AUTHORITY_UNRESOLVED'],:now)"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "register": deterministic_uuid(
+                    f"support-register:{old_package['id_package_id']}:v{new_version}"
+                ),
+                "p": old_package["id_package_id"],
+                "pv": new_version,
+                "book": register_member["volume_book_id"],
+                "bv": register_member["volume_book_version"],
+                "membership": register_member["membership_id"],
+                "mv": register_member["version"],
+                "manifest": json.dumps(register_manifest, sort_keys=True, separators=(",", ":")),
+                "fingerprint": register_manifest["fingerprint"],
+                "now": now,
+            },
+        )
+        blockers = sorted(
+            {
+                str(code)
+                for item in transformed
+                for code in (
+                    item["blocker_codes"]
+                    if isinstance(item["blocker_codes"], (list, tuple))
+                    else ()
+                )
+            }
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.id_package_readiness_evaluations VALUES "
+                "(:o,:w,:evaluation,1,:p,:pv,:required,:covered,:generated,:finalized,:missing,"
+                ":conflict,:indeterminate,:blocked,:not_applicable,:blockers,'incomplete',:fingerprint,:now)"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "evaluation": uuid7(),
+                "p": old_package["id_package_id"],
+                "pv": new_version,
+                "required": required,
+                "covered": covered,
+                "generated": states.count("generated_candidate"),
+                "finalized": states.count("finalized"),
+                "missing": missing,
+                "conflict": states.count("conflict"),
+                "indeterminate": states.count("indeterminate"),
+                "blocked": states.count("blocked"),
+                "not_applicable": states.count("not_applicable"),
+                "blockers": blockers,
+                "fingerprint": semantic_digest(
+                    {"package": package_fingerprint, "states": states, "blockers": blockers}
+                ),
+                "now": now,
+            },
+        )
 
     def _admit(self, claimed: ClaimedJob) -> dict[str, object]:
         with self._open_source(claimed) as source:
@@ -383,3 +1073,12 @@ def verify_stream_digest(stream: BinaryIO) -> tuple[str, int]:
 
 def verify_bytes_digest(content: bytes) -> tuple[str, int]:
     return verify_stream_digest(io.BytesIO(content))
+
+
+def _set_worker_scope(session: Session, claimed: ClaimedJob) -> None:
+    session.execute(
+        sa.select(
+            sa.func.set_config("asd.organization_id", str(claimed.organization_id), True),
+            sa.func.set_config("asd.workspace_id", str(claimed.workspace_id), True),
+        )
+    ).one()

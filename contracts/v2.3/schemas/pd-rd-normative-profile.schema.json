@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.3:schema:pd-rd-normative-profile",
+  "title": "ApplicablePdRdNormativeProfile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "profile_id",
+    "profile_version",
+    "workspace_id",
+    "project_definition_id",
+    "project_definition_version",
+    "applicable_on",
+    "input_fingerprint",
+    "corpus_denominator",
+    "normative_edition_ids",
+    "rule_version_ids",
+    "required_pd_sections",
+    "expected_rd_sets",
+    "formatting_requirements",
+    "unresolved_inputs",
+    "gaps",
+    "completeness_status",
+    "semantic_fingerprint"
+  ],
+  "properties": {
+    "contract_version": { "const": "2.3.0" },
+    "profile_id": { "type": "string", "format": "uuid" },
+    "profile_version": { "type": "integer", "minimum": 1 },
+    "workspace_id": { "type": "string", "format": "uuid" },
+    "project_definition_id": { "type": "string", "format": "uuid" },
+    "project_definition_version": { "type": "integer", "minimum": 1 },
+    "applicable_on": { "type": ["string", "null"], "format": "date" },
+    "input_fingerprint": { "$ref": "#/$defs/digest" },
+    "corpus_denominator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["spds_members"],
+      "properties": {
+        "spds_members": { "type": "integer", "minimum": 0 },
+        "manifest_fingerprint": { "$ref": "#/$defs/digest" },
+        "gap": { "type": "string", "minLength": 1 }
+      },
+      "oneOf": [
+        { "required": ["manifest_fingerprint"] },
+        { "required": ["gap"] }
+      ]
+    },
+    "normative_edition_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "rule_version_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "format": "uuid" }
+    },
+    "required_pd_sections": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "expected_rd_sets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "formatting_requirements": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/requirement" }
+    },
+    "unresolved_inputs": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "gaps": { "type": "array", "items": { "$ref": "#/$defs/gap" } },
+    "completeness_status": {
+      "enum": ["complete", "partial", "indeterminate", "blocked"]
+    },
+    "semantic_fingerprint": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "requirement": {
+      "type": "object",
+      "required": [
+        "rule_version_id",
+        "normative_edition_id",
+        "normative_provision_id",
+        "normative_provision_version",
+        "source_version_id",
+        "source_locator_id",
+        "structural_path",
+        "evidence_digest",
+        "official_source",
+        "authority_layer"
+      ],
+      "properties": {
+        "rule_version_id": { "type": "string", "format": "uuid" },
+        "normative_edition_id": { "type": "string", "format": "uuid" },
+        "normative_provision_id": { "type": "string", "format": "uuid" },
+        "normative_provision_version": { "type": "integer", "minimum": 1 },
+        "source_version_id": { "type": "string", "format": "uuid" },
+        "source_locator_id": { "type": "string", "format": "uuid" },
+        "structural_path": { "type": "string", "minLength": 1 },
+        "evidence_digest": { "$ref": "#/$defs/digest" },
+        "official_source": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "authority_layer": { "const": "normative_authority" }
+      }
+    },
+    "gap": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["code", "blocking"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "blocking": { "type": "boolean" }
+      }
+    }
+  }
+}

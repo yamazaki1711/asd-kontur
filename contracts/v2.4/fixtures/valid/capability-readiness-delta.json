@@ -1,0 +1,144 @@
+{
+  "contract_version": "2.4.0",
+  "base_current_state": "contracts/v2.2/fixtures/valid/capability-current-state.json",
+  "base_extension": "contracts/v2.3/fixtures/valid/capability-registry-extension.json",
+  "denominator": 143,
+  "readiness_delta": [
+    {
+      "capability_id": "interaction.generation-export-ui",
+      "prior": "NOT_IMPLEMENTED",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.finalized-pdf-download"],
+      "remaining_gaps": ["only the synthetic qualified AOSR family is externally accepted"]
+    },
+    {
+      "capability_id": "support.id-matrix",
+      "prior": "FOUNDATION_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.support-production.package-readiness"],
+      "remaining_gaps": ["complete work-type and applicable-NTD denominator is not qualified"]
+    },
+    {
+      "capability_id": "support.aosr",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.finalized-aosr"],
+      "remaining_gaps": ["real-OKS professional operation is not accepted"]
+    },
+    {
+      "capability_id": "output.template-registry",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.support-production.template-344pr-2023-1.0.0"],
+      "remaining_gaps": ["only one official template family is production-qualified"]
+    },
+    {
+      "capability_id": "output.docx",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.support-production.aosr-generation"],
+      "remaining_gaps": ["renderer families beyond AOSR remain unqualified"]
+    },
+    {
+      "capability_id": "output.pdf",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.pdf-digest-and-range"],
+      "remaining_gaps": ["output acceptance is limited to the synthetic AOSR contour"]
+    },
+    {
+      "capability_id": "output.layout-render-validation",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.support-production.print-layout-receipt"],
+      "remaining_gaps": ["layout profiles for other template families are absent"]
+    },
+    {
+      "capability_id": "output.print-acceptance",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.support-production.print-layout-receipt"],
+      "remaining_gaps": ["print acceptance is not qualified across the document denominator"]
+    },
+    {
+      "capability_id": "output.generated-document-candidate",
+      "prior": "FOUNDATION_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["browser-e2e.support-production.generation-run"],
+      "remaining_gaps": ["candidate generation is qualified for one template family"]
+    },
+    {
+      "capability_id": "output.finalization",
+      "prior": "FOUNDATION_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.finalized-aosr"],
+      "remaining_gaps": ["synthetic professional grant is not production personnel qualification"]
+    },
+    {
+      "capability_id": "operations.native-macos-deployment",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.authoritative-mbp"],
+      "remaining_gaps": ["public contour remains a development deployment"]
+    },
+    {
+      "capability_id": "operations.launchd-services",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["runtime.public-product.api-worker-restart"],
+      "remaining_gaps": ["production operational qualification is incomplete"]
+    },
+    {
+      "capability_id": "operations.api-worker",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["runtime.public-product.separate-api-worker"],
+      "remaining_gaps": ["multi-object production operations are not accepted"]
+    },
+    {
+      "capability_id": "operations.postgresql",
+      "prior": "FOUNDATION_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["postgres-e2e.public-product.restart-survival"],
+      "remaining_gaps": ["production backup and disaster-recovery operations remain incomplete"]
+    },
+    {
+      "capability_id": "operations.object-plane",
+      "prior": "FOUNDATION_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.canonical-pdf-digest"],
+      "remaining_gaps": ["full object-plane lifecycle is not accepted for a real OKS"]
+    },
+    {
+      "capability_id": "operations.health-capability",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.live-ready"],
+      "remaining_gaps": ["health coverage is limited to the current application boundary"]
+    },
+    {
+      "capability_id": "operations.release-update-rollback",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["deployment.public-product.version-pinned-record"],
+      "remaining_gaps": ["full rollback drill is not a production qualification"]
+    },
+    {
+      "capability_id": "operations.remote-access-boundary",
+      "prior": "CONTRACT_ONLY",
+      "current": "PARTIAL",
+      "evidence": ["external-e2e.public-product.single-origin-ingress"],
+      "remaining_gaps": ["public contour is explicitly development-only"]
+    }
+  ],
+  "effective_distribution": {
+    "CAPABILITY_READY": 16,
+    "PARTIAL": 28,
+    "FOUNDATION_ONLY": 40,
+    "CONTRACT_ONLY": 52,
+    "NOT_IMPLEMENTED": 7
+  },
+  "trial_ready": false,
+  "oks_ready": false,
+  "product_ready": false
+}

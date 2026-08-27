@@ -9,6 +9,7 @@ from uuid import UUID
 
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
+from asd_kontur.support.production_postgres import SupportProductionRepository
 
 from .config import SpineSettings
 from .models import (
@@ -96,6 +97,7 @@ class ProductSpineService:
         self._lifecycle = lifecycle_repository
         self._object_store = object_store
         self._settings = settings
+        self._support_production = SupportProductionRepository(repository.engine)
 
     def create_workspace(
         self,
@@ -306,6 +308,19 @@ class ProductSpineService:
             page_number=page_number,
         )
 
+    def exact_evidence(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        source_locator_id: UUID,
+    ) -> EvidencePanel:
+        return self._repository.get_exact_evidence_locator(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            source_locator_id=source_locator_id,
+        )
+
     def list_jobs(self, *, owner_identity_id: str, workspace_id: UUID) -> tuple[JobSummary, ...]:
         return self._repository.list_jobs(
             owner_identity_id=owner_identity_id,
@@ -379,25 +394,236 @@ class ProductSpineService:
     def knowledge_status(self) -> KnowledgeStatus:
         return self._repository.platform_knowledge_status()
 
+    def ntd_seed_status(self) -> dict[str, Any]:
+        return self._repository.ntd_seed_status()
+
+    def ntd_artifact_content(
+        self, *, artifact_id: UUID, byte_range: tuple[int, int] | None = None
+    ) -> DocumentContent:
+        artifact = self._repository.get_ntd_artifact_object(artifact_id)
+        size = int(artifact["size_bytes"])
+        if byte_range is None:
+            offset, end = 0, size - 1
+        else:
+            offset, end = byte_range
+            if offset < 0 or end < offset or end >= size:
+                raise ValueError("ntd_artifact_range_not_satisfiable")
+        length = end - offset + 1
+
+        def chunks() -> Iterator[bytes]:
+            with self._object_store.open(str(artifact["object_key"])) as source:
+                source.seek(offset)
+                remaining = length
+                while remaining and (
+                    chunk := source.read(min(self._settings.upload_chunk_bytes, remaining))
+                ):
+                    remaining -= len(chunk)
+                    yield chunk
+
+        return DocumentContent(
+            str(artifact["media_type"]),
+            size,
+            str(artifact["content_digest"]),
+            str(artifact["filename"]),
+            offset,
+            length,
+            chunks(),
+        )
+
+    def project_understanding(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any] | None:
+        return self._repository.project_understanding_view(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+
+    def support_production_view(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        return self._support_production.view(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def form_support_id_package(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID,
+    ) -> dict[str, Any]:
+        return self._support_production.form_package(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
+        )
+
+    def start_support_generation(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        membership_id: UUID,
+        idempotency_key: str,
+        correlation_id: UUID,
+    ) -> dict[str, Any]:
+        return self._support_production.start_generation(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            membership_id=membership_id,
+            idempotency_key=idempotency_key,
+            correlation_id=correlation_id,
+        )
+
+    def support_candidate_content(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        byte_range: tuple[int, int] | None = None,
+    ) -> DocumentContent:
+        candidate = self._support_production.candidate_object(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+        )
+        return self._support_output_content(
+            artifact=candidate,
+            identity=candidate_id,
+            kind="generated-candidate",
+            byte_range=byte_range,
+        )
+
+    def review_support_candidate(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        outcome: str,
+    ) -> dict[str, Any]:
+        return self._support_production.review_candidate(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+            outcome=outcome,
+        )
+
+    def finalize_support_candidate(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_id: UUID,
+    ) -> dict[str, Any]:
+        return self._support_production.finalize_candidate(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+        )
+
+    def support_finalized_content(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        finalized_id: UUID,
+        byte_range: tuple[int, int] | None = None,
+    ) -> DocumentContent:
+        artifact = self._support_production.finalized_object(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            finalized_id=finalized_id,
+        )
+        return self._support_output_content(
+            artifact=artifact,
+            identity=finalized_id,
+            kind="finalized-document",
+            byte_range=byte_range,
+        )
+
+    def record_support_package_backup_manifest(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        return self._support_production.record_package_backup_manifest(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+
+    def _support_output_content(
+        self,
+        *,
+        artifact: dict[str, str],
+        identity: UUID,
+        kind: str,
+        byte_range: tuple[int, int] | None,
+    ) -> DocumentContent:
+        with self._object_store.open(artifact["object_key"]) as source:
+            source.seek(0, 2)
+            size = source.tell()
+        if byte_range is None:
+            offset, end = 0, size - 1
+        else:
+            offset, end = byte_range
+            if offset < 0 or end < offset or end >= size:
+                raise ValueError("generated_candidate_range_not_satisfiable")
+        length = end - offset + 1
+
+        def chunks() -> Iterator[bytes]:
+            with self._object_store.open(artifact["object_key"]) as source:
+                source.seek(offset)
+                remaining = length
+                while remaining and (
+                    chunk := source.read(min(self._settings.upload_chunk_bytes, remaining))
+                ):
+                    remaining -= len(chunk)
+                    yield chunk
+
+        output_format = artifact["format"]
+        media_type = (
+            "application/pdf"
+            if output_format in {"PDF", "PDF_OVERLAY"}
+            else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        extension = "pdf" if output_format in {"PDF", "PDF_OVERLAY"} else "docx"
+        return DocumentContent(
+            media_type,
+            size,
+            artifact["content_digest"],
+            f"{kind}-{identity}.{extension}",
+            offset,
+            length,
+            chunks(),
+        )
+
     def capability_status(self) -> dict[str, Any]:
         knowledge = self.knowledge_status()
         blockers = {
-            "OFFICIAL_NTD_VERIFIED_EDITION_COUNT_ZERO",
-            "RULE_VERSION_COUNT_ZERO",
             "MODEL_BROKER_NOT_IN_SPINE_SLICE",
             "SCALE_THRESHOLDS_UNSET",
+            "SUPPORT_AOSR_TEMPLATE_AUTHORITY_UNRESOLVED",
+            "SUPPORT_PRODUCTION_PRINT_PROFILE_NOT_QUALIFIED",
+            "SUPPORT_EXECUTIVE_SCHEME_GEOMETRY_UNAVAILABLE",
         }
+        if knowledge.verified_normative_edition_count == 0:
+            blockers.add("OFFICIAL_NTD_VERIFIED_EDITION_COUNT_ZERO")
+        if knowledge.rule_version_count == 0:
+            blockers.add("RULE_VERSION_COUNT_ZERO")
         if knowledge.memory_data_defect:
             blockers.add("MEMORY_DATA_DEFECT")
+        blockers.add("FIELD_ANDROID_CLIENT_NOT_IMPLEMENTED")
         return {
-            "contract_version": "2.2.0",
-            "slice": "PRODUCT-APPLICATION-SPINE-01",
+            "contract_version": "2.3.0",
+            "slice": "PRODUCT-APPLICATION-PUBLIC-DEPLOYMENT-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
                 "interaction.four-mode-navigation",
                 "interaction.document-registry",
                 "interaction.gaps-conflicts-blockers",
+                "interaction.work-requirement-matrix-ui",
+                "interaction.generation-export-ui",
                 "application.http-api",
                 "application.authentication",
                 "application.session-handling",
@@ -409,11 +635,23 @@ class ProductSpineService:
                 "intake.pdf-page-inventory",
                 "intake.crash-recovery",
                 "operations.document-worker",
+                "support.id-matrix",
+                "output.template-registry",
+                "output.docx",
+                "output.generated-document-candidate",
             ],
             "blockers": sorted(blockers),
             "trial_ready": False,
             "oks_ready": False,
             "product_ready": False,
+            "deployment": {
+                "source_commit": self._settings.release_commit,
+                "runtime_profile": self._settings.release_profile,
+                "deployed_at": self._settings.deployed_at,
+                "frontend_build_digest": self._settings.frontend_build_digest,
+                "openapi_digest": self._settings.openapi_digest,
+                "migration_head": self._settings.expected_migration_head,
+            },
         }
 
 

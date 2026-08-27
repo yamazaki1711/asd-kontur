@@ -34,6 +34,7 @@ from sqlalchemy import Engine
 
 from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
+from asd_kontur.support.production_postgres import SupportProductionError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -41,24 +42,32 @@ from ..application_spine.models import ModeName, SessionPrincipal
 from ..application_spine.object_store import WorkspaceObjectStore
 from ..application_spine.postgres import SpinePersistenceError, SpinePostgresRepository
 from ..application_spine.reset import WorkspaceResetService
-from ..application_spine.services import ProductSpineService, UploadPart
+from ..application_spine.services import DocumentContent, ProductSpineService, UploadPart
 from .schemas import (
     CapabilityStatusView,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
     EvidencePanelView,
+    FormIdPackageRequest,
+    GenerationStartView,
     HealthView,
     JobCancellationRequest,
     JobView,
     KnowledgeStatusView,
     LoginRequest,
     ModeView,
+    NtdSeedStatusView,
+    PackageBackupManifestView,
+    ProjectUnderstandingView,
     ResetChallengeView,
     ResetExecuteRequest,
     ResetPrepareRequest,
     ResetReceiptView,
+    ReviewGeneratedCandidateRequest,
     SessionView,
+    StartGenerationRequest,
+    SupportProductionView,
     UploadBatchView,
     WorkspaceCreate,
     WorkspaceView,
@@ -168,6 +177,13 @@ def _install_middleware(app: FastAPI) -> None:
     async def lifecycle_error(request: Request, exc: LifecycleError) -> JSONResponse:
         return _error(request, exc.code.value, 409)
 
+    @app.exception_handler(SupportProductionError)
+    async def support_production_error(
+        request: Request, exc: SupportProductionError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
     @app.exception_handler(ValueError)
     async def value_error(request: Request, exc: ValueError) -> JSONResponse:
         return _error(request, str(exc), 422)
@@ -194,7 +210,7 @@ def _api_router() -> APIRouter:
         try:
             head = _container(request).repository.migration_head()
             checks = {"postgresql": "reachable", "migration_head": head}
-            expected = "0018_product_spine"
+            expected = _container(request).settings.expected_migration_head
             return HealthView(
                 status="ready" if head == expected else "not_ready",
                 checks=checks,
@@ -538,6 +554,24 @@ def _api_router() -> APIRouter:
         )
         return EvidencePanelView(**jsonable_encoder(asdict(value)))
 
+    @router.get(
+        "/workspaces/{workspace_id}/evidence/locators/{source_locator_id}",
+        response_model=EvidencePanelView,
+        tags=["evidence"],
+    )
+    def exact_evidence(
+        request: Request,
+        workspace_id: UUID,
+        source_locator_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> EvidencePanelView:
+        value = _container(request).service.exact_evidence(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            source_locator_id=source_locator_id,
+        )
+        return EvidencePanelView(**jsonable_encoder(asdict(value)))
+
     @router.get("/workspaces/{workspace_id}/modes/{mode}", response_model=ModeView, tags=["modes"])
     def mode_view(
         request: Request,
@@ -552,6 +586,212 @@ def _api_router() -> APIRouter:
         )
         return ModeView(**jsonable_encoder(asdict(value)))
 
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding",
+        response_model=ProjectUnderstandingView,
+        tags=["project-understanding"],
+    )
+    def project_understanding(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> ProjectUnderstandingView:
+        value = _container(request).service.project_understanding(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        if value is None:
+            raise HTTPException(status_code=404, detail="project_understanding_no_result")
+        return ProjectUnderstandingView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/id-production",
+        response_model=SupportProductionView,
+        tags=["support-production"],
+    )
+    def support_production(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> SupportProductionView:
+        value = _container(request).service.support_production_view(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/id-packages",
+        response_model=SupportProductionView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def form_support_id_package(
+        request: Request,
+        workspace_id: UUID,
+        payload: FormIdPackageRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportProductionView:
+        value = _container(request).service.form_support_id_package(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=payload.work_package_id,
+        )
+        return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/generation-runs",
+        response_model=GenerationStartView,
+        status_code=202,
+        tags=["support-production"],
+    )
+    def start_support_generation(
+        request: Request,
+        workspace_id: UUID,
+        payload: StartGenerationRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> GenerationStartView:
+        value = _container(request).service.start_support_generation(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            membership_id=payload.membership_id,
+            idempotency_key=payload.idempotency_key,
+            correlation_id=request.state.correlation_id,
+        )
+        return GenerationStartView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/generated-candidates/{candidate_id}/content",
+        tags=["support-production"],
+    )
+    def support_candidate_content(
+        request: Request,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+        range_header: Annotated[str | None, Header(alias="Range")] = None,
+    ) -> StreamingResponse:
+        provisional = _container(request).service.support_candidate_content(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+        )
+        requested = _parse_range(range_header, provisional.size_bytes)
+        value = (
+            provisional
+            if requested is None
+            else _container(request).service.support_candidate_content(
+                owner_identity_id=principal.owner_identity_id,
+                workspace_id=workspace_id,
+                candidate_id=candidate_id,
+                byte_range=requested,
+            )
+        )
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(value.length),
+            "ETag": f'"{value.content_digest[7:]}"',
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+            ),
+        }
+        response_status = 200
+        if requested is not None:
+            headers["Content-Range"] = (
+                f"bytes {value.offset}-{value.offset + value.length - 1}/{value.size_bytes}"
+            )
+            response_status = 206
+        return StreamingResponse(
+            value.chunks,
+            media_type=value.media_type,
+            status_code=response_status,
+            headers=headers,
+        )
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/generated-candidates/{candidate_id}/review",
+        response_model=SupportProductionView,
+        tags=["support-production"],
+    )
+    def review_support_candidate(
+        request: Request,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        payload: ReviewGeneratedCandidateRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportProductionView:
+        value = _container(request).service.review_support_candidate(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+            outcome=payload.outcome,
+        )
+        return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/generated-candidates/{candidate_id}/finalize",
+        response_model=SupportProductionView,
+        tags=["support-production"],
+    )
+    def finalize_support_candidate(
+        request: Request,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportProductionView:
+        value = _container(request).service.finalize_support_candidate(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+        )
+        return SupportProductionView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content",
+        tags=["support-production"],
+    )
+    def support_finalized_content(
+        request: Request,
+        workspace_id: UUID,
+        finalized_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+        range_header: Annotated[str | None, Header(alias="Range")] = None,
+    ) -> StreamingResponse:
+        provisional = _container(request).service.support_finalized_content(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            finalized_id=finalized_id,
+        )
+        requested = _parse_range(range_header, provisional.size_bytes)
+        value = (
+            provisional
+            if requested is None
+            else _container(request).service.support_finalized_content(
+                owner_identity_id=principal.owner_identity_id,
+                workspace_id=workspace_id,
+                finalized_id=finalized_id,
+                byte_range=requested,
+            )
+        )
+        return _stream_document_content(value, requested)
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/id-packages/backup-manifests",
+        response_model=PackageBackupManifestView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def record_support_package_backup_manifest(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> PackageBackupManifestView:
+        value = _container(request).service.record_support_package_backup_manifest(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return PackageBackupManifestView(**jsonable_encoder(value))
+
     @router.get("/platform/knowledge-status", response_model=KnowledgeStatusView, tags=["platform"])
     def knowledge_status(
         request: Request,
@@ -559,6 +799,46 @@ def _api_router() -> APIRouter:
     ) -> KnowledgeStatusView:
         value = _container(request).service.knowledge_status()
         return KnowledgeStatusView(**jsonable_encoder(asdict(value)))
+
+    @router.get("/platform/ntd-seed-status", response_model=NtdSeedStatusView, tags=["platform"])
+    def ntd_seed_status(
+        request: Request,
+        _: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> NtdSeedStatusView:
+        return NtdSeedStatusView(**jsonable_encoder(_container(request).service.ntd_seed_status()))
+
+    @router.get("/platform/ntd/artifacts/{artifact_id}/content", tags=["platform"])
+    def ntd_artifact_content(
+        request: Request,
+        artifact_id: UUID,
+        _: Annotated[SessionPrincipal, Depends(_principal)],
+        range_header: Annotated[str | None, Header(alias="Range")] = None,
+    ) -> StreamingResponse:
+        provisional = _container(request).repository.get_ntd_artifact_object(artifact_id)
+        requested = _parse_range(range_header, int(provisional["size_bytes"]))
+        value = _container(request).service.ntd_artifact_content(
+            artifact_id=artifact_id, byte_range=requested
+        )
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(value.length),
+            "ETag": f'"{value.content_digest[7:]}"',
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+            ),
+        }
+        response_status = 200
+        if requested is not None:
+            headers["Content-Range"] = (
+                f"bytes {value.offset}-{value.offset + value.length - 1}/{value.size_bytes}"
+            )
+            response_status = 206
+        return StreamingResponse(
+            value.chunks,
+            media_type=value.media_type,
+            status_code=response_status,
+            headers=headers,
+        )
 
     return router
 
@@ -648,6 +928,31 @@ def _header_filename(value: str) -> str:
     from urllib.parse import quote
 
     return quote(value, safe="")
+
+
+def _stream_document_content(
+    value: DocumentContent, requested: tuple[int, int] | None
+) -> StreamingResponse:
+    headers = {
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(value.length),
+        "ETag": f'"{value.content_digest[7:]}"',
+        "Content-Disposition": (
+            f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+        ),
+    }
+    response_status = 200
+    if requested is not None:
+        headers["Content-Range"] = (
+            f"bytes {value.offset}-{value.offset + value.length - 1}/{value.size_bytes}"
+        )
+        response_status = 206
+    return StreamingResponse(
+        value.chunks,
+        media_type=value.media_type,
+        status_code=response_status,
+        headers=headers,
+    )
 
 
 def _error(request: Request, code: str, status_code: int) -> JSONResponse:

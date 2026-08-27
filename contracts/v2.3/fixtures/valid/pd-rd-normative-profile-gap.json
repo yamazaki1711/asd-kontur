@@ -1,0 +1,31 @@
+{
+  "contract_version": "2.3.0",
+  "profile_id": "00000000-0000-7000-8000-000000000231",
+  "profile_version": 1,
+  "workspace_id": "00000000-0000-7000-8000-000000000001",
+  "project_definition_id": "00000000-0000-7000-8000-000000000221",
+  "project_definition_version": 1,
+  "applicable_on": null,
+  "input_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "corpus_denominator": {
+    "spds_members": 0,
+    "gap": "SPDS_CORPUS_MANIFEST_UNAVAILABLE"
+  },
+  "normative_edition_ids": [],
+  "rule_version_ids": [],
+  "required_pd_sections": [],
+  "expected_rd_sets": [],
+  "formatting_requirements": [],
+  "unresolved_inputs": ["applicable_on"],
+  "gaps": [
+    { "code": "VERIFIED_PD_RD_NTD_UNAVAILABLE", "blocking": true },
+    { "code": "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE", "blocking": true },
+    {
+      "code": "NORMATIVE_APPLICABILITY_INPUT_MISSING",
+      "blocking": true,
+      "inputs": ["applicable_on"]
+    }
+  ],
+  "completeness_status": "blocked",
+  "semantic_fingerprint": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+}

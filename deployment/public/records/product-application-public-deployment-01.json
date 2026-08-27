@@ -1,0 +1,63 @@
+{
+  "record_version": "1.0.0",
+  "recorded_at": "2026-08-27T23:06:11Z",
+  "deployment_class": "public-development-product-demonstration",
+  "application_source_commit": "45475d4cefee1aff9061397b9ee4bbb76ca8aa0d",
+  "application_source_tree": "f5b473eca4e7cf6bd29def198f7b42caf6c8815f",
+  "frontend_build_digest": "sha256:7929b31afa1dcda029be21106a414f96a108b0c910e8966b4b9c8088a4b4f997",
+  "openapi_digest": "sha256:1409ca522a0eacc6f6fe185cb95da76cb028e78ce01c87aeaf481fff7639c63b",
+  "migration_head": "0027_public_deployment",
+  "database_schema_fingerprint": "sha256:2ae7a559f9b0d9fab646386203d4150b8253bf8d803f2e671158e8341f557493",
+  "runtime_profile": "public-development-contour",
+  "urls": {
+    "website": "https://asd-kontur.ru",
+    "application": "https://app.asd-kontur.ru",
+    "levashovo_archive": "https://bi.asd-kontur.ru/levashovo/intake-control/",
+    "tm35": "https://tm.asd-kontur.ru"
+  },
+  "nginx_digests": {
+    "website": "sha256:5803c6fe7a5d172b4e2e57481c32c89c9ad2e9aadb0704c82911613db687f24a",
+    "application": "sha256:9cce1d9b7560bb776429b04ef3907660bf31f13fd84f49f0c5a8c3eb2af1d729",
+    "bi": "sha256:71c546542cecec81c648b6bfa74e8f915df8ebf6219a564f161c53c65867360c",
+    "tm35_unchanged": "sha256:0ed133f83893702b39acf407180311833865ecb6790aee69691767d9fb8b896a"
+  },
+  "tls": {
+    "subject": "CN=app.asd-kontur.ru",
+    "sha256_fingerprint": "85:7C:24:1F:7E:E4:DC:D2:98:DE:C1:85:F1:7D:09:D2:00:6D:F7:16:3C:2C:2B:7F:9E:E6:CD:43:69:AA:E4:52",
+    "not_before": "2026-08-27T22:03:24Z",
+    "not_after": "2026-11-25T22:03:23Z"
+  },
+  "runtime_identities": {
+    "api": "ru.asd-kontur.spine.api",
+    "worker": "ru.asd-kontur.spine.worker",
+    "ingress": "ru.asd-kontur.spine.ingress",
+    "vps_socket": "asd-kontur-app-ingress.socket",
+    "vps_proxy": "asd-kontur-app-ingress.service"
+  },
+  "finalized_pdf": {
+    "sha256": "sha256:6cff1f024c90b6fe5414af417b19f750310c0e4caa15a84b270995c299eafb5a",
+    "bytes": 1548022,
+    "pages": 4
+  },
+  "external_acceptance": {
+    "playwright_before_restart": "PASS 2/2",
+    "playwright_after_restart": "PASS 2/2",
+    "king25": "PASS",
+    "api_worker_restart_state": "4 package versions; 4 volume books; 4 registers; 1 finalized document"
+  },
+  "legacy_archive": {
+    "repository": "yamazaki1711/ISUID",
+    "branch": "archive/levashovo-intake-control-2026-08-27",
+    "commit": "256e72353bbbc03917a8fe7cffb8f53b8162b7a9"
+  },
+  "rollback": {
+    "application_source_commit": "45475d4cefee1aff9061397b9ee4bbb76ca8aa0d",
+    "vps_snapshot": "/opt/kat/backups/public-cutover-20260827",
+    "legacy_root_nginx_digest": "sha256:bd02f9167ffb29719beffc941122c298adcad7af7142d0bff9d1bc588d56f8e6"
+  },
+  "readiness": {
+    "trial_ready": false,
+    "oks_ready": false,
+    "product_ready": false
+  }
+}

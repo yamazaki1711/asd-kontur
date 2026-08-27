@@ -70,6 +70,226 @@ class PracticeNtdAlignmentStatus(StrEnum):
     UNRESOLVED = "unresolved"
 
 
+class OfficialProvider(StrEnum):
+    GOVERNMENT_PORTAL = "government_portal"
+    OFFICIAL_LEGAL_PUBLICATION = "official_legal_publication"
+    ROSSTANDART_FUND = "rosstandart_fund"
+    MINSTROY_CATALOGUE = "minstroy_catalogue"
+
+
+class ProviderAccessStatus(StrEnum):
+    AVAILABLE = "available"
+    ACCESS_BLOCKED = "access_blocked"
+    NETWORK_UNAVAILABLE = "network_unavailable"
+    TLS_VERIFICATION_FAILED = "tls_verification_failed"
+    PROXY_MISCONFIGURED = "proxy_misconfigured"
+    HTTP_ACCESS_DENIED = "http_access_denied"
+    AUTHENTICATION_REQUIRED = "authentication_required"
+    LICENSE_RESTRICTED = "license_restricted"
+    ARTIFACT_UNAVAILABLE = "artifact_unavailable"
+    UNEXPECTED_MIME = "unexpected_mime"
+    INVALID_BYTES = "invalid_bytes"
+    UNSUPPORTED_VIEWER_PROTOCOL = "unsupported_viewer_protocol"
+    PARSER_FAILURE = "parser_failure"
+    INVALID_RESPONSE = "invalid_response"
+
+
+class CorpusMemberStatus(StrEnum):
+    ACTIVE = "active"
+    REPLACED = "replaced"
+    CANCELLED = "cancelled"
+    NOT_EFFECTIVE_IN_RF = "not_effective_in_rf"
+    UNKNOWN = "unknown"
+
+
+@dataclass(frozen=True, slots=True)
+class OfficialProviderHealthReceipt:
+    receipt_id: UUID
+    provider: OfficialProvider
+    endpoint: str
+    transport_profile: str
+    checked_at: datetime
+    status: ProviderAccessStatus
+    http_status: int | None
+    response_digest: str | None
+    failure_code: str | None
+    diagnostic: dict[str, Any] | None = None
+
+    @property
+    def fingerprint(self) -> str:
+        # Receipt identity deliberately includes ``checked_at``. Provider health is an
+        # observation, not a semantic corpus snapshot.
+        return digest_of(self)
+
+
+@dataclass(frozen=True, slots=True)
+class NormativeCorpusMember:
+    member_id: UUID
+    ordinal: int
+    stable_identity_key: str
+    designation: str
+    title: str
+    catalog_id: str
+    catalog_url: str
+    status: CorpusMemberStatus
+    replaces_designation: str | None
+    replaced_by_designation: str | None
+    scope_text: str | None
+    official_metadata: dict[str, Any]
+    acquisition_status: AcquisitionTerminalStatus
+    metadata_digest: str
+
+
+@dataclass(frozen=True, slots=True)
+class NormativeCorpusManifest:
+    manifest_id: UUID
+    version: int
+    corpus_key: str
+    query: str
+    provider: OfficialProvider
+    query_endpoints: tuple[str, ...]
+    denominator: int
+    members: tuple[NormativeCorpusMember, ...]
+    parser_version: str
+    created_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.version < 1 or self.denominator < 1:
+            raise ValueError("Normative corpus manifest requires a positive denominator")
+        if self.denominator != len(self.members):
+            raise ValueError("Normative corpus denominator must equal exact member count")
+        if tuple(member.ordinal for member in self.members) != tuple(
+            range(1, self.denominator + 1)
+        ):
+            raise ValueError("Normative corpus ordinals must be contiguous")
+        catalog_ids = [member.catalog_id for member in self.members]
+        if len(catalog_ids) != len(set(catalog_ids)):
+            raise ValueError("Normative corpus contains duplicate official catalog records")
+
+    @property
+    def fingerprint(self) -> str:
+        # Run identities and wall-clock acquisition metadata must not make the same
+        # official denominator appear semantically different on a later retrieval.
+        # Member UUIDs are likewise storage identities; the official catalog identity
+        # and normalized semantic fields define the manifest.
+        return digest_of(
+            {
+                "fingerprint_schema": "normative_corpus_manifest_semantic_v1",
+                "version": self.version,
+                "corpus_key": self.corpus_key,
+                "query": self.query,
+                "provider": self.provider,
+                "query_endpoints": self.query_endpoints,
+                "denominator": self.denominator,
+                "parser_version": self.parser_version,
+                "members": [
+                    {
+                        "ordinal": member.ordinal,
+                        "stable_identity_key": member.stable_identity_key,
+                        "designation": member.designation,
+                        "title": member.title,
+                        "catalog_id": member.catalog_id,
+                        "catalog_url": member.catalog_url,
+                        "status": member.status,
+                        "replaces_designation": member.replaces_designation,
+                        "replaced_by_designation": member.replaced_by_designation,
+                        "scope_text": member.scope_text,
+                        "official_metadata": member.official_metadata,
+                        "acquisition_status": member.acquisition_status,
+                        "metadata_digest": member.metadata_digest,
+                    }
+                    for member in self.members
+                ],
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicabilityPredicate:
+    predicate_id: UUID
+    version: int
+    provision_id: UUID
+    provision_version: int
+    predicate: dict[str, Any]
+    required_inputs: tuple[str, ...]
+    exclusions: tuple[dict[str, Any], ...]
+    semantic_fingerprint: str
+
+    def __post_init__(self) -> None:
+        expected = self.compute_fingerprint(
+            provision_id=self.provision_id,
+            provision_version=self.provision_version,
+            predicate=self.predicate,
+            required_inputs=self.required_inputs,
+            exclusions=self.exclusions,
+        )
+        if self.version < 1 or self.provision_version < 1 or self.semantic_fingerprint != expected:
+            raise ValueError("Applicability predicate semantic fingerprint is invalid")
+
+    @staticmethod
+    def compute_fingerprint(
+        *,
+        provision_id: UUID,
+        provision_version: int,
+        predicate: dict[str, Any],
+        required_inputs: tuple[str, ...],
+        exclusions: tuple[dict[str, Any], ...],
+    ) -> str:
+        return digest_of(
+            {
+                "fingerprint_schema": "normative_applicability_predicate_v1",
+                "provision_id": provision_id,
+                "provision_version": provision_version,
+                "predicate": predicate,
+                "required_inputs": sorted(required_inputs),
+                "exclusions": exclusions,
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ApplicablePdRdNormativeProfile:
+    profile_id: UUID
+    version: int
+    workspace_id: UUID
+    project_definition_id: UUID
+    project_definition_version: int
+    applicable_on: date | None
+    input_fingerprint: str
+    corpus_denominator: dict[str, Any]
+    normative_edition_ids: tuple[UUID, ...]
+    rule_version_ids: tuple[UUID, ...]
+    required_pd_sections: tuple[dict[str, Any], ...]
+    expected_rd_sets: tuple[dict[str, Any], ...]
+    formatting_requirements: tuple[dict[str, Any], ...]
+    unresolved_inputs: tuple[str, ...]
+    gaps: tuple[dict[str, Any], ...]
+    completeness_status: str
+    semantic_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class RuleNormativeProvisionEvidence:
+    evidence_id: UUID
+    rule_version_id: UUID
+    normative_provision_id: UUID
+    normative_provision_version: int
+    normative_edition_id: UUID
+    source_version_id: UUID
+    source_locator_id: UUID
+    applicability_predicate_id: UUID
+    applicability_predicate_version: int
+    qualification_decision_ref: str
+    evidence_digest: str
+    recorded_at: datetime
+
+    def __post_init__(self) -> None:
+        if self.normative_provision_version < 1 or self.applicability_predicate_version < 1:
+            raise ValueError("Rule normative evidence versions must be positive")
+        if not self.qualification_decision_ref or not self.evidence_digest.startswith("sha256:"):
+            raise ValueError("Rule normative evidence requires exact qualification lineage")
+
+
 @dataclass(frozen=True, slots=True)
 class OfficialHttpMetadata:
     request_url: str
@@ -80,6 +300,8 @@ class OfficialHttpMetadata:
     last_modified: str | None
     byte_length: int
     retrieved_at: datetime
+    redirect_chain: tuple[str, ...] = ()
+    response_headers: tuple[tuple[str, str], ...] = ()
 
     def __post_init__(self) -> None:
         if not self.request_url.startswith("https://") or not self.final_url.startswith("https://"):
@@ -94,6 +316,7 @@ class CatalogueCandidate:
     catalog_url: str
     title: str
     matched_designation: str
+    catalogue_artifact_urls: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,6 +534,9 @@ class NtdBackupManifest:
     edition_fingerprints: tuple[tuple[UUID, str], ...]
     provision_fingerprints: tuple[tuple[UUID, int, str], ...]
     activation_decision_refs: tuple[tuple[UUID, int], ...]
+    rule_candidate_fingerprints: tuple[tuple[UUID, int, str], ...]
+    rule_qualification_fingerprints: tuple[tuple[UUID, int, str], ...]
+    rule_activation_fingerprints: tuple[tuple[UUID, int, str], ...]
     gap_fingerprints: tuple[str, ...]
     conflict_fingerprints: tuple[str, ...]
     projection_profile_version: str
@@ -324,6 +550,9 @@ class NtdBackupManifest:
             *(value for _, value in self.source_versions),
             *(value for _, value in self.edition_fingerprints),
             *(value for _, _, value in self.provision_fingerprints),
+            *(value for _, _, value in self.rule_candidate_fingerprints),
+            *(value for _, _, value in self.rule_qualification_fingerprints),
+            *(value for _, _, value in self.rule_activation_fingerprints),
         )
         if self.version < 1 or any(not value.startswith("sha256:") for value in digests):
             raise ValueError("NTD backup manifest requires pinned integrity digests")

@@ -114,7 +114,7 @@ def test_spine_content_minimal_scale_profile(
 
     assert accepted == file_count
     assert rejected == 0
-    assert enqueued == file_count * 5
+    assert enqueued == file_count * 17
 
     first_page_started = time.perf_counter()
     page, cursor = service.list_documents(
@@ -176,9 +176,9 @@ def test_spine_content_minimal_scale_profile(
             or 0
         )
     assert document_rows == file_count
-    assert sum(int(value) for value in state_rows.values()) == file_count * 5
+    assert sum(int(value) for value in state_rows.values()) == file_count * 17
     assert int(state_rows.get("succeeded", 0)) == 2
-    assert int(state_rows.get("queued", 0)) == file_count * 5 - 2
+    assert int(state_rows.get("queued", 0)) == file_count * 17 - 2
 
     max_resident_raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     max_resident_bytes = (

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "decision_id": "NTD-SEED-REMEDIATION-01",
+  "decision_version": 1,
+  "recorded_at": "2026-08-26T13:54:15+12:00",
+  "canonical_base_commit": "81961379366a42475367c42652bef9d0dbf27d7d",
+  "status": "IN_PROGRESS",
+  "supersedes_semantics_of": {
+    "decision": "NTD-SEED-01",
+    "historical_status_preserved": "PARTIAL",
+    "historical_manifest_fingerprint": "sha256:071960850be497aa6cff032a64375f9cacacadc9fed1a36b136fddfb862ca4b6",
+    "historical_resolution_report_fingerprint": "sha256:1392964228c5732f69c74026011b554768eacf2cce85a73abbfdac1133302386",
+    "historical_dump_sha256": "sha256:416c1a2fe6b54b528e6e823584e78996f258fe02d403128b2a50dbb473263c62"
+  },
+  "reopening_reasons": [
+    "The official Minstroy catalogue is reachable from the current execution environment.",
+    "Exact seed documents are publicly present in the official catalogue.",
+    "The historical official_access_blocked outcome no longer describes current provider access.",
+    "A query-only no_exact_result is not terminal until bounded deterministic catalogue enumeration and exact card parsing have completed."
+  ],
+  "bounded_denominator": {
+    "guide_pdf_pages": [15, 16, 17, 18, 19],
+    "printed_mentions": 37,
+    "stable_normative_identities": 25,
+    "minstroy_orders": 2,
+    "technical_normative_documents": 23
+  },
+  "authority_policy": [
+    {
+      "priority": 1,
+      "source": "https://minstroyrf.gov.ru/docs/",
+      "use": "official catalogue records and official artifacts"
+    },
+    {
+      "priority": 2,
+      "source": "https://publication.pravo.gov.ru/",
+      "use": "official publication records for orders and amendments"
+    },
+    {
+      "priority": 3,
+      "source": "https://protect.gost.ru/",
+      "use": "official standard identity, edition metadata and officially accessible artifacts"
+    },
+    {
+      "priority": 4,
+      "source": ["https://docs.cntd.ru/", "https://meganorm.ru/"],
+      "use": "discovery/reference only; never canonical authority bytes"
+    }
+  ],
+  "terminal_condition": {
+    "per_identity_outcome_required": true,
+    "downloaded_requires_immutable_official_bytes": true,
+    "processed_requires_terminal_page_and_structure_denominators": true,
+    "ingested_requires_verified_provisions_in_canonical_postgresql": true,
+    "applied_requires_gateway_evidence_and_qualified_rule_trace": true
+  },
+  "readiness": {
+    "NTD-SEED-REMEDIATION-01": "IN_PROGRESS",
+    "INDUSTRIAL-DOCUMENT-UNDERSTANDING-01": "IN_PROGRESS",
+    "TrialReady": false,
+    "OKSReady": false,
+    "ProductReady": false
+  }
+}

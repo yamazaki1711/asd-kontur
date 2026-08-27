@@ -144,7 +144,17 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         outcomes = [recovered]
         while outcome := restarted_worker.run_once():
             outcomes.append(outcome)
-        assert [value.state.value for value in outcomes] == ["succeeded"] * 5
+        # The interrupted lease is recovered first; every job that the worker can
+        # execute before the deterministic classification failure must succeed.
+        # The exact count is asserted from the durable job ledger below instead of
+        # from this scheduling-local list.
+        assert outcomes[:-1]
+        assert all(value.state is JobState.SUCCEEDED for value in outcomes[:-1])
+        assert outcomes[-1].state is JobState.FAILED
+        assert outcomes[-1].outcome_code in {
+            "classification_evidence_unavailable",
+            "pdf_renderer_unavailable",
+        }
         duplicate = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents",
             files=[("files", ("two-pages.pdf", _pdf(), "application/pdf"))],
@@ -153,8 +163,23 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert duplicate.status_code == 202
         assert duplicate.json() == upload.json()
         jobs = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/jobs").json()
-        assert len(jobs) == 5
-        assert all(value["state"] == "succeeded" for value in jobs)
+        assert len(jobs) == 17
+        succeeded_count = len(outcomes) - 1
+        assert sum(value["state"] == "succeeded" for value in jobs) == succeeded_count
+        assert sum(value["state"] == "failed" for value in jobs) == 1
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == (
+            16 - succeeded_count
+        )
+        failed_job = next(value for value in jobs if value["state"] == "failed")
+        assert failed_job["typed_failure_code"] == outcomes[-1].outcome_code
+        job_states = {value["job_kind"]: value["state"] for value in jobs}
+        for required_success in (
+            "DOCUMENT_ADMISSION",
+            "DOCUMENT_HASH",
+            "PDF_INVENTORY",
+            "NATIVE_TEXT_EXTRACTION",
+        ):
+            assert job_states[required_success] == "succeeded"
         documents = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents").json()
         assert len(documents["items"]) == 1
         document = documents["items"][0]
@@ -187,6 +212,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             )
         assert knowledge_before["memory_data_defect"] is (qualification_status != "pass")
         assert knowledge_before["knowledge_ready"] is False
+        ntd_seed_before = client.get("/api/v1/platform/ntd-seed-status").json()
+        assert ntd_seed_before["counts"]["denominator"] == 25
+        assert ntd_seed_before["counts"]["registered_identity_count"] == 0
+        assert ntd_seed_before["complete"] is False
 
         prepared = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/lifecycle/reset/prepare",
@@ -210,6 +239,7 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         remaining = client.get("/api/v1/workspaces").json()
         assert [value["workspace_id"] for value in remaining] == [workspace_b["workspace_id"]]
         assert client.get("/api/v1/platform/knowledge-status").json() == knowledge_before
+        assert client.get("/api/v1/platform/ntd-seed-status").json() == ntd_seed_before
         assert any(settings.archive_store_root.rglob("*.zip"))
         assert client.post("/api/v1/session/logout", headers=csrf).status_code == 204
         assert client.get("/api/v1/workspaces").status_code == 401

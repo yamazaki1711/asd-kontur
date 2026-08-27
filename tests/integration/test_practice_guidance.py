@@ -984,7 +984,7 @@ def test_disposable_practice_memory_head_to_0008_to_head(
         with disposable_engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0020_knowledge_status"
+                == "0027_public_deployment"
             )
         with pytest.raises(IntegrityFailure) as missing_relation:
             memory_relation_inventory(

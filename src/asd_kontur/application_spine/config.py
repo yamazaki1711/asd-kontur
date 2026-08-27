@@ -38,6 +38,12 @@ class SpineSettings:
     job_lease_seconds: int = 30
     event_retention_seconds: int = 86400
     frontend_dist: Path | None = None
+    release_commit: str = "development-unpinned"
+    release_profile: str = "local-development"
+    deployed_at: str | None = None
+    frontend_build_digest: str | None = None
+    openapi_digest: str | None = None
+    expected_migration_head: str = "0027_public_deployment"
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -96,6 +102,14 @@ class SpineSettings:
             max_batch_bytes=int(os.environ.get("ASD_MAX_BATCH_BYTES", str(2 * 1024 * 1024 * 1024))),
             max_batch_files=int(os.environ.get("ASD_MAX_BATCH_FILES", "1000")),
             frontend_dist=Path(frontend) if frontend else None,
+            release_commit=os.environ.get("ASD_RELEASE_COMMIT", "development-unpinned"),
+            release_profile=os.environ.get("ASD_RELEASE_PROFILE", "local-development"),
+            deployed_at=os.environ.get("ASD_DEPLOYED_AT"),
+            frontend_build_digest=os.environ.get("ASD_FRONTEND_BUILD_DIGEST"),
+            openapi_digest=os.environ.get("ASD_OPENAPI_DIGEST"),
+            expected_migration_head=os.environ.get(
+                "ASD_EXPECTED_MIGRATION_HEAD", "0027_public_deployment"
+            ),
         )
 
 

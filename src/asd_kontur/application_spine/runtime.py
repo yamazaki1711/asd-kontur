@@ -218,8 +218,40 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
     if not output.is_absolute() or output.exists():
         raise ValueError("launchd output must be a new absolute path")
     output.mkdir(parents=True, mode=0o700)
-    executable = Path(sys.executable).resolve()
+    # Preserve the virtual-environment interpreter path. Resolving its symlink to
+    # the uv-managed base interpreter drops the editable project environment when
+    # launchd starts the service outside an interactive shell.
+    executable = Path(sys.executable).absolute()
     log_root = _log_root()
+    environment = {
+        "ASD_DATABASE_URL": settings.database_url,
+        "ASD_LIFECYCLE_DATABASE_URL": settings.lifecycle_database_url,
+        "ASD_WORKER_DATABASE_URL": settings.worker_database_url,
+        "ASD_DESTRUCTION_DATABASE_URL": settings.destruction_database_url,
+        "ASD_OBJECT_STORE_ROOT": str(settings.object_store_root),
+        "ASD_ARCHIVE_STORE_ROOT": str(settings.archive_store_root),
+        "ASD_SESSION_PROFILE": settings.session_profile.value,
+        "ASD_AUTH_AUDIT_PEPPER": settings.audit_pepper,
+        "ASD_BIND_HOST": settings.bind_host,
+        "ASD_BIND_PORT": str(settings.bind_port),
+        "ASD_LOG_ROOT": str(log_root),
+        "ASD_RELEASE_COMMIT": settings.release_commit,
+        "ASD_RELEASE_PROFILE": settings.release_profile,
+        "ASD_EXPECTED_MIGRATION_HEAD": settings.expected_migration_head,
+    }
+    optional_environment = {
+        "ASD_FRONTEND_DIST": str(settings.frontend_dist) if settings.frontend_dist else None,
+        "ASD_DEPLOYED_AT": settings.deployed_at,
+        "ASD_FRONTEND_BUILD_DIGEST": settings.frontend_build_digest,
+        "ASD_OPENAPI_DIGEST": settings.openapi_digest,
+    }
+    for variable_name, variable_value in optional_environment.items():
+        if variable_value is not None:
+            environment[variable_name] = variable_value
+    environment_xml = "".join(
+        f"<key>{escape(name)}</key><string>{escape(value)}</string>"
+        for name, value in sorted(environment.items())
+    )
     for name, command_name in (("api", "serve-api"), ("worker", "run-worker")):
         log_path = log_root / f"{name}.log"
         content = (
@@ -232,13 +264,16 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
             f"<string>{escape(str(executable))}</string><string>-m</string>"
             "<string>asd_kontur.application_spine.runtime</string>"
             f"<string>{command_name}</string></array>"
+            f"<key>EnvironmentVariables</key><dict>{environment_xml}</dict>"
             f"<key>StandardOutPath</key><string>{escape(str(log_path))}</string>"
             f"<key>StandardErrorPath</key><string>{escape(str(log_path))}</string>"
             "<key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>5</integer>"
             "<key>ProcessType</key><string>Background</string>"
             "</dict></plist>\n"
         )
-        (output / f"ru.asd-kontur.spine.{name}.plist").write_text(content, encoding="utf-8")
+        target = output / f"ru.asd-kontur.spine.{name}.plist"
+        target.write_text(content, encoding="utf-8")
+        target.chmod(0o600)
     rotation = "\n".join(
         f"{log_root / f'{name}.log'}  640  10  10240  *  J" for name in ("api", "worker")
     )

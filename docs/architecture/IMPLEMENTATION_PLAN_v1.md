@@ -54,7 +54,7 @@ The Spine ended with selected application/interaction/intake foundations and
 their capability E2E. It may advance individual capabilities to
 `CAPABILITY_READY`; it cannot set ModeReady, TrialReady or ProductReady.
 
-## Next slice: INDUSTRIAL-DOCUMENT-UNDERSTANDING-01
+## Current slice: INDUSTRIAL-DOCUMENT-UNDERSTANDING-01
 
 Purpose: turn admitted ПЗ/ПД/РД/ВОР/estimate documents into an evidence-bound,
 visible project model without changing memory integrity or claiming a ready
@@ -66,8 +66,13 @@ WorkRequirementMatrix → visible evidence-bound UI result`.
 
 This slice starts only after MEMORY-INTEGRITY-FIX-01 is merged. It must use the
 existing Product Application Spine, durable jobs, workspace isolation,
-Knowledge Gateway and exact locators. It does not authorize a real OKS,
-recursive NTD acquisition, CAD/Drawing Intelligence or external VLM routing.
+Knowledge Gateway and exact locators. Its bounded normative denominator is the
+official PP No. 87 edition/amendment chain and the official SPDS family manifest
+needed for PD/RD applicability. It does not authorize recursive acquisition of
+unrelated NTD, a real OKS, CAD/Drawing Intelligence or external VLM routing.
+
+Current implementation and acquisition status is recorded in
+[INDUSTRIAL-DOCUMENT-UNDERSTANDING-01](../implementation/INDUSTRIAL_DOCUMENT_UNDERSTANDING_01.md).
 
 ## Subsequent streams
 
@@ -82,3 +87,12 @@ recursive NTD acquisition, CAD/Drawing Intelligence or external VLM routing.
 9. four ModeReady decisions and product acceptance.
 
 Each stream updates the same registry and cannot remove a denominator.
+
+The Field/Offline stream includes the separately registered
+[`FIELD-ANDROID-CLIENT-01`](../implementation/FIELD_ANDROID_CLIENT_01.md)
+capability ([issue #24](https://github.com/yamazaki1711/asd-kontur/issues/24)).
+It remains `NOT_IMPLEMENTED`; an approved threat model and comparative device,
+MDM, security, offline-sync and delivery decisions precede any Android project.
+Its absence blocks Support/Audit/Restoration field acceptance and final
+`ProductReady`, but does not expand the current Industrial Document Understanding
+slice.

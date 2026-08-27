@@ -29,8 +29,13 @@ class FakeOfficialTransport:
         if "/docs/419099/" in url:
             body = """<!doctype html><html><h1>СП 543.1325800.2024 synthetic title</h1>
             <div>Опубликовано: 27 декабря 2024 Минстрой</div>
-            <a href='/upload/sp543.pdf'>Download</a>
-            <a href='/upload/appendix.zip'>Download attachment</a></html>""".encode()
+            <div class='actions-panel-box'>
+              <a href='/upload/sp543.pdf'>Download</a>
+              <a href='/upload/appendix.zip'>Download attachment</a>
+            </div>
+            <div class='related'>
+              <a href='/upload/unrelated.pdf'>Скачать</a>
+            </div></html>""".encode()
             content_type = "text/html"
         elif "/upload/sp543.pdf" in url:
             body = b"%PDF-1.7\nsynthetic"
@@ -72,6 +77,80 @@ def test_exact_official_search_card_and_multiple_attachments() -> None:
     artifact = client.download_artifact(f"{MINSTROY_BASE_URL}/upload/sp543.pdf")
     assert artifact.body.startswith(b"%PDF-")
     assert all(url.startswith(MINSTROY_BASE_URL) for url in transport.urls)
+    assert all("unrelated.pdf" not in url for url in record.artifact_urls)
+
+
+def test_exact_search_continues_from_amendment_only_designation_to_title() -> None:
+    class AmendmentThenBaseTransport(FakeOfficialTransport):
+        def get(self, url: str) -> OfficialResponse:
+            self.urls.append(url)
+            if "70.13330.2012" in url:
+                body = (
+                    "<html><a href='/docs/361151/'>Изменение №6 к СП 70.13330.2012</a></html>"
+                ).encode()
+            elif "%D0%9D%D0%B5%D1%81%D1%83%D1%89%D0%B8%D0%B5" in url:
+                body = (
+                    "<html><a href='/docs/1888/'>\u0421\u041f70.13330.2012 "
+                    "Несущие и ограждающие конструкции</a></html>"
+                ).encode()
+            else:
+                body = b"<html></html>"
+            return OfficialResponse(
+                OfficialHttpMetadata(
+                    request_url=url,
+                    final_url=url,
+                    status_code=200,
+                    content_type="text/html",
+                    etag=None,
+                    last_modified=None,
+                    byte_length=len(body),
+                    retrieved_at=datetime(2026, 8, 26, tzinfo=UTC),
+                ),
+                body,
+            )
+
+    transport = AmendmentThenBaseTransport()
+    client = MinstroyCatalogueClient(transport, max_search_pages=1)
+
+    result = client.search_exact(
+        normalize_identifier("СП 70.13330.2012"),
+        title_hint="Несущие и ограждающие конструкции",
+    )
+
+    assert [candidate.catalog_id for candidate in result.candidates] == ["1888", "361151"]
+    assert len(transport.urls) == 2
+
+
+def test_listing_download_survives_legacy_card_without_actions_panel() -> None:
+    class ListingArtifactTransport(FakeOfficialTransport):
+        def get(self, url: str) -> OfficialResponse:
+            self.urls.append(url)
+            if "/docs/1888/" in url:
+                body = "<html><h1>\u0421\u041f70.13330.2012 synthetic</h1></html>".encode()
+            else:
+                body = """<html><div class='item-wrap'><div>
+                <a href='/docs/1888/'>\u0421\u041f70.13330.2012 synthetic</a>
+                <a href='/upload/SP70.13330.2012.pdf'>Download</a>
+                </div></div></html>""".encode()
+            return OfficialResponse(
+                OfficialHttpMetadata(
+                    request_url=url,
+                    final_url=url,
+                    status_code=200,
+                    content_type="text/html",
+                    etag=None,
+                    last_modified=None,
+                    byte_length=len(body),
+                    retrieved_at=datetime(2026, 8, 26, tzinfo=UTC),
+                ),
+                body,
+            )
+
+    client = MinstroyCatalogueClient(ListingArtifactTransport(), max_search_pages=1)
+    search = client.search_exact(normalize_identifier("\u0421\u041f 70.13330.2012"))
+    record = client.fetch_record(search.candidates[0])
+
+    assert record.artifact_urls == (f"{MINSTROY_BASE_URL}/upload/SP70.13330.2012.pdf",)
 
 
 def test_download_rejects_mismatched_pdf_signature() -> None:
@@ -86,6 +165,15 @@ def test_download_rejects_mismatched_pdf_signature() -> None:
     with pytest.raises(OfficialCatalogueError, match="PDF signature") as error:
         client.download_artifact(f"{MINSTROY_BASE_URL}/upload/sp543.pdf")
     assert error.value.code == "ARTIFACT_INVALID"
+
+
+def test_download_percent_encodes_official_cyrillic_path() -> None:
+    transport = FakeOfficialTransport()
+    client = MinstroyCatalogueClient(transport)
+
+    client.download_artifact(f"{MINSTROY_BASE_URL}/upload/СП 48.html")
+
+    assert transport.urls[-1].endswith("/upload/%D0%A1%D0%9F%2048.html")
 
 
 def test_client_rejects_non_official_endpoint() -> None:

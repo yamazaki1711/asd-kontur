@@ -1,0 +1,9 @@
+[Unit]
+Description=Forward container ingress to the MBP reverse SSH endpoint
+Requires=asd-kontur-app-ingress.socket
+After=asd-kontur-app-ingress.socket
+
+[Service]
+ExecStart=/lib/systemd/systemd-socket-proxyd 127.0.0.1:18765
+NoNewPrivileges=true
+PrivateTmp=true

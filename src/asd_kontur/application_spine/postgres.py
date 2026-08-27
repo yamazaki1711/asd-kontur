@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid5
 
@@ -76,6 +76,12 @@ class SpinePostgresRepository:
     def __init__(self, engine: Engine, *, event_retention_seconds: int = 86400) -> None:
         self._engine = engine
         self._event_retention_seconds = event_retention_seconds
+
+    @property
+    def engine(self) -> Engine:
+        """Expose the shared persistence boundary to sibling application repositories."""
+
+        return self._engine
 
     def migration_head(self) -> str:
         with self._engine.connect() as connection:
@@ -778,7 +784,10 @@ class SpinePostgresRepository:
         job_ids: list[UUID] = []
         prior: UUID | None = None
         for priority, kind in enumerate(JobKind, start=1):
-            if kind is JobKind.WORKSPACE_RESET_RECONCILIATION:
+            if kind in {
+                JobKind.WORKSPACE_RESET_RECONCILIATION,
+                JobKind.ID_DOCUMENT_GENERATION,
+            }:
                 continue
             job_id = uuid7()
             job_ids.append(job_id)
@@ -1952,6 +1961,77 @@ class SpinePostgresRepository:
             False,
         )
 
+    def get_exact_evidence_locator(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        source_locator_id: UUID,
+    ) -> EvidencePanel:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT sl.source_locator_id,sl.source_version_id,sl.locator_value,"
+                        "sl.fragment_digest,v.document_id,v.version AS document_version,"
+                        "h.page_number,h.width_points,h.height_points,h.rotation_degrees,"
+                        "COALESCE(e.extraction_method,'source_locator') AS extraction_method "
+                        "FROM workspace.source_locators sl JOIN workspace.document_versions v ON "
+                        "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
+                        "v.source_version_id=sl.source_version_id JOIN LATERAL (SELECT * FROM "
+                        "workspace.document_page_health_versions h WHERE h.organization_id=sl.organization_id "
+                        "AND h.workspace_id=sl.workspace_id AND h.document_id=v.document_id AND "
+                        "h.document_version=v.version AND h.page_number=(sl.locator_value->>'page')::bigint "
+                        "ORDER BY h.health_version DESC LIMIT 1) h ON true LEFT JOIN "
+                        "workspace.native_layout_element_versions e ON "
+                        "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id AND "
+                        "e.source_locator_id=sl.source_locator_id WHERE sl.organization_id=:organization "
+                        "AND sl.workspace_id=:workspace AND sl.source_locator_id=:locator ORDER BY "
+                        "e.version DESC NULLS LAST LIMIT 1"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "locator": source_locator_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            raise SpinePersistenceError("evidence_locator_not_found")
+        locator_value = dict(row["locator_value"])
+        region_raw = locator_value.get("region")
+        if not isinstance(region_raw, list | tuple) or len(region_raw) != 4:
+            raise SpinePersistenceError("evidence_locator_region_invalid")
+        region = tuple(float(value) for value in region_raw)
+        locator = PageLocator(
+            UUID(str(row["document_id"])),
+            int(row["document_version"]),
+            UUID(str(row["source_version_id"])),
+            UUID(str(row["source_locator_id"])),
+            int(row["page_number"]),
+            region,  # type: ignore[arg-type]
+            float(row["width_points"]),
+            float(row["height_points"]),
+            int(row["rotation_degrees"]),
+            str(row["fragment_digest"]),
+            str(row["extraction_method"]),
+        )
+        return EvidencePanel(
+            locator,
+            "candidate_or_verified_workspace_fact",
+            "workspace_fact_candidate",
+            None,
+            None,
+            None,
+            (),
+            (),
+            False,
+        )
+
     def latest_matrix_and_mode_execution(
         self,
         *,
@@ -1991,6 +2071,167 @@ class SpinePostgresRepository:
             dict(matrix) if matrix is not None else None,
             dict(execution) if execution is not None else None,
         )
+
+    def project_understanding_view(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any] | None:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            reconciliation = (
+                session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.project_understanding_reconciliations WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace "
+                        "ORDER BY recorded_at DESC,reconciliation_id,version DESC LIMIT 1"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if reconciliation is None:
+                return None
+            project = (
+                session.execute(
+                    sa.text(
+                        "SELECT project_definition_id,version,purpose,object_class,definition,"
+                        "fingerprint,created_at FROM workspace.project_definition_versions WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "project_definition_id=:project AND version=:version"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "project": reconciliation["project_definition_id"],
+                        "version": reconciliation["project_definition_version"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            packages = (
+                session.execute(
+                    sa.text(
+                        "SELECT work_package_id,version,package,fingerprint FROM "
+                        "workspace.construction_work_package_versions WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "project_definition_id=:project ORDER BY work_package_id,version"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "project": reconciliation["project_definition_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+            matrix = (
+                session.execute(
+                    sa.text(
+                        "SELECT matrix_id,version,matrix,fingerprint FROM "
+                        "workspace.work_requirement_matrix_versions WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "matrix_id=:matrix AND version=:version"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "matrix": reconciliation["matrix_id"],
+                        "version": reconciliation["matrix_version"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            profile = (
+                session.execute(
+                    sa.text(
+                        "SELECT profile_id,version,applicable_on,corpus_denominator,"
+                        "normative_edition_ids,rule_version_ids,"
+                        "required_pd_sections,expected_rd_sets,formatting_requirements,unresolved_inputs,"
+                        "gaps,completeness_status,semantic_fingerprint FROM "
+                        "workspace.applicable_pd_rd_normative_profiles WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "project_definition_id=:project AND project_definition_version=:version "
+                        "ORDER BY created_at DESC,profile_id LIMIT 1"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "project": reconciliation["project_definition_id"],
+                        "version": reconciliation["project_definition_version"],
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            page_roles = (
+                session.execute(
+                    sa.text(
+                        "SELECT v.source_version_id,split_part(d.scope,':',2)::bigint AS page_number,"
+                        "d.selected_roles,d.source_locator_ids,d.decision_code FROM "
+                        "workspace.document_role_decisions d JOIN workspace.document_versions v ON "
+                        "v.organization_id=d.organization_id AND v.workspace_id=d.workspace_id AND "
+                        "v.document_id=d.document_id AND v.version=d.document_version WHERE "
+                        "d.organization_id=:organization AND d.workspace_id=:workspace "
+                        "ORDER BY v.source_version_id,page_number,d.decision_version"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
+            defects = (
+                session.execute(
+                    sa.text(
+                        "SELECT defect_id,version,defect_kind,subject_identity,related_identity,"
+                        "source_locator_ids,parameters,blocking,status FROM "
+                        "workspace.project_reconciliation_defects WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace "
+                        "ORDER BY defect_id,version"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
+            evidence_rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
+                        "sl.source_version_id,sl.locator_kind,sl.locator_value,sl.fragment_digest,"
+                        "v.document_id,v.version AS document_version FROM workspace.source_locators sl "
+                        "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id AND "
+                        "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id WHERE "
+                        "sl.organization_id=:organization AND sl.workspace_id=:workspace ORDER BY "
+                        "sl.source_locator_id,v.version DESC"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
+        return {
+            "reconciliation": _jsonable_row(reconciliation),
+            "project_definition": _jsonable_row(project),
+            "page_roles": [_jsonable_row(row) for row in page_roles],
+            "work_packages": [_jsonable_row(row) for row in packages],
+            "matrix": _jsonable_row(matrix),
+            "normative_profile": _jsonable_row(profile) if profile is not None else None,
+            "defects": [_jsonable_row(row) for row in defects],
+            "evidence_index": {
+                str(row["source_locator_id"]): _jsonable_row(row) for row in evidence_rows
+            },
+            "authority_layers": {
+                "workspace_fact": "project_definition_and_document_registry",
+                "methodological_practice": "advisory_only",
+                "normative_authority": "verified_subset_only",
+                "customer_addition": "workspace_additive_only",
+                "ai_candidate": "candidate_only",
+            },
+        }
 
     def platform_knowledge_status(self) -> KnowledgeStatus:
         with self._engine.connect() as connection:
@@ -2082,6 +2323,340 @@ class SpinePostgresRepository:
             bool(value["knowledge_ready"]),
             tuple(str(item) for item in value["blockers"]),
         )
+
+    def ntd_seed_status(self) -> dict[str, Any]:
+        """Return exact-25 status and bounded verified provision evidence."""
+
+        with self._engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    sa.text(
+                        "WITH latest AS (SELECT DISTINCT ON (identity_resolution_id) * FROM "
+                        "platform.ntd_identity_resolution_versions ORDER BY identity_resolution_id,"
+                        "version DESC) SELECT i.identity_reconciliation_id,"
+                        "i.canonical_stable_identity_key,i.printed_designations,i.identity_status,"
+                        "l.provider,l.resolution_status,l.failure_code,l.official_record_url,"
+                        "l.official_record_digest,l.diagnostic,l.normative_document_id,"
+                        "l.normative_edition_id,l.normative_artifact_ids,d.designation,d.title,"
+                        "e.edition_label,a.normative_artifact_id,a.official_url,a.content_digest,"
+                        "a.media_type,a.size_bytes FROM "
+                        "platform.ntd_seed_identity_reconciliations i LEFT JOIN latest l ON "
+                        "l.identity_reconciliation_id=i.identity_reconciliation_id LEFT JOIN "
+                        "platform.normative_documents d ON d.normative_document_id=l.normative_document_id "
+                        "LEFT JOIN platform.normative_editions e ON "
+                        "e.normative_edition_id=l.normative_edition_id LEFT JOIN LATERAL "
+                        "unnest(l.normative_artifact_ids) artifact_id ON true LEFT JOIN "
+                        "platform.normative_artifacts a ON a.normative_artifact_id=artifact_id "
+                        "ORDER BY i.canonical_stable_identity_key,"
+                        "l.provider,a.normative_artifact_id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            metrics = {
+                UUID(str(row["normative_artifact_id"])): dict(row)
+                for row in connection.execute(
+                    sa.text(
+                        "WITH latest_pages AS (SELECT DISTINCT ON (normative_page_id) * FROM "
+                        "platform.normative_representation_pages ORDER BY normative_page_id,"
+                        "version DESC) SELECT p.normative_artifact_id,"
+                        "count(DISTINCT p.normative_page_id) page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE p.extraction_route='native') native_page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE p.extraction_route='polza_candidate') polza_routed_page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE p.extraction_route='blocked') blocked_page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE p.terminal_outcome='recovery_complete') recovered_page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE p.terminal_outcome='native_complete') native_complete_page_count,"
+                        "count(DISTINCT p.normative_page_id) FILTER "
+                        "(WHERE x.status='candidate') external_candidate_page_count FROM latest_pages p "
+                        "LEFT JOIN platform.ntd_external_extraction_receipts x ON "
+                        "x.normative_page_id=p.normative_page_id AND x.normative_page_version=p.version "
+                        "GROUP BY p.normative_artifact_id"
+                    )
+                ).mappings()
+            }
+            provision_counts = {
+                UUID(str(row["normative_edition_id"])): int(row["verified_count"])
+                for row in connection.execute(
+                    sa.text(
+                        "SELECT normative_edition_id,count(*) FILTER (WHERE verification_status='verified') "
+                        "verified_count FROM platform.normative_provision_versions "
+                        "GROUP BY normative_edition_id"
+                    )
+                ).mappings()
+            }
+            provision_details: dict[UUID, list[dict[str, Any]]] = {}
+            for provision_row in connection.execute(
+                sa.text(
+                    "WITH latest_alignments AS (SELECT DISTINCT ON (alignment_id) * FROM "
+                    "platform.practice_ntd_alignments ORDER BY alignment_id,version DESC),"
+                    "bounded AS (SELECT value.*,row_number() OVER (PARTITION BY "
+                    "normative_edition_id ORDER BY structural_path,normative_provision_id,version) "
+                    "evidence_ordinal FROM platform.normative_provision_versions value WHERE "
+                    "verification_status='verified'),selected AS (SELECT p.* FROM bounded p "
+                    "WHERE p.evidence_ordinal<=20 OR EXISTS (SELECT 1 FROM latest_alignments a "
+                    "WHERE a.normative_edition_id=p.normative_edition_id AND "
+                    "a.normative_provision_id=p.normative_provision_id AND "
+                    "a.normative_provision_version=p.version) OR EXISTS (SELECT 1 FROM "
+                    "platform.normative_rule_candidates candidate WHERE "
+                    "candidate.normative_provision_id=p.normative_provision_id AND "
+                    "candidate.normative_provision_version=p.version)) SELECT p.normative_edition_id,"
+                    "p.normative_provision_id,p.version,"
+                    "p.source_version_id,p.structural_path,p.page_number,p.verbatim_text,"
+                    "p.content_digest,p.verification_decision_ref,COALESCE((SELECT status FROM "
+                    "platform.normative_activation_decisions activation WHERE "
+                    "activation.selected_edition_id=p.normative_edition_id ORDER BY "
+                    "activation.as_of DESC,activation.version DESC LIMIT 1),'not_activated') "
+                    "edition_activation_status,COALESCE((SELECT jsonb_agg(jsonb_build_object("
+                    "'rule_candidate_id',candidate.normative_rule_candidate_id,"
+                    "'candidate_version',candidate.version,'deontic_type',candidate.deontic_type,"
+                    "'qualification_status',COALESCE(qualification.status,'not_qualified'),"
+                    "'qualification_gates',COALESCE(qualification.gate_results,'[]'::jsonb),"
+                    "'activation_status',COALESCE(outcome.status,'not_activated'),"
+                    "'activation_reason',COALESCE(outcome.reason_code,'RULE_ACTIVATION_NOT_DECIDED'),"
+                    "'rule_version_id',outcome.rule_version_id,"
+                    "'rule_lifecycle_status',outcome.rule_lifecycle_status) ORDER BY "
+                    "candidate.normative_rule_candidate_id,candidate.version) FROM "
+                    "platform.normative_rule_candidates candidate LEFT JOIN LATERAL (SELECT q.* FROM "
+                    "platform.normative_rule_qualification_decisions q WHERE "
+                    "q.normative_rule_candidate_id=candidate.normative_rule_candidate_id AND "
+                    "q.normative_rule_candidate_version=candidate.version ORDER BY q.decided_at DESC,"
+                    "q.version DESC LIMIT 1) qualification ON true LEFT JOIN LATERAL (SELECT o.* FROM "
+                    "platform.normative_rule_activation_outcomes o WHERE "
+                    "o.normative_rule_candidate_id=candidate.normative_rule_candidate_id AND "
+                    "o.normative_rule_candidate_version=candidate.version ORDER BY o.decided_at DESC,"
+                    "o.version DESC LIMIT 1) outcome ON true WHERE "
+                    "candidate.normative_provision_id=p.normative_provision_id AND "
+                    "candidate.normative_provision_version=p.version),'[]'::jsonb) rules,"
+                    "COALESCE((SELECT jsonb_agg(jsonb_build_object("
+                    "'alignment_id',alignment.alignment_id,'version',alignment.version,"
+                    "'status',alignment.alignment_status,'practice_guide_reference_id',"
+                    "alignment.practice_guide_reference_id,'guidance_unit_id',"
+                    "alignment.guidance_unit_id,'guidance_unit_version',"
+                    "alignment.guidance_unit_version,'evidence_refs',alignment.evidence_refs,"
+                    "'decision_ref',alignment.decision_ref) ORDER BY alignment.alignment_id,"
+                    "alignment.version) FROM latest_alignments alignment WHERE "
+                    "alignment.normative_provision_id=p.normative_provision_id AND "
+                    "alignment.normative_provision_version=p.version),'[]'::jsonb) alignments,"
+                    "jsonb_agg(jsonb_build_object("
+                    "'source_locator_id',sl.source_locator_id,'page',"
+                    "(sl.locator_value->>'page')::integer,'region',sl.locator_value->'region',"
+                    "'fragment_digest',sl.fragment_digest) ORDER BY ids.ordinality) locators FROM "
+                    "selected p JOIN "
+                    "platform.normative_structural_fragments sf ON "
+                    "sf.structural_unit_id=p.structural_unit_id AND "
+                    "sf.source_version_id=p.source_version_id CROSS JOIN LATERAL "
+                    "unnest(sf.source_locator_ids) WITH ORDINALITY ids(locator_id,ordinality) JOIN "
+                    "platform.source_locators sl ON sl.source_locator_id=ids.locator_id GROUP BY "
+                    "p.normative_edition_id,"
+                    "p.normative_provision_id,p.version,p.source_version_id,p.structural_path,"
+                    "p.page_number,p.verbatim_text,p.content_digest,p.verification_decision_ref "
+                    "ORDER BY p.normative_edition_id,p.structural_path,p.normative_provision_id,"
+                    "p.version"
+                )
+            ).mappings():
+                edition_id = UUID(str(provision_row["normative_edition_id"]))
+                provision_details.setdefault(edition_id, []).append(
+                    {
+                        "provision_id": str(provision_row["normative_provision_id"]),
+                        "version": int(provision_row["version"]),
+                        "source_version_id": str(provision_row["source_version_id"]),
+                        "structural_path": str(provision_row["structural_path"]),
+                        "page_number": int(provision_row["page_number"]),
+                        "locators": list(provision_row["locators"]),
+                        "verbatim_text": str(provision_row["verbatim_text"]),
+                        "content_digest": str(provision_row["content_digest"]),
+                        "verification_decision_ref": str(
+                            provision_row["verification_decision_ref"]
+                        ),
+                        "edition_activation_status": str(
+                            provision_row["edition_activation_status"]
+                        ),
+                        "rules": list(provision_row["rules"]),
+                        "alignments": list(provision_row["alignments"]),
+                    }
+                )
+            alignment_counts = {
+                UUID(str(row["normative_document_id"])): int(row["alignment_count"])
+                for row in connection.execute(
+                    sa.text(
+                        "WITH latest AS (SELECT DISTINCT ON (alignment_id) * FROM "
+                        "platform.practice_ntd_alignments ORDER BY alignment_id,version DESC) "
+                        "SELECT normative_document_id,count(*) alignment_count FROM latest "
+                        "WHERE normative_document_id IS NOT NULL GROUP BY normative_document_id"
+                    )
+                ).mappings()
+            }
+            rule_counts = {
+                UUID(str(row["normative_edition_id"])): int(row["rule_count"])
+                for row in connection.execute(
+                    sa.text(
+                        "SELECT candidate.normative_edition_id,count(DISTINCT "
+                        "qualification.normative_rule_candidate_id) FILTER (WHERE "
+                        "qualification.status='qualified') rule_count FROM "
+                        "platform.normative_rule_candidates candidate LEFT JOIN "
+                        "platform.normative_rule_qualification_decisions qualification ON "
+                        "qualification.normative_rule_candidate_id="
+                        "candidate.normative_rule_candidate_id AND "
+                        "qualification.normative_rule_candidate_version=candidate.version "
+                        "GROUP BY candidate.normative_edition_id"
+                    )
+                ).mappings()
+            }
+            rule_summary = dict(
+                connection.execute(
+                    sa.text(
+                        "SELECT (SELECT count(*) FROM platform.normative_rule_candidates) "
+                        "rule_candidates,(SELECT count(*) FROM "
+                        "platform.normative_rule_qualification_decisions WHERE status='qualified') "
+                        "qualified_rules,(SELECT count(*) FROM (SELECT DISTINCT ON "
+                        "(normative_rule_candidate_id,normative_rule_candidate_version) status FROM "
+                        "platform.normative_rule_activation_outcomes ORDER BY "
+                        "normative_rule_candidate_id,normative_rule_candidate_version,decided_at DESC,"
+                        "version DESC) latest WHERE status='active') active_rules,(SELECT count(*) "
+                        "FROM (SELECT DISTINCT ON (normative_rule_candidate_id,"
+                        "normative_rule_candidate_version) status FROM "
+                        "platform.normative_rule_activation_outcomes ORDER BY "
+                        "normative_rule_candidate_id,normative_rule_candidate_version,decided_at DESC,"
+                        "version DESC) latest WHERE status='not_activated') qualified_not_active"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+        grouped: dict[UUID, dict[str, Any]] = {}
+        for row in rows:
+            identity_id = UUID(str(row["identity_reconciliation_id"]))
+            item = grouped.setdefault(
+                identity_id,
+                {
+                    "stable_identity": str(row["canonical_stable_identity_key"]),
+                    "printed_designations": list(row["printed_designations"]),
+                    "identity_status": str(row["identity_status"]),
+                    "resolutions": [],
+                    "artifacts": [],
+                },
+            )
+            if row["provider"] is not None and not any(
+                value["provider"] == str(row["provider"]) for value in item["resolutions"]
+            ):
+                item["resolutions"].append(
+                    {
+                        "provider": str(row["provider"]),
+                        "status": str(row["resolution_status"]),
+                        "failure_code": str(row["failure_code"])
+                        if row["failure_code"] is not None
+                        else None,
+                        "official_record_url": str(row["official_record_url"])
+                        if row["official_record_url"] is not None
+                        else None,
+                        "official_record_digest": str(row["official_record_digest"])
+                        if row["official_record_digest"] is not None
+                        else None,
+                        "observations": list(dict(row["diagnostic"]).get("observations", [])),
+                    }
+                )
+            if row["normative_artifact_id"] is None:
+                continue
+            artifact_id = UUID(str(row["normative_artifact_id"]))
+            if any(value["artifact_id"] == str(artifact_id) for value in item["artifacts"]):
+                continue
+            metric = metrics.get(artifact_id, {})
+            edition_id = UUID(str(row["normative_edition_id"]))
+            document_id = UUID(str(row["normative_document_id"]))
+            item["artifacts"].append(
+                {
+                    "artifact_id": str(artifact_id),
+                    "document_id": str(document_id),
+                    "edition_id": str(edition_id),
+                    "designation": str(row["designation"]),
+                    "title": str(row["title"]),
+                    "edition_label": str(row["edition_label"]),
+                    "official_url": str(row["official_url"]),
+                    "content_digest": str(row["content_digest"]),
+                    "media_type": str(row["media_type"]),
+                    "size_bytes": int(row["size_bytes"]),
+                    "page_count": int(metric.get("page_count", 0)),
+                    "native_page_count": int(metric.get("native_page_count", 0)),
+                    "polza_routed_page_count": int(metric.get("polza_routed_page_count", 0)),
+                    "blocked_page_count": int(metric.get("blocked_page_count", 0)),
+                    "native_complete_page_count": int(metric.get("native_complete_page_count", 0)),
+                    "recovered_page_count": int(metric.get("recovered_page_count", 0)),
+                    "external_candidate_page_count": int(
+                        metric.get("external_candidate_page_count", 0)
+                    ),
+                    "verified_provision_count": provision_counts.get(edition_id, 0),
+                    "practice_alignment_count": alignment_counts.get(document_id, 0),
+                    "qualified_rule_count": rule_counts.get(edition_id, 0),
+                    "verified_provisions": provision_details.get(edition_id, []),
+                }
+            )
+        items = sorted(grouped.values(), key=lambda value: value["stable_identity"])
+        counts = {
+            "denominator": 25,
+            "registered_identity_count": len(items),
+            "official_record_resolved": sum(
+                any(value["official_record_url"] for value in item["resolutions"]) for item in items
+            ),
+            "artifact_downloaded": sum(bool(item["artifacts"]) for item in items),
+            "provisions_verified": sum(
+                sum(value["verified_provision_count"] for value in item["artifacts"])
+                for item in items
+            ),
+            "alignments": sum(
+                sum(value["practice_alignment_count"] for value in item["artifacts"])
+                for item in items
+            ),
+            "qualified_rules": sum(
+                sum(value["qualified_rule_count"] for value in item["artifacts"]) for item in items
+            ),
+            "rule_candidates": int(rule_summary["rule_candidates"]),
+            "active_rules": int(rule_summary["active_rules"]),
+            "qualified_not_active": int(rule_summary["qualified_not_active"]),
+        }
+        return {
+            "schema_version": "ntd-seed-status-v2",
+            "logical_manifest_fingerprint": (
+                "sha256:071960850be497aa6cff032a64375f9cacacadc9fed1a36b136fddfb862ca4b6"
+            ),
+            "counts": counts,
+            "identities": items,
+            "complete": counts["registered_identity_count"] == counts["denominator"]
+            and counts["artifact_downloaded"] == counts["denominator"]
+            and counts["provisions_verified"] > 0,
+        }
+
+    def get_ntd_artifact_object(self, artifact_id: UUID) -> dict[str, Any]:
+        with self._engine.connect() as connection:
+            row = (
+                connection.execute(
+                    sa.text(
+                        "SELECT a.normative_artifact_id,a.filename,a.media_type,a.size_bytes,"
+                        "a.content_digest,o.object_id FROM platform.normative_artifacts a JOIN "
+                        "platform.source_versions sv ON sv.source_version_id=a.source_version_id "
+                        "JOIN platform.objects o ON o.object_id=sv.object_id AND "
+                        "o.object_version=sv.object_version WHERE a.normative_artifact_id=:artifact"
+                    ),
+                    {"artifact": artifact_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            raise SpinePersistenceError("ntd_artifact_not_found")
+        return {
+            "artifact_id": UUID(str(row["normative_artifact_id"])),
+            "filename": str(row["filename"]),
+            "media_type": str(row["media_type"]),
+            "size_bytes": int(row["size_bytes"]),
+            "content_digest": str(row["content_digest"]),
+            "object_key": f"platform/source/{row['object_id']}",
+        }
 
     def _append_event(
         self,
@@ -2219,3 +2794,19 @@ def _json(value: object) -> str:
     import json
 
     return json.dumps(value, default=str, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _jsonable_row(row: Any) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in dict(row).items():
+        if isinstance(value, UUID):
+            result[str(key)] = str(value)
+        elif isinstance(value, (datetime, date)):
+            result[str(key)] = value.isoformat()
+        elif isinstance(value, tuple):
+            result[str(key)] = [str(item) if isinstance(item, UUID) else item for item in value]
+        elif isinstance(value, list):
+            result[str(key)] = [str(item) if isinstance(item, UUID) else item for item in value]
+        else:
+            result[str(key)] = value
+    return result

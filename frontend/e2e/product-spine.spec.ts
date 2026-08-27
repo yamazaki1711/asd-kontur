@@ -151,7 +151,7 @@ test("owner reaches the four-mode shell and honest blockers", async ({
   await page.getByLabel("Пользователь").fill("synthetic-owner");
   await page.getByLabel("Пароль").fill("Synthetic-Password-42!");
   await page.getByRole("button", { name: "Войти" }).click();
-  await expect(page.getByText("MEMORY DATA_DEFECT")).toBeVisible();
+  await expect(page.getByText("ProductApplication PARTIAL")).toBeVisible();
   await page.getByLabel("Название workspace").fill("Synthetic workspace A");
   await page.getByRole("button", { name: "Создать" }).click();
   await expect(page.getByText("Synthetic workspace A")).toBeVisible();

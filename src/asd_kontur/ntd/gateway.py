@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from asd_kontur.knowledge.gateway import (
     NTD_CONTRACT_VERSION,
+    PD_RD_NTD_CONTRACT_VERSION,
+    PD_RD_NTD_TOOLS,
     EvidenceItem,
     EvidencePack,
     GatewayContext,
@@ -33,7 +35,6 @@ class NtdKnowledgeQueryService:
     def execute(
         self, tool: str, payload: dict[str, Any], context: GatewayContext
     ) -> GatewayResponse:
-        del context
         handlers = {
             "knowledge.resolve_ntd": self._resolve_ntd,
             "knowledge.get_ntd_document": self._get_document,
@@ -43,12 +44,147 @@ class NtdKnowledgeQueryService:
             "knowledge.get_ntd_evidence_pack": self._get_evidence_pack,
             "knowledge.get_practice_ntd_alignment": self._get_alignment,
         }
+        if tool in PD_RD_NTD_TOOLS:
+            return self._get_pd_rd_profile(tool, payload, context)
         handler = handlers.get(tool)
         if handler is None:
             return self._response(
                 tool, GatewayStatus.NO_RESULT, {}, gaps=(self._gap("unknown_tool"),)
             )
         return handler(tool, payload)
+
+    def _get_pd_rd_profile(
+        self, tool: str, payload: dict[str, Any], context: GatewayContext
+    ) -> GatewayResponse:
+        if context.organization_id is None or context.workspace_id is None:
+            return self._response(
+                tool,
+                GatewayStatus.NO_RESULT,
+                {},
+                gaps=(self._gap("workspace_scope_required"),),
+            )
+        profile_id = _required_uuid(payload, "profile_id")
+        version = int(payload.get("version", 0))
+        if version < 1:
+            raise ValueError("version is required")
+        with Session(self._engine) as session, session.begin():
+            session.execute(
+                sa.select(
+                    sa.func.set_config("asd.organization_id", str(context.organization_id), True),
+                    sa.func.set_config("asd.workspace_id", str(context.workspace_id), True),
+                )
+            ).one()
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.applicable_pd_rd_normative_profiles WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "profile_id=:profile AND version=:version"
+                    ),
+                    {
+                        "organization": context.organization_id,
+                        "workspace": context.workspace_id,
+                        "profile": profile_id,
+                        "version": version,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            return self._response(
+                tool,
+                GatewayStatus.NO_RESULT,
+                {},
+                gaps=(self._gap("pd_rd_profile_pin_not_found", f"{profile_id}:{version}"),),
+            )
+        gaps = tuple(dict(item) for item in row["gaps"])
+        status = GatewayStatus.KNOWLEDGE_GAP if gaps else GatewayStatus.OK
+        requirements = [
+            *row["required_pd_sections"],
+            *row["expected_rd_sets"],
+            *row["formatting_requirements"],
+        ]
+        evidence = tuple(
+            EvidenceItem(
+                evidence_link_id=(
+                    f"pd-rd-rule:{item['rule_version_id']}:"
+                    f"{item['normative_provision_id']}:{item['normative_provision_version']}"
+                ),
+                source_version_id=str(item["source_version_id"]),
+                edition_id=str(item["normative_edition_id"]),
+                structural_unit_locator=str(item["structural_path"]),
+                content_digest=str(item["evidence_digest"]),
+                access_reference=str(item["official_source"]),
+                authority_layer="normative_authority",
+            )
+            for item in requirements
+        )
+        result: dict[str, Any] = {
+            "authority_layer": "normative_authority",
+            "profile_id": str(profile_id),
+            "profile_version": version,
+            "project_definition": {
+                "id": str(row["project_definition_id"]),
+                "version": int(row["project_definition_version"]),
+                "authority_layer": "workspace_fact",
+            },
+            "applicable_on": (
+                row["applicable_on"].isoformat() if row["applicable_on"] is not None else None
+            ),
+            "normative_edition_ids": [str(item) for item in row["normative_edition_ids"]],
+            "rule_version_ids": [str(item) for item in row["rule_version_ids"]],
+            "corpus_denominator": dict(row["corpus_denominator"]),
+            "unresolved_inputs": list(row["unresolved_inputs"]),
+            "gaps": list(gaps),
+            "completeness_status": str(row["completeness_status"]),
+            "semantic_fingerprint": str(row["semantic_fingerprint"]),
+            "practice_intelligence": None,
+            "customer_addition": None,
+            "ai_candidate": None,
+        }
+        if tool == "knowledge.resolve_applicable_pd_sections":
+            result["required_pd_sections"] = row["required_pd_sections"]
+        elif tool == "knowledge.resolve_section_content_requirements":
+            section = str(payload.get("section", ""))
+            result["requirements"] = [
+                item
+                for item in row["required_pd_sections"]
+                if not section or str(item.get("section", item.get("code", ""))) == section
+            ]
+        elif tool == "knowledge.resolve_expected_rd_sets":
+            result["expected_rd_sets"] = row["expected_rd_sets"]
+        elif tool == "knowledge.resolve_applicable_spds_profile":
+            result["formatting_requirements"] = row["formatting_requirements"]
+        elif tool == "knowledge.evaluate_pd_rd_completeness":
+            result.update(
+                {
+                    "required_pd_sections": row["required_pd_sections"],
+                    "expected_rd_sets": row["expected_rd_sets"],
+                    "formatting_requirements": row["formatting_requirements"],
+                }
+            )
+        elif tool == "knowledge.explain_pd_rd_normative_decision":
+            result["decision_trace"] = {
+                "editions": result["normative_edition_ids"],
+                "rules": result["rule_version_ids"],
+                "requirements": requirements,
+            }
+        elif tool == "knowledge.get_pd_rd_normative_gap":
+            result = {
+                key: result[key]
+                for key in (
+                    "authority_layer",
+                    "profile_id",
+                    "profile_version",
+                    "corpus_denominator",
+                    "unresolved_inputs",
+                    "gaps",
+                    "completeness_status",
+                    "semantic_fingerprint",
+                )
+            }
+        return self._response(tool, status, result, evidence=evidence, gaps=gaps)
 
     def _resolve_ntd(self, tool: str, payload: dict[str, Any]) -> GatewayResponse:
         raw = str(payload.get("identifier", ""))
@@ -289,8 +425,16 @@ class NtdKnowledgeQueryService:
                 session.execute(
                     sa.text(
                         "SELECT p.*,a.official_url,a.content_digest AS artifact_digest,"
-                        "a.normative_artifact_id FROM platform.normative_provision_versions p "
+                        "a.normative_artifact_id,e.edition_label,e.edition_fingerprint,"
+                        "sem.modality,sem.uncertainty_codes AS semantic_uncertainty_codes,"
+                        "d.designation,d.title FROM platform.normative_provision_versions p "
                         "JOIN platform.normative_artifacts a ON a.source_version_id=p.source_version_id "
+                        "JOIN platform.normative_editions e ON e.normative_edition_id="
+                        "p.normative_edition_id JOIN platform.normative_documents d ON "
+                        "d.normative_document_id=e.normative_document_id "
+                        "LEFT JOIN platform.normative_provision_semantics sem ON "
+                        "sem.provision_candidate_id=p.provision_candidate_id AND "
+                        "sem.candidate_version=p.candidate_version "
                         "WHERE p.normative_edition_id=:edition AND p.structural_path=:locator "
                         "AND p.verification_status='verified' ORDER BY p.version DESC LIMIT 2"
                     ),
@@ -299,6 +443,83 @@ class NtdKnowledgeQueryService:
                 .mappings()
                 .all()
             )
+            source_locators: list[Any] = []
+            activation_status: str | None = None
+            rule_rows: list[Any] = []
+            if len(rows) == 1:
+                source_locators = list(
+                    session.execute(
+                        sa.text(
+                            "SELECT ids.ordinality,sl.source_locator_id,sl.locator_value,"
+                            "sl.fragment_digest FROM platform.normative_structural_fragments sf "
+                            "CROSS JOIN LATERAL unnest(sf.source_locator_ids) WITH ORDINALITY "
+                            "ids(locator_id,ordinality) JOIN platform.source_locators sl ON "
+                            "sl.source_locator_id=ids.locator_id WHERE sf.structural_unit_id=:unit "
+                            "AND sf.source_version_id=:source ORDER BY ids.ordinality"
+                        ),
+                        {
+                            "unit": rows[0]["structural_unit_id"],
+                            "source": rows[0]["source_version_id"],
+                        },
+                    )
+                    .mappings()
+                    .all()
+                )
+                if not source_locators:
+                    source_locators = list(
+                        session.execute(
+                            sa.text(
+                                "SELECT 1 AS ordinality,sl.source_locator_id,sl.locator_value,"
+                                "sl.fragment_digest FROM platform.structural_units su JOIN "
+                                "platform.source_locators sl ON sl.source_locator_id="
+                                "su.source_locator_id WHERE su.structural_unit_id=:unit"
+                            ),
+                            {"unit": rows[0]["structural_unit_id"]},
+                        )
+                        .mappings()
+                        .all()
+                    )
+                activation_status = session.execute(
+                    sa.text(
+                        "SELECT status FROM platform.normative_activation_decisions WHERE "
+                        "selected_edition_id=:edition ORDER BY as_of DESC,version DESC LIMIT 1"
+                    ),
+                    {"edition": edition_id},
+                ).scalar_one_or_none()
+                rule_rows = list(
+                    session.execute(
+                        sa.text(
+                            "SELECT candidate.normative_rule_candidate_id,candidate.version "
+                            "candidate_version,candidate.deontic_type,candidate.actor,"
+                            "candidate.regulated_object,candidate.required_action,"
+                            "candidate.applicability_predicate,candidate.output_contract,"
+                            "qualification.qualification_decision_id,qualification.status "
+                            "qualification_status,qualification.gate_results,"
+                            "outcome.status activation_status,outcome.reason_code activation_reason,"
+                            "outcome.rule_version_id,outcome.rule_lifecycle_status FROM "
+                            "platform.normative_rule_candidates candidate LEFT JOIN LATERAL "
+                            "(SELECT q.* FROM platform.normative_rule_qualification_decisions q "
+                            "WHERE q.normative_rule_candidate_id="
+                            "candidate.normative_rule_candidate_id AND "
+                            "q.normative_rule_candidate_version=candidate.version ORDER BY "
+                            "q.decided_at DESC,q.version DESC LIMIT 1) qualification ON true "
+                            "LEFT JOIN LATERAL (SELECT o.* FROM "
+                            "platform.normative_rule_activation_outcomes o WHERE "
+                            "o.normative_rule_candidate_id=candidate.normative_rule_candidate_id "
+                            "AND o.normative_rule_candidate_version=candidate.version ORDER BY "
+                            "o.decided_at DESC,o.version DESC LIMIT 1) outcome ON true WHERE "
+                            "candidate.normative_provision_id=:provision AND "
+                            "candidate.normative_provision_version=:version ORDER BY "
+                            "candidate.normative_rule_candidate_id,candidate.version"
+                        ),
+                        {
+                            "provision": rows[0]["normative_provision_id"],
+                            "version": rows[0]["version"],
+                        },
+                    )
+                    .mappings()
+                    .all()
+                )
         if len(rows) != 1:
             status = GatewayStatus.NORMATIVE_CONFLICT if len(rows) > 1 else GatewayStatus.NO_RESULT
             return self._response(
@@ -310,25 +531,58 @@ class NtdKnowledgeQueryService:
                 ),
             )
         row = rows[0]
-        evidence = EvidenceItem(
-            evidence_link_id=f"ntd:{row['normative_provision_id']}:{row['version']}",
-            source_version_id=str(row["source_version_id"]),
-            edition_id=str(row["normative_edition_id"]),
-            structural_unit_locator=str(row["structural_path"]),
-            content_digest=str(row["content_digest"]),
-            access_reference=str(row["official_url"]),
-            authority_layer="normative_authority",
+        evidence = tuple(
+            EvidenceItem(
+                evidence_link_id=(
+                    f"ntd:{row['normative_provision_id']}:{row['version']}:"
+                    f"{locator_row['source_locator_id']}"
+                ),
+                source_version_id=str(row["source_version_id"]),
+                edition_id=str(row["normative_edition_id"]),
+                structural_unit_locator=_exact_locator(
+                    str(row["structural_path"]), locator_row["locator_value"]
+                ),
+                content_digest=str(locator_row["fragment_digest"]),
+                access_reference=str(row["official_url"]),
+                authority_layer="normative_authority",
+            )
+            for locator_row in source_locators
         )
+        if not evidence:
+            return self._response(
+                tool,
+                GatewayStatus.KNOWLEDGE_GAP,
+                {},
+                gaps=(self._gap("verified_provision_locator_missing", locator),),
+            )
+        active_rules = [row for row in rule_rows if row["activation_status"] == "active"]
+        rule_gaps = tuple(
+            self._gap(
+                str(row["activation_reason"] or "rule_activation_decision_missing"),
+                str(row["normative_rule_candidate_id"]),
+            )
+            for row in rule_rows
+            if row["activation_status"] != "active"
+        )
+        if not rule_rows:
+            rule_gaps = (self._gap("verified_provision_rule_candidate_missing", locator),)
         return self._response(
             tool,
             GatewayStatus.OK,
             {
                 "authority_layer": "normative_authority",
                 "provision": _json_row(row),
+                "source_locators": [_json_row(value) for value in source_locators],
+                "edition_activation_status": activation_status or "not_activated",
+                "applicability_status": "not_evaluated_for_workspace",
                 "practice_recommendation": None,
-                "deterministic_rule_version": None,
+                "rule_candidates": [_json_row(value) for value in rule_rows],
+                "deterministic_rule_version": (
+                    _json_row(active_rules[0]) if len(active_rules) == 1 else None
+                ),
             },
-            evidence=(evidence,),
+            evidence=evidence,
+            gaps=rule_gaps,
         )
 
     def _search(self, tool: str, payload: dict[str, Any]) -> GatewayResponse:
@@ -420,8 +674,124 @@ class NtdKnowledgeQueryService:
                     if row["alignment_status"] == "normative_conflict"
                 ),
             )
+        selected = rows[0]
+        with Session(self._engine) as session:
+            guidance = (
+                session.execute(
+                    sa.text(
+                        "SELECT guidance_unit_id,version,practice_guide_edition_id,guidance_kind,"
+                        "normalized_instruction,topic,recommended_practice,authority_layer,"
+                        "integrity_digest FROM platform.practice_guidance_units WHERE "
+                        "guidance_unit_id=:guidance AND version=:version"
+                    ),
+                    {
+                        "guidance": selected["guidance_unit_id"],
+                        "version": selected["guidance_unit_version"],
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            guidance_evidence = (
+                session.execute(
+                    sa.text(
+                        "SELECT guidance_evidence_id,source_version_id,source_locator_id,"
+                        "page_number,region,fragment_digest,evidence_role FROM "
+                        "platform.practice_guidance_evidence WHERE guidance_unit_id=:guidance "
+                        "AND guidance_unit_version=:version ORDER BY evidence_role,source_locator_id"
+                    ),
+                    {
+                        "guidance": selected["guidance_unit_id"],
+                        "version": selected["guidance_unit_version"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        if guidance is None or not guidance_evidence:
+            return self._response(
+                tool,
+                GatewayStatus.KNOWLEDGE_GAP,
+                {"alignments": [_json_row(row) for row in rows]},
+                gaps=(self._gap("practice_guidance_evidence_missing", str(guidance_id)),),
+            )
+        if (
+            selected["normative_provision_id"] is None
+            or selected["normative_provision_version"] is None
+            or selected["normative_edition_id"] is None
+        ):
+            return self._response(
+                tool,
+                GatewayStatus.KNOWLEDGE_GAP,
+                {"alignments": [_json_row(row) for row in rows]},
+                gaps=(self._gap("alignment_exact_provision_missing", str(guidance_id)),),
+            )
+        normative = self._get_provision(
+            "knowledge.get_ntd_provision",
+            {
+                "edition_id": str(selected["normative_edition_id"]),
+                "locator": _alignment_provision_locator(self._engine, selected),
+            },
+        )
+        if normative.status is not GatewayStatus.OK:
+            return self._response(
+                tool,
+                normative.status,
+                {"alignments": [_json_row(row) for row in rows]},
+                gaps=normative.evidence_pack.gaps,
+                conflicts=normative.evidence_pack.conflicts,
+            )
+        practice_evidence = tuple(
+            EvidenceItem(
+                evidence_link_id=f"practice:{value['guidance_evidence_id']}",
+                source_version_id=str(value["source_version_id"]),
+                edition_id=str(guidance["practice_guide_edition_id"]),
+                structural_unit_locator=_exact_locator(
+                    f"practice:{guidance['guidance_unit_id']}:{guidance['version']}",
+                    {"page": value["page_number"], "region": value["region"]},
+                ),
+                content_digest=str(value["fragment_digest"]),
+                access_reference=(
+                    f"practice-guide-edition:{guidance['practice_guide_edition_id']}"
+                ),
+                authority_layer="methodological_guidance",
+            )
+            for value in guidance_evidence
+        )
+        status = (
+            GatewayStatus.KNOWLEDGE_INCOMPLETE
+            if selected["alignment_status"] == "edition_warning"
+            else GatewayStatus.OK
+        )
+        alignment_gaps = (
+            (
+                self._gap(
+                    "normative_edition_activation_not_qualified",
+                    str(selected["normative_edition_id"]),
+                ),
+            )
+            if status is GatewayStatus.KNOWLEDGE_INCOMPLETE
+            else ()
+        )
+        gaps = normative.evidence_pack.gaps + alignment_gaps
         return self._response(
-            tool, GatewayStatus.OK, {"alignments": [_json_row(row) for row in rows]}
+            tool,
+            status,
+            {
+                "authority_layers": {
+                    "practice_intelligence": _json_row(guidance),
+                    "normative_authority": normative.result,
+                    "deterministic_rule_version": normative.result.get(
+                        "deterministic_rule_version"
+                    ),
+                    "workspace_fact": None,
+                    "customer_addition": None,
+                    "ai_candidate": None,
+                },
+                "alignments": [_json_row(row) for row in rows],
+            },
+            evidence=practice_evidence + normative.evidence_pack.evidence,
+            gaps=gaps,
         )
 
     @staticmethod
@@ -440,7 +810,9 @@ class NtdKnowledgeQueryService:
     ) -> GatewayResponse:
         return GatewayResponse(
             tool=tool,
-            contract_version=NTD_CONTRACT_VERSION,
+            contract_version=(
+                PD_RD_NTD_CONTRACT_VERSION if tool in PD_RD_NTD_TOOLS else NTD_CONTRACT_VERSION
+            ),
             status=status,
             result=result,
             evidence_pack=EvidencePack(
@@ -490,7 +862,37 @@ def _stable_designation(stable_identity_key: str) -> str:
     if namespace == "gost":
         return f"ГОСТ {value}"
     if namespace == "minstroy" and value.startswith("order:"):
-        return f"ПРИКАЗ МИНСТРОЯ РОССИИ № {value.removeprefix('order:').replace('-pr', '/ПР')}"
+        order_parts = value.removeprefix("order:").split(":")
+        if len(order_parts) == 2:
+            issued, number = order_parts
+            return (
+                f"ПРИКАЗ МИНСТРОЯ РОССИИ № {number.replace('-pr', '/ПР')} "
+                f"ОТ {issued[8:10]}.{issued[5:7]}.{issued[:4]}"
+            )
+        return stable_identity_key
     if namespace == "instruction":
         return f"И {value}"
     return stable_identity_key
+
+
+def _exact_locator(structural_path: str, locator_value: Any) -> str:
+    page = int(locator_value["page"])
+    region = ",".join(f"{float(value):.12f}" for value in locator_value["region"])
+    return f"{structural_path}#page={page};region={region}"
+
+
+def _alignment_provision_locator(engine: Engine, alignment: Any) -> str:
+    with Session(engine) as session:
+        value = session.execute(
+            sa.text(
+                "SELECT structural_path FROM platform.normative_provision_versions WHERE "
+                "normative_provision_id=:provision AND version=:version"
+            ),
+            {
+                "provision": alignment["normative_provision_id"],
+                "version": alignment["normative_provision_version"],
+            },
+        ).scalar_one_or_none()
+    if value is None:
+        raise ValueError("alignment provision pin is missing")
+    return str(value)

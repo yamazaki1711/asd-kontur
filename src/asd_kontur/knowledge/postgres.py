@@ -216,6 +216,27 @@ class RuleRegistryService:
                 )
             else:
                 rule_id = UUID(str(existing))
+            existing_version = (
+                session.execute(
+                    sa.text(
+                        "SELECT rule_id,integrity_digest FROM platform.rule_versions "
+                        "WHERE rule_version_id=:id"
+                    ),
+                    {"id": UUID(definition.rule_version_id)},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if existing_version is not None:
+                if (
+                    UUID(str(existing_version["rule_id"])) != rule_id
+                    or str(existing_version["integrity_digest"]) != definition.fingerprint()
+                ):
+                    raise KnowledgeError(
+                        KnowledgeErrorCode.INVALID_TRANSITION,
+                        "RuleVersion identity is already bound to different semantics.",
+                    )
+                return rule_id
             session.execute(
                 sa.text(
                     "INSERT INTO platform.rule_versions "
@@ -299,7 +320,11 @@ class RuleRegistryService:
             if target is RuleState.EVIDENCE_ATTACHED:
                 count = session.scalar(
                     sa.text(
-                        "SELECT count(*) FROM platform.rule_evidence WHERE rule_version_id=:id"
+                        "SELECT count(*) FROM ("
+                        "SELECT rule_version_id FROM platform.rule_evidence WHERE rule_version_id=:id "
+                        "UNION ALL SELECT rule_version_id FROM "
+                        "platform.rule_normative_provision_evidence WHERE rule_version_id=:id"
+                        ") exact_evidence"
                     ),
                     {"id": rule_version_id},
                 )

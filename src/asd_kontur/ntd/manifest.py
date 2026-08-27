@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 from uuid import UUID
 
@@ -20,7 +20,7 @@ from asd_kontur.practice_guidance.native_layout import (
 
 from .identifiers import NormalizedNormativeIdentifier, normalize_identifier
 
-NTD_SEED_MANIFEST_PROFILE_VERSION = "practice_guide_ntd_seed_manifest_v0.1"
+NTD_SEED_MANIFEST_PROFILE_VERSION = "practice_guide_ntd_seed_manifest_v0.2"
 EXPECTED_PAGES = (15, 16, 17, 18, 19)
 EXPECTED_RAW_MENTIONS = 37
 EXPECTED_IDENTITIES = 25
@@ -145,6 +145,7 @@ def build_seed_manifest(
                             starting_ordinal=len(references) + 1,
                         )
                     )
+    references = _resolve_undated_order_occurrences(references)
     page_counts = tuple(
         (page, sum(reference.pdf_page == page for reference in references))
         for page in EXPECTED_PAGES
@@ -184,6 +185,41 @@ def build_seed_manifest(
         page_counts=page_counts,
         fingerprint=digest_of(fingerprint_payload),
     )
+
+
+def _resolve_undated_order_occurrences(
+    references: list[PracticeGuideNormativeReference],
+) -> list[PracticeGuideNormativeReference]:
+    """Bind a number-only mention only when this exact guide edition is unambiguous."""
+
+    dated_by_number: dict[str, dict[str, NormalizedNormativeIdentifier]] = {}
+    for reference in references:
+        normalized = reference.normalized
+        if normalized.document_kind.value != "minstroy_order" or normalized.printed_edition is None:
+            continue
+        number = normalized.stable_identity_key.rsplit(":", 1)[-1]
+        # ``raw`` is occurrence evidence and deliberately differs between otherwise
+        # identical printed references.  Ambiguity is decided by canonical legal-act
+        # identity, never by the spelling of an occurrence.
+        dated_by_number.setdefault(number, {})[normalized.stable_identity_key] = normalized
+    resolved: list[PracticeGuideNormativeReference] = []
+    for reference in references:
+        normalized = reference.normalized
+        if ":date-unresolved:" not in normalized.stable_identity_key:
+            resolved.append(reference)
+            continue
+        number = normalized.stable_identity_key.rsplit(":", 1)[-1]
+        candidates = dated_by_number.get(number, {})
+        if len(candidates) != 1:
+            raise ValueError(f"NTD_SEED_ORDER_DATE_AMBIGUOUS:{number}")
+        selected = next(iter(candidates.values()))
+        resolved.append(
+            replace(
+                reference,
+                normalized=replace(selected, raw=reference.raw_designation),
+            )
+        )
+    return resolved
 
 
 def _references_from_block(

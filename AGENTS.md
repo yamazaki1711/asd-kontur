@@ -13,6 +13,9 @@ and the current [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v1.m
   context through Knowledge Gateway; numeric-critical drawings use BF16.
 - Preserve hard workspace isolation, RLS/default deny, evidence, provenance,
   immutable history and Candidate-before-Fact authority.
+- For NTD discovery start with Minstroy, then `docs.cntd.ru`, then
+  `meganorm.ru`. The latter two are discovery/reference sources only: canonical
+  NTD Authority still requires an exact official SourceVersion.
 - Work on one active delivery slice. Every PASS states an exact denominator and
   evidence. `ProductReady=false` until the formal terminal condition.
 - Use mac_asd through **selective engineering reuse**: preserve proven best
