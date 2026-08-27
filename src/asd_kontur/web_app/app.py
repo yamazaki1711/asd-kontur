@@ -210,7 +210,7 @@ def _api_router() -> APIRouter:
         try:
             head = _container(request).repository.migration_head()
             checks = {"postgresql": "reachable", "migration_head": head}
-            expected = "0026_support_id_finalize"
+            expected = _container(request).settings.expected_migration_head
             return HealthView(
                 status="ready" if head == expected else "not_ready",
                 checks=checks,

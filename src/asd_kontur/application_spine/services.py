@@ -615,7 +615,7 @@ class ProductSpineService:
         blockers.add("FIELD_ANDROID_CLIENT_NOT_IMPLEMENTED")
         return {
             "contract_version": "2.3.0",
-            "slice": "SUPPORT-PRODUCTION-ID-01",
+            "slice": "PRODUCT-APPLICATION-PUBLIC-DEPLOYMENT-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -644,6 +644,14 @@ class ProductSpineService:
             "trial_ready": False,
             "oks_ready": False,
             "product_ready": False,
+            "deployment": {
+                "source_commit": self._settings.release_commit,
+                "runtime_profile": self._settings.release_profile,
+                "deployed_at": self._settings.deployed_at,
+                "frontend_build_digest": self._settings.frontend_build_digest,
+                "openapi_digest": self._settings.openapi_digest,
+                "migration_head": self._settings.expected_migration_head,
+            },
         }
 
 

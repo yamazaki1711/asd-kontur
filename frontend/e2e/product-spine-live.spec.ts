@@ -43,6 +43,17 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
   await expect(page.getByText(/template .* · active/)).toBeVisible();
   await expect(page.getByText("print: print_ready")).toBeVisible();
   await expect(page.getByText("review: approved")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Immutable package / register history" }),
+  ).toBeVisible();
+  for (const version of [1, 2, 3, 4]) {
+    await expect(
+      page.getByText(`PackageVersion ${String(version)}`, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(`RegisterVersion ${String(version)}`, { exact: true }),
+    ).toBeVisible();
+  }
   await expect(page.getByText("Finalized").first()).toBeVisible();
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
   await expect(

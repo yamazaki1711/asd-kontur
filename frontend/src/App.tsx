@@ -1078,6 +1078,8 @@ function SupportProductionBody({
   const readiness = value.readiness as Record<string, unknown> | null;
   const memberships = value.memberships ?? [];
   const registers = value.registers ?? [];
+  const packageHistory = value.package_history ?? [];
+  const registerHistory = value.register_history ?? [];
   const fields = value.field_resolutions ?? [];
   return (
     <>
@@ -1309,6 +1311,51 @@ function SupportProductionBody({
                             </a>
                           )}
                           <GapList gaps={blockers} good={!blockers.length} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section className="panel">
+            <h2>Immutable package / register history</h2>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>PackageVersion</th>
+                    <th>Composition</th>
+                    <th>RegisterVersion</th>
+                    <th>Fingerprint</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {packageHistory.map((packageVersion) => {
+                    const version = Number(packageVersion.version);
+                    const registerVersion = registerHistory.find(
+                      (item) => Number(item.id_package_version) === version,
+                    );
+                    const manifest = (registerVersion?.register_manifest ??
+                      {}) as Record<string, unknown>;
+                    const documents = Array.isArray(manifest.documents)
+                      ? manifest.documents
+                      : [];
+                    return (
+                      <tr key={String(packageVersion.version)}>
+                        <td>PackageVersion {String(version)}</td>
+                        <td>{String(documents.length)} body documents</td>
+                        <td>
+                          {registerVersion
+                            ? `RegisterVersion ${String(version)}`
+                            : "gap"}
+                        </td>
+                        <td className="mono">
+                          {displayValue(
+                            registerVersion?.manifest_fingerprint,
+                            "REGISTER_VERSION_MISSING",
+                          )}
                         </td>
                       </tr>
                     );
@@ -2054,6 +2101,27 @@ function OperationsPage() {
                 <dd>{String(value.oks_ready)}</dd>
                 <dt>ProductReady</dt>
                 <dd>{String(value.product_ready)}</dd>
+              </dl>
+            </section>
+            <section className="panel">
+              <h2>Deployment</h2>
+              <dl>
+                <dt>Source commit</dt>
+                <dd className="mono">{value.deployment.source_commit}</dd>
+                <dt>Runtime profile</dt>
+                <dd>{value.deployment.runtime_profile}</dd>
+                <dt>Migration head</dt>
+                <dd className="mono">{value.deployment.migration_head}</dd>
+                <dt>Deployed at</dt>
+                <dd>{value.deployment.deployed_at ?? "not deployed"}</dd>
+                <dt>Frontend</dt>
+                <dd className="mono">
+                  {value.deployment.frontend_build_digest ?? "not pinned"}
+                </dd>
+                <dt>OpenAPI</dt>
+                <dd className="mono">
+                  {value.deployment.openapi_digest ?? "not pinned"}
+                </dd>
               </dl>
             </section>
           </div>

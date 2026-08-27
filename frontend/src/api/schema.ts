@@ -550,6 +550,7 @@ export interface components {
             blockers: string[];
             /** Contract Version */
             contract_version: string;
+            deployment: components["schemas"]["DeploymentStatusView"];
             /** Implemented */
             implemented: string[];
             /** Oks Ready */
@@ -560,6 +561,21 @@ export interface components {
             slice: string;
             /** Trial Ready */
             trial_ready: boolean;
+        };
+        /** DeploymentStatusView */
+        DeploymentStatusView: {
+            /** Deployed At */
+            deployed_at: string | null;
+            /** Frontend Build Digest */
+            frontend_build_digest: string | null;
+            /** Migration Head */
+            migration_head: string;
+            /** Openapi Digest */
+            openapi_digest: string | null;
+            /** Runtime Profile */
+            runtime_profile: string;
+            /** Source Commit */
+            source_commit: string;
         };
         /** DocumentPage */
         DocumentPage: {
@@ -1225,6 +1241,10 @@ export interface components {
             authority_layers: {
                 [key: string]: string;
             };
+            /** Book History */
+            book_history?: {
+                [key: string]: unknown;
+            }[];
             /** Books */
             books?: {
                 [key: string]: unknown;
@@ -1247,10 +1267,22 @@ export interface components {
             package: {
                 [key: string]: unknown;
             } | null;
+            /** Package History */
+            package_history?: {
+                [key: string]: unknown;
+            }[];
             /** Readiness */
             readiness?: {
                 [key: string]: unknown;
             } | null;
+            /** Readiness History */
+            readiness_history?: {
+                [key: string]: unknown;
+            }[];
+            /** Register History */
+            register_history?: {
+                [key: string]: unknown;
+            }[];
             /** Registers */
             registers?: {
                 [key: string]: unknown;

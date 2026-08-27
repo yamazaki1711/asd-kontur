@@ -375,6 +375,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         item for item in finalized_view["memberships"] if item["role"] == "support.aosr"
     )
     assert finalized_view["package"]["version"] == 4
+    assert [item["version"] for item in finalized_view["package_history"]] == [1, 2, 3, 4]
+    assert [item["id_package_version"] for item in finalized_view["register_history"]] == [
+        1,
+        2,
+        3,
+        4,
+    ]
     assert finalized_member["state"] == "finalized"
     assert finalized_member["finalized_document_id"] is not None
     finalized_identity = UUID(str(finalized_member["finalized_document_id"]))

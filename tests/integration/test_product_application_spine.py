@@ -144,7 +144,12 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         outcomes = [recovered]
         while outcome := restarted_worker.run_once():
             outcomes.append(outcome)
-        assert [value.state.value for value in outcomes[:-1]] == ["succeeded"] * 9
+        # The interrupted lease is recovered first; every job that the worker can
+        # execute before the deterministic classification failure must succeed.
+        # The exact count is asserted from the durable job ledger below instead of
+        # from this scheduling-local list.
+        assert outcomes[:-1]
+        assert all(value.state is JobState.SUCCEEDED for value in outcomes[:-1])
         assert outcomes[-1].state is JobState.FAILED
         assert outcomes[-1].outcome_code == "classification_evidence_unavailable"
         duplicate = client.post(

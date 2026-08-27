@@ -27,8 +27,10 @@
   "include": [
     "src",
     "e2e",
+    "e2e-external",
     "vite.config.ts",
     "eslint.config.js",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.external.config.ts"
   ]
 }

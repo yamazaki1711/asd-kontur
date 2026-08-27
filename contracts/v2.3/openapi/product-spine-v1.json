@@ -43,6 +43,9 @@
             "title": "Contract Version",
             "type": "string"
           },
+          "deployment": {
+            "$ref": "#/components/schemas/DeploymentStatusView"
+          },
           "implemented": {
             "items": {
               "type": "string"
@@ -74,9 +77,70 @@
           "blockers",
           "trial_ready",
           "oks_ready",
-          "product_ready"
+          "product_ready",
+          "deployment"
         ],
         "title": "CapabilityStatusView",
+        "type": "object"
+      },
+      "DeploymentStatusView": {
+        "additionalProperties": false,
+        "properties": {
+          "deployed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployed At"
+          },
+          "frontend_build_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frontend Build Digest"
+          },
+          "migration_head": {
+            "title": "Migration Head",
+            "type": "string"
+          },
+          "openapi_digest": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openapi Digest"
+          },
+          "runtime_profile": {
+            "title": "Runtime Profile",
+            "type": "string"
+          },
+          "source_commit": {
+            "title": "Source Commit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_commit",
+          "runtime_profile",
+          "deployed_at",
+          "frontend_build_digest",
+          "openapi_digest",
+          "migration_head"
+        ],
+        "title": "DeploymentStatusView",
         "type": "object"
       },
       "DocumentPage": {
@@ -1735,6 +1799,14 @@
             "title": "Authority Layers",
             "type": "object"
           },
+          "book_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Book History",
+            "type": "array"
+          },
           "books": {
             "items": {
               "additionalProperties": true,
@@ -1790,6 +1862,14 @@
             ],
             "title": "Package"
           },
+          "package_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Package History",
+            "type": "array"
+          },
           "readiness": {
             "anyOf": [
               {
@@ -1801,6 +1881,22 @@
               }
             ],
             "title": "Readiness"
+          },
+          "readiness_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Readiness History",
+            "type": "array"
+          },
+          "register_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Register History",
+            "type": "array"
           },
           "registers": {
             "items": {

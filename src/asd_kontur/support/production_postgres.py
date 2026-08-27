@@ -65,6 +65,10 @@ class SupportProductionRepository:
                     "matrix": _matrix_ref(matrix),
                     "requirements": requirements,
                     "package": None,
+                    "package_history": [],
+                    "book_history": [],
+                    "register_history": [],
+                    "readiness_history": [],
                     "gaps": [
                         *(("WORK_REQUIREMENT_MATRIX_UNAVAILABLE",) if matrix is None else ()),
                         "ID_PACKAGE_NOT_FORMED",
@@ -73,6 +77,49 @@ class SupportProductionRepository:
                 }
             package_id = UUID(str(package_row["id_package_id"]))
             package_version = int(package_row["version"])
+            package_history = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.id_package_versions WHERE organization_id=:o "
+                        "AND workspace_id=:w AND id_package_id=:p ORDER BY version"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": package_id},
+                ).mappings()
+            ]
+            book_history = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.id_package_volume_book_versions WHERE "
+                        "organization_id=:o AND workspace_id=:w AND id_package_id=:p "
+                        "ORDER BY id_package_version,ordinal"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": package_id},
+                ).mappings()
+            ]
+            register_history = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.support_register_candidates WHERE "
+                        "organization_id=:o AND workspace_id=:w AND id_package_id=:p "
+                        "ORDER BY id_package_version,recorded_at,register_candidate_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": package_id},
+                ).mappings()
+            ]
+            readiness_history = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.id_package_readiness_evaluations WHERE "
+                        "organization_id=:o AND workspace_id=:w AND id_package_id=:p "
+                        "ORDER BY id_package_version,evaluated_at,evaluation_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": package_id},
+                ).mappings()
+            ]
             books = [
                 dict(item)
                 for item in session.execute(
@@ -201,6 +248,10 @@ class SupportProductionRepository:
             "matrix": _matrix_ref(matrix),
             "requirements": requirements,
             "package": _jsonable(package_row),
+            "package_history": [_jsonable(item) for item in package_history],
+            "book_history": [_jsonable(item) for item in book_history],
+            "register_history": [_jsonable(item) for item in register_history],
+            "readiness_history": [_jsonable(item) for item in readiness_history],
             "books": [_jsonable(item) for item in books],
             "memberships": [_jsonable(item) for item in memberships],
             "registers": [_jsonable(item) for item in registers],

@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "build": "vite build",
-    "e2e": "NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost playwright test"
+    "e2e": "NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost playwright test",
+    "e2e:external": "playwright test --config playwright.external.config.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "5.102.3",

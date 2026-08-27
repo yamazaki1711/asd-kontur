@@ -195,6 +195,10 @@ class SupportProductionView(ApiModel):
     matrix: dict[str, Any] | None
     requirements: list[dict[str, Any]]
     package: dict[str, Any] | None
+    package_history: list[dict[str, Any]] = Field(default_factory=list)
+    book_history: list[dict[str, Any]] = Field(default_factory=list)
+    register_history: list[dict[str, Any]] = Field(default_factory=list)
+    readiness_history: list[dict[str, Any]] = Field(default_factory=list)
     books: list[dict[str, Any]] = Field(default_factory=list)
     memberships: list[dict[str, Any]] = Field(default_factory=list)
     registers: list[dict[str, Any]] = Field(default_factory=list)
@@ -339,6 +343,15 @@ class NtdSeedStatusView(ApiModel):
     complete: bool
 
 
+class DeploymentStatusView(ApiModel):
+    source_commit: str
+    runtime_profile: str
+    deployed_at: str | None
+    frontend_build_digest: str | None
+    openapi_digest: str | None
+    migration_head: str
+
+
 class CapabilityStatusView(ApiModel):
     contract_version: str
     slice: str
@@ -347,6 +360,7 @@ class CapabilityStatusView(ApiModel):
     trial_ready: bool
     oks_ready: bool
     product_ready: bool
+    deployment: DeploymentStatusView
 
 
 class HealthView(ApiModel):
