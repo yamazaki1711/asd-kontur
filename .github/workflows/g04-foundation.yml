@@ -75,9 +75,9 @@ jobs:
 
       - name: Regenerate OpenAPI and typed client
         run: |
-          uv run python tools/export_product_spine_openapi.py --output contracts/v2.1/openapi/product-spine-v1.json
+          uv run python tools/export_product_spine_openapi.py --output contracts/v2.3/openapi/product-spine-v1.json
           npm --prefix frontend run generate:api
-          git diff --exit-code -- contracts/v2.1/openapi/product-spine-v1.json frontend/src/api/schema.ts
+          git diff --exit-code -- contracts/v2.3/openapi/product-spine-v1.json frontend/src/api/schema.ts
 
       - name: Frontend strict checks and production bundle
         working-directory: frontend

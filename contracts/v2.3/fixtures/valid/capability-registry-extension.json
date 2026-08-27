@@ -1,0 +1,55 @@
+{
+  "contract_version": "2.3.0",
+  "base_registry": "contracts/v2.0/fixtures/valid/product-capability-registry.json",
+  "base_denominator": 142,
+  "additions": [
+    {
+      "capability_id": "field.secure-android-client",
+      "name": "FIELD-ANDROID-CLIENT-01 secure offline field data collection client",
+      "plane": "field-offline",
+      "product_modes": ["Support", "Audit", "Restoration"],
+      "dependencies": [
+        "application.http-api",
+        "application.authentication",
+        "application.authorization",
+        "application.durable-job-orchestration",
+        "interaction.document-registry",
+        "field.device-identity",
+        "field.offline-queue",
+        "field.conflict-resolution",
+        "field.idempotent-sync"
+      ],
+      "current_readiness": "NOT_IMPLEMENTED",
+      "legacy_decision": "USE_AS_REFERENCE_ONLY",
+      "target_implementation": "REIMPLEMENT_FROM_SEMANTICS",
+      "authentication_architecture": "UNDECIDED",
+      "architecture_security_adr_required": true,
+      "issue_url": "https://github.com/yamazaki1711/asd-kontur/issues/24",
+      "known_gaps": [
+        "threat model and device class decision absent",
+        "Android stack, MDM, operator authentication and distribution decisions intentionally unset",
+        "mobile evidence capture and secure offline synchronization not implemented",
+        "absence blocks Support/Audit/Restoration field acceptance and ProductReady"
+      ],
+      "acceptance_criteria": [
+        "approved threat model and evidence-backed architecture decisions",
+        "comparison of PIN, NFC plus PIN, QR or smart card plus PIN, passkey or device credential, and supplemental biometrics",
+        "exact versioned OperatorAssignmentVersion resolution without mutable profile selection",
+        "device-bound authentication, encryption, revocation and cross-workspace isolation",
+        "immutable original capture with SHA-256 and derivation lineage",
+        "idempotent resumable content-addressed synchronization with terminal server receipts",
+        "offline interruption, restart, power-loss, conflict and compromised-device qualification",
+        "field E2E for Support, Audit and Restoration without fabrication"
+      ],
+      "required_for_product": true
+    }
+  ],
+  "denominator": 143,
+  "readiness_distribution": {
+    "CAPABILITY_READY": 16,
+    "PARTIAL": 10,
+    "FOUNDATION_ONLY": 45,
+    "CONTRACT_ONLY": 64,
+    "NOT_IMPLEMENTED": 8
+  }
+}

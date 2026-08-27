@@ -265,6 +265,9 @@ PERMANENT_RELATIONS = (
     ("platform", "rule_evidence"),
     ("platform", "rule_reviews"),
     ("platform", "rule_approvals"),
+    ("platform", "normative_rule_candidates"),
+    ("platform", "normative_rule_qualification_decisions"),
+    ("platform", "normative_rule_activation_outcomes"),
 )
 
 NON_SEMANTIC_COLUMNS = frozenset(
@@ -347,6 +350,35 @@ REQUIRED_SEMANTIC_COLUMNS: dict[tuple[str, str], frozenset[str]] = {
     ),
     ("platform", "rule_versions"): frozenset(
         {"rule_version_id", "rule_id", "version", "integrity_digest"}
+    ),
+    ("platform", "normative_rule_candidates"): frozenset(
+        {
+            "normative_rule_candidate_id",
+            "version",
+            "normative_edition_id",
+            "source_version_id",
+            "normative_provision_id",
+            "normative_provision_version",
+            "source_locator_id",
+            "semantic_fingerprint",
+        }
+    ),
+    ("platform", "normative_rule_qualification_decisions"): frozenset(
+        {
+            "qualification_decision_id",
+            "normative_rule_candidate_id",
+            "status",
+            "decision_fingerprint",
+        }
+    ),
+    ("platform", "normative_rule_activation_outcomes"): frozenset(
+        {
+            "rule_activation_outcome_id",
+            "normative_rule_candidate_id",
+            "status",
+            "reason_code",
+            "decision_fingerprint",
+        }
     ),
 }
 

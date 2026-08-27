@@ -26,6 +26,10 @@ class ObjectStorePort(Protocol):
         self, *, operation_id: str, object_key: str, content: bytes
     ) -> ObjectWriteReceipt: ...
 
+    def put_immutable_file(
+        self, *, operation_id: str, object_key: str, source_path: Path
+    ) -> ObjectWriteReceipt: ...
+
     def head(self, object_key: str) -> ObjectWriteReceipt | None: ...
 
     def delete(self, object_key: str) -> bool: ...
@@ -80,6 +84,15 @@ class InMemoryObjectStore:
             return None
         digest = f"sha256:{hashlib.sha256(content).hexdigest()}"
         return ObjectWriteReceipt("head", object_key, digest, len(content), True)
+
+    def put_immutable_file(
+        self, *, operation_id: str, object_key: str, source_path: Path
+    ) -> ObjectWriteReceipt:
+        return self.put_immutable(
+            operation_id=operation_id,
+            object_key=object_key,
+            content=source_path.read_bytes(),
+        )
 
     def delete(self, object_key: str) -> bool:
         if self.fail_deletes:
@@ -158,6 +171,64 @@ class LocalFilesystemObjectStore:
             object_key,
             digest,
             len(content),
+            True,
+            self.adapter_key,
+        )
+        self._operations[operation_id] = receipt
+        return receipt
+
+    def put_immutable_file(
+        self, *, operation_id: str, object_key: str, source_path: Path
+    ) -> ObjectWriteReceipt:
+        if not source_path.is_absolute() or not source_path.is_file() or source_path.is_symlink():
+            raise KnowledgeError(
+                KnowledgeErrorCode.OBJECT_WRITE_FAILED,
+                "Immutable source path must be an absolute regular file.",
+            )
+        digest = hashlib.sha256()
+        size = 0
+        with source_path.open("rb") as source:
+            while chunk := source.read(1024 * 1024):
+                digest.update(chunk)
+                size += len(chunk)
+        expected_digest = f"sha256:{digest.hexdigest()}"
+        existing = self._operations.get(operation_id)
+        if existing is not None:
+            if existing.object_key != object_key or existing.digest != expected_digest:
+                raise KnowledgeError(
+                    KnowledgeErrorCode.DIGEST_CONFLICT,
+                    "Object operation identity was reused for different file bytes.",
+                )
+            return existing
+        target = self._path(object_key)
+        if target.exists():
+            current_digest = hashlib.sha256()
+            current_size = 0
+            with target.open("rb") as current:
+                while chunk := current.read(1024 * 1024):
+                    current_digest.update(chunk)
+                    current_size += len(chunk)
+            if current_size != size or f"sha256:{current_digest.hexdigest()}" != expected_digest:
+                raise KnowledgeError(
+                    KnowledgeErrorCode.DIGEST_CONFLICT,
+                    "Immutable object key already contains different bytes.",
+                )
+        else:
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                with os.fdopen(descriptor, "wb") as output, source_path.open("rb") as source:
+                    while chunk := source.read(1024 * 1024):
+                        output.write(chunk)
+                    output.flush()
+                    os.fsync(output.fileno())
+            except BaseException:
+                target.unlink(missing_ok=True)
+                raise
+        receipt = ObjectWriteReceipt(
+            operation_id,
+            object_key,
+            expected_digest,
+            size,
             True,
             self.adapter_key,
         )

@@ -579,6 +579,12 @@ def test_verified_provision_gateway_backup_and_projection_rebuild(
     )
     assert response.status is GatewayStatus.OK
     assert response.evidence_pack.evidence[0].authority_layer == "normative_authority"
+    assert response.evidence_pack.evidence[0].edition_id == str(seeded.edition_id)
+    assert response.evidence_pack.evidence[0].structural_unit_locator.startswith(
+        "7.2#page=7;region="
+    )
+    assert response.result["edition_activation_status"] == "active"
+    assert response.result["applicability_status"] == "not_evaluated_for_workspace"
     assert response.result["practice_recommendation"] is None
     assert response.result["deterministic_rule_version"] is None
     with postgres_environment.owner_engine.connect() as connection:

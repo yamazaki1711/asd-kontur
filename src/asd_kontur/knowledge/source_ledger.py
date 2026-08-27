@@ -8,6 +8,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -166,6 +167,75 @@ class PlatformSourceLedger:
             self._finish_failed_attempt(attempt_id, error.code)
             raise
         try:
+            return self._accept(request, artifact_id, attempt_id, object_id, receipt)
+        except (IntegrityError, KnowledgeError) as error:
+            removed = self._objects.delete(object_key)
+            code = (
+                KnowledgeErrorCode.VERSION_CONFLICT
+                if removed
+                else KnowledgeErrorCode.RECONCILIATION_REQUIRED
+            )
+            self._finish_failed_attempt(attempt_id, code)
+            if isinstance(error, KnowledgeError):
+                raise
+            raise KnowledgeError(
+                code, "Source version conflicts with an immutable ledger entry."
+            ) from error
+
+    def admit_file(
+        self, request: PlatformSourceAdmission, source_path: Path
+    ) -> AdmittedSourceVersion:
+        """Admit a bounded downloaded file without buffering it as one Python value."""
+
+        if not source_path.is_absolute() or not source_path.is_file() or source_path.is_symlink():
+            raise KnowledgeError(
+                KnowledgeErrorCode.OBJECT_WRITE_FAILED,
+                "Platform source admission requires an absolute regular file.",
+            )
+        if (
+            request.source_kind
+            in {
+                "methodological_practice_guide",
+                "normative_document",
+                "legal_act",
+                "official_reference",
+            }
+            and request.retention_class != PERMANENT_PLATFORM_CORE
+        ):
+            raise KnowledgeError(
+                KnowledgeErrorCode.RETENTION_CLASS_INVALID,
+                "Permanent platform knowledge requires permanent platform-core retention.",
+            )
+        digest = hashlib.sha256()
+        with source_path.open("rb") as stream:
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+        content_digest = f"sha256:{digest.hexdigest()}"
+        artifact_id, attempt_id = self._begin_attempt(request)
+        with Session(self._engine) as session:
+            duplicate = session.execute(
+                sa.text(
+                    "SELECT source_version_id FROM platform.source_versions "
+                    "WHERE source_artifact_id=:artifact AND content_digest=:digest"
+                ),
+                {"artifact": artifact_id, "digest": content_digest},
+            ).scalar_one_or_none()
+        if duplicate is not None:
+            with Session(self._engine) as session, session.begin():
+                session.execute(
+                    sa.text(
+                        "UPDATE platform.acquisition_attempts SET status='accepted',retrieved_at=:now,"
+                        "observed_content_digest=:digest WHERE acquisition_attempt_id=:id"
+                    ),
+                    {"id": attempt_id, "now": datetime.now(UTC), "digest": content_digest},
+                )
+            return AdmittedSourceVersion(artifact_id, UUID(str(duplicate)), content_digest, True)
+        object_id = uuid7()
+        object_key = f"platform/source/{object_id}"
+        try:
+            receipt = self._objects.put_immutable_file(
+                operation_id=str(attempt_id), object_key=object_key, source_path=source_path
+            )
             return self._accept(request, artifact_id, attempt_id, object_id, receipt)
         except (IntegrityError, KnowledgeError) as error:
             removed = self._objects.delete(object_key)

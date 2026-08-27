@@ -15,6 +15,8 @@ GUIDANCE_CONTRACT_VERSION = "2.2.0"
 GUIDANCE_SCHEMA_ID = "urn:asd-kontur:contracts:v2.2:schema:practice-intelligence"
 NTD_CONTRACT_VERSION = "1.7.0"
 NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v1.7:schema:normative-knowledge"
+PD_RD_NTD_CONTRACT_VERSION = "2.3.0"
+PD_RD_NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v2.3:schema:pd-rd-normative-profile"
 HARNESS_CONTRACT_VERSION = "1.8.0"
 HARNESS_SCHEMA_ID = "urn:asd-kontur:contracts:v1.8:schema:construction-harness"
 BASE_TOOLS = frozenset(
@@ -49,13 +51,24 @@ NTD_TOOLS = frozenset(
         "knowledge.get_practice_ntd_alignment",
     }
 )
+PD_RD_NTD_TOOLS = frozenset(
+    {
+        "knowledge.resolve_applicable_pd_sections",
+        "knowledge.resolve_section_content_requirements",
+        "knowledge.resolve_applicable_spds_profile",
+        "knowledge.resolve_expected_rd_sets",
+        "knowledge.evaluate_pd_rd_completeness",
+        "knowledge.explain_pd_rd_normative_decision",
+        "knowledge.get_pd_rd_normative_gap",
+    }
+)
 HARNESS_TOOLS = frozenset(
     {
         "knowledge.get_construction_harness_context",
         "knowledge.trace_work_requirement",
     }
 )
-TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | HARNESS_TOOLS
+TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | PD_RD_NTD_TOOLS | HARNESS_TOOLS
 
 
 class GatewayStatus(StrEnum):
@@ -178,6 +191,9 @@ class KnowledgeGateway:
         elif request.tool in GUIDANCE_TOOLS:
             expected_contract = GUIDANCE_CONTRACT_VERSION
             expected_schema = GUIDANCE_SCHEMA_ID
+        elif request.tool in PD_RD_NTD_TOOLS:
+            expected_contract = PD_RD_NTD_CONTRACT_VERSION
+            expected_schema = PD_RD_NTD_SCHEMA_ID
         elif request.tool in NTD_TOOLS:
             expected_contract = NTD_CONTRACT_VERSION
             expected_schema = NTD_SCHEMA_ID

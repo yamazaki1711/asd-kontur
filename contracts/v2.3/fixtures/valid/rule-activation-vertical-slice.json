@@ -1,0 +1,76 @@
+{
+  "schema_version": "rule-activation-selection-v1",
+  "selection_decision": "NTD-RULE-ACTIVATION-VERTICAL-SLICE-01",
+  "interpretation_profile_version": "normative-rule-candidate-manifest-v1",
+  "qualification_profile_version": "normative-rule-qualification-v1",
+  "rules": [
+    {
+      "designation": "СП 347.1325800.2017",
+      "structural_path": "10.8",
+      "deontic_type": "prohibition",
+      "actor": {"kind": "work_performer"},
+      "regulated_object": {"kind": "pressurized_equipment"},
+      "required_action": {"action": "repair_leak", "prohibited": true},
+      "applicability_predicate": {"field": "equipment.pressurized", "operator": "eq", "value": true},
+      "output_contract": {"finding": "repair_under_pressure_prohibited"},
+      "evidence_bindings": {
+        "deontic_type": ["Запрещается"],
+        "actor": ["проводить ремонт"],
+        "regulated_object": ["оборудо-\nвания"],
+        "required_action": ["ремонт по устранению протечек"],
+        "applicability_predicate": ["находящегося под давлением"]
+      }
+    },
+    {
+      "designation": "СП 361.1325800.2017",
+      "structural_path": "9.2.2.6",
+      "deontic_type": "prohibition",
+      "actor": {"kind": "concreting_work_performer"},
+      "regulated_object": {"kind": "concrete_mix_level_at_borehole_mouth"},
+      "required_action": {"action": "lower_level", "prohibited_above_m": 1.5},
+      "applicability_predicate": {"field": "work.kind", "operator": "eq", "value": "borehole_concreting"},
+      "output_contract": {"finding": "concrete_mix_level_drop_exceeds_1_5_m"},
+      "evidence_bindings": {
+        "deontic_type": ["Не допускается"],
+        "actor": ["Не допускается понижение"],
+        "regulated_object": ["уровня бетонной смеси в устье скважины"],
+        "required_action": ["более\n1,5 м"],
+        "applicability_predicate": ["бетонной смеси в устье скважины"]
+      }
+    },
+    {
+      "designation": "СП 361.1325800.2017",
+      "structural_path": "7.1.4",
+      "deontic_type": "obligation",
+      "actor": {"kind": "geotechnical_assessment_performer"},
+      "regulated_object": {"kind": "geotechnical_forecast_report"},
+      "required_action": {"action": "include_influence_zone_inventory"},
+      "applicability_predicate": {"field": "assessment.geotechnical_forecast_required", "operator": "eq", "value": true},
+      "output_contract": {"required_content": "influence_zone_buildings_and_structures"},
+      "evidence_bindings": {
+        "deontic_type": ["должен содержать"],
+        "actor": ["Отчет по результатам геотехнического прогноза"],
+        "regulated_object": ["Отчет по результатам геотехнического прогноза"],
+        "required_action": ["перечень\nвсех зданий и сооружений"],
+        "applicability_predicate": ["находящихся в зоне влияния нового строительства"]
+      }
+    },
+    {
+      "designation": "СП 543.1325800.2024",
+      "structural_path": "7.1.13",
+      "deontic_type": "obligation",
+      "actor": {"kind": "input_control_performer"},
+      "regulated_object": {"kind": "input_control_results"},
+      "required_action": {"action": "document_results"},
+      "applicability_predicate": {"field": "control.kind", "operator": "eq", "value": "input"},
+      "output_contract": {"required_documents": ["input_control_log", "test_protocol"]},
+      "evidence_bindings": {
+        "deontic_type": ["должны быть документированы"],
+        "actor": ["лицом, осуществляющим инструментальный контроль"],
+        "regulated_object": ["Результаты входного контроля"],
+        "required_action": ["документированы в\nжурналах входного контроля"],
+        "applicability_predicate": ["входного контроля"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "registry_version": "2.3.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "industrial_document_understanding_in_progress",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["2.0.0", "2.1.0", "2.2.0"]
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.3:schema:capability-registry-extension",
+      "path": "schemas/capability-registry-extension.schema.json",
+      "digest": "sha256:1dd54d6403a38988f0f6470d92de0414ec55930ea041383680a67f112b21227c"
+    },
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.3:schema:pd-rd-normative-profile",
+      "path": "schemas/pd-rd-normative-profile.schema.json",
+      "digest": "sha256:4dfdf7bcfd8950e572b6990e3e99c1a768d7119e3089e56d9f77cf108c9d4dc8"
+    }
+  ],
+  "contract_keys": [
+    "product.capability-registry-extension@2.3.0",
+    "field.secure-android-client@2.3.0",
+    "knowledge.pd-rd-normative-profile@2.3.0"
+  ],
+  "fixtures": {
+    "valid": [
+      "fixtures/valid/capability-registry-extension.json",
+      "fixtures/valid/pd-rd-normative-profile-gap.json"
+    ],
+    "invalid": []
+  }
+}

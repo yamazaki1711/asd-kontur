@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import unicodedata
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import BinaryIO
@@ -94,7 +95,7 @@ class WorkspaceObjectStore:
                 os.fsync(output.fileno())
             if size == 0:
                 raise IntakeError("empty_file")
-            media_type = detect_media_type(header, client_media_type)
+            media_type = detect_staged_media_type(staging_path, header, client_media_type)
             hexdigest = digest.hexdigest()
             object_key = (
                 f"workspaces/{organization_id}/{workspace_id}/sha256/{hexdigest[:2]}/{hexdigest}"
@@ -263,6 +264,8 @@ def detect_media_type(header: bytes, client_media_type: str | None) -> str:
         return "image/png"
     if header.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
+    if header.startswith((b"II*\x00", b"MM\x00*")):
+        return "image/tiff"
     if b"\x00" not in header:
         try:
             header.decode("utf-8")
@@ -271,6 +274,43 @@ def detect_media_type(header: bytes, client_media_type: str | None) -> str:
         else:
             return "text/plain"
     raise IntakeError("unsupported_or_mismatched_media_type")
+
+
+def detect_staged_media_type(path: Path, header: bytes, client_media_type: str | None) -> str:
+    """Inspect container structure; client filename and MIME are never authoritative."""
+
+    if header.startswith(b"PK\x03\x04"):
+        try:
+            with zipfile.ZipFile(path) as archive:
+                names = frozenset(archive.namelist())
+        except zipfile.BadZipFile as exc:
+            raise IntakeError("office_container_invalid") from exc
+        if "[Content_Types].xml" in names and "word/document.xml" in names:
+            return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        if "[Content_Types].xml" in names and "xl/workbook.xml" in names:
+            return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        raise IntakeError("unsupported_office_container")
+    detected = detect_media_type(header, client_media_type)
+    if detected == "text/plain" and _looks_like_csv(path):
+        return "text/csv"
+    return detected
+
+
+def _looks_like_csv(path: Path) -> bool:
+    with path.open("rb") as stream:
+        sample = stream.read(8192)
+    try:
+        text = sample.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        return False
+    lines = [line for line in text.splitlines() if line.strip()][:8]
+    if len(lines) < 2:
+        return False
+    for delimiter in (";", ",", "\t"):
+        widths = [len(line.split(delimiter)) for line in lines]
+        if min(widths) >= 2 and len(set(widths)) <= 2:
+            return True
+    return False
 
 
 def _file_digest(path: Path) -> str:

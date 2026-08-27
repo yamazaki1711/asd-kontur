@@ -7,25 +7,34 @@ from __future__ import annotations
 import hashlib
 import html
 import re
-import ssl
-import time
-import urllib.error
+import unicodedata
 import urllib.parse
-import urllib.request
-from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import date
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Protocol
 
 from .identifiers import NormalizedNormativeIdentifier, NormativeDocumentKind
-from .models import CatalogueCandidate, OfficialCatalogueRecord, OfficialHttpMetadata
+from .models import (
+    CatalogueCandidate,
+    OfficialCatalogueRecord,
+    OfficialHttpMetadata,
+    OfficialProvider,
+)
+from .official_sources import (
+    BoundedOfficialTransport,
+    OfficialSourceError,
+    StreamedOfficialSource,
+    TransportProfile,
+)
 
 MINSTROY_HOST = "minstroyrf.gov.ru"
 MINSTROY_BASE_URL = f"https://{MINSTROY_HOST}"
-MINSTROY_CATALOGUE_PROFILE_VERSION = "minstroy_catalogue_client_v0.1"
+MINSTROY_CATALOGUE_PROFILE_VERSION = "minstroy_catalogue_client_v0.2"
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 MAX_SEARCH_PAGES = 3
+MAX_CATEGORY_PAGES = 64
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MIN_INTERVAL_SECONDS = 0.25
 
@@ -54,6 +63,11 @@ _MONTHS = {
     "ноября": 11,
     "декабря": 12,
 }
+_CATEGORY_BY_KIND = {
+    NormativeDocumentKind.MINSTROY_ORDER: "52",
+    NormativeDocumentKind.CODE_OF_PRACTICE: "60",
+    NormativeDocumentKind.INSTRUCTION: "44",
+}
 
 
 class OfficialCatalogueError(RuntimeError):
@@ -71,9 +85,11 @@ class OfficialResponse:
 class OfficialTransport(Protocol):
     def get(self, url: str) -> OfficialResponse: ...
 
+    def stream_to_path(self, url: str, destination: Path) -> StreamedOfficialSource: ...
+
 
 class UrllibOfficialTransport:
-    """TLS-verifying, size-bounded official-host-only HTTP transport."""
+    """Compatibility adapter over the single provider-neutral acquisition transport."""
 
     def __init__(
         self,
@@ -82,85 +98,31 @@ class UrllibOfficialTransport:
         max_response_bytes: int = MAX_RESPONSE_BYTES,
         max_attempts: int = 2,
         min_interval_seconds: float = DEFAULT_MIN_INTERVAL_SECONDS,
-        sleeper: Callable[[float], None] = time.sleep,
-        clock: Callable[[], float] = time.monotonic,
+        profile: TransportProfile = TransportProfile.DIRECT,
     ) -> None:
-        if timeout_seconds <= 0 or max_response_bytes < 1 or not 1 <= max_attempts <= 3:
-            raise ValueError("Official transport bounds are invalid")
-        self._timeout = timeout_seconds
-        self._max_response_bytes = max_response_bytes
-        self._max_attempts = max_attempts
-        self._min_interval = min_interval_seconds
-        self._sleep = sleeper
-        self._clock = clock
-        self._last_request_at: float | None = None
+        self._delegate = BoundedOfficialTransport(
+            OfficialProvider.MINSTROY_CATALOGUE,
+            profile=profile,
+            timeout_seconds=timeout_seconds,
+            max_attempts=max_attempts,
+            max_response_bytes=max_response_bytes,
+            min_interval_seconds=min_interval_seconds,
+        )
 
     def get(self, url: str) -> OfficialResponse:
         _require_official_url(url)
-        last_error: Exception | None = None
-        for attempt in range(1, self._max_attempts + 1):
-            self._rate_limit()
-            request = urllib.request.Request(
-                url,
-                method="GET",
-                headers={
-                    "Accept": "text/html,application/pdf,application/octet-stream;q=0.8",
-                    "User-Agent": "ASD-KONTUR-NTD-SEED/0.1 (bounded official-source acquisition)",
-                },
-            )
-            try:
-                with urllib.request.urlopen(
-                    request,
-                    timeout=self._timeout,
-                    context=ssl.create_default_context(),
-                ) as response:
-                    final_url = response.geturl()
-                    _require_official_url(final_url)
-                    body = response.read(self._max_response_bytes + 1)
-                    if len(body) > self._max_response_bytes:
-                        raise OfficialCatalogueError(
-                            "OFFICIAL_RESPONSE_TOO_LARGE",
-                            "Official response exceeds the configured byte bound.",
-                        )
-                    headers = response.headers
-                    return OfficialResponse(
-                        metadata=OfficialHttpMetadata(
-                            request_url=url,
-                            final_url=final_url,
-                            status_code=int(response.status),
-                            content_type=headers.get_content_type() if headers else None,
-                            etag=headers.get("ETag") if headers else None,
-                            last_modified=headers.get("Last-Modified") if headers else None,
-                            byte_length=len(body),
-                            retrieved_at=datetime.now(UTC),
-                        ),
-                        body=body,
-                    )
-            except urllib.error.HTTPError as exc:
-                last_error = exc
-                if exc.code not in {408, 429, 500, 502, 503, 504} or attempt == self._max_attempts:
-                    raise OfficialCatalogueError(
-                        "OFFICIAL_HTTP_ERROR", f"Official endpoint returned HTTP {exc.code}."
-                    ) from exc
-            except (TimeoutError, urllib.error.URLError) as exc:
-                last_error = exc
-                if attempt == self._max_attempts:
-                    raise OfficialCatalogueError(
-                        "OFFICIAL_ACCESS_BLOCKED",
-                        "Official endpoint was unavailable within the bounded retry policy.",
-                    ) from exc
-            self._sleep(float(2 ** (attempt - 1)))
-        raise OfficialCatalogueError(
-            "OFFICIAL_ACCESS_BLOCKED", "Official endpoint remained unavailable."
-        ) from last_error
+        try:
+            response = self._delegate.get(url)
+        except OfficialSourceError as exc:
+            raise OfficialCatalogueError(exc.code, str(exc)) from exc
+        return OfficialResponse(response.metadata, response.body)
 
-    def _rate_limit(self) -> None:
-        now = self._clock()
-        if self._last_request_at is not None:
-            remaining = self._min_interval - (now - self._last_request_at)
-            if remaining > 0:
-                self._sleep(remaining)
-        self._last_request_at = self._clock()
+    def stream_to_path(self, url: str, destination: Path) -> StreamedOfficialSource:
+        _require_official_url(url)
+        try:
+            return self._delegate.stream_to_path(url, destination)
+        except OfficialSourceError as exc:
+            raise OfficialCatalogueError(exc.code, str(exc)) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,13 +142,17 @@ class MinstroyCatalogueClient:
         *,
         base_url: str = MINSTROY_BASE_URL,
         max_search_pages: int = MAX_SEARCH_PAGES,
+        max_category_pages: int = MAX_CATEGORY_PAGES,
     ) -> None:
         _require_official_url(base_url)
         if not 1 <= max_search_pages <= 5:
             raise ValueError("Catalogue pagination must remain bounded")
+        if not 1 <= max_category_pages <= MAX_CATEGORY_PAGES:
+            raise ValueError("Catalogue enumeration bound is invalid")
         self._transport = transport or UrllibOfficialTransport()
         self._base_url = base_url.rstrip("/")
         self._max_search_pages = max_search_pages
+        self._max_category_pages = max_category_pages
 
     def search_exact(
         self,
@@ -194,30 +160,51 @@ class MinstroyCatalogueClient:
         *,
         title_hint: str | None = None,
     ) -> CatalogueSearchResult:
-        queries = [identifier.normalized_designation]
-        if title_hint and title_hint.strip() and title_hint.strip() not in queries:
-            queries.append(f"{identifier.normalized_designation} {title_hint.strip()}")
+        queries = list(_query_variants(identifier, title_hint))
         endpoints: list[str] = []
         metadata: list[OfficialHttpMetadata] = []
         candidates: dict[str, CatalogueCandidate] = {}
         for query in queries:
             encoded = urllib.parse.quote(query)
-            for path in (f"/docs/?q={encoded}", f"/search/?q={encoded}"):
-                for page in range(1, self._max_search_pages + 1):
-                    separator = "&" if "?" in path else "?"
-                    page_path = path if page == 1 else f"{path}{separator}PAGEN_1={page}"
-                    endpoint = f"{self._base_url}{page_path}"
-                    response = self._transport.get(endpoint)
-                    endpoints.append(endpoint)
-                    metadata.append(response.metadata)
-                    page_candidates = _parse_candidates(response.body, identifier)
-                    new_count = 0
-                    for candidate in page_candidates:
-                        if candidate.catalog_id not in candidates:
-                            candidates[candidate.catalog_id] = candidate
-                            new_count += 1
-                    if new_count == 0:
-                        break
+            path = f"/docs/?q={encoded}"
+            for page in range(1, self._max_search_pages + 1):
+                page_path = path if page == 1 else f"{path}&PAGEN_1={page}"
+                endpoint = f"{self._base_url}{page_path}"
+                response = self._transport.get(endpoint)
+                endpoints.append(endpoint)
+                metadata.append(response.metadata)
+                for candidate in _parse_candidates(response.body, identifier):
+                    candidates.setdefault(candidate.catalog_id, candidate)
+                if page >= min(_last_catalogue_page(response.body), self._max_search_pages):
+                    break
+            # An exact designation query often returns only amendment cards even
+            # when the base document is discoverable by its official title.  Do
+            # not terminate discovery until a non-amendment candidate is found.
+            if any(not is_amendment_candidate(candidate) for candidate in candidates.values()):
+                break
+        if not candidates and identifier.document_kind in _CATEGORY_BY_KIND:
+            category = _CATEGORY_BY_KIND[identifier.document_kind]
+            path = f"/docs/?t%5B0%5D={category}"
+            first_endpoint = f"{self._base_url}{path}"
+            first = self._transport.get(first_endpoint)
+            endpoints.append(first_endpoint)
+            metadata.append(first.metadata)
+            last_page = _last_catalogue_page(first.body)
+            if last_page > self._max_category_pages:
+                raise OfficialCatalogueError(
+                    "CATALOGUE_ENUMERATION_BOUND_EXCEEDED",
+                    f"Official category reports {last_page} pages; bound is "
+                    f"{self._max_category_pages}.",
+                )
+            for candidate in _parse_candidates(first.body, identifier):
+                candidates.setdefault(candidate.catalog_id, candidate)
+            for page in range(2, last_page + 1):
+                endpoint = f"{self._base_url}{path}&PAGEN_1={page}"
+                response = self._transport.get(endpoint)
+                endpoints.append(endpoint)
+                metadata.append(response.metadata)
+                for candidate in _parse_candidates(response.body, identifier):
+                    candidates.setdefault(candidate.catalog_id, candidate)
         return CatalogueSearchResult(
             normalized_query=identifier.normalized_designation,
             official_endpoints=tuple(endpoints),
@@ -236,8 +223,11 @@ class MinstroyCatalogueClient:
         artifact_urls = tuple(
             sorted(
                 {
-                    urllib.parse.urljoin(f"{self._base_url}/", href)
-                    for href, label in parser.links
+                    _canonical_official_url(urllib.parse.urljoin(f"{self._base_url}/", href))
+                    for href, label in (
+                        *parser.links,
+                        *((href, "Скачать") for href in candidate.catalogue_artifact_urls),
+                    )
                     if _is_artifact_link(href, label)
                 }
             )
@@ -262,10 +252,30 @@ class MinstroyCatalogueClient:
         )
 
     def download_artifact(self, url: str) -> OfficialResponse:
-        _require_official_url(url)
-        response = self._transport.get(url)
+        canonical_url = _canonical_official_url(url)
+        _require_official_url(canonical_url)
+        response = self._transport.get(canonical_url)
         _validate_artifact_signature(response)
         return response
+
+    def download_artifact_to_path(self, url: str, destination: Path) -> StreamedOfficialSource:
+        canonical_url = _canonical_official_url(url)
+        _require_official_url(canonical_url)
+        if not hasattr(self._transport, "stream_to_path"):
+            raise OfficialCatalogueError(
+                "OFFICIAL_STREAMING_UNSUPPORTED",
+                "Configured official transport has no streaming acquisition capability.",
+            )
+        result = self._transport.stream_to_path(canonical_url, destination)
+        with result.path.open("rb") as stream:
+            header = stream.read(4096)
+        _validate_artifact_header(
+            final_url=result.metadata.final_url,
+            content_type=result.metadata.content_type,
+            header=header,
+            byte_length=result.byte_length,
+        )
+        return result
 
 
 class _CandidateParser(HTMLParser):
@@ -274,10 +284,22 @@ class _CandidateParser(HTMLParser):
         self._href: str | None = None
         self._parts: list[str] = []
         self.links: list[tuple[str, str]] = []
+        self._item_depth: int | None = None
+        self._item_links: list[tuple[str, str]] = []
+        self.item_link_groups: list[tuple[tuple[str, str], ...]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag.lower() == "a":
-            self._href = dict(attrs).get("href")
+        lowered = tag.lower()
+        attributes = dict(attrs)
+        if lowered == "div":
+            classes = set((attributes.get("class") or "").split())
+            if self._item_depth is None and "item-wrap" in classes:
+                self._item_depth = 1
+                self._item_links = []
+            elif self._item_depth is not None:
+                self._item_depth += 1
+        if lowered == "a":
+            self._href = attributes.get("href")
             self._parts = []
 
     def handle_data(self, data: str) -> None:
@@ -286,9 +308,18 @@ class _CandidateParser(HTMLParser):
 
     def handle_endtag(self, tag: str) -> None:
         if tag.lower() == "a" and self._href is not None:
-            self.links.append((self._href, " ".join(" ".join(self._parts).split())))
+            link = (self._href, " ".join(" ".join(self._parts).split()))
+            self.links.append(link)
+            if self._item_depth is not None:
+                self._item_links.append(link)
             self._href = None
             self._parts = []
+        elif tag.lower() == "div" and self._item_depth is not None:
+            self._item_depth -= 1
+            if self._item_depth == 0:
+                self.item_link_groups.append(tuple(self._item_links))
+                self._item_depth = None
+                self._item_links = []
 
 
 class _CardParser(HTMLParser):
@@ -297,16 +328,24 @@ class _CardParser(HTMLParser):
         self._in_h1 = False
         self._href: str | None = None
         self._link_parts: list[str] = []
+        self._main_actions_depth: int | None = None
         self.h1 = ""
         self.links: list[tuple[str, str]] = []
         self.text_parts: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         lowered = tag.lower()
+        attributes = dict(attrs)
+        if lowered == "div":
+            classes = set((attributes.get("class") or "").split())
+            if self._main_actions_depth is None and "actions-panel-box" in classes:
+                self._main_actions_depth = 1
+            elif self._main_actions_depth is not None:
+                self._main_actions_depth += 1
         if lowered == "h1":
             self._in_h1 = True
         elif lowered == "a":
-            self._href = dict(attrs).get("href")
+            self._href = attributes.get("href") if self._main_actions_depth is not None else None
             self._link_parts = []
 
     def handle_data(self, data: str) -> None:
@@ -326,6 +365,10 @@ class _CardParser(HTMLParser):
             self.links.append((self._href, " ".join(self._link_parts)))
             self._href = None
             self._link_parts = []
+        elif lowered == "div" and self._main_actions_depth is not None:
+            self._main_actions_depth -= 1
+            if self._main_actions_depth == 0:
+                self._main_actions_depth = None
 
 
 def _parse_candidates(
@@ -334,33 +377,65 @@ def _parse_candidates(
     parser = _CandidateParser()
     parser.feed(_decode_html(body))
     candidates: dict[str, CatalogueCandidate] = {}
-    for href, title in parser.links:
-        path = urllib.parse.urlsplit(href).path
-        match = _CARD_LINK.match(path)
-        if match is None or not title or not _identifier_matches(identifier, title):
-            continue
-        catalog_id = match.group("id")
-        candidates[catalog_id] = CatalogueCandidate(
-            catalog_id=catalog_id,
-            catalog_url=path,
-            title=html.unescape(title),
-            matched_designation=identifier.normalized_designation,
+    groups = parser.item_link_groups or tuple((link,) for link in parser.links)
+    for group in groups:
+        artifact_urls = tuple(
+            dict.fromkeys(href for href, label in group if _is_artifact_link(href, label))
         )
+        for href, title in group:
+            path = urllib.parse.urlsplit(href).path
+            match = _CARD_LINK.match(path)
+            if match is None or not title or not _identifier_matches(identifier, title):
+                continue
+            catalog_id = match.group("id")
+            candidates[catalog_id] = CatalogueCandidate(
+                catalog_id=catalog_id,
+                catalog_url=path,
+                title=html.unescape(title),
+                matched_designation=identifier.normalized_designation,
+                catalogue_artifact_urls=artifact_urls,
+            )
     return tuple(candidates.values())
 
 
 def _identifier_matches(identifier: NormalizedNormativeIdentifier, title: str) -> bool:
-    normalized_title = re.sub(r"[\s.№]", "", title).casefold()
+    normalized_title = _catalogue_text_key(title)
     designation = identifier.normalized_designation
     if identifier.document_kind is NormativeDocumentKind.MINSTROY_ORDER:
         number = re.search(r"(\d+)/ПР", designation)
         if number is None or f"{number.group(1)}/пр" not in normalized_title:
             return False
         if identifier.printed_edition is not None:
-            return identifier.printed_edition in title
+            parsed = _parse_first_date(title)
+            return parsed is not None and parsed.strftime("%d.%m.%Y") == identifier.printed_edition
         return True
-    comparable = re.sub(r"[\s.]", "", designation).casefold()
+    comparable = _catalogue_text_key(designation)
     return re.search(rf"(?<!\d){re.escape(comparable)}(?!\d)", normalized_title) is not None
+
+
+def _catalogue_text_key(value: str) -> str:
+    normalized = unicodedata.normalize("NFKC", html.unescape(value).replace("№", "")).casefold()
+    normalized = re.sub(r"[\u2010-\u2015\u2212]", "-", normalized)
+    return re.sub(r"[\s№]", "", normalized)
+
+
+def _query_variants(
+    identifier: NormalizedNormativeIdentifier, title_hint: str | None
+) -> tuple[str, ...]:
+    values = [identifier.normalized_designation]
+    if identifier.document_kind is NormativeDocumentKind.MINSTROY_ORDER:
+        number = re.search(r"(\d+)/ПР", identifier.normalized_designation)
+        if number is not None:
+            values.append(f"{number.group(1)}/пр")
+    if title_hint and title_hint.strip():
+        values.append(title_hint.strip())
+    return tuple(dict.fromkeys(values))
+
+
+def _last_catalogue_page(body: bytes) -> int:
+    text = _decode_html(body)
+    pages = [int(value) for value in re.findall(r"PAGEN_1=(\d+)", html.unescape(text))]
+    return max(pages, default=1)
 
 
 def _decode_html(body: bytes) -> str:
@@ -397,6 +472,11 @@ def _is_artifact_link(href: str, label: str) -> bool:
     return "скачать" in label.casefold() or path.endswith((".pdf", ".doc", ".docx", ".rtf", ".zip"))
 
 
+def is_amendment_candidate(candidate: CatalogueCandidate) -> bool:
+    title = _catalogue_text_key(candidate.title)
+    return re.match(r"^изменение\d+к", title) is not None or "овнесенииизменений" in title
+
+
 def _require_official_url(url: str) -> None:
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "https" or parsed.hostname not in {MINSTROY_HOST, f"www.{MINSTROY_HOST}"}:
@@ -407,6 +487,16 @@ def _require_official_url(url: str) -> None:
         raise OfficialCatalogueError(
             "OFFICIAL_ENDPOINT_NOT_ALLOWED", "Credentials in URLs are forbidden."
         )
+
+
+def _canonical_official_url(url: str) -> str:
+    """Encode an official IRI as a transport-safe URI without changing semantics."""
+
+    parsed = urllib.parse.urlsplit(url)
+    _require_official_url(url)
+    path = urllib.parse.quote(urllib.parse.unquote(parsed.path), safe="/%:@!$&'()*+,;=-._~")
+    query = urllib.parse.quote(urllib.parse.unquote(parsed.query), safe="=&;%:@!$'()*+,/?-._~")
+    return urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, path, query, parsed.fragment))
 
 
 def _validate_artifact_signature(response: OfficialResponse) -> None:
@@ -425,3 +515,22 @@ def _validate_artifact_signature(response: OfficialResponse) -> None:
             )
     elif not body:
         raise OfficialCatalogueError("ARTIFACT_INVALID", "Official artifact is empty.")
+
+
+def _validate_artifact_header(
+    *, final_url: str, content_type: str | None, header: bytes, byte_length: int
+) -> None:
+    if byte_length < 1:
+        raise OfficialCatalogueError("ARTIFACT_INVALID", "Official artifact is empty.")
+    declared = (content_type or "").casefold()
+    if declared == "application/pdf" or final_url.casefold().endswith(".pdf"):
+        if not header.startswith(b"%PDF-"):
+            raise OfficialCatalogueError(
+                "ARTIFACT_INVALID", "Official artifact declares PDF without a PDF signature."
+            )
+    elif declared in {"text/html", "application/xhtml+xml"}:
+        stripped = header.lstrip().lower()
+        if not (stripped.startswith(b"<!doctype html") or stripped.startswith(b"<html")):
+            raise OfficialCatalogueError(
+                "ARTIFACT_INVALID", "Official HTML artifact has an invalid signature."
+            )

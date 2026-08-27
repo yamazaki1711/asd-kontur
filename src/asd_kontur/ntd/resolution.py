@@ -19,6 +19,7 @@ from .minstroy import (
     MINSTROY_CATALOGUE_PROFILE_VERSION,
     MinstroyCatalogueClient,
     OfficialCatalogueError,
+    is_amendment_candidate,
 )
 from .models import (
     AcquisitionReceipt,
@@ -27,6 +28,7 @@ from .models import (
     OfficialCatalogueRecord,
     OfficialHttpMetadata,
 )
+from .official_sources import OfficialSourceError
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,10 +173,21 @@ def resolve_seed_manifest(
         initial_endpoint = _initial_endpoint(identifier.normalized_designation)
         try:
             search = client.search_exact(identifier, title_hint=first.raw_title)
-        except OfficialCatalogueError as error:
+        except (OfficialCatalogueError, OfficialSourceError) as error:
             status = (
                 AcquisitionTerminalStatus.OFFICIAL_ACCESS_BLOCKED
-                if error.code in {"OFFICIAL_ACCESS_BLOCKED", "OFFICIAL_HTTP_ERROR"}
+                if error.code
+                in {
+                    "OFFICIAL_ACCESS_BLOCKED",
+                    "OFFICIAL_HTTP_ERROR",
+                    "OFFICIAL_NETWORK_TIMEOUT",
+                    "OFFICIAL_NETWORK_UNAVAILABLE",
+                    "OFFICIAL_PROXY_ROUTE_FAILED",
+                    "OFFICIAL_TLS_HANDSHAKE_FAILED",
+                    "OFFICIAL_TLS_VERIFICATION_FAILED",
+                    "OFFICIAL_HTTP_ACCESS_DENIED",
+                    "OFFICIAL_AUTHENTICATION_REQUIRED",
+                }
                 else AcquisitionTerminalStatus.BLOCKED_DETERMINISTIC_FAILURE
             )
             terminal = AcquisitionReceipt(
@@ -233,7 +246,35 @@ def resolve_seed_manifest(
                 )
             )
             continue
-        if len(candidates) != 1:
+        primary_candidates = tuple(
+            candidate for candidate in candidates if not is_amendment_candidate(candidate)
+        )
+        if not primary_candidates:
+            status = AcquisitionTerminalStatus.OFFICIAL_ARTIFACT_UNAVAILABLE
+            terminal = _terminal_receipt(
+                identifier.normalized_designation,
+                search.official_endpoints[-1],
+                requested_at,
+                candidates,
+                status,
+                "ONLY_AMENDMENT_RECORDS_FOUND",
+                search.responses[-1] if search.responses else None,
+            )
+            resolutions.append(
+                IdentityResolution(
+                    identity_key,
+                    identifier.normalized_designation,
+                    reference_ids,
+                    printed_editions,
+                    status,
+                    terminal,
+                    None,
+                    (),
+                    ("ONLY_AMENDMENT_RECORDS_FOUND",),
+                )
+            )
+            continue
+        if len(primary_candidates) != 1:
             status = AcquisitionTerminalStatus.AMBIGUOUS_OFFICIAL_RECORDS
             terminal = _terminal_receipt(
                 identifier.normalized_designation,
@@ -258,10 +299,10 @@ def resolve_seed_manifest(
                 )
             )
             continue
-        selected = candidates[0]
+        selected = primary_candidates[0]
         try:
             record = client.fetch_record(selected)
-        except OfficialCatalogueError as error:
+        except (OfficialCatalogueError, OfficialSourceError) as error:
             status = AcquisitionTerminalStatus.OFFICIAL_ACCESS_BLOCKED
             terminal = _terminal_receipt(
                 identifier.normalized_designation,
@@ -315,12 +356,12 @@ def resolve_seed_manifest(
             )
             continue
         artifacts: list[ResolvedArtifactBytes] = []
-        artifact_failure: OfficialCatalogueError | None = None
+        artifact_failure: OfficialCatalogueError | OfficialSourceError | None = None
         for artifact_url in record.artifact_urls:
             artifact_requested_at = now()
             try:
                 response = client.download_artifact(artifact_url)
-            except OfficialCatalogueError as error:
+            except (OfficialCatalogueError, OfficialSourceError) as error:
                 artifact_failure = error
                 break
             content_digest = "sha256:" + hashlib.sha256(response.body).hexdigest()

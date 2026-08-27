@@ -59,7 +59,7 @@ from .postgres import (
 from .qualification import execute_four_mode_fixture
 from .qwen import run_bf16_smoke
 
-EXPECTED_HEAD = "0020_knowledge_status"
+EXPECTED_HEAD = "0026_support_id_finalize"
 EXPECTED_MODEL_DIGEST = "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766"
 HEAD_TABLES = (
     "project_definition_versions",
@@ -278,10 +278,13 @@ def _contract_inventory(repository_root: Path) -> dict[str, Any]:
                     "registered schema digest differs",
                     evidence={"path": str(schema_path.relative_to(repository_root))},
                 )
-            if expected_digest is None and registry.get("registry_version") == "2.2.0":
+            registry_version = tuple(
+                int(part) for part in str(registry.get("registry_version", "0.0.0")).split(".")
+            )
+            if expected_digest is None and registry_version >= (2, 2, 0):
                 raise IntegrityFailure(
                     "CONTRACT_FINGERPRINT_MISSING",
-                    "current Contract Pack schema lacks a registered digest",
+                    "Contract Pack schema at or after v2.2 lacks a registered digest",
                     evidence={"path": str(schema_path.relative_to(repository_root))},
                 )
         for key in registry.get("contract_keys", []):
@@ -628,14 +631,14 @@ class CycleRunner:
             first = canonical_digest(first_inventory)
             engine.dispose()
             engine = None
-            migrate(self.root, database_url, "0019_memory_integrity")
+            migrate(self.root, database_url, "0021_document_understanding")
             migrate(self.root, database_url, "head")
             engine = sa.create_engine(database_url)
             second = schema_fingerprint(engine)
             if first != second:
                 raise IntegrityFailure(
                     "SCHEMA_ROUNDTRIP_MISMATCH",
-                    "0020 downgrade/upgrade changed schema fingerprint",
+                    "0022 downgrade/upgrade changed schema fingerprint",
                     evidence={"before": first, "after": second},
                 )
             with engine.begin() as connection:

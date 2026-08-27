@@ -144,7 +144,9 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         outcomes = [recovered]
         while outcome := restarted_worker.run_once():
             outcomes.append(outcome)
-        assert [value.state.value for value in outcomes] == ["succeeded"] * 5
+        assert [value.state.value for value in outcomes[:-1]] == ["succeeded"] * 9
+        assert outcomes[-1].state is JobState.FAILED
+        assert outcomes[-1].outcome_code == "classification_evidence_unavailable"
         duplicate = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents",
             files=[("files", ("two-pages.pdf", _pdf(), "application/pdf"))],
@@ -153,8 +155,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert duplicate.status_code == 202
         assert duplicate.json() == upload.json()
         jobs = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/jobs").json()
-        assert len(jobs) == 5
-        assert all(value["state"] == "succeeded" for value in jobs)
+        assert len(jobs) == 17
+        assert sum(value["state"] == "succeeded" for value in jobs) == 9
+        assert sum(value["state"] == "failed" for value in jobs) == 1
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 7
         documents = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents").json()
         assert len(documents["items"]) == 1
         document = documents["items"][0]
@@ -187,6 +191,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             )
         assert knowledge_before["memory_data_defect"] is (qualification_status != "pass")
         assert knowledge_before["knowledge_ready"] is False
+        ntd_seed_before = client.get("/api/v1/platform/ntd-seed-status").json()
+        assert ntd_seed_before["counts"]["denominator"] == 25
+        assert ntd_seed_before["counts"]["registered_identity_count"] == 0
+        assert ntd_seed_before["complete"] is False
 
         prepared = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/lifecycle/reset/prepare",
@@ -210,6 +218,7 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         remaining = client.get("/api/v1/workspaces").json()
         assert [value["workspace_id"] for value in remaining] == [workspace_b["workspace_id"]]
         assert client.get("/api/v1/platform/knowledge-status").json() == knowledge_before
+        assert client.get("/api/v1/platform/ntd-seed-status").json() == ntd_seed_before
         assert any(settings.archive_store_root.rglob("*.zip"))
         assert client.post("/api/v1/session/logout", headers=csrf).status_code == 204
         assert client.get("/api/v1/workspaces").status_code == 401

@@ -130,9 +130,15 @@ def test_identifier_normalization_separates_document_from_printed_edition() -> N
     assert sp.printed_edition == "2024"
     assert gost_without_year.stable_identity_key == "ru:gost-r:58973"
     assert gost_without_year.printed_edition is None
-    assert order_without_date.stable_identity_key == "ru:minstroy:order:344-pr"
+    assert order_without_date.stable_identity_key == "ru:minstroy:order:date-unresolved:344-pr"
     assert order_without_date.printed_edition is None
     assert order_without_date.document_kind is NormativeDocumentKind.MINSTROY_ORDER
+
+
+def test_order_identity_includes_exact_date_and_manifest_resolves_number_only_occurrence() -> None:
+    exact = normalize_identifier("Приказ Минстроя №344/пр от 16.05.2023")
+    assert exact.stable_identity_key == "ru:minstroy:order:2023-05-16:344-pr"
+    assert exact.printed_edition == "16.05.2023"
 
 
 def test_manifest_fails_closed_on_missing_page() -> None:

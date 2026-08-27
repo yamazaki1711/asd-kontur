@@ -20,6 +20,9 @@ import { PdfEvidenceViewer } from "./viewer/PdfEvidenceViewer";
 type Workspace = components["schemas"]["WorkspaceView"];
 type Document = components["schemas"]["DocumentView"];
 type Job = components["schemas"]["JobView"];
+type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
+type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
+type SupportProduction = components["schemas"]["SupportProductionView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
 
@@ -46,8 +49,20 @@ export function App() {
             element={<EvidenceIndexPage />}
           />
           <Route
+            path="/workspaces/:workspaceId/evidence/locators/:locatorId"
+            element={<ExactEvidencePage />}
+          />
+          <Route
             path="/workspaces/:workspaceId/work-matrix"
             element={<WorkMatrixPage />}
+          />
+          <Route
+            path="/workspaces/:workspaceId/project-understanding"
+            element={<ProjectUnderstandingPage />}
+          />
+          <Route
+            path="/workspaces/:workspaceId/support-id"
+            element={<SupportProductionPage />}
           />
           <Route
             path="/workspaces/:workspaceId/modes/:mode"
@@ -168,7 +183,7 @@ function ApplicationShell() {
           </span>
         </Link>
         <div className="top-actions">
-          <StatusPill tone="warning">MEMORY DATA_DEFECT</StatusPill>
+          <StatusPill tone="warning">ProductApplication PARTIAL</StatusPill>
           <button className="ghost" onClick={() => logout.mutate()}>
             Выйти
           </button>
@@ -182,7 +197,15 @@ function ApplicationShell() {
             <NavItem to={`${workspaceBase}/documents`} label="Documents" />
             <NavItem to={`${workspaceBase}/jobs`} label="Jobs" />
             <NavItem to={`${workspaceBase}/evidence`} label="Evidence" />
+            <NavItem
+              to={`${workspaceBase}/project-understanding`}
+              label="Project Understanding"
+            />
             <NavItem to={`${workspaceBase}/work-matrix`} label="Work Matrix" />
+            <NavItem
+              to={`${workspaceBase}/support-id`}
+              label="Support / ID Package"
+            />
             {MODES.map((mode) => (
               <NavItem
                 key={mode}
@@ -698,6 +721,64 @@ function DocumentViewerPage() {
   );
 }
 
+function ExactEvidencePage() {
+  const { workspaceId = "", locatorId = "" } = useParams();
+  const evidence = useQuery({
+    queryKey: ["exact-evidence", workspaceId, locatorId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/evidence/locators/{source_locator_id}",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              source_locator_id: locatorId,
+            },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    retry: false,
+  });
+  return (
+    <Page
+      title="Exact Evidence Locator"
+      lead="Разрешённая workspace-ссылка на точную страницу/регион и immutable evidence digest."
+    >
+      <QueryState query={evidence} empty="Evidence locator отсутствует.">
+        {(value) => (
+          <section className="panel">
+            <dl>
+              <dt>SourceVersion</dt>
+              <dd className="mono">{value.locator.source_version_id}</dd>
+              <dt>Locator</dt>
+              <dd className="mono">{value.locator.source_locator_id}</dd>
+              <dt>Page / region</dt>
+              <dd>
+                {value.locator.page_number} / {value.locator.region.join(", ")}
+              </dd>
+              <dt>Evidence digest</dt>
+              <dd className="mono truncate">{value.locator.evidence_digest}</dd>
+              <dt>Extraction</dt>
+              <dd>{value.locator.extraction_method}</dd>
+              <dt>Status / authority</dt>
+              <dd>
+                {value.candidate_fact_status} / {value.authority_type}
+              </dd>
+            </dl>
+            <Link
+              to={`/workspaces/${workspaceId}/documents/${value.locator.document_id}?page=${String(value.locator.page_number)}`}
+            >
+              Открыть документ на странице {value.locator.page_number}
+            </Link>
+          </section>
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
 function JobsPage() {
   const { workspaceId = "" } = useParams();
   const queryClient = useQueryClient();
@@ -843,6 +924,464 @@ function WorkMatrixPage() {
   );
 }
 
+function SupportProductionPage() {
+  const { workspaceId = "" } = useParams();
+  const queryClient = useQueryClient();
+  const production = useQuery({
+    queryKey: ["support-id-production", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/id-production",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const formPackage = useMutation({
+    mutationFn: async (workPackageId: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/id-packages",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: { work_package_id: workPackageId },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
+  const startGeneration = useMutation({
+    mutationFn: async (membership: Record<string, unknown>) => {
+      const identity = String(membership.membership_id);
+      const version = Number(membership.version);
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/generation-runs",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            membership_id: identity,
+            idempotency_key: `support-generation:${identity}:v${String(version)}`,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["support-id-production", workspaceId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] }),
+      ]);
+    },
+  });
+  const reviewCandidate = useMutation({
+    mutationFn: async (candidateId: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/generated-candidates/{candidate_id}/review",
+        {
+          params: {
+            path: { workspace_id: workspaceId, candidate_id: candidateId },
+          },
+          body: { outcome: "approved" },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
+  const finalizeCandidate = useMutation({
+    mutationFn: async (candidateId: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/generated-candidates/{candidate_id}/finalize",
+        {
+          params: {
+            path: { workspace_id: workspaceId, candidate_id: candidateId },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
+  return (
+    <Page
+      title="Support / Исполнительная документация"
+      lead="От WorkRequirementMatrix к versioned комплекту, реестру, evidence-bound полям и управляемой генерации."
+    >
+      <QueryState query={production}>
+        {(value) => (
+          <SupportProductionBody
+            value={value}
+            workspaceId={workspaceId}
+            formPackage={(identity) => formPackage.mutate(identity)}
+            packagePending={formPackage.isPending}
+            generation={(membership) => startGeneration.mutate(membership)}
+            generationPending={startGeneration.isPending}
+            review={(identity) => reviewCandidate.mutate(identity)}
+            reviewPending={reviewCandidate.isPending}
+            finalize={(identity) => finalizeCandidate.mutate(identity)}
+            finalizationPending={finalizeCandidate.isPending}
+            commandError={
+              formPackage.error ??
+              startGeneration.error ??
+              reviewCandidate.error ??
+              finalizeCandidate.error
+            }
+          />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function SupportProductionBody({
+  value,
+  workspaceId,
+  formPackage,
+  packagePending,
+  generation,
+  generationPending,
+  review,
+  reviewPending,
+  finalize,
+  finalizationPending,
+  commandError,
+}: {
+  value: SupportProduction;
+  workspaceId: string;
+  formPackage: (identity: string) => void;
+  packagePending: boolean;
+  generation: (membership: Record<string, unknown>) => void;
+  generationPending: boolean;
+  review: (candidateId: string) => void;
+  reviewPending: boolean;
+  finalize: (candidateId: string) => void;
+  finalizationPending: boolean;
+  commandError: unknown;
+}) {
+  const workPackages = Array.from(
+    new Set(value.requirements.map((item) => String(item.work_package_id))),
+  );
+  const readiness = value.readiness as Record<string, unknown> | null;
+  const memberships = value.memberships ?? [];
+  const registers = value.registers ?? [];
+  const fields = value.field_resolutions ?? [];
+  return (
+    <>
+      <section className="panel">
+        <div className="entity-heading">
+          <h2>Work / ID Requirements</h2>
+          <StatusPill tone="warning">
+            {value.package ? "package formed" : "package absent"}
+          </StatusPill>
+        </div>
+        {value.requirements.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Документ</th>
+                  <th>State</th>
+                  <th>Authority</th>
+                  <th>Basis / gaps</th>
+                </tr>
+              </thead>
+              <tbody>
+                {value.requirements.map((requirement) => (
+                  <tr key={String(requirement.document_requirement_id)}>
+                    <td>
+                      <strong>{String(requirement.document_type)}</strong>
+                      <small className="mono">
+                        {String(requirement.document_requirement_id)}
+                      </small>
+                    </td>
+                    <td>
+                      <StatusPill>
+                        {String(requirement.requirement_state)}
+                      </StatusPill>
+                    </td>
+                    <td>{String(requirement.authority_status)}</td>
+                    <td>
+                      <GapList
+                        gaps={[
+                          ...((requirement.basis_refs as
+                            string[] | undefined) ?? []),
+                          ...((requirement.blockers as string[] | undefined) ??
+                            []),
+                        ]}
+                        good={
+                          !(
+                            (requirement.blockers as unknown[] | undefined)
+                              ?.length ?? 0
+                          )
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            WorkRequirementMatrix не содержит ID requirements.
+          </InfoNotice>
+        )}
+        {!value.package &&
+          workPackages.map((identity) => (
+            <button
+              key={identity}
+              onClick={() => formPackage(identity)}
+              disabled={packagePending}
+            >
+              Сформировать PackageVersion для {identity}
+            </button>
+          ))}
+        {commandError !== null && commandError !== undefined ? (
+          <ErrorNotice error={commandError} />
+        ) : null}
+      </section>
+
+      {value.package && (
+        <>
+          <section className="metrics" aria-label="Package completeness">
+            <Metric
+              label="Required"
+              value={Number(readiness?.required_count ?? 0)}
+            />
+            <Metric
+              label="Covered"
+              value={Number(readiness?.covered_count ?? 0)}
+            />
+            <Metric
+              label="Generated candidate"
+              value={Number(readiness?.generated_candidate_count ?? 0)}
+            />
+            <Metric
+              label="Finalized"
+              value={Number(readiness?.finalized_count ?? 0)}
+            />
+            <Metric
+              label="Missing"
+              value={Number(readiness?.missing_count ?? 0)}
+            />
+            <Metric
+              label="Blocked"
+              value={Number(readiness?.blocked_count ?? 0)}
+            />
+          </section>
+          <section className="panel">
+            <div className="entity-heading">
+              <h2>PackageVersion / ordered memberships</h2>
+              <StatusPill tone="warning">
+                {displayValue(readiness?.status, "incomplete")}
+              </StatusPill>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>№</th>
+                    <th>Role / subject</th>
+                    <th>Copies / stage</th>
+                    <th>State</th>
+                    <th>Action / evidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {memberships.map((membership) => {
+                    const candidate = membership.generated_candidate_id;
+                    const candidateIdentity =
+                      typeof candidate === "string" ? candidate : "";
+                    const finalizedIdentity =
+                      typeof membership.finalized_document_id === "string"
+                        ? membership.finalized_document_id
+                        : "";
+                    const blockers = Array.isArray(membership.blocker_codes)
+                      ? membership.blocker_codes.map(String)
+                      : [];
+                    return (
+                      <tr
+                        key={`${String(membership.membership_id)}:${String(membership.version)}`}
+                      >
+                        <td>{String(membership.ordinal)}</td>
+                        <td>
+                          <strong>{String(membership.role)}</strong>
+                          <small className="mono">
+                            {String(membership.subject_ref)}
+                          </small>
+                        </td>
+                        <td>
+                          {String(membership.required_copy_count)} /{" "}
+                          {String(membership.stage)}
+                        </td>
+                        <td>
+                          <StatusPill
+                            tone={blockers.length ? "warning" : "default"}
+                          >
+                            {finalizedIdentity
+                              ? "finalized"
+                              : candidate
+                                ? "generated_candidate"
+                                : String(membership.state)}
+                          </StatusPill>
+                          {Boolean(membership.job_state) && (
+                            <small>job: {String(membership.job_state)}</small>
+                          )}
+                          {Boolean(membership.template_version) && (
+                            <small>
+                              template {String(membership.template_version)} ·{" "}
+                              {displayValue(
+                                membership.template_qualification_state,
+                                "unqualified",
+                              )}
+                            </small>
+                          )}
+                          {Boolean(membership.print_validation_result) && (
+                            <small>
+                              print:{" "}
+                              {String(membership.print_validation_result)}
+                            </small>
+                          )}
+                          {Boolean(membership.review_outcome) && (
+                            <small>
+                              review: {String(membership.review_outcome)}
+                            </small>
+                          )}
+                        </td>
+                        <td>
+                          {candidateIdentity ? (
+                            <>
+                              <a
+                                className="button-link"
+                                href={`/api/v1/workspaces/${workspaceId}/support/generated-candidates/${candidateIdentity}/content`}
+                              >
+                                Скачать candidate
+                              </a>
+                              {!membership.review_outcome && (
+                                <button
+                                  className="ghost"
+                                  onClick={() => review(candidateIdentity)}
+                                  disabled={reviewPending}
+                                >
+                                  Подтвердить review
+                                </button>
+                              )}
+                              {membership.review_outcome === "approved" &&
+                                !finalizedIdentity && (
+                                  <button
+                                    className="ghost"
+                                    onClick={() => finalize(candidateIdentity)}
+                                    disabled={finalizationPending}
+                                  >
+                                    Финализировать
+                                  </button>
+                                )}
+                            </>
+                          ) : membership.role !== "register" ? (
+                            <button
+                              className="ghost"
+                              onClick={() => generation(membership)}
+                              disabled={generationPending}
+                            >
+                              Запустить generation
+                            </button>
+                          ) : null}
+                          {finalizedIdentity && (
+                            <a
+                              className="button-link"
+                              href={`/api/v1/workspaces/${workspaceId}/support/finalized-documents/${finalizedIdentity}/content`}
+                            >
+                              Скачать finalized
+                            </a>
+                          )}
+                          <GapList gaps={blockers} good={!blockers.length} />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section className="split">
+            <article className="panel">
+              <h2>Реестр комплекта</h2>
+              {registers.map((register) => {
+                const manifest = register.register_manifest as Record<
+                  string,
+                  unknown
+                >;
+                const documents = Array.isArray(manifest.documents)
+                  ? (manifest.documents as Record<string, unknown>[])
+                  : [];
+                return (
+                  <div key={String(register.register_candidate_id)}>
+                    <p className="mono">
+                      {String(register.manifest_fingerprint)}
+                    </p>
+                    <ol start={2}>
+                      {documents.map((item) => (
+                        <li key={String(item.membership_id)}>
+                          {String(item.role)} — {String(item.state)}, copies{" "}
+                          {String(item.copies)}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })}
+            </article>
+            <article className="panel">
+              <h2>Gaps / blockers</h2>
+              <GapList gaps={value.gaps} />
+            </article>
+          </section>
+          <section className="panel">
+            <h2>Resolved document fields</h2>
+            {fields.length ? (
+              <dl>
+                {fields.map((field) => (
+                  <div
+                    key={`${String(field.generation_run_id)}:${String(field.field_key)}`}
+                  >
+                    <dt>{String(field.field_key)}</dt>
+                    <dd>
+                      {String(field.display_value ?? field.state)}
+                      {Boolean(field.source_locator_id) && (
+                        <Link
+                          to={`/workspaces/${workspaceId}/evidence/locators/${String(field.source_locator_id)}`}
+                        >
+                          exact evidence
+                        </Link>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p>GenerationRun ещё не разрешал поля.</p>
+            )}
+          </section>
+        </>
+      )}
+    </>
+  );
+}
+
 function ModePage() {
   const { workspaceId = "", mode = "Tender" } = useParams();
   const normalized = MODES.includes(mode as (typeof MODES)[number])
@@ -881,6 +1420,313 @@ function ModePage() {
   );
 }
 
+function ProjectUnderstandingPage() {
+  const { workspaceId = "" } = useParams();
+  const understanding = useQuery({
+    queryKey: ["project-understanding", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/project-understanding",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    retry: false,
+  });
+  return (
+    <Page
+      title="Project Understanding"
+      lead="Единый evidence-bound ProjectDefinition, состав ОКС, работы и нормативный профиль ПД/РД."
+    >
+      <QueryState
+        query={understanding}
+        empty="Обработка документов ещё не сформировала ProjectDefinition."
+      >
+        {(value) => {
+          const definition = value.project_definition.definition as {
+            fields?: Record<string, unknown>;
+            gaps?: string[];
+          };
+          const profile = value.normative_profile;
+          const profileGaps = (profile?.gaps ?? []) as Array<{
+            code?: string;
+          }>;
+          const evidenceIndex = value.evidence_index as Record<
+            string,
+            Record<string, unknown>
+          >;
+          return (
+            <>
+              <div className="metrics">
+                <Metric
+                  label="Project fields"
+                  value={Object.keys(definition.fields ?? {}).length}
+                />
+                <Metric
+                  label="Page decisions"
+                  value={value.page_roles.length}
+                />
+                <Metric
+                  label="Work packages"
+                  value={value.work_packages.length}
+                />
+                <Metric label="Defects" value={value.defects.length} />
+              </div>
+              <div className="split">
+                <section className="panel">
+                  <div className="entity-heading">
+                    <h2>ProjectDefinition</h2>
+                    <StatusPill tone="warning">PARTIAL</StatusPill>
+                  </div>
+                  <EvidenceObject
+                    value={definition.fields ?? {}}
+                    workspaceId={workspaceId}
+                    evidenceIndex={evidenceIndex}
+                  />
+                  <h3>Project gaps</h3>
+                  <GapList gaps={definition.gaps ?? []} />
+                </section>
+                <section className="panel">
+                  <h2>Applicable PD/RD Normative Profile</h2>
+                  {profile ? (
+                    <>
+                      <dl>
+                        <dt>Profile</dt>
+                        <dd className="mono">{String(profile.profile_id)}</dd>
+                        <dt>Applicable edition date</dt>
+                        <dd>
+                          {displayValue(
+                            profile.applicable_on,
+                            "не подтверждена",
+                          )}
+                        </dd>
+                        <dt>Completeness</dt>
+                        <dd>{String(profile.completeness_status)}</dd>
+                      </dl>
+                      <h3>Official corpus denominator</h3>
+                      <EvidenceObject
+                        value={
+                          (profile.corpus_denominator ?? {}) as Record<
+                            string,
+                            unknown
+                          >
+                        }
+                      />
+                      <NormativeRequirementList
+                        title="Required PD sections"
+                        values={profile.required_pd_sections}
+                      />
+                      <NormativeRequirementList
+                        title="Expected RD sets"
+                        values={profile.expected_rd_sets}
+                      />
+                      <NormativeRequirementList
+                        title="Formatting and assembly"
+                        values={profile.formatting_requirements}
+                      />
+                      <h3>Unresolved applicability inputs</h3>
+                      <GapList
+                        gaps={
+                          Array.isArray(profile.unresolved_inputs)
+                            ? profile.unresolved_inputs.map(String)
+                            : []
+                        }
+                      />
+                      <h3>Normative gaps</h3>
+                      <GapList
+                        gaps={profileGaps.map(
+                          (item) => item.code ?? "NORMATIVE_GAP",
+                        )}
+                      />
+                    </>
+                  ) : (
+                    <p className="empty-state">
+                      Normative profile отсутствует.
+                    </p>
+                  )}
+                </section>
+              </div>
+              <section className="panel">
+                <h2>Work packages</h2>
+                {value.work_packages.length ? (
+                  <div className="card-grid">
+                    {value.work_packages.map((item) => (
+                      <WorkPackageCard
+                        key={String(item.work_package_id)}
+                        item={item}
+                        workspaceId={workspaceId}
+                        evidenceIndex={evidenceIndex}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="empty-state">
+                    WorkPackage candidates отсутствуют.
+                  </p>
+                )}
+              </section>
+              <section className="panel">
+                <h2>Authority separation</h2>
+                <EvidenceObject value={value.authority_layers} />
+              </section>
+            </>
+          );
+        }}
+      </QueryState>
+    </Page>
+  );
+}
+
+function NormativeRequirementList({
+  title,
+  values,
+}: {
+  title: string;
+  values: unknown;
+}) {
+  const rows = Array.isArray(values)
+    ? (values as Array<Record<string, unknown>>)
+    : [];
+  return (
+    <section>
+      <h3>{title}</h3>
+      {rows.length ? (
+        <div className="card-grid">
+          {rows.map((row) => (
+            <article
+              className="entity-card"
+              key={`${displayValue(row.rule_version_id)}:${displayValue(row.normative_provision_id)}`}
+            >
+              <strong>
+                {displayValue(
+                  row.section ?? row.mark ?? row.code,
+                  "requirement",
+                )}
+              </strong>
+              <p>Edition: {displayValue(row.normative_edition_id)}</p>
+              <p>Provision: {displayValue(row.structural_path)}</p>
+              <p>Locator: {displayValue(row.locator)}</p>
+              <p className="mono">
+                RuleVersion: {displayValue(row.rule_version_id)}
+              </p>
+              <p className="mono">
+                Evidence: {displayValue(row.evidence_digest)}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-state">no verified result</p>
+      )}
+    </section>
+  );
+}
+
+function WorkPackageCard({
+  item,
+  workspaceId,
+  evidenceIndex,
+}: {
+  item: Record<string, unknown>;
+  workspaceId: string;
+  evidenceIndex: Record<string, Record<string, unknown>>;
+}) {
+  const packageValue = (item.package ?? {}) as Record<string, unknown>;
+  const workType = (packageValue.work_type ?? {}) as Record<string, unknown>;
+  const locators = Array.isArray(packageValue.source_locator_ids)
+    ? packageValue.source_locator_ids
+    : [];
+  return (
+    <article className="entity-card">
+      <h3>{displayValue(workType.normalized, "unresolved")}</h3>
+      <p className="mono">{String(item.work_package_id)}</p>
+      <p>
+        Evidence:{" "}
+        {locators.length
+          ? locators.map((locator) => {
+              const identity = String(locator);
+              const evidence = evidenceIndex[identity];
+              return (
+                <Link
+                  key={identity}
+                  to={`/workspaces/${workspaceId}/evidence/locators/${identity}`}
+                >
+                  {evidence
+                    ? `page ${displayValue(evidence.locator_value)}`
+                    : identity}
+                </Link>
+              );
+            })
+          : "gap"}
+      </p>
+    </article>
+  );
+}
+
+function EvidenceObject({
+  value,
+  workspaceId,
+  evidenceIndex,
+}: {
+  value: Record<string, unknown>;
+  workspaceId?: string;
+  evidenceIndex?: Record<string, Record<string, unknown>>;
+}) {
+  return (
+    <dl>
+      {Object.entries(value).map(([key, raw]) => {
+        const item =
+          typeof raw === "object" && raw !== null
+            ? (raw as Record<string, unknown>)
+            : { normalized_value: raw };
+        const locatorIdentity = displayValue(item.source_locator_id);
+        return (
+          <div key={key} className="evidence-field">
+            <dt>{key}</dt>
+            <dd>
+              {displayValue(
+                item.normalized_value ?? item.raw_value,
+                "no_result",
+              )}
+            </dd>
+            {item.raw_value !== undefined && (
+              <dd className="muted">Printed: {displayValue(item.raw_value)}</dd>
+            )}
+            {item.source_locator_id !== undefined && (
+              <dd className="mono">
+                {workspaceId ? (
+                  <Link
+                    to={`/workspaces/${workspaceId}/evidence/locators/${locatorIdentity}`}
+                  >
+                    Locator: {displayValue(item.source_locator_id)}
+                    {evidenceIndex?.[locatorIdentity]
+                      ? " (resolved)"
+                      : " (gap)"}
+                  </Link>
+                ) : (
+                  <>Locator: {displayValue(item.source_locator_id)}</>
+                )}
+              </dd>
+            )}
+          </div>
+        );
+      })}
+    </dl>
+  );
+}
+
+function displayValue(value: unknown, fallback = "") {
+  if (value === undefined || value === null) return fallback;
+  if (
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+  return JSON.stringify(value);
+}
+
 function useMode(workspaceId: string, mode: (typeof MODES)[number]) {
   return useQuery({
     queryKey: ["mode", workspaceId, mode],
@@ -901,6 +1747,13 @@ function KnowledgePage() {
       const { data, error } = await api.GET(
         "/api/v1/platform/knowledge-status",
       );
+      return requireData(data, error);
+    },
+  });
+  const ntdSeed = useQuery({
+    queryKey: ["ntd-seed-status"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/platform/ntd-seed-status");
       return requireData(data, error);
     },
   });
@@ -936,10 +1789,235 @@ function KnowledgePage() {
               <h2>Fingerprints</h2>
               <pre>{JSON.stringify(value.semantic_fingerprints, null, 2)}</pre>
             </section>
+            <section className="panel">
+              <h2>NTD Seed Remediation — exact denominator</h2>
+              <QueryState query={ntdSeed}>
+                {(seed) => <NtdSeedStatusTable value={seed} />}
+              </QueryState>
+            </section>
           </>
         )}
       </QueryState>
     </Page>
+  );
+}
+
+function NtdSeedStatusTable({ value }: { value: NtdSeedStatus }) {
+  return (
+    <>
+      <div className="metrics">
+        <Metric label="Denominator" value={value.counts.denominator ?? 0} />
+        <Metric
+          label="Registered identities"
+          value={value.counts.registered_identity_count ?? 0}
+        />
+        <Metric
+          label="Official records"
+          value={value.counts.official_record_resolved ?? 0}
+        />
+        <Metric
+          label="Official artifacts"
+          value={value.counts.artifact_downloaded ?? 0}
+        />
+        <Metric
+          label="Verified provisions"
+          value={value.counts.provisions_verified ?? 0}
+        />
+        <Metric label="Alignments" value={value.counts.alignments ?? 0} />
+        <Metric
+          label="Qualified rules"
+          value={value.counts.qualified_rules ?? 0}
+        />
+        <Metric
+          label="Rule candidates"
+          value={value.counts.rule_candidates ?? 0}
+        />
+        <Metric label="Active rules" value={value.counts.active_rules ?? 0} />
+        <Metric
+          label="Qualified / not active"
+          value={value.counts.qualified_not_active ?? 0}
+        />
+      </div>
+      <p className="mono">{value.logical_manifest_fingerprint}</p>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Identity / printed edition</th>
+              <th>Official resolution</th>
+              <th>Artifact</th>
+              <th>Pages</th>
+              <th>Publication</th>
+              <th>Gaps</th>
+            </tr>
+          </thead>
+          <tbody>
+            {value.identities.map((identity) => (
+              <NtdSeedStatusRow
+                key={identity.stable_identity}
+                value={identity}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function NtdSeedStatusRow({ value }: { value: NtdSeedIdentity }) {
+  const artifact = value.artifacts[0];
+  const preferredResolution =
+    value.resolutions.find((item) => item.official_record_url) ??
+    value.resolutions[0];
+  const gaps = value.resolutions
+    .map((item) => item.failure_code)
+    .filter((item): item is string => Boolean(item));
+  return (
+    <tr>
+      <td>
+        <strong>{value.printed_designations.join("; ")}</strong>
+        <small className="mono">{value.stable_identity}</small>
+      </td>
+      <td>
+        <StatusPill
+          tone={
+            preferredResolution?.official_record_url ? "default" : "warning"
+          }
+        >
+          {preferredResolution?.status ?? "unresolved"}
+        </StatusPill>
+        <small>{preferredResolution?.provider ?? "—"}</small>
+        {preferredResolution?.official_record_url ? (
+          <a
+            href={preferredResolution.official_record_url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Official record
+          </a>
+        ) : null}
+      </td>
+      <td>
+        {artifact ? (
+          <>
+            <StatusPill>downloaded</StatusPill>
+            <small>{artifact.edition_label}</small>
+            <small className="mono truncate">{artifact.content_digest}</small>
+            <a
+              href={`/api/v1/platform/ntd/artifacts/${artifact.artifact_id}/content#page=1`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open admitted source
+            </a>
+          </>
+        ) : (
+          <StatusPill tone="warning">metadata-only / blocked</StatusPill>
+        )}
+      </td>
+      <td>
+        {artifact ? (
+          <>
+            {artifact.page_count} total
+            <small>{artifact.native_complete_page_count} native complete</small>
+            <small>
+              {artifact.polza_routed_page_count} external recovery routed
+            </small>
+            <small>
+              {artifact.external_candidate_page_count} candidates received
+            </small>
+          </>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td>
+        {artifact ? (
+          <>
+            <small>
+              {artifact.verified_provision_count} verified provisions
+            </small>
+            <small>{artifact.practice_alignment_count} Practice↔NTD</small>
+            <small>{artifact.qualified_rule_count} qualified rules</small>
+            {artifact.verified_provisions.map((provision) => (
+              <details
+                key={`${provision.provision_id}:${String(provision.version)}`}
+              >
+                <summary>
+                  {provision.structural_path} · page {provision.page_number}
+                </summary>
+                <p>{provision.verbatim_text}</p>
+                <small>edition: {provision.edition_activation_status}</small>
+                <small className="mono truncate">
+                  {provision.verification_decision_ref}
+                </small>
+                {provision.rules.map((rule) => (
+                  <div
+                    className="evidence-card"
+                    key={`${rule.rule_candidate_id}:${String(rule.candidate_version)}`}
+                  >
+                    <strong>RuleCandidate · {rule.deontic_type}</strong>
+                    <StatusPill
+                      tone={
+                        rule.activation_status === "active"
+                          ? "default"
+                          : "warning"
+                      }
+                    >
+                      {rule.qualification_status} → {rule.activation_status}
+                    </StatusPill>
+                    <small>{rule.activation_reason}</small>
+                    <small>
+                      RuleVersion: {rule.rule_version_id ?? "not compiled"}
+                    </small>
+                    <small>
+                      lifecycle: {rule.rule_lifecycle_status ?? "not started"}
+                    </small>
+                  </div>
+                ))}
+                {provision.alignments.map((alignment) => (
+                  <div
+                    className="evidence-card"
+                    key={`${String(alignment.alignment_id)}:${String(alignment.version)}`}
+                  >
+                    <strong>Practice↔NTD alignment</strong>
+                    <StatusPill tone="warning">
+                      {String(alignment.status)}
+                    </StatusPill>
+                    <small className="mono">
+                      practice reference:{" "}
+                      {String(alignment.practice_guide_reference_id)}
+                    </small>
+                    <small className="mono">
+                      guidance: {String(alignment.guidance_unit_id)}:
+                      {String(alignment.guidance_unit_version)}
+                    </small>
+                    <small>{String(alignment.decision_ref)}</small>
+                  </div>
+                ))}
+                {provision.locators.map((locator, index) => (
+                  <a
+                    key={String(locator.source_locator_id)}
+                    href={`/api/v1/platform/ntd/artifacts/${artifact.artifact_id}/content#page=${String(locator.page)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Evidence {index + 1}: page {String(locator.page)} region{" "}
+                    <span className="mono">
+                      {JSON.stringify(locator.region)}
+                    </span>
+                  </a>
+                ))}
+              </details>
+            ))}
+          </>
+        ) : (
+          "—"
+        )}
+      </td>
+      <td>{gaps.length ? <GapList gaps={gaps} /> : <span>—</span>}</td>
+    </tr>
   );
 }
 

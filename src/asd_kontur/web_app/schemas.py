@@ -178,6 +178,69 @@ class ModeView(ApiModel):
     readiness: str
 
 
+class ProjectUnderstandingView(ApiModel):
+    reconciliation: dict[str, Any]
+    project_definition: dict[str, Any]
+    page_roles: list[dict[str, Any]]
+    work_packages: list[dict[str, Any]]
+    matrix: dict[str, Any]
+    normative_profile: dict[str, Any] | None
+    defects: list[dict[str, Any]]
+    evidence_index: dict[str, dict[str, Any]]
+    authority_layers: dict[str, str]
+
+
+class SupportProductionView(ApiModel):
+    workspace_id: UUID
+    matrix: dict[str, Any] | None
+    requirements: list[dict[str, Any]]
+    package: dict[str, Any] | None
+    books: list[dict[str, Any]] = Field(default_factory=list)
+    memberships: list[dict[str, Any]] = Field(default_factory=list)
+    registers: list[dict[str, Any]] = Field(default_factory=list)
+    readiness: dict[str, Any] | None = None
+    field_resolutions: list[dict[str, Any]] = Field(default_factory=list)
+    gaps: list[str]
+    authority_layers: dict[str, str]
+
+
+class FormIdPackageRequest(ApiModel):
+    work_package_id: UUID
+
+
+class StartGenerationRequest(ApiModel):
+    membership_id: UUID
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class GenerationStartView(ApiModel):
+    job_id: UUID
+    generation_run_id: UUID | None = None
+    state: str
+    duplicate: bool
+
+
+class ReviewGeneratedCandidateRequest(ApiModel):
+    outcome: Literal["approved", "rejected", "needs_correction"]
+
+
+class PackageBackupManifestView(ApiModel):
+    backup_manifest_id: UUID
+    fingerprint: str
+    latest_package: dict[str, Any]
+    packages: list[dict[str, Any]]
+    books: list[dict[str, Any]]
+    memberships: list[dict[str, Any]]
+    registers: list[dict[str, Any]]
+    readiness: list[dict[str, Any]]
+    generation_runs: list[dict[str, Any]]
+    generated_candidates: list[dict[str, Any]]
+    print_validations: list[dict[str, Any]]
+    reviews: list[dict[str, Any]]
+    finalized_documents: list[dict[str, Any]]
+    terminal_receipts: list[dict[str, Any]]
+
+
 class KnowledgeStatusView(ApiModel):
     practice_guide_count: int
     practice_edition_count: int
@@ -198,6 +261,82 @@ class KnowledgeStatusView(ApiModel):
     memory_data_defect: bool
     knowledge_ready: bool
     blockers: list[str]
+
+
+class NtdSeedResolutionView(ApiModel):
+    provider: str
+    status: str
+    failure_code: str | None
+    official_record_url: str | None
+    official_record_digest: str | None
+    observations: list[str]
+
+
+class NtdRuleDecisionView(ApiModel):
+    rule_candidate_id: UUID
+    candidate_version: int
+    deontic_type: str
+    qualification_status: str
+    qualification_gates: list[list[Any]]
+    activation_status: str
+    activation_reason: str
+    rule_version_id: UUID | None
+    rule_lifecycle_status: str | None
+
+
+class NtdVerifiedProvisionView(ApiModel):
+    provision_id: UUID
+    version: int
+    source_version_id: UUID
+    structural_path: str
+    page_number: int
+    locators: list[dict[str, Any]]
+    verbatim_text: str
+    content_digest: str
+    verification_decision_ref: str
+    edition_activation_status: str
+    rules: list[NtdRuleDecisionView]
+    alignments: list[dict[str, Any]]
+
+
+class NtdSeedArtifactView(ApiModel):
+    artifact_id: UUID
+    document_id: UUID
+    edition_id: UUID
+    designation: str
+    title: str
+    edition_label: str
+    official_url: str
+    content_digest: str
+    media_type: str
+    size_bytes: int
+    page_count: int
+    native_page_count: int
+    polza_routed_page_count: int
+    blocked_page_count: int
+    native_complete_page_count: int
+    recovered_page_count: int
+    external_candidate_page_count: int
+    verified_provision_count: int
+    practice_alignment_count: int
+    qualified_rule_count: int
+    verified_provisions: list[NtdVerifiedProvisionView]
+
+
+class NtdSeedIdentityView(ApiModel):
+    stable_identity: str
+    printed_designations: list[str]
+    identity_status: str
+    resolutions: list[NtdSeedResolutionView]
+    artifacts: list[NtdSeedArtifactView]
+
+
+class NtdSeedStatusView(ApiModel):
+    schema_version: str
+    logical_manifest_fingerprint: str
+    counts: dict[str, int]
+    identities: list[NtdSeedIdentityView]
+    complete: bool
 
 
 class CapabilityStatusView(ApiModel):

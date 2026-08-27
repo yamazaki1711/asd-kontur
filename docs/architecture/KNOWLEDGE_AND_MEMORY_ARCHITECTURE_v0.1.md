@@ -65,6 +65,13 @@ RAG является поисковым механизмом. KAG — спосо
 получения, SHA-256 и точный locator; статус действия и применимость не
 выводятся из имени файла, а отменённая редакция остаётся в provenance.
 
+Owner-approved порядок discovery-поиска: (1) официальный каталог Минстроя,
+(2) `https://docs.cntd.ru/`, (3) `https://meganorm.ru/`. Второй и третий
+источники используются только для discovery/reference evidence. Их текст или
+файл не получает authority `normative_authority`, не становится canonical
+`SourceVersion` и не служит основанием `RuleVersion` без разрешения exact
+официального источника и редакции.
+
 Методические руководства принимаются отдельным source kind
 `MethodologicalPracticeGuide`. Для них обязательны те же immutable bytes,
 `SourceVersion`, object receipt, acquisition provenance и page/region lineage,
@@ -277,7 +284,10 @@ trusted application layer выполняет retrieval/validation локальн
 
 1. Выбор документа по управляемому реестру релевантности; официальный каталог
    Минстроя — приоритетный source (включая релевантные СП 48, СП 70, СП 543,
-   но без hard-coded исчерпывающего списка).
+   но без hard-coded исчерпывающего списка). Если exact record не найден,
+   discovery продолжается через `docs.cntd.ru`, затем `meganorm.ru`; найденные
+   там сведения остаются reference evidence и направляют поиск exact official
+   source, но не публикуются в NTD Authority.
 2. Регистрация `NormativeDocument`, official URL, retrieval timestamp и
    SHA-256; каждая редакция — отдельная `NormativeEdition`.
 3. Экспертно проверяемое определение статуса, дат, области применимости и явной

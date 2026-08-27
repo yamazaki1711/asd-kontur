@@ -23,6 +23,9 @@ from asd_kontur.knowledge.gateway import (
     NTD_CONTRACT_VERSION,
     NTD_SCHEMA_ID,
     NTD_TOOLS,
+    PD_RD_NTD_CONTRACT_VERSION,
+    PD_RD_NTD_SCHEMA_ID,
+    PD_RD_NTD_TOOLS,
     TOOLS,
     EvidencePack,
     GatewayStatus,
@@ -65,6 +68,9 @@ def test_all_allowlisted_tools_require_exact_capability_and_version(tool: str) -
     elif tool in GUIDANCE_TOOLS:
         contract_version = GUIDANCE_CONTRACT_VERSION
         schema_id = GUIDANCE_SCHEMA_ID
+    elif tool in PD_RD_NTD_TOOLS:
+        contract_version = PD_RD_NTD_CONTRACT_VERSION
+        schema_id = PD_RD_NTD_SCHEMA_ID
     elif tool in NTD_TOOLS:
         contract_version = NTD_CONTRACT_VERSION
         schema_id = NTD_SCHEMA_ID

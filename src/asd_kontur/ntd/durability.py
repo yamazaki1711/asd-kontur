@@ -75,6 +75,35 @@ def build_backup_manifest(
                 )
             ).all()
         )
+        rule_candidates = tuple(
+            (UUID(str(row[0])), int(row[1]), str(row[2]))
+            for row in session.execute(
+                sa.text(
+                    "SELECT normative_rule_candidate_id,version,semantic_fingerprint FROM "
+                    "platform.normative_rule_candidates ORDER BY normative_rule_candidate_id,version"
+                )
+            ).all()
+        )
+        rule_qualifications = tuple(
+            (UUID(str(row[0])), int(row[1]), str(row[2]))
+            for row in session.execute(
+                sa.text(
+                    "SELECT qualification_decision_id,version,decision_fingerprint FROM "
+                    "platform.normative_rule_qualification_decisions ORDER BY "
+                    "qualification_decision_id,version"
+                )
+            ).all()
+        )
+        rule_activations = tuple(
+            (UUID(str(row[0])), int(row[1]), str(row[2]))
+            for row in session.execute(
+                sa.text(
+                    "SELECT rule_activation_outcome_id,version,decision_fingerprint FROM "
+                    "platform.normative_rule_activation_outcomes ORDER BY "
+                    "rule_activation_outcome_id,version"
+                )
+            ).all()
+        )
         gaps = tuple(
             str(value)
             for value in session.execute(
@@ -96,6 +125,9 @@ def build_backup_manifest(
         "editions": editions,
         "provisions": provisions,
         "activations": activations,
+        "rule_candidates": rule_candidates,
+        "rule_qualifications": rule_qualifications,
+        "rule_activations": rule_activations,
         "gaps": gaps,
         "conflicts": conflicts,
     }
@@ -107,6 +139,9 @@ def build_backup_manifest(
         edition_fingerprints=editions,
         provision_fingerprints=provisions,
         activation_decision_refs=activations,
+        rule_candidate_fingerprints=rule_candidates,
+        rule_qualification_fingerprints=rule_qualifications,
+        rule_activation_fingerprints=rule_activations,
         gap_fingerprints=gaps,
         conflict_fingerprints=conflicts,
         projection_profile_version=NTD_PROJECTION_PROFILE_VERSION,
@@ -134,10 +169,14 @@ def persist_backup_manifest(engine: Engine, manifest: NtdBackupManifest) -> bool
                 "INSERT INTO platform.ntd_backup_manifests "
                 "(backup_manifest_id,version,seed_manifest_fingerprint,source_versions,"
                 "edition_fingerprints,provision_fingerprints,activation_decision_refs,"
+                "rule_candidate_fingerprints,rule_qualification_fingerprints,"
+                "rule_activation_fingerprints,"
                 "gap_fingerprints,conflict_fingerprints,projection_profile_version,"
                 "canonical_semantic_fingerprint,created_at) VALUES "
                 "(:id,:version,:seed,CAST(:sources AS jsonb),CAST(:editions AS jsonb),"
-                "CAST(:provisions AS jsonb),CAST(:activations AS jsonb),:gaps,:conflicts,"
+                "CAST(:provisions AS jsonb),CAST(:activations AS jsonb),"
+                "CAST(:rule_candidates AS jsonb),CAST(:rule_qualifications AS jsonb),"
+                "CAST(:rule_activations AS jsonb),:gaps,:conflicts,"
                 ":projection,:semantic,:created)"
             ),
             {
@@ -158,6 +197,24 @@ def persist_backup_manifest(engine: Engine, manifest: NtdBackupManifest) -> bool
                 ),
                 "activations": json.dumps(
                     [(str(key), version) for key, version in manifest.activation_decision_refs]
+                ),
+                "rule_candidates": json.dumps(
+                    [
+                        (str(key), version, value)
+                        for key, version, value in manifest.rule_candidate_fingerprints
+                    ]
+                ),
+                "rule_qualifications": json.dumps(
+                    [
+                        (str(key), version, value)
+                        for key, version, value in manifest.rule_qualification_fingerprints
+                    ]
+                ),
+                "rule_activations": json.dumps(
+                    [
+                        (str(key), version, value)
+                        for key, version, value in manifest.rule_activation_fingerprints
+                    ]
                 ),
                 "gaps": list(manifest.gap_fingerprints),
                 "conflicts": list(manifest.conflict_fingerprints),

@@ -1,10 +1,60 @@
 import { expect, test } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 
 const repository = resolve(import.meta.dirname, "../..");
 const statePath = process.env.ASD_E2E_STATE_PATH;
+
+test("live Support ID package exposes finalized AOSR, register, and provenance", async ({
+  page,
+}) => {
+  test.skip(
+    process.env.ASD_E2E_SEED_SUPPORT_PRODUCTION !== "1",
+    "support production seed is opt-in",
+  );
+  if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
+  const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+    support_workspace_id?: string;
+  };
+  if (!state.support_workspace_id)
+    throw new Error("support workspace identity missing");
+  await page.goto("/login");
+  await page.getByLabel("Пользователь").fill("synthetic-product-owner");
+  await page.getByLabel("Пароль").fill("Synthetic-Product-Owner-Password-42!");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Рабочие пространства" }),
+  ).toBeVisible();
+  await page.goto(`/workspaces/${state.support_workspace_id}/support-id`);
+  await expect(
+    page.getByRole("heading", {
+      name: "Support / Исполнительная документация",
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("support.aosr", { exact: true }).first(),
+  ).toBeVisible();
+  const register = page.locator("tbody tr").filter({ hasText: "register" });
+  await expect(register.locator("td").first()).toHaveText("1");
+  await expect(
+    page.getByText("finalized", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByText(/template .* · active/)).toBeVisible();
+  await expect(page.getByText("print: print_ready")).toBeVisible();
+  await expect(page.getByText("review: approved")).toBeVisible();
+  await expect(page.getByText("Finalized").first()).toBeVisible();
+  await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
+  await expect(
+    page.getByText("work_type.classification").first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "exact evidence" }).first(),
+  ).toBeVisible();
+  const download = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Скачать finalized" }).click();
+  expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
+});
 
 test("live PostgreSQL spine survives worker loss and isolated reset", async ({
   page,
@@ -32,13 +82,23 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     if (!workspaceA) throw new Error("workspace A identity missing");
     await workspaceACard.getByRole("link", { name: "Открыть" }).click();
     await page.getByRole("link", { name: "Documents" }).click();
-    await page.getByLabel("Добавить файлы").setInputFiles({
-      name: "live-two-pages.pdf",
-      mimeType: "application/pdf",
-      buffer: syntheticPdf(),
-    });
+    await page.getByLabel("Добавить файлы").setInputFiles([
+      {
+        name: "live-two-pages.pdf",
+        mimeType: "application/pdf",
+        buffer: syntheticPdf(),
+      },
+      {
+        name: "live-quantities.csv",
+        mimeType: "text/csv",
+        buffer: syntheticVor(),
+      },
+    ]);
     await expect(
       page.getByRole("link", { name: "live-two-pages.pdf" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "live-quantities.csv" }),
     ).toBeVisible();
 
     interrupted = worker("claim-and-pause", marker);
@@ -49,7 +109,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await page.getByRole("link", { name: "Jobs", exact: true }).click();
     await expect(page.getByText("running")).toBeVisible();
     await page.waitForTimeout(5_500);
-    const restarted = worker("drain");
+    const restarted = worker("drain", undefined, 27);
     expect(await exited(restarted)).toBe(0);
     await expect
       .poll(
@@ -57,7 +117,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
           page.locator("tbody tr").filter({ hasText: "succeeded" }).count(),
         { timeout: 15_000 },
       )
-      .toBe(5);
+      .toBe(26);
 
     await page.getByRole("link", { name: "Documents" }).click();
     await expect(
@@ -71,16 +131,54 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     ).toBeVisible();
     await expect(page.getByText("none", { exact: true })).toBeVisible();
 
+    await page
+      .getByRole("link", { name: "Project Understanding", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Project Understanding" }),
+    ).toBeVisible();
+    await expect(page.getByText("Устройство монолитной плиты")).toBeVisible();
+    await page.locator("article.entity-card a").first().click();
+    await expect(
+      page.getByRole("heading", { name: "Exact Evidence Locator" }),
+    ).toBeVisible();
+    await expect(page.getByText("workspace_fact_candidate")).toBeVisible();
+
     for (const mode of ["Tender", "Support", "Audit", "Restoration"]) {
       await page.getByRole("link", { name: mode, exact: true }).click();
       await expect(page.getByRole("heading", { name: mode })).toBeVisible();
-      await expect(page.getByText("FOUNDATION_ONLY")).toBeVisible();
+      await expect(page.getByText("PARTIAL", { exact: true })).toBeVisible();
     }
     await page.getByRole("link", { name: "Platform Knowledge" }).click();
     await expect(
       page.getByRole("heading", { name: "KnowledgeReady = false" }),
     ).toBeVisible();
     await expect(page.getByText("MEMORY_DATA_DEFECT").last()).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "NTD Seed Remediation — exact denominator",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".metric").filter({ hasText: "Denominator" }),
+    ).toContainText("25");
+    await expect(
+      page.getByText(
+        "sha256:071960850be497aa6cff032a64375f9cacacadc9fed1a36b136fddfb862ca4b6",
+      ),
+    ).toBeVisible();
+    if (process.env.ASD_E2E_EXPECT_NTD_NATIVE_CANARY === "1") {
+      const normativeRow = page.locator("tbody tr").filter({
+        hasText: "СП 543.1325800.2024",
+      });
+      await expect(normativeRow).toContainText("6 verified provisions");
+      await expect(normativeRow).toContainText("1 Practice↔NTD");
+      await expect(normativeRow).toContainText("7.1.13 · page 23");
+      await expect(normativeRow).toContainText("edition: not_activated");
+      await expect(
+        normativeRow.getByRole("link", { name: /Evidence 1: page 23 region/ }),
+      ).toHaveAttribute("href", /#page=23$/);
+    }
 
     await page.getByRole("link", { name: "Workspaces" }).click();
     await page.getByLabel("Название workspace").fill("Live workspace B");
@@ -109,7 +207,11 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
   }
 });
 
-function worker(mode: "claim-and-pause" | "drain", marker?: string) {
+function worker(
+  mode: "claim-and-pause" | "drain",
+  marker?: string,
+  expected?: number,
+) {
   const arguments_ = [
     "run",
     "python",
@@ -117,6 +219,7 @@ function worker(mode: "claim-and-pause" | "drain", marker?: string) {
     mode,
   ];
   if (marker) arguments_.push("--marker", marker);
+  if (expected !== undefined) arguments_.push("--expected", String(expected));
   return spawn("uv", arguments_, {
     cwd: repository,
     env: process.env,
@@ -155,4 +258,13 @@ function syntheticPdf() {
   body += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\n`;
   body += `startxref\n${String(xref)}\n%%EOF\n`;
   return Buffer.from(body, "ascii");
+}
+
+function syntheticVor() {
+  return Buffer.from(
+    "Ведомость объёмов работ;;;;;\n" +
+      "Вид работ;Объём;Ед. изм.;Материал;Количество материала;Ед. изм. материала\n" +
+      "Устройство монолитной плиты;+12,350;м³;Бетон В25;12,350;м³\n",
+    "utf8",
+  );
 }

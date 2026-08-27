@@ -19,6 +19,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", choices=("claim-and-pause", "drain"))
     parser.add_argument("--marker", type=Path)
+    parser.add_argument("--expected", type=int, default=5)
     arguments = parser.parse_args()
     state_path = Path(os.environ["ASD_E2E_STATE_PATH"])
     state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -55,8 +56,8 @@ def main() -> None:
         processed = 0
         while worker.run_once() is not None:
             processed += 1
-        if processed != 5:
-            raise RuntimeError(f"expected five recovered jobs, got {processed}")
+        if processed != arguments.expected:
+            raise RuntimeError(f"expected {arguments.expected} recovered jobs, got {processed}")
     finally:
         engine.dispose()
 
