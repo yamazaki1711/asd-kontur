@@ -25,6 +25,9 @@ database or object-plane replica is created on the VPS.
 - `ru.asd-kontur.spine.api`: FastAPI + built React frontend;
 - `ru.asd-kontur.spine.worker`: durable document/generation worker;
 - deployment ingress identity: recorded only after the VPS route is active;
+- `ru.asd-kontur.spine.ingress`: MBP reverse SSH process;
+- `asd-kontur-app-ingress.socket/service`: VPS loopback-to-container bridge;
+- `levashovo-intake-control.service`: isolated archived legacy process;
 - migration head: `0027_public_deployment`.
 
 Launchd configuration is generated outside Git with
@@ -43,6 +46,12 @@ deployment artifacts, not repository source.
 6. Keep exact previous nginx configuration and service identity as rollback
    target.
 7. Do not change `tm.asd-kontur.ru`.
+
+The active bridge is deliberately two-step: SSH terminates on VPS loopback
+`127.0.0.1:18765`; `systemd-socket-proxyd` exposes only
+`172.18.0.1:18766` to the nginx Docker network. UFW allows that bridge source
+only. This avoids exposing the application upstream on the VPS public
+interface.
 
 ## Failure behaviour
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=Archived Levashovo intake-control UI
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=claude-agent
+Group=kat-project
+WorkingDirectory=/opt/kat/legacy-intake-control
+EnvironmentFile=/opt/kat/legacy-intake-control/.env
+Environment=ISUID_PUBLIC_PREFIX=/levashovo/intake-control
+ExecStart=/usr/bin/python3 -m uvicorn isuid_app.main:app --host 0.0.0.0 --port 8088
+Restart=always
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

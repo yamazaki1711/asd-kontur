@@ -120,4 +120,9 @@ test("authenticated Product Spine exposes finalized synthetic package evidence",
   await page.goto("/operations");
   await expect(page.getByRole("heading", { name: "Deployment" })).toBeVisible();
   await expect(page.getByText("public-development-contour")).toBeVisible();
+
+  await page.getByRole("button", { name: "Выйти" }).click();
+  await expect(page.getByRole("heading", { name: "АСД-КОНТУР" })).toBeVisible();
+  const afterLogout = await page.request.get("/api/v1/workspaces");
+  expect(afterLogout.status()).toBe(401);
 });
