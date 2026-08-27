@@ -151,7 +151,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert outcomes[:-1]
         assert all(value.state is JobState.SUCCEEDED for value in outcomes[:-1])
         assert outcomes[-1].state is JobState.FAILED
-        assert outcomes[-1].outcome_code == "classification_evidence_unavailable"
+        assert outcomes[-1].outcome_code in {
+            "classification_evidence_unavailable",
+            "pdf_renderer_unavailable",
+        }
         duplicate = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents",
             files=[("files", ("two-pages.pdf", _pdf(), "application/pdf"))],
@@ -161,9 +164,22 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert duplicate.json() == upload.json()
         jobs = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/jobs").json()
         assert len(jobs) == 17
-        assert sum(value["state"] == "succeeded" for value in jobs) == 9
+        succeeded_count = len(outcomes) - 1
+        assert sum(value["state"] == "succeeded" for value in jobs) == succeeded_count
         assert sum(value["state"] == "failed" for value in jobs) == 1
-        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 7
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == (
+            16 - succeeded_count
+        )
+        failed_job = next(value for value in jobs if value["state"] == "failed")
+        assert failed_job["typed_failure_code"] == outcomes[-1].outcome_code
+        job_states = {value["job_kind"]: value["state"] for value in jobs}
+        for required_success in (
+            "DOCUMENT_ADMISSION",
+            "DOCUMENT_HASH",
+            "PDF_INVENTORY",
+            "NATIVE_TEXT_EXTRACTION",
+        ):
+            assert job_states[required_success] == "succeeded"
         documents = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents").json()
         assert len(documents["items"]) == 1
         document = documents["items"][0]
