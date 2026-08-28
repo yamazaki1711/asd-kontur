@@ -154,6 +154,7 @@ class ProductSpineService:
             raise ValueError("batch_item_ordinal_invalid")
         organization_id = self._repository.resolve_scope(owner_identity_id, workspace_id)
         staged: list[tuple[int, StagedObject]] = []
+        archive_members: list[tuple[int, int, int]] = []
         rejected: list[RejectedUpload] = []
         observed_bytes = 0
         manifest_items: list[dict[str, object]] = []
@@ -202,6 +203,34 @@ class ProductSpineService:
                         "digest": item.digest,
                     }
                 )
+                if item.media_type == "application/zip":
+                    expanded = self._object_store.expand_archive(
+                        item,
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                        max_members=self._settings.max_batch_files - len(parts),
+                        max_total_bytes=self._settings.max_batch_bytes - observed_bytes,
+                    )
+                    for member_ordinal, member in enumerate(expanded, start=1):
+                        expanded_ordinal = len(parts) + len(archive_members) + 1
+                        archive_members.append((part.ordinal, member_ordinal, expanded_ordinal))
+                        staged.append((expanded_ordinal, member))
+                        observed_bytes += member.size_bytes
+                        manifest_items.append(
+                            {
+                                "ordinal": expanded_ordinal,
+                                "archive_parent_ordinal": part.ordinal,
+                                "archive_member_ordinal": member_ordinal,
+                                "relative_path": member.relative_path,
+                                "media_type": member.media_type,
+                                "size_bytes": member.size_bytes,
+                                "digest": member.digest,
+                            }
+                        )
+                if len(staged) > self._settings.max_batch_files:
+                    raise ValueError("batch_file_count_limit_exceeded")
+                if observed_bytes > self._settings.max_batch_bytes:
+                    raise ValueError("batch_size_limit_exceeded")
             manifest_digest = semantic_digest(
                 {
                     "workspace_id": workspace_id,
@@ -216,6 +245,7 @@ class ProductSpineService:
                 object_store=self._object_store,
                 correlation_id=correlation_id,
                 client_manifest_digest=manifest_digest,
+                archive_members=tuple(archive_members),
             )
         except BaseException:
             for _, item in staged:
@@ -354,6 +384,27 @@ class ProductSpineService:
             reason_code="owner_requested",
         )
 
+    def pause_job(self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID) -> JobSummary:
+        return self._repository.pause_job(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+
+    def resume_job(self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID) -> JobSummary:
+        return self._repository.resume_job(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+
+    def retry_job(self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID) -> JobSummary:
+        return self._repository.manually_retry_job(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+
     def mode_view(
         self,
         *,
@@ -436,6 +487,42 @@ class ProductSpineService:
         return self._repository.project_understanding_view(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+        )
+
+    def start_project_understanding(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        correlation_id: UUID,
+    ) -> JobSummary:
+        return self._repository.start_project_understanding(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=correlation_id,
+        )
+
+    def review_project_candidate(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_kind: str,
+        candidate_id: UUID,
+        candidate_version: int,
+        action: str,
+        resolved_value: Any | None,
+        reason: str,
+    ) -> dict[str, Any]:
+        return self._repository.review_project_candidate(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_kind=candidate_kind,
+            candidate_id=candidate_id,
+            candidate_version=candidate_version,
+            action=action,
+            resolved_value=resolved_value,
+            reason=reason,
         )
 
     def support_production_view(
@@ -601,9 +688,9 @@ class ProductSpineService:
         knowledge = self.knowledge_status()
         blockers = {
             "MODEL_BROKER_NOT_IN_SPINE_SLICE",
-            "SCALE_THRESHOLDS_UNSET",
-            "SUPPORT_AOSR_TEMPLATE_AUTHORITY_UNRESOLVED",
-            "SUPPORT_PRODUCTION_PRINT_PROFILE_NOT_QUALIFIED",
+            "INDUSTRIAL_INTAKE_SCALE_THRESHOLDS_UNSET",
+            "INDUSTRIAL_INTAKE_VLM_PROFILE_NOT_QUALIFIED",
+            "PROJECT_UNDERSTANDING_SYNTHETIC_CORPUS_ONLY",
             "SUPPORT_EXECUTIVE_SCHEME_GEOMETRY_UNAVAILABLE",
         }
         if knowledge.verified_normative_edition_count == 0:
@@ -614,8 +701,8 @@ class ProductSpineService:
             blockers.add("MEMORY_DATA_DEFECT")
         blockers.add("FIELD_ANDROID_CLIENT_NOT_IMPLEMENTED")
         return {
-            "contract_version": "2.3.0",
-            "slice": "PRODUCT-APPLICATION-PUBLIC-DEPLOYMENT-01",
+            "contract_version": "2.5.0",
+            "slice": "INDUSTRIAL-INTAKE-PROJECT-UNDERSTANDING-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -629,11 +716,33 @@ class ProductSpineService:
                 "application.session-handling",
                 "application.durable-job-orchestration",
                 "intake.batch-upload",
+                "intake.recursive-folder-admission",
                 "intake.streamed-hashing",
                 "intake.mime-content-validation",
                 "intake.deduplication",
+                "intake.archive-handling",
                 "intake.pdf-page-inventory",
+                "intake.native-extraction",
+                "intake.ocr",
+                "intake.sharding",
+                "intake.backpressure",
                 "intake.crash-recovery",
+                "intake.quarantine",
+                "intake.scale-1k",
+                "intake.scale-5k",
+                "intake.scale-10k",
+                "project-understanding.pz-identification",
+                "project-understanding.pd-rd-classification",
+                "project-understanding.project-definition",
+                "project-understanding.oks-structure",
+                "project-understanding.spatial-structure",
+                "project-understanding.work-types",
+                "project-understanding.work-dependencies",
+                "project-understanding.quantities",
+                "project-understanding.materials",
+                "project-understanding.vor-estimate-reconciliation",
+                "project-understanding.work-packages",
+                "project-understanding.requirement-matrix",
                 "operations.document-worker",
                 "support.id-matrix",
                 "output.template-registry",

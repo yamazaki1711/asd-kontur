@@ -89,6 +89,8 @@ def inspect_and_extract(
         return _xlsx_document(content, document_id, document_version, source_version_id)
     if media_type == "text/csv":
         return _csv_document(content, document_id, document_version, source_version_id)
+    if media_type == "application/zip":
+        return _archive_inventory(content, document_id, document_version, source_version_id)
     if media_type.startswith("image/"):
         page = _non_native_page(
             document_id=document_id,
@@ -98,6 +100,32 @@ def inspect_and_extract(
         )
         return _document(media_type, "raster_image", "signature-inventory", "0.1.0", (page,), ())
     raise NativeExtractionFailure("document_format_not_supported")
+
+
+def _archive_inventory(
+    content: bytes, document_id: UUID, version: int, source_version_id: UUID
+) -> NativeDocument:
+    """Inventory an admitted ZIP container; member files are processed independently."""
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as archive:
+            member_count = sum(not item.is_dir() for item in archive.infolist())
+    except zipfile.BadZipFile as exc:
+        raise NativeExtractionFailure("archive_structure_invalid") from exc
+    page = _non_native_page(
+        document_id=document_id,
+        document_version=version,
+        source_version_id=source_version_id,
+        media_type="application/zip",
+    )
+    return _document(
+        "application/zip",
+        "archive_container",
+        "zip-inventory",
+        "1.0.0",
+        (page,),
+        (f"ARCHIVE_EXPANDED_MEMBERS:{member_count}",),
+    )
 
 
 def _pdf_document(

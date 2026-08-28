@@ -38,6 +38,7 @@ class JobKind(StrEnum):
 
 class JobState(StrEnum):
     QUEUED = "queued"
+    PAUSED = "paused"
     LEASED = "leased"
     RUNNING = "running"
     SUCCEEDED = "succeeded"

@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ReactNode, SyntheticEvent, useEffect, useState } from "react";
+import {
+  DragEvent,
+  ReactNode,
+  SyntheticEvent,
+  useEffect,
+  useState,
+} from "react";
 import {
   Link,
   Navigate,
@@ -73,6 +79,37 @@ const MODE_DEFINITIONS: Record<
       "Перечень недостающего, восстановленные проекты документов и комплект ИД без фабрикации отсутствующих фактов.",
     nextAction: "Оценить доступные исходные данные",
   },
+};
+
+const EXPECTED_SOURCE_DOCUMENTS: Record<ModeName, string[]> = {
+  Tender: [
+    "Договор и приложения",
+    "ПД и РД",
+    "Ведомости объёмов работ и сметы",
+    "Техническое задание",
+    "Требования и регламенты заказчика",
+  ],
+  Support: [
+    "ПД и РД",
+    "Договорные и организационно-технологические документы",
+    "Сведения о работах и материалах",
+    "Имеющаяся исполнительная документация",
+    "Журналы, акты, схемы и документы о качестве",
+  ],
+  Audit: [
+    "Проверяемый комплект документации",
+    "Исходные ПД и РД",
+    "Договор и требования заказчика",
+    "Фактические документы и реестры",
+    "Сведения об объёме и границах аудита",
+  ],
+  Restoration: [
+    "Сохранившаяся исполнительная документация",
+    "Журналы и акты",
+    "Исполнительные схемы",
+    "Документы о качестве",
+    "Подтверждённые сведения о выполненных работах",
+  ],
 };
 
 function modeFromSlug(value?: string): ModeName | null {
@@ -339,7 +376,7 @@ function ApplicationShell() {
           <NavItem to={`${workspaceBase}/jobs`} label="Обработка" />
           <NavItem
             to={`${workspaceBase}/project-understanding`}
-            label="Исходные данные"
+            label="Модель объекта"
           />
           <NavItem
             to={`${workspaceBase}/work-matrix`}
@@ -736,6 +773,9 @@ function DocumentsPage() {
   const [sort, setSort] = useState("recorded_desc");
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const normalizedMode = modeFromSlug(mode) ?? "Tender";
   const documents = useQuery({
     queryKey: ["documents", workspaceId, filter, sort, cursor],
     queryFn: async () => {
@@ -757,10 +797,10 @@ function DocumentsPage() {
     },
   });
   const upload = useMutation({
-    mutationFn: async (files: FileList) => {
+    mutationFn: async (files: File[]) => {
       const form = new FormData();
       const relative: string[] = [];
-      for (const file of Array.from(files)) {
+      for (const file of files) {
         form.append("files", file, file.name);
         relative.push(file.webkitRelativePath || file.name);
       }
@@ -776,41 +816,147 @@ function DocumentsPage() {
       return requireData(data, error);
     },
     onSuccess: async () => {
+      setSelectedFiles([]);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] }),
         queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] }),
       ]);
     },
   });
+  const addFiles = (files: FileList | File[]) => {
+    setSelectedFiles((current) => {
+      const values = [...current];
+      const keys = new Set(
+        current.map(
+          (file) =>
+            `${file.webkitRelativePath || file.name}:${String(file.size)}:${String(file.lastModified)}`,
+        ),
+      );
+      for (const file of Array.from(files)) {
+        const key = `${file.webkitRelativePath || file.name}:${String(file.size)}:${String(file.lastModified)}`;
+        if (!keys.has(key)) {
+          keys.add(key);
+          values.push(file);
+        }
+      }
+      return values;
+    });
+  };
+  const dropFiles = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    addFiles(event.dataTransfer.files);
+  };
+  const selectedBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
   return (
     <Page
-      title="Документы объекта"
-      lead="Загруженные исходные документы, их версии и состояние обработки."
+      title="Исходные документы"
+      lead="Добавьте документы без предварительной ручной сортировки. Неполный комплект можно дополнять позднее."
     >
+      <section className="split intake-start">
+        <article className="panel">
+          <h2>Что обычно требуется</h2>
+          <p>Для режима «{MODE_DEFINITIONS[normalizedMode].title}»:</p>
+          <ul>
+            {EXPECTED_SOURCE_DOCUMENTS[normalizedMode].map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+          <p className="muted-copy">
+            Перечень служит подсказкой и не препятствует приёму неполного
+            комплекта.
+          </p>
+        </article>
+        <article className="panel">
+          <h2>Добавить исходные документы</h2>
+          <div
+            className={`drop-zone${dragActive ? " drag-active" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={dropFiles}
+          >
+            <strong>Перетащите файлы сюда</strong>
+            <span>или выберите файлы, папку либо архив ZIP</span>
+            <div className="upload-actions">
+              <label className="upload-button">
+                Выбрать файлы
+                <input
+                  hidden
+                  type="file"
+                  multiple
+                  accept=".pdf,.docx,.xlsx,.csv,.png,.jpg,.jpeg,.tif,.tiff,.zip"
+                  onChange={(event) =>
+                    event.target.files && addFiles(event.target.files)
+                  }
+                />
+              </label>
+              <label className="upload-button secondary">
+                Выбрать папку
+                <input
+                  hidden
+                  type="file"
+                  multiple
+                  {...({ webkitdirectory: "", directory: "" } as object)}
+                  onChange={(event) =>
+                    event.target.files && addFiles(event.target.files)
+                  }
+                />
+              </label>
+            </div>
+          </div>
+        </article>
+      </section>
+      {selectedFiles.length > 0 && (
+        <section className="panel selected-upload" aria-live="polite">
+          <div className="entity-heading">
+            <div>
+              <h2>Подготовлено к загрузке</h2>
+              <p>
+                {selectedFiles.length} файлов · {formatBytes(selectedBytes)}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => upload.mutate(selectedFiles)}
+              disabled={upload.isPending}
+            >
+              Начать загрузку
+            </button>
+          </div>
+          <ul className="selected-file-list">
+            {selectedFiles.map((file, index) => (
+              <li
+                key={`${file.webkitRelativePath || file.name}:${String(file.size)}:${String(file.lastModified)}`}
+              >
+                <span>
+                  <strong>{file.name}</strong>
+                  <small>
+                    {file.webkitRelativePath || file.name} ·{" "}
+                    {formatBytes(file.size)}
+                  </small>
+                </span>
+                <button
+                  type="button"
+                  className="ghost"
+                  aria-label={`Исключить ${file.name}`}
+                  onClick={() =>
+                    setSelectedFiles((items) =>
+                      items.filter((_, itemIndex) => itemIndex !== index),
+                    )
+                  }
+                >
+                  Исключить
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="panel toolbar">
-        <label className="upload-button">
-          Добавить файлы
-          <input
-            hidden
-            type="file"
-            multiple
-            onChange={(event) =>
-              event.target.files && upload.mutate(event.target.files)
-            }
-          />
-        </label>
-        <label className="upload-button secondary">
-          Добавить папку
-          <input
-            hidden
-            type="file"
-            multiple
-            {...({ webkitdirectory: "", directory: "" } as object)}
-            onChange={(event) =>
-              event.target.files && upload.mutate(event.target.files)
-            }
-          />
-        </label>
         <label>
           Статус
           <select
@@ -846,10 +992,18 @@ function DocumentsPage() {
       </section>
       {upload.isPending && (
         <InfoNotice>
-          Файлы передаются потоково и регистрируются одной manifest-транзакцией…
+          Файлы загружаются и регистрируются. Уже принятые данные не будут
+          потеряны при повторе…
         </InfoNotice>
       )}
       {upload.isError && <ErrorNotice error={upload.error} />}
+      {upload.isSuccess && (
+        <InfoNotice>
+          Принято новых файлов: {upload.data.accepted_document_ids.length}.
+          Повторных файлов: {upload.data.duplicate_document_ids.length}. Не
+          поддержано или отклонено: {upload.data.rejected_count}.
+        </InfoNotice>
+      )}
       <QueryState query={documents} empty="Документы ещё не загружены.">
         {(page) => (
           <>
@@ -943,16 +1097,18 @@ function DocumentTable({
                 <small>{formatBytes(document.size_bytes)}</small>
               </td>
               <td>
-                <StatusPill>{document.admission_status}</StatusPill>
+                <StatusPill>
+                  {humanizeStatus(document.admission_status)}
+                </StatusPill>
               </td>
               <td>
                 <StatusPill
                   tone={document.capability_gaps.length ? "warning" : "default"}
                 >
-                  {document.extraction_status}
+                  {humanizeStatus(document.extraction_status)}
                 </StatusPill>
                 {document.capability_gaps.map((gap) => (
-                  <small key={gap}>{gap}</small>
+                  <small key={gap}>{humanizeGap(gap)}</small>
                 ))}
               </td>
               <td>{document.page_count ?? "—"}</td>
@@ -1084,6 +1240,8 @@ function JobsPage() {
 
 function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
   const queryClient = useQueryClient();
+  const refreshJobs = () =>
+    queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] });
   const cancel = useMutation({
     mutationFn: async (jobId: string) => {
       const { error } = await api.POST(
@@ -1095,8 +1253,37 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
       );
       if (error) throw new Error("job_cancellation_failed");
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] }),
+    onSuccess: refreshJobs,
+  });
+  const pause = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/pause",
+        { params: { path: { workspace_id: workspaceId, job_id: jobId } } },
+      );
+      if (error) throw new Error("job_pause_failed");
+    },
+    onSuccess: refreshJobs,
+  });
+  const resume = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/resume",
+        { params: { path: { workspace_id: workspaceId, job_id: jobId } } },
+      );
+      if (error) throw new Error("job_resume_failed");
+    },
+    onSuccess: refreshJobs,
+  });
+  const retry = useMutation({
+    mutationFn: async (jobId: string) => {
+      const { error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/retry",
+        { params: { path: { workspace_id: workspaceId, job_id: jobId } } },
+      );
+      if (error) throw new Error("job_retry_failed");
+    },
+    onSuccess: refreshJobs,
   });
   return (
     <div className="table-wrap">
@@ -1114,10 +1301,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
         <tbody>
           {jobs.map((job) => (
             <tr key={job.job_id}>
-              <td>
-                {job.job_kind}
-                <small className="mono">{job.job_id}</small>
-              </td>
+              <td>{humanizeJobKind(job.job_kind)}</td>
               <td>
                 <StatusPill
                   tone={
@@ -1138,14 +1322,44 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 {job.terminal_receipt_id ?? "—"}
               </td>
               <td>
-                {["queued", "leased", "running"].includes(job.state) && (
-                  <button
-                    className="ghost"
-                    onClick={() => cancel.mutate(job.job_id)}
-                  >
-                    Отменить
-                  </button>
-                )}
+                <div className="inline-actions">
+                  {job.state === "queued" && (
+                    <button
+                      className="ghost"
+                      onClick={() => pause.mutate(job.job_id)}
+                    >
+                      Приостановить
+                    </button>
+                  )}
+                  {job.state === "paused" && (
+                    <button
+                      className="ghost"
+                      onClick={() => resume.mutate(job.job_id)}
+                    >
+                      Продолжить
+                    </button>
+                  )}
+                  {["queued", "paused", "leased", "running"].includes(
+                    job.state,
+                  ) && (
+                    <button
+                      className="ghost"
+                      onClick={() => cancel.mutate(job.job_id)}
+                    >
+                      Отменить
+                    </button>
+                  )}
+                  {["failed", "cancelled", "reconciliation_required"].includes(
+                    job.state,
+                  ) && (
+                    <button
+                      className="ghost"
+                      onClick={() => retry.mutate(job.job_id)}
+                    >
+                      Повторить
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -1759,16 +1973,16 @@ function ModePage() {
               {normalized === "Support" ? (
                 <Link
                   className="button-link"
-                  to={workspaceRoute(normalized, workspaceId, "/support-id")}
+                  to={workspaceRoute(normalized, workspaceId, "/documents")}
                 >
-                  {definition.nextAction}
+                  Добавить исходные документы
                 </Link>
               ) : (
                 <Link
                   className="button-link"
                   to={workspaceRoute(normalized, workspaceId, "/documents")}
                 >
-                  {definition.nextAction}
+                  Добавить исходные документы
                 </Link>
               )}
             </section>
@@ -1803,6 +2017,8 @@ function ModePage() {
 
 function ProjectUnderstandingPage() {
   const { workspaceId = "", mode } = useParams();
+  const queryClient = useQueryClient();
+  const [section, setSection] = useState("general");
   const understanding = useQuery({
     queryKey: ["project-understanding", workspaceId],
     queryFn: async () => {
@@ -1813,12 +2029,94 @@ function ProjectUnderstandingPage() {
       return requireData(data, error);
     },
     retry: false,
+    refetchInterval: 5_000,
   });
+  const start = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/project-understanding/runs",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["project-understanding", workspaceId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] }),
+      ]);
+    },
+  });
+  const review = useMutation({
+    mutationFn: async (payload: {
+      candidate_kind: "project_field" | "work_type" | "quantity" | "material";
+      candidate_id: string;
+      candidate_version: number;
+      action: "confirmed" | "rejected" | "corrected";
+      resolved_value: string | number | boolean | null;
+      reason: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/project-understanding/reviews",
+        { params: { path: { workspace_id: workspaceId } }, body: payload },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["project-understanding", workspaceId],
+      });
+    },
+  });
+  const sections = [
+    ["general", "Общие сведения"],
+    ["structure", "Структура объекта"],
+    ["works", "Виды и объёмы работ"],
+    ["materials", "Материалы и изделия"],
+    ["packages", "Пакеты работ"],
+    ["matrix", "Матрица требований"],
+    ["gaps", "Расхождения и пробелы"],
+  ] as const;
   return (
     <Page
-      title="Исходные данные объекта"
-      lead="Состав объекта, проектные сведения, работы и применимые нормативные требования."
+      title="Модель объекта"
+      lead="Структура ОКС, работы, объёмы, материалы и требования, сформированные из загруженных документов."
     >
+      <div className="model-actions">
+        <button
+          type="button"
+          onClick={() => start.mutate()}
+          disabled={start.isPending}
+        >
+          Сформировать модель объекта
+        </button>
+        <Link
+          className="button-link secondary"
+          to={workspaceRouteFromSlug(mode, workspaceId, "/documents")}
+        >
+          Добавить исходные документы
+        </Link>
+      </div>
+      {start.isPending && (
+        <InfoNotice>
+          Формирование модели поставлено в очередь обработки…
+        </InfoNotice>
+      )}
+      {start.isError && <ErrorNotice error={start.error} />}
+      {review.isError && <ErrorNotice error={review.error} />}
+      <nav className="model-tabs" aria-label="Разделы модели объекта">
+        {sections.map(([key, label]) => (
+          <button
+            type="button"
+            className={section === key ? "active" : "ghost"}
+            key={key}
+            onClick={() => setSection(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
       <QueryState
         query={understanding}
         empty="Обработка документов ещё не сформировала описание объекта."
@@ -1836,11 +2134,30 @@ function ProjectUnderstandingPage() {
             string,
             Record<string, unknown>
           >;
+          const candidates = (value.candidates ?? {}) as Record<
+            string,
+            Record<string, unknown>[]
+          >;
+          const decisions = (value.review_decisions ?? []) as Record<
+            string,
+            unknown
+          >[];
+          const matrixValue = (value.matrix.matrix ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const matrixRows = Array.isArray(matrixValue.rows)
+            ? (matrixValue.rows as Record<string, unknown>[])
+            : [];
+          const reconciliation = value.reconciliation as Record<
+            string,
+            unknown
+          >;
           return (
             <>
               <div className="metrics">
                 <Metric
-                  label="Сведений об объекте"
+                  label="Сведений"
                   value={Object.keys(definition.fields ?? {}).length}
                 />
                 <Metric
@@ -1853,51 +2170,137 @@ function ProjectUnderstandingPage() {
                 />
                 <Metric label="Замечаний" value={value.defects.length} />
               </div>
-              <div className="split">
+              {Object.keys(reconciliation).length === 0 && (
+                <InfoNotice>
+                  Документы можно загружать и обрабатывать независимо. Когда
+                  исходные данные готовы, запустите формирование общей модели
+                  объекта.
+                </InfoNotice>
+              )}
+              {section === "general" && (
+                <div className="split">
+                  <section className="panel">
+                    <div className="entity-heading">
+                      <h2>Описание объекта</h2>
+                      <StatusPill tone="warning">
+                        Сформировано частично
+                      </StatusPill>
+                    </div>
+                    <EvidenceObject
+                      value={definition.fields ?? {}}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      evidenceIndex={evidenceIndex}
+                    />
+                    <h3>Недостающие сведения</h3>
+                    <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
+                  </section>
+                  <section className="panel">
+                    <h2>Сведения, требующие решения</h2>
+                    <CandidateReviewTable
+                      kind="project_field"
+                      candidates={candidates.project_fields ?? []}
+                      decisions={decisions}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      onReview={(payload) => review.mutate(payload)}
+                      pending={review.isPending}
+                    />
+                  </section>
+                </div>
+              )}
+              {section === "structure" && (
                 <section className="panel">
-                  <div className="entity-heading">
-                    <h2>Описание объекта</h2>
-                    <StatusPill tone="warning">
-                      Сформировано частично
-                    </StatusPill>
-                  </div>
+                  <h2>Структура объекта</h2>
+                  <p>
+                    Части объекта, зоны, уровни и фронты работ отображаются
+                    только при наличии точного исходного фрагмента.
+                    Неразрешённые пространственные сведения остаются пробелом.
+                  </p>
                   <EvidenceObject
                     value={definition.fields ?? {}}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                     evidenceIndex={evidenceIndex}
                   />
-                  <h3>Недостающие сведения</h3>
-                  <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
+                  <h3>Классифицированные страницы</h3>
+                  <EvidenceObject value={{ pages: value.page_roles }} />
                 </section>
+              )}
+              {section === "works" && (
                 <section className="panel">
-                  <h2>Применимые нормативные требования</h2>
+                  <h2>Виды и объёмы работ</h2>
+                  <CandidateReviewTable
+                    kind="work_type"
+                    candidates={candidates.work_types ?? []}
+                    decisions={decisions}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                    onReview={(payload) => review.mutate(payload)}
+                    pending={review.isPending}
+                  />
+                  <CandidateReviewTable
+                    kind="quantity"
+                    candidates={candidates.quantities ?? []}
+                    decisions={decisions}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                    onReview={(payload) => review.mutate(payload)}
+                    pending={review.isPending}
+                  />
+                </section>
+              )}
+              {section === "materials" && (
+                <section className="panel">
+                  <h2>Материалы и изделия</h2>
+                  <CandidateReviewTable
+                    kind="material"
+                    candidates={candidates.materials ?? []}
+                    decisions={decisions}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                    onReview={(payload) => review.mutate(payload)}
+                    pending={review.isPending}
+                  />
+                </section>
+              )}
+              {section === "packages" && (
+                <section className="panel">
+                  <h2>Пакеты работ</h2>
+                  {value.work_packages.length ? (
+                    <div className="card-grid">
+                      {value.work_packages.map((item) => (
+                        <WorkPackageCard
+                          key={String(item.work_package_id)}
+                          item={item}
+                          workspaceId={workspaceId}
+                          modeSlug={mode}
+                          evidenceIndex={evidenceIndex}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-state">
+                      Пакеты работ ещё не определены.
+                    </p>
+                  )}
+                </section>
+              )}
+              {section === "matrix" && (
+                <section className="panel">
+                  <h2>Матрица требований</h2>
+                  {matrixRows.length ? (
+                    <EvidenceObject value={{ rows: matrixRows }} />
+                  ) : (
+                    <p className="empty-state">Матрица ещё не сформирована.</p>
+                  )}
                   {profile ? (
                     <>
-                      <dl>
-                        <dt>Версия профиля</dt>
-                        <dd className="mono">{String(profile.profile_id)}</dd>
-                        <dt>Дата применимости</dt>
-                        <dd>
-                          {displayValue(
-                            profile.applicable_on,
-                            "не подтверждена",
-                          )}
-                        </dd>
-                        <dt>Комплектность</dt>
-                        <dd>
-                          {humanizeStatus(String(profile.completeness_status))}
-                        </dd>
-                      </dl>
-                      <h3>Состав нормативных источников</h3>
-                      <EvidenceObject
-                        value={
-                          (profile.corpus_denominator ?? {}) as Record<
-                            string,
-                            unknown
-                          >
-                        }
-                      />
+                      <h3>Нормативные основания</h3>
+                      <p>
+                        Учитываются только положения подтверждённых редакций.
+                        Неуточнённые основания показаны отдельно.
+                      </p>
                       <NormativeRequirementList
                         title="Требуемые разделы ПД"
                         values={profile.required_pd_sections}
@@ -1906,19 +2309,6 @@ function ProjectUnderstandingPage() {
                         title="Ожидаемые комплекты РД"
                         values={profile.expected_rd_sets}
                       />
-                      <NormativeRequirementList
-                        title="Оформление и сборка"
-                        values={profile.formatting_requirements}
-                      />
-                      <h3>Неуточнённые условия применимости</h3>
-                      <GapList
-                        gaps={
-                          Array.isArray(profile.unresolved_inputs)
-                            ? profile.unresolved_inputs.map(String)
-                            : []
-                        }
-                      />
-                      <h3>Пробелы нормативных оснований</h3>
                       <GapList
                         gaps={profileGaps.map(
                           (item) => item.code ?? "NORMATIVE_GAP",
@@ -1927,38 +2317,219 @@ function ProjectUnderstandingPage() {
                     </>
                   ) : (
                     <p className="empty-state">
-                      Применимый нормативный профиль ещё не сформирован.
+                      Подтверждённые нормативные основания для этой модели ещё
+                      не определены.
                     </p>
                   )}
                 </section>
-              </div>
-              <section className="panel">
-                <h2>Пакеты работ</h2>
-                {value.work_packages.length ? (
-                  <div className="card-grid">
-                    {value.work_packages.map((item) => (
-                      <WorkPackageCard
-                        key={String(item.work_package_id)}
-                        item={item}
-                        workspaceId={workspaceId}
-                        modeSlug={mode}
-                        evidenceIndex={evidenceIndex}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty-state">Пакеты работ ещё не определены.</p>
-                )}
-              </section>
-              <section className="panel">
-                <h2>Authority separation</h2>
-                <EvidenceObject value={value.authority_layers} />
-              </section>
+              )}
+              {section === "gaps" && (
+                <section className="panel">
+                  <h2>Расхождения и пробелы</h2>
+                  {value.defects.length ? (
+                    <EvidenceObject value={{ differences: value.defects }} />
+                  ) : (
+                    <p>Расхождения ВОР и сметы пока не обнаружены.</p>
+                  )}
+                  <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
+                  <GapList
+                    gaps={profileGaps.map(
+                      (item) => item.code ?? "NORMATIVE_GAP",
+                    )}
+                  />
+                </section>
+              )}
             </>
           );
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function CandidateReviewTable({
+  kind,
+  candidates,
+  decisions,
+  workspaceId,
+  modeSlug,
+  onReview,
+  pending,
+}: {
+  kind: "project_field" | "work_type" | "quantity" | "material";
+  candidates: Record<string, unknown>[];
+  decisions: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+  onReview: (payload: {
+    candidate_kind: "project_field" | "work_type" | "quantity" | "material";
+    candidate_id: string;
+    candidate_version: number;
+    action: "confirmed" | "rejected" | "corrected";
+    resolved_value: string | number | boolean | null;
+    reason: string;
+  }) => void;
+  pending: boolean;
+}) {
+  const titles = {
+    project_field: "Общие сведения",
+    work_type: "Виды работ",
+    quantity: "Объёмы",
+    material: "Материалы",
+  };
+  if (!candidates.length)
+    return <p className="empty-state">{titles[kind]} ещё не извлечены.</p>;
+  return (
+    <div className="candidate-list">
+      <h3>{titles[kind]}</h3>
+      {candidates.slice(0, 100).map((candidate) => {
+        const identity = String(candidate.candidate_id);
+        const decision = decisions.find(
+          (item) => String(item.candidate_id) === identity,
+        );
+        return (
+          <CandidateReviewRow
+            key={`${identity}:${String(candidate.version)}`}
+            kind={kind}
+            candidate={candidate}
+            decision={decision}
+            workspaceId={workspaceId}
+            modeSlug={modeSlug}
+            onReview={onReview}
+            pending={pending}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+function CandidateReviewRow({
+  kind,
+  candidate,
+  decision,
+  workspaceId,
+  modeSlug,
+  onReview,
+  pending,
+}: {
+  kind: "project_field" | "work_type" | "quantity" | "material";
+  candidate: Record<string, unknown>;
+  decision?: Record<string, unknown> | undefined;
+  workspaceId: string;
+  modeSlug?: string | undefined;
+  onReview: (payload: {
+    candidate_kind: "project_field" | "work_type" | "quantity" | "material";
+    candidate_id: string;
+    candidate_version: number;
+    action: "confirmed" | "rejected" | "corrected";
+    resolved_value: string | number | boolean | null;
+    reason: string;
+  }) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [corrected, setCorrected] = useState(displayValue(candidate.value, ""));
+  const [reason, setReason] = useState("");
+  const locator = displayValue(candidate.source_locator_id, "");
+  const submit = (action: "confirmed" | "rejected" | "corrected") => {
+    onReview({
+      candidate_kind: kind,
+      candidate_id: displayValue(candidate.candidate_id),
+      candidate_version: Number(candidate.version),
+      action,
+      resolved_value: action === "corrected" ? corrected : null,
+      reason:
+        reason ||
+        (action === "confirmed"
+          ? "Проверено по исходному фрагменту"
+          : "Отклонено при проверке"),
+    });
+    setEditing(false);
+  };
+  return (
+    <article className="candidate-row">
+      <div>
+        <strong>{displayValue(candidate.label, "Сведение")}</strong>
+        <p>{displayValue(candidate.value)}</p>
+        <small>
+          {humanizeStatus(displayValue(candidate.status, "candidate"))}
+        </small>
+        {locator && (
+          <Link
+            to={workspaceRouteFromSlug(
+              modeSlug,
+              workspaceId,
+              `/evidence/locators/${locator}`,
+            )}
+          >
+            Открыть исходный фрагмент
+          </Link>
+        )}
+      </div>
+      <div className="candidate-actions">
+        {decision ? (
+          <StatusPill
+            tone={decision.action === "rejected" ? "warning" : "default"}
+          >
+            {humanizeStatus(String(decision.action))}
+          </StatusPill>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="ghost"
+              disabled={pending}
+              onClick={() => submit("confirmed")}
+            >
+              Подтвердить
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={pending}
+              onClick={() => setEditing(true)}
+            >
+              Исправить
+            </button>
+            <button
+              type="button"
+              className="ghost"
+              disabled={pending}
+              onClick={() => submit("rejected")}
+            >
+              Отклонить
+            </button>
+          </>
+        )}
+      </div>
+      {editing && (
+        <div className="candidate-edit">
+          <label>
+            Исправленное значение
+            <input
+              value={corrected}
+              onChange={(event) => setCorrected(event.target.value)}
+            />
+          </label>
+          <label>
+            Причина изменения
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              required
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || reason.trim().length < 3 || !corrected.trim()}
+            onClick={() => submit("corrected")}
+          >
+            Сохранить новую версию
+          </button>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -1985,18 +2556,12 @@ function NormativeRequirementList({
               <strong>
                 {displayValue(
                   row.section ?? row.mark ?? row.code,
-                  "requirement",
+                  "Требование",
                 )}
               </strong>
-              <p>Edition: {displayValue(row.normative_edition_id)}</p>
-              <p>Provision: {displayValue(row.structural_path)}</p>
-              <p>Locator: {displayValue(row.locator)}</p>
-              <p className="mono">
-                RuleVersion: {displayValue(row.rule_version_id)}
-              </p>
-              <p className="mono">
-                Evidence: {displayValue(row.evidence_digest)}
-              </p>
+              <p>Редакция: {displayValue(row.normative_edition_id)}</p>
+              <p>Пункт: {displayValue(row.structural_path)}</p>
+              <p>Место в источнике: {displayValue(row.locator)}</p>
             </article>
           ))}
         </div>
@@ -2604,6 +3169,7 @@ function humanizeStatus(value: string) {
     partial_with_capability_gap: "Требует дополнения",
     failed: "Ошибка",
     queued: "В очереди",
+    paused: "Приостановлено",
     leased: "Назначено исполнителю",
     running: "Выполняется",
     succeeded: "Завершено",
@@ -2623,6 +3189,18 @@ function humanizeStatus(value: string) {
     unqualified: "Не квалифицировано",
     authoritative: "Официальное основание",
     verified: "Проверено",
+    pending: "Ожидает загрузки",
+    accepted: "Принят",
+    duplicate: "Повторный файл",
+    processing: "Обрабатывается",
+    candidate: "Требует подтверждения",
+    needs_evidence: "Недостаточно данных",
+    conflict: "Обнаружено расхождение",
+    quarantined: "Помещён в карантин",
+    unsupported: "Не поддерживается",
+    confirmed: "Подтверждено",
+    corrected: "Исправлено",
+    rejected: "Отклонено",
   };
   return labels[value] ?? value.replaceAll("_", " ").toLowerCase();
 }
@@ -2637,6 +3215,30 @@ function humanizeDocumentRole(value: string) {
     attachment: "Приложение",
   };
   return labels[value.toLowerCase()] ?? value.replaceAll("_", " ");
+}
+
+function humanizeJobKind(value: string) {
+  const labels: Record<string, string> = {
+    DOCUMENT_ADMISSION: "Приём файла",
+    DOCUMENT_HASH: "Проверка целостности",
+    PDF_INVENTORY: "Учёт страниц",
+    NATIVE_TEXT_EXTRACTION: "Извлечение текста",
+    DOCUMENT_FORMAT_INVENTORY: "Определение структуры",
+    PDF_PAGE_HEALTH_ANALYSIS: "Проверка страниц",
+    NATIVE_LAYOUT_EXTRACTION: "Разбор структуры страницы",
+    OCR_ROUTING: "Выбор способа обработки",
+    OCR_EXTRACTION: "Восстановление текста",
+    DOCUMENT_PAGE_CLASSIFICATION: "Классификация документа",
+    DOCUMENT_AGGREGATION: "Сборка документа",
+    PROJECT_DEFINITION_EXTRACTION: "Сведения об объекте",
+    WORK_QUANTITY_MATERIAL_EXTRACTION: "Работы, объёмы и материалы",
+    WORK_PACKAGE_ASSEMBLY: "Формирование пакетов работ",
+    REQUIREMENT_MATRIX_ASSEMBLY: "Формирование матрицы требований",
+    PROJECT_UNDERSTANDING_RECONCILIATION: "Формирование модели объекта",
+    ID_DOCUMENT_GENERATION: "Подготовка исполнительного документа",
+    EVIDENCE_INDEX_UPDATE: "Связь с исходными фрагментами",
+  };
+  return labels[value] ?? "Обработка документа";
 }
 
 function humanizeFieldKey(value: string) {

@@ -1,5 +1,9 @@
 # INDUSTRIAL-DOCUMENT-UNDERSTANDING-01 implementation record
 
+> Следующий additive product slice приёма исходных документов и формирования модели ОКС
+> зафиксирован в `INDUSTRIAL_INTAKE_PROJECT_UNDERSTANDING_01.md`. Настоящая историческая
+> запись и её normative denominators не переписываются.
+
 - Status: `IN PROGRESS — bounded architecture and synthetic vertical slice`
 - Base: `81961379366a42475367c42652bef9d0dbf27d7d`
 - Contract Pack: `2.3.0`

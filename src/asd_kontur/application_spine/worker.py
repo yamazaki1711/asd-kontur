@@ -146,6 +146,28 @@ class DocumentWorker:
                 {"semantic_effect": "bounded_to_completed_pages"},
             )
         except DeterministicJobFailure as exc:
+            if (
+                exc.code
+                in {
+                    "pdf_structure_invalid",
+                    "pdf_has_no_pages",
+                    "source_digest_mismatch",
+                    "docx_structure_invalid",
+                    "xlsx_structure_invalid",
+                    "archive_structure_invalid",
+                }
+                and "document_id" in claimed.input_manifest
+            ):
+                _admission, _extraction, page_count, gaps = self._repository.latest_document_state(
+                    claimed
+                )
+                self._repository.append_document_state(
+                    claimed,
+                    admission_status="quarantined",
+                    extraction_status="failed",
+                    page_count=page_count,
+                    capability_gaps=tuple(sorted({*gaps, exc.code})),
+                )
             return self._terminal(
                 claimed,
                 JobState.FAILED,

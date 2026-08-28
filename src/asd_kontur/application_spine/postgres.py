@@ -231,6 +231,7 @@ class SpinePostgresRepository:
         object_store: WorkspaceObjectStore,
         correlation_id: UUID,
         client_manifest_digest: str,
+        archive_members: tuple[tuple[int, int, int], ...] = (),
     ) -> BatchRegistration:
         if not staged_items and not rejected_items:
             raise SpinePersistenceError("empty_batch")
@@ -240,6 +241,7 @@ class SpinePostgresRepository:
         accepted_ids: list[UUID] = []
         duplicate_ids: list[UUID] = []
         job_ids: list[UUID] = []
+        registrations: dict[int, RegisteredDocument] = {}
         total_bytes = sum(item.size_bytes for _, item in staged_items) + sum(
             item.client_size_bytes or 0 for item in rejected_items
         )
@@ -355,6 +357,7 @@ class SpinePostgresRepository:
                         ordinal=ordinal,
                         staged=staged,
                     )
+                    registrations[ordinal] = registered
                     (duplicate_ids if registered.duplicate else accepted_ids).append(
                         registered.document_id
                     )
@@ -378,6 +381,46 @@ class SpinePostgresRepository:
                             "size": staged.size_bytes,
                             "outcome": "duplicate" if registered.duplicate else "accepted",
                             "document": registered.document_id,
+                        },
+                    )
+                for archive_ordinal, member_ordinal, child_ordinal in archive_members:
+                    archive = registrations[archive_ordinal]
+                    child = registrations[child_ordinal]
+                    child_staged = next(
+                        staged for ordinal, staged in staged_items if ordinal == child_ordinal
+                    )
+                    lineage_digest = semantic_digest(
+                        {
+                            "archive_document_id": archive.document_id,
+                            "archive_document_version": archive.document_version,
+                            "member_ordinal": member_ordinal,
+                            "member_document_id": child.document_id,
+                            "member_document_version": child.document_version,
+                            "member_relative_path": child_staged.relative_path,
+                            "member_content_digest": child_staged.digest,
+                        }
+                    )
+                    session.execute(
+                        sa.text(
+                            "INSERT INTO workspace.intake_archive_members "
+                            "(organization_id,workspace_id,archive_document_id,archive_document_version,"
+                            "member_ordinal,member_document_id,member_document_version,member_relative_path,"
+                            "member_content_digest,uncompressed_size_bytes,lineage_digest) VALUES "
+                            "(:organization,:workspace,:archive,:archive_version,:ordinal,:member,"
+                            ":member_version,:path,:digest,:size,:lineage) ON CONFLICT DO NOTHING"
+                        ),
+                        {
+                            "organization": organization_id,
+                            "workspace": workspace_id,
+                            "archive": archive.document_id,
+                            "archive_version": archive.document_version,
+                            "ordinal": member_ordinal,
+                            "member": child.document_id,
+                            "member_version": child.document_version,
+                            "path": child_staged.relative_path,
+                            "digest": child_staged.digest,
+                            "size": child_staged.size_bytes,
+                            "lineage": lineage_digest,
                         },
                     )
                 for rejected in rejected_items:
@@ -783,12 +826,22 @@ class SpinePostgresRepository:
         }
         job_ids: list[UUID] = []
         prior: UUID | None = None
-        for priority, kind in enumerate(JobKind, start=1):
-            if kind in {
+        kinds = tuple(
+            kind
+            for kind in JobKind
+            if kind
+            not in {
                 JobKind.WORKSPACE_RESET_RECONCILIATION,
                 JobKind.ID_DOCUMENT_GENERATION,
-            }:
-                continue
+            }
+        )
+        if media_type == "application/zip":
+            kinds = (
+                JobKind.DOCUMENT_ADMISSION,
+                JobKind.DOCUMENT_HASH,
+                JobKind.DOCUMENT_FORMAT_INVENTORY,
+            )
+        for priority, kind in enumerate(kinds, start=1):
             job_id = uuid7()
             job_ids.append(job_id)
             session.execute(
@@ -1345,7 +1398,7 @@ class SpinePostgresRepository:
                     "digest": digest,
                 },
             )
-            if JobState(str(row.state)) is JobState.QUEUED:
+            if JobState(str(row.state)) in {JobState.QUEUED, JobState.PAUSED}:
                 result = {"semantic_effect": False, "reason": reason_code}
                 result_digest = semantic_digest(
                     {"job_id": job_id, "state": "cancelled", "result": result}
@@ -1402,6 +1455,203 @@ class SpinePostgresRepository:
                     ),
                     {"organization": organization_id, "workspace": workspace_id, "job": job_id},
                 )
+
+    def pause_job(self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID) -> JobSummary:
+        return self._change_job_control_state(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+            action="pause",
+            expected=JobState.QUEUED,
+            target=JobState.PAUSED,
+        )
+
+    def resume_job(self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID) -> JobSummary:
+        return self._change_job_control_state(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+            action="resume",
+            expected=JobState.PAUSED,
+            target=JobState.QUEUED,
+        )
+
+    def _change_job_control_state(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        job_id: UUID,
+        action: str,
+        expected: JobState,
+        target: JobState,
+    ) -> JobSummary:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            row = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job FOR UPDATE"
+                ),
+                {"organization": organization_id, "workspace": workspace_id, "job": job_id},
+            ).one_or_none()
+            if row is None:
+                raise SpinePersistenceError("job_not_found")
+            prior = JobState(str(row.state))
+            if prior is target:
+                return _job_summary(row)
+            if prior is not expected:
+                raise SpinePersistenceError(f"job_{action}_not_available")
+            control_id = uuid7()
+            digest = semantic_digest(
+                {
+                    "job_id": job_id,
+                    "action": action,
+                    "prior_state": prior,
+                    "result_state": target,
+                    "input_digest": str(row.input_digest),
+                }
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state=:target,eligible_at=CURRENT_TIMESTAMP "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {
+                    "target": target.value,
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_control_decisions "
+                    "(organization_id,workspace_id,control_decision_id,job_id,action,prior_state,"
+                    "result_state,decided_by_identity_id,decision_digest) VALUES "
+                    "(:organization,:workspace,:control,:job,:action,:prior,:result,:owner,:digest) "
+                    "ON CONFLICT (organization_id,workspace_id,decision_digest) DO NOTHING"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "control": control_id,
+                    "job": job_id,
+                    "action": action,
+                    "prior": prior.value,
+                    "result": target.value,
+                    "owner": owner_identity_id,
+                    "digest": digest,
+                },
+            )
+            updated = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {"organization": organization_id, "workspace": workspace_id, "job": job_id},
+            ).one()
+        return _job_summary(updated)
+
+    def manually_retry_job(
+        self, *, owner_identity_id: str, workspace_id: UUID, job_id: UUID
+    ) -> JobSummary:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            row = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job FOR UPDATE"
+                ),
+                {"organization": organization_id, "workspace": workspace_id, "job": job_id},
+            ).one_or_none()
+            if row is None:
+                raise SpinePersistenceError("job_not_found")
+            prior = JobState(str(row.state))
+            if prior not in {
+                JobState.FAILED,
+                JobState.CANCELLED,
+                JobState.RECONCILIATION_REQUIRED,
+            }:
+                raise SpinePersistenceError("job_manual_retry_not_available")
+            control_id = uuid7()
+            derived_job_id = uuid7()
+            new_key = f"manual-retry:{job_id}:{control_id}"
+            provenance = {
+                **dict(row.provenance),
+                "manual_retry_of": str(job_id),
+                "control_decision_id": str(control_id),
+            }
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,causation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:derived,:document,:kind,CAST(:manifest AS jsonb),"
+                    ":digest,:key,'queued',:priority,:attempts,:policy,CAST(:provenance AS jsonb),"
+                    ":correlation,:causation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "derived": derived_job_id,
+                    "document": row.subject_document_id,
+                    "kind": str(row.job_kind),
+                    "manifest": _json(dict(row.input_manifest)),
+                    "digest": str(row.input_digest),
+                    "key": new_key,
+                    "priority": int(row.priority),
+                    "attempts": int(row.max_attempts),
+                    "policy": str(row.retry_policy_version),
+                    "provenance": _json(provenance),
+                    "correlation": row.correlation_id,
+                    "causation": job_id,
+                    "owner": owner_identity_id,
+                },
+            )
+            decision_digest = semantic_digest(
+                {
+                    "job_id": job_id,
+                    "action": "manual_retry",
+                    "prior_state": prior,
+                    "derived_job_id": derived_job_id,
+                    "input_digest": str(row.input_digest),
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_control_decisions "
+                    "(organization_id,workspace_id,control_decision_id,job_id,action,prior_state,"
+                    "result_state,derived_job_id,decided_by_identity_id,decision_digest) VALUES "
+                    "(:organization,:workspace,:control,:job,'manual_retry',:prior,'queued',:derived,"
+                    ":owner,:digest)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "control": control_id,
+                    "job": job_id,
+                    "prior": prior.value,
+                    "derived": derived_job_id,
+                    "owner": owner_identity_id,
+                    "digest": decision_digest,
+                },
+            )
+            derived = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": derived_job_id,
+                },
+            ).one()
+        return _job_summary(derived)
 
     def cancel_jobs_for_reset(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -2091,7 +2341,9 @@ class SpinePostgresRepository:
                 .one_or_none()
             )
             if reconciliation is None:
-                return None
+                return self._empty_project_understanding_view(
+                    session, organization_id=organization_id, workspace_id=workspace_id
+                )
             project = (
                 session.execute(
                     sa.text(
@@ -2202,16 +2454,29 @@ class SpinePostgresRepository:
                     sa.text(
                         "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
                         "sl.source_version_id,sl.locator_kind,sl.locator_value,sl.fragment_digest,"
-                        "v.document_id,v.version AS document_version FROM workspace.source_locators sl "
+                        "v.document_id,v.version AS document_version,v.safe_display_name,e.raw_text "
+                        "FROM workspace.source_locators sl "
                         "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id AND "
-                        "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id WHERE "
+                        "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id "
+                        "LEFT JOIN workspace.native_layout_element_versions e ON "
+                        "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id AND "
+                        "e.source_locator_id=sl.source_locator_id WHERE "
                         "sl.organization_id=:organization AND sl.workspace_id=:workspace ORDER BY "
-                        "sl.source_locator_id,v.version DESC"
+                        "sl.source_locator_id,v.version DESC,e.version DESC NULLS LAST"
                     ),
                     {"organization": organization_id, "workspace": workspace_id},
                 )
                 .mappings()
                 .all()
+            )
+            candidates = self._project_candidate_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            review_decisions = self._project_review_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            intake_summary = self._intake_summary(
+                session, organization_id=organization_id, workspace_id=workspace_id
             )
         return {
             "reconciliation": _jsonable_row(reconciliation),
@@ -2224,6 +2489,363 @@ class SpinePostgresRepository:
             "evidence_index": {
                 str(row["source_locator_id"]): _jsonable_row(row) for row in evidence_rows
             },
+            "candidates": candidates,
+            "review_decisions": review_decisions,
+            "intake_summary": intake_summary,
+            "authority_layers": {
+                "workspace_fact": "project_definition_and_document_registry",
+                "methodological_practice": "advisory_only",
+                "normative_authority": "verified_subset_only",
+                "customer_addition": "workspace_additive_only",
+                "ai_candidate": "candidate_only",
+            },
+        }
+
+    def start_project_understanding(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        correlation_id: UUID,
+    ) -> JobSummary:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            document = (
+                session.execute(
+                    sa.text(
+                        "SELECT v.document_id,v.version,v.source_version_id,v.object_key,v.media_type,"
+                        "v.content_digest FROM workspace.document_versions v JOIN "
+                        "workspace.document_version_activation_decisions a ON "
+                        "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
+                        "a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
+                        "v.organization_id=:organization AND v.workspace_id=:workspace AND NOT EXISTS "
+                        "(SELECT 1 FROM workspace.document_version_activation_decisions newer WHERE "
+                        "newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
+                        "AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
+                        "AND v.media_type<>'application/zip' ORDER BY v.recorded_at DESC,v.document_id LIMIT 1"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if document is None:
+                raise SpinePersistenceError("project_understanding_sources_unavailable")
+            source_ids = session.scalars(
+                sa.text(
+                    "SELECT source_version_id FROM workspace.document_versions WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace ORDER BY source_version_id"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            ).all()
+            reviews = session.scalars(
+                sa.text(
+                    "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace ORDER BY "
+                    "review_decision_id,decision_version"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            ).all()
+            semantic_input = semantic_digest(
+                {"source_version_ids": [str(item) for item in source_ids], "reviews": list(reviews)}
+            )
+            idempotency_key = f"project-understanding:{semantic_input}"
+            existing = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_kind='PROJECT_UNDERSTANDING_RECONCILIATION' "
+                    "AND idempotency_key=:key"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "key": idempotency_key,
+                },
+            ).one_or_none()
+            if existing is not None:
+                return _job_summary(existing)
+            manifest = {
+                "document_id": document["document_id"],
+                "document_version": document["version"],
+                "source_version_id": document["source_version_id"],
+                "object_key": document["object_key"],
+                "media_type": document["media_type"],
+                "content_digest": document["content_digest"],
+                "corpus_semantic_input": semantic_input,
+            }
+            job_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_UNDERSTANDING_RECONCILIATION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',120,3,'spine-retry-v0.1',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "document": document["document_id"],
+                    "manifest": _json(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": idempotency_key,
+                    "provenance": _json(
+                        {"contract": "project-understanding.command@1.0.0", "input": semantic_input}
+                    ),
+                    "correlation": correlation_id,
+                    "owner": owner_identity_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.queued",
+                safe_message_code="project_model_formation_queued",
+                current=0,
+                total=1,
+                terminal=False,
+            )
+            row = session.execute(
+                sa.text(
+                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {"organization": organization_id, "workspace": workspace_id, "job": job_id},
+            ).one()
+        return _job_summary(row)
+
+    def review_project_candidate(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_kind: str,
+        candidate_id: UUID,
+        candidate_version: int,
+        action: str,
+        resolved_value: Any | None,
+        reason: str,
+    ) -> dict[str, Any]:
+        relation = {
+            "project_field": ("project_field_candidates", "source_version_id", "raw_value"),
+            "work_type": ("work_type_candidates", "source_version_id", "raw_name"),
+            "quantity": ("quantity_candidates", None, "raw_value"),
+            "material": ("material_candidates", None, "raw_name"),
+        }.get(candidate_kind)
+        if relation is None or action not in {"confirmed", "rejected", "corrected"}:
+            raise SpinePersistenceError("project_candidate_review_invalid")
+        if candidate_version < 1 or len(reason.strip()) < 3:
+            raise SpinePersistenceError("project_candidate_review_reason_required")
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        table, source_column, value_column = relation
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            if source_column is None:
+                row = (
+                    session.execute(
+                        sa.text(
+                            f"SELECT child.*,work.source_version_id FROM workspace.{table} child JOIN "
+                            "workspace.work_type_candidates work ON work.organization_id=child.organization_id "
+                            "AND work.workspace_id=child.workspace_id AND work.candidate_id=child.work_candidate_id "
+                            "AND work.version=child.work_candidate_version WHERE child.organization_id=:o "
+                            "AND child.workspace_id=:w AND child.candidate_id=:candidate AND child.version=:version"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "candidate": candidate_id,
+                            "version": candidate_version,
+                        },
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+            else:
+                row = (
+                    session.execute(
+                        sa.text(
+                            f"SELECT * FROM workspace.{table} WHERE organization_id=:o AND "
+                            "workspace_id=:w AND candidate_id=:candidate AND version=:version"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "candidate": candidate_id,
+                            "version": candidate_version,
+                        },
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+            if row is None:
+                raise SpinePersistenceError("project_candidate_not_found")
+            review_id = uuid5(
+                OWNER_ORGANIZATION_NAMESPACE,
+                f"project-review:{workspace_id}:{candidate_kind}:{candidate_id}",
+            )
+            prior = session.scalar(
+                sa.text(
+                    "SELECT max(decision_version) FROM workspace.project_candidate_review_decisions "
+                    "WHERE organization_id=:o AND workspace_id=:w AND review_decision_id=:review"
+                ),
+                {"o": organization_id, "w": workspace_id, "review": review_id},
+            )
+            decision_version = int(prior or 0) + 1
+            original = {"value": row[value_column]}
+            corrected = resolved_value if action == "corrected" else None
+            digest = semantic_digest(
+                {
+                    "review_decision_id": review_id,
+                    "decision_version": decision_version,
+                    "candidate_kind": candidate_kind,
+                    "candidate_id": candidate_id,
+                    "candidate_version": candidate_version,
+                    "action": action,
+                    "original_value": original,
+                    "resolved_value": corrected,
+                    "reason": reason.strip(),
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_candidate_review_decisions "
+                    "(organization_id,workspace_id,review_decision_id,decision_version,candidate_kind,"
+                    "candidate_id,candidate_version,source_version_id,source_locator_id,action,original_value,"
+                    "resolved_value,reason,supersedes_decision_version,decided_by_identity_id,decision_digest) "
+                    "VALUES (:o,:w,:review,:decision_version,:kind,:candidate,:candidate_version,:source,"
+                    ":locator,:action,CAST(:original AS jsonb),CAST(:resolved AS jsonb),:reason,:supersedes,"
+                    ":owner,:digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "review": review_id,
+                    "decision_version": decision_version,
+                    "kind": candidate_kind,
+                    "candidate": candidate_id,
+                    "candidate_version": candidate_version,
+                    "source": row["source_version_id"],
+                    "locator": row["source_locator_id"],
+                    "action": action,
+                    "original": _json(original),
+                    "resolved": _json(corrected) if corrected is not None else None,
+                    "reason": reason.strip(),
+                    "supersedes": int(prior) if prior else None,
+                    "owner": owner_identity_id,
+                    "digest": digest,
+                },
+            )
+        return {
+            "review_decision_id": review_id,
+            "decision_version": decision_version,
+            "action": action,
+            "decision_digest": digest,
+        }
+
+    @staticmethod
+    def _intake_summary(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any]:
+        rows = session.execute(
+            sa.text(
+                "SELECT s.admission_status,s.extraction_status,count(*) AS count FROM "
+                "workspace.document_processing_states s WHERE s.organization_id=:o AND s.workspace_id=:w "
+                "AND NOT EXISTS (SELECT 1 FROM workspace.document_processing_states newer WHERE "
+                "newer.organization_id=s.organization_id AND newer.workspace_id=s.workspace_id AND "
+                "newer.document_id=s.document_id AND newer.document_version=s.document_version AND "
+                "newer.state_sequence>s.state_sequence) GROUP BY s.admission_status,s.extraction_status"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        ).mappings()
+        jobs = session.execute(
+            sa.text(
+                "SELECT state,count(*) AS count FROM workspace.durable_jobs WHERE organization_id=:o "
+                "AND workspace_id=:w GROUP BY state"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        ).mappings()
+        return {
+            "documents": [dict(item) for item in rows],
+            "jobs": [dict(item) for item in jobs],
+        }
+
+    @staticmethod
+    def _project_candidate_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, list[dict[str, Any]]]:
+        queries = {
+            "project_fields": "SELECT candidate_id,version,field_key AS label,raw_value AS value,"
+            "normalized_value,source_version_id,source_locator_id,status,uncertainty_codes,conflicts "
+            "FROM workspace.project_field_candidates WHERE organization_id=:o AND workspace_id=:w",
+            "work_types": "SELECT candidate_id,version,normalized_name AS label,raw_name AS value,"
+            "source_version_id,source_locator_id,canonical_mapping_status AS status "
+            "FROM workspace.work_type_candidates WHERE organization_id=:o AND workspace_id=:w",
+            "quantities": "SELECT q.candidate_id,q.version,w.normalized_name AS label,q.raw_value AS value,"
+            "q.parsed_value AS normalized_value,w.source_version_id,q.source_locator_id,q.status,q.raw_unit,"
+            "q.normalized_unit FROM workspace.quantity_candidates q JOIN workspace.work_type_candidates w "
+            "ON w.organization_id=q.organization_id AND w.workspace_id=q.workspace_id AND "
+            "w.candidate_id=q.work_candidate_id AND w.version=q.work_candidate_version WHERE "
+            "q.organization_id=:o AND q.workspace_id=:w",
+            "materials": "SELECT m.candidate_id,m.version,w.normalized_name AS label,m.raw_name AS value,"
+            "m.parsed_quantity AS normalized_value,w.source_version_id,m.source_locator_id,m.status,"
+            "m.raw_quantity,m.raw_unit,m.normalized_unit FROM workspace.material_candidates m JOIN "
+            "workspace.work_type_candidates w ON w.organization_id=m.organization_id AND "
+            "w.workspace_id=m.workspace_id AND w.candidate_id=m.work_candidate_id AND "
+            "w.version=m.work_candidate_version WHERE m.organization_id=:o AND m.workspace_id=:w",
+        }
+        return {
+            key: [
+                _jsonable_row(row)
+                for row in session.execute(
+                    sa.text(query + " ORDER BY candidate_id,version"),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
+            for key, query in queries.items()
+        }
+
+    @staticmethod
+    def _project_review_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        rows = session.execute(
+            sa.text(
+                "SELECT DISTINCT ON (review_decision_id) * FROM "
+                "workspace.project_candidate_review_decisions WHERE organization_id=:o AND "
+                "workspace_id=:w ORDER BY review_decision_id,decision_version DESC"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        ).mappings()
+        return [_jsonable_row(row) for row in rows]
+
+    @classmethod
+    def _empty_project_understanding_view(
+        cls, session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any]:
+        return {
+            "reconciliation": {},
+            "project_definition": {"definition": {"fields": {}, "gaps": []}},
+            "page_roles": [],
+            "work_packages": [],
+            "matrix": {"matrix": {"rows": []}},
+            "normative_profile": None,
+            "defects": [],
+            "evidence_index": {},
+            "candidates": cls._project_candidate_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
+            "review_decisions": cls._project_review_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
+            "intake_summary": cls._intake_summary(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
             "authority_layers": {
                 "workspace_fact": "project_definition_and_document_registry",
                 "methodological_practice": "advisory_only",

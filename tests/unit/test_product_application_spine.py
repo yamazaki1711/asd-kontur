@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import plistlib
 import sys
+import zipfile
 from pathlib import Path
 from uuid import UUID
 
@@ -113,6 +114,59 @@ def test_object_store_streams_commits_and_rejects_cross_root_key(tmp_path: Path)
         store.open("../outside")
 
 
+def test_archive_expansion_preserves_relative_paths_and_rejects_traversal(tmp_path: Path) -> None:
+    store = WorkspaceObjectStore(tmp_path, chunk_bytes=65536, max_file_bytes=1024 * 1024)
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("ПД/пояснительная-записка.txt", "Наименование объекта: Учебный корпус")
+        archive.writestr("РД/лист.pdf", b"%PDF-1.7\n")
+    staged = store.stage(
+        stream=io.BytesIO(payload.getvalue()),
+        organization_id=ORGANIZATION_ID,
+        workspace_id=WORKSPACE_ID,
+        original_name="исходные.zip",
+        relative_path="комплект/исходные.zip",
+        client_media_type="application/zip",
+    )
+    assert staged.media_type == "application/zip"
+    members = store.expand_archive(
+        staged,
+        organization_id=ORGANIZATION_ID,
+        workspace_id=WORKSPACE_ID,
+        max_members=10,
+        max_total_bytes=1024 * 1024,
+    )
+    assert [item.relative_path for item in members] == [
+        "комплект/исходные/ПД/пояснительная-записка.txt",
+        "комплект/исходные/РД/лист.pdf",
+    ]
+    assert [item.media_type for item in members] == ["text/plain", "application/pdf"]
+    for member in members:
+        store.abort(member)
+    store.abort(staged)
+
+    unsafe = io.BytesIO()
+    with zipfile.ZipFile(unsafe, "w") as archive:
+        archive.writestr("../outside.txt", "blocked")
+    rejected = store.stage(
+        stream=io.BytesIO(unsafe.getvalue()),
+        organization_id=ORGANIZATION_ID,
+        workspace_id=WORKSPACE_ID,
+        original_name="unsafe.zip",
+        relative_path="unsafe.zip",
+        client_media_type="application/zip",
+    )
+    with pytest.raises(IntakeError, match="relative_path_rejected"):
+        store.expand_archive(
+            rejected,
+            organization_id=ORGANIZATION_ID,
+            workspace_id=WORKSPACE_ID,
+            max_members=10,
+            max_total_bytes=1024 * 1024,
+        )
+    store.abort(rejected)
+
+
 def test_semantic_digest_ignores_mapping_order_but_not_typed_payload() -> None:
     assert semantic_digest({"b": 2, "a": 1}) == semantic_digest({"a": 1, "b": 2})
     assert semantic_digest({"value": "1"}) != semantic_digest({"value": 1})
@@ -134,7 +188,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
     assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0027_public_deployment"
+        "0028_industrial_intake"
     )
     assert "10240" in (output / "asd-kontur-spine.newsyslog.conf").read_text(encoding="utf-8")
     assert _show_logs(settings(tmp_path), "all", 2) == 0

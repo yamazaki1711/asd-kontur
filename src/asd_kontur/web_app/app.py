@@ -59,6 +59,8 @@ from .schemas import (
     ModeView,
     NtdSeedStatusView,
     PackageBackupManifestView,
+    ProjectCandidateReviewRequest,
+    ProjectCandidateReviewView,
     ProjectUnderstandingView,
     ResetChallengeView,
     ResetExecuteRequest,
@@ -491,6 +493,61 @@ def _api_router() -> APIRouter:
         )
         return {"status": "cancellation_requested"}
 
+    @router.post(
+        "/workspaces/{workspace_id}/jobs/{job_id}/pause",
+        response_model=JobView,
+        tags=["jobs"],
+    )
+    def pause_job(
+        request: Request,
+        workspace_id: UUID,
+        job_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> JobView:
+        value = _container(request).service.pause_job(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        return JobView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/workspaces/{workspace_id}/jobs/{job_id}/resume",
+        response_model=JobView,
+        tags=["jobs"],
+    )
+    def resume_job(
+        request: Request,
+        workspace_id: UUID,
+        job_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> JobView:
+        value = _container(request).service.resume_job(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        return JobView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/workspaces/{workspace_id}/jobs/{job_id}/retry",
+        response_model=JobView,
+        status_code=202,
+        tags=["jobs"],
+    )
+    def retry_job(
+        request: Request,
+        workspace_id: UUID,
+        job_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> JobView:
+        value = _container(request).service.retry_job(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        return JobView(**jsonable_encoder(asdict(value)))
+
     @router.get("/workspaces/{workspace_id}/events", tags=["jobs"])
     async def events(
         request: Request,
@@ -603,6 +660,48 @@ def _api_router() -> APIRouter:
         if value is None:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")
         return ProjectUnderstandingView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/project-understanding/runs",
+        response_model=JobView,
+        status_code=202,
+        tags=["project-understanding"],
+    )
+    def start_project_understanding(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> JobView:
+        value = _container(request).service.start_project_understanding(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=request.state.correlation_id,
+        )
+        return JobView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/workspaces/{workspace_id}/project-understanding/reviews",
+        response_model=ProjectCandidateReviewView,
+        status_code=201,
+        tags=["project-understanding"],
+    )
+    def review_project_candidate(
+        request: Request,
+        workspace_id: UUID,
+        payload: ProjectCandidateReviewRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ProjectCandidateReviewView:
+        value = _container(request).service.review_project_candidate(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_kind=payload.candidate_kind,
+            candidate_id=payload.candidate_id,
+            candidate_version=payload.candidate_version,
+            action=payload.action,
+            resolved_value=payload.resolved_value,
+            reason=payload.reason,
+        )
+        return ProjectCandidateReviewView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/support/id-production",

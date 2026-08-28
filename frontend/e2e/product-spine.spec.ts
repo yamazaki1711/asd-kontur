@@ -226,12 +226,13 @@ test("user enters through four Russian modes and keeps the selected object", asy
     new RegExp(`/modes/restoration/workspaces/${workspaceA}/documents$`),
   );
   await page.getByRole("link", { name: "Документы" }).click();
-  const chooser = page.getByLabel("Добавить файлы");
+  const chooser = page.getByLabel("Выбрать файлы");
   await chooser.setInputFiles({
     name: "synthetic.pdf",
     mimeType: "application/pdf",
     buffer: pdf,
   });
+  await page.getByRole("button", { name: "Начать загрузку" }).click();
   await expect(page.getByRole("link", { name: "synthetic.pdf" })).toBeVisible();
   await page.getByRole("link", { name: "synthetic.pdf" }).click();
   await expect(page.getByLabel("PDF page 1")).toBeVisible();

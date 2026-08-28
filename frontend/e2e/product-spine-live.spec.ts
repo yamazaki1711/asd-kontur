@@ -100,8 +100,8 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     const workspaceA = workspaceAPath.split("/").at(-1);
     if (!workspaceA) throw new Error("workspace A identity missing");
     await workspaceACard.getByRole("link", { name: "Открыть" }).click();
-    await page.getByRole("link", { name: "Документы" }).click();
-    await page.getByLabel("Добавить файлы").setInputFiles([
+    await page.getByRole("link", { name: "Документы", exact: true }).click();
+    await page.getByLabel("Выбрать файлы").setInputFiles([
       {
         name: "live-two-pages.pdf",
         mimeType: "application/pdf",
@@ -113,6 +113,8 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
         buffer: syntheticVor(),
       },
     ]);
+    await expect(page.getByText("2 файлов")).toBeVisible();
+    await page.getByRole("button", { name: "Начать загрузку" }).click();
     await expect(
       page.getByRole("link", { name: "live-two-pages.pdf" }),
     ).toBeVisible();
@@ -151,13 +153,19 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(page.getByText("none", { exact: true })).toBeVisible();
 
     await page
-      .getByRole("link", { name: "Исходные данные", exact: true })
+      .getByRole("link", { name: "Модель объекта", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Исходные данные объекта" }),
+      page.getByRole("heading", { name: "Модель объекта" }),
     ).toBeVisible();
-    await expect(page.getByText("Устройство монолитной плиты")).toBeVisible();
-    await page.locator("article.entity-card a").first().click();
+    await page.getByRole("button", { name: "Виды и объёмы работ" }).click();
+    await expect(
+      page.getByText("Устройство монолитной плиты", { exact: true }),
+    ).toBeVisible();
+    await page
+      .getByRole("link", { name: "Открыть исходный фрагмент" })
+      .first()
+      .click();
     await expect(
       page.getByRole("heading", { name: "Точное место в исходном документе" }),
     ).toBeVisible();
