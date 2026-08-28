@@ -11,7 +11,8 @@ test("live NTD canaries expose native and raster version-pinned evidence", async
   await page.getByLabel("Пользователь").fill("synthetic-live-owner");
   await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
   await page.getByRole("button", { name: "Войти" }).click();
-  await page.getByRole("link", { name: "Platform Knowledge" }).click();
+  await page.goto("/admin/knowledge");
+  await page.getByText("Технические сведения", { exact: true }).click();
 
   await expect(
     page.getByRole("heading", { name: "KnowledgeReady = false" }),

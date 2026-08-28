@@ -6,7 +6,7 @@ const documentId = "018f5c3e-7b00-7000-8000-000000002103";
 const challengeId = "018f5c3e-7b00-7000-8000-000000002104";
 const timestamp = "2026-08-26T00:00:00+12:00";
 
-test("owner reaches the four-mode shell and honest blockers", async ({
+test("user enters through four Russian modes and keeps the selected object", async ({
   page,
 }) => {
   let loggedIn = false;
@@ -151,17 +151,68 @@ test("owner reaches the four-mode shell and honest blockers", async ({
   await page.getByLabel("Пользователь").fill("synthetic-owner");
   await page.getByLabel("Пароль").fill("Synthetic-Password-42!");
   await page.getByRole("button", { name: "Войти" }).click();
-  await expect(page.getByText("ProductApplication PARTIAL")).toBeVisible();
-  await page.getByLabel("Название workspace").fill("Synthetic workspace A");
-  await page.getByRole("button", { name: "Создать" }).click();
-  await expect(page.getByText("Synthetic workspace A")).toBeVisible();
-  await page.getByRole("link", { name: "Открыть" }).first().click();
-  for (const mode of ["Tender", "Support", "Audit", "Restoration"]) {
-    await page.getByRole("link", { name: mode, exact: true }).click();
-    await expect(page.getByRole("heading", { name: mode })).toBeVisible();
-    await expect(page.getByText("FOUNDATION_ONLY")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Выберите режим работы" }),
+  ).toBeVisible();
+  const expectedModes = [
+    "Тендерный анализ",
+    "Инженерное сопровождение",
+    "Аудит",
+    "Восстановление",
+  ];
+  await expect(page.locator("article.mode-card")).toHaveCount(4);
+  for (const title of expectedModes)
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  const normalText = await page.locator("main").innerText();
+  for (const forbidden of [
+    "Product Application Spine",
+    "ProductApplication PARTIAL",
+    "Workspaces",
+    "Platform Knowledge",
+    "Operations",
+    "Tender",
+    "Support",
+    "Restoration",
+    "Synthetic",
+  ])
+    expect(normalText).not.toContain(forbidden);
+
+  await page
+    .locator("article.mode-card")
+    .filter({ hasText: "Инженерное сопровождение" })
+    .getByRole("link", { name: "Выбрать режим" })
+    .click();
+  await page.getByLabel("Название объекта").fill("Строительство корпуса А");
+  await page.getByRole("button", { name: "Создать объект" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Инженерное сопровождение" }),
+  ).toBeVisible();
+
+  for (const title of expectedModes) {
+    await page.getByRole("link", { name: "Сменить режим" }).click();
+    await page
+      .locator("article.mode-card")
+      .filter({ hasText: title })
+      .getByRole("link", { name: "Выбрать режим" })
+      .click();
+    await expect(page.getByText("Строительство корпуса А")).toBeVisible();
+    await page.getByRole("link", { name: "Открыть" }).click();
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
   }
-  await page.getByRole("link", { name: "Documents" }).click();
+  await page.goto(`/workspaces/${workspaceA}/documents`);
+  await expect(
+    page.getByRole("heading", { name: "Выберите режим работы" }),
+  ).toBeVisible();
+  await expect(page.locator("article.mode-card")).toHaveCount(4);
+  await page
+    .locator("article.mode-card")
+    .filter({ hasText: "Восстановление" })
+    .getByRole("link", { name: "Продолжить" })
+    .click();
+  await expect(page).toHaveURL(
+    new RegExp(`/modes/restoration/workspaces/${workspaceA}/documents$`),
+  );
+  await page.getByRole("link", { name: "Документы" }).click();
   const chooser = page.getByLabel("Добавить файлы");
   await chooser.setInputFiles({
     name: "synthetic.pdf",
@@ -171,24 +222,29 @@ test("owner reaches the four-mode shell and honest blockers", async ({
   await expect(page.getByRole("link", { name: "synthetic.pdf" })).toBeVisible();
   await page.getByRole("link", { name: "synthetic.pdf" }).click();
   await expect(page.getByLabel("PDF page 1")).toBeVisible();
-  await expect(page.getByText(challengeId)).toBeVisible();
   await expect(page.getByLabel("Evidence locator region")).toBeVisible();
-  await page.getByRole("link", { name: "Platform Knowledge" }).click();
+  await page.goto("/admin/knowledge");
+  await page.getByText("Технические сведения", { exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "KnowledgeReady = false" }),
   ).toBeVisible();
-  await expect(page.getByText("MEMORY_DATA_DEFECT").last()).toBeVisible();
-  await page.getByRole("link", { name: "Workspaces" }).click();
-  await page.getByLabel("Название workspace").fill("Synthetic workspace B");
-  await page.getByRole("button", { name: "Создать" }).click();
-  await expect(page.getByText("Synthetic workspace B")).toBeVisible();
-  await page.goto(`/workspaces/${workspaceA}`);
+  await expect(
+    page
+      .getByText("Требуется дополнительная проверка или исходные данные.")
+      .last(),
+  ).toBeVisible();
+  await page.goto("/modes/audit/workspaces");
+  await page.getByLabel("Название объекта").fill("Строительство корпуса Б");
+  await page.getByRole("button", { name: "Создать объект" }).click();
+  await expect(page.getByRole("heading", { name: "Аудит" })).toBeVisible();
+  await page.goto(`/admin/workspaces/${workspaceA}/reset`);
   await page.getByRole("button", { name: "Подготовить reset" }).click();
   const exact = `RESET ${workspaceA} synthetic-confirmation`;
   await page.getByLabel("Подтверждение exact target").fill(exact);
   await page.getByRole("button", { name: "Выполнить reset" }).click();
-  await expect(page.getByText("Synthetic workspace B")).toBeVisible();
-  await expect(page.getByText("Synthetic workspace A")).toHaveCount(0);
+  await page.goto("/modes/audit/workspaces");
+  await expect(page.getByText("Строительство корпуса Б")).toBeVisible();
+  await expect(page.getByText("Строительство корпуса А")).toHaveCount(0);
   await page.getByRole("button", { name: "Выйти" }).click();
   await expect(page.getByRole("heading", { name: "АСД-КОНТУР" })).toBeVisible();
   const unauthorizedStatus = await page.evaluate(async () => {
@@ -197,6 +253,29 @@ test("owner reaches the four-mode shell and honest blockers", async ({
   });
   expect(unauthorizedStatus).toBe(401);
 });
+
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 1280, height: 720 },
+  { width: 390, height: 844 },
+  { width: 360, height: 800 },
+]) {
+  test(`mode selection has no horizontal overflow at ${String(viewport.width)}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await page.route("**/api/v1/session", (route) => json(route, session()));
+    await page.goto("/modes");
+    await expect(page.locator("article.mode-card")).toHaveCount(4);
+    expect(
+      await page.evaluate(
+        () =>
+          globalThis.document.documentElement.scrollWidth ===
+          globalThis.document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+}
 
 function workspace(id: string, displayName: string) {
   return {

@@ -24,46 +24,50 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
   await page.getByLabel("Пароль").fill("Synthetic-Product-Owner-Password-42!");
   await page.getByRole("button", { name: "Войти" }).click();
   await expect(
-    page.getByRole("heading", { name: "Рабочие пространства" }),
+    page.getByRole("heading", { name: "Выберите режим работы" }),
   ).toBeVisible();
-  await page.goto(`/workspaces/${state.support_workspace_id}/support-id`);
+  await page.goto(
+    `/modes/support/workspaces/${state.support_workspace_id}/support-id`,
+  );
   await expect(
-    page.getByRole("heading", {
-      name: "Support / Исполнительная документация",
-    }),
+    page.getByRole("heading", { name: "Исполнительная документация" }),
   ).toBeVisible();
   await expect(
-    page.getByText("support.aosr", { exact: true }).first(),
+    page
+      .getByText("Акт освидетельствования скрытых работ", { exact: true })
+      .first(),
   ).toBeVisible();
-  const register = page.locator("tbody tr").filter({ hasText: "register" });
+  const register = page
+    .locator("tbody tr")
+    .filter({ hasText: "Реестр документов комплекта" });
   await expect(register.locator("td").first()).toHaveText("1");
   await expect(
-    page.getByText("finalized", { exact: true }).first(),
+    page.getByText("Финализирован", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText(/template .* · active/)).toBeVisible();
-  await expect(page.getByText("print: print_ready")).toBeVisible();
-  await expect(page.getByText("review: approved")).toBeVisible();
+  await expect(page.getByText(/форма .* · действует/i)).toBeVisible();
+  await expect(page.getByText("печатная форма: Готово к печати")).toBeVisible();
+  await expect(page.getByText("проверка: Одобрено")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Immutable package / register history" }),
+    page.getByRole("heading", { name: "История версий комплекта и реестра" }),
   ).toBeVisible();
   for (const version of [1, 2, 3, 4]) {
     await expect(
-      page.getByText(`PackageVersion ${String(version)}`, { exact: true }),
+      page.getByText(`Версия комплекта ${String(version)}`, { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(`RegisterVersion ${String(version)}`, { exact: true }),
+      page.getByText(`Версия реестра ${String(version)}`, { exact: true }),
     ).toBeVisible();
   }
-  await expect(page.getByText("Finalized").first()).toBeVisible();
+  await expect(page.getByText("Финализировано").first()).toBeVisible();
   await expect(page.getByText("1", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Вид работы").first()).toBeVisible();
   await expect(
-    page.getByText("work_type.classification").first(),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "exact evidence" }).first(),
+    page.getByRole("link", { name: "открыть источник" }).first(),
   ).toBeVisible();
   const download = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Скачать finalized" }).click();
+  await page
+    .getByRole("link", { name: "Скачать финализированный документ" })
+    .click();
   expect((await download).suggestedFilename()).toMatch(/\.pdf$/);
 });
 
@@ -78,13 +82,19 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await page.getByLabel("Пользователь").fill("synthetic-live-owner");
     await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
     await page.getByRole("button", { name: "Войти" }).click();
-    await expect(page.getByText("Workspace ещё не созданы.")).toBeVisible();
+    await page
+      .locator("article.mode-card")
+      .filter({ hasText: "Инженерное сопровождение" })
+      .getByRole("link", { name: "Выбрать режим" })
+      .click();
+    await expect(page.getByText("Доступных объектов пока нет.")).toBeVisible();
 
-    await page.getByLabel("Название workspace").fill("Live workspace A");
-    await page.getByRole("button", { name: "Создать" }).click();
+    await page.getByLabel("Название объекта").fill("Испытательный объект А");
+    await page.getByRole("button", { name: "Создать объект" }).click();
     const workspaceACard = page.locator("article").filter({
-      has: page.getByRole("heading", { name: "Live workspace A" }),
+      has: page.getByRole("heading", { name: "Испытательный объект А" }),
     });
+    await page.getByRole("link", { name: "Сменить объект" }).click();
     const workspaceAPath = await workspaceACard
       .getByRole("link", { name: "Открыть" })
       .getAttribute("href");
@@ -92,7 +102,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     const workspaceA = workspaceAPath.split("/").at(-1);
     if (!workspaceA) throw new Error("workspace A identity missing");
     await workspaceACard.getByRole("link", { name: "Открыть" }).click();
-    await page.getByRole("link", { name: "Documents" }).click();
+    await page.getByRole("link", { name: "Документы" }).click();
     await page.getByLabel("Добавить файлы").setInputFiles([
       {
         name: "live-two-pages.pdf",
@@ -117,20 +127,20 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     interrupted.kill("SIGKILL");
     await exited(interrupted);
     interrupted = null;
-    await page.getByRole("link", { name: "Jobs", exact: true }).click();
-    await expect(page.getByText("running")).toBeVisible();
+    await page.getByRole("link", { name: "Обработка", exact: true }).click();
+    await expect(page.getByText("Выполняется")).toBeVisible();
     await page.waitForTimeout(5_500);
     const restarted = worker("drain", undefined, 27);
     expect(await exited(restarted)).toBe(0);
     await expect
       .poll(
         async () =>
-          page.locator("tbody tr").filter({ hasText: "succeeded" }).count(),
+          page.locator("tbody tr").filter({ hasText: "Завершено" }).count(),
         { timeout: 15_000 },
       )
       .toBe(26);
 
-    await page.getByRole("link", { name: "Documents" }).click();
+    await page.getByRole("link", { name: "Документы" }).click();
     await expect(
       page.getByRole("link", { name: "live-two-pages.pdf" }),
     ).toHaveCount(1);
@@ -143,28 +153,38 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(page.getByText("none", { exact: true })).toBeVisible();
 
     await page
-      .getByRole("link", { name: "Project Understanding", exact: true })
+      .getByRole("link", { name: "Исходные данные", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Project Understanding" }),
+      page.getByRole("heading", { name: "Исходные данные объекта" }),
     ).toBeVisible();
     await expect(page.getByText("Устройство монолитной плиты")).toBeVisible();
     await page.locator("article.entity-card a").first().click();
     await expect(
-      page.getByRole("heading", { name: "Exact Evidence Locator" }),
+      page.getByRole("heading", { name: "Точное место в исходном документе" }),
     ).toBeVisible();
     await expect(page.getByText("workspace_fact_candidate")).toBeVisible();
 
-    for (const mode of ["Tender", "Support", "Audit", "Restoration"]) {
-      await page.getByRole("link", { name: mode, exact: true }).click();
-      await expect(page.getByRole("heading", { name: mode })).toBeVisible();
-      await expect(page.getByText("PARTIAL", { exact: true })).toBeVisible();
+    for (const [slug, title] of [
+      ["tender", "Тендерный анализ"],
+      ["support", "Инженерное сопровождение"],
+      ["audit", "Аудит"],
+      ["restoration", "Восстановление"],
+    ] as const) {
+      await page.goto(`/modes/${slug}/workspaces/${workspaceA}`);
+      await expect(page.getByRole("heading", { name: title })).toBeVisible();
+      await expect(page.getByText("Доступно частично")).toBeVisible();
     }
-    await page.getByRole("link", { name: "Platform Knowledge" }).click();
+    await page.goto("/admin/knowledge");
+    await page.getByText("Технические сведения", { exact: true }).click();
     await expect(
       page.getByRole("heading", { name: "KnowledgeReady = false" }),
     ).toBeVisible();
-    await expect(page.getByText("MEMORY_DATA_DEFECT").last()).toBeVisible();
+    await expect(
+      page
+        .getByText("Требуется дополнительная проверка или исходные данные.")
+        .last(),
+    ).toBeVisible();
     await expect(
       page.getByRole("heading", {
         name: "NTD Seed Remediation — exact denominator",
@@ -191,18 +211,18 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
       ).toHaveAttribute("href", /#page=23$/);
     }
 
-    await page.getByRole("link", { name: "Workspaces" }).click();
-    await page.getByLabel("Название workspace").fill("Live workspace B");
-    await page.getByRole("button", { name: "Создать" }).click();
-    await expect(page.getByText("Live workspace B")).toBeVisible();
-    await page.goto(`/workspaces/${workspaceA}`);
+    await page.goto("/modes/support/workspaces");
+    await page.getByLabel("Название объекта").fill("Испытательный объект Б");
+    await page.getByRole("button", { name: "Создать объект" }).click();
+    await page.goto(`/admin/workspaces/${workspaceA}/reset`);
     await page.getByRole("button", { name: "Подготовить reset" }).click();
     const confirmation = await page.locator(".danger-text code").textContent();
     if (!confirmation) throw new Error("reset confirmation missing");
     await page.getByLabel("Подтверждение exact target").fill(confirmation);
     await page.getByRole("button", { name: "Выполнить reset" }).click();
-    await expect(page.getByText("Live workspace B")).toBeVisible();
-    await expect(page.getByText("Live workspace A")).toHaveCount(0);
+    await page.goto("/modes/support/workspaces");
+    await expect(page.getByText("Испытательный объект Б")).toBeVisible();
+    await expect(page.getByText("Испытательный объект А")).toHaveCount(0);
     await page.getByRole("button", { name: "Выйти" }).click();
     await expect(
       page.getByRole("heading", { name: "АСД-КОНТУР" }),
