@@ -7,6 +7,7 @@ import {
   Outlet,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -25,6 +26,81 @@ type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
+type ModeName = (typeof MODES)[number];
+
+const MODE_DEFINITIONS: Record<
+  ModeName,
+  {
+    slug: string;
+    title: string;
+    purpose: string;
+    results: string;
+    nextAction: string;
+  }
+> = {
+  Tender: {
+    slug: "tender",
+    title: "Тендерный анализ",
+    purpose:
+      "Проверка договора, ПД/РД, ведомостей объёмов работ, смет и требований заказчика.",
+    results:
+      "Риски, неучтённые работы и материалы, замечания к исходным данным, протокол разногласий и предложения по договору.",
+    nextAction: "Загрузить и проверить исходные документы",
+  },
+  Support: {
+    slug: "support",
+    title: "Инженерное сопровождение",
+    purpose:
+      "Сопровождение СМР, контроль исходных данных, работ, материалов и корректное формирование исполнительной документации.",
+    results:
+      "Структура работ, требования к контролю, комплект ИД, реестр, акты и другие поддержанные документы.",
+    nextAction: "Открыть комплект исполнительной документации",
+  },
+  Audit: {
+    slug: "audit",
+    title: "Аудит",
+    purpose:
+      "Проверка проектной, рабочей и исполнительной документации, фактических данных и состояния комплектности.",
+    results: "Несоответствия, пробелы, риски, замечания и план устранения.",
+    nextAction: "Проверить состав загруженных документов",
+  },
+  Restoration: {
+    slug: "restoration",
+    title: "Восстановление",
+    purpose:
+      "Восстановление состояния исполнительной документации по имеющимся документам, журналам, актам, схемам и подтверждённым фактам.",
+    results:
+      "Перечень недостающего, восстановленные проекты документов и комплект ИД без фабрикации отсутствующих фактов.",
+    nextAction: "Оценить доступные исходные данные",
+  },
+};
+
+function modeFromSlug(value?: string): ModeName | null {
+  return (
+    MODES.find(
+      (mode) => MODE_DEFINITIONS[mode].slug === value?.toLowerCase(),
+    ) ?? null
+  );
+}
+
+function workspaceRoute(mode: ModeName, workspaceId: string, suffix = "") {
+  return `/modes/${MODE_DEFINITIONS[mode].slug}/workspaces/${workspaceId}${suffix}`;
+}
+
+function workspaceRouteFromSlug(
+  modeSlug: string | undefined,
+  workspaceId: string,
+  suffix = "",
+) {
+  const mode = modeFromSlug(modeSlug);
+  return mode
+    ? workspaceRoute(mode, workspaceId, suffix)
+    : `/workspaces/${workspaceId}${suffix}`;
+}
+
+function displayWorkspaceName(value: string) {
+  return /synthetic/i.test(value) ? "Демонстрационный объект" : value;
+}
 
 export function App() {
   return (
@@ -32,47 +108,70 @@ export function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<Authenticated />}>
         <Route element={<ApplicationShell />}>
-          <Route index element={<Navigate to="/workspaces" replace />} />
-          <Route path="/workspaces" element={<WorkspacesPage />} />
-          <Route path="/workspaces/:workspaceId" element={<WorkspaceHome />} />
+          <Route index element={<Navigate to="/modes" replace />} />
+          <Route path="/modes" element={<ModeSelectionPage />} />
+          <Route path="/modes/:mode/workspaces" element={<WorkspacesPage />} />
           <Route
-            path="/workspaces/:workspaceId/documents"
+            path="/modes/:mode/workspaces/:workspaceId"
+            element={<ModePage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/documents"
             element={<DocumentsPage />}
           />
           <Route
-            path="/workspaces/:workspaceId/documents/:documentId"
+            path="/modes/:mode/workspaces/:workspaceId/documents/:documentId"
             element={<DocumentViewerPage />}
           />
-          <Route path="/workspaces/:workspaceId/jobs" element={<JobsPage />} />
           <Route
-            path="/workspaces/:workspaceId/evidence"
+            path="/modes/:mode/workspaces/:workspaceId/jobs"
+            element={<JobsPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/evidence"
             element={<EvidenceIndexPage />}
           />
           <Route
-            path="/workspaces/:workspaceId/evidence/locators/:locatorId"
+            path="/modes/:mode/workspaces/:workspaceId/evidence/locators/:locatorId"
             element={<ExactEvidencePage />}
           />
           <Route
-            path="/workspaces/:workspaceId/work-matrix"
+            path="/modes/:mode/workspaces/:workspaceId/work-matrix"
             element={<WorkMatrixPage />}
           />
           <Route
-            path="/workspaces/:workspaceId/project-understanding"
+            path="/modes/:mode/workspaces/:workspaceId/project-understanding"
             element={<ProjectUnderstandingPage />}
           />
           <Route
-            path="/workspaces/:workspaceId/support-id"
+            path="/modes/:mode/workspaces/:workspaceId/support-id"
             element={<SupportProductionPage />}
           />
+          <Route path="/admin/knowledge" element={<KnowledgePage />} />
+          <Route path="/admin/system" element={<OperationsPage />} />
           <Route
-            path="/workspaces/:workspaceId/modes/:mode"
-            element={<ModePage />}
+            path="/admin/workspaces/:workspaceId/reset"
+            element={<AdminWorkspaceResetPage />}
           />
-          <Route path="/platform/knowledge" element={<KnowledgePage />} />
-          <Route path="/operations" element={<OperationsPage />} />
+          <Route
+            path="/workspaces"
+            element={<Navigate to="/modes" replace />}
+          />
+          <Route
+            path="/workspaces/:workspaceId/*"
+            element={<LegacyModeGate />}
+          />
+          <Route
+            path="/platform/knowledge"
+            element={<Navigate to="/admin/knowledge" replace />}
+          />
+          <Route
+            path="/operations"
+            element={<Navigate to="/admin/system" replace />}
+          />
         </Route>
       </Route>
-      <Route path="*" element={<Navigate to="/workspaces" replace />} />
+      <Route path="*" element={<Navigate to="/modes" replace />} />
     </Routes>
   );
 }
@@ -109,7 +208,7 @@ function LoginPage() {
     onSuccess: async () => {
       setPassword("");
       await queryClient.invalidateQueries({ queryKey: ["session"] });
-      void navigate("/workspaces", { replace: true });
+      void navigate("/modes", { replace: true });
     },
   });
   const submit = (event: SyntheticEvent<HTMLFormElement>) => {
@@ -119,12 +218,8 @@ function LoginPage() {
   return (
     <main className="login-shell">
       <section className="login-card" aria-labelledby="login-title">
-        <p className="eyebrow">Локальная доказательная платформа</p>
         <h1 id="login-title">АСД-КОНТУР</h1>
-        <p>
-          Войдите под bootstrap owner identity. Пароль не сохраняется в
-          браузере.
-        </p>
+        <p className="login-subtitle">Вход в комплекс</p>
         <form onSubmit={submit}>
           <label>
             Пользователь
@@ -156,9 +251,31 @@ function LoginPage() {
 }
 
 function ApplicationShell() {
-  const { workspaceId } = useParams();
+  const { workspaceId, mode: modeSlug } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const mode = modeFromSlug(modeSlug);
+  const isAdmin = location.pathname.startsWith("/admin/");
+  const isSelection = !workspaceId && !isAdmin;
+  const session = useQuery({
+    queryKey: ["session"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/api/v1/session");
+      return requireData(data, error);
+    },
+  });
+  const workspace = useQuery({
+    queryKey: ["workspace", workspaceId],
+    enabled: Boolean(workspaceId),
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/lifecycle",
+        { params: { path: { workspace_id: workspaceId ?? "" } } },
+      );
+      return requireData(data, error);
+    },
+  });
   const logout = useMutation({
     mutationFn: async () => {
       const { error } = await api.POST("/api/v1/session/logout");
@@ -169,55 +286,77 @@ function ApplicationShell() {
       void navigate("/login", { replace: true });
     },
   });
-  const workspaceBase = workspaceId ? `/workspaces/${workspaceId}` : null;
+  const workspaceBase =
+    workspaceId && mode ? workspaceRoute(mode, workspaceId) : null;
   return (
-    <div className="app-shell">
+    <div
+      className={`app-shell${isSelection || isAdmin ? " app-shell-simple" : ""}`}
+    >
       <header className="topbar">
-        <Link className="brand" to="/workspaces">
+        <Link className="brand" to="/modes">
           <span className="brand-mark" aria-hidden="true">
             АК
           </span>
           <span>
             <strong>АСД-КОНТУР</strong>
-            <small>Product Application Spine</small>
+            {workspace.data && mode && (
+              <small>
+                {displayWorkspaceName(workspace.data.display_name)} ·{" "}
+                {MODE_DEFINITIONS[mode].title}
+              </small>
+            )}
           </span>
         </Link>
         <div className="top-actions">
-          <StatusPill tone="warning">ProductApplication PARTIAL</StatusPill>
+          {workspaceBase && mode && (
+            <>
+              <Link
+                className="top-link"
+                to={`/modes/${MODE_DEFINITIONS[mode].slug}/workspaces`}
+              >
+                Сменить объект
+              </Link>
+              <Link className="top-link" to="/modes">
+                Сменить режим
+              </Link>
+            </>
+          )}
+          {isAdmin && (
+            <Link className="top-link" to="/modes">
+              К выбору режима
+            </Link>
+          )}
+          <span className="profile-name">{session.data?.username}</span>
           <button className="ghost" onClick={() => logout.mutate()}>
             Выйти
           </button>
         </div>
       </header>
-      <aside className="sidebar" aria-label="Основная навигация">
-        <NavItem to="/workspaces" label="Workspaces" />
-        {workspaceBase && (
-          <>
-            <NavItem to={workspaceBase} label="Current Workspace" end />
-            <NavItem to={`${workspaceBase}/documents`} label="Documents" />
-            <NavItem to={`${workspaceBase}/jobs`} label="Jobs" />
-            <NavItem to={`${workspaceBase}/evidence`} label="Evidence" />
-            <NavItem
-              to={`${workspaceBase}/project-understanding`}
-              label="Project Understanding"
-            />
-            <NavItem to={`${workspaceBase}/work-matrix`} label="Work Matrix" />
+      {workspaceBase && mode && (
+        <aside className="sidebar" aria-label="Разделы объекта">
+          <NavItem to={workspaceBase} label="Обзор" end />
+          <NavItem to={`${workspaceBase}/documents`} label="Документы" />
+          <NavItem to={`${workspaceBase}/jobs`} label="Обработка" />
+          <NavItem
+            to={`${workspaceBase}/project-understanding`}
+            label="Исходные данные"
+          />
+          <NavItem
+            to={`${workspaceBase}/work-matrix`}
+            label="Работы и требования"
+          />
+          {mode === "Support" && (
             <NavItem
               to={`${workspaceBase}/support-id`}
-              label="Support / ID Package"
+              label="Исполнительная документация"
             />
-            {MODES.map((mode) => (
-              <NavItem
-                key={mode}
-                to={`${workspaceBase}/modes/${mode}`}
-                label={mode}
-              />
-            ))}
-          </>
-        )}
-        <NavItem to="/platform/knowledge" label="Platform Knowledge" />
-        <NavItem to="/operations" label="Operations" />
-      </aside>
+          )}
+          <NavItem
+            to={`${workspaceBase}/evidence`}
+            label="Исходные подтверждения"
+          />
+        </aside>
+      )}
       <main className="content">
         <Outlet />
       </main>
@@ -246,8 +385,14 @@ function NavItem({
 }
 
 function WorkspacesPage() {
+  const { mode: modeSlug } = useParams();
+  const mode = modeFromSlug(modeSlug);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
+  const [recentWorkspaceByMode, setRecentWorkspaceByMode] = useState<
+    Partial<Record<ModeName, string>>
+  >({});
   const workspaces = useQuery({
     queryKey: ["workspaces"],
     queryFn: async () => {
@@ -262,17 +407,29 @@ function WorkspacesPage() {
       });
       return requireData(data, error);
     },
-    onSuccess: async () => {
+    onSuccess: async (workspace) => {
       setName("");
       await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      if (mode) {
+        window.localStorage.setItem(
+          `asd-recent-${MODE_DEFINITIONS[mode].slug}`,
+          workspace.workspace_id,
+        );
+        void navigate(workspaceRoute(mode, workspace.workspace_id));
+      }
     },
   });
+  if (!mode) return <Navigate to="/modes" replace />;
+  const recentWorkspaceId =
+    recentWorkspaceByMode[mode] ??
+    window.localStorage.getItem(`asd-recent-${MODE_DEFINITIONS[mode].slug}`);
   return (
     <Page
-      title="Рабочие пространства"
-      lead="Изолированные контуры конкретных ОКС. Platform Knowledge не принадлежит ни одному из них."
+      title="Выберите объект"
+      lead={`Режим «${MODE_DEFINITIONS[mode].title}». Откройте существующий ОКС или создайте новый.`}
     >
       <section className="panel compact">
+        <h2>Создать объект</h2>
         <form
           className="inline-form"
           onSubmit={(event) => {
@@ -281,7 +438,7 @@ function WorkspacesPage() {
           }}
         >
           <label>
-            Название workspace
+            Название объекта
             <input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -290,43 +447,97 @@ function WorkspacesPage() {
             />
           </label>
           <button type="submit" disabled={create.isPending}>
-            Создать
+            Создать объект
           </button>
         </form>
         {create.isError && <ErrorNotice error={create.error} />}
       </section>
-      <QueryState query={workspaces} empty="Workspace ещё не созданы.">
-        {(items) => (
-          <div className="card-grid">
-            {items.map((workspace) => (
-              <WorkspaceCard
-                key={workspace.workspace_id}
-                workspace={workspace}
-              />
-            ))}
-          </div>
-        )}
+      <div className="section-heading">
+        <h2>Доступные объекты</h2>
+        <Link to="/modes">Сменить режим</Link>
+      </div>
+      <QueryState query={workspaces} empty="Доступных объектов пока нет.">
+        {(items) => {
+          const activeItems = items.filter(
+            (workspace) => workspace.lifecycle_state === "ACTIVE",
+          );
+          const recent = activeItems.find(
+            (workspace) => workspace.workspace_id === recentWorkspaceId,
+          );
+          const remember = (identity: string) => {
+            window.localStorage.setItem(
+              `asd-recent-${MODE_DEFINITIONS[mode].slug}`,
+              identity,
+            );
+            setRecentWorkspaceByMode((current) => ({
+              ...current,
+              [mode]: identity,
+            }));
+          };
+          return (
+            <>
+              {!activeItems.length && (
+                <InfoNotice>Доступных объектов пока нет.</InfoNotice>
+              )}
+              {recent && (
+                <section
+                  className="recent-object"
+                  aria-labelledby="recent-title"
+                >
+                  <h2 id="recent-title">Последний открытый</h2>
+                  <WorkspaceCard
+                    workspace={recent}
+                    mode={mode}
+                    onOpen={remember}
+                  />
+                </section>
+              )}
+              <div className="card-grid">
+                {activeItems
+                  .filter(
+                    (workspace) => workspace.workspace_id !== recentWorkspaceId,
+                  )
+                  .map((workspace) => (
+                    <WorkspaceCard
+                      key={workspace.workspace_id}
+                      workspace={workspace}
+                      mode={mode}
+                      onOpen={remember}
+                    />
+                  ))}
+              </div>
+            </>
+          );
+        }}
       </QueryState>
     </Page>
   );
 }
 
-function WorkspaceCard({ workspace }: { workspace: Workspace }) {
+function WorkspaceCard({
+  workspace,
+  mode,
+  onOpen,
+}: {
+  workspace: Workspace;
+  mode: ModeName;
+  onOpen?: (identity: string) => void;
+}) {
   return (
     <article className="entity-card">
       <div className="entity-heading">
-        <h2>{workspace.display_name}</h2>
-        <StatusPill>{workspace.lifecycle_state}</StatusPill>
+        <h2>{displayWorkspaceName(workspace.display_name)}</h2>
+        <StatusPill>
+          {workspace.lifecycle_state === "ACTIVE"
+            ? "В работе"
+            : "Недоступен для изменений"}
+        </StatusPill>
       </div>
-      <dl>
-        <dt>Workspace</dt>
-        <dd className="mono">{workspace.workspace_id}</dd>
-        <dt>Revision</dt>
-        <dd>{workspace.workspace_revision}</dd>
-      </dl>
+      <p>Объект доступен для работы в выбранном режиме.</p>
       <Link
         className="button-link"
-        to={`/workspaces/${workspace.workspace_id}`}
+        to={workspaceRoute(mode, workspace.workspace_id)}
+        onClick={() => onOpen?.(workspace.workspace_id)}
       >
         Открыть
       </Link>
@@ -334,41 +545,55 @@ function WorkspaceCard({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function WorkspaceHome() {
-  const { workspaceId = "" } = useParams();
-  const lifecycle = useQuery({
-    queryKey: ["workspace", workspaceId],
-    queryFn: async () => {
-      const { data, error } = await api.GET(
-        "/api/v1/workspaces/{workspace_id}/lifecycle",
-        { params: { path: { workspace_id: workspaceId } } },
-      );
-      return requireData(data, error);
-    },
-  });
+function ModeSelectionPage() {
   return (
     <Page
-      title="Контур ОКС"
-      lead="Все режимы используют общий ProjectDefinition и WorkRequirementMatrix; раздельные копии доменных данных не создаются."
+      title="Выберите режим работы"
+      lead="Выберите задачу, которую необходимо выполнить. Один объект можно открывать в разных режимах."
     >
-      <QueryState query={lifecycle}>
-        {(workspace) => (
-          <>
-            <WorkspaceCard workspace={workspace} />
-            <WorkspaceResetPanel workspace={workspace} />
-          </>
-        )}
-      </QueryState>
-      <div className="card-grid four">
+      <div className="mode-grid">
         {MODES.map((mode) => (
-          <article className="entity-card" key={mode}>
-            <p className="eyebrow">Mode shell</p>
-            <h2>{mode}</h2>
-            <p>
-              Показывает только сохранённые bounded results и явные blockers.
-            </p>
-            <Link to={`/workspaces/${workspaceId}/modes/${mode}`}>
-              Открыть режим
+          <article className="mode-card" key={mode}>
+            <span className="mode-number">0{MODES.indexOf(mode) + 1}</span>
+            <h2>{MODE_DEFINITIONS[mode].title}</h2>
+            <p>{MODE_DEFINITIONS[mode].purpose}</p>
+            <h3>Результаты работы</h3>
+            <p>{MODE_DEFINITIONS[mode].results}</p>
+            <Link
+              className="card-action"
+              to={`/modes/${MODE_DEFINITIONS[mode].slug}/workspaces`}
+            >
+              Выбрать режим
+            </Link>
+          </article>
+        ))}
+      </div>
+    </Page>
+  );
+}
+
+function LegacyModeGate() {
+  const { workspaceId = "" } = useParams();
+  const location = useLocation();
+  const marker = `/workspaces/${workspaceId}`;
+  const suffix = location.pathname.startsWith(marker)
+    ? location.pathname.slice(marker.length)
+    : "";
+  return (
+    <Page
+      title="Выберите режим работы"
+      lead="Ссылка ведёт к объекту без указания текущей задачи. Выберите режим — система не будет определять его за вас."
+    >
+      <div className="mode-grid compact-modes">
+        {MODES.map((mode) => (
+          <article className="mode-card" key={mode}>
+            <h2>{MODE_DEFINITIONS[mode].title}</h2>
+            <p>{MODE_DEFINITIONS[mode].purpose}</p>
+            <Link
+              className="card-action"
+              to={workspaceRoute(mode, workspaceId, suffix)}
+            >
+              Продолжить
             </Link>
           </article>
         ))}
@@ -476,8 +701,32 @@ function WorkspaceResetPanel({ workspace }: { workspace: Workspace }) {
   );
 }
 
-function DocumentsPage() {
+function AdminWorkspaceResetPage() {
   const { workspaceId = "" } = useParams();
+  const workspace = useQuery({
+    queryKey: ["workspace", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/lifecycle",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="Сброс данных объекта"
+      lead="Административная операция полного удаления рабочего состояния выбранного объекта."
+    >
+      <QueryState query={workspace}>
+        {(value) => <WorkspaceResetPanel workspace={value} />}
+      </QueryState>
+    </Page>
+  );
+}
+
+function DocumentsPage() {
+  const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState("recorded_desc");
@@ -531,8 +780,8 @@ function DocumentsPage() {
   });
   return (
     <Page
-      title="Document Registry"
-      lead="SourceVersion, digest, processing state и capability gaps без загрузки полного текста в registry response."
+      title="Документы объекта"
+      lead="Загруженные исходные документы, их версии и состояние обработки."
     >
       <section className="panel toolbar">
         <label className="upload-button">
@@ -569,9 +818,11 @@ function DocumentsPage() {
             }}
           >
             <option value="">Все</option>
-            <option value="complete">complete</option>
-            <option value="partial_with_capability_gap">with gap</option>
-            <option value="failed">failed</option>
+            <option value="complete">Обработан</option>
+            <option value="partial_with_capability_gap">
+              Требует дополнения
+            </option>
+            <option value="failed">Ошибка обработки</option>
           </select>
         </label>
         <label>
@@ -595,11 +846,15 @@ function DocumentsPage() {
         </InfoNotice>
       )}
       {upload.isError && <ErrorNotice error={upload.error} />}
-      <QueryState query={documents} empty="Document Registry пуст.">
+      <QueryState query={documents} empty="Документы ещё не загружены.">
         {(page) => (
           <>
-            <DocumentTable documents={page.items} workspaceId={workspaceId} />
-            <nav className="pagination" aria-label="Document Registry pages">
+            <DocumentTable
+              documents={page.items}
+              workspaceId={workspaceId}
+              modeSlug={mode}
+            />
+            <nav className="pagination" aria-label="Страницы списка документов">
               <button
                 type="button"
                 disabled={cursorHistory.length === 0}
@@ -632,9 +887,11 @@ function DocumentsPage() {
 function DocumentTable({
   documents,
   workspaceId,
+  modeSlug,
 }: {
   documents: Document[];
   workspaceId: string;
+  modeSlug?: string | undefined;
 }) {
   return (
     <div className="table-wrap">
@@ -642,11 +899,11 @@ function DocumentTable({
         <thead>
           <tr>
             <th>Документ</th>
-            <th>Версия / provenance</th>
+            <th>Версия и источник</th>
             <th>Тип / размер</th>
-            <th>Admission</th>
-            <th>Extraction</th>
-            <th>Pages</th>
+            <th>Приём</th>
+            <th>Обработка</th>
+            <th>Страниц</th>
             <th>SHA-256</th>
           </tr>
         </thead>
@@ -655,7 +912,7 @@ function DocumentTable({
             <tr key={document.document_id}>
               <td>
                 <Link
-                  to={`/workspaces/${workspaceId}/documents/${document.document_id}?page=1`}
+                  to={`${workspaceRouteFromSlug(modeSlug, workspaceId, `/documents/${document.document_id}`)}?page=1`}
                 >
                   {document.safe_display_name}
                 </Link>
@@ -670,8 +927,10 @@ function DocumentTable({
                   SourceVersion: {document.source_version_id ?? "gap"}
                 </small>
                 <small>
-                  <Link to={`/workspaces/${workspaceId}/jobs`}>
-                    jobs: {document.job_ids.length}
+                  <Link
+                    to={workspaceRouteFromSlug(modeSlug, workspaceId, "/jobs")}
+                  >
+                    заданий обработки: {document.job_ids.length}
                   </Link>
                 </small>
               </td>
@@ -708,8 +967,8 @@ function DocumentViewerPage() {
   const page = Math.max(1, Number(params.get("page") || 1));
   return (
     <Page
-      title="PDF / Evidence Viewer"
-      lead="Viewer визуализирует evidence, но не подтверждает геометрию и не является CAD authority."
+      title="Просмотр документа"
+      lead="Исходный документ с переходом к точной странице и отмеченной области."
     >
       <PdfEvidenceViewer
         workspaceId={workspaceId}
@@ -722,7 +981,7 @@ function DocumentViewerPage() {
 }
 
 function ExactEvidencePage() {
-  const { workspaceId = "", locatorId = "" } = useParams();
+  const { workspaceId = "", locatorId = "", mode } = useParams();
   const evidence = useQuery({
     queryKey: ["exact-evidence", workspaceId, locatorId],
     queryFn: async () => {
@@ -743,32 +1002,35 @@ function ExactEvidencePage() {
   });
   return (
     <Page
-      title="Exact Evidence Locator"
-      lead="Разрешённая workspace-ссылка на точную страницу/регион и immutable evidence digest."
+      title="Точное место в исходном документе"
+      lead="Страница и область исходного документа, на которых основано выбранное сведение."
     >
-      <QueryState query={evidence} empty="Evidence locator отсутствует.">
+      <QueryState
+        query={evidence}
+        empty="Связь с исходным документом отсутствует."
+      >
         {(value) => (
           <section className="panel">
             <dl>
-              <dt>SourceVersion</dt>
+              <dt>Версия источника</dt>
               <dd className="mono">{value.locator.source_version_id}</dd>
-              <dt>Locator</dt>
+              <dt>Идентификатор места</dt>
               <dd className="mono">{value.locator.source_locator_id}</dd>
-              <dt>Page / region</dt>
+              <dt>Страница и область</dt>
               <dd>
                 {value.locator.page_number} / {value.locator.region.join(", ")}
               </dd>
-              <dt>Evidence digest</dt>
+              <dt>Контрольная сумма фрагмента</dt>
               <dd className="mono truncate">{value.locator.evidence_digest}</dd>
-              <dt>Extraction</dt>
+              <dt>Способ извлечения</dt>
               <dd>{value.locator.extraction_method}</dd>
-              <dt>Status / authority</dt>
+              <dt>Состояние и тип источника</dt>
               <dd>
                 {value.candidate_fact_status} / {value.authority_type}
               </dd>
             </dl>
             <Link
-              to={`/workspaces/${workspaceId}/documents/${value.locator.document_id}?page=${String(value.locator.page_number)}`}
+              to={`${workspaceRouteFromSlug(mode, workspaceId, `/documents/${value.locator.document_id}`)}?page=${String(value.locator.page_number)}`}
             >
               Открыть документ на странице {value.locator.page_number}
             </Link>
@@ -806,10 +1068,10 @@ function JobsPage() {
   }, [queryClient, workspaceId]);
   return (
     <Page
-      title="Durable Jobs"
-      lead="SSE показывает resumable progress; PostgreSQL остаётся canonical job state."
+      title="Обработка документов"
+      lead="Текущие и завершённые задания обработки загруженных материалов."
     >
-      <QueryState query={jobs} empty="Jobs отсутствуют.">
+      <QueryState query={jobs} empty="Заданий обработки пока нет.">
         {(items) => <JobTable jobs={items} workspaceId={workspaceId} />}
       </QueryState>
     </Page>
@@ -837,12 +1099,12 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
       <table>
         <thead>
           <tr>
-            <th>Kind</th>
-            <th>State</th>
-            <th>Attempts</th>
-            <th>Failure</th>
-            <th>Terminal receipt</th>
-            <th>Action</th>
+            <th>Вид обработки</th>
+            <th>Состояние</th>
+            <th>Попытки</th>
+            <th>Причина ошибки</th>
+            <th>Результат</th>
+            <th>Действие</th>
           </tr>
         </thead>
         <tbody>
@@ -861,7 +1123,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                       : "default"
                   }
                 >
-                  {job.state}
+                  {humanizeStatus(job.state)}
                 </StatusPill>
               </td>
               <td>
@@ -877,7 +1139,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                     className="ghost"
                     onClick={() => cancel.mutate(job.job_id)}
                   >
-                    Cancel
+                    Отменить
                   </button>
                 )}
               </td>
@@ -892,12 +1154,12 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
 function EvidenceIndexPage() {
   return (
     <Page
-      title="Evidence"
-      lead="Evidence открывается из точного document/page locator. Выберите документ в Document Registry."
+      title="Исходные подтверждения"
+      lead="Откройте документ, чтобы перейти к странице и области, из которых получено выбранное сведение."
     >
       <InfoNotice>
-        Demo evidence запрещён: до выбора зарегистрированного SourceVersion
-        панель остаётся пустой.
+        Выберите зарегистрированный документ. Система не показывает условные
+        сведения без связи с исходным материалом.
       </InfoNotice>
     </Page>
   );
@@ -908,8 +1170,8 @@ function WorkMatrixPage() {
   const audit = useMode(workspaceId, "Audit");
   return (
     <Page
-      title="WorkRequirementMatrix"
-      lead="Одна matrix identity должна использоваться всеми четырьмя режимами."
+      title="Работы и требования"
+      lead="Структура работ объекта и связанные требования к контролю и документам."
     >
       <QueryState query={audit}>
         {(view) =>
@@ -925,7 +1187,7 @@ function WorkMatrixPage() {
 }
 
 function SupportProductionPage() {
-  const { workspaceId = "" } = useParams();
+  const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
   const production = useQuery({
     queryKey: ["support-id-production", workspaceId],
@@ -1018,14 +1280,15 @@ function SupportProductionPage() {
   });
   return (
     <Page
-      title="Support / Исполнительная документация"
-      lead="От WorkRequirementMatrix к versioned комплекту, реестру, evidence-bound полям и управляемой генерации."
+      title="Исполнительная документация"
+      lead="Требования к документам, состав комплекта, реестр и подготовка поддержанных форм."
     >
       <QueryState query={production}>
         {(value) => (
           <SupportProductionBody
             value={value}
             workspaceId={workspaceId}
+            modeSlug={mode}
             formPackage={(identity) => formPackage.mutate(identity)}
             packagePending={formPackage.isPending}
             generation={(membership) => startGeneration.mutate(membership)}
@@ -1050,6 +1313,7 @@ function SupportProductionPage() {
 function SupportProductionBody({
   value,
   workspaceId,
+  modeSlug,
   formPackage,
   packagePending,
   generation,
@@ -1062,6 +1326,7 @@ function SupportProductionBody({
 }: {
   value: SupportProduction;
   workspaceId: string;
+  modeSlug?: string | undefined;
   formPackage: (identity: string) => void;
   packagePending: boolean;
   generation: (membership: Record<string, unknown>) => void;
@@ -1085,9 +1350,9 @@ function SupportProductionBody({
     <>
       <section className="panel">
         <div className="entity-heading">
-          <h2>Work / ID Requirements</h2>
+          <h2>Требования к исполнительной документации</h2>
           <StatusPill tone="warning">
-            {value.package ? "package formed" : "package absent"}
+            {value.package ? "Комплект сформирован" : "Комплект не сформирован"}
           </StatusPill>
         </div>
         {value.requirements.length ? (
@@ -1096,26 +1361,29 @@ function SupportProductionBody({
               <thead>
                 <tr>
                   <th>Документ</th>
-                  <th>State</th>
-                  <th>Authority</th>
-                  <th>Basis / gaps</th>
+                  <th>Состояние</th>
+                  <th>Основание</th>
+                  <th>Требования и пробелы</th>
                 </tr>
               </thead>
               <tbody>
                 {value.requirements.map((requirement) => (
                   <tr key={String(requirement.document_requirement_id)}>
                     <td>
-                      <strong>{String(requirement.document_type)}</strong>
-                      <small className="mono">
-                        {String(requirement.document_requirement_id)}
-                      </small>
+                      <strong>
+                        {humanizeDocumentRole(
+                          String(requirement.document_type),
+                        )}
+                      </strong>
                     </td>
                     <td>
                       <StatusPill>
-                        {String(requirement.requirement_state)}
+                        {humanizeStatus(String(requirement.requirement_state))}
                       </StatusPill>
                     </td>
-                    <td>{String(requirement.authority_status)}</td>
+                    <td>
+                      {humanizeStatus(String(requirement.authority_status))}
+                    </td>
                     <td>
                       <GapList
                         gaps={[
@@ -1139,7 +1407,8 @@ function SupportProductionBody({
           </div>
         ) : (
           <InfoNotice>
-            WorkRequirementMatrix не содержит ID requirements.
+            Для выбранной работы требования к исполнительной документации ещё не
+            определены.
           </InfoNotice>
         )}
         {!value.package &&
@@ -1149,7 +1418,7 @@ function SupportProductionBody({
               onClick={() => formPackage(identity)}
               disabled={packagePending}
             >
-              Сформировать PackageVersion для {identity}
+              Сформировать комплект
             </button>
           ))}
         {commandError !== null && commandError !== undefined ? (
@@ -1159,35 +1428,35 @@ function SupportProductionBody({
 
       {value.package && (
         <>
-          <section className="metrics" aria-label="Package completeness">
+          <section className="metrics" aria-label="Комплектность пакета">
             <Metric
-              label="Required"
+              label="Требуется"
               value={Number(readiness?.required_count ?? 0)}
             />
             <Metric
-              label="Covered"
+              label="Учтено"
               value={Number(readiness?.covered_count ?? 0)}
             />
             <Metric
-              label="Generated candidate"
+              label="Подготовлено"
               value={Number(readiness?.generated_candidate_count ?? 0)}
             />
             <Metric
-              label="Finalized"
+              label="Финализировано"
               value={Number(readiness?.finalized_count ?? 0)}
             />
             <Metric
-              label="Missing"
+              label="Отсутствует"
               value={Number(readiness?.missing_count ?? 0)}
             />
             <Metric
-              label="Blocked"
+              label="Заблокировано"
               value={Number(readiness?.blocked_count ?? 0)}
             />
           </section>
           <section className="panel">
             <div className="entity-heading">
-              <h2>PackageVersion / ordered memberships</h2>
+              <h2>Состав комплекта</h2>
               <StatusPill tone="warning">
                 {displayValue(readiness?.status, "incomplete")}
               </StatusPill>
@@ -1197,10 +1466,10 @@ function SupportProductionBody({
                 <thead>
                   <tr>
                     <th>№</th>
-                    <th>Role / subject</th>
-                    <th>Copies / stage</th>
-                    <th>State</th>
-                    <th>Action / evidence</th>
+                    <th>Документ</th>
+                    <th>Экземпляры и этап</th>
+                    <th>Состояние</th>
+                    <th>Действие и основание</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1221,10 +1490,9 @@ function SupportProductionBody({
                       >
                         <td>{String(membership.ordinal)}</td>
                         <td>
-                          <strong>{String(membership.role)}</strong>
-                          <small className="mono">
-                            {String(membership.subject_ref)}
-                          </small>
+                          <strong>
+                            {humanizeDocumentRole(String(membership.role))}
+                          </strong>
                         </td>
                         <td>
                           {String(membership.required_copy_count)} /{" "}
@@ -1234,33 +1502,45 @@ function SupportProductionBody({
                           <StatusPill
                             tone={blockers.length ? "warning" : "default"}
                           >
-                            {finalizedIdentity
-                              ? "finalized"
-                              : candidate
-                                ? "generated_candidate"
-                                : String(membership.state)}
+                            {humanizeStatus(
+                              finalizedIdentity
+                                ? "finalized"
+                                : candidate
+                                  ? "generated_candidate"
+                                  : String(membership.state),
+                            )}
                           </StatusPill>
                           {Boolean(membership.job_state) && (
-                            <small>job: {String(membership.job_state)}</small>
+                            <small>
+                              обработка:{" "}
+                              {humanizeStatus(String(membership.job_state))}
+                            </small>
                           )}
                           {Boolean(membership.template_version) && (
                             <small>
-                              template {String(membership.template_version)} ·{" "}
-                              {displayValue(
-                                membership.template_qualification_state,
-                                "unqualified",
+                              форма {String(membership.template_version)} ·{" "}
+                              {humanizeStatus(
+                                displayValue(
+                                  membership.template_qualification_state,
+                                  "unqualified",
+                                ),
                               )}
                             </small>
                           )}
                           {Boolean(membership.print_validation_result) && (
                             <small>
-                              print:{" "}
-                              {String(membership.print_validation_result)}
+                              печатная форма:{" "}
+                              {humanizeStatus(
+                                String(membership.print_validation_result),
+                              )}
                             </small>
                           )}
                           {Boolean(membership.review_outcome) && (
                             <small>
-                              review: {String(membership.review_outcome)}
+                              проверка:{" "}
+                              {humanizeStatus(
+                                String(membership.review_outcome),
+                              )}
                             </small>
                           )}
                         </td>
@@ -1271,7 +1551,7 @@ function SupportProductionBody({
                                 className="button-link"
                                 href={`/api/v1/workspaces/${workspaceId}/support/generated-candidates/${candidateIdentity}/content`}
                               >
-                                Скачать candidate
+                                Скачать проект документа
                               </a>
                               {!membership.review_outcome && (
                                 <button
@@ -1279,7 +1559,7 @@ function SupportProductionBody({
                                   onClick={() => review(candidateIdentity)}
                                   disabled={reviewPending}
                                 >
-                                  Подтвердить review
+                                  Подтвердить проверку
                                 </button>
                               )}
                               {membership.review_outcome === "approved" &&
@@ -1299,7 +1579,7 @@ function SupportProductionBody({
                               onClick={() => generation(membership)}
                               disabled={generationPending}
                             >
-                              Запустить generation
+                              Подготовить документ
                             </button>
                           ) : null}
                           {finalizedIdentity && (
@@ -1307,7 +1587,7 @@ function SupportProductionBody({
                               className="button-link"
                               href={`/api/v1/workspaces/${workspaceId}/support/finalized-documents/${finalizedIdentity}/content`}
                             >
-                              Скачать finalized
+                              Скачать финализированный документ
                             </a>
                           )}
                           <GapList gaps={blockers} good={!blockers.length} />
@@ -1320,15 +1600,15 @@ function SupportProductionBody({
             </div>
           </section>
           <section className="panel">
-            <h2>Immutable package / register history</h2>
+            <h2>История версий комплекта и реестра</h2>
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>PackageVersion</th>
-                    <th>Composition</th>
-                    <th>RegisterVersion</th>
-                    <th>Fingerprint</th>
+                    <th>Версия комплекта</th>
+                    <th>Состав</th>
+                    <th>Версия реестра</th>
+                    <th>Контрольная сумма</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1344,12 +1624,12 @@ function SupportProductionBody({
                       : [];
                     return (
                       <tr key={String(packageVersion.version)}>
-                        <td>PackageVersion {String(version)}</td>
-                        <td>{String(documents.length)} body documents</td>
+                        <td>Версия комплекта {String(version)}</td>
+                        <td>{String(documents.length)} документов</td>
                         <td>
                           {registerVersion
-                            ? `RegisterVersion ${String(version)}`
-                            : "gap"}
+                            ? `Версия реестра ${String(version)}`
+                            : "Не сформирована"}
                         </td>
                         <td className="mono">
                           {displayValue(
@@ -1383,7 +1663,8 @@ function SupportProductionBody({
                     <ol start={2}>
                       {documents.map((item) => (
                         <li key={String(item.membership_id)}>
-                          {String(item.role)} — {String(item.state)}, copies{" "}
+                          {humanizeDocumentRole(String(item.role))} —{" "}
+                          {humanizeStatus(String(item.state))}, экземпляров{" "}
                           {String(item.copies)}
                         </li>
                       ))}
@@ -1393,26 +1674,30 @@ function SupportProductionBody({
               })}
             </article>
             <article className="panel">
-              <h2>Gaps / blockers</h2>
-              <GapList gaps={value.gaps} />
+              <h2>Что мешает завершению</h2>
+              <GapList gaps={value.gaps.map(humanizeGap)} />
             </article>
           </section>
           <section className="panel">
-            <h2>Resolved document fields</h2>
+            <h2>Заполненные поля документа</h2>
             {fields.length ? (
               <dl>
                 {fields.map((field) => (
                   <div
                     key={`${String(field.generation_run_id)}:${String(field.field_key)}`}
                   >
-                    <dt>{String(field.field_key)}</dt>
+                    <dt>{humanizeFieldKey(String(field.field_key))}</dt>
                     <dd>
                       {String(field.display_value ?? field.state)}
                       {Boolean(field.source_locator_id) && (
                         <Link
-                          to={`/workspaces/${workspaceId}/evidence/locators/${String(field.source_locator_id)}`}
+                          to={workspaceRouteFromSlug(
+                            modeSlug,
+                            workspaceId,
+                            `/evidence/locators/${String(field.source_locator_id)}`,
+                          )}
                         >
-                          exact evidence
+                          открыть источник
                         </Link>
                       )}
                     </dd>
@@ -1420,7 +1705,7 @@ function SupportProductionBody({
                 ))}
               </dl>
             ) : (
-              <p>GenerationRun ещё не разрешал поля.</p>
+              <p>Поля документа ещё не подготовлены.</p>
             )}
           </section>
         </>
@@ -1430,35 +1715,80 @@ function SupportProductionBody({
 }
 
 function ModePage() {
-  const { workspaceId = "", mode = "Tender" } = useParams();
-  const normalized = MODES.includes(mode as (typeof MODES)[number])
-    ? (mode as (typeof MODES)[number])
-    : "Tender";
-  const view = useMode(workspaceId, normalized);
+  const { workspaceId = "", mode } = useParams();
+  const normalized = modeFromSlug(mode);
+  const view = useMode(workspaceId, normalized ?? "Tender");
+  if (!normalized) return <Navigate to="/modes" replace />;
+  const definition = MODE_DEFINITIONS[normalized];
   return (
-    <Page
-      title={normalized}
-      lead="Mode shell читает общее ядро и не создаёт вымышленные bounded results."
-    >
+    <Page title={definition.title} lead={definition.purpose}>
       <QueryState query={view}>
         {(value) => (
-          <div className="split">
-            <section className="panel">
+          <div className="mode-home">
+            <section className="panel mode-summary">
               <div className="entity-heading">
-                <h2>Execution</h2>
-                <StatusPill tone="warning">{value.readiness}</StatusPill>
+                <h2>Текущее состояние</h2>
+                <StatusPill tone="warning">
+                  {humanizeReadiness(value.readiness)}
+                </StatusPill>
               </div>
-              <p>{value.purpose}</p>
-              <dl>
-                <dt>Execution</dt>
-                <dd>{value.execution_state ?? "не запускался"}</dd>
-                <dt>Matrix</dt>
-                <dd className="mono">{value.matrix_version_id ?? "нет"}</dd>
-              </dl>
+              <div className="mode-facts">
+                <div>
+                  <strong>{value.available_inputs.length}</strong>
+                  <span>источников данных доступно</span>
+                </div>
+                <div>
+                  <strong>{Object.keys(value.bounded_results).length}</strong>
+                  <span>результатов подготовлено</span>
+                </div>
+                <div>
+                  <strong>
+                    {value.gaps.length + value.missing_capabilities.length}
+                  </strong>
+                  <span>вопросов требуют решения</span>
+                </div>
+              </div>
             </section>
             <section className="panel">
-              <h2>Required missing capabilities</h2>
-              <GapList gaps={value.missing_capabilities} />
+              <h2>Профессиональные результаты</h2>
+              <p>{definition.results}</p>
+              {normalized === "Support" ? (
+                <Link
+                  className="button-link"
+                  to={workspaceRoute(normalized, workspaceId, "/support-id")}
+                >
+                  {definition.nextAction}
+                </Link>
+              ) : (
+                <Link
+                  className="button-link"
+                  to={workspaceRoute(normalized, workspaceId, "/documents")}
+                >
+                  {definition.nextAction}
+                </Link>
+              )}
+            </section>
+            <section className="panel">
+              <h2>Что уже доступно</h2>
+              {value.available_inputs.length ? (
+                <p>
+                  Загруженные документы и сведения объекта готовы для работы в
+                  этом режиме.
+                </p>
+              ) : (
+                <p>Исходные документы ещё не загружены.</p>
+              )}
+            </section>
+            <section className="panel">
+              <h2>Что требуется сделать</h2>
+              {value.gaps.length || value.missing_capabilities.length ? (
+                <p>
+                  Для полного профессионального результата нужны дополнительные
+                  исходные данные или поддержка следующих этапов обработки.
+                </p>
+              ) : (
+                <p>Зарегистрированных препятствий нет.</p>
+              )}
             </section>
           </div>
         )}
@@ -1468,7 +1798,7 @@ function ModePage() {
 }
 
 function ProjectUnderstandingPage() {
-  const { workspaceId = "" } = useParams();
+  const { workspaceId = "", mode } = useParams();
   const understanding = useQuery({
     queryKey: ["project-understanding", workspaceId],
     queryFn: async () => {
@@ -1482,12 +1812,12 @@ function ProjectUnderstandingPage() {
   });
   return (
     <Page
-      title="Project Understanding"
-      lead="Единый evidence-bound ProjectDefinition, состав ОКС, работы и нормативный профиль ПД/РД."
+      title="Исходные данные объекта"
+      lead="Состав объекта, проектные сведения, работы и применимые нормативные требования."
     >
       <QueryState
         query={understanding}
-        empty="Обработка документов ещё не сформировала ProjectDefinition."
+        empty="Обработка документов ещё не сформировала описание объекта."
       >
         {(value) => {
           const definition = value.project_definition.definition as {
@@ -1506,51 +1836,56 @@ function ProjectUnderstandingPage() {
             <>
               <div className="metrics">
                 <Metric
-                  label="Project fields"
+                  label="Сведений об объекте"
                   value={Object.keys(definition.fields ?? {}).length}
                 />
                 <Metric
-                  label="Page decisions"
+                  label="Разобрано страниц"
                   value={value.page_roles.length}
                 />
                 <Metric
-                  label="Work packages"
+                  label="Пакетов работ"
                   value={value.work_packages.length}
                 />
-                <Metric label="Defects" value={value.defects.length} />
+                <Metric label="Замечаний" value={value.defects.length} />
               </div>
               <div className="split">
                 <section className="panel">
                   <div className="entity-heading">
-                    <h2>ProjectDefinition</h2>
-                    <StatusPill tone="warning">PARTIAL</StatusPill>
+                    <h2>Описание объекта</h2>
+                    <StatusPill tone="warning">
+                      Сформировано частично
+                    </StatusPill>
                   </div>
                   <EvidenceObject
                     value={definition.fields ?? {}}
                     workspaceId={workspaceId}
+                    modeSlug={mode}
                     evidenceIndex={evidenceIndex}
                   />
-                  <h3>Project gaps</h3>
-                  <GapList gaps={definition.gaps ?? []} />
+                  <h3>Недостающие сведения</h3>
+                  <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
                 </section>
                 <section className="panel">
-                  <h2>Applicable PD/RD Normative Profile</h2>
+                  <h2>Применимые нормативные требования</h2>
                   {profile ? (
                     <>
                       <dl>
-                        <dt>Profile</dt>
+                        <dt>Версия профиля</dt>
                         <dd className="mono">{String(profile.profile_id)}</dd>
-                        <dt>Applicable edition date</dt>
+                        <dt>Дата применимости</dt>
                         <dd>
                           {displayValue(
                             profile.applicable_on,
                             "не подтверждена",
                           )}
                         </dd>
-                        <dt>Completeness</dt>
-                        <dd>{String(profile.completeness_status)}</dd>
+                        <dt>Комплектность</dt>
+                        <dd>
+                          {humanizeStatus(String(profile.completeness_status))}
+                        </dd>
                       </dl>
-                      <h3>Official corpus denominator</h3>
+                      <h3>Состав нормативных источников</h3>
                       <EvidenceObject
                         value={
                           (profile.corpus_denominator ?? {}) as Record<
@@ -1560,18 +1895,18 @@ function ProjectUnderstandingPage() {
                         }
                       />
                       <NormativeRequirementList
-                        title="Required PD sections"
+                        title="Требуемые разделы ПД"
                         values={profile.required_pd_sections}
                       />
                       <NormativeRequirementList
-                        title="Expected RD sets"
+                        title="Ожидаемые комплекты РД"
                         values={profile.expected_rd_sets}
                       />
                       <NormativeRequirementList
-                        title="Formatting and assembly"
+                        title="Оформление и сборка"
                         values={profile.formatting_requirements}
                       />
-                      <h3>Unresolved applicability inputs</h3>
+                      <h3>Неуточнённые условия применимости</h3>
                       <GapList
                         gaps={
                           Array.isArray(profile.unresolved_inputs)
@@ -1579,7 +1914,7 @@ function ProjectUnderstandingPage() {
                             : []
                         }
                       />
-                      <h3>Normative gaps</h3>
+                      <h3>Пробелы нормативных оснований</h3>
                       <GapList
                         gaps={profileGaps.map(
                           (item) => item.code ?? "NORMATIVE_GAP",
@@ -1588,13 +1923,13 @@ function ProjectUnderstandingPage() {
                     </>
                   ) : (
                     <p className="empty-state">
-                      Normative profile отсутствует.
+                      Применимый нормативный профиль ещё не сформирован.
                     </p>
                   )}
                 </section>
               </div>
               <section className="panel">
-                <h2>Work packages</h2>
+                <h2>Пакеты работ</h2>
                 {value.work_packages.length ? (
                   <div className="card-grid">
                     {value.work_packages.map((item) => (
@@ -1602,14 +1937,13 @@ function ProjectUnderstandingPage() {
                         key={String(item.work_package_id)}
                         item={item}
                         workspaceId={workspaceId}
+                        modeSlug={mode}
                         evidenceIndex={evidenceIndex}
                       />
                     ))}
                   </div>
                 ) : (
-                  <p className="empty-state">
-                    WorkPackage candidates отсутствуют.
-                  </p>
+                  <p className="empty-state">Пакеты работ ещё не определены.</p>
                 )}
               </section>
               <section className="panel">
@@ -1672,10 +2006,12 @@ function NormativeRequirementList({
 function WorkPackageCard({
   item,
   workspaceId,
+  modeSlug,
   evidenceIndex,
 }: {
   item: Record<string, unknown>;
   workspaceId: string;
+  modeSlug?: string | undefined;
   evidenceIndex: Record<string, Record<string, unknown>>;
 }) {
   const packageValue = (item.package ?? {}) as Record<string, unknown>;
@@ -1685,10 +2021,9 @@ function WorkPackageCard({
     : [];
   return (
     <article className="entity-card">
-      <h3>{displayValue(workType.normalized, "unresolved")}</h3>
-      <p className="mono">{String(item.work_package_id)}</p>
+      <h3>{displayValue(workType.normalized, "Не определён")}</h3>
       <p>
-        Evidence:{" "}
+        Исходные подтверждения:{" "}
         {locators.length
           ? locators.map((locator) => {
               const identity = String(locator);
@@ -1696,15 +2031,19 @@ function WorkPackageCard({
               return (
                 <Link
                   key={identity}
-                  to={`/workspaces/${workspaceId}/evidence/locators/${identity}`}
+                  to={workspaceRouteFromSlug(
+                    modeSlug,
+                    workspaceId,
+                    `/evidence/locators/${identity}`,
+                  )}
                 >
                   {evidence
-                    ? `page ${displayValue(evidence.locator_value)}`
-                    : identity}
+                    ? `страница ${displayValue(evidence.locator_value)}`
+                    : "открыть источник"}
                 </Link>
               );
             })
-          : "gap"}
+          : "не указаны"}
       </p>
     </article>
   );
@@ -1713,10 +2052,12 @@ function WorkPackageCard({
 function EvidenceObject({
   value,
   workspaceId,
+  modeSlug,
   evidenceIndex,
 }: {
   value: Record<string, unknown>;
   workspaceId?: string;
+  modeSlug?: string | undefined;
   evidenceIndex?: Record<string, Record<string, unknown>>;
 }) {
   return (
@@ -1733,25 +2074,31 @@ function EvidenceObject({
             <dd>
               {displayValue(
                 item.normalized_value ?? item.raw_value,
-                "no_result",
+                "Нет результата",
               )}
             </dd>
             {item.raw_value !== undefined && (
-              <dd className="muted">Printed: {displayValue(item.raw_value)}</dd>
+              <dd className="muted">
+                В источнике: {displayValue(item.raw_value)}
+              </dd>
             )}
             {item.source_locator_id !== undefined && (
               <dd className="mono">
                 {workspaceId ? (
                   <Link
-                    to={`/workspaces/${workspaceId}/evidence/locators/${locatorIdentity}`}
+                    to={workspaceRouteFromSlug(
+                      modeSlug,
+                      workspaceId,
+                      `/evidence/locators/${locatorIdentity}`,
+                    )}
                   >
-                    Locator: {displayValue(item.source_locator_id)}
+                    Открыть исходный фрагмент
                     {evidenceIndex?.[locatorIdentity]
-                      ? " (resolved)"
-                      : " (gap)"}
+                      ? ""
+                      : " (связь не разрешена)"}
                   </Link>
                 ) : (
-                  <>Locator: {displayValue(item.source_locator_id)}</>
+                  <>Исходный фрагмент: {displayValue(item.source_locator_id)}</>
                 )}
               </dd>
             )}
@@ -1806,42 +2153,61 @@ function KnowledgePage() {
   });
   return (
     <Page
-      title="Platform Knowledge Status"
-      lead="Read-only operational status без выдачи полного canonical knowledge текста."
+      title="Нормативная база комплекса"
+      lead="Состояние нормативных источников и профессиональных методик, используемых комплексом."
     >
       <QueryState query={status}>
         {(value) => (
           <>
-            <div className="metrics">
-              <Metric
-                label="Source guidance"
-                value={value.source_guidance_count}
-              />
-              <Metric
-                label="Active intelligence"
-                value={value.active_intelligence_count}
-              />
-              <Metric label="Playbooks" value={value.active_playbook_count} />
-              <Metric
-                label="NTD editions"
-                value={value.verified_normative_edition_count}
-              />
-              <Metric label="RuleVersion" value={value.rule_version_count} />
-            </div>
-            <section className="panel danger-panel">
-              <h2>KnowledgeReady = {String(value.knowledge_ready)}</h2>
-              <GapList gaps={value.blockers} />
+            <section className="panel admin-summary">
+              <h2>Общее состояние</h2>
+              <p>
+                Загружено проверенных нормативных редакций:{" "}
+                {value.verified_normative_edition_count.toLocaleString("ru-RU")}
+                . Активных методик:{" "}
+                {value.active_playbook_count.toLocaleString("ru-RU")}.
+              </p>
+              <p>
+                {value.knowledge_ready
+                  ? "Нормативная база готова к использованию."
+                  : "Часть нормативных источников и методик ещё требует подготовки."}
+              </p>
             </section>
-            <section className="panel">
-              <h2>Fingerprints</h2>
-              <pre>{JSON.stringify(value.semantic_fingerprints, null, 2)}</pre>
-            </section>
-            <section className="panel">
-              <h2>NTD Seed Remediation — exact denominator</h2>
-              <QueryState query={ntdSeed}>
-                {(seed) => <NtdSeedStatusTable value={seed} />}
-              </QueryState>
-            </section>
+            <details className="panel technical-details">
+              <summary>Технические сведения</summary>
+              <div className="metrics">
+                <Metric
+                  label="Source guidance"
+                  value={value.source_guidance_count}
+                />
+                <Metric
+                  label="Active intelligence"
+                  value={value.active_intelligence_count}
+                />
+                <Metric label="Playbooks" value={value.active_playbook_count} />
+                <Metric
+                  label="NTD editions"
+                  value={value.verified_normative_edition_count}
+                />
+                <Metric label="RuleVersion" value={value.rule_version_count} />
+              </div>
+              <section className="danger-panel technical-section">
+                <h2>KnowledgeReady = {String(value.knowledge_ready)}</h2>
+                <GapList gaps={value.blockers} />
+              </section>
+              <section className="technical-section">
+                <h2>Fingerprints</h2>
+                <pre>
+                  {JSON.stringify(value.semantic_fingerprints, null, 2)}
+                </pre>
+              </section>
+              <section className="technical-section">
+                <h2>NTD Seed Remediation — exact denominator</h2>
+                <QueryState query={ntdSeed}>
+                  {(seed) => <NtdSeedStatusTable value={seed} />}
+                </QueryState>
+              </section>
+            </details>
           </>
         )}
       </QueryState>
@@ -2078,53 +2444,66 @@ function OperationsPage() {
   });
   return (
     <Page
-      title="Operations"
-      lead="Состояние application slice, recovery и readiness без optimistic PASS."
+      title="Состояние комплекса"
+      lead="Работоспособность развернутого контура и доступность его основных функций."
     >
       <QueryState query={capabilities}>
         {(value) => (
-          <div className="split">
-            <section className="panel">
-              <h2>Implemented</h2>
-              <GapList gaps={value.implemented} good />
+          <>
+            <section className="panel admin-summary">
+              <h2>Общее состояние</h2>
+              <p>
+                Комплекс доступен для разработки и проверки реализованных
+                функций. Полная готовность к промышленной эксплуатации пока не
+                заявлена.
+              </p>
             </section>
-            <section className="panel">
-              <h2>Blockers</h2>
-              <GapList gaps={value.blockers} />
-            </section>
-            <section className="panel">
-              <h2>Readiness</h2>
-              <dl>
-                <dt>TrialReady</dt>
-                <dd>{String(value.trial_ready)}</dd>
-                <dt>OKSReady</dt>
-                <dd>{String(value.oks_ready)}</dd>
-                <dt>ProductReady</dt>
-                <dd>{String(value.product_ready)}</dd>
-              </dl>
-            </section>
-            <section className="panel">
-              <h2>Deployment</h2>
-              <dl>
-                <dt>Source commit</dt>
-                <dd className="mono">{value.deployment.source_commit}</dd>
-                <dt>Runtime profile</dt>
-                <dd>{value.deployment.runtime_profile}</dd>
-                <dt>Migration head</dt>
-                <dd className="mono">{value.deployment.migration_head}</dd>
-                <dt>Deployed at</dt>
-                <dd>{value.deployment.deployed_at ?? "not deployed"}</dd>
-                <dt>Frontend</dt>
-                <dd className="mono">
-                  {value.deployment.frontend_build_digest ?? "not pinned"}
-                </dd>
-                <dt>OpenAPI</dt>
-                <dd className="mono">
-                  {value.deployment.openapi_digest ?? "not pinned"}
-                </dd>
-              </dl>
-            </section>
-          </div>
+            <details className="panel technical-details">
+              <summary>Технические сведения</summary>
+              <div className="split technical-section">
+                <section className="panel">
+                  <h2>Implemented</h2>
+                  <GapList gaps={value.implemented} good />
+                </section>
+                <section className="panel">
+                  <h2>Blockers</h2>
+                  <GapList gaps={value.blockers} />
+                </section>
+                <section className="panel">
+                  <h2>Readiness</h2>
+                  <dl>
+                    <dt>TrialReady</dt>
+                    <dd>{String(value.trial_ready)}</dd>
+                    <dt>OKSReady</dt>
+                    <dd>{String(value.oks_ready)}</dd>
+                    <dt>ProductReady</dt>
+                    <dd>{String(value.product_ready)}</dd>
+                  </dl>
+                </section>
+                <section className="panel">
+                  <h2>Deployment</h2>
+                  <dl>
+                    <dt>Source commit</dt>
+                    <dd className="mono">{value.deployment.source_commit}</dd>
+                    <dt>Runtime profile</dt>
+                    <dd>{value.deployment.runtime_profile}</dd>
+                    <dt>Migration head</dt>
+                    <dd className="mono">{value.deployment.migration_head}</dd>
+                    <dt>Deployed at</dt>
+                    <dd>{value.deployment.deployed_at ?? "not deployed"}</dd>
+                    <dt>Frontend</dt>
+                    <dd className="mono">
+                      {value.deployment.frontend_build_digest ?? "not pinned"}
+                    </dd>
+                    <dt>OpenAPI</dt>
+                    <dd className="mono">
+                      {value.deployment.openapi_digest ?? "not pinned"}
+                    </dd>
+                  </dl>
+                </section>
+              </div>
+            </details>
+          </>
         )}
       </QueryState>
     </Page>
@@ -2143,7 +2522,6 @@ function Page({
   return (
     <>
       <header className="page-header">
-        <p className="eyebrow">ASD-KONTUR / evidence-bound</p>
         <h1>{title}</h1>
         <p>{lead}</p>
       </header>
@@ -2161,7 +2539,7 @@ function FullState({ label }: { label: string }) {
 function ErrorNotice({ error }: { error: unknown }) {
   return (
     <div className="notice error" role="alert">
-      {error instanceof Error ? error.message : "request_failed"}
+      {humanizeError(error)}
     </div>
   );
 }
@@ -2172,7 +2550,7 @@ function GapList({ gaps, good = false }: { gaps: string[]; good?: boolean }) {
   return gaps.length ? (
     <ul className={good ? "good-list" : "gap-list"}>
       {gaps.map((gap) => (
-        <li key={gap}>{gap}</li>
+        <li key={gap}>{humanizeGap(gap)}</li>
       ))}
     </ul>
   ) : (
@@ -2212,4 +2590,92 @@ function formatBytes(value: number) {
   if (value < 1024) return `${String(value)} B`;
   if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KiB`;
   return `${(value / 1024 ** 2).toFixed(1)} MiB`;
+}
+
+function humanizeStatus(value: string) {
+  const labels: Record<string, string> = {
+    ACTIVE: "В работе",
+    active: "Действует",
+    complete: "Обработан",
+    partial_with_capability_gap: "Требует дополнения",
+    failed: "Ошибка",
+    queued: "В очереди",
+    leased: "Назначено исполнителю",
+    running: "Выполняется",
+    succeeded: "Завершено",
+    cancelled: "Отменено",
+    reconciliation_required: "Требует проверки",
+    finalized: "Финализирован",
+    generated_candidate: "Проект подготовлен",
+    missing: "Отсутствует",
+    blocked: "Заблокирован",
+    required: "Требуется",
+    conditional: "При определённых условиях",
+    not_applicable: "Не применяется",
+    unresolved: "Требует уточнения",
+    approved: "Одобрено",
+    print_ready: "Готово к печати",
+    qualified: "Квалифицировано",
+    unqualified: "Не квалифицировано",
+    authoritative: "Официальное основание",
+    verified: "Проверено",
+  };
+  return labels[value] ?? value.replaceAll("_", " ").toLowerCase();
+}
+
+function humanizeDocumentRole(value: string) {
+  const labels: Record<string, string> = {
+    register: "Реестр документов комплекта",
+    "support.aosr": "Акт освидетельствования скрытых работ",
+    aosr: "Акт освидетельствования скрытых работ",
+    executive_scheme: "Исполнительная схема",
+    quality_documents: "Документы о качестве материалов",
+    attachment: "Приложение",
+  };
+  return labels[value.toLowerCase()] ?? value.replaceAll("_", " ");
+}
+
+function humanizeFieldKey(value: string) {
+  const labels: Record<string, string> = {
+    "work_type.classification": "Вид работы",
+    work_type: "Вид работы",
+    project_reference: "Ссылка на проект",
+    organization: "Организация",
+    object_name: "Наименование объекта",
+    act_number: "Номер акта",
+    act_date: "Дата акта",
+  };
+  return labels[value] ?? value.replaceAll(".", " · ").replaceAll("_", " ");
+}
+
+function humanizeReadiness(value: string) {
+  if (["READY", "COMPLETE"].includes(value)) return "Готово";
+  if (["PARTIAL", "FOUNDATION_ONLY"].includes(value))
+    return "Доступно частично";
+  return "Требует подготовки";
+}
+
+function humanizeGap(value: string) {
+  const labels: Record<string, string> = {
+    WORK_REQUIREMENT_MATRIX_UNAVAILABLE: "Матрица работ ещё не сформирована.",
+    VERIFIED_NTD_SUBSET: "Не все нормативные основания проверены.",
+    TEMPLATE_NOT_PRODUCTION_QUALIFIED:
+      "Форма документа ещё не квалифицирована для выпуска.",
+    EXECUTIVE_SCHEME_OUTPUT_BLOCKED:
+      "Исполнительная схема не может быть подготовлена без подтверждённой геометрии.",
+    QUALITY_DOCUMENTS_MISSING: "Документы о качестве материалов отсутствуют.",
+    OCR_REQUIRED: "Для части страниц требуется распознавание.",
+  };
+  return (
+    labels[value] ?? "Требуется дополнительная проверка или исходные данные."
+  );
+}
+
+function humanizeError(error: unknown) {
+  if (!(error instanceof Error)) return "Не удалось выполнить запрос.";
+  if (/401|session|unauthor/i.test(error.message))
+    return "Сеанс завершён. Войдите снова.";
+  if (/403|forbidden/i.test(error.message))
+    return "Недостаточно прав для выполнения действия.";
+  return "Не удалось выполнить действие. Повторите попытку или обратитесь к администратору.";
 }

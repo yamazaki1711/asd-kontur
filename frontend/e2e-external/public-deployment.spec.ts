@@ -44,7 +44,7 @@ test("public website routes to the isolated Product Application", async ({
   ).toHaveAttribute("href", "https://app.asd-kontur.ru");
 });
 
-test("authenticated Product Spine exposes finalized synthetic package evidence", async ({
+test("authorized user enters by mode and downloads the finalized package document", async ({
   page,
   request,
 }) => {
@@ -57,11 +57,17 @@ test("authenticated Product Spine exposes finalized synthetic package evidence",
   await page.getByLabel("Пароль").fill(password);
   await page.getByRole("button", { name: "Войти" }).click();
   await expect(
-    page.getByRole("heading", { name: "Рабочие пространства" }),
+    page.getByRole("heading", { name: "Выберите режим работы" }),
   ).toBeVisible();
+  await expect(page.locator("article.mode-card")).toHaveCount(4);
+  await page
+    .locator("article.mode-card")
+    .filter({ hasText: "Инженерное сопровождение" })
+    .getByRole("link", { name: "Выбрать режим" })
+    .click();
   const workspace = page
     .locator("article")
-    .filter({ hasText: "Synthetic" })
+    .filter({ hasText: "Демонстрационный объект" })
     .first();
   const target = await workspace
     .getByRole("link", { name: "Открыть" })
@@ -71,15 +77,20 @@ test("authenticated Product Spine exposes finalized synthetic package evidence",
   if (!workspaceId) throw new Error("synthetic workspace identity is missing");
 
   for (const path of ["documents", "evidence", "work-matrix"]) {
-    await page.goto(`/workspaces/${workspaceId}/${path}`);
+    await page.goto(`/modes/support/workspaces/${workspaceId}/${path}`);
     await expect(page.locator("main")).toBeVisible();
   }
-  for (const mode of ["Tender", "Support", "Audit", "Restoration"]) {
-    await page.goto(`/workspaces/${workspaceId}/modes/${mode}`);
-    await expect(page.getByRole("heading", { name: mode })).toBeVisible();
+  for (const [mode, title] of [
+    ["tender", "Тендерный анализ"],
+    ["support", "Инженерное сопровождение"],
+    ["audit", "Аудит"],
+    ["restoration", "Восстановление"],
+  ] as const) {
+    await page.goto(`/modes/${mode}/workspaces/${workspaceId}`);
+    await expect(page.getByRole("heading", { name: title })).toBeVisible();
   }
 
-  await page.goto(`/workspaces/${workspaceId}/support-id`);
+  await page.goto(`/modes/support/workspaces/${workspaceId}/support-id`);
   const sseOpened = await page.evaluate(async (eventsUrl) => {
     return await new Promise<boolean>((resolve) => {
       const source = new EventSource(eventsUrl);
@@ -102,18 +113,20 @@ test("authenticated Product Spine exposes finalized synthetic package evidence",
   expect(sseOpened).toBe(true);
   for (const version of [1, 2, 3, 4]) {
     await expect(
-      page.getByText(`PackageVersion ${String(version)}`, { exact: true }),
+      page.getByText(`Версия комплекта ${String(version)}`, { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(`RegisterVersion ${String(version)}`, { exact: true }),
+      page.getByText(`Версия реестра ${String(version)}`, { exact: true }),
     ).toBeVisible();
   }
   await expect(
-    page.getByText("finalized", { exact: true }).first(),
+    page.getByText("Финализирован", { exact: true }).first(),
   ).toBeVisible();
-  await expect(page.getByText("Missing").first()).toBeVisible();
-  await expect(page.getByText("Blocked").first()).toBeVisible();
-  const finalizedLink = page.getByRole("link", { name: "Скачать finalized" });
+  await expect(page.getByText("Отсутствует").first()).toBeVisible();
+  await expect(page.getByText("Заблокировано").first()).toBeVisible();
+  const finalizedLink = page.getByRole("link", {
+    name: "Скачать финализированный документ",
+  });
   const href = await finalizedLink.getAttribute("href");
   if (!href) throw new Error("finalized document URL is missing");
   const full = await page.request.get(href);
@@ -130,7 +143,8 @@ test("authenticated Product Spine exposes finalized synthetic package evidence",
   expect((await range.body()).byteLength).toBe(32);
   expect(range.headers()["content-range"]).toMatch(/^bytes 0-31\//);
 
-  await page.goto("/operations");
+  await page.goto("/admin/system");
+  await page.getByText("Технические сведения", { exact: true }).click();
   await expect(page.getByRole("heading", { name: "Deployment" })).toBeVisible();
   await expect(page.getByText("public-development-contour")).toBeVisible();
 

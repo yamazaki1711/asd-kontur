@@ -66,7 +66,7 @@ export function PdfEvidenceViewer({
     },
   });
   if (loadError) return <div className="notice error">{loadError}</div>;
-  if (!pdf) return <div className="center-state">Загрузка PDF.js…</div>;
+  if (!pdf) return <div className="center-state">Загрузка документа…</div>;
   const boundedPage = Math.min(Math.max(page, 1), pdf.numPages);
   const fit = (mode: "width" | "page") => {
     void pdf.getPage(boundedPage).then((pdfPage) => {
@@ -141,39 +141,39 @@ export function PdfEvidenceViewer({
         />
       </section>
       <aside className="evidence-panel">
-        <h2>Evidence</h2>
-        {evidence.isPending && <p>Получение locator…</p>}
+        <h2>Источник сведений</h2>
+        {evidence.isPending && <p>Получение точного фрагмента…</p>}
         {evidence.isError && (
-          <p className="danger-text">knowledge/evidence gap</p>
+          <p className="danger-text">Связь с исходным фрагментом не найдена.</p>
         )}
         {evidence.data && (
           <dl>
-            <dt>SourceVersion</dt>
+            <dt>Версия источника</dt>
             <dd className="mono">{evidence.data.locator.source_version_id}</dd>
-            <dt>Locator</dt>
+            <dt>Идентификатор места</dt>
             <dd className="mono">{evidence.data.locator.source_locator_id}</dd>
-            <dt>Page / region</dt>
+            <dt>Страница и область</dt>
             <dd>
               {evidence.data.locator.page_number} /{" "}
               {evidence.data.locator.region.join(", ")}
             </dd>
-            <dt>Page geometry</dt>
+            <dt>Размер страницы</dt>
             <dd>
               {evidence.data.locator.width_points} ×{" "}
-              {evidence.data.locator.height_points} pt / rotation{" "}
+              {evidence.data.locator.height_points} пт / поворот{" "}
               {evidence.data.locator.rotation_degrees}°
             </dd>
-            <dt>Evidence digest</dt>
+            <dt>Контрольная сумма фрагмента</dt>
             <dd className="mono truncate">
               {evidence.data.locator.evidence_digest}
             </dd>
-            <dt>Extraction</dt>
+            <dt>Способ извлечения</dt>
             <dd>{evidence.data.locator.extraction_method}</dd>
-            <dt>Status</dt>
+            <dt>Состояние</dt>
             <dd>{evidence.data.candidate_fact_status}</dd>
-            <dt>Authority</dt>
+            <dt>Тип источника</dt>
             <dd>{evidence.data.authority_type}</dd>
-            <dt>Uncertainty</dt>
+            <dt>Неопределённость</dt>
             <dd>{evidence.data.uncertainty.join(", ") || "—"}</dd>
           </dl>
         )}
