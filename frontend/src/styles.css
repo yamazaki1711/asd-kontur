@@ -618,8 +618,7 @@ pre {
   .evidence-panel {
     max-height: 24rem;
   }
-  .top-link,
-  .profile-name {
+  .top-link {
     display: none;
   }
 }
@@ -628,6 +627,11 @@ pre {
   .topbar {
     min-height: 4.5rem;
     padding-inline: 0.85rem;
+  }
+  .profile-name {
+    display: block;
+    max-width: 7rem;
+    font-size: 0.7rem;
   }
   .brand small {
     max-width: 12rem;
@@ -680,7 +684,8 @@ pre {
     height: 2rem;
   }
   .brand small {
-    display: none;
+    display: block;
+    max-width: 9rem;
   }
   .top-actions {
     gap: 0.35rem;
