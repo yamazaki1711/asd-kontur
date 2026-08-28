@@ -149,7 +149,9 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         # The exact count is asserted from the durable job ledger below instead of
         # from this scheduling-local list.
         assert outcomes[:-1]
-        assert all(value.state is JobState.SUCCEEDED for value in outcomes[:-1])
+        assert all(value.state is JobState.SUCCEEDED for value in outcomes[:-1]), [
+            (value.job_id, value.state.value, value.outcome_code) for value in outcomes
+        ]
         assert outcomes[-1].state is JobState.FAILED
         assert outcomes[-1].outcome_code in {
             "classification_evidence_unavailable",

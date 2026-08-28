@@ -786,6 +786,7 @@ class PostgresWorkspaceStorageAdapter:
 
     TABLES = (
         "projection.project_understanding_entries",
+        "workspace.project_candidate_review_decisions",
         "workspace.project_understanding_reconciliations",
         "workspace.project_reconciliation_defects",
         "workspace.source_cross_references",
@@ -806,6 +807,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.project_understanding_runs",
         "workspace.reset_confirmation_challenges",
         "workspace.support_generation_job_bindings",
+        "workspace.job_control_decisions",
         "workspace.job_terminal_receipts",
         "workspace.job_cancellations",
         "workspace.job_leases",
@@ -814,6 +816,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.durable_job_attempts",
         "workspace.durable_jobs",
         "workspace.document_pages",
+        "workspace.intake_archive_members",
         "workspace.document_version_activation_decisions",
         "workspace.document_processing_states",
         "workspace.document_versions",

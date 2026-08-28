@@ -99,6 +99,11 @@ FIELD_PATTERNS: dict[str, tuple[re.Pattern[str], ...]] = {
     "purpose": (re.compile(r"назначение\s+(?:объекта|окс)\s*[:—-]\s*(.+)", re.I),),
     "location": (re.compile(r"(?:местоположение|адрес)\s+(?:объекта|окс)?\s*[:—-]\s*(.+)", re.I),),
     "object_composition": (re.compile(r"состав\s+(?:объекта|окс)\s*[:—-]\s*(.+)", re.I),),
+    "object_parts": (re.compile(r"части\s+(?:объекта|окс)\s*[:—-]\s*(.+)", re.I),),
+    "zones": (re.compile(r"(?:зоны|участки)\s+(?:работ)?\s*[:—-]\s*(.+)", re.I),),
+    "levels": (re.compile(r"(?:уровни|отметки)\s*[:—-]\s*(.+)", re.I),),
+    "work_fronts": (re.compile(r"фронты\s+работ\s*[:—-]\s*(.+)", re.I),),
+    "work_dependencies": (re.compile(r"зависимости\s+работ\s*[:—-]\s*(.+)", re.I),),
     "construction_stage": (
         re.compile(r"(?:очередь|этап)\s+(?:строительства)?\s*[:—-]\s*(.+)", re.I),
     ),

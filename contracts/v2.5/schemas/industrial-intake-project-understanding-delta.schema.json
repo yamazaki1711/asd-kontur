@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.5:schema:industrial-intake-project-understanding-delta",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "base_delta",
+    "product_denominator",
+    "slice_denominator",
+    "capabilities",
+    "synthetic_corpus",
+    "effective_distribution",
+    "trial_ready",
+    "oks_ready",
+    "product_ready"
+  ],
+  "properties": {
+    "contract_version": {"const": "2.5.0"},
+    "base_delta": {"const": "contracts/v2.4/fixtures/valid/capability-readiness-delta.json"},
+    "product_denominator": {"const": 143},
+    "slice_denominator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["intake", "project_understanding", "total"],
+      "properties": {
+        "intake": {"const": 17},
+        "project_understanding": {"const": 12},
+        "total": {"const": 29}
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "minItems": 29,
+      "maxItems": 29,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["capability_id", "prior", "current", "evidence", "remaining_gaps"],
+        "properties": {
+          "capability_id": {"type": "string", "pattern": "^(intake|project-understanding)\\.[a-z0-9-]+$"},
+          "prior": {"enum": ["CAPABILITY_READY", "PARTIAL", "FOUNDATION_ONLY", "CONTRACT_ONLY"]},
+          "current": {"enum": ["CAPABILITY_READY", "PARTIAL", "FOUNDATION_ONLY"]},
+          "evidence": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "remaining_gaps": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "synthetic_corpus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "generator", "real_oks_data", "files", "control_denominator"],
+      "properties": {
+        "version": {"const": "industrial-intake-synthetic@1.0.0"},
+        "generator": {"const": "tools/build_industrial_intake_synthetic_corpus.py"},
+        "real_oks_data": {"const": false},
+        "files": {"const": 13},
+        "control_denominator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["object_parts", "zones", "levels", "work_fronts", "work_types", "quantities", "materials", "dependencies", "vor_estimate_mismatches", "known_missing"],
+          "properties": {
+            "object_parts": {"const": 2},
+            "zones": {"const": 2},
+            "levels": {"const": 2},
+            "work_fronts": {"const": 2},
+            "work_types": {"const": 3},
+            "quantities": {"const": 3},
+            "materials": {"const": 3},
+            "dependencies": {"const": 2},
+            "vor_estimate_mismatches": {"const": 2},
+            "known_missing": {"const": ["confirmed_geometry", "material_quality_documents"]}
+          }
+        }
+      }
+    },
+    "effective_distribution": {
+      "const": {"CAPABILITY_READY": 16, "PARTIAL": 45, "FOUNDATION_ONLY": 36, "CONTRACT_ONLY": 39, "NOT_IMPLEMENTED": 7}
+    },
+    "trial_ready": {"const": false},
+    "oks_ready": {"const": false},
+    "product_ready": {"const": false}
+  }
+}

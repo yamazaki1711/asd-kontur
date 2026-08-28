@@ -10,7 +10,7 @@ import unicodedata
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO
+from typing import BinaryIO, cast
 from uuid import UUID
 
 
@@ -131,6 +131,66 @@ class WorkspaceObjectStore:
         finally:
             os.close(directory_fd)
         return CommittedObject(target, True)
+
+    def expand_archive(
+        self,
+        staged: StagedObject,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        max_members: int,
+        max_total_bytes: int,
+    ) -> tuple[StagedObject, ...]:
+        """Safely stage regular ZIP members while retaining the original container."""
+
+        if staged.media_type != "application/zip":
+            return ()
+        expanded: list[StagedObject] = []
+        observed_paths: set[str] = set()
+        observed_bytes = 0
+        try:
+            with zipfile.ZipFile(staged.staging_path) as archive:
+                members = [member for member in archive.infolist() if not member.is_dir()]
+                if not members or len(members) > max_members:
+                    raise IntakeError("archive_member_count_invalid")
+                for member in members:
+                    mode = (member.external_attr >> 16) & 0o170000
+                    if member.flag_bits & 0x1:
+                        raise IntakeError("archive_encrypted_member_rejected")
+                    if mode == 0o120000:
+                        raise IntakeError("archive_symlink_rejected")
+                    member_path = sanitize_relative_path(member.filename)
+                    folded = member_path.casefold()
+                    if folded in observed_paths:
+                        raise IntakeError("archive_duplicate_path_rejected")
+                    observed_paths.add(folded)
+                    if member.file_size < 1 or member.file_size > self._max_file_bytes:
+                        raise IntakeError("archive_member_size_invalid")
+                    if member.compress_size and member.file_size / member.compress_size > 200:
+                        raise IntakeError("archive_compression_ratio_rejected")
+                    observed_bytes += member.file_size
+                    if observed_bytes > max_total_bytes:
+                        raise IntakeError("archive_expanded_size_limit_exceeded")
+                    parent = PurePosixPath(staged.relative_path).with_suffix("")
+                    relative_path = (parent / member_path).as_posix()
+                    with archive.open(member, "r") as source:
+                        expanded.append(
+                            self.stage(
+                                stream=cast(BinaryIO, source),
+                                organization_id=organization_id,
+                                workspace_id=workspace_id,
+                                original_name=PurePosixPath(member_path).name,
+                                relative_path=relative_path,
+                                client_media_type=None,
+                            )
+                        )
+        except zipfile.BadZipFile as exc:
+            raise IntakeError("archive_structure_invalid") from exc
+        except BaseException:
+            for expanded_item in expanded:
+                self.abort(expanded_item)
+            raise
+        return tuple(expanded)
 
     def abort(self, staged: StagedObject) -> None:
         staged.staging_path.unlink(missing_ok=True)
@@ -289,7 +349,7 @@ def detect_staged_media_type(path: Path, header: bytes, client_media_type: str |
             return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         if "[Content_Types].xml" in names and "xl/workbook.xml" in names:
             return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        raise IntakeError("unsupported_office_container")
+        return "application/zip"
     detected = detect_media_type(header, client_media_type)
     if detected == "text/plain" and _looks_like_csv(path):
         return "text/csv"

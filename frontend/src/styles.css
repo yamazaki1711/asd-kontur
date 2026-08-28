@@ -202,6 +202,122 @@ button:disabled {
 .section-heading h2 {
   margin: 0;
 }
+.muted-copy {
+  color: var(--muted);
+}
+.intake-start {
+  align-items: stretch;
+}
+.drop-zone {
+  min-height: 15rem;
+  border: 2px dashed #9bad9f;
+  border-radius: 0.75rem;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 0.6rem;
+  padding: 1.5rem;
+  text-align: center;
+  background: #f6f8f4;
+  transition:
+    border-color 160ms ease,
+    background 160ms ease;
+}
+.drop-zone.drag-active {
+  border-color: var(--green);
+  background: #e8f1eb;
+}
+.upload-actions,
+.model-actions,
+.model-tabs,
+.candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+.inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.upload-actions {
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+.selected-upload {
+  margin-block: 1rem;
+}
+.selected-file-list {
+  display: grid;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+.selected-file-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.65rem;
+  min-width: 0;
+}
+.selected-file-list span,
+.selected-file-list small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.model-actions {
+  margin-bottom: 1rem;
+}
+.model-tabs {
+  margin-bottom: 1rem;
+  padding-bottom: 0.25rem;
+  overflow-x: auto;
+}
+.model-tabs button {
+  white-space: nowrap;
+}
+.model-tabs button.active {
+  background: var(--green);
+}
+.candidate-list {
+  display: grid;
+  gap: 0.75rem;
+}
+.candidate-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.65rem;
+}
+.candidate-row p {
+  margin: 0.25rem 0;
+}
+.candidate-row small,
+.candidate-row a {
+  display: block;
+}
+.candidate-edit {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.candidate-edit label,
+.candidate-edit input,
+.candidate-edit textarea {
+  display: block;
+  width: 100%;
+}
+.candidate-edit textarea {
+  min-height: 5rem;
+}
 .recent-object {
   margin: 1rem 0 1.5rem;
   max-width: 34rem;
@@ -674,6 +790,25 @@ pre {
   .entity-heading,
   .section-heading {
     align-items: flex-start;
+    flex-direction: column;
+  }
+  .candidate-row {
+    grid-template-columns: 1fr;
+  }
+  .candidate-actions,
+  .upload-actions,
+  .model-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .candidate-actions button,
+  .upload-actions .upload-button,
+  .model-actions > * {
+    width: 100%;
+    text-align: center;
+  }
+  .selected-file-list li {
+    align-items: stretch;
     flex-direction: column;
   }
   dl {

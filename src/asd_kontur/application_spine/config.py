@@ -43,7 +43,7 @@ class SpineSettings:
     deployed_at: str | None = None
     frontend_build_digest: str | None = None
     openapi_digest: str | None = None
-    expected_migration_head: str = "0027_public_deployment"
+    expected_migration_head: str = "0028_industrial_intake"
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -108,7 +108,7 @@ class SpineSettings:
             frontend_build_digest=os.environ.get("ASD_FRONTEND_BUILD_DIGEST"),
             openapi_digest=os.environ.get("ASD_OPENAPI_DIGEST"),
             expected_migration_head=os.environ.get(
-                "ASD_EXPECTED_MIGRATION_HEAD", "0027_public_deployment"
+                "ASD_EXPECTED_MIGRATION_HEAD", "0028_industrial_intake"
             ),
         )
 

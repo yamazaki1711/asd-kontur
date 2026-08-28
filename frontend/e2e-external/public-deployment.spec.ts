@@ -88,7 +88,45 @@ test("authorized user enters by mode and downloads the finalized package documen
   ] as const) {
     await page.goto(`/modes/${mode}/workspaces/${workspaceId}`);
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await page.goto(
+      `/modes/${mode}/workspaces/${workspaceId}/project-understanding`,
+    );
+    await expect(
+      page.getByRole("heading", { name: "Модель объекта" }),
+    ).toBeVisible();
   }
+
+  await page.goto(`/modes/support/workspaces/${workspaceId}/documents`);
+  await expect(page.getByText("Пояснительная_записка.docx")).toBeVisible();
+  const corruptRow = page
+    .locator("tbody tr")
+    .filter({ hasText: "Поврежденный_документ.pdf" });
+  await expect(corruptRow.getByText("Помещён в карантин")).toBeVisible();
+
+  await page.goto(
+    `/modes/support/workspaces/${workspaceId}/project-understanding`,
+  );
+  for (const section of [
+    "Общие сведения",
+    "Структура объекта",
+    "Виды и объёмы работ",
+    "Материалы и изделия",
+    "Пакеты работ",
+    "Матрица требований",
+    "Расхождения и пробелы",
+  ])
+    await expect(page.getByRole("button", { name: section })).toBeVisible();
+  await page.getByRole("button", { name: "Виды и объёмы работ" }).click();
+  await expect(
+    page.getByText("Устройство монолитной плиты", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("link", { name: "Открыть исходный фрагмент" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Точное место в исходном документе" }),
+  ).toBeVisible();
 
   await page.goto(`/modes/support/workspaces/${workspaceId}/support-id`);
   const sseOpened = await page.evaluate(async (eventsUrl) => {

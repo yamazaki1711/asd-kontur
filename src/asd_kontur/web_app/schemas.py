@@ -187,7 +187,31 @@ class ProjectUnderstandingView(ApiModel):
     normative_profile: dict[str, Any] | None
     defects: list[dict[str, Any]]
     evidence_index: dict[str, dict[str, Any]]
+    candidates: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    review_decisions: list[dict[str, Any]] = Field(default_factory=list)
+    intake_summary: dict[str, Any] = Field(default_factory=dict)
     authority_layers: dict[str, str]
+
+
+class ProjectCandidateReviewRequest(ApiModel):
+    candidate_kind: Literal["project_field", "work_type", "quantity", "material"]
+    candidate_id: UUID
+    candidate_version: int = Field(ge=1)
+    action: Literal["confirmed", "rejected", "corrected"]
+    resolved_value: Any | None = None
+    reason: str = Field(min_length=3, max_length=1000)
+
+    def model_post_init(self, __context: Any) -> None:
+        del __context
+        if (self.action == "corrected") != (self.resolved_value is not None):
+            raise ValueError("corrected action requires resolved_value")
+
+
+class ProjectCandidateReviewView(ApiModel):
+    review_decision_id: UUID
+    decision_version: int
+    action: str
+    decision_digest: str
 
 
 class SupportProductionView(ApiModel):

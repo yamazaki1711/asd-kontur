@@ -1,0 +1,21 @@
+{
+  "registry_version": "2.5.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "industrial_intake_project_understanding_partial",
+  "compatibility": {
+    "kind": "additive",
+    "preserves": ["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0"]
+  },
+  "schemas": [
+    {
+      "schema_id": "urn:asd-kontur:contracts:v2.5:schema:industrial-intake-project-understanding-delta",
+      "path": "schemas/industrial-intake-project-understanding-delta.schema.json",
+      "digest": "sha256:543736d700a8ff81695e8d4f8e2f51c2c9436d92b3a66f87e01926df35e8ff27"
+    }
+  ],
+  "contract_keys": ["product.industrial-intake-project-understanding-delta@2.5.0"],
+  "fixtures": {
+    "valid": ["fixtures/valid/industrial-intake-project-understanding-delta.json"],
+    "invalid": []
+  }
+}

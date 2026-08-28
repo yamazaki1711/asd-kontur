@@ -409,7 +409,19 @@ class IndustrialUnderstandingRepository:
             source_ids = self._active_source_ids(session, claimed)
             if not source_ids:
                 raise UnderstandingPersistenceError("project_sources_unavailable")
-            corpus_digest = semantic_digest([str(item) for item in source_ids])
+            review_digests = session.scalars(
+                sa.text(
+                    "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
+                    "organization_id=:o AND workspace_id=:w ORDER BY review_decision_id,decision_version"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id},
+            ).all()
+            corpus_digest = semantic_digest(
+                {
+                    "source_version_ids": [str(item) for item in source_ids],
+                    "review_decisions": list(review_digests),
+                }
+            )
             run_id = deterministic_uuid(
                 f"project-understanding-run:{claimed.organization_id}:{claimed.workspace_id}:"
                 f"{corpus_digest}:{UNDERSTANDING_PROFILE_VERSION}"
@@ -514,6 +526,15 @@ class IndustrialUnderstandingRepository:
                     "fingerprint": structural,
                 },
             )
+            self._rebuild_projection_in_session(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                run_id=run_id,
+                run_version=1,
+                project_definition_id=project_id,
+                matrix_id=matrix_id,
+            )
         return {
             "run_id": str(run_id),
             "run_version": 1,
@@ -525,6 +546,165 @@ class IndustrialUnderstandingRepository:
             "structural_fingerprint": structural,
             "terminal_status": "partial",
         }
+
+    def rebuild_project_understanding_projection(
+        self, *, organization_id: UUID, workspace_id: UUID
+    ) -> str:
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            selected = (
+                session.execute(
+                    sa.text(
+                        "SELECT run_id,run_version,project_definition_id,matrix_id FROM "
+                        "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                        "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if selected is None:
+                raise UnderstandingPersistenceError(
+                    "project_understanding_reconciliation_unavailable"
+                )
+            fingerprints = self._rebuild_projection_in_session(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                run_id=UUID(str(selected["run_id"])),
+                run_version=int(selected["run_version"]),
+                project_definition_id=UUID(str(selected["project_definition_id"])),
+                matrix_id=UUID(str(selected["matrix_id"])),
+            )
+        return semantic_digest({"entries": sorted(fingerprints)})
+
+    @staticmethod
+    def _rebuild_projection_in_session(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        run_id: UUID,
+        run_version: int,
+        project_definition_id: UUID,
+        matrix_id: UUID,
+    ) -> tuple[str, ...]:
+        session.execute(
+            sa.text(
+                "DELETE FROM projection.project_understanding_entries WHERE organization_id=:o "
+                "AND workspace_id=:w AND run_id=:run AND run_version=:version"
+            ),
+            {"o": organization_id, "w": workspace_id, "run": run_id, "version": run_version},
+        )
+        project = (
+            session.execute(
+                sa.text(
+                    "SELECT definition,fingerprint FROM workspace.project_definition_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND project_definition_id=:project "
+                    "AND version=1"
+                ),
+                {"o": organization_id, "w": workspace_id, "project": project_definition_id},
+            )
+            .mappings()
+            .one()
+        )
+        packages = session.execute(
+            sa.text(
+                "SELECT work_package_id,package,fingerprint FROM "
+                "workspace.construction_work_package_versions WHERE organization_id=:o AND "
+                "workspace_id=:w AND project_definition_id=:project ORDER BY work_package_id"
+            ),
+            {"o": organization_id, "w": workspace_id, "project": project_definition_id},
+        ).mappings()
+        matrix = (
+            session.execute(
+                sa.text(
+                    "SELECT matrix,fingerprint FROM workspace.work_requirement_matrix_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND matrix_id=:matrix AND version=1"
+                ),
+                {"o": organization_id, "w": workspace_id, "matrix": matrix_id},
+            )
+            .mappings()
+            .one()
+        )
+        entries: list[tuple[str, str, tuple[UUID, ...], dict[str, Any]]] = []
+        definition = dict(project["definition"])
+        project_locators = tuple(
+            sorted(
+                {
+                    UUID(str(value["source_locator_id"]))
+                    for value in dict(definition.get("fields", {})).values()
+                    if isinstance(value, dict) and value.get("source_locator_id")
+                },
+                key=str,
+            )
+        )
+        entries.append(
+            (
+                "project_definition",
+                str(project_definition_id),
+                project_locators,
+                {"definition": definition, "canonical_fingerprint": str(project["fingerprint"])},
+            )
+        )
+        for package_row in packages:
+            package = dict(package_row["package"])
+            locators = tuple(UUID(str(value)) for value in package.get("source_locator_ids", []))
+            entries.append(
+                (
+                    "work_package",
+                    str(package_row["work_package_id"]),
+                    locators,
+                    {"package": package, "canonical_fingerprint": str(package_row["fingerprint"])},
+                )
+            )
+        entries.append(
+            (
+                "requirement_matrix",
+                str(matrix_id),
+                (),
+                {
+                    "matrix": dict(matrix["matrix"]),
+                    "canonical_fingerprint": str(matrix["fingerprint"]),
+                },
+            )
+        )
+        fingerprints: list[str] = []
+        for kind, identity, locators, entry in entries:
+            fingerprint = semantic_digest(
+                {
+                    "run_id": run_id,
+                    "run_version": run_version,
+                    "entry_kind": kind,
+                    "entry_identity": identity,
+                    "source_locator_ids": [str(value) for value in locators],
+                    "entry": entry,
+                    "profile": "project-understanding-projection-v0.1",
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO projection.project_understanding_entries "
+                    "(organization_id,workspace_id,run_id,run_version,entry_kind,entry_identity,"
+                    "source_locator_ids,entry,projection_profile_version,entry_fingerprint) VALUES "
+                    "(:o,:w,:run,:version,:kind,:identity,:locators,CAST(:entry AS jsonb),"
+                    "'project-understanding-projection-v0.1',:fingerprint)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "run": run_id,
+                    "version": run_version,
+                    "kind": kind,
+                    "identity": identity,
+                    "locators": list(locators),
+                    "entry": _json(entry),
+                    "fingerprint": fingerprint,
+                },
+            )
+            fingerprints.append(fingerprint)
+        return tuple(fingerprints)
 
     def snapshot(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -906,7 +1086,13 @@ class IndustrialUnderstandingRepository:
             .mappings()
             .all()
         )
-        return [dict(row) for row in rows]
+        kind = "project_field" if table == "project_field_candidates" else "work_type"
+        return IndustrialUnderstandingRepository._apply_reviews(
+            session,
+            claimed,
+            kind,
+            [dict(row) for row in rows],
+        )
 
     @staticmethod
     def _work_child_rows(
@@ -928,7 +1114,60 @@ class IndustrialUnderstandingRepository:
             .mappings()
             .all()
         )
-        return [dict(row) for row in rows]
+        kind = "quantity" if table == "quantity_candidates" else "material"
+        return IndustrialUnderstandingRepository._apply_reviews(
+            session,
+            claimed,
+            kind,
+            [dict(row) for row in rows],
+        )
+
+    @staticmethod
+    def _apply_reviews(
+        session: Session,
+        claimed: ClaimedJob,
+        candidate_kind: str,
+        rows: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        decisions = session.execute(
+            sa.text(
+                "SELECT DISTINCT ON (candidate_id) candidate_id,action,resolved_value FROM "
+                "workspace.project_candidate_review_decisions WHERE organization_id=:o AND "
+                "workspace_id=:w AND candidate_kind=:kind ORDER BY candidate_id,decision_version DESC"
+            ),
+            {"o": claimed.organization_id, "w": claimed.workspace_id, "kind": candidate_kind},
+        ).mappings()
+        by_candidate = {str(item["candidate_id"]): dict(item) for item in decisions}
+        result: list[dict[str, Any]] = []
+        for row in rows:
+            decision = by_candidate.get(str(row["candidate_id"]))
+            if decision is None or decision["action"] == "confirmed":
+                result.append(row)
+                continue
+            if decision["action"] == "rejected":
+                continue
+            resolved = decision["resolved_value"]
+            if candidate_kind == "project_field":
+                row["raw_value"] = str(resolved)
+                row["normalized_value"] = resolved
+                row["status"] = "verified"
+            elif candidate_kind == "work_type":
+                row["raw_name"] = str(resolved)
+                row["normalized_name"] = " ".join(str(resolved).split()).casefold()
+            elif candidate_kind == "quantity":
+                row["raw_value"] = str(resolved)
+                try:
+                    row["parsed_value"] = Decimal(str(resolved))
+                    row["normalized_value"] = Decimal(str(resolved))
+                    row["status"] = "verified"
+                except ArithmeticError:
+                    row["status"] = "needs_evidence"
+            elif candidate_kind == "material":
+                row["raw_name"] = str(resolved)
+                row["normalized_name"] = " ".join(str(resolved).split()).casefold()
+                row["status"] = "verified"
+            result.append(row)
+        return result
 
     @staticmethod
     def _current_defects(

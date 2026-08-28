@@ -312,6 +312,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Job */
+        post: operations["pause_job_api_v1_workspaces__workspace_id__jobs__job_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Job */
+        post: operations["resume_job_api_v1_workspaces__workspace_id__jobs__job_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Job */
+        post: operations["retry_job_api_v1_workspaces__workspace_id__jobs__job_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/lifecycle": {
         parameters: {
             query?: never;
@@ -391,6 +442,40 @@ export interface paths {
         get: operations["project_understanding_api_v1_workspaces__workspace_id__project_understanding_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Project Candidate */
+        post: operations["review_project_candidate_api_v1_workspaces__workspace_id__project_understanding_reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Project Understanding */
+        post: operations["start_project_understanding_api_v1_workspaces__workspace_id__project_understanding_runs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1084,11 +1169,55 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** ProjectCandidateReviewRequest */
+        ProjectCandidateReviewRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "confirmed" | "rejected" | "corrected";
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /**
+             * Candidate Kind
+             * @enum {string}
+             */
+            candidate_kind: "project_field" | "work_type" | "quantity" | "material";
+            /** Candidate Version */
+            candidate_version: number;
+            /** Reason */
+            reason: string;
+            /** Resolved Value */
+            resolved_value?: unknown | null;
+        };
+        /** ProjectCandidateReviewView */
+        ProjectCandidateReviewView: {
+            /** Action */
+            action: string;
+            /** Decision Digest */
+            decision_digest: string;
+            /** Decision Version */
+            decision_version: number;
+            /**
+             * Review Decision Id
+             * Format: uuid
+             */
+            review_decision_id: string;
+        };
         /** ProjectUnderstandingView */
         ProjectUnderstandingView: {
             /** Authority Layers */
             authority_layers: {
                 [key: string]: string;
+            };
+            /** Candidates */
+            candidates?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
             };
             /** Defects */
             defects: {
@@ -1099,6 +1228,10 @@ export interface components {
                 [key: string]: {
                     [key: string]: unknown;
                 };
+            };
+            /** Intake Summary */
+            intake_summary?: {
+                [key: string]: unknown;
             };
             /** Matrix */
             matrix: {
@@ -1120,6 +1253,10 @@ export interface components {
             reconciliation: {
                 [key: string]: unknown;
             };
+            /** Review Decisions */
+            review_decisions?: {
+                [key: string]: unknown;
+            }[];
             /** Work Packages */
             work_packages: {
                 [key: string]: unknown;
@@ -1953,6 +2090,108 @@ export interface operations {
             };
         };
     };
+    pause_job_api_v1_workspaces__workspace_id__jobs__job_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_job_api_v1_workspaces__workspace_id__jobs__job_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_job_api_v1_workspaces__workspace_id__jobs__job_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     lifecycle_api_v1_workspaces__workspace_id__lifecycle_get: {
         parameters: {
             query?: never;
@@ -2108,6 +2347,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectUnderstandingView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_project_candidate_api_v1_workspaces__workspace_id__project_understanding_reviews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectCandidateReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectCandidateReviewView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_project_understanding_api_v1_workspaces__workspace_id__project_understanding_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobView"];
                 };
             };
             /** @description Validation Error */
