@@ -552,21 +552,23 @@ function ModeSelectionPage() {
       lead="Выберите задачу, которую необходимо выполнить. Один объект можно открывать в разных режимах."
     >
       <div className="mode-grid">
-        {MODES.map((mode) => (
-          <article className="mode-card" key={mode}>
-            <span className="mode-number">0{MODES.indexOf(mode) + 1}</span>
-            <h2>{MODE_DEFINITIONS[mode].title}</h2>
-            <p>{MODE_DEFINITIONS[mode].purpose}</p>
-            <h3>Результаты работы</h3>
-            <p>{MODE_DEFINITIONS[mode].results}</p>
+        {MODES.map((mode) => {
+          const titleId = `mode-card-${MODE_DEFINITIONS[mode].slug}-title`;
+          return (
             <Link
-              className="card-action"
+              aria-labelledby={titleId}
+              className="mode-card"
+              key={mode}
               to={`/modes/${MODE_DEFINITIONS[mode].slug}/workspaces`}
             >
-              Выбрать режим
+              <span className="mode-number">0{MODES.indexOf(mode) + 1}</span>
+              <h2 id={titleId}>{MODE_DEFINITIONS[mode].title}</h2>
+              <p>{MODE_DEFINITIONS[mode].purpose}</p>
+              <h3>Результаты работы</h3>
+              <p>{MODE_DEFINITIONS[mode].results}</p>
             </Link>
-          </article>
-        ))}
+          );
+        })}
       </div>
     </Page>
   );
@@ -585,18 +587,20 @@ function LegacyModeGate() {
       lead="Ссылка ведёт к объекту без указания текущей задачи. Выберите режим — система не будет определять его за вас."
     >
       <div className="mode-grid compact-modes">
-        {MODES.map((mode) => (
-          <article className="mode-card" key={mode}>
-            <h2>{MODE_DEFINITIONS[mode].title}</h2>
-            <p>{MODE_DEFINITIONS[mode].purpose}</p>
+        {MODES.map((mode) => {
+          const titleId = `legacy-mode-card-${MODE_DEFINITIONS[mode].slug}-title`;
+          return (
             <Link
-              className="card-action"
+              aria-labelledby={titleId}
+              className="mode-card"
+              key={mode}
               to={workspaceRoute(mode, workspaceId, suffix)}
             >
-              Продолжить
+              <h2 id={titleId}>{MODE_DEFINITIONS[mode].title}</h2>
+              <p>{MODE_DEFINITIONS[mode].purpose}</p>
             </Link>
-          </article>
-        ))}
+          );
+        })}
       </div>
     </Page>
   );

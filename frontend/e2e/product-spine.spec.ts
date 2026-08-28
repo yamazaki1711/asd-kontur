@@ -160,7 +160,17 @@ test("user enters through four Russian modes and keeps the selected object", asy
     "Аудит",
     "Восстановление",
   ];
-  await expect(page.locator("article.mode-card")).toHaveCount(4);
+  const modeSlugs = new Map([
+    ["Тендерный анализ", "tender"],
+    ["Инженерное сопровождение", "support"],
+    ["Аудит", "audit"],
+    ["Восстановление", "restoration"],
+  ]);
+  await expect(page.locator("a.mode-card")).toHaveCount(4);
+  await expect(page.locator("a.mode-card a, a.mode-card button")).toHaveCount(
+    0,
+  );
+  await expect(page.getByText("Выбрать режим", { exact: true })).toHaveCount(0);
   for (const title of expectedModes)
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
   const normalText = await page.locator("main").innerText();
@@ -177,11 +187,19 @@ test("user enters through four Russian modes and keeps the selected object", asy
   ])
     expect(normalText).not.toContain(forbidden);
 
+  const supportModeCard = page.getByRole("link", {
+    name: "Инженерное сопровождение",
+    exact: true,
+  });
+  await expect(supportModeCard).toHaveCSS("cursor", "pointer");
   await page
-    .locator("article.mode-card")
-    .filter({ hasText: "Инженерное сопровождение" })
-    .getByRole("link", { name: "Выбрать режим" })
-    .click();
+    .getByRole("link", { name: "Тендерный анализ", exact: true })
+    .focus();
+  await page.keyboard.press("Tab");
+  await expect(supportModeCard).toBeFocused();
+  await expect(supportModeCard).toHaveCSS("outline-style", "solid");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/modes\/support\/workspaces$/);
   await page.getByLabel("Название объекта").fill("Строительство корпуса А");
   await page.getByRole("button", { name: "Создать объект" }).click();
   await expect(
@@ -190,11 +208,10 @@ test("user enters through four Russian modes and keeps the selected object", asy
 
   for (const title of expectedModes) {
     await page.getByRole("link", { name: "Сменить режим" }).click();
-    await page
-      .locator("article.mode-card")
-      .filter({ hasText: title })
-      .getByRole("link", { name: "Выбрать режим" })
-      .click();
+    await page.getByRole("link", { name: title, exact: true }).click();
+    await expect(page).toHaveURL(
+      new RegExp(`/modes/${String(modeSlugs.get(title))}/workspaces$`),
+    );
     await expect(page.getByText("Строительство корпуса А")).toBeVisible();
     await page.getByRole("link", { name: "Открыть" }).click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
@@ -203,12 +220,8 @@ test("user enters through four Russian modes and keeps the selected object", asy
   await expect(
     page.getByRole("heading", { name: "Выберите режим работы" }),
   ).toBeVisible();
-  await expect(page.locator("article.mode-card")).toHaveCount(4);
-  await page
-    .locator("article.mode-card")
-    .filter({ hasText: "Восстановление" })
-    .getByRole("link", { name: "Продолжить" })
-    .click();
+  await expect(page.locator("a.mode-card")).toHaveCount(4);
+  await page.getByRole("link", { name: "Восстановление", exact: true }).click();
   await expect(page).toHaveURL(
     new RegExp(`/modes/restoration/workspaces/${workspaceA}/documents$`),
   );
@@ -266,7 +279,7 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await page.route("**/api/v1/session", (route) => json(route, session()));
     await page.goto("/modes");
-    await expect(page.locator("article.mode-card")).toHaveCount(4);
+    await expect(page.locator("a.mode-card")).toHaveCount(4);
     expect(
       await page.evaluate(
         () =>

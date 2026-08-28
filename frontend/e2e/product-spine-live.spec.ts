@@ -83,9 +83,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
     await page.getByRole("button", { name: "Войти" }).click();
     await page
-      .locator("article.mode-card")
-      .filter({ hasText: "Инженерное сопровождение" })
-      .getByRole("link", { name: "Выбрать режим" })
+      .getByRole("link", { name: "Инженерное сопровождение", exact: true })
       .click();
     await expect(page.getByText("Доступных объектов пока нет.")).toBeVisible();
 
