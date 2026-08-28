@@ -59,12 +59,12 @@ test("authorized user enters by mode and downloads the finalized package documen
   await expect(
     page.getByRole("heading", { name: "Выберите режим работы" }),
   ).toBeVisible();
-  await expect(page.locator("article.mode-card")).toHaveCount(4);
+  await expect(page.locator("a.mode-card")).toHaveCount(4);
+  await expect(page.getByText("Выбрать режим", { exact: true })).toHaveCount(0);
   await page
-    .locator("article.mode-card")
-    .filter({ hasText: "Инженерное сопровождение" })
-    .getByRole("link", { name: "Выбрать режим" })
+    .getByRole("link", { name: "Инженерное сопровождение", exact: true })
     .click();
+  await expect(page).toHaveURL(/\/modes\/support\/workspaces$/);
   const workspace = page
     .locator("article")
     .filter({ hasText: "Демонстрационный объект" })
