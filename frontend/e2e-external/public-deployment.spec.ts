@@ -97,7 +97,12 @@ test("authorized user enters by mode and downloads the finalized package documen
   }
 
   await page.goto(`/modes/support/workspaces/${workspaceId}/documents`);
-  await expect(page.getByText("Пояснительная_записка.docx")).toBeVisible();
+  await expect(
+    page.getByRole("link", {
+      name: "Пояснительная_записка.docx",
+      exact: true,
+    }),
+  ).toBeVisible();
   const corruptRow = page
     .locator("tbody tr")
     .filter({ hasText: "Поврежденный_документ.pdf" });
@@ -118,7 +123,7 @@ test("authorized user enters by mode and downloads the finalized package documen
     await expect(page.getByRole("button", { name: section })).toBeVisible();
   await page.getByRole("button", { name: "Виды и объёмы работ" }).click();
   await expect(
-    page.getByText("Устройство монолитной плиты", { exact: true }),
+    page.getByText("Устройство монолитной плиты", { exact: true }).first(),
   ).toBeVisible();
   await page
     .getByRole("link", { name: "Открыть исходный фрагмент" })
