@@ -473,7 +473,9 @@ def _jsonable_export(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _export_row(row: sa.RowMapping) -> dict[str, Any]:
-    return _jsonable_export(dict(row))
+    value = _jsonable_export(dict(row))
+    value.pop("created_at")
+    return value
 
 
 def _uuid_or_none(value: object) -> UUID | None:

@@ -584,6 +584,13 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert regenerated_archive.status_code == 201, regenerated_archive.text
         assert regenerated_archive.json()["export_id"] == created_exports[-1]["export_id"]
         assert regenerated_archive.json()["version"] == created_exports[-1]["version"] + 1
+        unchanged_archive = client.post(
+            f"/api/v1/workspaces/{workspace_id}/modes/Tender/exports",
+            json={"export_kind": "workspace_results", "output_format": "zip"},
+            headers=csrf,
+        )
+        assert unchanged_archive.status_code == 201, unchanged_archive.text
+        assert unchanged_archive.json() == regenerated_archive.json()
         refreshed_tender = client.get(f"/api/v1/workspaces/{workspace_id}/modes/Tender/result")
         assert refreshed_tender.status_code == 200, refreshed_tender.text
         latest_exports = refreshed_tender.json()["exports"]
