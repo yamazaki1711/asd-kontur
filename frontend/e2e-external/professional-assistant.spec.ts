@@ -117,9 +117,7 @@ test("local Qwen assistant serves all four modes with scoped exact sources", asy
   }
 
   await page.reload();
-  if (!(await page.getByTestId("assistant-panel").isVisible())) {
-    await page.getByRole("button", { name: "Инженерный помощник" }).click();
-  }
+  await openAssistant(page);
   await expect(page.getByText(gap.text, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByTestId("assistant-panel")).toBeVisible();
@@ -190,9 +188,7 @@ test("an interrupted local inference has a durable visible outcome", async ({
     ),
   ).toBeVisible({ timeout: 180_000 });
   await page.reload();
-  if (!(await page.getByTestId("assistant-panel").isVisible())) {
-    await page.getByRole("button", { name: "Инженерный помощник" }).click();
-  }
+  await openAssistant(page);
   await expect(
     page
       .getByTestId("assistant-panel")
@@ -213,11 +209,7 @@ async function login(page: Page) {
 
 async function ask(page: Page, route: string, question: string) {
   await page.goto(route);
-  const panel = page.getByTestId("assistant-panel");
-  if (!(await panel.isVisible())) {
-    await page.getByRole("button", { name: "Инженерный помощник" }).click();
-  }
-  await expect(panel).toBeVisible();
+  const panel = await openAssistant(page);
   const conversation = panel.getByLabel("Диалог");
   await panel.getByRole("button", { name: "Новый диалог" }).click();
   await expect(conversation).toHaveValue("");
@@ -245,6 +237,17 @@ async function ask(page: Page, route: string, question: string) {
     JSON.stringify({ question, firstVisibleMilliseconds, totalMilliseconds }),
   );
   return { text, firstVisibleMilliseconds, totalMilliseconds };
+}
+
+async function openAssistant(page: Page) {
+  const panel = page.getByTestId("assistant-panel");
+  const launcher = page.getByRole("button", { name: "Инженерный помощник" });
+  await expect(launcher).toBeVisible();
+  if ((await launcher.getAttribute("aria-expanded")) !== "true") {
+    await launcher.click();
+  }
+  await expect(panel).toBeVisible({ timeout: 15_000 });
+  return panel;
 }
 
 async function resetWorkspace(page: Page, workspaceId: string) {
