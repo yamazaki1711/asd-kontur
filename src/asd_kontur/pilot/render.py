@@ -30,6 +30,7 @@ def render_export(
     output_format: PilotExportFormat,
     additional_files: Iterable[tuple[str, bytes]] = (),
 ) -> bytes:
+    result = _export_snapshot(result)
     title = _export_title(kind)
     lines = _document_lines(result, title)
     if output_format is PilotExportFormat.PDF:
@@ -46,7 +47,8 @@ def render_workspace_archive(
 
     files: list[tuple[str, bytes]] = []
     manifest: list[dict[str, Any]] = []
-    for result in sorted(results, key=lambda value: str(value["mode"])):
+    snapshots = (_export_snapshot(result) for result in results)
+    for result in sorted(snapshots, key=lambda value: str(value["mode"])):
         mode = str(result["mode"]).lower()
         title = f"Результат режима «{result['mode']}»"
         lines = _document_lines(result, title)
@@ -84,6 +86,12 @@ def render_workspace_archive(
     )
     files.extend(additional_files)
     return _zip_bytes(files)
+
+
+def _export_snapshot(result: dict[str, Any]) -> dict[str, Any]:
+    """Remove delivery projections that would make an export depend on itself."""
+
+    return {key: value for key, value in result.items() if key != "exports"}
 
 
 def _document_lines(result: dict[str, Any], title: str) -> list[str]:

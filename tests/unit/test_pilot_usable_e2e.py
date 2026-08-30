@@ -8,7 +8,7 @@ from pypdf import PdfReader
 
 from asd_kontur.pilot.builder import build_pilot_result
 from asd_kontur.pilot.models import PilotExportFormat, PilotExportKind, PilotMode
-from asd_kontur.pilot.render import render_export
+from asd_kontur.pilot.render import render_export, render_workspace_archive
 
 WORKSPACE_ID = UUID("ea593b87-c5c8-44e0-b478-9f6be9ca7a87")
 PROJECT_ID = UUID("4c4a8dc5-9fee-4241-b408-70172f19aa7c")
@@ -169,6 +169,41 @@ def test_docx_and_pdf_exports_are_reproducible_and_readable() -> None:
     text = "\n".join(page.extract_text() or "" for page in reader.pages)
     assert "Пилотный объект" in text
     assert "Отчёт аудита" in text
+
+
+def test_zip_exports_do_not_depend_on_prior_export_projection() -> None:
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.SUPPORT,
+        project=_project(),
+        documents=_documents(),
+        support={},
+    )
+    first_package = render_export(
+        result=result,
+        kind=PilotExportKind.ID_PACKAGE,
+        output_format=PilotExportFormat.ZIP,
+    )
+    first_workspace = render_workspace_archive(results=[result])
+
+    result["exports"] = [
+        {
+            "export_id": "bf56e2e7-5be8-58c6-ac8c-772af057677c",
+            "version": 7,
+            "export_kind": "workspace_results",
+            "content_digest": "sha256:" + "9" * 64,
+        }
+    ]
+
+    assert first_package == render_export(
+        result=result,
+        kind=PilotExportKind.ID_PACKAGE,
+        output_format=PilotExportFormat.ZIP,
+    )
+    assert first_workspace == render_workspace_archive(results=[result])
+    with zipfile.ZipFile(io.BytesIO(first_workspace)) as archive:
+        assert b'"exports"' not in archive.read("support/result.json")
 
 
 def test_user_excluded_item_is_not_emitted_as_an_exported_finding() -> None:
