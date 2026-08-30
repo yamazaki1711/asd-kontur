@@ -188,7 +188,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
     assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0028_industrial_intake"
+        "0029_pilot_usable_e2e"
     )
     assert "10240" in (output / "asd-kontur-spine.newsyslog.conf").read_text(encoding="utf-8")
     assert _show_logs(settings(tmp_path), "all", 2) == 0

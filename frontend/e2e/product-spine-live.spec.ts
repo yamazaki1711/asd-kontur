@@ -145,12 +145,10 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
       page.getByRole("link", { name: "live-two-pages.pdf" }),
     ).toHaveCount(1);
     await page.getByRole("link", { name: "live-two-pages.pdf" }).click();
-    await expect(page.getByLabel("PDF page 1")).toBeVisible();
-    await expect(page.getByLabel("Evidence locator region")).toBeVisible();
-    await expect(
-      page.getByText("NO_VERIFIED_FACT_BOUND_TO_LOCATOR"),
-    ).toBeVisible();
-    await expect(page.getByText("none", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Страница PDF 1")).toBeVisible();
+    await expect(page.getByLabel("Область исходного фрагмента")).toBeVisible();
+    await expect(page.getByText("Состояние сведения")).toBeVisible();
+    await expect(page.getByText("Требует уточнения").first()).toBeVisible();
 
     await page
       .getByRole("link", { name: "Модель объекта", exact: true })
@@ -169,18 +167,69 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(
       page.getByRole("heading", { name: "Точное место в исходном документе" }),
     ).toBeVisible();
-    await expect(page.getByText("workspace_fact_candidate")).toBeVisible();
+    await expect(page.getByText("Состояние сведения")).toBeVisible();
+    await expect(page.getByText("Требует подтверждения")).toBeVisible();
+    await expect(page.getByText("workspace_fact_candidate")).toHaveCount(0);
 
-    for (const [slug, title] of [
-      ["tender", "Тендерный анализ"],
-      ["support", "Инженерное сопровождение"],
-      ["audit", "Аудит"],
-      ["restoration", "Восстановление"],
+    for (const [slug, title, exportLabel] of [
+      ["tender", "Тендерный анализ", "Протокол разногласий"],
+      ["support", "Инженерное сопровождение", "Матрица работ и требований"],
+      ["audit", "Аудит", "Отчёт аудита"],
+      ["restoration", "Восстановление", "План восстановления"],
     ] as const) {
       await page.goto(`/modes/${slug}/workspaces/${workspaceA}`);
       await expect(page.getByRole("heading", { name: title })).toBeVisible();
       await expect(page.getByText("Доступно частично")).toBeVisible();
+      await page.getByRole("link", { name: "Перейти к результату" }).click();
+      const formButton = page.getByRole("button", {
+        name: "Сформировать результат",
+      });
+      const exportHeading = page.getByText(exportLabel, { exact: true });
+      await expect(formButton.or(exportHeading)).toBeVisible();
+      if (await formButton.isVisible()) await formButton.click();
+      await expect(
+        page.getByRole("heading", { name: `Результат: ${title}` }),
+      ).toBeVisible();
+      await expect(exportHeading).toBeVisible();
+      await expect(page.getByText("Актуальность редакций")).toBeVisible();
     }
+    await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+    await page
+      .locator(".export-card")
+      .filter({ hasText: "Протокол разногласий" })
+      .getByRole("button", { name: "Подготовить DOCX" })
+      .click();
+    const protocolDownload = page.waitForEvent("download");
+    await page
+      .getByRole("link", { name: /Скачать Протокол разногласий \(DOCX\)/ })
+      .click();
+    expect((await protocolDownload).suggestedFilename()).toMatch(/\.docx$/);
+    await page.getByRole("button", { name: "Подготовить общий архив" }).click();
+    const archiveDownload = page.waitForEvent("download");
+    await page
+      .getByRole("link", { name: /Скачать Архив результатов объекта \(ZIP\)/ })
+      .click();
+    expect((await archiveDownload).suggestedFilename()).toMatch(/\.zip$/);
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 1280, height: 720 },
+      { width: 390, height: 844 },
+      { width: 360, height: 800 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+      await expect(
+        page.getByText("Протокол разногласий", { exact: true }),
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () =>
+            globalThis.document.documentElement.scrollWidth ===
+            globalThis.document.documentElement.clientWidth,
+        ),
+      ).toBe(true);
+    }
+    await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto("/admin/knowledge");
     await page.getByText("Технические сведения", { exact: true }).click();
     await expect(

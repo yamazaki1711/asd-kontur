@@ -30,6 +30,7 @@ type Job = components["schemas"]["JobView"];
 type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
 type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
+type PilotResult = components["schemas"]["PilotResultView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
 type ModeName = (typeof MODES)[number];
@@ -183,6 +184,10 @@ export function App() {
           <Route
             path="/modes/:mode/workspaces/:workspaceId/support-id"
             element={<SupportProductionPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/result"
+            element={<PilotResultPage />}
           />
           <Route path="/admin/knowledge" element={<KnowledgePage />} />
           <Route path="/admin/system" element={<OperationsPage />} />
@@ -382,16 +387,14 @@ function ApplicationShell() {
             to={`${workspaceBase}/work-matrix`}
             label="Работы и требования"
           />
+          <NavItem to={`${workspaceBase}/result`} label="Результат режима" />
           {mode === "Support" && (
             <NavItem
               to={`${workspaceBase}/support-id`}
               label="Исполнительная документация"
             />
           )}
-          <NavItem
-            to={`${workspaceBase}/evidence`}
-            label="Исходные подтверждения"
-          />
+          <NavItem to={`${workspaceBase}/evidence`} label="Источники" />
         </aside>
       )}
       <main className="content">
@@ -1057,12 +1060,11 @@ function DocumentTable({
         <thead>
           <tr>
             <th>Документ</th>
-            <th>Версия и источник</th>
             <th>Тип / размер</th>
             <th>Приём</th>
             <th>Обработка</th>
             <th>Страниц</th>
-            <th>SHA-256</th>
+            <th>Сведения</th>
           </tr>
         </thead>
         <tbody>
@@ -1075,22 +1077,6 @@ function DocumentTable({
                   {document.safe_display_name}
                 </Link>
                 <small>{document.relative_path}</small>
-              </td>
-              <td>
-                active v{document.version}
-                <small>
-                  prior: {document.prior_versions.join(", ") || "—"}
-                </small>
-                <small className="mono">
-                  SourceVersion: {document.source_version_id ?? "gap"}
-                </small>
-                <small>
-                  <Link
-                    to={workspaceRouteFromSlug(modeSlug, workspaceId, "/jobs")}
-                  >
-                    заданий обработки: {document.job_ids.length}
-                  </Link>
-                </small>
               </td>
               <td>
                 {document.media_type}
@@ -1112,7 +1098,16 @@ function DocumentTable({
                 ))}
               </td>
               <td>{document.page_count ?? "—"}</td>
-              <td className="mono truncate">{document.content_digest}</td>
+              <td>
+                <span>Версия {document.version}</span>
+                <small>
+                  <Link
+                    to={workspaceRouteFromSlug(modeSlug, workspaceId, "/jobs")}
+                  >
+                    Ход обработки
+                  </Link>
+                </small>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1172,22 +1167,16 @@ function ExactEvidencePage() {
         {(value) => (
           <section className="panel">
             <dl>
-              <dt>Версия источника</dt>
-              <dd className="mono">{value.locator.source_version_id}</dd>
-              <dt>Идентификатор места</dt>
-              <dd className="mono">{value.locator.source_locator_id}</dd>
               <dt>Страница и область</dt>
               <dd>
                 {value.locator.page_number} / {value.locator.region.join(", ")}
               </dd>
-              <dt>Контрольная сумма фрагмента</dt>
-              <dd className="mono truncate">{value.locator.evidence_digest}</dd>
-              <dt>Способ извлечения</dt>
-              <dd>{value.locator.extraction_method}</dd>
-              <dt>Состояние и тип источника</dt>
+              <dt>Способ получения</dt>
               <dd>
-                {value.candidate_fact_status} / {value.authority_type}
+                {humanizeExtractionMethod(value.locator.extraction_method)}
               </dd>
+              <dt>Состояние сведения</dt>
+              <dd>{humanizeStatus(value.candidate_fact_status)}</dd>
             </dl>
             <Link
               to={`${workspaceRouteFromSlug(mode, workspaceId, `/documents/${value.locator.document_id}`)}?page=${String(value.locator.page_number)}`}
@@ -1372,7 +1361,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
 function EvidenceIndexPage() {
   return (
     <Page
-      title="Исходные подтверждения"
+      title="Источники"
       lead="Откройте документ, чтобы перейти к странице и области, из которых получено выбранное сведение."
     >
       <InfoNotice>
@@ -1385,20 +1374,117 @@ function EvidenceIndexPage() {
 
 function WorkMatrixPage() {
   const { workspaceId = "" } = useParams();
-  const audit = useMode(workspaceId, "Audit");
+  const { mode } = useParams();
+  const understanding = useQuery({
+    queryKey: ["project-understanding", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/project-understanding",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    retry: false,
+  });
   return (
     <Page
       title="Работы и требования"
       lead="Структура работ объекта и связанные требования к контролю и документам."
     >
-      <QueryState query={audit}>
-        {(view) =>
-          view.matrix_version_id ? (
-            <pre>{JSON.stringify(view.bounded_results, null, 2)}</pre>
+      <QueryState query={understanding}>
+        {(view) => {
+          const matrixValue = (view.matrix.matrix ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const rows = Array.isArray(matrixValue.rows)
+            ? (matrixValue.rows as Record<string, unknown>[])
+            : [];
+          const packageNames = new Map(
+            view.work_packages.map((item) => {
+              const packageValue = (item.package ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const workType = (packageValue.work_type ?? {}) as Record<
+                string,
+                unknown
+              >;
+              return [
+                String(item.work_package_id),
+                displayValue(workType.normalized, "Работа требует уточнения"),
+              ];
+            }),
+          );
+          return rows.length ? (
+            <div className="matrix-cards">
+              {rows.map((row) => {
+                const locators = Array.isArray(row.workspace_facts)
+                  ? row.workspace_facts.map(String)
+                  : [];
+                const gaps = Array.isArray(row.gaps)
+                  ? row.gaps.map((gap) => humanizeGap(String(gap)))
+                  : [];
+                return (
+                  <article className="panel" key={String(row.work_package_id)}>
+                    <div className="entity-heading">
+                      <h2>
+                        {packageNames.get(String(row.work_package_id)) ??
+                          "Работа требует уточнения"}
+                      </h2>
+                      <StatusPill tone={row.complete ? "default" : "warning"}>
+                        {row.complete ? "Сформировано" : "Требует дополнения"}
+                      </StatusPill>
+                    </div>
+                    <p>
+                      Требования к контролю и документам формируются из общей
+                      модели объекта. Неподтверждённые основания остаются
+                      отдельными пробелами.
+                    </p>
+                    {locators.length > 0 && (
+                      <div className="source-links">
+                        <strong>Источники:</strong>
+                        {locators.map((locator, index) => (
+                          <Link
+                            key={locator}
+                            to={workspaceRouteFromSlug(
+                              mode,
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            Исходный фрагмент {index + 1}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                    {gaps.length > 0 && <GapList gaps={gaps} />}
+                  </article>
+                );
+              })}
+              <Link
+                className="button-link secondary"
+                to={`${workspaceRouteFromSlug(mode, workspaceId, "/project-understanding")}?section=matrix`}
+              >
+                Открыть подробную модель объекта
+              </Link>
+            </div>
           ) : (
-            <GapList gaps={view.gaps} />
-          )
-        }
+            <section className="panel empty-state">
+              <p>Матрица ещё не сформирована.</p>
+              <Link
+                className="button-link"
+                to={workspaceRouteFromSlug(
+                  mode,
+                  workspaceId,
+                  "/project-understanding",
+                )}
+              >
+                Перейти к модели объекта
+              </Link>
+            </section>
+          );
+        }}
       </QueryState>
     </Page>
   );
@@ -1970,12 +2056,12 @@ function ModePage() {
             <section className="panel">
               <h2>Профессиональные результаты</h2>
               <p>{definition.results}</p>
-              {normalized === "Support" ? (
+              {value.matrix_version_id ? (
                 <Link
                   className="button-link"
-                  to={workspaceRoute(normalized, workspaceId, "/documents")}
+                  to={workspaceRoute(normalized, workspaceId, "/result")}
                 >
-                  Добавить исходные документы
+                  Перейти к результату
                 </Link>
               ) : (
                 <Link
@@ -2015,10 +2101,645 @@ function ModePage() {
   );
 }
 
+function PilotResultPage() {
+  const { workspaceId = "", mode: modeSlug } = useParams();
+  const mode = modeFromSlug(modeSlug);
+  const queryClient = useQueryClient();
+  const result = useQuery({
+    queryKey: ["pilot-result", workspaceId, mode],
+    enabled: Boolean(mode),
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/modes/{mode}/result",
+        {
+          params: {
+            path: { workspace_id: workspaceId, mode: mode ?? "Tender" },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+  });
+  const formResult = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/modes/{mode}/result",
+        {
+          params: {
+            path: { workspace_id: workspaceId, mode: mode ?? "Tender" },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["pilot-result", workspaceId, mode],
+      });
+    },
+  });
+  const review = useMutation({
+    mutationFn: async (payload: {
+      itemId: string;
+      action:
+        "accepted" | "corrected" | "excluded" | "status_changed" | "commented";
+      resolvedFields: Record<string, unknown> | null;
+      comment: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/modes/{mode}/result/items/{item_id}/reviews",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              mode: mode ?? "Tender",
+              item_id: payload.itemId,
+            },
+          },
+          body: {
+            action: payload.action,
+            resolved_fields: payload.resolvedFields,
+            comment: payload.comment,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["pilot-result", workspaceId, mode],
+      });
+    },
+  });
+  const createExport = useMutation({
+    mutationFn: async (payload: {
+      exportKind:
+        | "disagreement_protocol"
+        | "contract_changes"
+        | "requirement_matrix"
+        | "id_package"
+        | "register"
+        | "audit_report"
+        | "recovery_plan"
+        | "recovered_drafts"
+        | "workspace_results";
+      outputFormat: "docx" | "pdf" | "zip";
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/modes/{mode}/exports",
+        {
+          params: {
+            path: { workspace_id: workspaceId, mode: mode ?? "Tender" },
+          },
+          body: {
+            export_kind: payload.exportKind,
+            output_format: payload.outputFormat,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["pilot-result", workspaceId, mode],
+      });
+    },
+  });
+  if (!mode) return <Navigate to="/modes" replace />;
+  const definition = MODE_DEFINITIONS[mode];
+  return (
+    <Page
+      title={`Результат: ${definition.title}`}
+      lead="Проверьте выводы, откройте исходные фрагменты и сформируйте рабочие документы."
+    >
+      {result.isError && !formResult.isSuccess ? (
+        <section className="panel result-empty">
+          <h2>Сформируйте первый результат</h2>
+          <p>
+            Комплекс использует общую модель объекта и не подставляет
+            отсутствующие факты. Нерешённые вопросы останутся видимыми.
+          </p>
+          <button
+            type="button"
+            onClick={() => formResult.mutate()}
+            disabled={formResult.isPending}
+          >
+            Сформировать результат
+          </button>
+          {formResult.isError && <ErrorNotice error={formResult.error} />}
+        </section>
+      ) : (
+        <QueryState query={result}>
+          {(value) => (
+            <PilotResultBody
+              value={value}
+              workspaceId={workspaceId}
+              mode={mode}
+              {...(modeSlug === undefined ? {} : { modeSlug })}
+              review={(payload) => review.mutate(payload)}
+              reviewPending={review.isPending}
+              createExport={(payload) => createExport.mutate(payload)}
+              exportPending={createExport.isPending}
+              commandError={review.error ?? createExport.error}
+            />
+          )}
+        </QueryState>
+      )}
+    </Page>
+  );
+}
+
+function PilotResultBody({
+  value,
+  workspaceId,
+  mode,
+  modeSlug,
+  review,
+  reviewPending,
+  createExport,
+  exportPending,
+  commandError,
+}: {
+  value: PilotResult;
+  workspaceId: string;
+  mode: ModeName;
+  modeSlug?: string;
+  review: (payload: {
+    itemId: string;
+    action:
+      "accepted" | "corrected" | "excluded" | "status_changed" | "commented";
+    resolvedFields: Record<string, unknown> | null;
+    comment: string;
+  }) => void;
+  reviewPending: boolean;
+  createExport: (payload: {
+    exportKind:
+      | "disagreement_protocol"
+      | "contract_changes"
+      | "requirement_matrix"
+      | "id_package"
+      | "register"
+      | "audit_report"
+      | "recovery_plan"
+      | "recovered_drafts"
+      | "workspace_results";
+    outputFormat: "docx" | "pdf" | "zip";
+  }) => void;
+  exportPending: boolean;
+  commandError: unknown;
+}) {
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [resultSearch, setResultSearch] = useState("");
+  const filteredItems = value.items.filter((item) => {
+    const status = pilotItemStatus(item);
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "open"
+        ? !["accepted", "excluded", "conforms"].includes(status)
+        : status === statusFilter);
+    const haystack = `${displayValue(item.title)} ${displayValue(
+      item.effective_description ?? item.description,
+    )}`.toLocaleLowerCase("ru-RU");
+    return (
+      matchesStatus &&
+      haystack.includes(resultSearch.trim().toLocaleLowerCase("ru-RU"))
+    );
+  });
+  return (
+    <>
+      <section className="metrics" aria-label="Сводка результата">
+        <Metric label="Выводов" value={Number(value.summary.items ?? 0)} />
+        <Metric
+          label="Требуют решения"
+          value={Number(value.summary.open_questions ?? 0)}
+        />
+        <Metric label="Рассмотрено" value={value.reviewed_item_count} />
+        <Metric
+          label="Пакетов работ"
+          value={Number(value.summary.work_packages ?? 0)}
+        />
+      </section>
+      <InfoNotice>{value.normative_notice}.</InfoNotice>
+      <section className="panel toolbar result-toolbar">
+        <label>
+          Найти в результатах
+          <input
+            type="search"
+            value={resultSearch}
+            onChange={(event) => setResultSearch(event.target.value)}
+            placeholder="Работа, материал или замечание"
+          />
+        </label>
+        <label>
+          Состояние
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="all">Все</option>
+            <option value="open">Требуют решения</option>
+            <option value="accepted">Приняты</option>
+            <option value="excluded">Исключены</option>
+            <option value="conflict">Расхождения</option>
+            <option value="missing">Отсутствуют</option>
+          </select>
+        </label>
+      </section>
+      <section className="panel">
+        <div className="entity-heading">
+          <div>
+            <h2>Выводы и действия</h2>
+            <p>
+              Каждый существенный вывод можно сопоставить с исходным фрагментом
+              и отдельно рассмотреть.
+            </p>
+          </div>
+          <StatusPill tone="warning">{humanizeStatus(value.status)}</StatusPill>
+        </div>
+        <div className="pilot-result-list">
+          {filteredItems.map((item) => (
+            <PilotResultItem
+              key={String(item.item_id)}
+              item={item}
+              workspaceId={workspaceId}
+              {...(modeSlug === undefined ? {} : { modeSlug })}
+              onReview={review}
+              pending={reviewPending}
+            />
+          ))}
+          {filteredItems.length === 0 && (
+            <p className="empty-state">
+              По выбранному фильтру результатов нет.
+            </p>
+          )}
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Сформировать документы</h2>
+        <p>
+          Экспорт содержит название объекта, версию результата, использованные
+          источники и нерешённые вопросы.
+        </p>
+        <div className="export-grid">
+          {value.available_exports.map((kind) => (
+            <article className="export-card" key={kind}>
+              <strong>{humanizeExportKind(kind)}</strong>
+              <div className="candidate-actions">
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={exportPending}
+                  onClick={() =>
+                    createExport({
+                      exportKind: kind as Parameters<
+                        typeof createExport
+                      >[0]["exportKind"],
+                      outputFormat: "docx",
+                    })
+                  }
+                >
+                  Подготовить DOCX
+                </button>
+                <button
+                  className="ghost"
+                  type="button"
+                  disabled={exportPending}
+                  onClick={() =>
+                    createExport({
+                      exportKind: kind as Parameters<
+                        typeof createExport
+                      >[0]["exportKind"],
+                      outputFormat: "pdf",
+                    })
+                  }
+                >
+                  Подготовить PDF
+                </button>
+                {["id_package", "recovered_drafts"].includes(kind) && (
+                  <button
+                    className="ghost"
+                    type="button"
+                    disabled={exportPending}
+                    onClick={() =>
+                      createExport({
+                        exportKind: kind as Parameters<
+                          typeof createExport
+                        >[0]["exportKind"],
+                        outputFormat: "zip",
+                      })
+                    }
+                  >
+                    Подготовить архив
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
+          <article className="export-card">
+            <strong>Архив результатов объекта</strong>
+            <p>Доступен после формирования результатов всех четырёх режимов.</p>
+            <button
+              className="ghost"
+              type="button"
+              disabled={exportPending}
+              onClick={() =>
+                createExport({
+                  exportKind: "workspace_results",
+                  outputFormat: "zip",
+                })
+              }
+            >
+              Подготовить общий архив
+            </button>
+          </article>
+        </div>
+        {commandError !== null && commandError !== undefined ? (
+          <ErrorNotice error={commandError} />
+        ) : null}
+        {(value.exports ?? []).length > 0 && (
+          <div className="download-list">
+            <h3>Готовые файлы</h3>
+            {(value.exports ?? []).map((item) => (
+              <a
+                className="button-link secondary"
+                key={`${String(item.export_id)}:${String(item.version)}`}
+                href={`/api/v1/workspaces/${workspaceId}/pilot-exports/${String(item.export_id)}/content`}
+              >
+                Скачать {humanizeExportKind(String(item.export_kind))} (
+                {String(item.output_format).toUpperCase()})
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
+      {mode === "Support" && (
+        <section className="panel">
+          <h2>Исполнительная документация</h2>
+          <p>
+            Финализированный АОСР и версии реестра сохраняются в действующем
+            комплекте исполнительной документации.
+          </p>
+          <Link
+            className="button-link"
+            to={workspaceRoute(mode, workspaceId, "/support-id")}
+          >
+            Открыть комплект ИД
+          </Link>
+        </section>
+      )}
+    </>
+  );
+}
+
+function PilotResultItem({
+  item,
+  workspaceId,
+  modeSlug,
+  onReview,
+  pending,
+}: {
+  item: Record<string, unknown>;
+  workspaceId: string;
+  modeSlug?: string;
+  onReview: (payload: {
+    itemId: string;
+    action:
+      "accepted" | "corrected" | "excluded" | "status_changed" | "commented";
+    resolvedFields: Record<string, unknown> | null;
+    comment: string;
+  }) => void;
+  pending: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [commenting, setCommenting] = useState(false);
+  const [changingStatus, setChangingStatus] = useState(false);
+  const [statusValue, setStatusValue] = useState("requires_clarification");
+  const [description, setDescription] = useState(
+    displayValue(item.effective_description ?? item.description),
+  );
+  const [comment, setComment] = useState("");
+  const locators = Array.isArray(item.source_locator_ids)
+    ? item.source_locator_ids.map(String)
+    : [];
+  const identity = String(item.item_id);
+  const submit = (
+    action:
+      "accepted" | "corrected" | "excluded" | "status_changed" | "commented",
+  ) => {
+    onReview({
+      itemId: identity,
+      action,
+      resolvedFields:
+        action === "corrected"
+          ? { description }
+          : action === "status_changed"
+            ? {
+                status: statusValue,
+                resolution_status:
+                  statusValue === "conforms" ? "resolved" : "open",
+              }
+            : null,
+      comment:
+        comment ||
+        (action === "accepted"
+          ? "Вывод принят после проверки источника"
+          : "Результат рассмотрен пользователем"),
+    });
+    setEditing(false);
+    setCommenting(false);
+    setChangingStatus(false);
+  };
+  return (
+    <article className="pilot-result-item">
+      <div className="entity-heading">
+        <div>
+          <h3>{displayValue(item.title, "Вывод")}</h3>
+          <StatusPill
+            tone={
+              ["conforms", "accepted"].includes(pilotItemStatus(item))
+                ? "default"
+                : "warning"
+            }
+          >
+            {humanizeStatus(pilotItemStatus(item))}
+          </StatusPill>
+        </div>
+        <div className="candidate-actions">
+          <button
+            type="button"
+            className="ghost"
+            disabled={pending}
+            onClick={() => submit("accepted")}
+          >
+            Принять
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={pending}
+            onClick={() => setEditing(true)}
+          >
+            Исправить
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={pending}
+            onClick={() => submit("excluded")}
+          >
+            Исключить
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={pending}
+            onClick={() => setCommenting(true)}
+          >
+            Комментарий
+          </button>
+          <button
+            type="button"
+            className="ghost"
+            disabled={pending}
+            onClick={() => setChangingStatus(true)}
+          >
+            Изменить статус
+          </button>
+        </div>
+      </div>
+      <p>{displayValue(item.effective_description ?? item.description)}</p>
+      <dl className="result-details">
+        <div>
+          <dt>Последствия</dt>
+          <dd>{displayValue(item.consequence)}</dd>
+        </div>
+        <div>
+          <dt>Рекомендуемое действие</dt>
+          <dd>{displayValue(item.recommended_action)}</dd>
+        </div>
+      </dl>
+      {locators.length ? (
+        <div className="source-links">
+          <strong>Источник:</strong>
+          {locators.map((locator, index) => (
+            <Link
+              key={locator}
+              to={workspaceRouteFromSlug(
+                modeSlug,
+                workspaceId,
+                `/evidence/locators/${locator}`,
+              )}
+            >
+              Исходный фрагмент {index + 1}
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <p className="muted-copy">
+          Точный исходный фрагмент для этого вывода требует уточнения.
+        </p>
+      )}
+      {item.review ? (
+        <small>
+          Последнее решение:{" "}
+          {humanizeStatus(
+            String((item.review as Record<string, unknown>).action),
+          )}{" "}
+          · {String((item.review as Record<string, unknown>).comment)}
+        </small>
+      ) : null}
+      {editing && (
+        <div className="candidate-edit">
+          <label>
+            Исправленная формулировка
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+          <label>
+            Причина или комментарий
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={
+              pending ||
+              description.trim().length < 3 ||
+              comment.trim().length < 3
+            }
+            onClick={() => submit("corrected")}
+          >
+            Сохранить новую версию решения
+          </button>
+        </div>
+      )}
+      {commenting && (
+        <div className="candidate-edit">
+          <label>
+            Комментарий
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || comment.trim().length < 3}
+            onClick={() => submit("commented")}
+          >
+            Сохранить комментарий
+          </button>
+        </div>
+      )}
+      {changingStatus && (
+        <div className="candidate-edit">
+          <label>
+            Новое состояние
+            <select
+              value={statusValue}
+              onChange={(event) => setStatusValue(event.target.value)}
+            >
+              <option value="conforms">Соответствует</option>
+              <option value="requires_clarification">Требует уточнения</option>
+              <option value="conflict">Противоречит другому источнику</option>
+              <option value="missing">Отсутствует</option>
+              <option value="cannot_prepare">
+                Невозможно проверить по имеющимся данным
+              </option>
+            </select>
+          </label>
+          <label>
+            Основание изменения
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={pending || comment.trim().length < 3}
+            onClick={() => submit("status_changed")}
+          >
+            Сохранить состояние
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function ProjectUnderstandingPage() {
   const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
-  const [section, setSection] = useState("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [section, setSection] = useState(
+    searchParams.get("section") ?? "general",
+  );
   const understanding = useQuery({
     queryKey: ["project-understanding", workspaceId],
     queryFn: async () => {
@@ -2111,7 +2832,10 @@ function ProjectUnderstandingPage() {
             type="button"
             className={section === key ? "active" : "ghost"}
             key={key}
-            onClick={() => setSection(key)}
+            onClick={() => {
+              setSection(key);
+              setSearchParams({ section: key }, { replace: true });
+            }}
           >
             {label}
           </button>
@@ -2566,7 +3290,9 @@ function NormativeRequirementList({
           ))}
         </div>
       ) : (
-        <p className="empty-state">no verified result</p>
+        <p className="empty-state">
+          Подтверждённое нормативное основание пока не определено.
+        </p>
       )}
     </section>
   );
@@ -2592,7 +3318,7 @@ function WorkPackageCard({
     <article className="entity-card">
       <h3>{displayValue(workType.normalized, "Не определён")}</h3>
       <p>
-        Исходные подтверждения:{" "}
+        Источники:{" "}
         {locators.length
           ? locators.map((locator) => {
               const identity = String(locator);
@@ -2639,7 +3365,7 @@ function EvidenceObject({
         const locatorIdentity = displayValue(item.source_locator_id);
         return (
           <div key={key} className="evidence-field">
-            <dt>{key}</dt>
+            <dt>{humanizeFieldKey(key)}</dt>
             <dd>
               {displayValue(
                 item.normalized_value ?? item.raw_value,
@@ -2688,6 +3414,15 @@ function displayValue(value: unknown, fallback = "") {
     return String(value);
   }
   return JSON.stringify(value);
+}
+
+function pilotItemStatus(item: Record<string, unknown>) {
+  const resolution = displayValue(item.effective_resolution_status);
+  if (["accepted", "excluded"].includes(resolution)) return resolution;
+  return displayValue(
+    item.effective_status ?? item.status,
+    "requires_clarification",
+  );
 }
 
 function useMode(workspaceId: string, mode: (typeof MODES)[number]) {
@@ -3031,15 +3766,15 @@ function OperationsPage() {
               <summary>Технические сведения</summary>
               <div className="split technical-section">
                 <section className="panel">
-                  <h2>Implemented</h2>
+                  <h2>Реализовано</h2>
                   <GapList gaps={value.implemented} good />
                 </section>
                 <section className="panel">
-                  <h2>Blockers</h2>
+                  <h2>Ограничения</h2>
                   <GapList gaps={value.blockers} />
                 </section>
                 <section className="panel">
-                  <h2>Readiness</h2>
+                  <h2>Решения о готовности</h2>
                   <dl>
                     <dt>TrialReady</dt>
                     <dd>{String(value.trial_ready)}</dd>
@@ -3050,7 +3785,7 @@ function OperationsPage() {
                   </dl>
                 </section>
                 <section className="panel">
-                  <h2>Deployment</h2>
+                  <h2>Развёртывание</h2>
                   <dl>
                     <dt>Source commit</dt>
                     <dd className="mono">{value.deployment.source_commit}</dd>
@@ -3162,6 +3897,7 @@ function formatBytes(value: number) {
 }
 
 function humanizeStatus(value: string) {
+  if (value.toLowerCase().includes("candidate")) return "Требует подтверждения";
   const labels: Record<string, string> = {
     ACTIVE: "В работе",
     active: "Действует",
@@ -3190,10 +3926,10 @@ function humanizeStatus(value: string) {
     authoritative: "Официальное основание",
     verified: "Проверено",
     pending: "Ожидает загрузки",
-    accepted: "Принят",
     duplicate: "Повторный файл",
     processing: "Обрабатывается",
     candidate: "Требует подтверждения",
+    "candidate or verified workspace fact": "Требует подтверждения",
     needs_evidence: "Недостаточно данных",
     conflict: "Обнаружено расхождение",
     quarantined: "Помещён в карантин",
@@ -3201,8 +3937,34 @@ function humanizeStatus(value: string) {
     confirmed: "Подтверждено",
     corrected: "Исправлено",
     rejected: "Отклонено",
+    accepted: "Принято",
+    excluded: "Исключено",
+    status_changed: "Статус изменён",
+    commented: "Добавлен комментарий",
+    draft_with_open_questions: "Проект с нерешёнными вопросами",
+    reviewed_draft: "Рассмотренный проект",
+    requires_clarification: "Требуется уточнение",
+    cannot_prepare: "Невозможно подготовить",
+    conforms: "Соответствует",
+    original_or_finalized: "Финализированный документ",
+    recoverable_draft: "Можно подготовить проект",
   };
   return labels[value] ?? value.replaceAll("_", " ").toLowerCase();
+}
+
+function humanizeExportKind(value: string) {
+  const labels: Record<string, string> = {
+    disagreement_protocol: "Протокол разногласий",
+    contract_changes: "Предлагаемые изменения к договору",
+    requirement_matrix: "Матрица работ и требований",
+    id_package: "Комплект исполнительной документации",
+    register: "Реестр документов комплекта",
+    audit_report: "Отчёт аудита",
+    recovery_plan: "План восстановления",
+    recovered_drafts: "Проекты восстанавливаемых документов",
+    workspace_results: "Архив результатов объекта",
+  };
+  return labels[value] ?? "Результат объекта";
 }
 
 function humanizeDocumentRole(value: string) {
@@ -3239,6 +4001,18 @@ function humanizeJobKind(value: string) {
     EVIDENCE_INDEX_UPDATE: "Связь с исходными фрагментами",
   };
   return labels[value] ?? "Обработка документа";
+}
+
+function humanizeExtractionMethod(value: string) {
+  const labels: Record<string, string> = {
+    native_text: "Из текста исходного документа",
+    native: "Из текста исходного документа",
+    ocr: "Восстановлено со страницы документа",
+    vlm: "Получено при анализе фрагмента; требуется проверка",
+    spreadsheet_cell: "Из ячейки таблицы",
+    docx_paragraph: "Из абзаца документа",
+  };
+  return labels[value] ?? "Из исходного документа";
 }
 
 function humanizeFieldKey(value: string) {

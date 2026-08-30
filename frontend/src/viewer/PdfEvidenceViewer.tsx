@@ -147,35 +147,23 @@ export function PdfEvidenceViewer({
           <p className="danger-text">Связь с исходным фрагментом не найдена.</p>
         )}
         {evidence.data && (
-          <dl>
-            <dt>Версия источника</dt>
-            <dd className="mono">{evidence.data.locator.source_version_id}</dd>
-            <dt>Идентификатор места</dt>
-            <dd className="mono">{evidence.data.locator.source_locator_id}</dd>
-            <dt>Страница и область</dt>
-            <dd>
-              {evidence.data.locator.page_number} /{" "}
-              {evidence.data.locator.region.join(", ")}
-            </dd>
-            <dt>Размер страницы</dt>
-            <dd>
-              {evidence.data.locator.width_points} ×{" "}
-              {evidence.data.locator.height_points} пт / поворот{" "}
-              {evidence.data.locator.rotation_degrees}°
-            </dd>
-            <dt>Контрольная сумма фрагмента</dt>
-            <dd className="mono truncate">
-              {evidence.data.locator.evidence_digest}
-            </dd>
-            <dt>Способ извлечения</dt>
-            <dd>{evidence.data.locator.extraction_method}</dd>
-            <dt>Состояние</dt>
-            <dd>{evidence.data.candidate_fact_status}</dd>
-            <dt>Тип источника</dt>
-            <dd>{evidence.data.authority_type}</dd>
-            <dt>Неопределённость</dt>
-            <dd>{evidence.data.uncertainty.join(", ") || "—"}</dd>
-          </dl>
+          <>
+            <dl>
+              <dt>Страница и область</dt>
+              <dd>
+                {evidence.data.locator.page_number} /{" "}
+                {evidence.data.locator.region.join(", ")}
+              </dd>
+              <dt>Способ получения</dt>
+              <dd>
+                {extractionLabel(evidence.data.locator.extraction_method)}
+              </dd>
+              <dt>Состояние сведения</dt>
+              <dd>{factStatusLabel(evidence.data.candidate_fact_status)}</dd>
+              <dt>Требует уточнения</dt>
+              <dd>{evidence.data.uncertainty.length ? "Да" : "Нет"}</dd>
+            </dl>
+          </>
         )}
       </aside>
     </div>
@@ -253,19 +241,42 @@ function PdfPage({
       className="pdf-page"
       style={{ width: size.width, height: size.height }}
     >
-      <canvas ref={canvasRef} aria-label={`PDF page ${String(pageNumber)}`} />
+      <canvas
+        ref={canvasRef}
+        aria-label={`Страница PDF ${String(pageNumber)}`}
+      />
       <div
         ref={textRef}
         className="text-layer"
-        aria-label="Native PDF text layer"
+        aria-label="Текстовый слой страницы"
       />
       {overlay && (
         <div
           className="locator-overlay"
           style={overlay}
-          aria-label="Evidence locator region"
+          aria-label="Область исходного фрагмента"
         />
       )}
     </div>
   );
+}
+
+function extractionLabel(value: string) {
+  const labels: Record<string, string> = {
+    native: "Из текста исходного документа",
+    native_text: "Из текста исходного документа",
+    spreadsheet_cell: "Из ячейки таблицы",
+    docx_paragraph: "Из абзаца документа",
+    ocr: "Восстановлено со страницы документа",
+    vlm: "Получено при анализе фрагмента; требуется проверка",
+  };
+  return labels[value] ?? "Из исходного документа";
+}
+
+function factStatusLabel(value: string) {
+  if (["confirmed", "verified"].includes(value)) return "Подтверждено";
+  if (value.includes("candidate")) return "Требует подтверждения";
+  if (value.includes("conflict")) return "Обнаружено расхождение";
+  if (value.includes("insufficient")) return "Недостаточно данных";
+  return "Требует уточнения";
 }

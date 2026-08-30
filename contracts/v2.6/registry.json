@@ -1,0 +1,9 @@
+{
+  "registry_version": "2.6.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "pilot_usable_e2e_pending_external_acceptance",
+  "compatibility": {"kind": "additive", "preserves": ["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0"]},
+  "schemas": [{"schema_id": "urn:asd-kontur:contracts:v2.6:schema:pilot-usable-e2e-delta", "path": "schemas/pilot-usable-e2e-delta.schema.json", "digest": "sha256:81d15ed5fd459d6462471d1f2c31cdf09e9a100dd748534da1bcddcf80f6cdc2"}],
+  "contract_keys": ["product.pilot-usable-e2e-delta@2.6.0"],
+  "fixtures": {"valid": ["fixtures/valid/pilot-usable-e2e-delta.json"], "invalid": []}
+}

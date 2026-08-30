@@ -235,8 +235,8 @@ test("user enters through four Russian modes and keeps the selected object", asy
   await page.getByRole("button", { name: "Начать загрузку" }).click();
   await expect(page.getByRole("link", { name: "synthetic.pdf" })).toBeVisible();
   await page.getByRole("link", { name: "synthetic.pdf" }).click();
-  await expect(page.getByLabel("PDF page 1")).toBeVisible();
-  await expect(page.getByLabel("Evidence locator region")).toBeVisible();
+  await expect(page.getByLabel("Страница PDF 1")).toBeVisible();
+  await expect(page.getByLabel("Область исходного фрагмента")).toBeVisible();
   await page.goto("/admin/knowledge");
   await page.getByText("Технические сведения", { exact: true }).click();
   await expect(

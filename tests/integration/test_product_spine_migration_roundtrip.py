@@ -28,6 +28,9 @@ SPINE_WORKSPACE_TABLES = (
     "job_leases",
     "job_progress_events",
     "job_terminal_receipts",
+    "pilot_export_versions",
+    "pilot_mode_result_versions",
+    "pilot_result_item_decisions",
 )
 
 

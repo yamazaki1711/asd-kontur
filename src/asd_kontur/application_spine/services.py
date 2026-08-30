@@ -9,6 +9,15 @@ from uuid import UUID
 
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
+from asd_kontur.pilot import (
+    PilotExportFormat,
+    PilotExportKind,
+    PilotMode,
+    PilotResultService,
+    PilotReviewAction,
+)
+from asd_kontur.pilot.readiness import TrialReadinessRepository
+from asd_kontur.pilot.service import PilotContent
 from asd_kontur.support.production_postgres import SupportProductionRepository
 
 from .config import SpineSettings
@@ -98,6 +107,12 @@ class ProductSpineService:
         self._object_store = object_store
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
+        self._pilot = PilotResultService(
+            repository,
+            object_store,
+            chunk_bytes=settings.upload_chunk_bytes,
+        )
+        self._trial_readiness = TrialReadinessRepository(repository.engine)
 
     def create_workspace(
         self,
@@ -638,6 +653,85 @@ class ProductSpineService:
             workspace_id=workspace_id,
         )
 
+    def form_pilot_result(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        mode: ModeName,
+    ) -> dict[str, Any]:
+        return self._pilot.form_result(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            mode=PilotMode(mode.value),
+        )
+
+    def pilot_result(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        mode: ModeName,
+    ) -> dict[str, Any] | None:
+        return self._pilot.get_result(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            mode=PilotMode(mode.value),
+        )
+
+    def review_pilot_result_item(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        mode: ModeName,
+        item_id: UUID,
+        action: PilotReviewAction,
+        resolved_fields: dict[str, Any] | None,
+        comment: str,
+    ) -> dict[str, Any]:
+        return self._pilot.review_item(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            mode=PilotMode(mode.value),
+            item_id=item_id,
+            action=action,
+            resolved_fields=resolved_fields,
+            comment=comment,
+        )
+
+    def create_pilot_export(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        mode: ModeName,
+        kind: PilotExportKind,
+        output_format: PilotExportFormat,
+    ) -> dict[str, Any]:
+        return self._pilot.create_export(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            mode=PilotMode(mode.value),
+            kind=kind,
+            output_format=output_format,
+        )
+
+    def pilot_export_content(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        export_id: UUID,
+        byte_range: tuple[int, int] | None = None,
+    ) -> PilotContent:
+        return self._pilot.export_content(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            export_id=export_id,
+            byte_range=byte_range,
+        )
+
     def _support_output_content(
         self,
         *,
@@ -685,24 +779,15 @@ class ProductSpineService:
         )
 
     def capability_status(self) -> dict[str, Any]:
-        knowledge = self.knowledge_status()
-        blockers = {
-            "MODEL_BROKER_NOT_IN_SPINE_SLICE",
-            "INDUSTRIAL_INTAKE_SCALE_THRESHOLDS_UNSET",
-            "INDUSTRIAL_INTAKE_VLM_PROFILE_NOT_QUALIFIED",
-            "PROJECT_UNDERSTANDING_SYNTHETIC_CORPUS_ONLY",
-            "SUPPORT_EXECUTIVE_SCHEME_GEOMETRY_UNAVAILABLE",
-        }
-        if knowledge.verified_normative_edition_count == 0:
-            blockers.add("OFFICIAL_NTD_VERIFIED_EDITION_COUNT_ZERO")
-        if knowledge.rule_version_count == 0:
-            blockers.add("RULE_VERSION_COUNT_ZERO")
-        if knowledge.memory_data_defect:
-            blockers.add("MEMORY_DATA_DEFECT")
-        blockers.add("FIELD_ANDROID_CLIENT_NOT_IMPLEMENTED")
+        decision = self._trial_readiness.latest()
+        blockers = (
+            list(decision["user_blockers"])
+            if decision is not None
+            else ["PILOT_ACCEPTANCE_NOT_RECORDED"]
+        )
         return {
-            "contract_version": "2.5.0",
-            "slice": "INDUSTRIAL-INTAKE-PROJECT-UNDERSTANDING-01",
+            "contract_version": "2.6.0",
+            "slice": "PILOT-USABLE-END-TO-END-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -748,9 +833,16 @@ class ProductSpineService:
                 "output.template-registry",
                 "output.docx",
                 "output.generated-document-candidate",
+                "pilot.tender-professional-result",
+                "pilot.support-professional-result",
+                "pilot.audit-professional-result",
+                "pilot.restoration-professional-result",
+                "pilot.reviewed-result-version",
+                "pilot.docx-pdf-zip-exports",
+                "pilot.trial-readiness-decision",
             ],
             "blockers": sorted(blockers),
-            "trial_ready": False,
+            "trial_ready": bool(decision and decision["status"] == "trial_ready"),
             "oks_ready": False,
             "product_ready": False,
             "deployment": {
@@ -762,6 +854,31 @@ class ProductSpineService:
                 "migration_head": self._settings.expected_migration_head,
             },
         }
+
+    def record_trial_readiness(
+        self,
+        *,
+        owner_identity_id: str,
+        criteria: dict[str, bool],
+        pilot_thresholds: dict[str, Any],
+        external_receipts: list[dict[str, Any]],
+        user_blockers: list[str],
+        rollback_target: str,
+    ) -> dict[str, Any]:
+        if len(self._settings.release_commit) != 40:
+            raise ValueError("trial_readiness_requires_pinned_release")
+        return self._trial_readiness.record(
+            deployed_commit=self._settings.release_commit,
+            criteria=criteria,
+            pilot_thresholds=pilot_thresholds,
+            external_receipts=external_receipts,
+            user_blockers=user_blockers,
+            rollback_target=rollback_target,
+            owner_identity_id=owner_identity_id,
+        )
+
+    def trial_readiness(self) -> dict[str, Any] | None:
+        return self._trial_readiness.latest()
 
 
 def _manifest_ordinal(item: dict[str, object]) -> int:
