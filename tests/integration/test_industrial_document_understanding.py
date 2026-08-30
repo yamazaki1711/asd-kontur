@@ -506,6 +506,89 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert exact.status_code == 200, exact.text
         assert exact.json()["locator"]["source_locator_id"] == quantity["source_locator_id"]
 
+        pilot_results: dict[str, dict[str, object]] = {}
+        for mode in ("Tender", "Support", "Audit", "Restoration"):
+            formed = client.post(
+                f"/api/v1/workspaces/{workspace_id}/modes/{mode}/result",
+                headers=csrf,
+            )
+            assert formed.status_code == 201, formed.text
+            pilot_results[mode] = formed.json()
+            assert pilot_results[mode]["source_manifest"]
+            assert pilot_results[mode]["items"]
+            assert (
+                pilot_results[mode]["normative_notice"]
+                == "Актуальность редакций нормативных документов не проверена"
+            )
+
+        audit_items = pilot_results["Audit"]["items"]
+        assert isinstance(audit_items, list)
+        first_audit_item = audit_items[0]
+        assert isinstance(first_audit_item, dict)
+        audit_review = client.post(
+            f"/api/v1/workspaces/{workspace_id}/modes/Audit/result/items/"
+            f"{first_audit_item['item_id']}/reviews",
+            json={
+                "action": "status_changed",
+                "resolved_fields": {"status": "requires_clarification"},
+                "comment": "Ответственный назначается после проверки исходного фрагмента",
+            },
+            headers=csrf,
+        )
+        assert audit_review.status_code == 201, audit_review.text
+        assert audit_review.json()["reviewed_item_count"] == 1
+
+        export_cases = (
+            ("Tender", "disagreement_protocol", "docx"),
+            ("Tender", "contract_changes", "pdf"),
+            ("Support", "requirement_matrix", "pdf"),
+            ("Support", "id_package", "zip"),
+            ("Support", "register", "docx"),
+            ("Audit", "audit_report", "docx"),
+            ("Audit", "audit_report", "pdf"),
+            ("Restoration", "recovery_plan", "docx"),
+            ("Restoration", "recovery_plan", "pdf"),
+            ("Restoration", "recovered_drafts", "zip"),
+            ("Tender", "workspace_results", "zip"),
+        )
+        created_exports = []
+        for mode, kind, output_format in export_cases:
+            created = client.post(
+                f"/api/v1/workspaces/{workspace_id}/modes/{mode}/exports",
+                json={"export_kind": kind, "output_format": output_format},
+                headers=csrf,
+            )
+            assert created.status_code == 201, created.text
+            export = created.json()
+            assert export["size_bytes"] > 100
+            assert export["content_digest"].startswith("sha256:")
+            created_exports.append(export)
+        content = client.get(
+            f"/api/v1/workspaces/{workspace_id}/pilot-exports/"
+            f"{created_exports[-1]['export_id']}/content"
+        )
+        assert content.status_code == 200
+        assert content.headers["accept-ranges"] == "bytes"
+        with zipfile.ZipFile(io.BytesIO(content.content)) as archive:
+            names = set(archive.namelist())
+        assert "manifest.json" in names
+        assert "tender/result.docx" in names
+        assert "support/result.pdf" in names
+        ranged = client.get(
+            f"/api/v1/workspaces/{workspace_id}/pilot-exports/"
+            f"{created_exports[0]['export_id']}/content",
+            headers={"Range": "bytes=0-63"},
+        )
+        assert ranged.status_code == 206
+        assert len(ranged.content) == 64
+        assert ranged.headers["content-range"].startswith("bytes 0-63/")
+        assert (
+            client.get(
+                f"/api/v1/workspaces/{workspace_b['workspace_id']}/modes/Tender/result"
+            ).status_code
+            == 404
+        )
+
         with postgres_environment.document_worker_engine.begin() as connection:
             connection.execute(
                 sa.select(
@@ -599,7 +682,13 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert workspace_id not in remaining_workspace_ids
         assert workspace_b["workspace_id"] in remaining_workspace_ids
         with postgres_environment.owner_engine.connect() as connection:
-            for table in ("intake_archive_members", "project_candidate_review_decisions"):
+            for table in (
+                "intake_archive_members",
+                "project_candidate_review_decisions",
+                "pilot_export_versions",
+                "pilot_result_item_decisions",
+                "pilot_mode_result_versions",
+            ):
                 assert (
                     connection.scalar(
                         sa.text(

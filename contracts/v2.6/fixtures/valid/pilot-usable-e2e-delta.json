@@ -1,0 +1,12 @@
+{
+  "contract_version": "2.6.0",
+  "base_delta": "contracts/v2.5/fixtures/valid/industrial-intake-project-understanding-delta.json",
+  "product_denominator": 143,
+  "pilot_corpus": {"version": "industrial-intake-synthetic@1.0.0", "selected_files": 13, "registered_documents": 14, "work_types": 3, "work_packages": 3, "matrix_rows": 3, "real_oks_data": false},
+  "mode_results": ["Tender", "Support", "Audit", "Restoration"],
+  "exports": ["disagreement_protocol", "contract_changes", "requirement_matrix", "id_package", "register", "audit_report", "recovery_plan", "recovered_drafts", "workspace_results"],
+  "thresholds": {"max_corpus_files": 250, "max_corpus_bytes": 1073741824, "admission_seconds": 180, "first_result_seconds": 600, "main_screen_seconds": 2, "transient_retry_rate_percent": 5, "unexpected_failure_rate_percent": 1, "interruption_recovery_seconds": 60},
+  "trial_readiness": {"state": "pending_external_acceptance", "decision_source": "application.trial_readiness_decisions", "required_criteria": ["owner_ui_path", "four_mode_results", "exact_source_navigation", "unconfirmed_facts_are_marked", "required_documents_not_fabricated", "restart_survival", "workspace_isolation", "exports_available", "limitations_visible", "rollback_available", "external_e2e_exact_commit"]},
+  "oks_ready": false,
+  "product_ready": false
+}

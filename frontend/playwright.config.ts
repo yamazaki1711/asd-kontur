@@ -3,6 +3,8 @@ import { defineConfig } from "@playwright/test";
 const e2eStatePath = "/tmp/asd-kontur-spine-e2e-state.json";
 process.env.ASD_E2E_STATE_PATH = e2eStatePath;
 process.env.ASD_E2E_PORT = "4173";
+process.env.NO_PROXY = "127.0.0.1,localhost";
+process.env.no_proxy = "127.0.0.1,localhost";
 const webServerEnvironment = Object.fromEntries(
   Object.entries(process.env).filter(
     (entry): entry is [string, string] => entry[1] !== undefined,

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.6:schema:pilot-usable-e2e-delta",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "base_delta", "product_denominator", "pilot_corpus", "mode_results", "exports", "thresholds", "trial_readiness", "oks_ready", "product_ready"],
+  "properties": {
+    "contract_version": {"const": "2.6.0"},
+    "base_delta": {"const": "contracts/v2.5/fixtures/valid/industrial-intake-project-understanding-delta.json"},
+    "product_denominator": {"const": 143},
+    "pilot_corpus": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "selected_files", "registered_documents", "work_types", "work_packages", "matrix_rows", "real_oks_data"],
+      "properties": {
+        "version": {"const": "industrial-intake-synthetic@1.0.0"},
+        "selected_files": {"const": 13},
+        "registered_documents": {"const": 14},
+        "work_types": {"const": 3},
+        "work_packages": {"const": 3},
+        "matrix_rows": {"const": 3},
+        "real_oks_data": {"const": false}
+      }
+    },
+    "mode_results": {
+      "type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true,
+      "items": {"enum": ["Tender", "Support", "Audit", "Restoration"]}
+    },
+    "exports": {
+      "type": "array", "minItems": 9, "maxItems": 9, "uniqueItems": true,
+      "items": {"enum": ["disagreement_protocol", "contract_changes", "requirement_matrix", "id_package", "register", "audit_report", "recovery_plan", "recovered_drafts", "workspace_results"]}
+    },
+    "thresholds": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_corpus_files", "max_corpus_bytes", "admission_seconds", "first_result_seconds", "main_screen_seconds", "transient_retry_rate_percent", "unexpected_failure_rate_percent", "interruption_recovery_seconds"],
+      "properties": {
+        "max_corpus_files": {"type": "integer", "minimum": 14},
+        "max_corpus_bytes": {"type": "integer", "minimum": 1},
+        "admission_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "first_result_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "main_screen_seconds": {"type": "number", "exclusiveMinimum": 0},
+        "transient_retry_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "unexpected_failure_rate_percent": {"type": "number", "minimum": 0, "maximum": 100},
+        "interruption_recovery_seconds": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "trial_readiness": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "decision_source", "required_criteria"],
+      "properties": {
+        "state": {"const": "pending_external_acceptance"},
+        "decision_source": {"const": "application.trial_readiness_decisions"},
+        "required_criteria": {
+          "const": ["owner_ui_path", "four_mode_results", "exact_source_navigation", "unconfirmed_facts_are_marked", "required_documents_not_fabricated", "restart_survival", "workspace_isolation", "exports_available", "limitations_visible", "rollback_available", "external_e2e_exact_commit"]
+        }
+      }
+    },
+    "oks_ready": {"const": false},
+    "product_ready": {"const": false}
+  }
+}

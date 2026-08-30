@@ -133,6 +133,62 @@ test("authorized user enters by mode and downloads the finalized package documen
     page.getByRole("heading", { name: "Точное место в исходном документе" }),
   ).toBeVisible();
 
+  const modeResults = [
+    ["tender", "Тендерный анализ", "Протокол разногласий"],
+    ["support", "Инженерное сопровождение", "Матрица работ и требований"],
+    ["audit", "Аудит", "Отчёт аудита"],
+    ["restoration", "Восстановление", "План восстановления"],
+  ] as const;
+  for (const [mode, title, output] of modeResults) {
+    await page.goto(`/modes/${mode}/workspaces/${workspaceId}/result`);
+    const form = page.getByRole("button", { name: "Сформировать результат" });
+    const resultHeading = page.getByRole("heading", {
+      name: `Результат: ${title}`,
+    });
+    await expect(form.or(resultHeading)).toBeVisible();
+    if (await form.isVisible()) await form.click();
+    await expect(
+      page.getByRole("heading", { name: `Результат: ${title}` }),
+    ).toBeVisible();
+    await expect(page.getByText(output, { exact: true })).toBeVisible();
+    await expect(page.getByText("Актуальность редакций")).toBeVisible();
+    await expect(page.getByText("Выводы и действия")).toBeVisible();
+  }
+  await page.goto(`/modes/audit/workspaces/${workspaceId}/result`);
+  const firstAudit = page.locator(".pilot-result-item").first();
+  await firstAudit.getByRole("button", { name: "Комментарий" }).click();
+  await firstAudit
+    .getByLabel("Комментарий")
+    .fill("Проверено при внешней приёмке пилотного контура");
+  await firstAudit
+    .getByRole("button", { name: "Сохранить комментарий" })
+    .click();
+  await expect(firstAudit.getByText("Добавлен комментарий")).toBeVisible();
+  await firstAudit
+    .getByRole("link", { name: /Исходный фрагмент/ })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Точное место в исходном документе" }),
+  ).toBeVisible();
+  await page.goto(`/modes/tender/workspaces/${workspaceId}/result`);
+  await page
+    .locator(".export-card")
+    .filter({ hasText: "Протокол разногласий" })
+    .getByRole("button", { name: "Подготовить DOCX" })
+    .click();
+  const protocol = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: /Скачать Протокол разногласий \(DOCX\)/ })
+    .click();
+  expect((await protocol).suggestedFilename()).toMatch(/\.docx$/);
+  await page.getByRole("button", { name: "Подготовить общий архив" }).click();
+  const resultArchive = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: /Скачать Архив результатов объекта \(ZIP\)/ })
+    .click();
+  expect((await resultArchive).suggestedFilename()).toMatch(/\.zip$/);
+
   await page.goto(`/modes/support/workspaces/${workspaceId}/support-id`);
   const sseOpened = await page.evaluate(async (eventsUrl) => {
     return await new Promise<boolean>((resolve) => {
@@ -188,7 +244,9 @@ test("authorized user enters by mode and downloads the finalized package documen
 
   await page.goto("/admin/system");
   await page.getByText("Технические сведения", { exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Deployment" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Развёртывание" }),
+  ).toBeVisible();
   await expect(page.getByText("public-development-contour")).toBeVisible();
 
   await page.getByRole("button", { name: "Выйти" }).click();

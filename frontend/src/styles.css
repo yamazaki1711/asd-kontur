@@ -727,6 +727,84 @@ pre {
   border-radius: 0.6rem;
   padding: 1rem;
 }
+.pilot-result-list {
+  display: grid;
+  gap: 1rem;
+}
+.pilot-result-item {
+  border: 1px solid var(--line);
+  border-left: 0.3rem solid var(--signal);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  background: #fffefb;
+  min-width: 0;
+}
+.pilot-result-item h3,
+.pilot-result-item p,
+.result-details dd {
+  overflow-wrap: anywhere;
+}
+.result-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 0.8rem;
+}
+.result-details > div {
+  padding: 0.75rem;
+  background: var(--paper-warm);
+  border-radius: 0.6rem;
+}
+.source-links,
+.download-list,
+.export-card .candidate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+.export-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+}
+.export-card {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 1rem;
+  background: var(--paper-warm);
+  min-width: 0;
+}
+.download-list {
+  margin-top: 1.25rem;
+}
+.download-list h3 {
+  flex-basis: 100%;
+}
+.result-toolbar label {
+  min-width: min(22rem, 100%);
+}
+.result-toolbar input,
+.result-toolbar select {
+  width: 100%;
+}
+.matrix-cards {
+  display: grid;
+  gap: 1rem;
+}
+.technical-details-inline {
+  margin-top: 0.55rem;
+  max-width: 100%;
+}
+.technical-details-inline summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.82rem;
+}
+.technical-details-inline small {
+  display: block;
+  max-width: 24rem;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 900px) {
   .app-shell {
     grid-template: 4.5rem auto 1fr / 1fr;

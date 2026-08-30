@@ -1493,6 +1493,283 @@
         "title": "PackageBackupManifestView",
         "type": "object"
       },
+      "PilotExportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "export_kind": {
+            "enum": [
+              "disagreement_protocol",
+              "contract_changes",
+              "requirement_matrix",
+              "id_package",
+              "register",
+              "audit_report",
+              "recovery_plan",
+              "recovered_drafts",
+              "workspace_results"
+            ],
+            "title": "Export Kind",
+            "type": "string"
+          },
+          "output_format": {
+            "enum": [
+              "docx",
+              "pdf",
+              "zip"
+            ],
+            "title": "Output Format",
+            "type": "string"
+          }
+        },
+        "required": [
+          "export_kind",
+          "output_format"
+        ],
+        "title": "PilotExportRequest",
+        "type": "object"
+      },
+      "PilotExportView": {
+        "additionalProperties": false,
+        "properties": {
+          "content_digest": {
+            "title": "Content Digest",
+            "type": "string"
+          },
+          "export_fingerprint": {
+            "title": "Export Fingerprint",
+            "type": "string"
+          },
+          "export_id": {
+            "format": "uuid",
+            "title": "Export Id",
+            "type": "string"
+          },
+          "export_kind": {
+            "title": "Export Kind",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "output_format": {
+            "title": "Output Format",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "export_id",
+          "version",
+          "export_kind",
+          "output_format",
+          "media_type",
+          "size_bytes",
+          "content_digest",
+          "export_fingerprint"
+        ],
+        "title": "PilotExportView",
+        "type": "object"
+      },
+      "PilotResultItemReviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "accepted",
+              "corrected",
+              "excluded",
+              "status_changed",
+              "commented"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "comment": {
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Comment",
+            "type": "string"
+          },
+          "resolved_fields": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolved Fields"
+          }
+        },
+        "required": [
+          "action",
+          "comment"
+        ],
+        "title": "PilotResultItemReviewRequest",
+        "type": "object"
+      },
+      "PilotResultView": {
+        "additionalProperties": false,
+        "properties": {
+          "available_exports": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Exports",
+            "type": "array"
+          },
+          "exports": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Exports",
+            "type": "array"
+          },
+          "fingerprint": {
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "formed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formed At"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "matrix_id": {
+            "title": "Matrix Id",
+            "type": "string"
+          },
+          "matrix_version": {
+            "title": "Matrix Version",
+            "type": "integer"
+          },
+          "mode": {
+            "enum": [
+              "Tender",
+              "Support",
+              "Audit",
+              "Restoration"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "normative_notice": {
+            "title": "Normative Notice",
+            "type": "string"
+          },
+          "project_definition_id": {
+            "title": "Project Definition Id",
+            "type": "string"
+          },
+          "project_definition_version": {
+            "title": "Project Definition Version",
+            "type": "integer"
+          },
+          "project_fields": {
+            "additionalProperties": true,
+            "title": "Project Fields",
+            "type": "object"
+          },
+          "project_status": {
+            "title": "Project Status",
+            "type": "string"
+          },
+          "result_id": {
+            "format": "uuid",
+            "title": "Result Id",
+            "type": "string"
+          },
+          "reviewed_item_count": {
+            "default": 0,
+            "title": "Reviewed Item Count",
+            "type": "integer"
+          },
+          "source_manifest": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Source Manifest",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          },
+          "unresolved_questions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Questions",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          },
+          "workspace_name": {
+            "title": "Workspace Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "result_id",
+          "version",
+          "mode",
+          "workspace_id",
+          "workspace_name",
+          "project_definition_id",
+          "project_definition_version",
+          "matrix_id",
+          "matrix_version",
+          "project_status",
+          "project_fields",
+          "summary",
+          "items",
+          "source_manifest",
+          "unresolved_questions",
+          "available_exports",
+          "normative_notice",
+          "status",
+          "fingerprint"
+        ],
+        "title": "PilotResultView",
+        "type": "object"
+      },
       "ProjectCandidateReviewRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2043,6 +2320,138 @@
         "title": "SupportProductionView",
         "type": "object"
       },
+      "TrialReadinessRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "criteria": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Criteria",
+            "type": "object"
+          },
+          "external_receipts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "External Receipts",
+            "type": "array"
+          },
+          "pilot_thresholds": {
+            "additionalProperties": true,
+            "title": "Pilot Thresholds",
+            "type": "object"
+          },
+          "rollback_target": {
+            "maxLength": 512,
+            "minLength": 7,
+            "title": "Rollback Target",
+            "type": "string"
+          },
+          "user_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "User Blockers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "criteria",
+          "pilot_thresholds",
+          "external_receipts",
+          "rollback_target"
+        ],
+        "title": "TrialReadinessRequest",
+        "type": "object"
+      },
+      "TrialReadinessView": {
+        "additionalProperties": false,
+        "properties": {
+          "criteria": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Criteria",
+            "type": "object"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by_identity_id": {
+            "title": "Decided By Identity Id",
+            "type": "string"
+          },
+          "decision_fingerprint": {
+            "title": "Decision Fingerprint",
+            "type": "string"
+          },
+          "decision_id": {
+            "format": "uuid",
+            "title": "Decision Id",
+            "type": "string"
+          },
+          "deployed_commit": {
+            "title": "Deployed Commit",
+            "type": "string"
+          },
+          "external_receipts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "External Receipts",
+            "type": "array"
+          },
+          "pilot_thresholds": {
+            "additionalProperties": true,
+            "title": "Pilot Thresholds",
+            "type": "object"
+          },
+          "rollback_target": {
+            "title": "Rollback Target",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "trial_ready",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "user_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "User Blockers",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "decision_id",
+          "version",
+          "deployed_commit",
+          "status",
+          "criteria",
+          "pilot_thresholds",
+          "external_receipts",
+          "user_blockers",
+          "rollback_target",
+          "decision_fingerprint",
+          "decided_by_identity_id",
+          "decided_at"
+        ],
+        "title": "TrialReadinessView",
+        "type": "object"
+      },
       "UploadBatchView": {
         "additionalProperties": false,
         "properties": {
@@ -2217,6 +2626,84 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/trial-readiness": {
+      "get": {
+        "operationId": "trial_readiness_api_v1_admin_trial_readiness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialReadinessView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Trial Readiness",
+        "tags": [
+          "platform"
+        ]
+      },
+      "post": {
+        "operationId": "record_trial_readiness_api_v1_admin_trial_readiness_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrialReadinessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrialReadinessView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Trial Readiness",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/api/v1/capabilities": {
       "get": {
         "operationId": "capabilities_api_v1_capabilities_get",
@@ -3597,6 +4084,353 @@
         "summary": "Mode View",
         "tags": [
           "modes"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/exports": {
+      "post": {
+        "operationId": "create_pilot_export_api_v1_workspaces__workspace_id__modes__mode__exports_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModeName"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PilotExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotExportView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Pilot Export",
+        "tags": [
+          "pilot-results"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/result": {
+      "get": {
+        "operationId": "pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModeName"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pilot Result",
+        "tags": [
+          "pilot-results"
+        ]
+      },
+      "post": {
+        "operationId": "form_pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModeName"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Form Pilot Result",
+        "tags": [
+          "pilot-results"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/result/items/{item_id}/reviews": {
+      "post": {
+        "operationId": "review_pilot_result_item_api_v1_workspaces__workspace_id__modes__mode__result_items__item_id__reviews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "mode",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ModeName"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PilotResultItemReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PilotResultView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Pilot Result Item",
+        "tags": [
+          "pilot-results"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/pilot-exports/{export_id}/content": {
+      "get": {
+        "operationId": "pilot_export_content_api_v1_workspaces__workspace_id__pilot_exports__export_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "export_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Export Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Range",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Range"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pilot Export Content",
+        "tags": [
+          "pilot-results"
         ]
       }
     },

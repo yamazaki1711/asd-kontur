@@ -34,6 +34,8 @@ from sqlalchemy import Engine
 
 from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
+from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewAction
+from asd_kontur.pilot.postgres import PilotResultError
 from asd_kontur.support.production_postgres import SupportProductionError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
@@ -59,6 +61,10 @@ from .schemas import (
     ModeView,
     NtdSeedStatusView,
     PackageBackupManifestView,
+    PilotExportRequest,
+    PilotExportView,
+    PilotResultItemReviewRequest,
+    PilotResultView,
     ProjectCandidateReviewRequest,
     ProjectCandidateReviewView,
     ProjectUnderstandingView,
@@ -70,6 +76,8 @@ from .schemas import (
     SessionView,
     StartGenerationRequest,
     SupportProductionView,
+    TrialReadinessRequest,
+    TrialReadinessView,
     UploadBatchView,
     WorkspaceCreate,
     WorkspaceView,
@@ -186,6 +194,11 @@ def _install_middleware(app: FastAPI) -> None:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
 
+    @app.exception_handler(PilotResultError)
+    async def pilot_result_error(request: Request, exc: PilotResultError) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
     @app.exception_handler(ValueError)
     async def value_error(request: Request, exc: ValueError) -> JSONResponse:
         return _error(request, str(exc), 422)
@@ -270,6 +283,40 @@ def _api_router() -> APIRouter:
         request: Request, _: Annotated[SessionPrincipal, Depends(_principal)]
     ) -> CapabilityStatusView:
         return CapabilityStatusView(**_container(request).service.capability_status())
+
+    @router.get(
+        "/admin/trial-readiness",
+        response_model=TrialReadinessView,
+        tags=["platform"],
+    )
+    def trial_readiness(
+        request: Request, _: Annotated[SessionPrincipal, Depends(_principal)]
+    ) -> TrialReadinessView:
+        value = _container(request).service.trial_readiness()
+        if value is None:
+            raise HTTPException(status_code=404, detail="trial_readiness_decision_not_found")
+        return TrialReadinessView(**jsonable_encoder(value))
+
+    @router.post(
+        "/admin/trial-readiness",
+        response_model=TrialReadinessView,
+        status_code=201,
+        tags=["platform"],
+    )
+    def record_trial_readiness(
+        request: Request,
+        payload: TrialReadinessRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> TrialReadinessView:
+        value = _container(request).service.record_trial_readiness(
+            owner_identity_id=principal.owner_identity_id,
+            criteria=payload.criteria,
+            pilot_thresholds=payload.pilot_thresholds,
+            external_receipts=payload.external_receipts,
+            user_blockers=payload.user_blockers,
+            rollback_target=payload.rollback_target,
+        )
+        return TrialReadinessView(**jsonable_encoder(value))
 
     @router.get("/workspaces", response_model=list[WorkspaceView], tags=["workspaces"])
     def list_workspaces(
@@ -642,6 +689,138 @@ def _api_router() -> APIRouter:
             mode=mode,
         )
         return ModeView(**jsonable_encoder(asdict(value)))
+
+    @router.get(
+        "/workspaces/{workspace_id}/modes/{mode}/result",
+        response_model=PilotResultView,
+        tags=["pilot-results"],
+    )
+    def pilot_result(
+        request: Request,
+        workspace_id: UUID,
+        mode: ModeName,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> PilotResultView:
+        value = _container(request).service.pilot_result(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            mode=mode,
+        )
+        if value is None:
+            raise HTTPException(status_code=404, detail="pilot_result_not_found")
+        return PilotResultView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/modes/{mode}/result",
+        response_model=PilotResultView,
+        status_code=201,
+        tags=["pilot-results"],
+    )
+    def form_pilot_result(
+        request: Request,
+        workspace_id: UUID,
+        mode: ModeName,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> PilotResultView:
+        value = _container(request).service.form_pilot_result(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            mode=mode,
+        )
+        return PilotResultView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/modes/{mode}/result/items/{item_id}/reviews",
+        response_model=PilotResultView,
+        status_code=201,
+        tags=["pilot-results"],
+    )
+    def review_pilot_result_item(
+        request: Request,
+        workspace_id: UUID,
+        mode: ModeName,
+        item_id: UUID,
+        payload: PilotResultItemReviewRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> PilotResultView:
+        value = _container(request).service.review_pilot_result_item(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            mode=mode,
+            item_id=item_id,
+            action=PilotReviewAction(payload.action),
+            resolved_fields=payload.resolved_fields,
+            comment=payload.comment,
+        )
+        return PilotResultView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/modes/{mode}/exports",
+        response_model=PilotExportView,
+        status_code=201,
+        tags=["pilot-results"],
+    )
+    def create_pilot_export(
+        request: Request,
+        workspace_id: UUID,
+        mode: ModeName,
+        payload: PilotExportRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> PilotExportView:
+        value = _container(request).service.create_pilot_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            mode=mode,
+            kind=PilotExportKind(payload.export_kind),
+            output_format=PilotExportFormat(payload.output_format),
+        )
+        return PilotExportView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/pilot-exports/{export_id}/content",
+        tags=["pilot-results"],
+    )
+    def pilot_export_content(
+        request: Request,
+        workspace_id: UUID,
+        export_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+        range_header: Annotated[str | None, Header(alias="Range")] = None,
+    ) -> StreamingResponse:
+        provisional = _container(request).service.pilot_export_content(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            export_id=export_id,
+        )
+        requested = _parse_range(range_header, provisional.size_bytes)
+        value = provisional
+        if requested is not None:
+            value = _container(request).service.pilot_export_content(
+                owner_identity_id=principal.owner_identity_id,
+                workspace_id=workspace_id,
+                export_id=export_id,
+                byte_range=requested,
+            )
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(value.length),
+            "ETag": f'"{value.content_digest[7:]}"',
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+            ),
+        }
+        response_status = 200
+        if requested is not None:
+            headers["Content-Range"] = (
+                f"bytes {value.offset}-{value.offset + value.length - 1}/{value.size_bytes}"
+            )
+            response_status = 206
+        return StreamingResponse(
+            value.chunks,
+            media_type=value.media_type,
+            status_code=response_status,
+            headers=headers,
+        )
 
     @router.get(
         "/workspaces/{workspace_id}/project-understanding",

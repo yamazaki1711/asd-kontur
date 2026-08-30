@@ -26,7 +26,7 @@ if str(REPOSITORY) not in sys.path:
 from run_product_spine_e2e_server import _seed_support_production_path  # noqa: E402,I001
 
 
-EXPECTED_HEAD = "0028_industrial_intake"
+EXPECTED_HEAD = "0029_pilot_usable_e2e"
 DEMO_OWNER_ID = "owner:" + hashlib.sha256(b"synthetic-product-owner").hexdigest()[:24]
 
 

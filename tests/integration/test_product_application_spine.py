@@ -44,6 +44,7 @@ def _settings(environment: PostgreSQLEnvironment, root: Path) -> SpineSettings:
         audit_pepper="synthetic-product-spine-audit-pepper",
         max_file_bytes=4 * 1024 * 1024,
         max_batch_bytes=8 * 1024 * 1024,
+        release_commit="1" * 40,
     )
 
 
@@ -243,6 +244,49 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert client.get("/api/v1/platform/knowledge-status").json() == knowledge_before
         assert client.get("/api/v1/platform/ntd-seed-status").json() == ntd_seed_before
         assert any(settings.archive_store_root.rglob("*.zip"))
+        trial_criteria = {
+            "owner_ui_path": True,
+            "four_mode_results": True,
+            "exact_source_navigation": True,
+            "unconfirmed_facts_are_marked": True,
+            "required_documents_not_fabricated": True,
+            "restart_survival": True,
+            "workspace_isolation": True,
+            "exports_available": True,
+            "limitations_visible": True,
+            "rollback_available": True,
+            "external_e2e_exact_commit": True,
+        }
+        thresholds = {
+            "max_corpus_files": 250,
+            "max_corpus_bytes": 1073741824,
+            "admission_seconds": 180,
+            "first_result_seconds": 600,
+            "main_screen_seconds": 2,
+            "transient_retry_rate_percent": 5,
+            "unexpected_failure_rate_percent": 1,
+            "interruption_recovery_seconds": 60,
+        }
+        decision = client.post(
+            "/api/v1/admin/trial-readiness",
+            json={
+                "criteria": trial_criteria,
+                "pilot_thresholds": thresholds,
+                "external_receipts": [{"kind": "synthetic_external_e2e", "passed": True}],
+                "user_blockers": [],
+                "rollback_target": "sha256:synthetic-rollback-checkpoint",
+            },
+            headers=csrf,
+        )
+        assert decision.status_code == 201, decision.text
+        assert decision.json()["status"] == "trial_ready"
+        assert decision.json()["deployed_commit"] == "1" * 40
+        assert client.get("/api/v1/admin/trial-readiness").json() == decision.json()
+        capabilities = client.get("/api/v1/capabilities").json()
+        assert capabilities["trial_ready"] is True
+        assert capabilities["oks_ready"] is False
+        assert capabilities["product_ready"] is False
+        assert capabilities["blockers"] == []
         assert client.post("/api/v1/session/logout", headers=csrf).status_code == 204
         assert client.get("/api/v1/workspaces").status_code == 401
 

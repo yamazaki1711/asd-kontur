@@ -178,6 +178,94 @@ class ModeView(ApiModel):
     readiness: str
 
 
+class PilotResultView(ApiModel):
+    result_id: UUID
+    version: int
+    mode: Literal["Tender", "Support", "Audit", "Restoration"]
+    workspace_id: UUID
+    workspace_name: str
+    project_definition_id: str
+    project_definition_version: int
+    matrix_id: str
+    matrix_version: int
+    project_status: str
+    project_fields: dict[str, Any]
+    summary: dict[str, Any]
+    items: list[dict[str, Any]]
+    source_manifest: list[dict[str, Any]]
+    unresolved_questions: list[str]
+    available_exports: list[str]
+    normative_notice: str
+    status: str
+    fingerprint: str
+    formed_at: str | None = None
+    exports: list[dict[str, Any]] = Field(default_factory=list)
+    reviewed_item_count: int = 0
+
+
+class PilotResultItemReviewRequest(ApiModel):
+    action: Literal["accepted", "corrected", "excluded", "status_changed", "commented"]
+    resolved_fields: dict[str, Any] | None = None
+    comment: str = Field(min_length=3, max_length=2000)
+
+    def model_post_init(self, __context: Any) -> None:
+        del __context
+        requires_fields = self.action in {"corrected", "status_changed"}
+        if requires_fields != (self.resolved_fields is not None):
+            raise ValueError("corrected or status action requires resolved_fields")
+        if self.action == "status_changed" and "status" not in (self.resolved_fields or {}):
+            raise ValueError("status action requires status")
+
+
+class PilotExportRequest(ApiModel):
+    export_kind: Literal[
+        "disagreement_protocol",
+        "contract_changes",
+        "requirement_matrix",
+        "id_package",
+        "register",
+        "audit_report",
+        "recovery_plan",
+        "recovered_drafts",
+        "workspace_results",
+    ]
+    output_format: Literal["docx", "pdf", "zip"]
+
+
+class PilotExportView(ApiModel):
+    export_id: UUID
+    version: int
+    export_kind: str
+    output_format: str
+    media_type: str
+    size_bytes: int
+    content_digest: str
+    export_fingerprint: str
+
+
+class TrialReadinessRequest(ApiModel):
+    criteria: dict[str, bool]
+    pilot_thresholds: dict[str, Any]
+    external_receipts: list[dict[str, Any]]
+    user_blockers: list[str] = Field(default_factory=list)
+    rollback_target: str = Field(min_length=7, max_length=512)
+
+
+class TrialReadinessView(ApiModel):
+    decision_id: UUID
+    version: int
+    deployed_commit: str
+    status: Literal["trial_ready", "blocked"]
+    criteria: dict[str, bool]
+    pilot_thresholds: dict[str, Any]
+    external_receipts: list[dict[str, Any]]
+    user_blockers: list[str]
+    rollback_target: str
+    decision_fingerprint: str
+    decided_by_identity_id: str
+    decided_at: datetime
+
+
 class ProjectUnderstandingView(ApiModel):
     reconciliation: dict[str, Any]
     project_definition: dict[str, Any]

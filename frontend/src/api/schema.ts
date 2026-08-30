@@ -4,6 +4,24 @@
  */
 
 export interface paths {
+    "/api/v1/admin/trial-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trial Readiness */
+        get: operations["trial_readiness_api_v1_admin_trial_readiness_get"];
+        put?: never;
+        /** Record Trial Readiness */
+        post: operations["record_trial_readiness_api_v1_admin_trial_readiness_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/capabilities": {
         parameters: {
             query?: never;
@@ -423,6 +441,75 @@ export interface paths {
         };
         /** Mode View */
         get: operations["mode_view_api_v1_workspaces__workspace_id__modes__mode__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Pilot Export */
+        post: operations["create_pilot_export_api_v1_workspaces__workspace_id__modes__mode__exports_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pilot Result */
+        get: operations["pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_get"];
+        put?: never;
+        /** Form Pilot Result */
+        post: operations["form_pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/modes/{mode}/result/items/{item_id}/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Pilot Result Item */
+        post: operations["review_pilot_result_item_api_v1_workspaces__workspace_id__modes__mode__result_items__item_id__reviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/pilot-exports/{export_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pilot Export Content */
+        get: operations["pilot_export_content_api_v1_workspaces__workspace_id__pilot_exports__export_id__content_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1169,6 +1256,124 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /** PilotExportRequest */
+        PilotExportRequest: {
+            /**
+             * Export Kind
+             * @enum {string}
+             */
+            export_kind: "disagreement_protocol" | "contract_changes" | "requirement_matrix" | "id_package" | "register" | "audit_report" | "recovery_plan" | "recovered_drafts" | "workspace_results";
+            /**
+             * Output Format
+             * @enum {string}
+             */
+            output_format: "docx" | "pdf" | "zip";
+        };
+        /** PilotExportView */
+        PilotExportView: {
+            /** Content Digest */
+            content_digest: string;
+            /** Export Fingerprint */
+            export_fingerprint: string;
+            /**
+             * Export Id
+             * Format: uuid
+             */
+            export_id: string;
+            /** Export Kind */
+            export_kind: string;
+            /** Media Type */
+            media_type: string;
+            /** Output Format */
+            output_format: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Version */
+            version: number;
+        };
+        /** PilotResultItemReviewRequest */
+        PilotResultItemReviewRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "accepted" | "corrected" | "excluded" | "status_changed" | "commented";
+            /** Comment */
+            comment: string;
+            /** Resolved Fields */
+            resolved_fields?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** PilotResultView */
+        PilotResultView: {
+            /** Available Exports */
+            available_exports: string[];
+            /** Exports */
+            exports?: {
+                [key: string]: unknown;
+            }[];
+            /** Fingerprint */
+            fingerprint: string;
+            /** Formed At */
+            formed_at?: string | null;
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Matrix Id */
+            matrix_id: string;
+            /** Matrix Version */
+            matrix_version: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "Tender" | "Support" | "Audit" | "Restoration";
+            /** Normative Notice */
+            normative_notice: string;
+            /** Project Definition Id */
+            project_definition_id: string;
+            /** Project Definition Version */
+            project_definition_version: number;
+            /** Project Fields */
+            project_fields: {
+                [key: string]: unknown;
+            };
+            /** Project Status */
+            project_status: string;
+            /**
+             * Result Id
+             * Format: uuid
+             */
+            result_id: string;
+            /**
+             * Reviewed Item Count
+             * @default 0
+             */
+            reviewed_item_count: number;
+            /** Source Manifest */
+            source_manifest: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
+            /** Summary */
+            summary: {
+                [key: string]: unknown;
+            };
+            /** Unresolved Questions */
+            unresolved_questions: string[];
+            /** Version */
+            version: number;
+            /**
+             * Workspace Id
+             * Format: uuid
+             */
+            workspace_id: string;
+            /** Workspace Name */
+            workspace_name: string;
+        };
         /** ProjectCandidateReviewRequest */
         ProjectCandidateReviewRequest: {
             /**
@@ -1434,6 +1639,67 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** TrialReadinessRequest */
+        TrialReadinessRequest: {
+            /** Criteria */
+            criteria: {
+                [key: string]: boolean;
+            };
+            /** External Receipts */
+            external_receipts: {
+                [key: string]: unknown;
+            }[];
+            /** Pilot Thresholds */
+            pilot_thresholds: {
+                [key: string]: unknown;
+            };
+            /** Rollback Target */
+            rollback_target: string;
+            /** User Blockers */
+            user_blockers?: string[];
+        };
+        /** TrialReadinessView */
+        TrialReadinessView: {
+            /** Criteria */
+            criteria: {
+                [key: string]: boolean;
+            };
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Decided By Identity Id */
+            decided_by_identity_id: string;
+            /** Decision Fingerprint */
+            decision_fingerprint: string;
+            /**
+             * Decision Id
+             * Format: uuid
+             */
+            decision_id: string;
+            /** Deployed Commit */
+            deployed_commit: string;
+            /** External Receipts */
+            external_receipts: {
+                [key: string]: unknown;
+            }[];
+            /** Pilot Thresholds */
+            pilot_thresholds: {
+                [key: string]: unknown;
+            };
+            /** Rollback Target */
+            rollback_target: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "trial_ready" | "blocked";
+            /** User Blockers */
+            user_blockers: string[];
+            /** Version */
+            version: number;
+        };
         /** UploadBatchView */
         UploadBatchView: {
             /** Accepted Document Ids */
@@ -1512,6 +1778,61 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    trial_readiness_api_v1_admin_trial_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialReadinessView"];
+                };
+            };
+        };
+    };
+    record_trial_readiness_api_v1_admin_trial_readiness_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrialReadinessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrialReadinessView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     capabilities_api_v1_capabilities_get: {
         parameters: {
             query?: never;
@@ -2316,6 +2637,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ModeView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_pilot_export_api_v1_workspaces__workspace_id__modes__mode__exports_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                mode: components["schemas"]["ModeName"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PilotExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PilotExportView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                mode: components["schemas"]["ModeName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PilotResultView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    form_pilot_result_api_v1_workspaces__workspace_id__modes__mode__result_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                mode: components["schemas"]["ModeName"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PilotResultView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_pilot_result_item_api_v1_workspaces__workspace_id__modes__mode__result_items__item_id__reviews_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                mode: components["schemas"]["ModeName"];
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PilotResultItemReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PilotResultView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pilot_export_content_api_v1_workspaces__workspace_id__pilot_exports__export_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                Range?: string | null;
+            };
+            path: {
+                workspace_id: string;
+                export_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
