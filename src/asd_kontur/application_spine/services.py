@@ -496,6 +496,39 @@ class ProductSpineService:
             chunks(),
         )
 
+    def platform_source_content(
+        self, *, source_version_id: UUID, byte_range: tuple[int, int] | None = None
+    ) -> DocumentContent:
+        artifact = self._repository.get_platform_source_object(source_version_id)
+        size = int(artifact["size_bytes"])
+        if byte_range is None:
+            offset, end = 0, size - 1
+        else:
+            offset, end = byte_range
+            if offset < 0 or end < offset or end >= size:
+                raise ValueError("platform_source_range_not_satisfiable")
+        length = end - offset + 1
+
+        def chunks() -> Iterator[bytes]:
+            with self._object_store.open(str(artifact["object_key"])) as source:
+                source.seek(offset)
+                remaining = length
+                while remaining and (
+                    chunk := source.read(min(self._settings.upload_chunk_bytes, remaining))
+                ):
+                    remaining -= len(chunk)
+                    yield chunk
+
+        return DocumentContent(
+            str(artifact["media_type"]),
+            size,
+            str(artifact["content_digest"]),
+            str(artifact["filename"]),
+            offset,
+            length,
+            chunks(),
+        )
+
     def project_understanding(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> dict[str, Any] | None:
@@ -779,15 +812,21 @@ class ProductSpineService:
         )
 
     def capability_status(self) -> dict[str, Any]:
-        decision = self._trial_readiness.latest()
+        latest_decision = self._trial_readiness.latest()
+        decision = (
+            latest_decision
+            if latest_decision is not None
+            and latest_decision["deployed_commit"] == self._settings.release_commit
+            else None
+        )
         blockers = (
             list(decision["user_blockers"])
             if decision is not None
             else ["PILOT_ACCEPTANCE_NOT_RECORDED"]
         )
         return {
-            "contract_version": "2.6.0",
-            "slice": "PILOT-USABLE-END-TO-END-01",
+            "contract_version": "2.7.0",
+            "slice": "PILOT-USABLE-END-TO-END-01+PROFESSIONAL-ASSISTANT",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -840,6 +879,9 @@ class ProductSpineService:
                 "pilot.reviewed-result-version",
                 "pilot.docx-pdf-zip-exports",
                 "pilot.trial-readiness-decision",
+                "assistant.workspace-scoped-conversations",
+                "assistant.local-qwen-streaming",
+                "assistant.knowledge-gateway-context",
             ],
             "blockers": sorted(blockers),
             "trial_ready": bool(decision and decision["status"] == "trial_ready"),

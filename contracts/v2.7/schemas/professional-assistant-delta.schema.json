@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.7:schema:professional-assistant-delta",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "base_delta", "product_denominator", "assistant", "memory", "durability", "external_acceptance", "oks_ready", "product_ready"],
+  "properties": {
+    "contract_version": {"const": "2.7.0"},
+    "base_delta": {"const": "contracts/v2.6/fixtures/valid/pilot-usable-e2e-delta.json"},
+    "product_denominator": {"const": 143},
+    "assistant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation_count", "modes", "model", "gateway_contract", "direct_sql_for_model", "canonical_actions_require_confirmation"],
+      "properties": {
+        "implementation_count": {"const": 1},
+        "modes": {"const": ["Tender", "Support", "Audit", "Restoration"]},
+        "model": {"const": "Qwen3.8-27B-MLX-8bit"},
+        "gateway_contract": {"const": "knowledge.get_professional_assistant_context@2.7.0"},
+        "direct_sql_for_model": {"const": false},
+        "canonical_actions_require_confirmation": {"const": true}
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["practice_units", "verified_normative_provisions", "workspace_scoped", "edition_currency_checked"],
+      "properties": {
+        "practice_units": {"const": 21105},
+        "verified_normative_provisions": {"const": 1294},
+        "workspace_scoped": {"const": true},
+        "edition_currency_checked": {"const": false}
+      }
+    },
+    "durability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postgres_history", "durable_turns", "stream_events", "worker_restart_terminal_outcome", "workspace_reset_scoped"],
+      "properties": {
+        "postgres_history": {"const": true},
+        "durable_turns": {"const": true},
+        "stream_events": {"const": true},
+        "worker_restart_terminal_outcome": {"const": true},
+        "workspace_reset_scoped": {"const": true}
+      }
+    },
+    "external_acceptance": {"enum": ["pending", "pass", "blocked"]},
+    "oks_ready": {"const": false},
+    "product_ready": {"const": false}
+  }
+}

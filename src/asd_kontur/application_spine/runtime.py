@@ -18,6 +18,10 @@ import uvicorn
 from alembic import command
 from alembic.config import Config
 
+from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
+from asd_kontur.assistant.postgres import AssistantRepository
+from asd_kontur.assistant.worker import AssistantWorker
+
 from .auth import OwnerAuthService
 from .config import SpineSettings
 from .object_store import WorkspaceObjectStore
@@ -37,12 +41,18 @@ def main(argv: list[str] | None = None) -> int:
     subcommands.add_parser("serve-api")
     worker = subcommands.add_parser("run-worker")
     worker.add_argument("--identity", default=f"document-worker:{os.getpid()}")
+    assistant_worker = subcommands.add_parser("run-assistant-worker")
+    assistant_worker.add_argument("--identity", default=f"assistant-worker:{os.getpid()}")
     subcommands.add_parser("status")
     subcommands.add_parser("health")
     stop = subcommands.add_parser("stop")
-    stop.add_argument("--service", choices=("api", "worker", "all"), default="all")
+    stop.add_argument(
+        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+    )
     logs = subcommands.add_parser("logs")
-    logs.add_argument("--service", choices=("api", "worker", "all"), default="all")
+    logs.add_argument(
+        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+    )
     logs.add_argument("--lines", type=int, default=100)
     launchd = subcommands.add_parser("render-launchd")
     launchd.add_argument("--output", type=Path, required=True)
@@ -96,6 +106,21 @@ def main(argv: list[str] | None = None) -> int:
             worker_instance.run_forever()
         finally:
             engine.dispose()
+        return 0
+    if args.command == "run-assistant-worker":
+        engine = sa.create_engine(settings.worker_database_url, pool_pre_ping=True)
+        knowledge_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
+        instance = AssistantWorker(
+            AssistantRepository(engine),
+            ProfessionalAssistantKnowledgeQuery(knowledge_engine),
+            identity=args.identity,
+            qwen_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
+        )
+        try:
+            instance.run_forever()
+        finally:
+            engine.dispose()
+            knowledge_engine.dispose()
         return 0
     if args.command in {"status", "health"}:
         return _http_status(settings)
@@ -179,7 +204,7 @@ def _log_root() -> Path:
 
 
 def _stop_launchd(service: str) -> int:
-    names = ("api", "worker") if service == "all" else (service,)
+    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
     outcomes: dict[str, str] = {}
     for name in names:
         label = f"ru.asd-kontur.spine.{name}"
@@ -198,7 +223,7 @@ def _show_logs(settings: SpineSettings, service: str, lines: int) -> int:
     del settings
     if lines < 1 or lines > 1000:
         raise ValueError("log line count must be between 1 and 1000")
-    names = ("api", "worker") if service == "all" else (service,)
+    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
     root = _log_root()
     missing = False
     for name in names:
@@ -244,6 +269,10 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         "ASD_DEPLOYED_AT": settings.deployed_at,
         "ASD_FRONTEND_BUILD_DIGEST": settings.frontend_build_digest,
         "ASD_OPENAPI_DIGEST": settings.openapi_digest,
+        "ASD_QWEN_RUNTIME_PYTHON": str(settings.qwen_runtime_python),
+        "ASD_QWEN_MODEL_PATH": str(settings.qwen_model_path),
+        "ASD_QWEN_BIND_HOST": settings.qwen_bind_host,
+        "ASD_QWEN_BIND_PORT": str(settings.qwen_bind_port),
     }
     for variable_name, variable_value in optional_environment.items():
         if variable_value is not None:
@@ -252,7 +281,11 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         f"<key>{escape(name)}</key><string>{escape(value)}</string>"
         for name, value in sorted(environment.items())
     )
-    for name, command_name in (("api", "serve-api"), ("worker", "run-worker")):
+    for name, command_name in (
+        ("api", "serve-api"),
+        ("worker", "run-worker"),
+        ("assistant-worker", "run-assistant-worker"),
+    ):
         log_path = log_root / f"{name}.log"
         content = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -274,8 +307,35 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         target = output / f"ru.asd-kontur.spine.{name}.plist"
         target.write_text(content, encoding="utf-8")
         target.chmod(0o600)
+    qwen_log_path = log_root / "qwen.log"
+    qwen_environment = (
+        f"<key>PYTHONPATH</key><string>{escape(str(Path(__file__).resolve().parents[2]))}</string>"
+    )
+    qwen_content = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+        '<plist version="1.0"><dict>'
+        "<key>Label</key><string>ru.asd-kontur.spine.qwen</string>"
+        "<key>ProgramArguments</key><array>"
+        f"<string>{escape(str(settings.qwen_runtime_python))}</string><string>-m</string>"
+        "<string>asd_kontur.assistant.qwen_server</string><string>--model</string>"
+        f"<string>{escape(str(settings.qwen_model_path))}</string><string>--host</string>"
+        f"<string>{escape(settings.qwen_bind_host)}</string><string>--port</string>"
+        f"<string>{settings.qwen_bind_port}</string></array>"
+        f"<key>EnvironmentVariables</key><dict>{qwen_environment}</dict>"
+        f"<key>StandardOutPath</key><string>{escape(str(qwen_log_path))}</string>"
+        f"<key>StandardErrorPath</key><string>{escape(str(qwen_log_path))}</string>"
+        "<key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>10</integer>"
+        "<key>ProcessType</key><string>Interactive</string>"
+        "</dict></plist>\n"
+    )
+    qwen_target = output / "ru.asd-kontur.spine.qwen.plist"
+    qwen_target.write_text(qwen_content, encoding="utf-8")
+    qwen_target.chmod(0o600)
     rotation = "\n".join(
-        f"{log_root / f'{name}.log'}  640  10  10240  *  J" for name in ("api", "worker")
+        f"{log_root / f'{name}.log'}  640  10  10240  *  J"
+        for name in ("api", "worker", "assistant-worker", "qwen")
     )
     (output / "asd-kontur-spine.newsyslog.conf").write_text(rotation + "\n", encoding="utf-8")
 

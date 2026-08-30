@@ -36,7 +36,8 @@ body,
 }
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 button,
@@ -54,7 +55,8 @@ button,
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
-select:focus-visible {
+select:focus-visible,
+textarea:focus-visible {
   outline: 3px solid #e7a42b;
   outline-offset: 2px;
 }
@@ -125,6 +127,14 @@ button:disabled {
   font-weight: 700;
   text-decoration: none;
 }
+.assistant-launch {
+  color: #173b2e;
+  background: var(--signal);
+  white-space: nowrap;
+}
+.assistant-launch:hover {
+  background: #e6a74e;
+}
 .profile-name {
   color: #c7d7cf;
   font-size: 0.82rem;
@@ -156,6 +166,183 @@ button:disabled {
   min-width: 0;
   width: 100%;
   max-width: 92rem;
+}
+.assistant-panel {
+  position: fixed;
+  z-index: 30;
+  right: 0;
+  top: 4.5rem;
+  bottom: 0;
+  width: min(34rem, 46vw);
+  min-width: 23rem;
+  max-width: 58rem;
+  resize: horizontal;
+  overflow: hidden;
+  direction: rtl;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  background: #f8f8f3;
+  border-left: 1px solid #aebbb3;
+  box-shadow: -1rem 0 2.5rem rgb(13 45 34 / 18%);
+}
+.assistant-panel > * {
+  direction: ltr;
+}
+.assistant-header {
+  padding: 0.95rem 1rem;
+  background: var(--green-dark);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.assistant-header > div {
+  display: grid;
+}
+.assistant-header small {
+  color: #c7d7cf;
+}
+.assistant-header .ghost {
+  color: white;
+  background: #285744;
+}
+.assistant-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.assistant-toolbar label {
+  flex: 1;
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.assistant-toolbar select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  padding: 0.48rem;
+  background: white;
+}
+.assistant-messages {
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.assistant-empty {
+  margin: auto 0;
+  padding: 1.2rem;
+  border: 1px dashed #aebbb3;
+  border-radius: 0.7rem;
+  background: white;
+}
+.assistant-message {
+  max-width: 94%;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  background: white;
+}
+.assistant-message-question {
+  align-self: flex-end;
+  background: #e9efe9;
+  border-color: #bdcdc3;
+}
+.assistant-message-answer {
+  align-self: stretch;
+  max-width: 100%;
+}
+.assistant-answer {
+  margin-top: 0.35rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.assistant-message-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.55rem;
+}
+.assistant-proposals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+.assistant-proposals .secondary {
+  font-size: 0.82rem;
+  padding: 0.5rem 0.7rem;
+}
+.text-action {
+  padding: 0;
+  color: var(--green);
+  background: transparent;
+  font-size: 0.82rem;
+}
+.assistant-sources {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+.assistant-sources summary {
+  cursor: pointer;
+  color: var(--green);
+  font-weight: 700;
+}
+.assistant-sources ol {
+  margin: 0.55rem 0 0;
+  padding-left: 1.4rem;
+}
+.assistant-sources li {
+  margin-bottom: 0.7rem;
+}
+.assistant-sources a,
+.assistant-sources span,
+.assistant-sources small {
+  display: block;
+}
+.assistant-sources blockquote {
+  margin: 0.35rem 0 0;
+  padding-left: 0.65rem;
+  border-left: 2px solid var(--signal);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.assistant-composer {
+  border-top: 1px solid var(--line);
+  padding: 0.85rem 1rem 1rem;
+  background: white;
+}
+.assistant-composer label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-weight: 700;
+}
+.assistant-composer textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 5.2rem;
+  max-height: 14rem;
+  border: 1px solid #aebbb3;
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+}
+.assistant-composer-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+.assistant-composer-actions small {
+  color: var(--muted);
+  text-align: right;
 }
 .app-shell-simple .content {
   width: min(100%, 82rem);
@@ -833,6 +1020,23 @@ pre {
 }
 
 @media (max-width: 700px) {
+  .assistant-panel {
+    inset: 0;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    resize: none;
+  }
+  .assistant-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .assistant-composer-actions small {
+    display: none;
+  }
+  .assistant-message {
+    max-width: 100%;
+  }
   .topbar {
     min-height: 4.5rem;
     padding-inline: 0.85rem;

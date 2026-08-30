@@ -1,0 +1,29 @@
+{
+  "contract_version": "2.7.0",
+  "base_delta": "contracts/v2.6/fixtures/valid/pilot-usable-e2e-delta.json",
+  "product_denominator": 143,
+  "assistant": {
+    "implementation_count": 1,
+    "modes": ["Tender", "Support", "Audit", "Restoration"],
+    "model": "Qwen3.8-27B-MLX-8bit",
+    "gateway_contract": "knowledge.get_professional_assistant_context@2.7.0",
+    "direct_sql_for_model": false,
+    "canonical_actions_require_confirmation": true
+  },
+  "memory": {
+    "practice_units": 21105,
+    "verified_normative_provisions": 1294,
+    "workspace_scoped": true,
+    "edition_currency_checked": false
+  },
+  "durability": {
+    "postgres_history": true,
+    "durable_turns": true,
+    "stream_events": true,
+    "worker_restart_terminal_outcome": true,
+    "workspace_reset_scoped": true
+  },
+  "external_acceptance": "pending",
+  "oks_ready": false,
+  "product_ready": false
+}

@@ -177,6 +177,8 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     log_root.mkdir()
     (log_root / "api.log").write_text("one\ntwo\nthree\n", encoding="utf-8")
     (log_root / "worker.log").write_text("worker\n", encoding="utf-8")
+    (log_root / "assistant-worker.log").write_text("assistant\n", encoding="utf-8")
+    (log_root / "qwen.log").write_text("qwen\n", encoding="utf-8")
     monkeypatch.setenv("ASD_LOG_ROOT", str(log_root))
     output = tmp_path / "launchd"
     _render_launchd(output, settings(tmp_path))
@@ -188,8 +190,18 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
     assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0029_pilot_usable_e2e"
+        "0030_professional_assistant"
     )
+    assistant_plist = plistlib.loads(
+        (output / "ru.asd-kontur.spine.assistant-worker.plist").read_bytes()
+    )
+    assert assistant_plist["Label"] == "ru.asd-kontur.spine.assistant-worker"
+    assert assistant_plist["ProgramArguments"][-1] == "run-assistant-worker"
+    qwen_plist = plistlib.loads(
+        (output / "ru.asd-kontur.spine.qwen.plist").read_bytes()
+    )
+    assert qwen_plist["Label"] == "ru.asd-kontur.spine.qwen"
+    assert "asd_kontur.assistant.qwen_server" in qwen_plist["ProgramArguments"]
     assert "10240" in (output / "asd-kontur-spine.newsyslog.conf").read_text(encoding="utf-8")
     assert _show_logs(settings(tmp_path), "all", 2) == 0
     monkeypatch.delenv("ASD_LOG_ROOT")

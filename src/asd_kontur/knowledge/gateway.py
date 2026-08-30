@@ -19,6 +19,8 @@ PD_RD_NTD_CONTRACT_VERSION = "2.3.0"
 PD_RD_NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v2.3:schema:pd-rd-normative-profile"
 HARNESS_CONTRACT_VERSION = "1.8.0"
 HARNESS_SCHEMA_ID = "urn:asd-kontur:contracts:v1.8:schema:construction-harness"
+ASSISTANT_CONTRACT_VERSION = "2.7.0"
+ASSISTANT_SCHEMA_ID = "urn:asd-kontur:contracts:v2.7:schema:professional-assistant-context"
 BASE_TOOLS = frozenset(
     {
         "knowledge.search",
@@ -68,7 +70,8 @@ HARNESS_TOOLS = frozenset(
         "knowledge.trace_work_requirement",
     }
 )
-TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | PD_RD_NTD_TOOLS | HARNESS_TOOLS
+ASSISTANT_TOOLS = frozenset({"knowledge.get_professional_assistant_context"})
+TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | PD_RD_NTD_TOOLS | HARNESS_TOOLS | ASSISTANT_TOOLS
 
 
 class GatewayStatus(StrEnum):
@@ -185,7 +188,10 @@ class KnowledgeGateway:
                 KnowledgeErrorCode.CONTRACT_VERSION_UNSUPPORTED,
                 "Unknown Knowledge Tool contract.",
             )
-        if request.tool in HARNESS_TOOLS:
+        if request.tool in ASSISTANT_TOOLS:
+            expected_contract = ASSISTANT_CONTRACT_VERSION
+            expected_schema = ASSISTANT_SCHEMA_ID
+        elif request.tool in HARNESS_TOOLS:
             expected_contract = HARNESS_CONTRACT_VERSION
             expected_schema = HARNESS_SCHEMA_ID
         elif request.tool in GUIDANCE_TOOLS:
