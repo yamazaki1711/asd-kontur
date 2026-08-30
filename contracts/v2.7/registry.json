@@ -1,0 +1,12 @@
+{
+  "registry_version": "2.7.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "professional_assistant_pending_external_acceptance",
+  "compatibility": {"kind": "additive", "preserves": ["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0", "2.6.0"]},
+  "schemas": [
+    {"schema_id": "urn:asd-kontur:contracts:v2.7:schema:professional-assistant-delta", "path": "schemas/professional-assistant-delta.schema.json", "digest": "sha256:c4fbdf34ddc57b4ffec2299ed16484d0436253dd301c7b74ab47134ab99d597b"},
+    {"schema_id": "urn:asd-kontur:contracts:v2.7:schema:professional-assistant-context", "path": "schemas/professional-assistant-context.schema.json", "digest": "sha256:80bd3375f83adf6b675dc65a713f954b07321bdab7a4cfaef4260266e52a8312"}
+  ],
+  "contract_keys": ["product.professional-assistant-delta@2.7.0"],
+  "fixtures": {"valid": ["fixtures/valid/professional-assistant-delta.json"], "invalid": []}
+}

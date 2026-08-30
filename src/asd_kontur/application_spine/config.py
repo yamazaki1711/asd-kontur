@@ -43,7 +43,11 @@ class SpineSettings:
     deployed_at: str | None = None
     frontend_build_digest: str | None = None
     openapi_digest: str | None = None
-    expected_migration_head: str = "0029_pilot_usable_e2e"
+    expected_migration_head: str = "0030_professional_assistant"
+    qwen_runtime_python: Path = Path("/Users/oleg/mlx/runtime/.venv/bin/python")
+    qwen_model_path: Path = Path("/Users/oleg/mlx/models/Qwen3.8-27B-MLX-8bit")
+    qwen_bind_host: str = "127.0.0.1"
+    qwen_bind_port: int = 8790
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -77,6 +81,8 @@ class SpineSettings:
             raise ValueError("invalid upload chunk/file limit")
         if self.max_batch_files < 1 or self.max_batch_bytes < self.max_file_bytes:
             raise ValueError("invalid batch limits")
+        if self.qwen_bind_host not in {"127.0.0.1", "::1", "localhost"}:
+            raise ValueError("local Qwen must bind to loopback")
 
     @property
     def secure_cookie(self) -> bool:
@@ -108,8 +114,18 @@ class SpineSettings:
             frontend_build_digest=os.environ.get("ASD_FRONTEND_BUILD_DIGEST"),
             openapi_digest=os.environ.get("ASD_OPENAPI_DIGEST"),
             expected_migration_head=os.environ.get(
-                "ASD_EXPECTED_MIGRATION_HEAD", "0029_pilot_usable_e2e"
+                "ASD_EXPECTED_MIGRATION_HEAD", "0030_professional_assistant"
             ),
+            qwen_runtime_python=Path(
+                os.environ.get(
+                    "ASD_QWEN_RUNTIME_PYTHON", "/Users/oleg/mlx/runtime/.venv/bin/python"
+                )
+            ),
+            qwen_model_path=Path(
+                os.environ.get("ASD_QWEN_MODEL_PATH", "/Users/oleg/mlx/models/Qwen3.8-27B-MLX-8bit")
+            ),
+            qwen_bind_host=os.environ.get("ASD_QWEN_BIND_HOST", "127.0.0.1"),
+            qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
         )
 
 

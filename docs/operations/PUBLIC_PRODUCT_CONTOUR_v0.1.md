@@ -24,11 +24,13 @@ database or object-plane replica is created on the VPS.
 
 - `ru.asd-kontur.spine.api`: FastAPI + built React frontend;
 - `ru.asd-kontur.spine.worker`: durable document/generation worker;
+- `ru.asd-kontur.spine.assistant-worker`: durable professional-dialog worker;
+- `ru.asd-kontur.spine.qwen`: loopback-only local Qwen3.8 MLX inference;
 - deployment ingress identity: recorded only after the VPS route is active;
 - `ru.asd-kontur.spine.ingress`: MBP reverse SSH process;
 - `asd-kontur-app-ingress.socket/service`: VPS loopback-to-container bridge;
 - `levashovo-intake-control.service`: isolated archived legacy process;
-- migration head: `0027_public_deployment`.
+- migration head: `0030_professional_assistant`.
 
 Launchd configuration is generated outside Git with
 `asd-kontur-spine render-launchd`. It pins database roles, object roots, build
@@ -52,6 +54,12 @@ The active bridge is deliberately two-step: SSH terminates on VPS loopback
 `172.18.0.1:18766` to the nginx Docker network. UFW allows that bridge source
 only. This avoids exposing the application upstream on the VPS public
 interface.
+
+The model process has no PostgreSQL or object-store credentials. The assistant
+worker receives a bounded, workspace-scoped context only through the
+version-pinned Knowledge Gateway. A broken inference stream is terminally
+recorded and shown as temporary unavailability; nginx and API never substitute
+an answer.
 
 ## Failure behaviour
 

@@ -3280,6 +3280,33 @@ class SpinePostgresRepository:
             "object_key": f"platform/source/{row['object_id']}",
         }
 
+    def get_platform_source_object(self, source_version_id: UUID) -> dict[str, Any]:
+        with self._engine.connect() as connection:
+            row = (
+                connection.execute(
+                    sa.text(
+                        "SELECT sv.source_version_id,sv.content_digest,o.object_id,o.size_bytes,"
+                        "o.media_type,a.title FROM platform.source_versions sv JOIN platform.objects o "
+                        "ON o.object_id=sv.object_id AND o.object_version=sv.object_version JOIN "
+                        "platform.source_artifacts a ON a.source_artifact_id=sv.source_artifact_id "
+                        "WHERE sv.source_version_id=:source"
+                    ),
+                    {"source": source_version_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            raise SpinePersistenceError("platform_source_not_found")
+        return {
+            "source_version_id": UUID(str(row["source_version_id"])),
+            "filename": f"{str(row['title']).strip() or 'source'}.pdf",
+            "media_type": str(row["media_type"]),
+            "size_bytes": int(row["size_bytes"]),
+            "content_digest": str(row["content_digest"]),
+            "object_key": f"platform/source/{row['object_id']}",
+        }
+
     def _append_event(
         self,
         session: Session,

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DragEvent,
+  KeyboardEvent,
   ReactNode,
   SyntheticEvent,
   useEffect,
@@ -31,6 +32,8 @@ type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
 type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
 type PilotResult = components["schemas"]["PilotResultView"];
+type AssistantConversation = components["schemas"]["AssistantConversationView"];
+type AssistantMessage = components["schemas"]["AssistantMessageView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
 type ModeName = (typeof MODES)[number];
@@ -298,6 +301,12 @@ function ApplicationShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const mode = modeFromSlug(modeSlug);
+  const [assistantOpen, setAssistantOpen] = useState(() =>
+    workspaceId
+      ? window.localStorage.getItem(`asd-assistant-open-${workspaceId}`) ===
+        "true"
+      : false,
+  );
   const isAdmin = location.pathname.startsWith("/admin/");
   const isSelection = !workspaceId && !isAdmin;
   const session = useQuery({
@@ -330,6 +339,14 @@ function ApplicationShell() {
   });
   const workspaceBase =
     workspaceId && mode ? workspaceRoute(mode, workspaceId) : null;
+  useEffect(() => {
+    if (workspaceId) {
+      window.localStorage.setItem(
+        `asd-assistant-open-${workspaceId}`,
+        String(assistantOpen),
+      );
+    }
+  }, [assistantOpen, workspaceId]);
   return (
     <div
       className={`app-shell${isSelection || isAdmin ? " app-shell-simple" : ""}`}
@@ -352,6 +369,14 @@ function ApplicationShell() {
         <div className="top-actions">
           {workspaceBase && mode && (
             <>
+              <button
+                className="assistant-launch"
+                type="button"
+                aria-expanded={assistantOpen}
+                onClick={() => setAssistantOpen((value) => !value)}
+              >
+                Инженерный помощник
+              </button>
               <Link
                 className="top-link"
                 to={`/modes/${MODE_DEFINITIONS[mode].slug}/workspaces`}
@@ -400,7 +425,411 @@ function ApplicationShell() {
       <main className="content">
         <Outlet />
       </main>
+      {workspaceId && mode && assistantOpen && (
+        <AssistantPanel
+          workspaceId={workspaceId}
+          mode={mode}
+          onClose={() => setAssistantOpen(false)}
+        />
+      )}
     </div>
+  );
+}
+
+function AssistantPanel({
+  workspaceId,
+  mode,
+  onClose,
+}: {
+  workspaceId: string;
+  mode: ModeName;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    window.localStorage.getItem(`asd-assistant-conversation-${workspaceId}`),
+  );
+  const [question, setQuestion] = useState("");
+  const [streamingText, setStreamingText] = useState("");
+  const [streamSources, setStreamSources] = useState<Record<string, unknown>[]>(
+    [],
+  );
+  const [activeTurn, setActiveTurn] = useState<string | null>(null);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const conversations = useQuery({
+    queryKey: ["assistant-conversations", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/assistant/conversations",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const createConversation = useMutation({
+    mutationFn: async (title?: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/assistant/conversations",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: { title: title || "Новый диалог" },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async (value) => {
+      setConversationId(value.conversation_id);
+      window.localStorage.setItem(
+        `asd-assistant-conversation-${workspaceId}`,
+        value.conversation_id,
+      );
+      setStreamingText("");
+      setStreamSources([]);
+      await queryClient.invalidateQueries({
+        queryKey: ["assistant-conversations", workspaceId],
+      });
+    },
+  });
+  const effectiveConversationId =
+    conversationId ?? conversations.data?.[0]?.conversation_id ?? null;
+  const messages = useQuery({
+    queryKey: ["assistant-messages", workspaceId, effectiveConversationId],
+    enabled: Boolean(effectiveConversationId),
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/assistant/conversations/{conversation_id}/messages",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              conversation_id: effectiveConversationId ?? "",
+            },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+  });
+  const ask = useMutation({
+    mutationFn: async ({
+      identity,
+      text,
+    }: {
+      identity: string;
+      text: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/assistant/conversations/{conversation_id}/turns",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              conversation_id: identity,
+            },
+          },
+          body: { mode, question: text },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: (turn) => {
+      setQuestion("");
+      setStreamingText("");
+      setStreamSources([]);
+      setStreamError(null);
+      setActiveTurn(turn.turn_id);
+      const events = new EventSource(
+        `/api/v1/workspaces/${workspaceId}/assistant/turns/${turn.turn_id}/events`,
+      );
+      events.addEventListener("delta", (event) => {
+        const value = JSON.parse((event as MessageEvent<string>).data) as {
+          text?: string;
+        };
+        setStreamingText((current) => current + (value.text ?? ""));
+      });
+      events.addEventListener("source", (event) => {
+        const value = JSON.parse(
+          (event as MessageEvent<string>).data,
+        ) as Record<string, unknown>;
+        setStreamSources((current) => [...current, value]);
+      });
+      const finish = () => {
+        events.close();
+        setActiveTurn(null);
+        void queryClient.invalidateQueries({
+          queryKey: [
+            "assistant-messages",
+            workspaceId,
+            effectiveConversationId,
+          ],
+        });
+      };
+      events.addEventListener("completed", finish);
+      events.addEventListener("failed", (event) => {
+        const value = JSON.parse((event as MessageEvent<string>).data) as {
+          message?: string;
+        };
+        setStreamError(value.message ?? "Помощник временно недоступен.");
+        finish();
+      });
+      events.addEventListener("reconciliation_required", (event) => {
+        const value = JSON.parse((event as MessageEvent<string>).data) as {
+          message?: string;
+        };
+        setStreamError(value.message ?? "Помощник временно недоступен.");
+        finish();
+      });
+      events.addEventListener("cancelled", (event) => {
+        const value = JSON.parse((event as MessageEvent<string>).data) as {
+          message?: string;
+        };
+        setStreamError(value.message ?? "Формирование ответа остановлено.");
+        finish();
+      });
+      events.onerror = () => {
+        if (events.readyState === EventSource.CLOSED) finish();
+      };
+    },
+  });
+  const stop = useMutation({
+    mutationFn: async () => {
+      if (!activeTurn) return;
+      const { error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/assistant/turns/{turn_id}/cancel",
+        {
+          params: {
+            path: { workspace_id: workspaceId, turn_id: activeTurn },
+          },
+          body: { confirmation: "STOP_ASSISTANT_RESPONSE" },
+        },
+      );
+      if (error) throw new Error("assistant_stop_failed");
+    },
+  });
+  const submit = async () => {
+    const text = question.trim();
+    if (!text || activeTurn) return;
+    let identity = effectiveConversationId;
+    if (!identity) {
+      const created = await createConversation.mutateAsync(text.slice(0, 120));
+      identity = created.conversation_id;
+    }
+    ask.mutate({ identity, text });
+  };
+  const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submit();
+    }
+  };
+  const values = (messages.data ?? []) as AssistantMessage[];
+  return (
+    <aside
+      className="assistant-panel"
+      aria-label="Инженерный помощник"
+      data-testid="assistant-panel"
+    >
+      <header className="assistant-header">
+        <div>
+          <strong>Инженерный помощник</strong>
+          <small>{MODE_DEFINITIONS[mode].title}</small>
+        </div>
+        <button className="ghost" type="button" onClick={onClose}>
+          Закрыть
+        </button>
+      </header>
+      <div className="assistant-toolbar">
+        <label>
+          Диалог
+          <select
+            value={effectiveConversationId ?? ""}
+            onChange={(event) => {
+              setConversationId(event.target.value || null);
+              if (event.target.value) {
+                window.localStorage.setItem(
+                  `asd-assistant-conversation-${workspaceId}`,
+                  event.target.value,
+                );
+              }
+            }}
+          >
+            <option value="">Новый диалог</option>
+            {(conversations.data ?? []).map((item: AssistantConversation) => (
+              <option key={item.conversation_id} value={item.conversation_id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="secondary"
+          type="button"
+          onClick={() => {
+            setConversationId("");
+            window.localStorage.removeItem(
+              `asd-assistant-conversation-${workspaceId}`,
+            );
+            setStreamingText("");
+            setStreamSources([]);
+            setStreamError(null);
+          }}
+        >
+          Новый диалог
+        </button>
+      </div>
+      <div className="assistant-messages" aria-live="polite">
+        {values.length === 0 && !streamingText && (
+          <div className="assistant-empty">
+            <strong>Задайте профессиональный вопрос</strong>
+            <p>
+              Помощник использует нормативные и методические материалы, а также
+              сведения открытого объекта строительства.
+            </p>
+          </div>
+        )}
+        {values.map((message) => (
+          <AssistantMessageCard
+            key={message.message_id}
+            message={message}
+            {...(message.role === "user" ? { onRepeat: setQuestion } : {})}
+          />
+        ))}
+        {(activeTurn || streamingText) && (
+          <article className="assistant-message assistant-message-answer">
+            <strong>Ответ</strong>
+            <div className="assistant-answer">
+              {streamingText || "Подбираю сведения и источники…"}
+            </div>
+            {streamSources.length > 0 && (
+              <AssistantSources sources={streamSources} />
+            )}
+          </article>
+        )}
+        {streamError && (
+          <div className="notice error-notice">{streamError}</div>
+        )}
+      </div>
+      <footer className="assistant-composer">
+        <label htmlFor="assistant-question">Ваш вопрос</label>
+        <textarea
+          id="assistant-question"
+          rows={3}
+          value={question}
+          placeholder="Например: какие документы нужны для предъявления этой работы?"
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={keyDown}
+          disabled={Boolean(activeTurn)}
+        />
+        <div className="assistant-composer-actions">
+          {activeTurn ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => stop.mutate()}
+            >
+              Остановить
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!question.trim()}
+            >
+              Отправить
+            </button>
+          )}
+          <small>Enter — отправить, Shift+Enter — новая строка</small>
+        </div>
+      </footer>
+    </aside>
+  );
+}
+
+function AssistantMessageCard({
+  message,
+  onRepeat,
+}: {
+  message: AssistantMessage;
+  onRepeat?: (value: string) => void;
+}) {
+  return (
+    <article
+      className={`assistant-message ${
+        message.role === "user"
+          ? "assistant-message-question"
+          : "assistant-message-answer"
+      }`}
+    >
+      <strong>{message.role === "user" ? "Вы" : "Ответ"}</strong>
+      <div className="assistant-answer">{message.content}</div>
+      {message.sources.length > 0 && (
+        <AssistantSources sources={message.sources} />
+      )}
+      {message.action_proposals.length > 0 && (
+        <div className="assistant-proposals" aria-label="Предложенные действия">
+          {message.action_proposals.map((proposal, index) => (
+            <Link
+              className="secondary"
+              key={`${displayValue(proposal.kind)}-${String(index)}`}
+              to={displayValue(proposal.href, "/modes")}
+            >
+              {displayValue(proposal.label, "Открыть результат")}
+            </Link>
+          ))}
+        </div>
+      )}
+      <div className="assistant-message-actions">
+        {message.role === "assistant" && (
+          <button
+            className="text-action"
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(message.content)}
+          >
+            Копировать
+          </button>
+        )}
+        {onRepeat && (
+          <button
+            className="text-action"
+            type="button"
+            onClick={() => onRepeat(message.content)}
+          >
+            Повторить вопрос
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function AssistantSources({ sources }: { sources: Record<string, unknown>[] }) {
+  return (
+    <details className="assistant-sources" open>
+      <summary>Источники ({sources.length})</summary>
+      <ol>
+        {sources.map((source, index) => (
+          <li key={`${displayValue(source.source_id)}-${String(index)}`}>
+            <a
+              href={displayValue(source.href, "#")}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {displayValue(source.title, "Источник")} ·{" "}
+              {displayValue(source.locator_label)}
+            </a>
+            {source.edition ? (
+              <span>Редакция: {displayValue(source.edition)}</span>
+            ) : null}
+            {source.edition_currency_notice ? (
+              <small>{displayValue(source.edition_currency_notice)}</small>
+            ) : null}
+            {source.fragment ? (
+              <blockquote>{displayValue(source.fragment)}</blockquote>
+            ) : null}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

@@ -3,7 +3,7 @@
 - Product Goal: `PRODUCT-GOAL-ASD-KONTUR@1.0.0`
 - Owner source: [GitHub issue #19](https://github.com/yamazaki1711/asd-kontur/issues/19)
 - Machine denominator: [Contract Pack v2.0](../../contracts/v2.0/README.md)
-- Current readiness ledger: [Contract Pack v2.6](../../contracts/v2.6/README.md)
+- Current readiness ledger: [Contract Pack v2.7](../../contracts/v2.7/README.md)
 - Historical rebaseline: [Product Goal Rebaseline](PRODUCT_GOAL_REBASELINE_DECISION_v1.json)
 - Current decision: [Product Current State v1.2](PRODUCT_CURRENT_STATE_DECISION_v1.2.json)
 
@@ -98,6 +98,7 @@ readiness, gaps, acceptance, scale and next slice are in:
 - [v2.4 readiness delta](../../contracts/v2.4/fixtures/valid/capability-readiness-delta.json).
 - [v2.5 intake and project-understanding delta](../../contracts/v2.5/fixtures/valid/industrial-intake-project-understanding-delta.json);
 - [v2.6 pilot acceptance contract](../../contracts/v2.6/fixtures/valid/pilot-usable-e2e-delta.json).
+- [v2.7 professional assistant contract](../../contracts/v2.7/fixtures/valid/professional-assistant-delta.json).
 
 These files are normative and machine-validated; this page is their navigation
 view, not a second registry.

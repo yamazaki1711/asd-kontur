@@ -178,6 +178,55 @@ class ModeView(ApiModel):
     readiness: str
 
 
+class AssistantConversationCreate(ApiModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class AssistantConversationView(ApiModel):
+    conversation_id: UUID
+    workspace_id: UUID
+    title: str
+    created_at: datetime
+    latest_mode: Literal["Tender", "Support", "Audit", "Restoration"] | None
+    message_count: int
+
+
+class AssistantQuestionRequest(ApiModel):
+    mode: Literal["Tender", "Support", "Audit", "Restoration"]
+    question: str = Field(min_length=2, max_length=8000)
+
+
+class AssistantTurnView(ApiModel):
+    turn_id: UUID
+    conversation_id: UUID
+    ordinal: int
+    mode: Literal["Tender", "Support", "Audit", "Restoration"]
+    question: str
+    state: str
+    failure_code: str | None
+    project_definition_id: UUID | None
+    project_definition_version: int | None
+    created_at: datetime
+    started_at: datetime | None
+    completed_at: datetime | None
+
+
+class AssistantMessageView(ApiModel):
+    message_id: UUID
+    conversation_id: UUID
+    turn_id: UUID
+    ordinal: int
+    role: Literal["user", "assistant"]
+    content: str
+    sources: list[dict[str, Any]]
+    action_proposals: list[dict[str, Any]]
+    created_at: datetime
+
+
+class AssistantCancelRequest(ApiModel):
+    confirmation: Literal["STOP_ASSISTANT_RESPONSE"]
+
+
 class PilotResultView(ApiModel):
     result_id: UUID
     version: int

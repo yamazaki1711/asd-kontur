@@ -32,6 +32,10 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import Engine
 
+from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
+from asd_kontur.assistant.models import AssistantMode
+from asd_kontur.assistant.postgres import AssistantPersistenceError, AssistantRepository
+from asd_kontur.assistant.service import ProfessionalAssistantService
 from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
 from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewAction
@@ -46,6 +50,12 @@ from ..application_spine.postgres import SpinePersistenceError, SpinePostgresRep
 from ..application_spine.reset import WorkspaceResetService
 from ..application_spine.services import DocumentContent, ProductSpineService, UploadPart
 from .schemas import (
+    AssistantCancelRequest,
+    AssistantConversationCreate,
+    AssistantConversationView,
+    AssistantMessageView,
+    AssistantQuestionRequest,
+    AssistantTurnView,
     CapabilityStatusView,
     DocumentPage,
     ErrorDetail,
@@ -112,6 +122,12 @@ class ApplicationContainer:
             PostgresLifecycleRepository(self.lifecycle_engine),
             self.object_store,
             settings,
+        )
+        assistant_repository = AssistantRepository(engine)
+        self.assistant = ProfessionalAssistantService(
+            self.repository,
+            assistant_repository,
+            ProfessionalAssistantKnowledgeQuery(engine),
         )
         self.reset_service = WorkspaceResetService(
             repository=self.repository,
@@ -196,6 +212,11 @@ def _install_middleware(app: FastAPI) -> None:
 
     @app.exception_handler(PilotResultError)
     async def pilot_result_error(request: Request, exc: PilotResultError) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(AssistantPersistenceError)
+    async def assistant_error(request: Request, exc: AssistantPersistenceError) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
 
@@ -1078,6 +1099,170 @@ def _api_router() -> APIRouter:
         value = _container(request).service.knowledge_status()
         return KnowledgeStatusView(**jsonable_encoder(asdict(value)))
 
+    @router.post(
+        "/workspaces/{workspace_id}/assistant/conversations",
+        response_model=AssistantConversationView,
+        status_code=201,
+        tags=["assistant"],
+    )
+    def create_assistant_conversation(
+        request: Request,
+        workspace_id: UUID,
+        body: AssistantConversationCreate,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> AssistantConversationView:
+        value = _container(request).assistant.create_conversation(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            title=body.title,
+        )
+        return AssistantConversationView(**jsonable_encoder(asdict(value)))
+
+    @router.get(
+        "/workspaces/{workspace_id}/assistant/conversations",
+        response_model=list[AssistantConversationView],
+        tags=["assistant"],
+    )
+    def list_assistant_conversations(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[AssistantConversationView]:
+        values = _container(request).assistant.list_conversations(
+            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+        )
+        return [AssistantConversationView(**jsonable_encoder(asdict(item))) for item in values]
+
+    @router.get(
+        "/workspaces/{workspace_id}/assistant/conversations/{conversation_id}/messages",
+        response_model=list[AssistantMessageView],
+        tags=["assistant"],
+    )
+    def assistant_messages(
+        request: Request,
+        workspace_id: UUID,
+        conversation_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[AssistantMessageView]:
+        values = _container(request).assistant.messages(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+        )
+        return [AssistantMessageView(**jsonable_encoder(asdict(item))) for item in values]
+
+    @router.post(
+        "/workspaces/{workspace_id}/assistant/conversations/{conversation_id}/turns",
+        response_model=AssistantTurnView,
+        status_code=202,
+        tags=["assistant"],
+    )
+    def ask_assistant(
+        request: Request,
+        workspace_id: UUID,
+        conversation_id: UUID,
+        body: AssistantQuestionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> AssistantTurnView:
+        value = _container(request).assistant.ask(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            conversation_id=conversation_id,
+            mode=AssistantMode(body.mode),
+            question=body.question,
+        )
+        return AssistantTurnView(**jsonable_encoder(asdict(value)))
+
+    @router.get(
+        "/workspaces/{workspace_id}/assistant/turns/{turn_id}",
+        response_model=AssistantTurnView,
+        tags=["assistant"],
+    )
+    def assistant_turn(
+        request: Request,
+        workspace_id: UUID,
+        turn_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AssistantTurnView:
+        value = _container(request).assistant.turn(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            turn_id=turn_id,
+        )
+        return AssistantTurnView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/workspaces/{workspace_id}/assistant/turns/{turn_id}/cancel",
+        response_model=AssistantTurnView,
+        tags=["assistant"],
+    )
+    def cancel_assistant_turn(
+        request: Request,
+        workspace_id: UUID,
+        turn_id: UUID,
+        _: AssistantCancelRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> AssistantTurnView:
+        value = _container(request).assistant.cancel(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            turn_id=turn_id,
+        )
+        return AssistantTurnView(**jsonable_encoder(asdict(value)))
+
+    @router.get(
+        "/workspaces/{workspace_id}/assistant/turns/{turn_id}/events",
+        tags=["assistant"],
+    )
+    async def assistant_turn_events(
+        request: Request,
+        workspace_id: UUID,
+        turn_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+        last_event_id: Annotated[str | None, Header(alias="Last-Event-ID")] = None,
+    ) -> StreamingResponse:
+        try:
+            after = max(0, int(last_event_id or "0"))
+        except ValueError as exc:
+            raise HTTPException(422, "assistant_event_cursor_invalid") from exc
+
+        async def stream() -> AsyncIterator[bytes]:
+            cursor = after
+            idle = 0
+            while idle < 3600 and not await request.is_disconnected():
+                events = _container(request).assistant.events(
+                    owner_identity_id=principal.owner_identity_id,
+                    workspace_id=workspace_id,
+                    turn_id=turn_id,
+                    after=cursor,
+                )
+                if not events:
+                    idle += 1
+                    if idle % 40 == 0:
+                        yield b": keepalive\n\n"
+                    await asyncio.sleep(0.25)
+                    continue
+                idle = 0
+                for event in events:
+                    cursor = event.sequence
+                    payload = json.dumps(event.payload, ensure_ascii=False, default=str)
+                    yield (
+                        f"id: {event.sequence}\nevent: {event.event_type}\ndata: {payload}\n\n"
+                    ).encode()
+                    if event.event_type in {
+                        "completed",
+                        "failed",
+                        "cancelled",
+                        "reconciliation_required",
+                    }:
+                        return
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+        )
+
     @router.get("/platform/ntd-seed-status", response_model=NtdSeedStatusView, tags=["platform"])
     def ntd_seed_status(
         request: Request,
@@ -1096,6 +1281,39 @@ def _api_router() -> APIRouter:
         requested = _parse_range(range_header, int(provisional["size_bytes"]))
         value = _container(request).service.ntd_artifact_content(
             artifact_id=artifact_id, byte_range=requested
+        )
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(value.length),
+            "ETag": f'"{value.content_digest[7:]}"',
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+            ),
+        }
+        response_status = 200
+        if requested is not None:
+            headers["Content-Range"] = (
+                f"bytes {value.offset}-{value.offset + value.length - 1}/{value.size_bytes}"
+            )
+            response_status = 206
+        return StreamingResponse(
+            value.chunks,
+            media_type=value.media_type,
+            status_code=response_status,
+            headers=headers,
+        )
+
+    @router.get("/platform/sources/{source_version_id}/content", tags=["platform"])
+    def platform_source_content(
+        request: Request,
+        source_version_id: UUID,
+        _: Annotated[SessionPrincipal, Depends(_principal)],
+        range_header: Annotated[str | None, Header(alias="Range")] = None,
+    ) -> StreamingResponse:
+        provisional = _container(request).repository.get_platform_source_object(source_version_id)
+        requested = _parse_range(range_header, int(provisional["size_bytes"]))
+        value = _container(request).service.platform_source_content(
+            source_version_id=source_version_id, byte_range=requested
         )
         headers = {
             "Accept-Ranges": "bytes",

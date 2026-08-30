@@ -4,6 +4,8 @@ const workspaceA = "018f5c3e-7b00-7000-8000-000000002101";
 const workspaceB = "018f5c3e-7b00-7000-8000-000000002102";
 const documentId = "018f5c3e-7b00-7000-8000-000000002103";
 const challengeId = "018f5c3e-7b00-7000-8000-000000002104";
+const conversationId = "018f5c3e-7b00-7000-8000-000000002105";
+const turnId = "018f5c3e-7b00-7000-8000-000000002106";
 const timestamp = "2026-08-26T00:00:00+12:00";
 
 test("user enters through four Russian modes and keeps the selected object", async ({
@@ -11,6 +13,7 @@ test("user enters through four Russian modes and keeps the selected object", asy
 }) => {
   let loggedIn = false;
   let resetPrepared = false;
+  let assistantAsked = false;
   const createdWorkspaces: ReturnType<typeof workspace>[] = [];
   const pdf = syntheticPdf();
 
@@ -80,11 +83,115 @@ test("user enters through four Russian modes and keeps the selected object", asy
     if (path.endsWith("/jobs")) {
       return json(route, [job()]);
     }
-    if (path.endsWith("/events")) {
+    if (path.endsWith("/events") && !path.includes("/assistant/")) {
       return route.fulfill({
         status: 200,
         contentType: "text/event-stream",
         body: `id: 1\nevent: job.succeeded\ndata: {"job_id":"${challengeId}","sequence":1,"event_type":"job.succeeded","safe_message_code":"job_succeeded","terminal":true,"recorded_at":"${timestamp}"}\n\n`,
+      });
+    }
+    if (
+      path.endsWith("/assistant/conversations") &&
+      request.method() === "GET"
+    ) {
+      return json(route, [
+        {
+          conversation_id: conversationId,
+          workspace_id: workspaceA,
+          title: "Рабочий диалог",
+          latest_mode: "Support",
+          message_count: assistantAsked ? 2 : 0,
+          created_at: timestamp,
+        },
+      ]);
+    }
+    if (
+      path.endsWith("/assistant/conversations") &&
+      request.method() === "POST"
+    ) {
+      return json(
+        route,
+        {
+          conversation_id: conversationId,
+          workspace_id: workspaceA,
+          title: "Рабочий диалог",
+          latest_mode: null,
+          message_count: 0,
+          created_at: timestamp,
+        },
+        201,
+      );
+    }
+    if (path.endsWith(`/assistant/conversations/${conversationId}/messages`)) {
+      return json(
+        route,
+        assistantAsked
+          ? [
+              {
+                message_id: documentId,
+                conversation_id: conversationId,
+                turn_id: turnId,
+                ordinal: 1,
+                role: "user",
+                content: "Какие документы нужны для АОСР?",
+                sources: [],
+                action_proposals: [],
+                created_at: timestamp,
+              },
+              {
+                message_id: challengeId,
+                conversation_id: conversationId,
+                turn_id: turnId,
+                ordinal: 2,
+                role: "assistant",
+                content:
+                  "Для предъявления подготовьте АОСР и подтверждённые приложения.",
+                sources: [
+                  {
+                    source_id: documentId,
+                    authority_layer: "methodological_practice",
+                    title: "Пособие по исполнительной документации",
+                    locator_label: "раздел пособия, страница 20",
+                    fragment:
+                      "Состав документов определяется выполненной работой.",
+                    href: `/api/v1/platform/sources/${documentId}/content#page=20`,
+                  },
+                ],
+                action_proposals: [],
+                created_at: timestamp,
+              },
+            ]
+          : [],
+      );
+    }
+    if (path.endsWith(`/assistant/conversations/${conversationId}/turns`)) {
+      assistantAsked = true;
+      return json(
+        route,
+        {
+          turn_id: turnId,
+          conversation_id: conversationId,
+          ordinal: 1,
+          mode: "Support",
+          question: "Какие документы нужны для АОСР?",
+          state: "queued",
+          failure_code: null,
+          project_definition_id: null,
+          project_definition_version: null,
+          created_at: timestamp,
+          started_at: null,
+          completed_at: null,
+        },
+        202,
+      );
+    }
+    if (path.endsWith(`/assistant/turns/${turnId}/events`)) {
+      return route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body:
+          'id: 1\nevent: delta\ndata: {"text":"Для предъявления подготовьте АОСР"}\n\n' +
+          `id: 2\nevent: completed\ndata: {"state":"succeeded"}\n\n`,
       });
     }
     if (path.includes("/modes/")) {
@@ -205,6 +312,23 @@ test("user enters through four Russian modes and keeps the selected object", asy
   await expect(
     page.getByRole("heading", { name: "Инженерное сопровождение" }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Инженерный помощник" }).click();
+  await expect(page.getByTestId("assistant-panel")).toBeVisible();
+  await expect(page.getByTestId("assistant-panel")).toContainText(
+    "Инженерное сопровождение",
+  );
+  await page.getByLabel("Ваш вопрос").fill("Какие документы нужны для АОСР?");
+  await page.getByRole("button", { name: "Отправить" }).click();
+  await expect(
+    page.getByText(
+      "Для предъявления подготовьте АОСР и подтверждённые приложения.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Пособие по исполнительной документации/ }),
+  ).toHaveAttribute("href", new RegExp(`${documentId}/content#page=20`));
+  await page.getByRole("button", { name: "Закрыть" }).click();
 
   for (const title of expectedModes) {
     await page.getByRole("link", { name: "Сменить режим" }).click();
@@ -215,6 +339,9 @@ test("user enters through four Russian modes and keeps the selected object", asy
     await expect(page.getByText("Строительство корпуса А")).toBeVisible();
     await page.getByRole("link", { name: "Открыть" }).click();
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
+    await page.getByRole("button", { name: "Инженерный помощник" }).click();
+    await expect(page.getByTestId("assistant-panel")).toContainText(title);
+    await page.getByRole("button", { name: "Закрыть" }).click();
   }
   await page.goto(`/workspaces/${workspaceA}/documents`);
   await expect(
