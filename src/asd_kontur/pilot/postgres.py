@@ -126,10 +126,11 @@ class PilotResultRepository:
             ).mappings()
             exports = session.execute(
                 sa.text(
-                    "SELECT export_id,version,export_kind,output_format,media_type,size_bytes,"
-                    "content_digest,export_fingerprint,created_at FROM workspace.pilot_export_versions "
+                    "SELECT DISTINCT ON (export_id) export_id,version,export_kind,output_format,"
+                    "media_type,size_bytes,content_digest,export_fingerprint,created_at "
+                    "FROM workspace.pilot_export_versions "
                     "WHERE organization_id=:o AND workspace_id=:w AND result_id=:result AND "
-                    "result_version=:version ORDER BY export_kind,output_format,version"
+                    "result_version=:version ORDER BY export_id,version DESC"
                 ),
                 {
                     "o": organization_id,

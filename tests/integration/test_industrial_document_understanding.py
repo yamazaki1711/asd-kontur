@@ -563,6 +563,40 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
             assert export["size_bytes"] > 100
             assert export["content_digest"].startswith("sha256:")
             created_exports.append(export)
+        tender_item = pilot_results["Tender"]["items"][0]
+        assert isinstance(tender_item, dict)
+        accepted_tender_item = client.post(
+            f"/api/v1/workspaces/{workspace_id}/modes/Tender/result/items/"
+            f"{tender_item['item_id']}/reviews",
+            json={
+                "action": "accepted",
+                "resolved_fields": None,
+                "comment": "Вывод принят после повторной проверки источника",
+            },
+            headers=csrf,
+        )
+        assert accepted_tender_item.status_code == 201, accepted_tender_item.text
+        regenerated_archive = client.post(
+            f"/api/v1/workspaces/{workspace_id}/modes/Tender/exports",
+            json={"export_kind": "workspace_results", "output_format": "zip"},
+            headers=csrf,
+        )
+        assert regenerated_archive.status_code == 201, regenerated_archive.text
+        assert regenerated_archive.json()["export_id"] == created_exports[-1]["export_id"]
+        assert regenerated_archive.json()["version"] == created_exports[-1]["version"] + 1
+        refreshed_tender = client.get(f"/api/v1/workspaces/{workspace_id}/modes/Tender/result")
+        assert refreshed_tender.status_code == 200, refreshed_tender.text
+        latest_exports = refreshed_tender.json()["exports"]
+        export_ids = [item["export_id"] for item in latest_exports]
+        assert len(export_ids) == len(set(export_ids))
+        assert (
+            next(
+                item
+                for item in latest_exports
+                if item["export_id"] == created_exports[-1]["export_id"]
+            )["version"]
+            == regenerated_archive.json()["version"]
+        )
         content = client.get(
             f"/api/v1/workspaces/{workspace_id}/pilot-exports/"
             f"{created_exports[-1]['export_id']}/content"
