@@ -26,9 +26,7 @@ def _settings(environment: PostgreSQLEnvironment, root: Path) -> SpineSettings:
     objects.mkdir()
     archives.mkdir()
     return SpineSettings(
-        database_url=environment.application_engine.url.render_as_string(
-            hide_password=False
-        ),
+        database_url=environment.application_engine.url.render_as_string(hide_password=False),
         lifecycle_database_url=environment.lifecycle_engine.url.render_as_string(
             hide_password=False
         ),
@@ -140,9 +138,12 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
         ).json()
         assert [item["role"] for item in messages] == ["user", "assistant"]
         assert "Подготовьте АОСР" in messages[1]["content"]
-        assert client.get(
-            f"/api/v1/workspaces/{workspace_b['workspace_id']}/assistant/turns/{turn_id}"
-        ).status_code == 404
+        assert (
+            client.get(
+                f"/api/v1/workspaces/{workspace_b['workspace_id']}/assistant/turns/{turn_id}"
+            ).status_code
+            == 404
+        )
         conversation_b = client.post(
             f"/api/v1/workspaces/{workspace_b['workspace_id']}/assistant/conversations",
             json={"title": "История второго объекта"},
@@ -166,9 +167,12 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
         )
         assert reset.status_code == 200, reset.text
         assert reset.json()["outcome"] == "verified"
-        assert client.get(
-            f"/api/v1/workspaces/{workspace_a['workspace_id']}/assistant/conversations"
-        ).status_code == 404
+        assert (
+            client.get(
+                f"/api/v1/workspaces/{workspace_a['workspace_id']}/assistant/conversations"
+            ).status_code
+            == 404
+        )
         remaining_b = client.get(
             f"/api/v1/workspaces/{workspace_b['workspace_id']}/assistant/conversations"
         ).json()

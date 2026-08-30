@@ -36,9 +36,7 @@ def test_professional_assistant_contract_pack_is_exact_and_valid(
     assert fixture["memory"]["practice_units"] == 21_105
     assert fixture["memory"]["verified_normative_provisions"] == 1_294
     assert fixture["external_acceptance"] == "pending"
-    assistant_context = _load(
-        root / "schemas" / "professional-assistant-context.schema.json"
-    )
+    assistant_context = _load(root / "schemas" / "professional-assistant-context.schema.json")
     Draft202012Validator(assistant_context).validate(
         {"query": "Какие документы нужны?", "mode": "Support"}
     )

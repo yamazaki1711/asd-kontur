@@ -40,9 +40,7 @@ class ProfessionalAssistantService:
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> tuple[Conversation, ...]:
         organization_id = self._spine.resolve_scope(owner_identity_id, workspace_id)
-        return self._repository.list_conversations(
-            organization_id, workspace_id, owner_identity_id
-        )
+        return self._repository.list_conversations(organization_id, workspace_id, owner_identity_id)
 
     def messages(
         self, *, owner_identity_id: str, workspace_id: UUID, conversation_id: UUID
@@ -84,9 +82,7 @@ class ProfessionalAssistantService:
 
     def turn(self, *, owner_identity_id: str, workspace_id: UUID, turn_id: UUID) -> Turn:
         organization_id = self._spine.resolve_scope(owner_identity_id, workspace_id)
-        return self._repository.turn(
-            organization_id, workspace_id, turn_id, owner_identity_id
-        )
+        return self._repository.turn(organization_id, workspace_id, turn_id, owner_identity_id)
 
     def events(
         self,
@@ -103,6 +99,4 @@ class ProfessionalAssistantService:
 
     def cancel(self, *, owner_identity_id: str, workspace_id: UUID, turn_id: UUID) -> Turn:
         organization_id = self._spine.resolve_scope(owner_identity_id, workspace_id)
-        return self._repository.cancel(
-            organization_id, workspace_id, turn_id, owner_identity_id
-        )
+        return self._repository.cancel(organization_id, workspace_id, turn_id, owner_identity_id)

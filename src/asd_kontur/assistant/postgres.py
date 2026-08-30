@@ -65,9 +65,7 @@ class AssistantRepository:
                     "title": title,
                 },
             )
-        return self.get_conversation(
-            organization_id, workspace_id, identity, owner_identity_id
-        )
+        return self.get_conversation(organization_id, workspace_id, identity, owner_identity_id)
 
     def list_conversations(
         self, organization_id: UUID, workspace_id: UUID, owner_identity_id: str
@@ -135,9 +133,7 @@ class AssistantRepository:
         conversation_id: UUID,
         owner_identity_id: str,
     ) -> tuple[Message, ...]:
-        self.get_conversation(
-            organization_id, workspace_id, conversation_id, owner_identity_id
-        )
+        self.get_conversation(organization_id, workspace_id, conversation_id, owner_identity_id)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
             rows = session.execute(
@@ -161,9 +157,7 @@ class AssistantRepository:
         project_ref: tuple[UUID, int] | None,
         platform_memory_fingerprint: str,
     ) -> Turn:
-        self.get_conversation(
-            organization_id, workspace_id, conversation_id, owner_identity_id
-        )
+        self.get_conversation(organization_id, workspace_id, conversation_id, owner_identity_id)
         normalized = " ".join(question.split())
         if not 2 <= len(normalized) <= 8000:
             raise AssistantPersistenceError("assistant_question_invalid")
@@ -512,8 +506,7 @@ class AssistantRepository:
             claimed.requested_by_identity_id,
         )
         return tuple(
-            {"role": item.role, "content": item.content[:1200]}
-            for item in messages[-limit:-1]
+            {"role": item.role, "content": item.content[:1200]} for item in messages[-limit:-1]
         )
 
     def _state_update(self, claimed: ClaimedTurn, state: str, code: str | None) -> None:

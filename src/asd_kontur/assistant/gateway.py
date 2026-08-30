@@ -40,7 +40,7 @@ class ProfessionalAssistantKnowledgeQuery:
                         "(SELECT count(*) FROM platform.normative_provision_versions WHERE "
                         "verification_status='verified') normative,"
                         "(SELECT coalesce(max(version),0) FROM "
-                    "platform.practice_intelligence_releases) release_version"
+                        "platform.practice_intelligence_releases) release_version"
                     )
                 )
                 .mappings()
@@ -434,9 +434,7 @@ def _search_query(query: str) -> str:
     return " OR ".join(tokens or ("строительство",))
 
 
-def _locator_score(
-    row: Any, tokens: tuple[str, ...], referenced: set[str]
-) -> int:
+def _locator_score(row: Any, tokens: tuple[str, ...], referenced: set[str]) -> int:
     haystack = f"{row['safe_display_name']} {row['raw_text'] or ''}".lower()
     score = sum(2 for token in tokens if token in haystack)
     if str(row["source_locator_id"]).lower() in referenced:
@@ -537,19 +535,15 @@ def _public_value(value: Any) -> Any:
     if isinstance(value, dict):
         result: dict[str, Any] = {}
         for key, item in value.items():
-            if (
-                key.endswith(("_id", "_ids", "_digest"))
-                or key
-                in {
-                    "fingerprint",
-                    "organization_id",
-                    "workspace_id",
-                    "candidate_id",
-                    "source_version_id",
-                    "recorded_at",
-                    "correlation_id",
-                }
-            ):
+            if key.endswith(("_id", "_ids", "_digest")) or key in {
+                "fingerprint",
+                "organization_id",
+                "workspace_id",
+                "candidate_id",
+                "source_version_id",
+                "recorded_at",
+                "correlation_id",
+            }:
                 continue
             result[key] = _public_value(item)
         return result

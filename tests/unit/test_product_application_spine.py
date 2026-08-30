@@ -197,9 +197,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     )
     assert assistant_plist["Label"] == "ru.asd-kontur.spine.assistant-worker"
     assert assistant_plist["ProgramArguments"][-1] == "run-assistant-worker"
-    qwen_plist = plistlib.loads(
-        (output / "ru.asd-kontur.spine.qwen.plist").read_bytes()
-    )
+    qwen_plist = plistlib.loads((output / "ru.asd-kontur.spine.qwen.plist").read_bytes())
     assert qwen_plist["Label"] == "ru.asd-kontur.spine.qwen"
     assert "asd_kontur.assistant.qwen_server" in qwen_plist["ProgramArguments"]
     assert "10240" in (output / "asd-kontur-spine.newsyslog.conf").read_text(encoding="utf-8")
