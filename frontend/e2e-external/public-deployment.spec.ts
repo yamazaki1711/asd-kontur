@@ -142,10 +142,8 @@ test("authorized user enters by mode and downloads the finalized package documen
   for (const [mode, title, output] of modeResults) {
     await page.goto(`/modes/${mode}/workspaces/${workspaceId}/result`);
     const form = page.getByRole("button", { name: "Сформировать результат" });
-    const resultHeading = page.getByRole("heading", {
-      name: `Результат: ${title}`,
-    });
-    await expect(form.or(resultHeading)).toBeVisible();
+    const outputHeading = page.getByText(output, { exact: true });
+    await expect(form.or(outputHeading)).toBeVisible();
     if (await form.isVisible()) await form.click();
     await expect(
       page.getByRole("heading", { name: `Результат: ${title}` }),
