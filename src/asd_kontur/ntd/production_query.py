@@ -180,3 +180,66 @@ def _should_abstain(
     if not candidates:
         return True
     return all(c.fused_score < min_relevance for c in candidates)
+
+
+@dataclass(frozen=True, slots=True)
+class _LexicalCandidate:
+    corpus_object_id: uuid.UUID
+    contextual_chunk_id: uuid.UUID
+    lexical_score: float
+    rank: int
+
+
+def _load_lexical_candidates(
+    connection: Connection,
+    profile: _Profile,
+    query: str,
+    candidate_limit: int,
+) -> tuple[_LexicalCandidate, ...]:
+    if not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool):
+        raise ValueError("ntd_production_lexical_invalid_candidate_limit_type")
+    if not (1 <= candidate_limit <= 200):
+        raise ValueError("ntd_production_lexical_invalid_candidate_limit_range")
+
+    sql = sa.text(
+        """
+        SELECT
+            c.corpus_object_id,
+            cc.contextual_chunk_id,
+            ts_rank_cd(cc.lexical_vector, websearch_to_tsquery('russian', :query)) AS lexical_score,
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    ts_rank_cd(cc.lexical_vector, websearch_to_tsquery('russian', :query)) DESC,
+                    cc.contextual_chunk_id ASC
+            ) AS rank
+        FROM platform.ntd_contextual_chunks cc
+        JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
+        WHERE cc.chunk_profile_id = :chunk_profile_id
+          AND cc.lexical_vector @@ websearch_to_tsquery('russian', :query)
+        ORDER BY rank ASC
+        LIMIT :limit
+        """
+    )
+
+    rows = (
+        connection.execute(
+            sql,
+            {
+                "query": query,
+                "chunk_profile_id": profile.chunk_profile_id,
+                "limit": candidate_limit,
+            },
+        )
+        .mappings()
+        .all()
+    )
+
+    return tuple(
+        _LexicalCandidate(
+            corpus_object_id=uuid.UUID(str(row["corpus_object_id"])),
+            contextual_chunk_id=uuid.UUID(str(row["contextual_chunk_id"])),
+            lexical_score=float(row["lexical_score"]),
+            rank=int(row["rank"]),
+        )
+        for row in rows
+    )
