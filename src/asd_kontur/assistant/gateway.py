@@ -614,12 +614,6 @@ class ProfessionalAssistantKnowledgeQuery:
                 ),
             }
         unique = {str(row["search_document_id"]): row for row in matches}
-        if any(str(row["authority_class"]) == "official" for row in unique.values()):
-            unique = {
-                identity: row
-                for identity, row in unique.items()
-                if str(row["authority_class"]) == "official"
-            }
         items = [self._ntd_document_item(row) for row in unique.values()]
         outcome = "designation_ambiguous" if len(items) > 1 else _document_outcome(matches[0])
         sources = [item["source"] for item in items]
