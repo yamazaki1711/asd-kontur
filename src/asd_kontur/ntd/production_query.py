@@ -243,3 +243,74 @@ def _load_lexical_candidates(
         )
         for row in rows
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _DenseCandidate:
+    corpus_object_id: uuid.UUID
+    contextual_chunk_id: uuid.UUID
+    similarity: float
+    rank: int
+
+
+def _load_dense_candidates(
+    connection: Connection,
+    profile: _Profile,
+    query_vector: tuple[float, ...],
+    candidate_limit: int,
+) -> tuple[_DenseCandidate, ...]:
+    if not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool):
+        raise ValueError("ntd_production_dense_invalid_candidate_limit_type")
+    if not (1 <= candidate_limit <= 200):
+        raise ValueError("ntd_production_dense_invalid_candidate_limit_range")
+    if len(query_vector) != profile.embedding.dimension:
+        raise ValueError("ntd_production_dense_invalid_query_vector_dimension")
+
+    vector_literal = _vector_literal(query_vector)
+
+    sql = sa.text(
+        """
+        SELECT
+            c.corpus_object_id,
+            cc.contextual_chunk_id,
+            1 - (e.embedding <=> CAST(:query_vector AS vector)) AS similarity,
+            ROW_NUMBER() OVER (
+                ORDER BY
+                    e.embedding <=> CAST(:query_vector AS vector) ASC,
+                    cc.contextual_chunk_id ASC
+            ) AS rank
+        FROM platform.ntd_chunk_embeddings e
+        JOIN platform.ntd_contextual_chunks cc
+            ON e.contextual_chunk_id = cc.contextual_chunk_id
+            AND e.contextual_chunk_version = cc.version
+        JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
+        WHERE e.embedding_profile_id = :embedding_profile_id
+          AND cc.chunk_profile_id = :chunk_profile_id
+        ORDER BY rank ASC
+        LIMIT :limit
+        """
+    )
+
+    rows = (
+        connection.execute(
+            sql,
+            {
+                "query_vector": vector_literal,
+                "embedding_profile_id": profile.embedding_profile_id,
+                "chunk_profile_id": profile.chunk_profile_id,
+                "limit": candidate_limit,
+            },
+        )
+        .mappings()
+        .all()
+    )
+
+    return tuple(
+        _DenseCandidate(
+            corpus_object_id=uuid.UUID(str(row["corpus_object_id"])),
+            contextual_chunk_id=uuid.UUID(str(row["contextual_chunk_id"])),
+            similarity=float(row["similarity"]),
+            rank=int(row["rank"]),
+        )
+        for row in rows
+    )
