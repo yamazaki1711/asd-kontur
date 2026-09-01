@@ -86,6 +86,11 @@ class DeveloperRequest:
             f"Invariants: {json.dumps(self.invariants, ensure_ascii=False)}\n"
             f"Acceptance: {json.dumps(self.acceptance, ensure_ascii=False)}\n"
             f"Context: {json.dumps(dict(self.context_files), ensure_ascii=False)}\n"
+            "Supplied context is authoritative. Old/context hunk lines must be copied "
+            "byte-for-byte. Hunk counts and locations must be verified. Absent "
+            "symbols/schemas/tables/context must not be invented. New files must be "
+            "complete. Explicit invariants override habits. Inability to produce an "
+            "exact patch must return blocked with an empty diff.\n"
             "Return one JSON object only: no prose and no markdown fence. Exact schema: "
             '{"plan":["non-empty step"],"unified_diff":"git unified diff",'
             '"tests":["full test command"],"assumptions":[],"terminal_outcome":"proposed"}. '
