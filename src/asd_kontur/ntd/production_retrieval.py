@@ -551,7 +551,14 @@ def _persist_canonical_document(
     page_locator_ids: list[uuid.UUID | None] = []
 
     for page in pages:
-        text = page.normalized_text if page.normalized_text else page.raw_transcription
+        if document.terminal_status in (
+            "blocked_extraction",
+            "blocked_source",
+            "unsupported_content",
+        ):
+            text = ""
+        else:
+            text = page.normalized_text if page.normalized_text else page.raw_transcription
         page_texts.append(text)
         page_locator_ids.append(page.source_locator_id)
 
