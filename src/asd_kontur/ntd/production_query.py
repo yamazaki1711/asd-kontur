@@ -117,3 +117,66 @@ def _load_profile(connection: Connection) -> _Profile:
 
 def _vector_literal(vector: tuple[float, ...]) -> str:
     return json.dumps(list(vector), separators=(",", ":"))
+
+
+@dataclass(frozen=True, slots=True)
+class _FusedCandidate:
+    corpus_object_id: uuid.UUID
+    lexical_rank: int | None
+    dense_rank: int | None
+    fused_score: float
+    ranking_reasons: tuple[str, ...]
+
+
+def _validate_query(query: str, limit: int) -> None:
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("ntd_production_query_invalid_query")
+    if len(query) > 1000:
+        raise ValueError("ntd_production_query_too_long")
+    if not isinstance(limit, int) or isinstance(limit, bool):
+        raise ValueError("ntd_production_query_invalid_limit_type")
+    if not (1 <= limit <= 50):
+        raise ValueError("ntd_production_query_invalid_limit_range")
+
+
+def _reciprocal_rank_fusion(
+    lexical: tuple[uuid.UUID, ...],
+    dense: tuple[uuid.UUID, ...],
+    k: int,
+) -> tuple[_FusedCandidate, ...]:
+    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
+        raise ValueError("ntd_production_rrf_invalid_k")
+    scores: dict[uuid.UUID, float] = {}
+    ranks: dict[uuid.UUID, tuple[int | None, int | None]] = {}
+    for uid in lexical:
+        ranks[uid] = (ranks.get(uid, (None, None))[0], None)
+    for rank, uid in enumerate(lexical, start=1):
+        scores[uid] = scores.get(uid, 0.0) + 1.0 / (k + rank)
+        ranks[uid] = (rank, ranks.get(uid, (None, None))[1])
+    for rank, uid in enumerate(dense, start=1):
+        scores[uid] = scores.get(uid, 0.0) + 1.0 / (k + rank)
+        ranks[uid] = (ranks.get(uid, (None, None))[0], rank)
+    sorted_items = sorted(scores.items(), key=lambda x: (-x[1], str(x[0])))
+    return tuple(
+        _FusedCandidate(
+            corpus_object_id=uid,
+            lexical_rank=ranks[uid][0],
+            dense_rank=ranks[uid][1],
+            fused_score=score,
+            ranking_reasons=("rrf",),
+        )
+        for uid, score in sorted_items
+    )
+
+
+def _should_abstain(
+    candidates: tuple[_FusedCandidate, ...],
+    min_relevance: float,
+) -> bool:
+    if not isinstance(min_relevance, (int, float)) or isinstance(min_relevance, bool):
+        raise ValueError("ntd_production_abstain_invalid_min_relevance_type")
+    if not (0 <= min_relevance <= 1):
+        raise ValueError("ntd_production_abstain_invalid_min_relevance_range")
+    if not candidates:
+        return True
+    return all(c.fused_score < min_relevance for c in candidates)
