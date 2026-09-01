@@ -420,6 +420,7 @@ class KnowledgeStatusView(ApiModel):
     verified_normative_edition_count: int
     verified_normative_provision_count: int
     rule_version_count: int
+    ntd_inventory: dict[str, Any]
     projection_states: dict[str, Any]
     last_verified_backup_at: datetime | None
     semantic_fingerprints: dict[str, Any]
@@ -519,6 +520,8 @@ class CapabilityStatusView(ApiModel):
     implemented: list[str]
     blockers: list[str]
     trial_ready: bool
+    construction_consultant_quality_ready: bool
+    domain_harness_ready: bool
     oks_ready: bool
     product_ready: bool
     deployment: DeploymentStatusView

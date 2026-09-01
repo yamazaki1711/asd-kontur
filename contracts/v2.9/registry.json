@@ -1,0 +1,12 @@
+{
+  "registry_version": "2.9.0",
+  "schema_dialect": "https://json-schema.org/draft/2020-12/schema",
+  "status": "ntd_consultant_corpus_ready_owner_quality_acceptance_pending",
+  "compatibility": {"kind": "additive", "preserves": ["2.0.0", "2.1.0", "2.2.0", "2.3.0", "2.4.0", "2.5.0", "2.6.0", "2.7.0", "2.8.0"]},
+  "schemas": [
+    {"schema_id": "urn:asd-kontur:contracts:v2.9:schema:ntd-consultant-corpus", "path": "schemas/ntd-consultant-corpus.schema.json", "digest": "sha256:5118b4266cf6196a3b8476cb36eb3f146ab43e7df0e914d4a3fab1299562c69a"},
+    {"schema_id": "urn:asd-kontur:contracts:v2.9:schema:professional-assistant-tool", "path": "schemas/professional-assistant-tool.schema.json", "digest": "sha256:8f2609c699b9a841a424db54e9af1d4642611ce0321b5cdfebe1be77a6dd1a5e"}
+  ],
+  "contract_keys": ["product.ntd-consultant-corpus@2.9.0"],
+  "fixtures": {"valid": ["fixtures/valid/ntd-consultant-corpus.json"], "invalid": []}
+}

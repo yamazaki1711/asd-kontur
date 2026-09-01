@@ -966,9 +966,13 @@ export interface components {
         CapabilityStatusView: {
             /** Blockers */
             blockers: string[];
+            /** Construction Consultant Quality Ready */
+            construction_consultant_quality_ready: boolean;
             /** Contract Version */
             contract_version: string;
             deployment: components["schemas"]["DeploymentStatusView"];
+            /** Domain Harness Ready */
+            domain_harness_ready: boolean;
             /** Implemented */
             implemented: string[];
             /** Oks Ready */
@@ -1226,6 +1230,10 @@ export interface components {
             memory_data_defect: boolean;
             /** Normative Identity Count */
             normative_identity_count: number;
+            /** Ntd Inventory */
+            ntd_inventory: {
+                [key: string]: unknown;
+            };
             /** Practice Edition Count */
             practice_edition_count: number;
             /** Practice Guide Count */

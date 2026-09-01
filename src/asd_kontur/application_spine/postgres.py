@@ -2892,11 +2892,48 @@ class SpinePostgresRepository:
                 .mappings()
                 .one_or_none()
             )
+            ntd_inventory = (
+                connection.execute(
+                    sa.text(
+                        "SELECT count(*) total_documents,"
+                        "count(*) FILTER (WHERE authority_class='official') official_documents,"
+                        "count(*) FILTER (WHERE authority_class='legacy_reference') reference_documents,"
+                        "count(*) FILTER (WHERE bytes_status='present') bytes_present,"
+                        "count(*) FILTER (WHERE search_status='searchable') searchable,"
+                        "count(*) FILTER (WHERE search_status='partially_searchable') partially_searchable,"
+                        "count(*) FILTER (WHERE authority_class='official' AND search_status IN "
+                        "('searchable','partially_searchable')) searchable_official_documents,"
+                        "count(*) FILTER (WHERE authority_class='legacy_reference' AND search_status IN "
+                        "('searchable','partially_searchable')) searchable_reference_documents,"
+                        "count(*) FILTER (WHERE structure_status IN ('structured','verified_provisions')) structured_editions,"
+                        "sum(verified_provision_count) verified_provisions,"
+                        "count(*) FILTER (WHERE text_status='none') documents_without_text,"
+                        "count(*) FILTER (WHERE edition_currency_status='not_checked') edition_currency_unchecked "
+                        "FROM platform.ntd_search_documents"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            ntd_identity_denominator = int(
+                connection.scalar(
+                    sa.text(
+                        "SELECT coalesce(max(identity_count),0) FROM platform.ntd_seed_manifests"
+                    )
+                )
+                or 0
+            )
         if not isinstance(value, dict):
             raise SpinePersistenceError("platform_knowledge_status_unavailable")
         if not isinstance(conflict_status, dict):
             raise SpinePersistenceError("platform_practice_conflict_status_unavailable")
         value = dict(value)
+        ntd_inventory_value = {key: int(item or 0) for key, item in ntd_inventory.items()}
+        ntd_inventory_value["absent_identities"] = max(
+            0,
+            ntd_identity_denominator - ntd_inventory_value["official_documents"],
+        )
+        ntd_inventory_value["identity_denominator"] = ntd_identity_denominator
         value["conflict_count"] = int(conflict_status["conflict_count"])
         value["quarantine_count"] = int(conflict_status["quarantine_count"])
         qualification_passed = qualification is not None and qualification["status"] == "pass"
@@ -2938,6 +2975,7 @@ class SpinePostgresRepository:
             int(value["verified_normative_edition_count"]),
             int(value["verified_normative_provision_count"]),
             int(value["rule_version_count"]),
+            ntd_inventory_value,
             dict(value["projection_states"]),
             backup_at,
             dict(value["semantic_fingerprints"]),

@@ -217,6 +217,7 @@ class KnowledgeStatus:
     verified_normative_edition_count: int
     verified_normative_provision_count: int
     rule_version_count: int
+    ntd_inventory: JsonValue
     projection_states: JsonValue
     last_verified_backup_at: datetime | None
     semantic_fingerprints: JsonValue

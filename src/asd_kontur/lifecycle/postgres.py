@@ -785,6 +785,9 @@ class PostgresWorkspaceStorageAdapter:
     """Restricted exact-relation purge adapter; never drops/truncates a schema."""
 
     TABLES = (
+        "workspace.assistant_dialogue_state_versions",
+        "workspace.assistant_quality_receipts",
+        "workspace.assistant_tool_receipts",
         "workspace.assistant_messages",
         "workspace.assistant_turn_events",
         "workspace.assistant_turns",

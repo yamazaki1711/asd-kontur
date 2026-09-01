@@ -3905,6 +3905,58 @@ function KnowledgePage() {
                   ? "Нормативная база готова к использованию."
                   : "Часть нормативных источников и методик ещё требует подготовки."}
               </p>
+              <div className="metrics">
+                <Metric
+                  label="Нормативных документов"
+                  value={Number(value.ntd_inventory.total_documents ?? 0)}
+                />
+                <Metric
+                  label="Официальных источников"
+                  value={Number(value.ntd_inventory.official_documents ?? 0)}
+                />
+                <Metric
+                  label="Справочных источников"
+                  value={Number(value.ntd_inventory.reference_documents ?? 0)}
+                />
+                <Metric
+                  label="Доступны для поиска"
+                  value={
+                    Number(value.ntd_inventory.searchable ?? 0) +
+                    Number(value.ntd_inventory.partially_searchable ?? 0)
+                  }
+                />
+                <Metric
+                  label="Bytes присутствуют"
+                  value={Number(value.ntd_inventory.bytes_present ?? 0)}
+                />
+                <Metric
+                  label="Структурированных редакций"
+                  value={Number(value.ntd_inventory.structured_editions ?? 0)}
+                />
+                <Metric
+                  label="Проверенных положений"
+                  value={Number(value.ntd_inventory.verified_provisions ?? 0)}
+                />
+                <Metric
+                  label="Без пригодного текста"
+                  value={Number(
+                    value.ntd_inventory.documents_without_text ?? 0,
+                  )}
+                />
+                <Metric
+                  label="Отсутствующих identities"
+                  value={Number(value.ntd_inventory.absent_identities ?? 0)}
+                />
+              </div>
+              <p>
+                Полностью доступны для поиска:{" "}
+                {Number(value.ntd_inventory.searchable ?? 0)}; частично
+                доступны:{" "}
+                {Number(value.ntd_inventory.partially_searchable ?? 0)}.
+                Актуальность редакции не проверена для{" "}
+                {Number(value.ntd_inventory.edition_currency_unchecked ?? 0)}{" "}
+                документов.
+              </p>
             </section>
             <details className="panel technical-details">
               <summary>Технические сведения</summary>

@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from typing import Any, BinaryIO
 from uuid import UUID
 
+import sqlalchemy as sa
+
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
 from asd_kontur.pilot import (
@@ -824,9 +826,26 @@ class ProductSpineService:
             if decision is not None
             else ["PILOT_ACCEPTANCE_NOT_RECORDED"]
         )
+        with self._repository.engine.connect() as connection:
+            consultant_quality = (
+                connection.execute(
+                    sa.text(
+                        "SELECT status,source_commit FROM "
+                        "application.construction_consultant_quality_decisions "
+                        "ORDER BY recorded_at DESC,version DESC LIMIT 1"
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+        consultant_quality_ready = bool(
+            consultant_quality
+            and consultant_quality["status"] == "quality_ready"
+            and consultant_quality["source_commit"] == self._settings.release_commit
+        )
         return {
-            "contract_version": "2.7.0",
-            "slice": "PILOT-USABLE-END-TO-END-01+PROFESSIONAL-ASSISTANT",
+            "contract_version": "2.8.0",
+            "slice": "PROFESSIONAL-ASSISTANT-REASONING-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -882,9 +901,14 @@ class ProductSpineService:
                 "assistant.workspace-scoped-conversations",
                 "assistant.local-qwen-streaming",
                 "assistant.knowledge-gateway-context",
+                "assistant.multi-step-reasoning",
+                "assistant.granular-knowledge-tools",
+                "assistant.response-quality-gate",
             ],
             "blockers": sorted(blockers),
             "trial_ready": bool(decision and decision["status"] == "trial_ready"),
+            "construction_consultant_quality_ready": consultant_quality_ready,
+            "domain_harness_ready": False,
             "oks_ready": False,
             "product_ready": False,
             "deployment": {

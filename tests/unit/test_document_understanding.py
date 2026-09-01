@@ -150,6 +150,24 @@ def test_page_health_rejects_mixed_script_ocr_garble() -> None:
     assert damaged.signals == ("mixed_script_ocr_garble_high",)
 
 
+def test_page_health_detects_cyrillic_utf8_mojibake() -> None:
+    mojibake_sample = "ÐÑÐ¸ÐºÐ°Ð· " * 10
+    damaged = analyze_page_health(
+        document_id=DOCUMENT_ID,
+        document_version=1,
+        page_number=4,
+        text=mojibake_sample,
+        image_count=0,
+        width_points=Decimal("595"),
+        height_points=Decimal("842"),
+        rotation_degrees=0,
+    )
+
+    assert damaged.primary_kind is PageHealthKind.DAMAGED_ENCODING
+    assert damaged.route is OcrRoute.APPLE_VISION
+    assert damaged.signals == ("cyrillic_utf8_mojibake_high",)
+
+
 def test_pdf_line_grouping_recovers_unanchored_continuation_fragments() -> None:
     lines = _group_pdf_lines(
         [

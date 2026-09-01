@@ -342,12 +342,20 @@
             "title": "Blockers",
             "type": "array"
           },
+          "construction_consultant_quality_ready": {
+            "title": "Construction Consultant Quality Ready",
+            "type": "boolean"
+          },
           "contract_version": {
             "title": "Contract Version",
             "type": "string"
           },
           "deployment": {
             "$ref": "#/components/schemas/DeploymentStatusView"
+          },
+          "domain_harness_ready": {
+            "title": "Domain Harness Ready",
+            "type": "boolean"
           },
           "implemented": {
             "items": {
@@ -379,6 +387,8 @@
           "implemented",
           "blockers",
           "trial_ready",
+          "construction_consultant_quality_ready",
+          "domain_harness_ready",
           "oks_ready",
           "product_ready",
           "deployment"
@@ -1061,6 +1071,11 @@
             "title": "Normative Identity Count",
             "type": "integer"
           },
+          "ntd_inventory": {
+            "additionalProperties": true,
+            "title": "Ntd Inventory",
+            "type": "object"
+          },
           "practice_edition_count": {
             "title": "Practice Edition Count",
             "type": "integer"
@@ -1114,6 +1129,7 @@
           "verified_normative_edition_count",
           "verified_normative_provision_count",
           "rule_version_count",
+          "ntd_inventory",
           "projection_states",
           "last_verified_backup_at",
           "semantic_fingerprints",

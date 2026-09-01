@@ -482,6 +482,9 @@ def analyze_page_health(
     length = len(stripped)
     damaged = len(CONTROL_OR_REPLACEMENT.findall(text))
     replacement_ratio = Decimal(damaged) / Decimal(max(1, len(text)))
+    mojibake_ratio = Decimal(sum(1 for char in text if char in ("\u00d0", "\u00d1"))) / Decimal(
+        max(1, len(text))
+    )
     mixed_script_ratio = _mixed_script_token_ratio(text)
     signals: list[str] = []
     blocking_parser_observations = tuple(
@@ -491,13 +494,21 @@ def analyze_page_health(
         primary = PageHealthKind.DAMAGED_ENCODING
         route = OcrRoute.APPLE_VISION
         signals.extend(f"native_parser:{value}" for value in blocking_parser_observations)
-    elif replacement_ratio > Decimal("0.02") or mixed_script_ratio > Decimal("0.08"):
+    elif (
+        replacement_ratio > Decimal("0.02")
+        or mixed_script_ratio > Decimal("0.08")
+        or mojibake_ratio > Decimal("0.08")
+    ):
         primary = PageHealthKind.DAMAGED_ENCODING
         route = OcrRoute.APPLE_VISION
         signals.append(
-            "mixed_script_ocr_garble_high"
-            if mixed_script_ratio > Decimal("0.08")
-            else "replacement_or_control_ratio_high"
+            "cyrillic_utf8_mojibake_high"
+            if mojibake_ratio > Decimal("0.08")
+            else (
+                "mixed_script_ocr_garble_high"
+                if mixed_script_ratio > Decimal("0.08")
+                else "replacement_or_control_ratio_high"
+            )
         )
     elif not stripped and image_count:
         primary = PageHealthKind.RASTER_ONLY

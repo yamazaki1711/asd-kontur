@@ -5,19 +5,93 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, cast
 from urllib.error import URLError
+from uuid import uuid4
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.assistant.worker import AssistantWorker
+from asd_kontur.knowledge.gateway import GatewayContext
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
 
 pytestmark = pytest.mark.postgres
+
+
+def test_ntd_inventory_distinguishes_searchable_text_from_verified_provisions(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    search_document_id = uuid4()
+    fingerprint = "sha256:" + "1" * 64
+    page_fingerprint = "sha256:" + "2" * 64
+    digest = "sha256:" + "3" * 64
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.ntd_search_documents("
+                "search_document_id,version,authority_class,stable_designation,"
+                "normalized_designation,alternative_designations,title,edition_label,artifact_digest,"
+                "bytes_status,page_inventory_status,text_status,search_status,structure_status,"
+                "edition_currency_status,page_count,searchable_page_count,native_text_characters,"
+                "ocr_page_count,ocr_text_characters,"
+                "structured_fragment_count,verified_provision_count,source_metadata,"
+                "index_profile_version,document_fingerprint,search_text) VALUES ("
+                ":id,1,'legacy_reference','СП 70.13330.2012','сп70133302012',"
+                "ARRAY['СП 70','СП70','СП 70.13330','СП 70.13330.2012'],"
+                "'Несущие и ограждающие конструкции','2012',:digest,'present','inventoried',"
+                "'complete','searchable','not_structured','not_checked',1,1,96,0,0,0,0,"
+                '\'{"authority_statement":"legacy_reference_not_active_authority"}\'::jsonb,'
+                "'ntd-consultant-search-index@1.0.0',:fingerprint,"
+                "'СП 70.13330.2012 несущие ограждающие бетонные конструкции')"
+            ),
+            {"id": search_document_id, "digest": digest, "fingerprint": fingerprint},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.ntd_search_pages(search_document_id,search_document_version,"
+                "page_number,page_text,page_text_digest,text_status,extraction_method,"
+                "page_fingerprint) "
+                "VALUES (:id,1,1,'Контроль качества бетона: входной, операционный и приемочный.',"
+                ":digest,'searchable','recovered_legacy_native_pdf',:fingerprint)"
+            ),
+            {"id": search_document_id, "digest": digest, "fingerprint": page_fingerprint},
+        )
+    query = ProfessionalAssistantKnowledgeQuery(postgres_environment.application_engine)
+    context = GatewayContext(
+        "synthetic-owner",
+        "assistant.chat.test",
+        "ntd-consultant-corpus-test@1.0.0",
+        uuid4(),
+        uuid4(),
+        uuid4(),
+    )
+
+    resolved = query.execute(
+        "consultant.resolve_ntd_designation",
+        {"mode": "Support", "designation": "СП70"},
+        context,
+    ).result
+
+    assert resolved["outcome"] == "document_present_searchable"
+    assert resolved["items"][0]["verified_provision_count"] == 0
+    assert {item["code"] for item in resolved["gaps"]} == {
+        "verified_provisions_unavailable",
+        "edition_currency_not_checked",
+    }
+    with pytest.raises(sa.exc.DBAPIError):
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "UPDATE platform.ntd_search_documents SET title='changed' "
+                    "WHERE search_document_id=:id"
+                ),
+                {"id": search_document_id},
+            )
 
 
 def _settings(environment: PostgreSQLEnvironment, root: Path) -> SpineSettings:
@@ -117,14 +191,18 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
             ProfessionalAssistantKnowledgeQuery(postgres_environment.application_engine),
             identity="assistant-test-worker",
         )
-        monkeypatch.setattr(
-            worker,
-            "_generate",
-            lambda claimed, prompt: (
-                "### Краткий ответ\nПодготовьте АОСР и связанные документы комплекта.\n"
-                "### Ограничения и недостающие сведения\nПроверьте исходные данные."
-            ),
+        model_outputs = iter(
+            (
+                '{"intent":"general_engineering","needs_clarification":false,'
+                '"clarifying_question":null,"steps":[]}',
+                '{"answer":"Подготовьте АОСР и связанные документы комплекта.",'
+                '"answer_type":"direct","needs_clarification":false,'
+                '"used_source_ids":[],"dialogue_summary":"Обсуждается комплект АОСР.",'
+                '"active_subjects":["АОСР"]}',
+                '{"passed":true,"issues":[]}',
+            )
         )
+        monkeypatch.setattr(worker, "_model_complete", lambda *args, **kwargs: next(model_outputs))
         claimed = worker._repository.claim("assistant-test-worker", 900)
         assert claimed is not None
         worker._run(claimed)
@@ -137,7 +215,7 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
             f"{conversation_id}/messages"
         ).json()
         assert [item["role"] for item in messages] == ["user", "assistant"]
-        assert "Подготовьте АОСР" in messages[1]["content"]
+        assert messages[1]["content"] == "Подготовьте АОСР и связанные документы комплекта."
         assert (
             client.get(
                 f"/api/v1/workspaces/{workspace_b['workspace_id']}/assistant/turns/{turn_id}"
@@ -225,7 +303,11 @@ def test_worker_outage_is_a_typed_terminal_outcome(
             ProfessionalAssistantKnowledgeQuery(postgres_environment.application_engine),
             identity="assistant-outage-worker",
         )
-        monkeypatch.setattr(worker, "_generate", lambda *_: (_ for _ in ()).throw(URLError("down")))
+        monkeypatch.setattr(
+            worker,
+            "_model_complete",
+            lambda *args, **kwargs: (_ for _ in ()).throw(URLError("down")),
+        )
         claimed = worker._repository.claim("assistant-outage-worker", 900)
         assert claimed is not None
         worker._run(claimed)

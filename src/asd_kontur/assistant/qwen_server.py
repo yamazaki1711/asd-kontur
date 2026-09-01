@@ -60,7 +60,13 @@ def main() -> None:
             try:
                 request = json.loads(self.rfile.read(length))
                 prompt_text = str(request["prompt"])
-                max_tokens = min(1800, max(64, int(request.get("max_tokens", 1200))))
+                generation_ceiling = (
+                    6000 if prompt_text.startswith("Role: qwen3.8-27b-developer-worker@") else 1800
+                )
+                max_tokens = min(generation_ceiling, max(64, int(request.get("max_tokens", 1200))))
+                temperature = float(request.get("temperature", 0.2))
+                if not 0.0 <= temperature <= 0.7:
+                    raise ValueError("temperature outside qualified range")
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 self.send_error(400)
                 return
@@ -83,7 +89,7 @@ def main() -> None:
                     prompt,
                     image=None,
                     max_tokens=max_tokens,
-                    temperature=0.0,
+                    temperature=temperature,
                 ):
                     current = str(result.text)
                     delta = current[len(prior) :] if current.startswith(prior) else current

@@ -189,9 +189,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["Label"] == "ru.asd-kontur.spine.api"
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
-    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0030_professional_assistant"
-    )
+    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == ("0033_ntd_memory")
     assistant_plist = plistlib.loads(
         (output / "ru.asd-kontur.spine.assistant-worker.plist").read_bytes()
     )
