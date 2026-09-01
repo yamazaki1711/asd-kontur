@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -30,6 +30,23 @@ from .reasoning import TOOL_NAMES
 
 ASSISTANT_TOOL = "knowledge.get_professional_assistant_context"
 ASSISTANT_REASONING_TOOLS = TOOL_NAMES
+
+PLATFORM_CONSULTANT_TOOLS = frozenset(
+    {
+        "consultant.search_practice",
+        "consultant.get_practice_fragment",
+        "consultant.get_ntd_inventory",
+        "consultant.resolve_ntd_designation",
+        "consultant.search_ntd_documents",
+        "consultant.search_ntd_content",
+        "consultant.get_ntd_page",
+        "consultant.get_ntd_section_context",
+        "consultant.get_verified_provisions",
+        "consultant.get_ntd_processing_status",
+        "consultant.search_ntd",
+        "consultant.get_ntd_provision",
+    }
+)
 
 
 class ProfessionalAssistantKnowledgeQuery:
@@ -67,9 +84,14 @@ class ProfessionalAssistantKnowledgeQuery:
             raise ValueError("assistant_gateway_tool_not_supported")
         if tool == "consultant.estimate_concrete_early_strength":
             return execute_early_strength(payload)
-        if context.organization_id is None or context.workspace_id is None:
-            raise PermissionError("assistant_workspace_scope_required")
-        mode = _mode(payload)
+        if tool in PLATFORM_CONSULTANT_TOOLS:
+            mode = ""
+        else:
+            if context.organization_id is None or context.workspace_id is None:
+                raise PermissionError("assistant_workspace_scope_required")
+            mode = _mode(payload)
+        organization_id = cast(UUID, context.organization_id)
+        workspace_id = cast(UUID, context.workspace_id)
         result: dict[str, Any]
         if tool == "consultant.search_practice":
             query, limit = _search_arguments(payload, maximum=8)
@@ -108,7 +130,7 @@ class ProfessionalAssistantKnowledgeQuery:
         elif tool == "consultant.find_applicability_candidates":
             query, limit = _search_arguments(payload, maximum=8)
             result = self._applicability_candidates(
-                context.organization_id, context.workspace_id, mode, query, limit
+                organization_id, workspace_id, mode, query, limit
             )
         elif tool == "consultant.search_ntd":
             query, limit = _search_arguments(payload, maximum=8)
@@ -119,16 +141,14 @@ class ProfessionalAssistantKnowledgeQuery:
             query, limit = _search_arguments(payload, maximum=10)
             result = self._tool_result(
                 tool,
-                self._workspace_search(
-                    context.organization_id, context.workspace_id, mode, query, limit
-                ),
+                self._workspace_search(organization_id, workspace_id, mode, query, limit),
             )
         elif tool == "consultant.get_workspace_fragment":
             result = self._tool_result(
                 tool,
                 self._workspace_fragment(
-                    context.organization_id,
-                    context.workspace_id,
+                    organization_id,
+                    workspace_id,
                     mode,
                     _source_id(payload),
                 ),
@@ -136,17 +156,15 @@ class ProfessionalAssistantKnowledgeQuery:
         elif tool == "consultant.get_id_package":
             view = SupportProductionRepository(self._engine).view(
                 owner_identity_id=context.actor_identity_id,
-                workspace_id=context.workspace_id,
+                workspace_id=workspace_id,
             )
             result = self._plain_tool_result(
                 tool,
                 _public_value(view),
-                _canonical_workspace_sources(view, context.workspace_id, mode, "Комплект ИД"),
+                _canonical_workspace_sources(view, workspace_id, mode, "Комплект ИД"),
             )
         else:
-            workspace = self._workspace_context(
-                context.organization_id, context.workspace_id, mode, ""
-            )
+            workspace = self._workspace_context(organization_id, workspace_id, mode, "")
             selected = {
                 "consultant.get_workspace_overview": {
                     "name": workspace["name"],

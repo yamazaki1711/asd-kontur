@@ -244,6 +244,7 @@ def _index_official(
         extraction_method=(
             "admitted_native_plus_ocr_pdf" if ocr_applied else "admitted_native_pdf"
         ),
+        corpus_object_id=None,
         source_metadata={
             "official_url": str(row["official_url"]),
             "effective_from": str(row["effective_from"]) if row["effective_from"] else None,
@@ -308,6 +309,7 @@ def _index_reference(
         origin_manifest_digest=manifest_digest,
         href=None,
         extraction_method="recovered_legacy_native_pdf",
+        corpus_object_id=None,
         source_metadata={
             "recovery_state": str(asset.get("state", "unknown")),
             "authority_statement": "legacy_reference_not_active_authority",
@@ -417,8 +419,12 @@ def _persist_document(
     origin_manifest_digest: str | None,
     href: str | None,
     extraction_method: str,
+    corpus_object_id: UUID | None,
     source_metadata: dict[str, Any],
+    page_locator_ids: list[UUID | None] | None = None,
 ) -> dict[str, Any]:
+    if page_locator_ids is not None and len(page_locator_ids) != len(pages):
+        raise ValueError("ntd_search_page_locator_count_mismatch")
     search_document_id = deterministic_uuid(f"ntd-search-document:{identity}")
     searchable_pages = sum(bool(page.strip()) for page in pages)
     page_count = max(inventoried_page_count, len(pages))
@@ -452,13 +458,13 @@ def _persist_document(
             "page_inventory_status,text_status,search_status,structure_status,edition_currency_status,"
             "page_count,searchable_page_count,native_text_characters,structured_fragment_count,"
             "ocr_page_count,ocr_text_characters,verified_provision_count,origin_manifest_digest,"
-            "source_access_href,source_metadata,"
+            "source_access_href,source_metadata,corpus_object_id,"
             "index_profile_version,document_fingerprint,search_text) VALUES ("
             ":id,1,:authority,:document_id,:edition_id,:artifact_id,:source_version_id,:designation,"
             ":normalized,:aliases,:title,:edition_label,:digest,:bytes_status,:inventory_status,"
             ":text_status,:search_status,:structure_status,'not_checked',:page_count,:searchable_pages,"
             ":characters,:structured,:ocr_pages,:ocr_characters,:verified,:manifest,:href,"
-            "CAST(:metadata AS jsonb),:profile,"
+            "CAST(:metadata AS jsonb),:corpus_object_id,:profile,"
             ":fingerprint,:search_text) ON CONFLICT (document_fingerprint) DO NOTHING"
         ),
         {
@@ -489,6 +495,7 @@ def _persist_document(
             "manifest": origin_manifest_digest,
             "href": href,
             "metadata": json.dumps(source_metadata, ensure_ascii=False),
+            "corpus_object_id": corpus_object_id,
             "profile": NTD_SEARCH_INDEX_PROFILE,
             "fingerprint": fingerprint,
             "search_text": search_text,
@@ -496,8 +503,10 @@ def _persist_document(
     )
     for page_number, text in enumerate(pages, start=1):
         digest = _digest(text.encode())
-        locator_id: UUID | None = None
-        if source_version_id is not None:
+        locator_id: UUID | None = (
+            page_locator_ids[page_number - 1] if page_locator_ids is not None else None
+        )
+        if locator_id is None and source_version_id is not None:
             locator_id = deterministic_uuid(f"ntd-search-page:{source_version_id}:{page_number}")
             connection.execute(
                 sa.text(
