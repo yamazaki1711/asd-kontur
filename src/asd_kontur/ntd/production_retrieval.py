@@ -384,24 +384,19 @@ def _projection_terminal_counts(
 
 def _source_snapshot_fingerprint(connection: sa.Connection) -> str:
     _projection_terminal_counts(_load_documents(connection))
-    query = sa.text("""
-        SELECT
-            corpus_object_id,
-            structural_unit_id,
-            version,
-            unit_kind,
-            structural_path,
-            unit_fingerprint,
-            source_locator_ids
-        FROM platform.ntd_structural_units
-        WHERE NOT EXISTS (
-            SELECT 1
-            FROM platform.ntd_structural_units newer
-            WHERE newer.structural_unit_id = platform.ntd_structural_units.structural_unit_id
-              AND newer.version > platform.ntd_structural_units.version
-        )
-        ORDER BY corpus_object_id, structural_unit_id, version
-    """)
+    query = sa.text(
+        "SELECT u.corpus_object_id, u.structural_unit_id, u.version, u.unit_kind, "
+        "u.structural_path, u.unit_fingerprint, u.source_locator_ids "
+        "FROM platform.ntd_structural_units AS u "
+        "JOIN platform.ntd_corpus_objects AS c ON c.corpus_object_id = u.corpus_object_id "
+        "WHERE c.authority_class <> 'gesn_candidate' "
+        "AND NOT EXISTS ("
+        "SELECT 1 FROM platform.ntd_structural_units AS newer "
+        "WHERE newer.structural_unit_id = u.structural_unit_id "
+        "AND newer.version > u.version"
+        ") "
+        "ORDER BY u.corpus_object_id, u.structural_unit_id, u.version"
+    )
     rows = connection.execute(query).mappings().all()
     payload: list[dict[str, Any]] = []
     for row in rows:
