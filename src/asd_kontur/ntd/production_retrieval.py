@@ -481,6 +481,154 @@ def _current_hierarchy_edges(connection: sa.Connection) -> tuple[dict[str, Any],
     return tuple(edges)
 
 
+_CURRENT_LEXICAL_DOCUMENTS_SQL = sa.text(
+    """
+    SELECT
+        corpus_object_id,
+        search_document_id,
+        version,
+        document_fingerprint,
+        search_status
+    FROM platform.ntd_search_documents AS current_doc
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM platform.ntd_search_documents AS newer_doc
+        WHERE newer_doc.search_document_id = current_doc.search_document_id
+          AND newer_doc.version > current_doc.version
+    )
+    ORDER BY corpus_object_id, search_document_id, version
+    """
+)
+
+
+_CURRENT_SEARCHABLE_PAGES_COUNT_SQL = sa.text(
+    """
+    SELECT count(*)
+    FROM platform.ntd_search_pages AS p
+    JOIN platform.ntd_search_documents AS d
+        ON p.search_document_id = d.search_document_id
+        AND p.search_document_version = d.version
+    WHERE p.text_status IN ('searchable', 'partially_searchable')
+      AND NOT EXISTS (
+          SELECT 1
+          FROM platform.ntd_search_documents AS d_newer
+          WHERE d_newer.search_document_id = d.search_document_id
+            AND d_newer.version > d.version
+      )
+    """
+)
+
+
+def _lexical_projection_identity(connection: sa.Connection) -> tuple[str, int, int]:
+    rows = connection.execute(_CURRENT_LEXICAL_DOCUMENTS_SQL).mappings().all()
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "corpus_object_id": str(row["corpus_object_id"]),
+                "search_document_id": str(row["search_document_id"]),
+                "version": int(row["version"]),
+                "document_fingerprint": str(row["document_fingerprint"]),
+                "search_status": str(row["search_status"]),
+            }
+        )
+    identity = semantic_digest(payload)
+    doc_count = sum(
+        1 for p in payload if p["search_status"] in ("searchable", "partially_searchable")
+    )
+    page_count = int(connection.execute(_CURRENT_SEARCHABLE_PAGES_COUNT_SQL).scalar_one())
+    return identity, doc_count, page_count
+
+
+def _vector_projection_identity(
+    connection: sa.Connection, embedding_profile_id: uuid.UUID
+) -> tuple[str | None, int]:
+    stmt = sa.text(
+        "SELECT contextual_chunk_id, contextual_chunk_version, embedding_digest "
+        "FROM platform.ntd_chunk_embeddings "
+        "WHERE embedding_profile_id = :embedding_profile_id "
+        "ORDER BY contextual_chunk_id, contextual_chunk_version, embedding_digest"
+    )
+    rows = connection.execute(stmt, {"embedding_profile_id": embedding_profile_id}).mappings().all()
+    if not rows:
+        return (None, 0)
+    payload: list[dict[str, str | int]] = [
+        {
+            "contextual_chunk_id": str(r["contextual_chunk_id"]),
+            "contextual_chunk_version": int(r["contextual_chunk_version"]),
+            "embedding_digest": str(r["embedding_digest"]),
+        }
+        for r in rows
+    ]
+    return (semantic_digest(payload), len(payload))
+
+
+def _graph_projection_identity(connection: sa.Connection) -> tuple[str, int, int]:
+    node_rows = (
+        connection.execute(
+            sa.text(
+                "SELECT n.graph_node_id, n.version, n.node_fingerprint "
+                "FROM platform.ntd_graph_nodes n "
+                "WHERE NOT EXISTS ("
+                "SELECT 1 FROM platform.ntd_graph_nodes m "
+                "WHERE m.graph_node_id = n.graph_node_id AND m.version > n.version"
+                ") "
+                "ORDER BY n.graph_node_id, n.version"
+            )
+        )
+        .mappings()
+        .all()
+    )
+    node_payload = [
+        {
+            "graph_node_id": str(r["graph_node_id"]),
+            "version": int(r["version"]),
+            "node_fingerprint": str(r["node_fingerprint"]),
+        }
+        for r in node_rows
+    ]
+    edge_rows = (
+        connection.execute(
+            sa.text(
+                "SELECT graph_edge_id, edge_fingerprint "
+                "FROM platform.ntd_graph_edges "
+                "ORDER BY graph_edge_id"
+            )
+        )
+        .mappings()
+        .all()
+    )
+    edge_payload = [
+        {
+            "graph_edge_id": str(r["graph_edge_id"]),
+            "edge_fingerprint": str(r["edge_fingerprint"]),
+        }
+        for r in edge_rows
+    ]
+    identity = semantic_digest({"nodes": node_payload, "edges": edge_payload})
+    return identity, len(node_payload), len(edge_payload)
+
+
+def _qualified_embedding_profile_id(
+    connection: sa.Connection, retrieval_profile_id: uuid.UUID
+) -> uuid.UUID:
+    rows = (
+        connection.execute(
+            sa.text(
+                "SELECT embedding_profile_id FROM platform.ntd_retrieval_profiles "
+                "WHERE retrieval_profile_id = :retrieval_profile_id "
+                "AND status = 'qualified_primary' ORDER BY retrieval_profile_id"
+            ),
+            {"retrieval_profile_id": retrieval_profile_id},
+        )
+        .mappings()
+        .all()
+    )
+    if len(rows) != 1 or rows[0]["embedding_profile_id"] is None:
+        raise ValueError("ntd_production_projection_embedding_profile_invalid")
+    return _uuid(rows[0]["embedding_profile_id"])
+
+
 def _qualified_retrieval_profile_id(connection: sa.Connection) -> uuid.UUID:
     rows = (
         connection.execute(
