@@ -968,6 +968,163 @@ def _persist_canonical_document(
     )
 
 
+def _insert_projection_version(
+    connection: sa.Connection,
+    retrieval_profile_id: uuid.UUID,
+    payload: dict[str, Any],
+    index_digests: dict[str, str],
+    counters: dict[str, int],
+    projection_fingerprint: str,
+) -> uuid.UUID:
+    projection_version_id = deterministic_uuid(f"ntd-memory-projection:{projection_fingerprint}")
+    connection.execute(
+        sa.text(
+            """
+            INSERT INTO projection.ntd_memory_versions (
+                projection_version_id,
+                retrieval_profile_id,
+                source_snapshot_fingerprint,
+                lexical_projection_identity,
+                vector_projection_identity,
+                hierarchy_projection_identity,
+                graph_projection_identity,
+                index_digests,
+                counters,
+                projection_fingerprint
+            ) VALUES (
+                :projection_version_id,
+                :retrieval_profile_id,
+                :source_snapshot_fingerprint,
+                :lexical_projection_identity,
+                :vector_projection_identity,
+                :hierarchy_projection_identity,
+                :graph_projection_identity,
+                CAST(:index_digests AS jsonb),
+                CAST(:counters AS jsonb),
+                :projection_fingerprint
+            )
+            ON CONFLICT (projection_fingerprint) DO NOTHING
+            """
+        ),
+        {
+            "projection_version_id": projection_version_id,
+            "retrieval_profile_id": retrieval_profile_id,
+            "source_snapshot_fingerprint": payload["source_snapshot_fingerprint"],
+            "lexical_projection_identity": payload["lexical_projection_identity"],
+            "vector_projection_identity": payload["vector_projection_identity"],
+            "hierarchy_projection_identity": payload["hierarchy_projection_identity"],
+            "graph_projection_identity": payload["graph_projection_identity"],
+            "index_digests": json.dumps(index_digests),
+            "counters": json.dumps(counters),
+            "projection_fingerprint": projection_fingerprint,
+        },
+    )
+    row = (
+        connection.execute(
+            sa.text(
+                """
+                SELECT projection_version_id
+                FROM projection.ntd_memory_versions
+                WHERE projection_fingerprint = :projection_fingerprint
+                """
+            ),
+            {"projection_fingerprint": projection_fingerprint},
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        raise ValueError("ntd_production_projection_insert_verification_failed")
+    return _uuid(row["projection_version_id"])
+
+
+def _insert_hierarchy_projection_edges(
+    connection: sa.Connection,
+    projection_version_id: uuid.UUID,
+    hierarchy_edges: tuple[dict[str, Any], ...],
+) -> None:
+    rows: list[dict[str, Any]] = []
+    for edge in hierarchy_edges:
+        rows.append(
+            {
+                "projection_version_id": projection_version_id,
+                "parent_structural_unit_id": _uuid(edge["parent_structural_unit_id"]),
+                "child_structural_unit_id": _uuid(edge["child_structural_unit_id"]),
+                "ordinal": int(edge["ordinal"]),
+                "depth": int(edge["depth"]),
+                "path_fingerprint": edge["path_fingerprint"],
+            }
+        )
+    if not rows:
+        return
+    connection.execute(
+        sa.text(
+            """
+            INSERT INTO projection.ntd_hierarchy_edges (
+                projection_version_id,
+                parent_structural_unit_id,
+                child_structural_unit_id,
+                ordinal,
+                depth,
+                path_fingerprint
+            ) VALUES (
+                :projection_version_id,
+                :parent_structural_unit_id,
+                :child_structural_unit_id,
+                :ordinal,
+                :depth,
+                :path_fingerprint
+            )
+            ON CONFLICT DO NOTHING
+            """
+        ),
+        rows,
+    )
+
+
+def materialize_production_memory_projection(engine: Engine) -> uuid.UUID:
+    with engine.begin() as connection:
+        documents = _load_documents(connection)
+        _projection_terminal_counts(documents)
+        retrieval_profile_id = _qualified_retrieval_profile_id(connection)
+        embedding_profile_id = _qualified_embedding_profile_id(connection, retrieval_profile_id)
+        source_snapshot_fingerprint = _source_snapshot_fingerprint(connection)
+        hierarchy_edges = _current_hierarchy_edges(connection)
+        hierarchy_identity = semantic_digest(list(hierarchy_edges))
+        lexical_identity, lexical_documents, lexical_pages = _lexical_projection_identity(
+            connection
+        )
+        vector_identity, vector_embeddings = _vector_projection_identity(
+            connection, embedding_profile_id
+        )
+        graph_identity, graph_nodes, graph_edges = _graph_projection_identity(connection)
+        payload, index_digests, counters, projection_fingerprint = _production_projection_payload(
+            documents,
+            retrieval_profile_id,
+            source_snapshot_fingerprint,
+            lexical_identity,
+            vector_identity,
+            hierarchy_identity,
+            graph_identity,
+            lexical_documents,
+            lexical_pages,
+            vector_embeddings,
+            len(hierarchy_edges),
+            graph_nodes,
+            graph_edges,
+        )
+        projection_version_id = _insert_projection_version(
+            connection,
+            retrieval_profile_id,
+            payload,
+            index_digests,
+            counters,
+            projection_fingerprint,
+        )
+        _insert_hierarchy_projection_edges(connection, projection_version_id, hierarchy_edges)
+        return projection_version_id
+
+
 def materialize_canonical_search_corpus(
     engine: Engine,
     *,
