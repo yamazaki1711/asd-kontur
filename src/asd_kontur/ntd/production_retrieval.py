@@ -382,6 +382,43 @@ def _projection_terminal_counts(
     }
 
 
+def _source_snapshot_fingerprint(connection: sa.Connection) -> str:
+    _projection_terminal_counts(_load_documents(connection))
+    query = sa.text("""
+        SELECT
+            corpus_object_id,
+            structural_unit_id,
+            version,
+            unit_kind,
+            structural_path,
+            unit_fingerprint,
+            source_locator_ids
+        FROM platform.ntd_structural_units
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM platform.ntd_structural_units newer
+            WHERE newer.structural_unit_id = platform.ntd_structural_units.structural_unit_id
+              AND newer.version > platform.ntd_structural_units.version
+        )
+        ORDER BY corpus_object_id, structural_unit_id, version
+    """)
+    rows = connection.execute(query).mappings().all()
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "corpus_object_id": str(row["corpus_object_id"]),
+                "structural_unit_id": str(row["structural_unit_id"]),
+                "version": row["version"],
+                "unit_kind": row["unit_kind"],
+                "structural_path": [str(p) for p in row["structural_path"]],
+                "unit_fingerprint": str(row["unit_fingerprint"]),
+                "source_locator_ids": [str(locator) for locator in row["source_locator_ids"]],
+            }
+        )
+    return semantic_digest(payload)
+
+
 def _qualified_retrieval_profile_id(connection: sa.Connection) -> uuid.UUID:
     rows = (
         connection.execute(
