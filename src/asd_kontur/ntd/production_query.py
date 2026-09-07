@@ -161,6 +161,26 @@ def _validate_query(query: str, limit: int) -> None:
         raise ValueError("ntd_production_query_invalid_limit_range")
 
 
+def _extract_ntd_designation(query: str) -> str | None:
+    import re
+
+    from asd_kontur.ntd.search_corpus import normalize_designation
+
+    if not isinstance(query, str):
+        raise ValueError("ntd_production_designation_invalid_query")
+    if not query.strip():
+        return None
+    match = re.search(
+        r"\b(\u0421\u041f|SP|\u0413\u041e\u0421\u0422(?:\s\u0420)?|GOST(?:\sR)?|\u0421\u041d\u0418\u041f|SNIP|\u0420\u0414|RD|\u041f\u0420\u0418\u041a\u0410\u0417|PRIKAZ|\u0418\u041d\u0421\u0422\u0420\u0423\u041a\u0426\u0418\u042f|INSTRUKTSIYA)"
+        r"\s*(\d+(?:\.\d+)*(?:-\d+)?)\b",
+        query,
+        re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return normalize_designation(f"{match.group(1)} {match.group(2)}")
+
+
 def _reciprocal_rank_fusion(
     lexical: tuple[_LexicalCandidate, ...],
     dense: tuple[_DenseCandidate, ...],
@@ -376,6 +396,98 @@ def _load_dense_candidates(
     )
 
 
+def _load_exact_designation_candidates(
+    connection: Connection,
+    profile: _Profile,
+    corpus_object_ids: tuple[uuid.UUID, ...],
+    limit: int,
+) -> tuple[_FusedCandidate, ...]:
+    if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 50:
+        raise ValueError("ntd_production_exact_invalid_limit")
+    if not corpus_object_ids:
+        return ()
+
+    sql = """
+        WITH ranked AS (
+            SELECT
+                c.corpus_object_id,
+                cc.contextual_chunk_id,
+                ROW_NUMBER() OVER (
+                    PARTITION BY c.corpus_object_id
+                    ORDER BY c.page_start, c.page_end, c.chunk_id, cc.contextual_chunk_id
+                ) AS rank
+            FROM platform.ntd_contextual_chunks cc
+            JOIN platform.ntd_chunks c
+                ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
+            WHERE cc.chunk_profile_id = :chunk_profile_id
+              AND c.corpus_object_id = ANY(CAST(:corpus_object_ids AS uuid[]))
+        )
+        SELECT corpus_object_id, contextual_chunk_id
+        FROM ranked
+        WHERE rank = 1
+        ORDER BY corpus_object_id, contextual_chunk_id
+        LIMIT :limit
+    """
+    params: dict[str, object] = {
+        "chunk_profile_id": profile.chunk_profile_id,
+        "corpus_object_ids": [str(item) for item in corpus_object_ids],
+        "limit": limit,
+    }
+    rows = connection.execute(sa.text(sql), params).mappings().all()
+    return tuple(
+        _FusedCandidate(
+            corpus_object_id=uuid.UUID(str(row["corpus_object_id"])),
+            contextual_chunk_id=uuid.UUID(str(row["contextual_chunk_id"])),
+            lexical_rank=None,
+            lexical_score=None,
+            dense_rank=None,
+            dense_similarity=None,
+            fused_score=1.0,
+            ranking_reasons=("exact_designation",),
+        )
+        for row in rows
+    )
+
+
+def _resolve_exact_corpus_object_ids(
+    connection: Connection,
+    designation: str | None,
+) -> tuple[uuid.UUID, ...]:
+    if designation is None:
+        return ()
+    if not isinstance(designation, str) or not designation.strip():
+        raise ValueError("ntd_production_exact_invalid_designation")
+
+    from asd_kontur.ntd.search_corpus import normalize_designation
+
+    target = normalize_designation(designation)
+    sql = sa.text(
+        "SELECT corpus_object_id, normalized_designation, alternative_designations, "
+        "stable_designation FROM platform.ntd_search_documents "
+        "WHERE corpus_object_id IS NOT NULL ORDER BY corpus_object_id"
+    )
+    rows = connection.execute(sql).mappings().all()
+    seen: set[uuid.UUID] = set()
+    result: list[uuid.UUID] = []
+    for row in rows:
+        corpus_object_id = uuid.UUID(str(row["corpus_object_id"]))
+        if corpus_object_id in seen:
+            continue
+        identities: set[str] = set()
+        for value in (row["normalized_designation"], row["stable_designation"]):
+            if isinstance(value, str):
+                identities.add(normalize_designation(value))
+        aliases = row["alternative_designations"]
+        if isinstance(aliases, (list, tuple)):
+            for alias in aliases:
+                if isinstance(alias, str):
+                    identities.add(normalize_designation(alias))
+        if target in identities:
+            seen.add(corpus_object_id)
+            result.append(corpus_object_id)
+    return tuple(result)
+
+
 def query_production_candidates(
     connection: Connection,
     query: str,
@@ -384,6 +496,13 @@ def query_production_candidates(
 ) -> tuple[_FusedCandidate, ...]:
     _validate_query(query, limit)
     profile = _load_profile(connection)
+    exact_designation = _extract_ntd_designation(query)
+    exact_corpus_object_ids = _resolve_exact_corpus_object_ids(connection, exact_designation)
+    if exact_corpus_object_ids:
+        return _load_exact_designation_candidates(
+            connection, profile, exact_corpus_object_ids, limit
+        )
+
     candidate_limit = min(200, max(limit * 5, limit))
     lexical = _load_lexical_candidates(connection, profile, query, candidate_limit)
     dense = _load_dense_candidates(connection, profile, query_vector, candidate_limit)

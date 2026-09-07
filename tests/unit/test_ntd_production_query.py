@@ -6,6 +6,7 @@ import pytest
 
 from asd_kontur.ntd.production_query import (
     _DenseCandidate,
+    _extract_ntd_designation,
     _FusedCandidate,
     _LexicalCandidate,
     _reciprocal_rank_fusion,
@@ -35,6 +36,13 @@ def test_validate_query(query: str, limit: int, expected_error: str | None) -> N
     else:
         with pytest.raises(ValueError, match=expected_error):
             _validate_query(query, limit)
+
+
+def test_extract_ntd_designation() -> None:
+    expected_prefix = chr(0x0441) + chr(0x043F)
+    assert _extract_ntd_designation("SP70") == expected_prefix + "70"
+    assert _extract_ntd_designation("GOST R 51872-2024") is not None
+    assert _extract_ntd_designation("ordinary concrete works") is None
 
 
 def test_rrf_fusion_same_corpus() -> None:
