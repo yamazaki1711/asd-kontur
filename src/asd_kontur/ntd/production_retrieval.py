@@ -419,6 +419,68 @@ def _source_snapshot_fingerprint(connection: sa.Connection) -> str:
     return semantic_digest(payload)
 
 
+_CURRENT_HIERARCHY_EDGES_SQL = sa.text("""
+    SELECT
+        child.corpus_object_id,
+        parent.structural_unit_id AS parent_structural_unit_id,
+        child.structural_unit_id AS child_structural_unit_id,
+        child.ordinal,
+        child.structural_path,
+        parent.unit_fingerprint AS parent_unit_fingerprint,
+        child.unit_fingerprint AS child_unit_fingerprint
+    FROM platform.ntd_structural_units AS child
+    JOIN platform.ntd_structural_units AS parent
+        ON parent.structural_unit_id = child.parent_structural_unit_id
+        AND parent.corpus_object_id = child.corpus_object_id
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM platform.ntd_structural_units AS newer_child
+        WHERE newer_child.structural_unit_id = child.structural_unit_id
+        AND newer_child.version > child.version
+    )
+    AND NOT EXISTS (
+        SELECT 1
+        FROM platform.ntd_structural_units AS newer_parent
+        WHERE newer_parent.structural_unit_id = parent.structural_unit_id
+        AND newer_parent.version > parent.version
+    )
+    ORDER BY
+        child.corpus_object_id,
+        parent.structural_unit_id,
+        child.ordinal,
+        child.structural_unit_id
+""")
+
+
+def _current_hierarchy_edges(connection: sa.Connection) -> tuple[dict[str, Any], ...]:
+    rows = connection.execute(_CURRENT_HIERARCHY_EDGES_SQL).mappings().all()
+    edges: list[dict[str, Any]] = []
+    for row in rows:
+        structural_path = [str(item) for item in row["structural_path"]]
+        path_fingerprint = semantic_digest(
+            {
+                "corpus_object_id": str(row["corpus_object_id"]),
+                "parent_structural_unit_id": str(row["parent_structural_unit_id"]),
+                "child_structural_unit_id": str(row["child_structural_unit_id"]),
+                "ordinal": int(row["ordinal"]),
+                "depth": 1,
+                "structural_path": structural_path,
+                "parent_unit_fingerprint": str(row["parent_unit_fingerprint"]),
+                "child_unit_fingerprint": str(row["child_unit_fingerprint"]),
+            }
+        )
+        edges.append(
+            {
+                "parent_structural_unit_id": str(row["parent_structural_unit_id"]),
+                "child_structural_unit_id": str(row["child_structural_unit_id"]),
+                "ordinal": int(row["ordinal"]),
+                "depth": 1,
+                "path_fingerprint": path_fingerprint,
+            }
+        )
+    return tuple(edges)
+
+
 def _qualified_retrieval_profile_id(connection: sa.Connection) -> uuid.UUID:
     rows = (
         connection.execute(
