@@ -629,6 +629,66 @@ def _qualified_embedding_profile_id(
     return _uuid(rows[0]["embedding_profile_id"])
 
 
+def _production_projection_payload(
+    documents: tuple[CanonicalSearchDocument, ...],
+    retrieval_profile_id: uuid.UUID,
+    source_snapshot_fingerprint: str,
+    lexical_identity: str,
+    vector_identity: str | None,
+    hierarchy_identity: str,
+    graph_identity: str,
+    lexical_documents: int,
+    lexical_pages: int,
+    vector_embeddings: int,
+    hierarchy_edges: int,
+    graph_nodes: int,
+    graph_edges: int,
+) -> tuple[dict[str, Any], dict[str, str], dict[str, int], str]:
+    terminal_counts = _projection_terminal_counts(documents)
+
+    structural_units = sum(doc.structural_units for doc in documents)
+    contextual_chunks = sum(doc.contextual_chunks for doc in documents)
+    embeddings = sum(doc.embeddings for doc in documents)
+
+    counters = {
+        "corpus_objects": terminal_counts["corpus_objects"],
+        "indexed_complete": terminal_counts["indexed_complete"],
+        "indexed_partial": terminal_counts["indexed_partial"],
+        "blocked": terminal_counts["blocked"],
+        "structural_units": structural_units,
+        "contextual_chunks": contextual_chunks,
+        "embeddings": embeddings,
+        "fts_documents": lexical_documents,
+        "fts_pages": lexical_pages,
+        "hnsw_embeddings": vector_embeddings,
+        "hierarchy_edges": hierarchy_edges,
+        "graph_nodes": graph_nodes,
+        "graph_edges": graph_edges,
+    }
+
+    index_digests = {
+        "lexical": lexical_identity,
+        "vector": vector_identity if vector_identity is not None else "unavailable",
+        "hierarchy": hierarchy_identity,
+        "graph": graph_identity,
+    }
+
+    payload = {
+        "retrieval_profile_id": str(retrieval_profile_id),
+        "source_snapshot_fingerprint": source_snapshot_fingerprint,
+        "lexical_projection_identity": lexical_identity,
+        "vector_projection_identity": vector_identity,
+        "hierarchy_projection_identity": hierarchy_identity,
+        "graph_projection_identity": graph_identity,
+        "index_digests": index_digests,
+        "counters": counters,
+    }
+
+    projection_fingerprint = semantic_digest(payload)
+
+    return payload, index_digests, counters, projection_fingerprint
+
+
 def _qualified_retrieval_profile_id(connection: sa.Connection) -> uuid.UUID:
     rows = (
         connection.execute(
