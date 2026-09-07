@@ -115,6 +115,16 @@ def _load_profile(connection: Connection) -> _Profile:
     )
 
 
+def _normalized_relevance(lexical_score: float | None, dense_similarity: float | None) -> float:
+    if lexical_score is not None and dense_similarity is not None:
+        return (lexical_score + dense_similarity) / 2.0
+    if lexical_score is not None:
+        return lexical_score
+    if dense_similarity is not None:
+        return dense_similarity
+    return 0.0
+
+
 def _vector_literal(vector: tuple[float, ...]) -> str:
     return json.dumps(list(vector), separators=(",", ":"))
 
