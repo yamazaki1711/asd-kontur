@@ -5,7 +5,9 @@ import uuid
 import pytest
 
 from asd_kontur.ntd.production_query import (
+    _DenseCandidate,
     _FusedCandidate,
+    _LexicalCandidate,
     _reciprocal_rank_fusion,
     _should_abstain,
     _validate_query,
@@ -35,34 +37,43 @@ def test_validate_query(query: str, limit: int, expected_error: str | None) -> N
             _validate_query(query, limit)
 
 
-@pytest.mark.parametrize(
-    "lexical, dense, k, expected_scores",
-    [
-        (
-            (UUID_A, UUID_B),
-            (UUID_B, UUID_C),
-            60,
-            {UUID_B: 1 / 62 + 1 / 61, UUID_A: 1 / 61, UUID_C: 1 / 62},
+def test_rrf_fusion_same_corpus() -> None:
+    lexical = (
+        _LexicalCandidate(
+            corpus_object_id=UUID_A,
+            contextual_chunk_id=UUID_B,
+            lexical_score=0.9,
+            rank=1,
         ),
-        (
-            (UUID_A,),
-            (UUID_A,),
-            10,
-            {UUID_A: 1 / 11 + 1 / 11},
+        _LexicalCandidate(
+            corpus_object_id=UUID_A,
+            contextual_chunk_id=UUID_C,
+            lexical_score=0.8,
+            rank=2,
         ),
-    ],
-)
-def test_rrf_fusion(
-    lexical: tuple[uuid.UUID, ...],
-    dense: tuple[uuid.UUID, ...],
-    k: int,
-    expected_scores: dict[uuid.UUID, float],
-) -> None:
-    result = _reciprocal_rank_fusion(lexical, dense, k)
-    assert len(result) == len(expected_scores)
-    for candidate in result:
-        assert candidate.fused_score == pytest.approx(expected_scores[candidate.corpus_object_id])
-        assert candidate.ranking_reasons == ("rrf",)
+    )
+    dense = (
+        _DenseCandidate(
+            corpus_object_id=UUID_A,
+            contextual_chunk_id=UUID_B,
+            similarity=0.95,
+            rank=2,
+        ),
+    )
+    results = _reciprocal_rank_fusion(lexical, dense, 60)
+    assert len(results) == 2
+    first = results[0]
+    assert first.contextual_chunk_id == UUID_B
+    assert first.lexical_rank == 1
+    assert first.dense_rank == 2
+    assert first.lexical_score == 0.9
+    assert first.dense_similarity == 0.95
+    assert first.fused_score == pytest.approx(1 / 61 + 1 / 62)
+    assert first.ranking_reasons == ("lexical_rank:1", "dense_rank:2")
+    second = results[1]
+    assert second.contextual_chunk_id == UUID_C
+    assert second.dense_rank is None
+    assert second.dense_similarity is None
 
 
 @pytest.mark.parametrize(
@@ -70,12 +81,34 @@ def test_rrf_fusion(
     [
         ((), 0.5, True),
         (
-            (_FusedCandidate(UUID_A, 1, 1, 0.1, ("rrf",)),),
+            (
+                _FusedCandidate(
+                    corpus_object_id=UUID_A,
+                    contextual_chunk_id=UUID_B,
+                    lexical_rank=1,
+                    lexical_score=0.7,
+                    dense_rank=1,
+                    dense_similarity=0.8,
+                    fused_score=0.1,
+                    ranking_reasons=("rrf",),
+                ),
+            ),
             0.5,
             True,
         ),
         (
-            (_FusedCandidate(UUID_A, 1, 1, 0.6, ("rrf",)),),
+            (
+                _FusedCandidate(
+                    corpus_object_id=UUID_A,
+                    contextual_chunk_id=UUID_B,
+                    lexical_rank=1,
+                    lexical_score=0.7,
+                    dense_rank=1,
+                    dense_similarity=0.8,
+                    fused_score=0.6,
+                    ranking_reasons=("rrf",),
+                ),
+            ),
             0.5,
             False,
         ),
@@ -90,8 +123,20 @@ def test_should_abstain(
 
 
 def test_invalid_parameters() -> None:
+    lexical_candidate = _LexicalCandidate(
+        corpus_object_id=UUID_A,
+        contextual_chunk_id=UUID_B,
+        lexical_score=0.9,
+        rank=1,
+    )
+    dense_candidate = _DenseCandidate(
+        corpus_object_id=UUID_A,
+        contextual_chunk_id=UUID_B,
+        similarity=0.9,
+        rank=1,
+    )
     with pytest.raises(ValueError, match="ntd_production_rrf_invalid_k"):
-        _reciprocal_rank_fusion((UUID_A,), (UUID_A,), 0)
+        _reciprocal_rank_fusion((lexical_candidate,), (dense_candidate,), 0)
 
     for invalid_min_relevance in (-0.1, 1.1):
         with pytest.raises(ValueError, match="ntd_production_abstain_invalid_min_relevance_range"):

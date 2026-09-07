@@ -307,11 +307,24 @@ def parse_search_plan(raw: str) -> SearchPlan:
     if not needs_clarification:
         if intent == "general_engineering":
             if steps:
-                if (
-                    len(steps) != 1
-                    or steps[0].tool != "consultant.estimate_concrete_early_strength"
-                ):
-                    raise ValueError("assistant_plan_general_engineering_tools_invalid")
+                allowed_tools = {
+                    "consultant.search_practice",
+                    "consultant.get_practice_fragment",
+                    "consultant.get_ntd_inventory",
+                    "consultant.resolve_ntd_designation",
+                    "consultant.search_ntd_documents",
+                    "consultant.search_ntd_content",
+                    "consultant.get_ntd_page",
+                    "consultant.get_ntd_section_context",
+                    "consultant.get_verified_provisions",
+                    "consultant.get_ntd_processing_status",
+                    "consultant.search_ntd",
+                    "consultant.get_ntd_provision",
+                    "consultant.estimate_concrete_early_strength",
+                }
+                for step in steps:
+                    if step.tool not in allowed_tools:
+                        raise ValueError("assistant_plan_general_engineering_tools_invalid")
         else:
             if not steps:
                 raise ValueError("assistant_plan_empty")
