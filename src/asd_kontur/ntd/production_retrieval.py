@@ -349,6 +349,39 @@ class CanonicalSearchDocument:
     graph_indexed: bool
 
 
+def _projection_terminal_counts(
+    documents: tuple[CanonicalSearchDocument, ...],
+) -> dict[str, int]:
+    corpus_objects = len(documents)
+    if corpus_objects != 118:
+        raise ValueError("ntd_production_projection_denominator_invalid")
+
+    indexed_complete = 0
+    indexed_partial = 0
+    blocked = 0
+
+    for doc in documents:
+        status = doc.terminal_status
+        if status == "indexed_complete":
+            indexed_complete += 1
+        elif status == "indexed_partial":
+            indexed_partial += 1
+        elif status in ("blocked_extraction", "blocked_source", "unsupported_content"):
+            blocked += 1
+        else:
+            raise ValueError("ntd_production_projection_terminal_status_invalid")
+
+    if indexed_complete + indexed_partial + blocked != corpus_objects:
+        raise ValueError("ntd_production_projection_terminal_counts_invalid")
+
+    return {
+        "corpus_objects": corpus_objects,
+        "indexed_complete": indexed_complete,
+        "indexed_partial": indexed_partial,
+        "blocked": blocked,
+    }
+
+
 @dataclass(frozen=True, slots=True)
 class CanonicalSearchPage:
     page_number: int
