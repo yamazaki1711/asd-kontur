@@ -382,6 +382,22 @@ def _projection_terminal_counts(
     }
 
 
+def _qualified_retrieval_profile_id(connection: sa.Connection) -> uuid.UUID:
+    rows = (
+        connection.execute(
+            sa.text(
+                "SELECT retrieval_profile_id FROM platform.ntd_retrieval_profiles "
+                "WHERE status='qualified_primary' ORDER BY retrieval_profile_id"
+            )
+        )
+        .mappings()
+        .all()
+    )
+    if len(rows) != 1:
+        raise ValueError("ntd_production_projection_profile_cardinality_invalid")
+    return _uuid(rows[0]["retrieval_profile_id"])
+
+
 @dataclass(frozen=True, slots=True)
 class CanonicalSearchPage:
     page_number: int
