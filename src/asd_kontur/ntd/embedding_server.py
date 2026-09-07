@@ -23,32 +23,89 @@ def _tree_digest(root: Path) -> str:
 
 class EmbeddingRuntime:
     def __init__(self, *, model_path: Path, profile_path: Path) -> None:
-        from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
+        import importlib
+        import json
 
+        embedding_loader = importlib.import_module("mlx_vlm.embedding_loader")
+        pooling = importlib.import_module("mlx_vlm.models.pooling")
+        utils = importlib.import_module("mlx_vlm.utils")
+
+        load_embedding_model = embedding_loader.load_embedding_model
+        read_pooling_config = pooling.read_pooling_config
+        load_processor = utils.load_processor
         profile = json.loads(profile_path.read_bytes())
         if profile["model_digest"] != _tree_digest(model_path):
             raise ValueError("embedding_model_digest_mismatch")
+
+        query_prefix = profile.get("query_prefix")
+        if not isinstance(query_prefix, str) or not query_prefix:
+            raise ValueError("embedding_profile_query_prefix_missing")
+
+        if profile.get("normalization") != "l2":
+            raise ValueError("embedding_profile_normalization_unsupported")
+
         self.profile = profile
-        self.model = SentenceTransformer(str(model_path), device="mps")
-        dimension = int(self.model.get_sentence_embedding_dimension())
+        self.query_prefix = query_prefix
+
+        self.model = load_embedding_model(model_path)
+        self.processor = load_processor(model_path, add_detokenizer=False)
+        self.model.pooling_config = read_pooling_config(model_path)
+
+        dimension = int(self.model.config.hidden_size)
         if dimension != int(profile["dimension"]):
             raise ValueError("embedding_model_dimension_mismatch")
 
     def encode(self, texts: list[str]) -> list[list[float]]:
+        import importlib
+        import math
+
+        mx = importlib.import_module("mlx.core")
+
         if (
             not texts
             or len(texts) > 128
             or any(not value.strip() or len(value) > 16000 for value in texts)
         ):
             raise ValueError("embedding_request_invalid")
-        values = self.model.encode(
-            texts,
-            batch_size=min(32, len(texts)),
-            normalize_embeddings=self.profile["normalization"] == "l2",
-            convert_to_numpy=True,
-            show_progress_bar=False,
+
+        tokenizer = getattr(self.processor, "tokenizer", self.processor)
+        max_length = min(getattr(tokenizer, "model_max_length", 512) or 512, 8192)
+        prefixed_texts = [self.query_prefix + text for text in texts]
+        encoded = tokenizer(
+            prefixed_texts,
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="np",
         )
-        return [[float(item) for item in vector] for vector in values]
+
+        input_ids = mx.array(encoded["input_ids"])
+        attention_mask = mx.array(encoded["attention_mask"])
+
+        out = self.model(input_ids=input_ids, attention_mask=attention_mask)
+        if not hasattr(out, "text_embeds"):
+            raise ValueError("embedding_model_output_missing")
+
+        embeds = out.text_embeds
+        mx.eval(embeds)
+        if embeds.shape[0] != len(texts):
+            raise ValueError("embedding_request_invalid")
+
+        expected_dim = int(self.profile["dimension"])
+        result: list[list[float]] = []
+        for index in range(len(texts)):
+            vector = embeds[index]
+            if vector.shape[0] != expected_dim:
+                raise ValueError("embedding_request_invalid")
+            row: list[float] = []
+            for component_index in range(expected_dim):
+                val = float(vector[component_index])
+                if not math.isfinite(val):
+                    raise ValueError("embedding_request_invalid")
+                row.append(val)
+            result.append(row)
+
+        return result
 
 
 def serve(*, model_path: Path, profile_path: Path, host: str, port: int) -> None:

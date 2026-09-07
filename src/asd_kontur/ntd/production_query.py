@@ -49,6 +49,7 @@ def _load_profile(connection: Connection) -> _Profile:
             ep.profile_key,
             ep.profile_version,
             ep.dimension,
+            ep.model_id,
             rp.parameters
         FROM platform.ntd_retrieval_profiles rp
         JOIN platform.ntd_embedding_profiles ep
@@ -90,6 +91,13 @@ def _load_profile(connection: Connection) -> _Profile:
     if not isinstance(dimension, int) or isinstance(dimension, bool) or dimension <= 0:
         raise ValueError("ntd_production_retrieval_invalid_dimension")
 
+    profile_model_id = row["model_id"]
+    if (
+        not isinstance(profile_model_id, str)
+        or not profile_model_id
+        or profile_model_id == "latest"
+    ):
+        raise ValueError("ntd_production_retrieval_invalid_embedding_model_id")
     parameters = row["parameters"]
     if not isinstance(parameters, dict):
         raise ValueError("ntd_production_retrieval_invalid_parameters")
@@ -104,6 +112,7 @@ def _load_profile(connection: Connection) -> _Profile:
         key=profile_key,
         version=profile_version,
         dimension=dimension,
+        model_id=profile_model_id,
     )
 
     return _Profile(
@@ -418,7 +427,7 @@ def _load_production_hits(
     if not candidates:
         return ()
 
-    contextual_chunk_ids = tuple(c.contextual_chunk_id for c in candidates)
+    contextual_chunk_ids = [str(c.contextual_chunk_id) for c in candidates]
     sql = """
         SELECT
             c.corpus_object_id,

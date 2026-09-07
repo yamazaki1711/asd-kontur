@@ -13,6 +13,7 @@ class EmbeddingProfile:
     key: str
     version: str
     dimension: int
+    model_id: str = ""
 
 
 def embed_query(
