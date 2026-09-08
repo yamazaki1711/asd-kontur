@@ -86,3 +86,30 @@ def test_create_conversation_duplicate_identity_rolls_back(
             {"o": organization_id, "id": conversation_id},
         ).scalar_one()
     assert count == 1
+
+
+def test_get_conversation_re_reads_platform_identity(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    organization_id = uuid4()
+    owner_identity_id = "platform-reader"
+    title = "Повторное чтение"
+
+    repository = ConstructionConsultantRepository(postgres_environment.application_engine)
+
+    created = repository.create_conversation(
+        organization_id=organization_id,
+        owner_identity_id=owner_identity_id,
+        title=title,
+    )
+
+    fetched = repository.get_conversation(
+        organization_id=organization_id,
+        conversation_id=created.conversation_id,
+        owner_identity_id=owner_identity_id,
+    )
+
+    assert fetched.conversation_id == created.conversation_id
+    assert fetched.title == title
+    assert fetched.created_at == created.created_at
+    assert fetched.message_count == 0

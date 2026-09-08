@@ -115,3 +115,53 @@ class ConstructionConsultantRepository:
             created_at=row["created_at"],
             message_count=0,
         )
+
+    def get_conversation(
+        self,
+        organization_id: UUID,
+        conversation_id: UUID,
+        owner_identity_id: str,
+    ) -> ConstructionConsultantConversation:
+        if not owner_identity_id or not owner_identity_id.strip():
+            raise ValueError("owner_identity_id must not be blank")
+
+        with Session(self._engine) as session, session.begin():
+            self._scope(session, organization_id)
+            row = session.execute(
+                sa.text(
+                    """
+                    SELECT
+                        c.conversation_id,
+                        c.title,
+                        c.created_at,
+                        (
+                            SELECT count(*)
+                            FROM platform.construction_consultant_messages m
+                            WHERE m.organization_id = :organization_id
+                              AND m.conversation_id = c.conversation_id
+                        ) AS message_count
+                    FROM platform.construction_consultant_conversations c
+                    WHERE c.organization_id = :organization_id
+                      AND c.conversation_id = :conversation_id
+                      AND c.created_by_identity_id = :owner_identity_id
+                    """
+                ),
+                {
+                    "organization_id": organization_id,
+                    "conversation_id": conversation_id,
+                    "owner_identity_id": owner_identity_id,
+                },
+            ).fetchone()
+
+        if row is None:
+            raise ConstructionConsultantPersistenceError(
+                "construction_consultant_conversation_not_found",
+                "construction_consultant_conversation_not_found",
+            )
+
+        return ConstructionConsultantConversation(
+            conversation_id=row[0],
+            title=row[1],
+            created_at=row[2],
+            message_count=row[3],
+        )
