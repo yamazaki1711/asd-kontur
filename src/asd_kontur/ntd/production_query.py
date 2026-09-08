@@ -333,7 +333,8 @@ def _load_lexical_candidates(
         JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
         WHERE cc.chunk_profile_id = :chunk_profile_id
           AND cc.lexical_vector @@ websearch_to_tsquery('russian', :query)
-          AND (:corpus_object_id IS NULL OR c.corpus_object_id = :corpus_object_id)
+          AND (CAST(:corpus_object_id AS uuid) IS NULL
+               OR c.corpus_object_id = CAST(:corpus_object_id AS uuid))
         ORDER BY rank ASC
         LIMIT :limit
         """
@@ -372,6 +373,60 @@ class _DenseCandidate:
     rank: int
 
 
+def _resolve_graph_node_ids(
+    connection: Connection,
+    candidates: tuple[_FusedCandidate, ...],
+    corpus_object_id: uuid.UUID | None,
+) -> tuple[uuid.UUID, ...]:
+    if not candidates:
+        return ()
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_graph_invalid_corpus_object_id_type")
+    candidate_corpus_ids: list[str] = []
+    candidate_chunk_ids: list[str] = []
+    for candidate in candidates:
+        try:
+            candidate_corpus_uuid = uuid.UUID(str(candidate.corpus_object_id))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ValueError("ntd_production_graph_invalid_candidate_corpus_object_id") from exc
+        try:
+            candidate_contextual_uuid = uuid.UUID(str(candidate.contextual_chunk_id))
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise ValueError("ntd_production_graph_invalid_candidate_contextual_chunk_id") from exc
+        if corpus_object_id is not None and candidate_corpus_uuid != corpus_object_id:
+            raise ValueError("ntd_production_graph_candidate_scope_mismatch")
+        candidate_corpus_ids.append(str(candidate_corpus_uuid))
+        candidate_chunk_ids.append(str(candidate_contextual_uuid))
+    sql = sa.text(
+        """
+        SELECT DISTINCT gn.graph_node_id
+        FROM platform.ntd_contextual_chunks cc
+        JOIN platform.ntd_chunks c
+            ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
+        JOIN platform.ntd_structural_units su
+            ON su.structural_unit_id = ANY(cc.structural_unit_ids)
+            AND su.corpus_object_id = c.corpus_object_id
+            AND su.version = 1
+        JOIN platform.ntd_graph_nodes gn
+            ON gn.canonical_entity_id = su.structural_unit_id
+            AND gn.version = 1
+        WHERE cc.contextual_chunk_id = ANY(CAST(:candidate_chunk_ids AS uuid[]))
+        AND c.corpus_object_id = ANY(CAST(:candidate_corpus_ids AS uuid[]))
+        """
+    )
+    result = connection.execute(
+        sql,
+        {
+            "candidate_chunk_ids": candidate_chunk_ids,
+            "candidate_corpus_ids": candidate_corpus_ids,
+        },
+    )
+    resolved_ids: set[uuid.UUID] = set()
+    for row in result:
+        resolved_ids.add(uuid.UUID(str(row[0])))
+    return tuple(sorted(resolved_ids, key=str))
+
+
 def _load_dense_candidates(
     connection: Connection,
     profile: _Profile,
@@ -408,7 +463,8 @@ def _load_dense_candidates(
         JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
         WHERE e.embedding_profile_id = :embedding_profile_id
           AND cc.chunk_profile_id = :chunk_profile_id
-          AND (:corpus_object_id IS NULL OR c.corpus_object_id = :corpus_object_id)
+          AND (CAST(:corpus_object_id AS uuid) IS NULL
+               OR c.corpus_object_id = CAST(:corpus_object_id AS uuid))
         ORDER BY rank ASC
         LIMIT :limit
         """
