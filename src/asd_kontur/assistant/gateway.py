@@ -52,8 +52,24 @@ PLATFORM_CONSULTANT_TOOLS = frozenset(
 class ProfessionalAssistantKnowledgeQuery:
     """Consultant-only allowlisted reads; the model never receives SQL access."""
 
-    def __init__(self, engine: Engine) -> None:
+    def __init__(
+        self,
+        engine: Engine,
+        *,
+        production_embedding_endpoint: str | None = None,
+    ) -> None:
         self._engine = engine
+        if production_embedding_endpoint is not None:
+            if (
+                not isinstance(production_embedding_endpoint, str)
+                or production_embedding_endpoint == ""
+                or not (
+                    production_embedding_endpoint.startswith("http://127.0.0.1:")
+                    or production_embedding_endpoint.startswith("http://localhost:")
+                )
+            ):
+                raise ValueError("assistant_production_embedding_endpoint_invalid")
+        self._production_embedding_endpoint = production_embedding_endpoint
 
     def memory_fingerprint(self) -> str:
         with self._engine.connect() as connection:
@@ -643,9 +659,93 @@ class ProfessionalAssistantKnowledgeQuery:
             )
         return [self._ntd_document_item(row) for row in rows]
 
+    def _production_ntd_content(
+        self, query: str, limit: int, document_id: UUID | None
+    ) -> list[dict[str, Any]] | None:
+        if self._production_embedding_endpoint is None:
+            return None
+
+        from asd_kontur.assistant.production_ntd_evidence import production_hit_to_ntd_page_item
+        from asd_kontur.ntd.production_query import query_production_ntd
+
+        with self._engine.connect() as connection:
+            hits = query_production_ntd(
+                connection,
+                self._production_embedding_endpoint,
+                query,
+                limit,
+            )
+
+            if document_id is not None:
+                scope_rows = connection.execute(
+                    sa.text(
+                        "SELECT corpus_object_id FROM platform.ntd_corpus_objects "
+                        "WHERE corpus_object_id = :id "
+                        "UNION "
+                        "SELECT corpus_object_id FROM platform.ntd_search_documents "
+                        "WHERE search_document_id = :id AND corpus_object_id IS NOT NULL"
+                    ),
+                    {"id": document_id},
+                ).mappings()
+                allowed_ids = {UUID(str(row["corpus_object_id"])) for row in scope_rows}
+                if not allowed_ids:
+                    return []
+                hits = tuple(h for h in hits if h.corpus_object_id in allowed_ids)
+
+            if not hits:
+                return []
+
+            hit_ids = [h.corpus_object_id for h in hits]
+            meta_rows = connection.execute(
+                sa.text(
+                    "SELECT corpus_object_id, source_version_id, normative_edition_id "
+                    "FROM platform.ntd_corpus_objects "
+                    "WHERE corpus_object_id = ANY(CAST(:ids AS uuid[]))"
+                ),
+                {"ids": hit_ids},
+            ).mappings()
+            meta_map: dict[UUID, dict[str, Any]] = {
+                UUID(str(row["corpus_object_id"])): dict(row) for row in meta_rows
+            }
+
+            results: list[dict[str, Any]] = []
+            for hit in hits:
+                meta = meta_map.get(hit.corpus_object_id)
+                if meta is None:
+                    raise ValueError("assistant_production_hit_metadata_missing")
+
+                source_version_id = (
+                    UUID(str(meta["source_version_id"]))
+                    if meta["source_version_id"] is not None
+                    else None
+                )
+                normative_edition_id = (
+                    UUID(str(meta["normative_edition_id"]))
+                    if meta["normative_edition_id"] is not None
+                    else None
+                )
+                if source_version_id is not None:
+                    href = f"/api/v1/platform/sources/{source_version_id}/content"
+                else:
+                    href = ""
+
+                results.append(
+                    production_hit_to_ntd_page_item(
+                        hit,
+                        source_version_id=source_version_id,
+                        normative_edition_id=normative_edition_id,
+                        source_access_href=href,
+                    )
+                )
+
+            return results
+
     def _search_ntd_content(
         self, query: str, limit: int, document_id: UUID | None = None
     ) -> list[dict[str, Any]]:
+        result = self._production_ntd_content(query, limit, document_id)
+        if result is not None:
+            return result
         search_query = _search_query(query)
         with self._engine.connect() as connection:
             rows = list(

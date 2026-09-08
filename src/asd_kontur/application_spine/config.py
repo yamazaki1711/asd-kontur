@@ -48,6 +48,7 @@ class SpineSettings:
     qwen_model_path: Path = Path("/Users/oleg/mlx/models/Qwen3.8-27B-MLX-8bit")
     qwen_bind_host: str = "127.0.0.1"
     qwen_bind_port: int = 8790
+    ntd_embedding_endpoint: str | None = None
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -126,6 +127,7 @@ class SpineSettings:
             ),
             qwen_bind_host=os.environ.get("ASD_QWEN_BIND_HOST", "127.0.0.1"),
             qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
+            ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
         )
 
 

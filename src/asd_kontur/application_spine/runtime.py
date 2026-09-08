@@ -112,7 +112,10 @@ def main(argv: list[str] | None = None) -> int:
         knowledge_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         instance = AssistantWorker(
             AssistantRepository(engine),
-            ProfessionalAssistantKnowledgeQuery(knowledge_engine),
+            ProfessionalAssistantKnowledgeQuery(
+                knowledge_engine,
+                production_embedding_endpoint=settings.ntd_embedding_endpoint,
+            ),
             identity=args.identity,
             qwen_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
         )

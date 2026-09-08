@@ -127,7 +127,10 @@ class ApplicationContainer:
         self.assistant = ProfessionalAssistantService(
             self.repository,
             assistant_repository,
-            ProfessionalAssistantKnowledgeQuery(engine),
+            ProfessionalAssistantKnowledgeQuery(
+                engine,
+                production_embedding_endpoint=settings.ntd_embedding_endpoint,
+            ),
         )
         self.reset_service = WorkspaceResetService(
             repository=self.repository,
