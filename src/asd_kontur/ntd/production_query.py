@@ -550,6 +550,83 @@ def _graph_node_contextual_chunk_ids(
     return tuple(uuid.UUID(str(row[0])) for row in result)
 
 
+def _load_graph_candidates(
+    connection: Connection,
+    contextual_chunk_ids: tuple[uuid.UUID, ...],
+    corpus_object_id: uuid.UUID | None,
+) -> tuple[_FusedCandidate, ...]:
+    if not contextual_chunk_ids:
+        return ()
+
+    for chunk_id in contextual_chunk_ids:
+        if not isinstance(chunk_id, uuid.UUID):
+            raise ValueError("ntd_production_graph_invalid_contextual_chunk_id")
+
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_graph_invalid_corpus_object_id_type")
+
+    chunk_id_strings = [str(chunk_id) for chunk_id in contextual_chunk_ids]
+    sql = sa.text(
+        """
+        SELECT c.corpus_object_id, cc.contextual_chunk_id
+        FROM platform.ntd_contextual_chunks cc
+        JOIN platform.ntd_chunks c
+            ON cc.chunk_id = c.chunk_id
+            AND cc.chunk_version = c.version
+        WHERE cc.contextual_chunk_id = ANY(CAST(:contextual_chunk_ids AS uuid[]))
+            AND (CAST(:corpus_object_id AS uuid) IS NULL
+                 OR c.corpus_object_id = CAST(:corpus_object_id AS uuid))
+        ORDER BY cc.contextual_chunk_id ASC
+        """
+    )
+    params: dict[str, object] = {
+        "contextual_chunk_ids": chunk_id_strings,
+        "corpus_object_id": str(corpus_object_id) if corpus_object_id is not None else None,
+    }
+    result = connection.execute(sql, params)
+    return tuple(
+        _FusedCandidate(
+            corpus_object_id=uuid.UUID(str(row[0])),
+            contextual_chunk_id=uuid.UUID(str(row[1])),
+            lexical_rank=None,
+            lexical_score=None,
+            dense_rank=None,
+            dense_similarity=None,
+            fused_score=0.0,
+            ranking_reasons=("graph_expansion",),
+        )
+        for row in result
+    )
+
+
+def _expand_graph_candidates(
+    connection: Connection,
+    seed_candidates: tuple[_FusedCandidate, ...],
+    profile: _Profile,
+    corpus_object_id: uuid.UUID | None,
+    limit: int,
+) -> tuple[_FusedCandidate, ...]:
+    if not seed_candidates:
+        return ()
+
+    if isinstance(limit, bool) or not isinstance(limit, int) or not (1 <= limit <= 50):
+        raise ValueError("ntd_production_graph_expansion_invalid_limit")
+
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_graph_invalid_corpus_object_id_type")
+
+    seed_candidates_subset = seed_candidates[: profile.reranker_top_n]
+    seed_node_ids = _resolve_graph_node_ids(connection, seed_candidates_subset, corpus_object_id)
+    graph_node_ids = _expand_graph_node_ids(connection, seed_node_ids, profile.graph_max_depth)
+    contextual_chunk_ids = _graph_node_contextual_chunk_ids(
+        connection, graph_node_ids, profile, corpus_object_id, limit
+    )
+    loaded_candidates = _load_graph_candidates(connection, contextual_chunk_ids, corpus_object_id)
+    seed_chunk_ids = {c.contextual_chunk_id for c in seed_candidates}
+    expanded = [c for c in loaded_candidates if c.contextual_chunk_id not in seed_chunk_ids]
+    return tuple(expanded[:limit])
+
+
 def _load_dense_candidates(
     connection: Connection,
     profile: _Profile,
@@ -747,6 +824,11 @@ def query_production_candidates(
         if _normalized_relevance(c.lexical_score, c.dense_similarity) >= profile.min_relevance
     )
 
+    if not filtered:
+        return ()
+
+    base_limit = limit - 1 if limit > 1 else limit
+
     groups: dict[uuid.UUID, list[_FusedCandidate]] = {}
     for candidate in filtered:
         groups.setdefault(candidate.corpus_object_id, []).append(candidate)
@@ -762,13 +844,27 @@ def query_production_candidates(
     sorted_groups = sorted(groups.items(), key=_doc_sort_key)
 
     result: list[_FusedCandidate] = []
-    while len(result) < limit and any(groups.values()):
+    while len(result) < base_limit and any(groups.values()):
         for _corpus_id, candidates in sorted_groups:
             if not candidates:
                 continue
             result.append(candidates.pop(0))
-            if len(result) >= limit:
+            if len(result) >= base_limit:
                 break
+
+    if limit > 1:
+        graph_candidates = _expand_graph_candidates(
+            connection, filtered, profile, corpus_object_id, min(8, limit)
+        )
+        if graph_candidates:
+            selected_chunk_ids = {c.contextual_chunk_id for c in result}
+            for graph_candidate in graph_candidates:
+                if (
+                    graph_candidate.contextual_chunk_id not in selected_chunk_ids
+                    and len(result) < limit
+                ):
+                    result.append(graph_candidate)
+                    break
 
     return tuple(result)
 
