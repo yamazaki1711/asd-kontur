@@ -427,6 +427,129 @@ def _resolve_graph_node_ids(
     return tuple(sorted(resolved_ids, key=str))
 
 
+def _expand_graph_node_ids(
+    connection: Connection,
+    seed_node_ids: tuple[uuid.UUID, ...],
+    max_depth: int,
+) -> tuple[uuid.UUID, ...]:
+    if not all(isinstance(sid, uuid.UUID) for sid in seed_node_ids):
+        raise ValueError("ntd_production_graph_invalid_seed_node_id")
+    if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not (1 <= max_depth <= 4):
+        raise ValueError("ntd_production_graph_invalid_max_depth")
+    if not seed_node_ids:
+        return ()
+
+    seed_list = [str(sid) for sid in seed_node_ids]
+
+    sql = sa.text("""
+        WITH RECURSIVE graph_walk AS (
+            SELECT
+                sn.graph_node_id AS node_id,
+                0 AS depth,
+                ARRAY[sn.graph_node_id] AS path
+            FROM platform.ntd_graph_nodes sn
+            WHERE sn.graph_node_id = ANY(CAST(:seed_node_ids AS uuid[]))
+              AND sn.version = 1
+
+            UNION ALL
+
+            SELECT
+                CASE
+                    WHEN gn.source_graph_node_id = gw.node_id THEN gn.target_graph_node_id
+                    ELSE gn.source_graph_node_id
+                END AS node_id,
+                gw.depth + 1 AS depth,
+                gw.path || (
+                    CASE
+                        WHEN gn.source_graph_node_id = gw.node_id THEN gn.target_graph_node_id
+                        ELSE gn.source_graph_node_id
+                    END
+                ) AS path
+            FROM graph_walk gw
+            JOIN platform.ntd_graph_edges gn
+                ON gn.source_graph_node_id = gw.node_id
+                OR gn.target_graph_node_id = gw.node_id
+            JOIN platform.ntd_graph_nodes n
+                ON n.graph_node_id = (
+                    CASE
+                        WHEN gn.source_graph_node_id = gw.node_id THEN gn.target_graph_node_id
+                        ELSE gn.source_graph_node_id
+                    END
+                )
+                AND n.version = 1
+            WHERE gw.depth < :max_depth
+              AND NOT (
+                    CASE
+                        WHEN gn.source_graph_node_id = gw.node_id THEN gn.target_graph_node_id
+                        ELSE gn.source_graph_node_id
+                    END
+                ) = ANY(gw.path)
+        )
+        SELECT DISTINCT node_id
+        FROM graph_walk
+    """)
+
+    result = connection.execute(sql, {"seed_node_ids": seed_list, "max_depth": max_depth})
+    rows = result.fetchall()
+    node_ids = [row[0] for row in rows]
+    return tuple(sorted(node_ids, key=str))
+
+
+def _graph_node_contextual_chunk_ids(
+    connection: Connection,
+    graph_node_ids: tuple[uuid.UUID, ...],
+    profile: _Profile,
+    corpus_object_id: uuid.UUID | None,
+    limit: int,
+) -> tuple[uuid.UUID, ...]:
+    if not graph_node_ids:
+        return ()
+
+    for node_id in graph_node_ids:
+        if not isinstance(node_id, uuid.UUID):
+            raise ValueError("ntd_production_graph_invalid_node_id")
+
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_graph_invalid_corpus_object_id_type")
+
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > 200:
+        raise ValueError("ntd_production_graph_invalid_limit")
+
+    node_id_strings = [str(node_id) for node_id in graph_node_ids]
+
+    sql = sa.text(
+        """
+        SELECT DISTINCT cc.contextual_chunk_id
+        FROM platform.ntd_graph_nodes gn
+        JOIN platform.ntd_structural_units su
+            ON gn.canonical_entity_id = su.structural_unit_id
+            AND su.version = 1
+        JOIN platform.ntd_contextual_chunks cc
+            ON su.structural_unit_id = ANY(cc.structural_unit_ids)
+        JOIN platform.ntd_chunks c
+            ON cc.chunk_id = c.chunk_id
+            AND cc.chunk_version = c.version
+        WHERE gn.version = 1
+            AND gn.graph_node_id = ANY(CAST(:graph_node_ids AS uuid[]))
+            AND cc.chunk_profile_id = :chunk_profile_id
+            AND (CAST(:corpus_object_id AS uuid) IS NULL
+                 OR c.corpus_object_id = CAST(:corpus_object_id AS uuid))
+        ORDER BY cc.contextual_chunk_id ASC
+        LIMIT :limit
+        """
+    )
+
+    params: dict[str, object] = {
+        "graph_node_ids": node_id_strings,
+        "chunk_profile_id": profile.chunk_profile_id,
+        "corpus_object_id": str(corpus_object_id) if corpus_object_id is not None else None,
+        "limit": limit,
+    }
+
+    result = connection.execute(sql, params)
+    return tuple(uuid.UUID(str(row[0])) for row in result)
+
+
 def _load_dense_candidates(
     connection: Connection,
     profile: _Profile,
