@@ -37,6 +37,9 @@ class _Profile:
     embedding: EmbeddingProfile
     chunk_profile_id: uuid.UUID
     min_relevance: float
+    reranker_profile_id: uuid.UUID
+    graph_max_depth: int
+    reranker_top_n: int
 
 
 def _load_profile(connection: Connection) -> _Profile:
@@ -46,6 +49,7 @@ def _load_profile(connection: Connection) -> _Profile:
             rp.retrieval_profile_id,
             rp.embedding_profile_id,
             rp.chunk_profile_id,
+            rp.reranker_profile_id,
             ep.profile_key,
             ep.profile_version,
             ep.dimension,
@@ -79,6 +83,11 @@ def _load_profile(connection: Connection) -> _Profile:
     except (ValueError, TypeError) as e:
         raise ValueError("ntd_production_retrieval_invalid_chunk_profile_id") from e
 
+    try:
+        reranker_profile_id = uuid.UUID(str(row["reranker_profile_id"]))
+    except (ValueError, TypeError) as e:
+        raise ValueError("ntd_production_retrieval_invalid_reranker_profile_id") from e
+
     profile_key = row["profile_key"]
     if not isinstance(profile_key, str) or not profile_key:
         raise ValueError("ntd_production_retrieval_invalid_profile_key")
@@ -108,6 +117,28 @@ def _load_profile(connection: Connection) -> _Profile:
     if not (0 <= min_relevance <= 1):
         raise ValueError("ntd_production_retrieval_invalid_min_relevance_range")
 
+    graph_params = parameters.get("graph")
+    if not isinstance(graph_params, dict):
+        raise ValueError("ntd_production_retrieval_invalid_graph_max_depth")
+    graph_max_depth = graph_params.get("max_depth")
+    if (
+        not isinstance(graph_max_depth, int)
+        or isinstance(graph_max_depth, bool)
+        or graph_max_depth <= 0
+    ):
+        raise ValueError("ntd_production_retrieval_invalid_graph_max_depth")
+
+    reranker_params = parameters.get("reranker")
+    if not isinstance(reranker_params, dict):
+        raise ValueError("ntd_production_retrieval_invalid_reranker_top_n")
+    reranker_top_n = reranker_params.get("top_n")
+    if (
+        not isinstance(reranker_top_n, int)
+        or isinstance(reranker_top_n, bool)
+        or reranker_top_n <= 0
+    ):
+        raise ValueError("ntd_production_retrieval_invalid_reranker_top_n")
+
     embedding = EmbeddingProfile(
         key=profile_key,
         version=profile_version,
@@ -121,6 +152,9 @@ def _load_profile(connection: Connection) -> _Profile:
         embedding=embedding,
         chunk_profile_id=chunk_profile_id,
         min_relevance=float(min_relevance),
+        reranker_profile_id=reranker_profile_id,
+        graph_max_depth=graph_max_depth,
+        reranker_top_n=reranker_top_n,
     )
 
 
@@ -275,11 +309,14 @@ def _load_lexical_candidates(
     profile: _Profile,
     query: str,
     candidate_limit: int,
+    corpus_object_id: uuid.UUID | None = None,
 ) -> tuple[_LexicalCandidate, ...]:
     if not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool):
         raise ValueError("ntd_production_lexical_invalid_candidate_limit_type")
     if not (1 <= candidate_limit <= 200):
         raise ValueError("ntd_production_lexical_invalid_candidate_limit_range")
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_lexical_invalid_corpus_object_id_type")
 
     sql = sa.text(
         """
@@ -296,6 +333,7 @@ def _load_lexical_candidates(
         JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
         WHERE cc.chunk_profile_id = :chunk_profile_id
           AND cc.lexical_vector @@ websearch_to_tsquery('russian', :query)
+          AND (:corpus_object_id IS NULL OR c.corpus_object_id = :corpus_object_id)
         ORDER BY rank ASC
         LIMIT :limit
         """
@@ -308,6 +346,7 @@ def _load_lexical_candidates(
                 "query": query,
                 "chunk_profile_id": profile.chunk_profile_id,
                 "limit": candidate_limit,
+                "corpus_object_id": corpus_object_id,
             },
         )
         .mappings()
@@ -338,6 +377,7 @@ def _load_dense_candidates(
     profile: _Profile,
     query_vector: tuple[float, ...],
     candidate_limit: int,
+    corpus_object_id: uuid.UUID | None = None,
 ) -> tuple[_DenseCandidate, ...]:
     if not isinstance(candidate_limit, int) or isinstance(candidate_limit, bool):
         raise ValueError("ntd_production_dense_invalid_candidate_limit_type")
@@ -345,6 +385,8 @@ def _load_dense_candidates(
         raise ValueError("ntd_production_dense_invalid_candidate_limit_range")
     if len(query_vector) != profile.embedding.dimension:
         raise ValueError("ntd_production_dense_invalid_query_vector_dimension")
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_dense_invalid_corpus_object_id_type")
 
     vector_literal = _vector_literal(query_vector)
 
@@ -366,6 +408,7 @@ def _load_dense_candidates(
         JOIN platform.ntd_chunks c ON cc.chunk_id = c.chunk_id AND cc.chunk_version = c.version
         WHERE e.embedding_profile_id = :embedding_profile_id
           AND cc.chunk_profile_id = :chunk_profile_id
+          AND (:corpus_object_id IS NULL OR c.corpus_object_id = :corpus_object_id)
         ORDER BY rank ASC
         LIMIT :limit
         """
@@ -378,6 +421,7 @@ def _load_dense_candidates(
                 "query_vector": vector_literal,
                 "embedding_profile_id": profile.embedding_profile_id,
                 "chunk_profile_id": profile.chunk_profile_id,
+                "corpus_object_id": corpus_object_id,
                 "limit": candidate_limit,
             },
         )
@@ -493,19 +537,30 @@ def query_production_candidates(
     query: str,
     query_vector: tuple[float, ...],
     limit: int = 8,
+    *,
+    corpus_object_id: uuid.UUID | None = None,
 ) -> tuple[_FusedCandidate, ...]:
+    if corpus_object_id is not None and not isinstance(corpus_object_id, uuid.UUID):
+        raise ValueError("ntd_production_candidates_invalid_corpus_object_id_type")
+
     _validate_query(query, limit)
     profile = _load_profile(connection)
-    exact_designation = _extract_ntd_designation(query)
-    exact_corpus_object_ids = _resolve_exact_corpus_object_ids(connection, exact_designation)
-    if exact_corpus_object_ids:
-        return _load_exact_designation_candidates(
-            connection, profile, exact_corpus_object_ids, limit
-        )
+
+    if corpus_object_id is None:
+        exact_designation = _extract_ntd_designation(query)
+        exact_corpus_object_ids = _resolve_exact_corpus_object_ids(connection, exact_designation)
+        if exact_corpus_object_ids:
+            return _load_exact_designation_candidates(
+                connection, profile, exact_corpus_object_ids, limit
+            )
 
     candidate_limit = min(200, max(limit * 5, limit))
-    lexical = _load_lexical_candidates(connection, profile, query, candidate_limit)
-    dense = _load_dense_candidates(connection, profile, query_vector, candidate_limit)
+    lexical = _load_lexical_candidates(
+        connection, profile, query, candidate_limit, corpus_object_id
+    )
+    dense = _load_dense_candidates(
+        connection, profile, query_vector, candidate_limit, corpus_object_id
+    )
     fused = _reciprocal_rank_fusion(lexical, dense, 60)
     filtered = tuple(
         c
@@ -607,9 +662,13 @@ def query_production_ntd(
     embedding_endpoint: str,
     query: str,
     limit: int = 8,
+    *,
+    corpus_object_id: uuid.UUID | None = None,
 ) -> tuple[ProductionRetrievalHit, ...]:
     _validate_query(query, limit)
     profile = _load_profile(connection)
     query_vector = embed_query(embedding_endpoint, profile.embedding, query)
-    candidates = query_production_candidates(connection, query, query_vector, limit)
+    candidates = query_production_candidates(
+        connection, query, query_vector, limit, corpus_object_id=corpus_object_id
+    )
     return _load_production_hits(connection, candidates)

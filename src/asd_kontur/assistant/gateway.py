@@ -669,28 +669,32 @@ class ProfessionalAssistantKnowledgeQuery:
         from asd_kontur.ntd.production_query import query_production_ntd
 
         with self._engine.connect() as connection:
+            resolved_scope: UUID | None = None
+            if document_id is not None:
+                scope_rows = connection.execute(
+                    sa.text(
+                        "SELECT DISTINCT corpus_object_id FROM platform.ntd_corpus_objects "
+                        "WHERE corpus_object_id = :id "
+                        "UNION "
+                        "SELECT DISTINCT corpus_object_id FROM platform.ntd_search_documents "
+                        "WHERE search_document_id = :id AND corpus_object_id IS NOT NULL"
+                    ),
+                    {"id": document_id},
+                ).mappings()
+                scope_ids = [UUID(str(row["corpus_object_id"])) for row in scope_rows]
+                if not scope_ids:
+                    return []
+                if len(scope_ids) > 1:
+                    raise ValueError("assistant_production_document_scope_ambiguous")
+                resolved_scope = scope_ids[0]
+
             hits = query_production_ntd(
                 connection,
                 self._production_embedding_endpoint,
                 query,
                 limit,
+                corpus_object_id=resolved_scope,
             )
-
-            if document_id is not None:
-                scope_rows = connection.execute(
-                    sa.text(
-                        "SELECT corpus_object_id FROM platform.ntd_corpus_objects "
-                        "WHERE corpus_object_id = :id "
-                        "UNION "
-                        "SELECT corpus_object_id FROM platform.ntd_search_documents "
-                        "WHERE search_document_id = :id AND corpus_object_id IS NOT NULL"
-                    ),
-                    {"id": document_id},
-                ).mappings()
-                allowed_ids = {UUID(str(row["corpus_object_id"])) for row in scope_rows}
-                if not allowed_ids:
-                    return []
-                hits = tuple(h for h in hits if h.corpus_object_id in allowed_ids)
 
             if not hits:
                 return []
