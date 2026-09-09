@@ -20,12 +20,20 @@ test("live platform construction consultant answers and restores a durable dialo
     page.getByRole("heading", { name: "Строительный консультант" }),
   ).toBeVisible();
   const question =
-    "Что проверяют при входном контроле строительных материалов?";
+    process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1"
+      ? "Какие требования к уходу за бетоном?"
+      : "Что проверяют при входном контроле строительных материалов?";
   await page.getByLabel("Ваш вопрос").fill(question);
   await page.getByRole("button", { name: "Отправить вопрос" }).click();
   const answer = page.locator(".construction-consultant-message-assistant");
   await expect(answer).toBeVisible({ timeout: 120_000 });
   await expect(answer).not.toHaveText("");
+  if (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1") {
+    const sources = answer.locator(".construction-consultant-sources");
+    await expect(sources).toBeVisible();
+    await sources.locator("summary").click();
+    await expect(sources.getByRole("link").first()).toBeVisible();
+  }
   await page.reload();
   await expect(
     page

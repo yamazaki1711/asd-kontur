@@ -257,6 +257,7 @@ def main() -> None:
             bind_port=int(os.environ.get("ASD_E2E_PORT", "4173")),
             job_lease_seconds=5,
             frontend_dist=repository / "frontend" / "dist",
+            ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
         )
         app_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         if os.environ.get("ASD_E2E_SEED_ACTIVE_RULE") == "1":
