@@ -241,6 +241,7 @@ class ConstructionConsultantConversationView(ApiModel):
 class ConstructionConsultantMessageView(ApiModel):
     message_id: UUID
     conversation_id: UUID
+    request_id: UUID | None
     ordinal: int
     role: Literal["user", "assistant"]
     content: str
@@ -248,6 +249,17 @@ class ConstructionConsultantMessageView(ApiModel):
     model_identity: str | None
     model_profile_version: str | None
     created_at: datetime
+
+
+class ConstructionConsultantQuestionRequest(ApiModel):
+    request_id: UUID
+    question: str = Field(min_length=2, max_length=8000)
+
+
+class ConstructionConsultantAnswerView(ApiModel):
+    user_message: ConstructionConsultantMessageView
+    assistant_message: ConstructionConsultantMessageView
+    evidence_statuses: list[str]
 
 
 class PilotResultView(ApiModel):

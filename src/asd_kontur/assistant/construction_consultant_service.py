@@ -15,6 +15,9 @@ class ConstructionConsultantService:
     def _organization_id(self, owner_identity_id: str) -> UUID:
         return uuid5(OWNER_ORGANIZATION_NAMESPACE, owner_identity_id)
 
+    def organization_id(self, owner_identity_id: str) -> UUID:
+        return self._organization_id(owner_identity_id)
+
     def create_conversation(
         self, owner_identity_id: str, title: str | None
     ) -> ConstructionConsultantConversation:

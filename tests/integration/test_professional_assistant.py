@@ -334,6 +334,101 @@ def test_platform_history_owner_isolation_and_no_workspace_fields(
         assert msg_resp_b.status_code == 404
 
 
+def test_platform_consultant_question_is_persisted_idempotently_and_isolated(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        engine=postgres_environment.application_engine,
+        settings=_settings(postgres_environment, tmp_path),
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="consultant-owner-a",
+        password="Consultant-Owner-A-42!",
+        display_name="Consultant owner A",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="consultant-owner-b",
+        password="Consultant-Owner-B-42!",
+        display_name="Consultant owner B",
+    )
+
+    class StubConstructionModel:
+        calls = 0
+
+        def complete(self, prompt: str) -> str:
+            assert "Вопрос: Что проверяют при входном контроле?" in prompt
+            self.calls += 1
+            return "Проверяют документы качества, маркировку и соответствие поставке."
+
+    model = StubConstructionModel()
+    app.state.container.construction_consultant_questions._model = model
+
+    with TestClient(app) as client:
+        assert (
+            client.post(
+                "/api/v1/session/login",
+                json={"username": "consultant-owner-a", "password": "Consultant-Owner-A-42!"},
+            ).status_code
+            == 200
+        )
+        csrf_a = _csrf(client)
+        created = client.post(
+            "/api/v1/construction-consultant/conversations",
+            json={"title": "Входной контроль"},
+            headers=csrf_a,
+        )
+        assert created.status_code == 201
+        conversation_id = created.json()["conversation_id"]
+        request_id = str(uuid4())
+        body = {"request_id": request_id, "question": "Что проверяют при входном контроле?"}
+
+        answer = client.post(
+            f"/api/v1/construction-consultant/conversations/{conversation_id}/questions",
+            json=body,
+            headers=csrf_a,
+        )
+        assert answer.status_code == 200, answer.text
+        payload = answer.json()
+        assert payload["user_message"]["role"] == "user"
+        assert payload["assistant_message"]["role"] == "assistant"
+        assert payload["user_message"]["request_id"] == request_id
+        assert payload["assistant_message"]["request_id"] == request_id
+        assert model.calls == 1
+
+        repeated = client.post(
+            f"/api/v1/construction-consultant/conversations/{conversation_id}/questions",
+            json=body,
+            headers=csrf_a,
+        )
+        assert repeated.status_code == 200, repeated.text
+        assert (
+            repeated.json()["assistant_message"]["message_id"]
+            == payload["assistant_message"]["message_id"]
+        )
+        assert model.calls == 1
+        messages = client.get(
+            f"/api/v1/construction-consultant/conversations/{conversation_id}/messages"
+        )
+        assert messages.status_code == 200
+        assert [item["role"] for item in messages.json()] == ["user", "assistant"]
+
+        assert client.post("/api/v1/session/logout", headers=csrf_a).status_code == 204
+        assert (
+            client.post(
+                "/api/v1/session/login",
+                json={"username": "consultant-owner-b", "password": "Consultant-Owner-B-42!"},
+            ).status_code
+            == 200
+        )
+        forbidden = client.post(
+            f"/api/v1/construction-consultant/conversations/{conversation_id}/questions",
+            json={"request_id": str(uuid4()), "question": "Чужой вопрос"},
+            headers=_csrf(client),
+        )
+        assert forbidden.status_code == 404
+
+
 def test_worker_outage_is_a_typed_terminal_outcome(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,

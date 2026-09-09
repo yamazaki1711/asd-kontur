@@ -32,9 +32,17 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import Engine
 
+from asd_kontur.assistant.construction_consultant_evidence import (
+    ConstructionConsultantEvidenceCollector,
+)
 from asd_kontur.assistant.construction_consultant_postgres import (
     ConstructionConsultantPersistenceError,
     ConstructionConsultantRepository,
+)
+from asd_kontur.assistant.construction_consultant_questions import (
+    ConstructionConsultantQuestionError,
+    ConstructionConsultantQuestionService,
+    LocalQwenConstructionConsultantModel,
 )
 from asd_kontur.assistant.construction_consultant_service import ConstructionConsultantService
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
@@ -62,9 +70,11 @@ from .schemas import (
     AssistantQuestionRequest,
     AssistantTurnView,
     CapabilityStatusView,
+    ConstructionConsultantAnswerView,
     ConstructionConsultantConversationCreate,
     ConstructionConsultantConversationView,
     ConstructionConsultantMessageView,
+    ConstructionConsultantQuestionRequest,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
@@ -140,8 +150,19 @@ class ApplicationContainer:
                 production_embedding_endpoint=settings.ntd_embedding_endpoint,
             ),
         )
-        self.construction_consultant = ConstructionConsultantService(
-            ConstructionConsultantRepository(engine)
+        construction_repository = ConstructionConsultantRepository(engine)
+        self.construction_consultant = ConstructionConsultantService(construction_repository)
+        construction_knowledge = ProfessionalAssistantKnowledgeQuery(
+            engine,
+            production_embedding_endpoint=settings.ntd_embedding_endpoint,
+        )
+        self.construction_consultant_questions = ConstructionConsultantQuestionService(
+            self.construction_consultant,
+            construction_repository,
+            ConstructionConsultantEvidenceCollector(construction_knowledge),
+            LocalQwenConstructionConsultantModel(
+                f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate"
+            ),
         )
         self.reset_service = WorkspaceResetService(
             repository=self.repository,
@@ -239,6 +260,13 @@ def _install_middleware(app: FastAPI) -> None:
         request: Request, exc: ConstructionConsultantPersistenceError
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(ConstructionConsultantQuestionError)
+    async def construction_consultant_question_error(
+        request: Request, exc: ConstructionConsultantQuestionError
+    ) -> JSONResponse:
+        status_code = 503 if "inference" in exc.code else 409
         return _error(request, exc.code, status_code)
 
     @app.exception_handler(ValueError)
@@ -1170,6 +1198,33 @@ def _api_router() -> APIRouter:
         return [
             ConstructionConsultantMessageView(**jsonable_encoder(asdict(item))) for item in items
         ]
+
+    @router.post(
+        "/construction-consultant/conversations/{conversation_id}/questions",
+        response_model=ConstructionConsultantAnswerView,
+        tags=["construction-consultant"],
+    )
+    def ask_construction_consultant(
+        request: Request,
+        conversation_id: UUID,
+        body: ConstructionConsultantQuestionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ConstructionConsultantAnswerView:
+        answer = _container(request).construction_consultant_questions.ask(
+            owner_identity_id=principal.owner_identity_id,
+            conversation_id=conversation_id,
+            request_id=body.request_id,
+            question=body.question,
+        )
+        return ConstructionConsultantAnswerView(
+            user_message=ConstructionConsultantMessageView(
+                **jsonable_encoder(asdict(answer.user_message))
+            ),
+            assistant_message=ConstructionConsultantMessageView(
+                **jsonable_encoder(asdict(answer.assistant_message))
+            ),
+            evidence_statuses=list(answer.evidence_statuses),
+        )
 
     @router.post(
         "/workspaces/{workspace_id}/assistant/conversations",

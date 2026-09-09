@@ -34,6 +34,10 @@ type SupportProduction = components["schemas"]["SupportProductionView"];
 type PilotResult = components["schemas"]["PilotResultView"];
 type AssistantConversation = components["schemas"]["AssistantConversationView"];
 type AssistantMessage = components["schemas"]["AssistantMessageView"];
+type ConstructionConsultantConversation =
+  components["schemas"]["ConstructionConsultantConversationView"];
+type ConstructionConsultantMessage =
+  components["schemas"]["ConstructionConsultantMessageView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
 type ModeName = (typeof MODES)[number];
@@ -1039,7 +1043,239 @@ function ModeSelectionPage() {
           );
         })}
       </div>
+      <ConstructionConsultantPanel />
     </Page>
+  );
+}
+
+function ConstructionConsultantPanel() {
+  const queryClient = useQueryClient();
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    window.localStorage.getItem("asd-construction-consultant-conversation"),
+  );
+  const [question, setQuestion] = useState("");
+  const conversations = useQuery({
+    queryKey: ["construction-consultant-conversations"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/construction-consultant/conversations",
+      );
+      return requireData(data, error);
+    },
+  });
+  const effectiveConversationId =
+    conversationId ?? conversations.data?.[0]?.conversation_id ?? null;
+  const messages = useQuery({
+    queryKey: ["construction-consultant-messages", effectiveConversationId],
+    enabled: Boolean(effectiveConversationId),
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/construction-consultant/conversations/{conversation_id}/messages",
+        {
+          params: { path: { conversation_id: effectiveConversationId ?? "" } },
+        },
+      );
+      return requireData(data, error);
+    },
+  });
+  const createConversation = useMutation({
+    mutationFn: async (title: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/construction-consultant/conversations",
+        { body: { title } },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async (value) => {
+      setConversationId(value.conversation_id);
+      window.localStorage.setItem(
+        "asd-construction-consultant-conversation",
+        value.conversation_id,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-conversations"],
+      });
+    },
+  });
+  const ask = useMutation({
+    mutationFn: async ({
+      identity,
+      text,
+    }: {
+      identity: string;
+      text: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/construction-consultant/conversations/{conversation_id}/questions",
+        {
+          params: { path: { conversation_id: identity } },
+          body: { request_id: crypto.randomUUID(), question: text },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      setQuestion("");
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-messages", effectiveConversationId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-conversations"],
+      });
+    },
+  });
+  const submit = async () => {
+    const text = question.trim();
+    if (!text || ask.isPending) return;
+    let identity = effectiveConversationId;
+    if (!identity) {
+      const created = await createConversation.mutateAsync(text.slice(0, 120));
+      identity = created.conversation_id;
+    }
+    ask.mutate({ identity, text });
+  };
+  const values = (messages.data ?? []) as ConstructionConsultantMessage[];
+  return (
+    <section
+      className="construction-consultant"
+      aria-labelledby="construction-consultant-title"
+    >
+      <div className="construction-consultant-heading">
+        <div>
+          <p className="eyebrow">Общие профессиональные знания</p>
+          <h2 id="construction-consultant-title">Строительный консультант</h2>
+          <p>
+            Вопрос не привязан к объекту. Ответ опирается на методические и
+            нормативные материалы; инженерная оценка всегда обозначается
+            отдельно от подтверждённого факта.
+          </p>
+        </div>
+        <label>
+          Диалог
+          <select
+            value={effectiveConversationId ?? ""}
+            onChange={(event) => {
+              const next = event.target.value || null;
+              setConversationId(next);
+              if (next) {
+                window.localStorage.setItem(
+                  "asd-construction-consultant-conversation",
+                  next,
+                );
+              }
+            }}
+          >
+            <option value="">Новый диалог</option>
+            {(conversations.data ?? []).map(
+              (item: ConstructionConsultantConversation) => (
+                <option key={item.conversation_id} value={item.conversation_id}>
+                  {item.title}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+      </div>
+      <div className="construction-consultant-history" aria-live="polite">
+        {values.length === 0 ? (
+          <p className="construction-consultant-empty">
+            Например: «Как организовать входной контроль материалов?»
+          </p>
+        ) : (
+          values.map((message) => (
+            <article
+              className={`construction-consultant-message construction-consultant-message-${message.role}`}
+              key={message.message_id}
+            >
+              <strong>{message.role === "user" ? "Вы" : "Ответ"}</strong>
+              <div>{message.content}</div>
+              {message.sources.length > 0 ? (
+                <details className="construction-consultant-sources">
+                  <summary>Основания ответа ({message.sources.length})</summary>
+                  <ol>
+                    {message.sources.map((source, index) => {
+                      const href = displayValue(source.href, "");
+                      const title = displayValue(source.title, "Источник");
+                      return (
+                        <li
+                          key={`${displayValue(source.source_id)}-${String(index)}`}
+                        >
+                          {href ? (
+                            <a href={href} target="_blank" rel="noreferrer">
+                              {title}
+                            </a>
+                          ) : (
+                            <span>{title}</span>
+                          )}
+                          <small>
+                            {displayValue(source.locator, "Локатор не указан")}
+                          </small>
+                          {source.fragment ? (
+                            <blockquote>
+                              {displayValue(source.fragment)}
+                            </blockquote>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              ) : null}
+            </article>
+          ))
+        )}
+        {ask.isPending ? (
+          <p className="construction-consultant-pending">Формирую ответ…</p>
+        ) : null}
+        {ask.isError ? (
+          <p className="notice error-notice">
+            {ask.error instanceof Error
+              ? ask.error.message
+              : "Консультант временно недоступен."}
+          </p>
+        ) : null}
+      </div>
+      <div className="construction-consultant-composer">
+        <label htmlFor="construction-consultant-question">Ваш вопрос</label>
+        <textarea
+          id="construction-consultant-question"
+          rows={3}
+          value={question}
+          placeholder="Задайте общий вопрос по строительным работам, контролю или исполнительной документации"
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          disabled={ask.isPending || createConversation.isPending}
+        />
+        <div>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={
+              !question.trim() || ask.isPending || createConversation.isPending
+            }
+          >
+            Отправить вопрос
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setConversationId(null);
+              window.localStorage.removeItem(
+                "asd-construction-consultant-conversation",
+              );
+            }}
+          >
+            Новый диалог
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

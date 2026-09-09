@@ -6,6 +6,37 @@ import { resolve } from "node:path";
 const repository = resolve(import.meta.dirname, "../..");
 const statePath = process.env.ASD_E2E_STATE_PATH;
 
+test("live platform construction consultant answers and restores a durable dialog", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await page.getByLabel("Пользователь").fill("synthetic-live-owner");
+  await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Выберите режим работы" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Строительный консультант" }),
+  ).toBeVisible();
+  const question =
+    "Что проверяют при входном контроле строительных материалов?";
+  await page.getByLabel("Ваш вопрос").fill(question);
+  await page.getByRole("button", { name: "Отправить вопрос" }).click();
+  const answer = page.locator(".construction-consultant-message-assistant");
+  await expect(answer).toBeVisible({ timeout: 120_000 });
+  await expect(answer).not.toHaveText("");
+  await page.reload();
+  await expect(
+    page
+      .locator(".construction-consultant-message-user")
+      .getByText(question, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".construction-consultant-message-assistant"),
+  ).toHaveCount(1);
+});
+
 test("live Support ID package exposes finalized AOSR, register, and provenance", async ({
   page,
 }) => {

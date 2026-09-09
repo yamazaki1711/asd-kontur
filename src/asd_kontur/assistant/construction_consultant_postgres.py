@@ -31,6 +31,7 @@ class ConstructionConsultantConversation:
 class ConstructionConsultantMessage:
     message_id: UUID
     conversation_id: UUID
+    request_id: UUID | None
     ordinal: int
     role: str
     content: str
@@ -229,6 +230,7 @@ class ConstructionConsultantRepository:
         sources: tuple[dict[str, Any], ...] = (),
         model_identity: str | None = None,
         model_profile_version: str | None = None,
+        request_id: UUID | None = None,
     ) -> ConstructionConsultantMessage:
         if not owner_identity_id or not owner_identity_id.strip():
             raise ValueError("construction_consultant_owner_identity_invalid")
@@ -238,6 +240,8 @@ class ConstructionConsultantRepository:
             raise ValueError("construction_consultant_content_invalid")
         if not isinstance(sources, tuple) or not all(isinstance(s, dict) for s in sources):
             raise ValueError("construction_consultant_sources_invalid")
+        if request_id is not None and not isinstance(request_id, UUID):
+            raise ValueError("construction_consultant_request_id_invalid")
 
         with Session(self._engine) as session, session.begin():
             self._scope(session, organization_id)
@@ -307,6 +311,7 @@ class ConstructionConsultantRepository:
                         organization_id,
                         message_id,
                         conversation_id,
+                        request_id,
                         message_ordinal,
                         role,
                         content,
@@ -319,6 +324,7 @@ class ConstructionConsultantRepository:
                         :org_id,
                         :msg_id,
                         :conv_id,
+                        :request_id,
                         :ordinal,
                         :role,
                         :content,
@@ -333,6 +339,7 @@ class ConstructionConsultantRepository:
                     "org_id": organization_id,
                     "msg_id": message_id,
                     "conv_id": conversation_id,
+                    "request_id": request_id,
                     "ordinal": ordinal,
                     "role": role,
                     "content": content,
@@ -350,6 +357,7 @@ class ConstructionConsultantRepository:
                     SELECT
                         message_id,
                         conversation_id,
+                        request_id,
                         message_ordinal,
                         role,
                         content,
@@ -374,6 +382,7 @@ class ConstructionConsultantRepository:
             return ConstructionConsultantMessage(
                 message_id=msg_row["message_id"],
                 conversation_id=msg_row["conversation_id"],
+                request_id=msg_row["request_id"],
                 ordinal=int(msg_row["message_ordinal"]),
                 role=msg_row["role"],
                 content=msg_row["content"],
@@ -400,6 +409,7 @@ class ConstructionConsultantRepository:
                             organization_id,
                             message_id,
                             conversation_id,
+                            request_id,
                             message_ordinal,
                             role,
                             content,
@@ -425,6 +435,7 @@ class ConstructionConsultantRepository:
                 ConstructionConsultantMessage(
                     message_id=row["message_id"],
                     conversation_id=row["conversation_id"],
+                    request_id=row["request_id"],
                     ordinal=int(row["message_ordinal"]),
                     role=row["role"],
                     content=row["content"],
@@ -435,3 +446,48 @@ class ConstructionConsultantRepository:
                 )
                 for row in rows
             )
+
+    def messages_for_request(
+        self,
+        organization_id: UUID,
+        conversation_id: UUID,
+        owner_identity_id: str,
+        request_id: UUID,
+    ) -> tuple[ConstructionConsultantMessage, ...]:
+        self.get_conversation(organization_id, conversation_id, owner_identity_id)
+        with Session(self._engine) as session, session.begin():
+            self._scope(session, organization_id)
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT message_id, conversation_id, request_id, message_ordinal, role, "
+                        "content, sources, model_identity, model_profile_version, created_at "
+                        "FROM platform.construction_consultant_messages "
+                        "WHERE organization_id=:organization_id "
+                        "AND conversation_id=:conversation_id "
+                        "AND request_id=:request_id ORDER BY message_ordinal"
+                    ),
+                    {
+                        "organization_id": organization_id,
+                        "conversation_id": conversation_id,
+                        "request_id": request_id,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        return tuple(
+            ConstructionConsultantMessage(
+                message_id=row["message_id"],
+                conversation_id=row["conversation_id"],
+                request_id=row["request_id"],
+                ordinal=int(row["message_ordinal"]),
+                role=row["role"],
+                content=row["content"],
+                sources=tuple(row["sources"]),
+                model_identity=row["model_identity"],
+                model_profile_version=row["model_profile_version"],
+                created_at=row["created_at"],
+            )
+            for row in rows
+        )
