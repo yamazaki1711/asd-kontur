@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -8,6 +9,8 @@ from uuid import UUID
 import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
+
+from asd_kontur.application_spine.models import semantic_digest
 
 
 class ConstructionConsultantPersistenceError(RuntimeError):
@@ -165,3 +168,167 @@ class ConstructionConsultantRepository:
             created_at=row[2],
             message_count=row[3],
         )
+
+    def append_message(
+        self,
+        organization_id: UUID,
+        conversation_id: UUID,
+        owner_identity_id: str,
+        role: str,
+        content: str,
+        sources: tuple[dict[str, Any], ...] = (),
+        model_identity: str | None = None,
+        model_profile_version: str | None = None,
+    ) -> ConstructionConsultantMessage:
+        if not owner_identity_id or not owner_identity_id.strip():
+            raise ValueError("construction_consultant_owner_identity_invalid")
+        if role not in ("user", "assistant"):
+            raise ValueError("construction_consultant_role_invalid")
+        if not content or not content.strip():
+            raise ValueError("construction_consultant_content_invalid")
+        if not isinstance(sources, tuple) or not all(isinstance(s, dict) for s in sources):
+            raise ValueError("construction_consultant_sources_invalid")
+
+        with Session(self._engine) as session, session.begin():
+            self._scope(session, organization_id)
+
+            conv_row = (
+                session.execute(
+                    sa.text(
+                        """
+                    SELECT conversation_id
+                    FROM platform.construction_consultant_conversations
+                    WHERE organization_id = :org_id
+                      AND conversation_id = :conv_id
+                      AND created_by_identity_id = :owner_id
+                    FOR UPDATE
+                    """
+                    ),
+                    {
+                        "org_id": organization_id,
+                        "conv_id": conversation_id,
+                        "owner_id": owner_identity_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+
+            if conv_row is None:
+                raise ConstructionConsultantPersistenceError(
+                    "construction_consultant_conversation_not_found",
+                    "construction_consultant_conversation_not_found",
+                )
+
+            ordinal_row = session.execute(
+                sa.text(
+                    """
+                    SELECT COALESCE(MAX(message_ordinal), 0) + 1
+                    FROM platform.construction_consultant_messages
+                    WHERE organization_id = :org_id
+                      AND conversation_id = :conv_id
+                    """
+                ),
+                {
+                    "org_id": organization_id,
+                    "conv_id": conversation_id,
+                },
+            ).scalar_one()
+
+            ordinal = int(ordinal_row)
+
+            from asd_kontur.domain import uuid7
+
+            message_id = uuid7()
+
+            digest_input = {
+                "conversation_id": str(conversation_id),
+                "ordinal": ordinal,
+                "role": role,
+                "content": content,
+                "sources": sources,
+            }
+            content_digest = semantic_digest(digest_input)
+
+            session.execute(
+                sa.text(
+                    """
+                    INSERT INTO platform.construction_consultant_messages (
+                        organization_id,
+                        message_id,
+                        conversation_id,
+                        message_ordinal,
+                        role,
+                        content,
+                        sources,
+                        model_identity,
+                        model_profile_version,
+                        content_digest
+                    )
+                    VALUES (
+                        :org_id,
+                        :msg_id,
+                        :conv_id,
+                        :ordinal,
+                        :role,
+                        :content,
+                        CAST(:sources AS jsonb),
+                        :model_identity,
+                        :model_profile_version,
+                        :content_digest
+                    )
+                    """
+                ),
+                {
+                    "org_id": organization_id,
+                    "msg_id": message_id,
+                    "conv_id": conversation_id,
+                    "ordinal": ordinal,
+                    "role": role,
+                    "content": content,
+                    "sources": json.dumps(sources, ensure_ascii=False),
+                    "model_identity": model_identity,
+                    "model_profile_version": model_profile_version,
+                    "content_digest": content_digest,
+                },
+            )
+
+            msg_row = (
+                session.execute(
+                    sa.text(
+                        """
+                    SELECT
+                        message_id,
+                        conversation_id,
+                        message_ordinal,
+                        role,
+                        content,
+                        sources,
+                        model_identity,
+                        model_profile_version,
+                        created_at
+                    FROM platform.construction_consultant_messages
+                    WHERE organization_id = :org_id
+                      AND message_id = :msg_id
+                    """
+                    ),
+                    {
+                        "org_id": organization_id,
+                        "msg_id": message_id,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+
+            return ConstructionConsultantMessage(
+                message_id=msg_row["message_id"],
+                conversation_id=msg_row["conversation_id"],
+                ordinal=int(msg_row["message_ordinal"]),
+                role=msg_row["role"],
+                content=msg_row["content"],
+                sources=tuple(msg_row["sources"]),
+                model_identity=msg_row["model_identity"],
+                model_profile_version=msg_row["model_profile_version"],
+                created_at=msg_row["created_at"],
+            )
