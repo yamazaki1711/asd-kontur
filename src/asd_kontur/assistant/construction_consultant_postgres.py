@@ -169,6 +169,56 @@ class ConstructionConsultantRepository:
             message_count=row[3],
         )
 
+    def list_conversations(
+        self,
+        organization_id: UUID,
+        owner_identity_id: str,
+    ) -> tuple[ConstructionConsultantConversation, ...]:
+        if not owner_identity_id or not owner_identity_id.strip():
+            raise ValueError("owner_identity_id must not be blank")
+
+        with Session(self._engine) as session, session.begin():
+            self._scope(session, organization_id)
+            sql = sa.text(
+                """
+                SELECT
+                    c.conversation_id,
+                    c.title,
+                    c.created_at,
+                    (
+                        SELECT COUNT(*)
+                        FROM platform.construction_consultant_messages m
+                        WHERE m.organization_id = :organization_id
+                          AND m.conversation_id = c.conversation_id
+                    ) AS message_count
+                FROM platform.construction_consultant_conversations c
+                WHERE c.organization_id = :organization_id
+                  AND c.created_by_identity_id = :owner_identity_id
+                ORDER BY c.created_at DESC, c.conversation_id
+                """
+            )
+            rows = (
+                session.execute(
+                    sql,
+                    {
+                        "organization_id": organization_id,
+                        "owner_identity_id": owner_identity_id,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+
+        return tuple(
+            ConstructionConsultantConversation(
+                conversation_id=row["conversation_id"],
+                title=row["title"],
+                created_at=row["created_at"],
+                message_count=row["message_count"],
+            )
+            for row in rows
+        )
+
     def append_message(
         self,
         organization_id: UUID,

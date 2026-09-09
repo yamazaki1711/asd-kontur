@@ -7,6 +7,7 @@ import pytest
 import sqlalchemy as sa
 
 from asd_kontur.assistant.construction_consultant_postgres import (
+    ConstructionConsultantMessage,
     ConstructionConsultantPersistenceError,
     ConstructionConsultantRepository,
 )
@@ -303,7 +304,7 @@ def test_concurrent_append_message_locking_protocol(
     )
 
     barrier = threading.Barrier(3)
-    results: list[object] = []
+    results: list[ConstructionConsultantMessage] = []
     errors: list[Exception] = []
 
     def worker(
@@ -429,3 +430,111 @@ def test_message_history_read_and_authorization(
     with pytest.raises(ConstructionConsultantPersistenceError) as exc_info:
         repo.messages(foreign_org_id, conversation.conversation_id, "history-owner")
     assert exc_info.value.code == "construction_consultant_conversation_not_found"
+
+
+def test_list_conversations_filters_by_owner_and_org_with_deterministic_ordering(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    """Test list filtering by owner/org and deterministic sorting."""
+    repository = ConstructionConsultantRepository(postgres_environment.application_engine)
+
+    # Создаем идентификаторы организаций и владельцев
+    org_a_id = uuid4()
+    org_b_id = uuid4()
+    owner_a_id = "owner-a"
+    owner_b_id = "owner-b"
+
+    # 1. Создаем диалоги
+    # Владелец A в Организации A: два диалога
+    conv_a1 = repository.create_conversation(
+        organization_id=org_a_id,
+        owner_identity_id=owner_a_id,
+        title="Диалог A1",
+    )
+    conv_a2 = repository.create_conversation(
+        organization_id=org_a_id,
+        owner_identity_id=owner_a_id,
+        title="Диалог A2",
+    )
+
+    # Владелец B в Организации A: один диалог
+    conv_b1 = repository.create_conversation(
+        organization_id=org_a_id,
+        owner_identity_id=owner_b_id,
+        title="Диалог B1",
+    )
+
+    # Владелец A в Организации B: один диалог
+    conv_a_org_b = repository.create_conversation(
+        organization_id=org_b_id,
+        owner_identity_id=owner_a_id,
+        title="Диалог A в Org B",
+    )
+
+    # 2. Добавляем сообщения в диалоги владельца A в Организации A
+    repository.append_message(
+        organization_id=org_a_id,
+        conversation_id=conv_a1.conversation_id,
+        owner_identity_id=owner_a_id,
+        role="user",
+        content="Сообщение 1",
+    )
+    repository.append_message(
+        organization_id=org_a_id,
+        conversation_id=conv_a2.conversation_id,
+        owner_identity_id=owner_a_id,
+        role="user",
+        content="Сообщение 2",
+    )
+
+    # 3. Получаем список диалогов для владельца A в Организации A
+    values = repository.list_conversations(
+        organization_id=org_a_id,
+        owner_identity_id=owner_a_id,
+    )
+
+    # Проверка количества
+    assert len(values) == 2, f"Ожидалось 2 диалога, получено {len(values)}"
+
+    # Проверка содержимого: только диалоги владельца A в Организации A
+    returned_ids = {v.conversation_id for v in values}
+    expected_ids = {conv_a1.conversation_id, conv_a2.conversation_id}
+    assert returned_ids == expected_ids, (
+        f"Неверный набор диалогов. Ожидалось {expected_ids}, получено {returned_ids}"
+    )
+
+    # Проверка отсутствия чужих диалогов
+    assert conv_b1.conversation_id not in returned_ids
+    assert conv_a_org_b.conversation_id not in returned_ids
+
+    # Проверка количества сообщений
+    for v in values:
+        assert v.message_count == 1, f"Диалог {v.conversation_id} должен иметь 1 сообщение"
+
+    # Проверка детерминированной сортировки
+    # Контракт: created_at DESC, conversation_id
+    # Так как created_at генерируется БД и может совпасть при быстром создании,
+    # мы проверяем, что порядок соответствует сортировке по (created_at DESC, conversation_id).
+    # Use conversation_id as secondary key for determinism when created_at is equal.
+
+    # Сортируем ожидаемые значения по контракту
+    # Так как мы не знаем точных created_at заранее, мы проверяем, что возвращенный список
+    # является отсортированным по (created_at DESC, conversation_id ASC).
+
+    # Проверяем, что список отсортирован правильно
+    for index in range(len(values) - 1):
+        current = values[index]
+        next_val = values[index + 1]
+
+        # Если created_at равны, то conversation_id должен быть в порядке возрастания
+        if current.created_at == next_val.created_at:
+            assert current.conversation_id < next_val.conversation_id, (
+                f"При равных created_at, conversation_id должен быть в порядке возрастания. "
+                f"Текущий: {current.conversation_id}, Следующий: {next_val.conversation_id}"
+            )
+        else:
+            # Если created_at не равны, то текущий должен быть новее (больше)
+            assert current.created_at > next_val.created_at, (
+                f"Список должен быть отсортирован по created_at DESC. "
+                f"Текущий: {current.created_at}, Следующий: {next_val.created_at}"
+            )
