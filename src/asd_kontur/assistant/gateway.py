@@ -230,7 +230,16 @@ class ProfessionalAssistantKnowledgeQuery:
         )
         search_query = _search_query(query)
         practice = self._practice_context(search_query, 4)
-        normative = self._normative_context(search_query, 4)
+        # The platform production projection is the normative retrieval path when
+        # an embedding endpoint is configured for this application process.  Keep
+        # the verified-provision query only as the explicit no-embedding fallback:
+        # it cannot provide the same hybrid FTS/dense/graph evidence as the
+        # production query used by the platform consultant.
+        normative = (
+            self._search_ntd_content(query, 4)
+            if self._production_embedding_endpoint is not None
+            else self._normative_context(search_query, 4)
+        )
         sources = tuple(
             [item["source"] for item in workspace["source_items"]]
             + [item["source"] for item in practice]
