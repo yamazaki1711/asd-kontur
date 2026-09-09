@@ -227,6 +227,29 @@ class AssistantCancelRequest(ApiModel):
     confirmation: Literal["STOP_ASSISTANT_RESPONSE"]
 
 
+class ConstructionConsultantConversationCreate(ApiModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class ConstructionConsultantConversationView(ApiModel):
+    conversation_id: UUID
+    title: str
+    created_at: datetime
+    message_count: int
+
+
+class ConstructionConsultantMessageView(ApiModel):
+    message_id: UUID
+    conversation_id: UUID
+    ordinal: int
+    role: Literal["user", "assistant"]
+    content: str
+    sources: list[dict[str, Any]]
+    model_identity: str | None
+    model_profile_version: str | None
+    created_at: datetime
+
+
 class PilotResultView(ApiModel):
     result_id: UUID
     version: int

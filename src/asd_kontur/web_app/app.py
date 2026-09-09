@@ -32,6 +32,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import Engine
 
+from asd_kontur.assistant.construction_consultant_postgres import (
+    ConstructionConsultantPersistenceError,
+    ConstructionConsultantRepository,
+)
+from asd_kontur.assistant.construction_consultant_service import ConstructionConsultantService
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.models import AssistantMode
 from asd_kontur.assistant.postgres import AssistantPersistenceError, AssistantRepository
@@ -57,6 +62,9 @@ from .schemas import (
     AssistantQuestionRequest,
     AssistantTurnView,
     CapabilityStatusView,
+    ConstructionConsultantConversationCreate,
+    ConstructionConsultantConversationView,
+    ConstructionConsultantMessageView,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
@@ -131,6 +139,9 @@ class ApplicationContainer:
                 engine,
                 production_embedding_endpoint=settings.ntd_embedding_endpoint,
             ),
+        )
+        self.construction_consultant = ConstructionConsultantService(
+            ConstructionConsultantRepository(engine)
         )
         self.reset_service = WorkspaceResetService(
             repository=self.repository,
@@ -220,6 +231,13 @@ def _install_middleware(app: FastAPI) -> None:
 
     @app.exception_handler(AssistantPersistenceError)
     async def assistant_error(request: Request, exc: AssistantPersistenceError) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(ConstructionConsultantPersistenceError)
+    async def construction_consultant_error(
+        request: Request, exc: ConstructionConsultantPersistenceError
+    ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
 
@@ -1101,6 +1119,57 @@ def _api_router() -> APIRouter:
     ) -> KnowledgeStatusView:
         value = _container(request).service.knowledge_status()
         return KnowledgeStatusView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/construction-consultant/conversations",
+        response_model=ConstructionConsultantConversationView,
+        status_code=201,
+        tags=["construction-consultant"],
+    )
+    def create_construction_consultant_conversation(
+        request: Request,
+        body: ConstructionConsultantConversationCreate,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ConstructionConsultantConversationView:
+        item = _container(request).construction_consultant.create_conversation(
+            owner_identity_id=principal.owner_identity_id,
+            title=body.title,
+        )
+        return ConstructionConsultantConversationView(**jsonable_encoder(asdict(item)))
+
+    @router.get(
+        "/construction-consultant/conversations",
+        response_model=list[ConstructionConsultantConversationView],
+        tags=["construction-consultant"],
+    )
+    def list_conversations(
+        request: Request,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[ConstructionConsultantConversationView]:
+        return [
+            ConstructionConsultantConversationView(**jsonable_encoder(asdict(item)))
+            for item in _container(request).construction_consultant.list_conversations(
+                owner_identity_id=principal.owner_identity_id
+            )
+        ]
+
+    @router.get(
+        "/construction-consultant/conversations/{conversation_id}/messages",
+        response_model=list[ConstructionConsultantMessageView],
+        tags=["construction-consultant"],
+    )
+    def get_conversation_messages(
+        request: Request,
+        conversation_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[ConstructionConsultantMessageView]:
+        items = _container(request).construction_consultant.messages(
+            owner_identity_id=principal.owner_identity_id,
+            conversation_id=conversation_id,
+        )
+        return [
+            ConstructionConsultantMessageView(**jsonable_encoder(asdict(item))) for item in items
+        ]
 
     @router.post(
         "/workspaces/{workspace_id}/assistant/conversations",

@@ -259,6 +259,81 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
         ]
 
 
+def test_platform_history_owner_isolation_and_no_workspace_fields(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    app = create_app(
+        engine=postgres_environment.application_engine,
+        settings=_settings(postgres_environment, tmp_path),
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="owner-a",
+        password="Owner-A-Pass-123!",
+        display_name="Owner A",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="owner-b",
+        password="Owner-B-Pass-123!",
+        display_name="Owner B",
+    )
+
+    with TestClient(app) as client:
+        # Owner A login
+        login_a = client.post(
+            "/api/v1/session/login",
+            json={"username": "owner-a", "password": "Owner-A-Pass-123!"},
+        )
+        assert login_a.status_code == 200
+        csrf_a = _csrf(client)
+
+        # Create conversation
+        create_resp = client.post(
+            "/api/v1/construction-consultant/conversations",
+            json={"title": "Test Conversation"},
+            headers=csrf_a,
+        )
+        assert create_resp.status_code == 201
+        conv_data = create_resp.json()
+        assert "workspace_id" not in conv_data
+        assert conv_data["title"] == "Test Conversation"
+        assert "conversation_id" in conv_data
+        assert "created_at" in conv_data
+        assert "message_count" in conv_data
+        conv_id = conv_data["conversation_id"]
+
+        # Get list
+        list_resp = client.get("/api/v1/construction-consultant/conversations")
+        assert list_resp.status_code == 200
+        list_data = list_resp.json()
+        assert len(list_data) == 1
+        assert list_data[0]["conversation_id"] == conv_id
+
+        # Get messages
+        msg_resp = client.get(f"/api/v1/construction-consultant/conversations/{conv_id}/messages")
+        assert msg_resp.status_code == 200
+        assert msg_resp.json() == []
+
+        # Logout A
+        logout_a = client.post("/api/v1/session/logout", headers=csrf_a)
+        assert logout_a.status_code == 204
+
+        # Owner B login
+        login_b = client.post(
+            "/api/v1/session/login",
+            json={"username": "owner-b", "password": "Owner-B-Pass-123!"},
+        )
+        assert login_b.status_code == 200
+        # Get list for B
+        list_resp_b = client.get("/api/v1/construction-consultant/conversations")
+        assert list_resp_b.status_code == 200
+        assert list_resp_b.json() == []
+
+        # Try to access A's messages
+        msg_resp_b = client.get(f"/api/v1/construction-consultant/conversations/{conv_id}/messages")
+        assert msg_resp_b.status_code == 404
+
+
 def test_worker_outage_is_a_typed_terminal_outcome(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
