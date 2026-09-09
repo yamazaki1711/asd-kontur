@@ -332,3 +332,56 @@ class ConstructionConsultantRepository:
                 model_profile_version=msg_row["model_profile_version"],
                 created_at=msg_row["created_at"],
             )
+
+    def messages(
+        self,
+        organization_id: UUID,
+        conversation_id: UUID,
+        owner_identity_id: str,
+    ) -> tuple[ConstructionConsultantMessage, ...]:
+        self.get_conversation(organization_id, conversation_id, owner_identity_id)
+        with Session(self._engine) as session, session.begin():
+            self._scope(session, organization_id)
+            rows = (
+                session.execute(
+                    sa.text(
+                        """
+                        SELECT
+                            organization_id,
+                            message_id,
+                            conversation_id,
+                            message_ordinal,
+                            role,
+                            content,
+                            sources,
+                            model_identity,
+                            model_profile_version,
+                            created_at
+                        FROM platform.construction_consultant_messages
+                        WHERE organization_id = :organization_id
+                          AND conversation_id = :conversation_id
+                        ORDER BY message_ordinal ASC
+                        """
+                    ),
+                    {
+                        "organization_id": organization_id,
+                        "conversation_id": conversation_id,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+            return tuple(
+                ConstructionConsultantMessage(
+                    message_id=row["message_id"],
+                    conversation_id=row["conversation_id"],
+                    ordinal=int(row["message_ordinal"]),
+                    role=row["role"],
+                    content=row["content"],
+                    sources=tuple(row["sources"]),
+                    model_identity=row["model_identity"],
+                    model_profile_version=row["model_profile_version"],
+                    created_at=row["created_at"],
+                )
+                for row in rows
+            )

@@ -383,3 +383,49 @@ def test_concurrent_append_message_locking_protocol(
 
     stored_ordinals = [row[0] for row in rows]
     assert stored_ordinals == [1, 2], f"Expected stored ordinals [1, 2], got {stored_ordinals}"
+
+
+def test_message_history_read_and_authorization(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    organization_id = uuid4()
+    repo = ConstructionConsultantRepository(postgres_environment.application_engine)
+    conversation = repo.create_conversation(
+        organization_id=organization_id,
+        owner_identity_id="history-owner",
+        title="История",
+    )
+    empty = repo.messages(organization_id, conversation.conversation_id, "history-owner")
+    assert empty == ()
+
+    repo.append_message(
+        organization_id,
+        conversation.conversation_id,
+        "history-owner",
+        "user",
+        "Первое",
+    )
+    repo.append_message(
+        organization_id,
+        conversation.conversation_id,
+        "history-owner",
+        "assistant",
+        "Второе",
+    )
+
+    messages = repo.messages(organization_id, conversation.conversation_id, "history-owner")
+    assert len(messages) == 2
+    assert [m.ordinal for m in messages] == [1, 2]
+    assert messages[0].role == "user"
+    assert messages[0].content == "Первое"
+    assert messages[1].role == "assistant"
+    assert messages[1].content == "Второе"
+
+    with pytest.raises(ConstructionConsultantPersistenceError) as exc_info:
+        repo.messages(organization_id, conversation.conversation_id, "foreign-owner")
+    assert exc_info.value.code == "construction_consultant_conversation_not_found"
+
+    foreign_org_id = uuid4()
+    with pytest.raises(ConstructionConsultantPersistenceError) as exc_info:
+        repo.messages(foreign_org_id, conversation.conversation_id, "history-owner")
+    assert exc_info.value.code == "construction_consultant_conversation_not_found"
