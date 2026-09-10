@@ -11,6 +11,12 @@ and the current [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v1.m
 - Do not propose a real OKS before an accepted `TrialReadinessDecision`.
 - Use native/deterministic processing before AI. Qwen3.8 receives bounded
   context through Knowledge Gateway; numeric-critical drawings use BF16.
+- Codex may implement and operate application code, tests, migrations and
+  recovery.  Bulk model-based document OCR/VLM and semantic extraction must
+  run through the approved local Qwen3.8 pipeline with durable provenance;
+  do not substitute Apple Vision, Tesseract, cloud models or Codex inference.
+  Keep deterministic hashing, native extraction, rendering, parsing,
+  validation and indexing outside model inference.
 - Preserve hard workspace isolation, RLS/default deny, evidence, provenance,
   immutable history and Candidate-before-Fact authority.
 - For NTD discovery start with Minstroy, then `docs.cntd.ru`, then
