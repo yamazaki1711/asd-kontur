@@ -71,6 +71,7 @@ class QwenDocumentSemanticAdapter:
             for item in locator_ids
         )
         source_version_id = locators[0].source_version_id
+        scope = f"page:{locators[0].page_number}"
         role_candidates: list[RoleCandidate] = []
         candidate_ids: list[UUID] = []
         for role in roles:
@@ -83,7 +84,7 @@ class QwenDocumentSemanticAdapter:
                 RoleCandidate(
                     candidate_id=candidate_id,
                     role=role,
-                    scope=f"document:{source_version_id}",
+                    scope=scope,
                     score=Decimal("0.80"),
                     signal_codes=("qwen:bounded_document_semantic",),
                     locators=locators,
@@ -101,7 +102,7 @@ class QwenDocumentSemanticAdapter:
         decision = RoleDecision(
             decision_id=decision_id,
             decision_version=1,
-            scope=f"document:{source_version_id}",
+            scope=scope,
             selected_roles=roles,
             candidate_ids=tuple(candidate_ids),
             decision_code="qwen_bounded_document_semantic",
