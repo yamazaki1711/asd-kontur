@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
@@ -247,12 +248,27 @@ def test_pdf_renderer_uses_known_local_location_when_launchd_path_is_restricted(
 ) -> None:
     candidate = Path("/opt/homebrew/bin/pdftoppm")
 
-    monkeypatch.setattr(ocr.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
     monkeypatch.setattr(ocr, "_PDFTOPPM_FALLBACKS", (candidate,))
     monkeypatch.setattr(Path, "is_file", lambda self: self == candidate)
     monkeypatch.setattr(Path, "stat", lambda self: type("Stat", (), {"st_mode": 0o755})())
 
     assert ocr._pdf_renderer() == str(candidate)
+
+
+def test_tesseract_uses_known_local_location_when_launchd_path_is_restricted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = Path("/opt/homebrew/bin/tesseract")
+
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+    monkeypatch.setattr(ocr, "_TESSERACT_FALLBACKS", (candidate,))
+    monkeypatch.setattr(Path, "is_file", lambda self: self == candidate)
+    monkeypatch.setattr(Path, "stat", lambda self: type("Stat", (), {"st_mode": 0o755})())
+
+    adapter = ocr.TesseractOcrAdapter()
+    assert adapter.available() is True
+    assert adapter._resolved_executable() == str(candidate)
 
 
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(

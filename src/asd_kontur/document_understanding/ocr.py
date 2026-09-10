@@ -23,6 +23,10 @@ _PDFTOPPM_FALLBACKS = (
     Path("/opt/homebrew/bin/pdftoppm"),
     Path("/usr/local/bin/pdftoppm"),
 )
+_TESSERACT_FALLBACKS = (
+    Path("/opt/homebrew/bin/tesseract"),
+    Path("/usr/local/bin/tesseract"),
+)
 
 
 class OcrFailure(RuntimeError):
@@ -130,7 +134,7 @@ class TesseractOcrAdapter:
         self._executable = executable
 
     def available(self) -> bool:
-        return shutil.which(self._executable) is not None
+        return self._resolved_executable() is not None
 
     def extract(
         self,
@@ -141,11 +145,12 @@ class TesseractOcrAdapter:
         source_version_id: UUID,
         page_number: int,
     ) -> OcrAdapterResult:
-        if not self.available():
+        executable = self._resolved_executable()
+        if executable is None:
             raise OcrFailure("tesseract_unavailable")
         completed = subprocess.run(
             [
-                self._executable,
+                executable,
                 str(image_path),
                 "stdout",
                 "-l",
@@ -199,6 +204,15 @@ class TesseractOcrAdapter:
                 )
             )
         return _result(self.adapter_key, self.adapter_version, "rus+eng", image_path, elements)
+
+    def _resolved_executable(self) -> str | None:
+        if executable := shutil.which(self._executable):
+            return executable
+        if self._executable == "tesseract":
+            for candidate in _TESSERACT_FALLBACKS:
+                if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                    return str(candidate)
+        return None
 
 
 def select_adapters(
