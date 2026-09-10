@@ -19,6 +19,11 @@ from asd_kontur.domain import deterministic_uuid
 from .models import ExactLocator, LayoutElement, OcrRoute
 from .native import normalize_text
 
+_PDFTOPPM_FALLBACKS = (
+    Path("/opt/homebrew/bin/pdftoppm"),
+    Path("/usr/local/bin/pdftoppm"),
+)
+
 
 class OcrFailure(RuntimeError):
     def __init__(self, code: str) -> None:
@@ -212,7 +217,7 @@ def select_adapters(
 
 
 def render_pdf_page(content: bytes, page_number: int, target: Path, *, dpi: int = 300) -> str:
-    executable = shutil.which("pdftoppm")
+    executable = _pdf_renderer()
     if executable is None:
         raise OcrFailure("pdf_renderer_unavailable")
     if page_number < 1 or dpi < 72 or dpi > 600:
@@ -245,6 +250,17 @@ def render_pdf_page(content: bytes, page_number: int, target: Path, *, dpi: int 
     if generated != target:
         generated.replace(target)
     return "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
+
+
+def _pdf_renderer() -> str | None:
+    """Find the locally installed Poppler renderer under launchd's restricted PATH."""
+
+    if executable := shutil.which("pdftoppm"):
+        return executable
+    for candidate in _PDFTOPPM_FALLBACKS:
+        if candidate.is_file() and candidate.stat().st_mode & 0o111:
+            return str(candidate)
+    return None
 
 
 def _ocr_element(

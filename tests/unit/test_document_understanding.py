@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
 import pytest
 
+from asd_kontur.document_understanding import ocr
 from asd_kontur.document_understanding.models import (
     CandidateDecision,
     DocumentRole,
@@ -229,3 +231,16 @@ def test_unsupported_format_is_typed_failure() -> None:
         )
 
     assert error.value.code == "document_format_not_supported"
+
+
+def test_pdf_renderer_uses_known_local_location_when_launchd_path_is_restricted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = Path("/opt/homebrew/bin/pdftoppm")
+
+    monkeypatch.setattr(ocr.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(ocr, "_PDFTOPPM_FALLBACKS", (candidate,))
+    monkeypatch.setattr(Path, "is_file", lambda self: self == candidate)
+    monkeypatch.setattr(Path, "stat", lambda self: type("Stat", (), {"st_mode": 0o755})())
+
+    assert ocr._pdf_renderer() == str(candidate)

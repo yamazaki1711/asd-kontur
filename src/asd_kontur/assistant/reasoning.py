@@ -259,6 +259,52 @@ def ensure_explicit_designation_resolution(plan: SearchPlan, question: str) -> S
     )
 
 
+def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPlan:
+    """Require a content read for a project question that asks for project facts.
+
+    A workspace overview is useful for project metadata, but it cannot establish
+    enumeration, location, or other facts that must be read from source documents.
+    """
+
+    if plan.needs_clarification or plan.intent not in {"workspace", "mixed"}:
+        return plan
+    if not _requires_workspace_document_content(question):
+        return plan
+    content_tools = {
+        "consultant.search_workspace_documents",
+        "consultant.get_workspace_fragment",
+    }
+    if any(step.tool in content_tools for step in plan.steps):
+        return plan
+    content_step = PlannedToolCall(
+        "consultant.search_workspace_documents",
+        {"query": question, "limit": 10},
+        "Вопрос запрашивает факт, перечень или расположение по проекту; требуется поиск по содержимому документов, а не только обзор объекта.",
+    )
+    return SearchPlan(
+        plan.intent,
+        False,
+        None,
+        tuple([*plan.steps, content_step][:MAX_TOOL_STEPS]),
+    )
+
+
+def _requires_workspace_document_content(question: str) -> bool:
+    normalized = " ".join(question.casefold().split())
+    if not re.search(
+        r"\b(?:проект\w*|пд|рд|документ\w*|чертеж\w*|лист\w*|объект\w*)\b",
+        normalized,
+    ):
+        return False
+    return bool(
+        re.search(
+            r"\b(?:сколько|перечисл\w*|где|на\s+каких|на\s+каком|"
+            r"какие|какой|какова|каковы|обознач\w*|располож\w*)",
+            normalized,
+        )
+    )
+
+
 def parse_search_plan(raw: str) -> SearchPlan:
     value = _json_object(raw)
     intent = str(value.get("intent", ""))

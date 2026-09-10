@@ -402,72 +402,17 @@ class ProfessionalAssistantKnowledgeQuery:
                     {"o": organization_id, "w": workspace_id},
                 ).mappings()
             )
-            locators = list(
-                session.execute(
-                    sa.text(
-                        "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
-                        "sl.source_version_id,sl.locator_value,sl.fragment_digest,v.document_id,"
-                        "v.safe_display_name,e.raw_text,e.page_number FROM workspace.source_locators sl "
-                        "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id AND "
-                        "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id "
-                        "LEFT JOIN workspace.native_layout_element_versions e ON "
-                        "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id AND "
-                        "e.source_locator_id=sl.source_locator_id WHERE sl.organization_id=:o AND "
-                        "sl.workspace_id=:w ORDER BY sl.source_locator_id,e.version DESC NULLS LAST LIMIT 100"
-                    ),
-                    {"o": organization_id, "w": workspace_id},
-                ).mappings()
+        source_items = (
+            self._workspace_search(
+                organization_id,
+                workspace_id,
+                mode,
+                query,
+                6,
             )
-        referenced = set(
-            re.findall(
-                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
-                str(
-                    (
-                        _json_row(project),
-                        [_json_row(row) for row in packages],
-                        _json_row(matrix),
-                        [_json_row(row) for row in defects],
-                        _json_row(result),
-                    )
-                ).lower(),
-            )
+            if query
+            else []
         )
-        tokens = _search_tokens(query)
-        ranked_locators = sorted(
-            locators,
-            key=lambda row: (
-                -_locator_score(row, tokens, referenced),
-                str(row["source_locator_id"]),
-            ),
-        )
-        selected_locators = [
-            row for row in ranked_locators if _locator_score(row, tokens, referenced) > 0
-        ][:6]
-        source_items = []
-        for row in selected_locators:
-            page = int(row["page_number"] or _page_from_locator(row["locator_value"]))
-            source_items.append(
-                {
-                    "content": {
-                        "document": str(row["safe_display_name"]),
-                        "page": page,
-                        "fragment": str(row["raw_text"] or "")[:1200],
-                    },
-                    "source": {
-                        "source_id": str(row["source_locator_id"]),
-                        "source_version_id": str(row["source_version_id"]),
-                        "authority_layer": "workspace_fact",
-                        "title": str(row["safe_display_name"]),
-                        "edition": None,
-                        "page": page,
-                        "locator_label": f"страница {page}",
-                        "fragment": str(row["raw_text"] or "")[:500],
-                        "content_digest": str(row["fragment_digest"]),
-                        "href": f"/modes/{_mode_slug(mode)}/workspaces/{workspace_id}/evidence/locators/{row['source_locator_id']}",
-                        "edition_currency_notice": None,
-                    },
-                }
-            )
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -1625,14 +1570,6 @@ def _normative_designation(query: str) -> str:
         re.IGNORECASE,
     )
     return " ".join(match.group(0).upper().split()) if match else ""
-
-
-def _locator_score(row: Any, tokens: tuple[str, ...], referenced: set[str]) -> int:
-    haystack = f"{row['safe_display_name']} {row['raw_text'] or ''}".lower()
-    score = sum(2 for token in tokens if token in haystack)
-    if str(row["source_locator_id"]).lower() in referenced:
-        score += 1
-    return score
 
 
 def _json_row(row: Any | None) -> dict[str, Any] | None:

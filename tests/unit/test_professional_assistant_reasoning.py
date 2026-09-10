@@ -8,7 +8,10 @@ from pathlib import Path
 import pytest
 
 from asd_kontur.assistant.reasoning import (
+    PlannedToolCall,
+    SearchPlan,
     compact_history,
+    ensure_workspace_content_search,
     parse_adequacy_decision,
     parse_search_plan,
     parse_synthesized_answer,
@@ -164,6 +167,34 @@ def test_insufficient_answer_must_tell_user_what_to_supply() -> None:
     )
     receipt = validate_answer(answer, intent="general", tool_names=(), sources=())
     assert "insufficient_without_next_question" in receipt["problems"]
+
+
+def test_project_enumeration_cannot_use_metadata_only_workspace_overview() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (PlannedToolCall("consultant.get_workspace_overview", {}, "Обзор объекта."),),
+    )
+
+    required = ensure_workspace_content_search(plan, "Сколько котлованов в этом проекте?")
+
+    assert [step.tool for step in required.steps] == [
+        "consultant.get_workspace_overview",
+        "consultant.search_workspace_documents",
+    ]
+    assert required.steps[-1].arguments["query"] == "Сколько котлованов в этом проекте?"
+
+
+def test_project_metadata_question_does_not_force_document_search() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (PlannedToolCall("consultant.get_workspace_overview", {}, "Обзор объекта."),),
+    )
+
+    assert ensure_workspace_content_search(plan, "Как называется этот объект?") == plan
 
 
 def test_history_window_is_bounded_and_preserves_latest_reference() -> None:

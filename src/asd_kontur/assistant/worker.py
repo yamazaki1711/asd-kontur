@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import signal
 import time
 import urllib.error
@@ -40,8 +41,8 @@ from .reasoning import (
     SynthesizedAnswer,
     compact_history,
     ensure_explicit_designation_resolution,
+    ensure_workspace_content_search,
     parse_adequacy_decision,
-    parse_model_quality,
     parse_search_plan,
     parse_synthesized_answer,
     validate_answer,
@@ -53,6 +54,8 @@ MODE_INSTRUCTIONS = {
     "Audit": "Выделяйте несоответствия, пробелы, последствия и порядок устранения замечаний.",
     "Restoration": "Разделяйте восстановимые проекты документов и сведения, которые нельзя фабриковать.",
 }
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _Audit:
@@ -240,6 +243,10 @@ class AssistantWorker:
         ):
             self._repository.fail(claimed, "qwen_stream_interrupted", reconciliation=True)
         except Exception:
+            LOGGER.exception(
+                "Professional assistant generation failed for durable turn %s",
+                claimed.turn_id,
+            )
             self._repository.fail(claimed, "assistant_generation_failed")
 
     def _model_complete(
@@ -296,7 +303,10 @@ class AssistantWorker:
         prompt = _planning_prompt(claimed, history, dialogue_state)
         raw = self._model_complete(claimed, prompt, max_tokens=520, temperature=0.1)
         try:
-            return ensure_explicit_designation_resolution(parse_search_plan(raw), claimed.question)
+            return ensure_workspace_content_search(
+                ensure_explicit_designation_resolution(parse_search_plan(raw), claimed.question),
+                claimed.question,
+            )
         except (ValueError, json.JSONDecodeError) as error:
             corrected = self._model_complete(
                 claimed,
@@ -304,8 +314,11 @@ class AssistantWorker:
                 max_tokens=520,
                 temperature=0.0,
             )
-            return ensure_explicit_designation_resolution(
-                parse_search_plan(corrected), claimed.question
+            return ensure_workspace_content_search(
+                ensure_explicit_designation_resolution(
+                    parse_search_plan(corrected), claimed.question
+                ),
+                claimed.question,
             )
 
     def _execute_tool(
@@ -378,10 +391,15 @@ class AssistantWorker:
         raw = self._model_complete(
             claimed,
             _quality_prompt(claimed, answer, receipts),
-            max_tokens=220,
+            max_tokens=24,
             temperature=0.0,
         )
-        return parse_model_quality(raw)
+        verdict = raw.strip().casefold().rstrip(".")
+        if verdict == "pass":
+            return {"passed": True, "issues": []}
+        if verdict == "fail":
+            return {"passed": False, "issues": ["model_quality_rejected"]}
+        return {"passed": False, "issues": ["model_quality_response_invalid"]}
 
     def _repair_answer(
         self,
@@ -393,7 +411,7 @@ class AssistantWorker:
         raw = self._model_complete(
             claimed,
             _repair_prompt(claimed, answer, model_checks),
-            max_tokens=min(1_100, max(420, len(answer.answer) // 2)),
+            max_tokens=min(1_400, max(800, len(answer.answer))),
             temperature=0.1,
         )
         return parse_synthesized_answer(raw, {str(item["source_id"]) for item in available_sources})
@@ -525,8 +543,9 @@ def _quality_prompt(
     return f"""Проверьте проект ответа перед публикацией. Не переписывайте ответ и не добавляйте факты.
 Проверки: дан ли прямой ответ; нет ли противоречия данным; нет ли придуманных фактов; разделены ли
 Пособие, НТД и сведения объекта; не приложены ли нерелевантные источники; не нужен ли вместо ответа
-уточняющий вопрос; не является ли текст перечнем цитат. Верните только JSON:
-{{"passed":true,"issues":[]}}
+уточняющий вопрос; не является ли текст перечнем цитат. Верните ровно одно слово латиницей: PASS,
+если ответ можно публиковать, или FAIL, если нельзя. Не добавляйте JSON, объяснение, знак
+препинания, перенос с текстом или другой текст.
 Устойчивое общее инженерное определение допустимо без источника, если оно не выдано за НТД или факт
 объекта. Не требуйте ссылку только ради ссылки.
 Если документ присутствует в inventory, ответ не должен предлагать его повторно загрузить. Совпадение
@@ -556,6 +575,8 @@ def _repair_prompt(
     return f"""Исправьте только перечисленные дефекты проекта ответа. Не добавляйте новые факты,
 числа, требования, источники или выводы. Не меняйте установленные сведения. Если дефект нельзя
 исправить без новых данных, замените ответ точным сообщением о недостаточности данных.
+Ответ должен быть законченным естественным русским текстом: не обрывайте последнюю фразу,
+не оставляйте незавершённое предложение и завершите его точкой.
 Верните только JSON той же схемы:
 {{"answer":"...","answer_type":"direct|explanation|procedure|comparison|workspace_conclusion|clarification|insufficient_data",
 "needs_clarification":false,"used_source_ids":[],"dialogue_summary":"...","active_subjects":[]}}
@@ -567,23 +588,43 @@ def _repair_prompt(
 
 
 def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
-    bounded = []
+    bounded: list[dict[str, Any]] = []
     remaining = 14_000
     for receipt in receipts:
         if remaining <= 0:
             break
         response = receipt["response"]
-        value = json.dumps(response, ensure_ascii=False, default=str)
-        excerpt = value[: min(5_000, remaining)]
-        remaining -= len(excerpt)
-        bounded.append(
+        source_index = [
             {
-                "step": receipt["step_sequence"],
-                "tool": receipt["tool"],
-                "reason": receipt["reason"],
-                "result": excerpt,
+                "source_id": str(source.get("source_id", "")),
+                "source_version_id": str(source.get("source_version_id", "")),
+                "title": str(source.get("title", "")),
+                "locator": str(source.get("locator_label", "")),
+                "page": source.get("page"),
+                "fragment": str(source.get("fragment", ""))[:700],
             }
-        )
+            for source in response.get("sources", [])
+            if isinstance(source, dict) and source.get("source_id")
+        ]
+        while source_index and len(json.dumps(source_index, ensure_ascii=False)) > 3_000:
+            source_index.pop()
+        result = {key: value for key, value in response.items() if key != "sources"}
+        available = min(5_000, remaining)
+        source_text = json.dumps(source_index, ensure_ascii=False, default=str)
+        result_text = json.dumps(result, ensure_ascii=False, default=str)
+        record = {
+            "step": receipt["step_sequence"],
+            "tool": receipt["tool"],
+            "reason": receipt["reason"],
+            "result": result_text[: max(0, available - min(len(source_text), 3_000))],
+            "evidence": source_index,
+        }
+        record_text = json.dumps(record, ensure_ascii=False, default=str)
+        if len(record_text) > remaining:
+            record["result"] = record["result"][: max(0, remaining - len(source_text) - 300)]
+            record_text = json.dumps(record, ensure_ascii=False, default=str)
+        remaining -= len(record_text)
+        bounded.append(record)
     return json.dumps(bounded, ensure_ascii=False)
 
 
@@ -601,6 +642,8 @@ def _deduplicated_sources(
 
 def _answer_budget(question: str, receipts: list[dict[str, Any]]) -> int:
     lowered = question.lower()
+    if any(marker in lowered for marker in ("сп ", "гост ", "приказ ", "инструкц")):
+        return 1_100
     if any(word in lowered for word in ("пошаг", "сравн", "подроб", "порядок")):
         return 1_100
     if len(receipts) >= 3:
