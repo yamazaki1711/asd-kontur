@@ -861,7 +861,7 @@ class IndustrialUnderstandingRepository:
                     "(organization_id,workspace_id,source_locator_id,source_version_id,locator_kind,"
                     "locator_key,locator_value,fragment_digest) VALUES "
                     "(:o,:w,:locator,:source,:kind,:key,CAST(:value AS jsonb),:fragment) "
-                    "ON CONFLICT (organization_id,workspace_id,source_locator_id) DO NOTHING"
+                    "ON CONFLICT DO NOTHING"
                 ),
                 {
                     "o": claimed.organization_id,

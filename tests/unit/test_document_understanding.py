@@ -309,6 +309,4 @@ def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
 
     repository.persist_ocr_result(claimed, page_number=1, result=result)
 
-    assert (
-        "ON CONFLICT (organization_id,workspace_id,source_locator_id) DO NOTHING" in recorded_sql[1]
-    )
+    assert "ON CONFLICT DO NOTHING" in recorded_sql[1]
