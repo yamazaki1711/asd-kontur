@@ -503,6 +503,27 @@ def test_qwen_semantic_classification_accepts_only_returned_evidence_locators() 
     assert result.decisions[0].decision_code == "qwen_bounded_document_semantic"
 
 
+def test_qwen_semantic_classification_accepts_one_json_object_wrapped_by_model_text() -> None:
+    document = _extract_csv("Пояснительная записка\\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=(
+            "Результат:\\n"
+            + json.dumps(
+                {"roles": ["explanatory_note"], "locator_ids": [locator_id]},
+                ensure_ascii=False,
+            )
+            + "\\nГотово."
+        ),
+    ):
+        result = adapter.classify(document.pages[0].elements)
+
+    assert result.candidates[0].locators[0].source_locator_id == UUID(locator_id)
+
+
 def test_qwen_semantic_classification_rejects_hallucinated_locator() -> None:
     document = _extract_csv("Пояснительная записка\\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")

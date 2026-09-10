@@ -243,12 +243,8 @@ def _complete(endpoint: str, prompt: str, timeout_seconds: float) -> str:
 def _parse(
     answer: str, allowed: dict[str, _SemanticFragment]
 ) -> tuple[tuple[DocumentRole, ...], tuple[str, ...]]:
-    text = answer.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-        text = text.rsplit("```", 1)[0].strip()
     try:
-        value: Any = json.loads(text)
+        value = _json_object(answer)
     except json.JSONDecodeError as exc:
         raise QwenSemanticFailure("qwen_semantic_response_invalid_json") from exc
     if not isinstance(value, dict):
@@ -274,12 +270,8 @@ def _parse(
 def _parse_structures(
     answer: str, allowed: dict[str, _SemanticFragment]
 ) -> tuple[tuple[str, str, str], ...]:
-    text = answer.strip()
-    if text.startswith("```"):
-        text = text.split("\n", 1)[1] if "\n" in text else ""
-        text = text.rsplit("```", 1)[0].strip()
     try:
-        value: Any = json.loads(text)
+        value = _json_object(answer)
     except json.JSONDecodeError as exc:
         raise QwenSemanticFailure("qwen_structure_response_invalid_json") from exc
     rows = value.get("structures") if isinstance(value, dict) else None
@@ -303,3 +295,22 @@ def _parse_structures(
         seen.add(item)
         observed.append(item)
     return tuple(observed)
+
+
+def _json_object(answer: str) -> Any:
+    """Accept one JSON object even when the local model wraps it in harmless prose."""
+    text = answer.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.rsplit("```", 1)[0].strip()
+    decoder = json.JSONDecoder()
+    for index, character in enumerate(text):
+        if character != "{":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    raise json.JSONDecodeError("JSON object not found", text, 0)
