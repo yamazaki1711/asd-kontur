@@ -183,6 +183,22 @@ _DEPENDENT_SOURCE_TOOLS = {
     ),
 }
 
+# These tools describe derived workspace metadata.  They can be deferred when a
+# project-content question has exhausted the bounded tool budget: document
+# evidence is a prerequisite for an answer about an object fact, while none of
+# these calls establishes that fact by itself.
+_WORKSPACE_METADATA_TOOLS = frozenset(
+    {
+        "consultant.get_workspace_overview",
+        "consultant.get_work_packages",
+        "consultant.get_requirement_matrix",
+        "consultant.get_discrepancies",
+        "consultant.get_id_package",
+        "consultant.get_mode_result",
+        "consultant.get_information_gaps",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PlannedToolCall:
@@ -281,12 +297,31 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
         {"query": question, "limit": 10},
         "Вопрос запрашивает факт, перечень или расположение по проекту; требуется поиск по содержимому документов, а не только обзор объекта.",
     )
-    return SearchPlan(
-        plan.intent,
-        False,
-        None,
-        tuple([*plan.steps, content_step][:MAX_TOOL_STEPS]),
-    )
+    if len(plan.steps) < MAX_TOOL_STEPS:
+        steps = (*plan.steps, content_step)
+    else:
+        # A full planner budget must not silently erase the required content
+        # read.  Replace only a metadata call; dependent retrieval and explicit
+        # designation resolution keep their ordering and prerequisites.
+        replace_index = next(
+            (
+                index
+                for index, step in enumerate(plan.steps)
+                if step.tool in _WORKSPACE_METADATA_TOOLS
+            ),
+            None,
+        )
+        if replace_index is None:
+            # The parser already removes impossible dependent calls.  A full
+            # plan with no replaceable metadata call is therefore an explicit
+            # retrieval plan; preserve it rather than dropping a valid step.
+            return plan
+        steps = (
+            *plan.steps[:replace_index],
+            content_step,
+            *plan.steps[replace_index + 1 :],
+        )
+    return SearchPlan(plan.intent, False, None, tuple(steps))
 
 
 def _requires_workspace_document_content(question: str) -> bool:
@@ -498,6 +533,18 @@ def validate_answer(
     }
     if intent == "workspace" and not workspace_tools.intersection(tool_names):
         problems.append("workspace_answer_without_workspace_tool")
+    if (
+        intent in {"workspace", "mixed"}
+        and workspace_tools.intersection(tool_names)
+        and re.search(
+            r"\b(?:в\s+(?:загруженн\w*|предоставленн\w*|доступн\w*)\s+"
+            r"документ\w*\s+(?:нет|отсутствует|не\s+содерж\w*)|"
+            r"документ\w*\s+не\s+содерж\w*|отсутствует\s+информац\w*)\b",
+            answer.answer,
+            re.IGNORECASE,
+        )
+    ):
+        problems.append("workspace_documents_incorrectly_declared_absent")
     exact_normative_claim = re.search(
         r"\b(?:СП|ГОСТ(?:\s+Р)?|СНиП)\s*\d|\bпункт(?:а|ом|у)?\s+\d",
         answer.answer,

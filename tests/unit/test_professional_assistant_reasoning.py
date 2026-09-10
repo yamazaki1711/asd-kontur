@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from asd_kontur.assistant.reasoning import (
+    MAX_TOOL_STEPS,
     PlannedToolCall,
     SearchPlan,
     compact_history,
@@ -184,6 +185,61 @@ def test_project_enumeration_cannot_use_metadata_only_workspace_overview() -> No
         "consultant.search_workspace_documents",
     ]
     assert required.steps[-1].arguments["query"] == "Сколько котлованов в этом проекте?"
+
+
+def test_project_enumeration_replaces_metadata_when_plan_is_at_tool_budget() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (
+            PlannedToolCall("consultant.get_workspace_overview", {}, "Обзор объекта."),
+            PlannedToolCall("consultant.get_work_packages", {}, "Пакеты работ."),
+            PlannedToolCall("consultant.get_requirement_matrix", {}, "Матрица."),
+            PlannedToolCall("consultant.get_information_gaps", {}, "Пробелы."),
+        ),
+    )
+
+    required = ensure_workspace_content_search(plan, "Сколько котлованов в этом проекте?")
+
+    assert len(required.steps) == MAX_TOOL_STEPS
+    assert [step.tool for step in required.steps] == [
+        "consultant.search_workspace_documents",
+        "consultant.get_work_packages",
+        "consultant.get_requirement_matrix",
+        "consultant.get_information_gaps",
+    ]
+
+
+def test_workspace_answer_cannot_declare_uploaded_documents_empty_after_retrieval() -> None:
+    answer = parse_synthesized_answer(
+        json.dumps(
+            {
+                "answer": " ".join(
+                    (
+                        "В загруженных документах отсутствует информация о котлованах.",
+                        "Уточните вопрос?",
+                    )
+                ),
+                "answer_type": "insufficient_data",
+                "needs_clarification": False,
+                "used_source_ids": [],
+                "dialogue_summary": "Проверяется число котлованов.",
+                "active_subjects": ["котлованы"],
+            },
+            ensure_ascii=False,
+        ),
+        set(),
+    )
+
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.search_workspace_documents",),
+        sources=(),
+    )
+
+    assert "workspace_documents_incorrectly_declared_absent" in receipt["problems"]
 
 
 def test_project_metadata_question_does_not_force_document_search() -> None:
