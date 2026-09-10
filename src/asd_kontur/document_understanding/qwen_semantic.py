@@ -26,9 +26,9 @@ from .models import (
 )
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-_MAX_PAGES = 18
-_MAX_CHARS_PER_PAGE = 1_600
-_MAX_PROMPT_CHARS = 24_000
+_MAX_PAGES = 6
+_MAX_CHARS_PER_PAGE = 800
+_MAX_PROMPT_CHARS = 4_800
 
 
 class QwenSemanticFailure(RuntimeError):
@@ -170,7 +170,8 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
     ]
     return (
         "Ты выполняешь ограниченную классификацию строительного документа. "
-        "Используй только приведённые фрагменты. Верни только JSON без Markdown: "
+        "Используй только приведённые фрагменты. Верни первой и единственной строкой JSON "
+        "без Markdown: "
         '{"roles":["..."],"locator_ids":["..."]}. '
         "roles — от одного до трёх точных значений из: explanatory_note, "
         "project_documentation, working_documentation, bill_of_quantities, local_estimate, "
