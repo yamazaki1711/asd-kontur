@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import Engine
 
 from asd_kontur.application_spine.models import ClaimedJob, JobKind
+from asd_kontur.assistant.qwen_server import _collect_generated_text
 from asd_kontur.document_understanding import ocr
 from asd_kontur.document_understanding.models import (
     CandidateDecision,
@@ -303,6 +304,16 @@ def test_qwen_vision_accepts_one_complete_json_object_in_model_prose(tmp_path: P
     )
 
     assert result.elements[0].raw_text == "Котлован № 1"
+
+
+def test_qwen_vision_response_collects_all_mlx_stream_segments() -> None:
+    class Segment:
+        def __init__(self, text: str) -> None:
+            self.text = text
+
+    assert _collect_generated_text((Segment('{"observations":['), Segment("]}"))) == (
+        '{"observations":[]}'
+    )
 
 
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(

@@ -12,9 +12,16 @@ import base64
 import io
 import json
 import threading
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+
+
+def _collect_generated_text(results: Iterable[Any]) -> str:
+    """Join MLX-VLM streaming segments without treating a delta as a full response."""
+
+    return "".join(str(result.text) for result in results)
 
 
 def main() -> None:
@@ -94,16 +101,16 @@ def main() -> None:
                     processor, config, prompt_text, num_images=1 if image is not None else 0
                 )
                 if self.path == "/vision":
-                    response_text = ""
-                    for result in mlx_vlm.stream_generate(
-                        model,
-                        processor,
-                        prompt,
-                        image=image,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                    ):
-                        response_text = str(result.text)
+                    response_text = _collect_generated_text(
+                        mlx_vlm.stream_generate(
+                            model,
+                            processor,
+                            prompt,
+                            image=image,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                        )
+                    )
                     payload = json.dumps(
                         {"model": "Qwen3.8-27B", "text": response_text}, ensure_ascii=False
                     ).encode()
