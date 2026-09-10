@@ -159,22 +159,30 @@ class QwenVisionOcrAdapter:
             payload = _embedded_json_object(candidate)
             if payload is None:
                 raise OcrFailure("qwen_vision_result_malformed") from exc
-        if not isinstance(payload, dict) or not isinstance(payload.get("observations"), list):
+        if not isinstance(payload, dict):
             raise OcrFailure("qwen_vision_result_schema_invalid")
-        elements: list[LayoutElement] = []
-        for order, item in enumerate(payload["observations"], start=1):
-            if (
-                not isinstance(item, dict)
-                or not isinstance(item.get("text"), str)
-                or not _valid_region(item.get("region"))
-            ):
+        raw_observations = payload.get("observations")
+        observations: list[object]
+        if isinstance(raw_observations, list):
+            observations = raw_observations
+        else:
+            root_text = payload.get("text")
+            if not isinstance(root_text, str):
                 raise OcrFailure("qwen_vision_result_schema_invalid")
-            raw_region = item["region"]
-            region = (
-                float(raw_region[0]),
-                float(raw_region[1]),
-                float(raw_region[2]),
-                float(raw_region[3]),
+            observations = [root_text]
+        elements: list[LayoutElement] = []
+        for order, item in enumerate(observations, start=1):
+            if isinstance(item, str):
+                raw_text = item
+                raw_region: object | None = None
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                raw_text = item["text"]
+                raw_region = item.get("region", item.get("bbox"))
+            else:
+                raise OcrFailure("qwen_vision_result_schema_invalid")
+            region = _normalise_model_region(
+                raw_region,
+                image_path=image_path,
             )
             elements.append(
                 _ocr_element(
@@ -184,7 +192,7 @@ class QwenVisionOcrAdapter:
                     page_number,
                     region,
                     order,
-                    item["text"],
+                    raw_text,
                     self.adapter_key,
                 )
             )
@@ -205,6 +213,36 @@ def _embedded_json_object(value: str) -> object | None:
         if isinstance(payload, dict):
             return payload
     return None
+
+
+def _normalise_model_region(
+    raw: object | None,
+    *,
+    image_path: Path,
+) -> tuple[float, float, float, float]:
+    """Validate normalized or pixel model coordinates; use page scope only when absent."""
+
+    if raw is None:
+        return (0.0, 0.0, 1.0, 1.0)
+    if not isinstance(raw, list) or len(raw) != 4 or any(isinstance(value, bool) for value in raw):
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    try:
+        coordinates = tuple(float(value) for value in raw)
+    except (TypeError, ValueError) as exc:
+        raise OcrFailure("qwen_vision_result_schema_invalid") from exc
+    if _valid_region(list(coordinates)):
+        return (coordinates[0], coordinates[1], coordinates[2], coordinates[3])
+    from PIL import Image
+
+    with Image.open(image_path) as image:
+        width, height = image.size
+    if width <= 0 or height <= 0:
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    x0, y0, x1, y1 = coordinates
+    normalized = (x0 / width, y0 / height, x1 / width, y1 / height)
+    if not _valid_region(list(normalized)):
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    return normalized
 
 
 class AppleVisionOcrAdapter:

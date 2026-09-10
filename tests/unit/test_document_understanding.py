@@ -306,6 +306,23 @@ def test_qwen_vision_accepts_one_complete_json_object_in_model_prose(tmp_path: P
     assert result.elements[0].raw_text == "Котлован № 1"
 
 
+def test_qwen_vision_validates_root_text_with_page_scope(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    image.write_bytes(b"bounded-image-bytes")
+
+    result = QwenVisionOcrAdapter("http://127.0.0.1:8790/vision")._parse_result(
+        '{"text":"Котлован № 1"}',
+        image,
+        document_id=DOCUMENT_ID,
+        document_version=1,
+        source_version_id=SOURCE_VERSION_ID,
+        page_number=7,
+    )
+
+    assert result.elements[0].raw_text == "Котлован № 1"
+    assert result.elements[0].locator.region == (0.0, 0.0, 1.0, 1.0)
+
+
 def test_qwen_vision_response_collects_all_mlx_stream_segments() -> None:
     class Segment:
         def __init__(self, text: str) -> None:
