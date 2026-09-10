@@ -270,18 +270,27 @@ class IndustrialDocumentUnderstandingPipeline:
         structures: tuple[StructureNodeCandidate, ...] = ()
         if self._qwen_semantic is not None:
             try:
-                structures = self._qwen_semantic.extract_structures(
+                semantic = self._qwen_semantic.extract_engineering(
                     self._repository.load_elements(claimed)
                 )
             except QwenSemanticFailure as exc:
                 raise UnderstandingStageFailure(exc.code) from exc
-        fields_only = StructuredCandidates(
-            bundle.project_fields, (), (), (), (), (), structures=structures
-        )
-        self._repository.persist_structured(claimed, fields_only)
+            bundle = StructuredCandidates(
+                (*bundle.project_fields, *semantic.project_fields),
+                semantic.works,
+                semantic.quantities,
+                semantic.materials,
+                (),
+                (),
+                structures=(*structures, *semantic.structures),
+            )
+        self._repository.persist_structured(claimed, bundle)
         return {
             "project_field_candidate_count": len(bundle.project_fields),
-            "structure_candidate_count": len(structures),
+            "structure_candidate_count": len(bundle.structures),
+            "work_candidate_count": len(bundle.works),
+            "quantity_candidate_count": len(bundle.quantities),
+            "material_candidate_count": len(bundle.materials),
         }
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:

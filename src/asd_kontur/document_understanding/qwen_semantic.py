@@ -1,4 +1,4 @@
-# ruff: noqa: RUF001 -- Russian bounded prompt is intentional.
+# ruff: noqa: E501, RUF001 -- bounded Russian JSON prompts are intentionally literal.
 """Bounded, evidence-bound Qwen semantic document classification."""
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import urllib.request
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from http.client import IncompleteRead, RemoteDisconnected
 from typing import Any
 from uuid import UUID
@@ -17,13 +17,20 @@ from uuid import UUID
 from asd_kontur.domain import deterministic_uuid
 
 from .models import (
+    CandidateDecision,
     DocumentRole,
     ExactLocator,
     LayoutElement,
+    MappingStatus,
+    MaterialCandidate,
+    ProjectFieldCandidate,
+    QuantityCandidate,
     RoleCandidate,
     RoleDecision,
     StructureNodeCandidate,
+    WorkTypeCandidate,
 )
+from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
 _MAX_PAGES = 6
@@ -139,6 +146,129 @@ class QwenDocumentSemanticAdapter:
             )
         return tuple(values)
 
+    def extract_engineering(self, elements: Iterable[LayoutElement]) -> StructuredCandidates:
+        """Extract evidence-bound engineering candidates from every bounded locator batch."""
+        fragments = _fragments(elements)
+        if not fragments:
+            raise QwenSemanticFailure("qwen_engineering_input_unavailable")
+        fields: list[ProjectFieldCandidate] = []
+        structures: list[StructureNodeCandidate] = []
+        works: list[WorkTypeCandidate] = []
+        quantities: list[QuantityCandidate] = []
+        materials: list[MaterialCandidate] = []
+        for ordinal in range(0, len(fragments), 24):
+            batch = fragments[ordinal : ordinal + 24]
+            allowed = {str(item.locator.source_locator_id): item for item in batch}
+            payload = _complete(self._endpoint, _engineering_prompt(batch), self._timeout_seconds)
+            parsed = _parse_engineering(payload, allowed)
+            batch_works: dict[str, WorkTypeCandidate] = {}
+            for name, locator_id in parsed["works"]:
+                locator = allowed[locator_id].locator
+                normalized = " ".join(name.casefold().split())
+                value = WorkTypeCandidate(
+                    deterministic_uuid(
+                        f"qwen-work:{locator.source_version_id}:{locator_id}:{normalized}"
+                    ),
+                    name,
+                    normalized,
+                    f"page:{locator.page_number}",
+                    locator,
+                    DocumentRole.PROJECT_DOCUMENTATION,
+                    MappingStatus.UNRESOLVED,
+                )
+                batch_works[normalized] = value
+                works.append(value)
+            for key, raw, locator_id in parsed["fields"]:
+                locator = allowed[locator_id].locator
+                fields.append(
+                    ProjectFieldCandidate(
+                        deterministic_uuid(
+                            f"qwen-field:{locator.source_version_id}:{locator_id}:{key}:{raw}"
+                        ),
+                        key,
+                        raw,
+                        raw,
+                        "text",
+                        locator,
+                        QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                        ("qwen_semantic_candidate",),
+                    )
+                )
+            for kind, name, locator_id in parsed["structures"]:
+                locator = allowed[locator_id].locator
+                normalized = " ".join(name.casefold().split())
+                structures.append(
+                    StructureNodeCandidate(
+                        deterministic_uuid(
+                            f"qwen-structure:{locator.source_version_id}:{locator_id}:{kind}:{normalized}"
+                        ),
+                        kind,
+                        name,
+                        normalized,
+                        locator,
+                    )
+                )
+            for work_name, raw, unit, locator_id in parsed["quantities"]:
+                work = batch_works.get(" ".join(work_name.casefold().split()))
+                if work is None:
+                    continue
+                locator = allowed[locator_id].locator
+                try:
+                    parsed_value = Decimal(raw.replace(",", "."))
+                except InvalidOperation:
+                    parsed_value = None
+                quantities.append(
+                    QuantityCandidate(
+                        deterministic_uuid(
+                            f"qwen-quantity:{locator.source_version_id}:{locator_id}:{work.candidate_id}:{raw}:{unit}"
+                        ),
+                        work.candidate_id,
+                        raw,
+                        parsed_value,
+                        unit,
+                        parsed_value,
+                        unit if parsed_value is not None else None,
+                        None,
+                        work.scope_key,
+                        locator,
+                        CandidateDecision.CANDIDATE,
+                    )
+                )
+            for work_name, name, raw, unit, locator_id in parsed["materials"]:
+                work = batch_works.get(" ".join(work_name.casefold().split()))
+                if work is None:
+                    continue
+                locator = allowed[locator_id].locator
+                try:
+                    parsed_value = Decimal(raw.replace(",", ".")) if raw else None
+                except InvalidOperation:
+                    parsed_value = None
+                materials.append(
+                    MaterialCandidate(
+                        deterministic_uuid(
+                            f"qwen-material:{locator.source_version_id}:{locator_id}:{work.candidate_id}:{name}"
+                        ),
+                        work.candidate_id,
+                        name,
+                        " ".join(name.casefold().split()),
+                        raw or None,
+                        parsed_value,
+                        unit or None,
+                        unit or None,
+                        locator,
+                        CandidateDecision.CANDIDATE,
+                    )
+                )
+        return StructuredCandidates(
+            tuple(fields),
+            tuple(works),
+            tuple(quantities),
+            tuple(materials),
+            (),
+            (),
+            tuple(structures),
+        )
+
 
 def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
     by_page: dict[int, list[LayoutElement]] = defaultdict(list)
@@ -157,6 +287,74 @@ def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment,
         sampled.append(_SemanticFragment(page_elements[0].locator, text[:_MAX_CHARS_PER_PAGE]))
         used += min(len(text), _MAX_CHARS_PER_PAGE)
     return tuple(sampled)
+
+
+def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
+    return tuple(
+        _SemanticFragment(item.locator, item.normalized_text[:800])
+        for item in elements
+        if item.normalized_text
+    )
+
+
+def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
+    fragments = [
+        {
+            "locator_id": str(item.locator.source_locator_id),
+            "page": item.locator.page_number,
+            "text": item.text,
+        }
+        for item in elements
+    ]
+    return (
+        "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
+        '{"fields":[{"key":"...","value":"...","locator_id":"..."}],'
+        '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","locator_id":"..."}],'
+        '"works":[{"name":"...","locator_id":"..."}],'
+        '"quantities":[{"work_name":"...","value":"...","unit":"...","locator_id":"..."}],'
+        '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","locator_id":"..."}]}. '
+        "Каждый locator_id только из входа; если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
+        + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def _parse_engineering(
+    answer: str, allowed: dict[str, _SemanticFragment]
+) -> dict[str, list[tuple[str, ...]]]:
+    try:
+        value = _json_object(answer)
+    except json.JSONDecodeError as exc:
+        raise QwenSemanticFailure("qwen_engineering_response_invalid_json") from exc
+    if not isinstance(value, dict):
+        raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
+    result: dict[str, list[tuple[str, ...]]] = {
+        "fields": [],
+        "structures": [],
+        "works": [],
+        "quantities": [],
+        "materials": [],
+    }
+    specs = {
+        "fields": ("key", "value", "locator_id"),
+        "structures": ("kind", "name", "locator_id"),
+        "works": ("name", "locator_id"),
+        "quantities": ("work_name", "value", "unit", "locator_id"),
+        "materials": ("work_name", "name", "quantity", "unit", "locator_id"),
+    }
+    for key, names in specs.items():
+        rows = value.get(key, [])
+        if not isinstance(rows, list) or len(rows) > 64:
+            raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
+        for row in rows:
+            if not isinstance(row, dict):
+                raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
+            item = tuple(" ".join(str(row.get(name, "")).split()) for name in names)
+            if not all(item) or item[-1] not in allowed:
+                raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
+            if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
+                raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
+            result[key].append(item)
+    return result
 
 
 def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
