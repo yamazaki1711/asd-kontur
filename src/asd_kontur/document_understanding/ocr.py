@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import hashlib
 import io
@@ -9,6 +10,8 @@ import json
 import shutil
 import subprocess
 import tempfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -60,6 +63,130 @@ class OcrAdapter(Protocol):
         source_version_id: UUID,
         page_number: int,
     ) -> OcrAdapterResult: ...
+
+
+class QwenVisionOcrAdapter:
+    """Loopback Qwen vision OCR with image bytes and validated layout evidence."""
+
+    adapter_key = "qwen3.8-27b-local-vision"
+    adapter_version = "qwen-vision-ocr-v1"
+
+    def __init__(self, endpoint: str, *, timeout_seconds: float = 180.0) -> None:
+        self._endpoint = endpoint
+        self._timeout_seconds = timeout_seconds
+
+    def available(self) -> bool:
+        health = self._endpoint.removesuffix("/vision") + "/health"
+        try:
+            with urllib.request.urlopen(health, timeout=2) as response:
+                payload = json.loads(response.read(4096))
+        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+            return False
+        return bool(
+            response.status == 200
+            and isinstance(payload, dict)
+            and payload.get("status") == "ready"
+        )
+
+    def extract(
+        self,
+        image_path: Path,
+        *,
+        document_id: UUID,
+        document_version: int,
+        source_version_id: UUID,
+        page_number: int,
+    ) -> OcrAdapterResult:
+        image_bytes = image_path.read_bytes()
+        if not image_bytes or len(image_bytes) > 12 * 1024 * 1024:
+            raise OcrFailure("qwen_vision_image_size_invalid")
+        request_body = json.dumps(
+            {
+                "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+                "prompt": (
+                    "Распознай текст строительного документа на изображении. Верни только JSON "
+                    '{"observations":[{"text":"точный текст","region":[x0,y0,x1,y1]}]}. '
+                    "Координаты нормированы от 0 до 1; не выдумывай неразборчивый текст."
+                ),
+                "max_tokens": 1800,
+                "temperature": 0.0,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            self._endpoint,
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
+                payload = json.loads(response.read(4 * 1024 * 1024))
+        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            raise OcrFailure("qwen_vision_runtime_unavailable") from exc
+        if (
+            response.status != 200
+            or not isinstance(payload, dict)
+            or not isinstance(payload.get("text"), str)
+        ):
+            raise OcrFailure("qwen_vision_response_invalid")
+        return self._parse_result(
+            payload["text"],
+            image_path,
+            document_id=document_id,
+            document_version=document_version,
+            source_version_id=source_version_id,
+            page_number=page_number,
+        )
+
+    def _parse_result(
+        self,
+        text: str,
+        image_path: Path,
+        *,
+        document_id: UUID,
+        document_version: int,
+        source_version_id: UUID,
+        page_number: int,
+    ) -> OcrAdapterResult:
+        candidate = text.strip()
+        if candidate.startswith("```"):
+            candidate = candidate.split("\n", 1)[1] if "\n" in candidate else ""
+            candidate = candidate.rsplit("```", 1)[0].strip()
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            raise OcrFailure("qwen_vision_result_malformed") from exc
+        if not isinstance(payload, dict) or not isinstance(payload.get("observations"), list):
+            raise OcrFailure("qwen_vision_result_schema_invalid")
+        elements: list[LayoutElement] = []
+        for order, item in enumerate(payload["observations"], start=1):
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("text"), str)
+                or not _valid_region(item.get("region"))
+            ):
+                raise OcrFailure("qwen_vision_result_schema_invalid")
+            raw_region = item["region"]
+            region = (
+                float(raw_region[0]),
+                float(raw_region[1]),
+                float(raw_region[2]),
+                float(raw_region[3]),
+            )
+            elements.append(
+                _ocr_element(
+                    document_id,
+                    document_version,
+                    source_version_id,
+                    page_number,
+                    region,
+                    order,
+                    item["text"],
+                    self.adapter_key,
+                )
+            )
+        return _result(self.adapter_key, self.adapter_version, "ru-RU+en-US", image_path, elements)
 
 
 class AppleVisionOcrAdapter:
@@ -218,15 +345,20 @@ class TesseractOcrAdapter:
 def select_adapters(
     route: OcrRoute,
     *,
-    apple: AppleVisionOcrAdapter,
-    tesseract: TesseractOcrAdapter,
+    qwen: QwenVisionOcrAdapter,
 ) -> tuple[OcrAdapter, ...]:
     if route is OcrRoute.NOT_REQUIRED:
         return ()
-    if route is OcrRoute.APPLE_VISION:
-        return tuple(adapter for adapter in (apple, tesseract) if adapter.available())
-    if route is OcrRoute.TESSERACT:
-        return tuple(adapter for adapter in (tesseract, apple) if adapter.available())
+    if route is OcrRoute.BLOCKED:
+        return ()
+    qwen_routes = {
+        OcrRoute.QWEN_VISION,
+        OcrRoute.APPLE_VISION,
+        OcrRoute.TESSERACT,
+        OcrRoute.VLM_REQUIRED,
+    }
+    if route in qwen_routes:
+        return (qwen,) if qwen.available() else ()
     return ()
 
 

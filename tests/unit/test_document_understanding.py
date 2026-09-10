@@ -30,7 +30,7 @@ from asd_kontur.document_understanding.native import (
     analyze_page_health,
     inspect_and_extract,
 )
-from asd_kontur.document_understanding.ocr import OcrAdapterResult
+from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.document_understanding.semantic import (
     classify_pages,
@@ -139,10 +139,10 @@ def test_page_health_routes_sparse_image_and_damaged_text_to_ocr() -> None:
     )
 
     assert sparse.primary_kind is PageHealthKind.EXISTING_OCR
-    assert sparse.route is OcrRoute.APPLE_VISION
+    assert sparse.route is OcrRoute.QWEN_VISION
     assert sparse.rotation_degrees == 90
     assert damaged.primary_kind is PageHealthKind.DAMAGED_ENCODING
-    assert damaged.route is OcrRoute.APPLE_VISION
+    assert damaged.route is OcrRoute.QWEN_VISION
 
 
 def test_page_health_rejects_mixed_script_ocr_garble() -> None:
@@ -158,7 +158,7 @@ def test_page_health_rejects_mixed_script_ocr_garble() -> None:
     )
 
     assert damaged.primary_kind is PageHealthKind.DAMAGED_ENCODING
-    assert damaged.route is OcrRoute.APPLE_VISION
+    assert damaged.route is OcrRoute.QWEN_VISION
     assert damaged.signals == ("mixed_script_ocr_garble_high",)
 
 
@@ -176,7 +176,7 @@ def test_page_health_detects_cyrillic_utf8_mojibake() -> None:
     )
 
     assert damaged.primary_kind is PageHealthKind.DAMAGED_ENCODING
-    assert damaged.route is OcrRoute.APPLE_VISION
+    assert damaged.route is OcrRoute.QWEN_VISION
     assert damaged.signals == ("cyrillic_utf8_mojibake_high",)
 
 
@@ -226,7 +226,7 @@ def test_pdf_unknown_font_encoding_is_page_scoped_damaged_native() -> None:
     assert page.elements == ()
     assert page.parser_observations == ("native_text_encoding_unresolved",)
     assert page.health.primary_kind is PageHealthKind.DAMAGED_ENCODING
-    assert page.health.route is OcrRoute.APPLE_VISION
+    assert page.health.route is OcrRoute.QWEN_VISION
     assert page.health.signals == ("native_parser:native_text_encoding_unresolved",)
 
 
@@ -269,6 +269,24 @@ def test_tesseract_uses_known_local_location_when_launchd_path_is_restricted(
     adapter = ocr.TesseractOcrAdapter()
     assert adapter.available() is True
     assert adapter._resolved_executable() == str(candidate)
+
+
+def test_qwen_vision_result_is_validated_with_exact_page_locator(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    image.write_bytes(b"bounded-image-bytes")
+
+    result = QwenVisionOcrAdapter("http://127.0.0.1:8790/vision")._parse_result(
+        '{"observations":[{"text":"Котлован № 1","region":[0,0,1,1]}]}',
+        image,
+        document_id=DOCUMENT_ID,
+        document_version=1,
+        source_version_id=SOURCE_VERSION_ID,
+        page_number=7,
+    )
+
+    assert result.adapter_key == "qwen3.8-27b-local-vision"
+    assert result.elements[0].locator.page_number == 7
+    assert result.elements[0].locator.source_version_id == SOURCE_VERSION_ID
 
 
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(

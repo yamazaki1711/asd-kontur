@@ -39,6 +39,7 @@ class PageHealthKind(StrEnum):
 
 class OcrRoute(StrEnum):
     NOT_REQUIRED = "not_required"
+    QWEN_VISION = "qwen3_8_vision"
     APPLE_VISION = "apple_vision_accurate"
     TESSERACT = "tesseract_rus_eng"
     VLM_REQUIRED = "vlm_required"

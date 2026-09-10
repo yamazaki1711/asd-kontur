@@ -101,6 +101,7 @@ def main(argv: list[str] | None = None) -> int:
             store,
             worker_identity=args.identity,
             lease_seconds=settings.job_lease_seconds,
+            qwen_vision_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/vision",
         )
         try:
             worker_instance.run_forever()

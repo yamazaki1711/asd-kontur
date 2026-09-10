@@ -10,7 +10,6 @@ import signal
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
@@ -21,11 +20,7 @@ from sqlalchemy import exc as sa_exc
 from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.native import NativeExtractionFailure
-from asd_kontur.document_understanding.ocr import (
-    AppleVisionOcrAdapter,
-    OcrFailure,
-    TesseractOcrAdapter,
-)
+from asd_kontur.document_understanding.ocr import OcrFailure, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.pipeline import (
     IndustrialDocumentUnderstandingPipeline,
     UnderstandingStageFailure,
@@ -78,6 +73,7 @@ class DocumentWorker:
         *,
         worker_identity: str,
         lease_seconds: int,
+        qwen_vision_url: str = "http://127.0.0.1:8790/vision",
     ) -> None:
         if len(worker_identity) < 3:
             raise ValueError("worker identity is required")
@@ -88,10 +84,7 @@ class DocumentWorker:
         self._stopping = False
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
-            apple_vision=AppleVisionOcrAdapter(
-                Path(__file__).resolve().parents[3] / "tools/ocr/apple_vision_ocr.swift"
-            ),
-            tesseract=TesseractOcrAdapter(),
+            qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
         )
 
     def request_stop(self) -> None:

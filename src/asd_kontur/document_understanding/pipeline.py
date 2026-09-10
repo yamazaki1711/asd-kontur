@@ -20,11 +20,10 @@ from .models import (
 )
 from .native import NativeExtractionFailure, inspect_and_extract
 from .ocr import (
-    AppleVisionOcrAdapter,
     OcrAdapter,
     OcrAdapterResult,
     OcrFailure,
-    TesseractOcrAdapter,
+    QwenVisionOcrAdapter,
     render_pdf_page,
     select_adapters,
 )
@@ -47,12 +46,10 @@ class IndustrialDocumentUnderstandingPipeline:
         self,
         repository: IndustrialUnderstandingRepository,
         *,
-        apple_vision: AppleVisionOcrAdapter,
-        tesseract: TesseractOcrAdapter,
+        qwen_vision: QwenVisionOcrAdapter,
     ) -> None:
         self._repository = repository
-        self._apple = apple_vision
-        self._tesseract = tesseract
+        self._qwen_vision = qwen_vision
 
     def execute(self, claimed: ClaimedJob, source: BinaryIO) -> dict[str, object]:
         handlers = {
@@ -130,10 +127,10 @@ class IndustrialDocumentUnderstandingPipeline:
             raise UnderstandingStageFailure("ocr_routing_input_unavailable")
         return {
             "routes": [{"page": page, "route": route} for page, route in routes],
-            "primary_adapter": self._apple.adapter_key if self._apple.available() else None,
-            "fallback_adapter": self._tesseract.adapter_key
-            if self._tesseract.available()
+            "primary_adapter": self._qwen_vision.adapter_key
+            if self._qwen_vision.available()
             else None,
+            "fallback_adapter": None,
         }
 
     def _ocr(self, claimed: ClaimedJob, source: BinaryIO) -> dict[str, object]:
@@ -143,9 +140,7 @@ class IndustrialDocumentUnderstandingPipeline:
         ]
         if not routed:
             return {"routed_page_count": 0, "extracted_page_count": 0, "status": "not_required"}
-        blocked = [
-            page for page, route in routed if route in {OcrRoute.BLOCKED, OcrRoute.VLM_REQUIRED}
-        ]
+        blocked = [page for page, route in routed if route is OcrRoute.BLOCKED]
         actionable = [(page, route) for page, route in routed if page not in blocked]
         if blocked and not actionable:
             raise UnderstandingStageFailure(
@@ -165,7 +160,7 @@ class IndustrialDocumentUnderstandingPipeline:
                 else:
                     raise UnderstandingStageFailure("ocr_source_format_unsupported")
                 result = self._run_ocr_adapters(
-                    select_adapters(route, apple=self._apple, tesseract=self._tesseract),
+                    select_adapters(route, qwen=self._qwen_vision),
                     image,
                     claimed,
                     page_number,

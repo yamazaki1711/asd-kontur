@@ -492,7 +492,7 @@ def analyze_page_health(
     )
     if blocking_parser_observations:
         primary = PageHealthKind.DAMAGED_ENCODING
-        route = OcrRoute.APPLE_VISION
+        route = OcrRoute.QWEN_VISION
         signals.extend(f"native_parser:{value}" for value in blocking_parser_observations)
     elif (
         replacement_ratio > Decimal("0.02")
@@ -500,7 +500,7 @@ def analyze_page_health(
         or mojibake_ratio > Decimal("0.08")
     ):
         primary = PageHealthKind.DAMAGED_ENCODING
-        route = OcrRoute.APPLE_VISION
+        route = OcrRoute.QWEN_VISION
         signals.append(
             "cyrillic_utf8_mojibake_high"
             if mojibake_ratio > Decimal("0.08")
@@ -512,7 +512,7 @@ def analyze_page_health(
         )
     elif not stripped and image_count:
         primary = PageHealthKind.RASTER_ONLY
-        route = OcrRoute.APPLE_VISION
+        route = OcrRoute.QWEN_VISION
         signals.append("image_without_native_text")
     elif not stripped:
         primary = PageHealthKind.BLANK
@@ -520,7 +520,7 @@ def analyze_page_health(
         signals.append("no_text_or_image")
     elif image_count and length < 80:
         primary = PageHealthKind.EXISTING_OCR
-        route = OcrRoute.APPLE_VISION
+        route = OcrRoute.QWEN_VISION
         signals.append("suspiciously_sparse_text_over_image")
     elif image_count:
         primary = PageHealthKind.MIXED
