@@ -3542,6 +3542,25 @@ function ProjectUnderstandingPage() {
             string,
             unknown
           >;
+          const materialization = value.materialization as Record<
+            string,
+            unknown
+          >;
+          const materializationState = String(
+            materialization.state ?? "not_requested",
+          );
+          const materializationMessages: Record<string, string> = {
+            not_requested:
+              "Модель объекта ещё не запускалась. Загруженные документы сохранены отдельно от модели.",
+            queued:
+              "Формирование модели ожидает выполнения зависимых задач обработки.",
+            running:
+              "Формирование модели объекта выполняется; промежуточные сведения сохраняются с источниками.",
+            blocked:
+              "Формирование модели заблокировано внутренней зависимостью обработки. Это не означает отсутствие замечаний или сведений в документах.",
+            partial:
+              "Модель сформирована частично: используйте сведения и источники с учётом указанных пробелов.",
+          };
           return (
             <>
               <div className="metrics">
@@ -3559,11 +3578,12 @@ function ProjectUnderstandingPage() {
                 />
                 <Metric label="Замечаний" value={value.defects.length} />
               </div>
-              {Object.keys(reconciliation).length === 0 && (
+              {materializationState !== "complete" && (
                 <InfoNotice>
-                  Документы можно загружать и обрабатывать независимо. Когда
-                  исходные данные готовы, запустите формирование общей модели
-                  объекта.
+                  {materializationMessages[materializationState] ??
+                    "Состояние формирования модели требует проверки."}
+                  {typeof materialization.failure_code === "string" &&
+                    ` Причина: ${materialization.failure_code}.`}
                 </InfoNotice>
               )}
               {section === "general" && (

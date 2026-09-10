@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -9,6 +10,7 @@ from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
+from unittest.mock import patch
 from uuid import UUID
 
 import pytest
@@ -333,6 +335,43 @@ def test_qwen_vision_response_collects_all_mlx_stream_segments() -> None:
     assert _collect_generated_text((Segment('{"observations":['), Segment("]}"))) == (
         '{"observations":[]}'
     )
+
+
+def test_qwen_vision_ocr_uses_bounded_page_generation_budget(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    image.write_bytes(b"png")
+    captured: dict[str, object] = {}
+
+    class Response:
+        status = 200
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _size: int) -> bytes:
+            return '{"text":"{\\"observations\\":[\\"Котлован № 1\\"]}"}'.encode()
+
+    def open_request(request: Any, *, timeout: float) -> Response:
+        captured["payload"] = request.data
+        captured["timeout"] = timeout
+        return Response()
+
+    adapter = QwenVisionOcrAdapter("http://127.0.0.1:8790/vision")
+    with patch("asd_kontur.document_understanding.ocr.urllib.request.urlopen", open_request):
+        result = adapter.extract(
+            image,
+            document_id=DOCUMENT_ID,
+            document_version=1,
+            source_version_id=SOURCE_VERSION_ID,
+            page_number=1,
+        )
+
+    assert json.loads(cast(bytes, captured["payload"]))["max_tokens"] == 800
+    assert captured["timeout"] == 180.0
+    assert result.adapter_version == "qwen-vision-ocr-v2"
 
 
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(

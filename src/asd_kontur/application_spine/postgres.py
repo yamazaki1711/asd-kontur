@@ -2479,6 +2479,15 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
         return {
+            "materialization": {
+                "state": "complete"
+                if str(reconciliation["terminal_status"]) == "complete"
+                else "partial",
+                "reconciliation_id": str(reconciliation["reconciliation_id"]),
+                "source_count": int(reconciliation["source_count"]),
+                "page_count": int(reconciliation["page_count"]),
+                "gaps": list(reconciliation["gaps"]),
+            },
             "reconciliation": _jsonable_row(reconciliation),
             "project_definition": _jsonable_row(project),
             "page_roles": [_jsonable_row(row) for row in page_roles],
@@ -2829,6 +2838,9 @@ class SpinePostgresRepository:
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> dict[str, Any]:
         return {
+            "materialization": cls._project_understanding_materialization(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
             "reconciliation": {},
             "project_definition": {"definition": {"fields": {}, "gaps": []}},
             "page_roles": [],
@@ -2853,6 +2865,75 @@ class SpinePostgresRepository:
                 "customer_addition": "workspace_additive_only",
                 "ai_candidate": "candidate_only",
             },
+        }
+
+    @staticmethod
+    def _project_understanding_materialization(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Expose a truthful state when no reconciliation is materialized yet."""
+        latest = (
+            session.execute(
+                sa.text(
+                    "SELECT job_id,state,typed_failure_code,created_at FROM workspace.durable_jobs WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "job_kind='PROJECT_UNDERSTANDING_RECONCILIATION' ORDER BY created_at DESC,job_id DESC "
+                    "LIMIT 1"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        role_count = int(
+            session.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.document_role_decisions WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+            or 0
+        )
+        candidate_count = int(
+            session.scalar(
+                sa.text(
+                    "SELECT (SELECT count(*) FROM workspace.project_field_candidates WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace) + "
+                    "(SELECT count(*) FROM workspace.work_type_candidates WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace) + "
+                    "(SELECT count(*) FROM workspace.quantity_candidates WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace) + "
+                    "(SELECT count(*) FROM workspace.material_candidates WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace)"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+            or 0
+        )
+        if latest is None:
+            state = "partial" if role_count or candidate_count else "not_requested"
+            return {
+                "state": state,
+                "role_decision_count": role_count,
+                "candidate_count": candidate_count,
+                "gaps": [],
+            }
+        job_state = str(latest["state"])
+        if job_state == "queued":
+            state = "queued"
+        elif job_state in {"leased", "running"}:
+            state = "running"
+        else:
+            state = "blocked"
+        return {
+            "state": state,
+            "job_id": str(latest["job_id"]),
+            "job_state": job_state,
+            "failure_code": latest["typed_failure_code"],
+            "role_decision_count": role_count,
+            "candidate_count": candidate_count,
+            "gaps": [],
         }
 
     def platform_knowledge_status(self) -> KnowledgeStatus:

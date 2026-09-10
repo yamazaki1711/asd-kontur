@@ -351,6 +351,7 @@ class TrialReadinessView(ApiModel):
 
 
 class ProjectUnderstandingView(ApiModel):
+    materialization: dict[str, Any] = Field(default_factory=dict)
     reconciliation: dict[str, Any]
     project_definition: dict[str, Any]
     page_roles: list[dict[str, Any]]

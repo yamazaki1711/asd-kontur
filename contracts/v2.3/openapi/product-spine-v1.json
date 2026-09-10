@@ -2409,6 +2409,11 @@
             "title": "Intake Summary",
             "type": "object"
           },
+          "materialization": {
+            "additionalProperties": true,
+            "title": "Materialization",
+            "type": "object"
+          },
           "matrix": {
             "additionalProperties": true,
             "title": "Matrix",

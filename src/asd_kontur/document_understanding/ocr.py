@@ -69,7 +69,7 @@ class QwenVisionOcrAdapter:
     """Loopback Qwen vision OCR with image bytes and validated layout evidence."""
 
     adapter_key = "qwen3.8-27b-local-vision"
-    adapter_version = "qwen-vision-ocr-v1"
+    adapter_version = "qwen-vision-ocr-v2"
 
     def __init__(self, endpoint: str, *, timeout_seconds: float = 180.0) -> None:
         self._endpoint = endpoint
@@ -108,7 +108,7 @@ class QwenVisionOcrAdapter:
                     '{"observations":[{"text":"точный текст","region":[x0,y0,x1,y1]}]}. '
                     "Координаты нормированы от 0 до 1; не выдумывай неразборчивый текст."
                 ),
-                "max_tokens": 1800,
+                "max_tokens": 800,
                 "temperature": 0.0,
             },
             ensure_ascii=False,
