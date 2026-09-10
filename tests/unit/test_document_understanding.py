@@ -6,6 +6,7 @@ import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from decimal import Decimal
+from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
@@ -32,6 +33,7 @@ from asd_kontur.document_understanding.native import (
     inspect_and_extract,
 )
 from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOcrAdapter
+from asd_kontur.document_understanding.pipeline import IndustrialDocumentUnderstandingPipeline
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.document_understanding.semantic import (
     classify_pages,
@@ -392,3 +394,49 @@ def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
     assert (
         locator_parameters["key"] == f"understanding:ocr:apple_vision:{locator.source_locator_id}"
     )
+
+
+def test_ocr_retry_does_not_resend_pages_already_completed_by_qwen() -> None:
+    class Repository:
+        def load_ocr_routes(self, _claimed: ClaimedJob) -> tuple[tuple[int, str], ...]:
+            return ((1, OcrRoute.QWEN_VISION.value),)
+
+        def load_completed_ocr_pages(
+            self, _claimed: ClaimedJob, *, adapter_key: str
+        ) -> frozenset[int]:
+            assert adapter_key == "qwen3.8-27b-local-vision"
+            return frozenset({1})
+
+    class QwenAdapter:
+        adapter_key = "qwen3.8-27b-local-vision"
+
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000001"),
+        UUID("40000000-0000-4000-8000-000000000001"),
+        UUID("50000000-0000-4000-8000-000000000001"),
+        JobKind.OCR_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+            "media_type": "image/png",
+        },
+        "sha256:" + "a" * 64,
+        1,
+        1,
+        "none",
+    )
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, QwenAdapter()),
+    )
+
+    result = pipeline._ocr(claimed, BytesIO(b"already-completed-image-is-not-read"))
+
+    assert result == {
+        "routed_page_count": 1,
+        "extracted_page_count": 0,
+        "already_complete_page_count": 1,
+        "blocked_pages": [],
+        "results": [],
+    }

@@ -270,6 +270,34 @@ class IndustrialUnderstandingRepository:
             ).all()
         return tuple((int(row.page_number), str(row.ocr_route)) for row in rows)
 
+    def load_completed_ocr_pages(self, claimed: ClaimedJob, *, adapter_key: str) -> frozenset[int]:
+        """Return persisted successful pages for the active OCR adapter.
+
+        A derived durable retry must continue a partially completed Qwen OCR
+        attempt instead of sending the same source pages back to inference.
+        Results from a different historical adapter deliberately do not satisfy
+        the active Qwen route: their provenance remains preserved, but it is
+        not silently promoted to the current model-based execution policy.
+        """
+        with self._session(claimed) as session:
+            rows = session.scalars(
+                sa.text(
+                    "SELECT DISTINCT page_number FROM workspace.ocr_extraction_versions "
+                    "WHERE organization_id=:o AND workspace_id=:w AND document_id=:document "
+                    "AND document_version=:version AND source_version_id=:source "
+                    "AND adapter_key=:adapter AND status='complete' ORDER BY page_number"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "document": self._document_id(claimed),
+                    "version": self._document_version(claimed),
+                    "source": self._source_version_id(claimed),
+                    "adapter": adapter_key,
+                },
+            ).all()
+        return frozenset(int(page_number) for page_number in rows)
+
     def persist_classification(
         self,
         claimed: ClaimedJob,

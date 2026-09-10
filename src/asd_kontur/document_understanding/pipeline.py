@@ -141,7 +141,14 @@ class IndustrialDocumentUnderstandingPipeline:
         if not routed:
             return {"routed_page_count": 0, "extracted_page_count": 0, "status": "not_required"}
         blocked = [page for page, route in routed if route is OcrRoute.BLOCKED]
-        actionable = [(page, route) for page, route in routed if page not in blocked]
+        completed_pages = self._repository.load_completed_ocr_pages(
+            claimed, adapter_key=self._qwen_vision.adapter_key
+        )
+        actionable = [
+            (page, route)
+            for page, route in routed
+            if page not in blocked and page not in completed_pages
+        ]
         if blocked and not actionable:
             raise UnderstandingStageFailure(
                 "drawing_or_encrypted_content_requires_unavailable_capability"
@@ -177,6 +184,7 @@ class IndustrialDocumentUnderstandingPipeline:
         return {
             "routed_page_count": len(routed),
             "extracted_page_count": len(extracted),
+            "already_complete_page_count": len(completed_pages),
             "blocked_pages": blocked,
             "results": extracted,
         }
