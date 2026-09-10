@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -2449,26 +2450,6 @@ class SpinePostgresRepository:
                 .mappings()
                 .all()
             )
-            evidence_rows = (
-                session.execute(
-                    sa.text(
-                        "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
-                        "sl.source_version_id,sl.locator_kind,sl.locator_value,sl.fragment_digest,"
-                        "v.document_id,v.version AS document_version,v.safe_display_name,e.raw_text "
-                        "FROM workspace.source_locators sl "
-                        "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id AND "
-                        "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id "
-                        "LEFT JOIN workspace.native_layout_element_versions e ON "
-                        "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id AND "
-                        "e.source_locator_id=sl.source_locator_id WHERE "
-                        "sl.organization_id=:organization AND sl.workspace_id=:workspace ORDER BY "
-                        "sl.source_locator_id,v.version DESC,e.version DESC NULLS LAST"
-                    ),
-                    {"organization": organization_id, "workspace": workspace_id},
-                )
-                .mappings()
-                .all()
-            )
             candidates = self._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2480,6 +2461,21 @@ class SpinePostgresRepository:
             )
             intake_summary = self._intake_summary(
                 session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            evidence_index = self._workspace_evidence_index(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=self._response_locator_ids(
+                    project,
+                    packages,
+                    matrix,
+                    profile,
+                    page_roles,
+                    defects,
+                    candidates,
+                    structure_nodes,
+                ),
             )
         return {
             "materialization": {
@@ -2498,9 +2494,7 @@ class SpinePostgresRepository:
             "matrix": _jsonable_row(matrix),
             "normative_profile": _jsonable_row(profile) if profile is not None else None,
             "defects": [_jsonable_row(row) for row in defects],
-            "evidence_index": {
-                str(row["source_locator_id"]): _jsonable_row(row) for row in evidence_rows
-            },
+            "evidence_index": evidence_index,
             "candidates": candidates,
             "structure_nodes": structure_nodes,
             "review_decisions": review_decisions,
@@ -2841,6 +2835,12 @@ class SpinePostgresRepository:
     def _empty_project_understanding_view(
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> dict[str, Any]:
+        candidates = cls._project_candidate_rows(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
+        structure_nodes = cls._project_structure_rows(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -2852,13 +2852,14 @@ class SpinePostgresRepository:
             "matrix": {"matrix": {"rows": []}},
             "normative_profile": None,
             "defects": [],
-            "evidence_index": {},
-            "candidates": cls._project_candidate_rows(
-                session, organization_id=organization_id, workspace_id=workspace_id
+            "evidence_index": cls._workspace_evidence_index(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=cls._response_locator_ids(candidates, structure_nodes),
             ),
-            "structure_nodes": cls._project_structure_rows(
-                session, organization_id=organization_id, workspace_id=workspace_id
-            ),
+            "candidates": candidates,
+            "structure_nodes": structure_nodes,
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
@@ -2889,6 +2890,63 @@ class SpinePostgresRepository:
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()
         return [_jsonable_row(row) for row in rows]
+
+    @staticmethod
+    def _workspace_evidence_index(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        locator_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        if not locator_ids:
+            return {}
+        rows = session.execute(
+            sa.text(
+                "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
+                "sl.source_version_id,sl.locator_kind,sl.locator_value,sl.fragment_digest,"
+                "v.document_id,v.version AS document_version,v.safe_display_name,e.raw_text "
+                "FROM workspace.source_locators sl "
+                "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id AND "
+                "v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id "
+                "LEFT JOIN workspace.native_layout_element_versions e ON "
+                "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id AND "
+                "e.source_locator_id=sl.source_locator_id WHERE "
+                "sl.organization_id=:organization AND sl.workspace_id=:workspace "
+                "AND sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[])) ORDER BY "
+                "sl.source_locator_id,v.version DESC,e.version DESC NULLS LAST"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "locator_ids": locator_ids,
+            },
+        ).mappings()
+        return {str(row["source_locator_id"]): _jsonable_row(row) for row in rows}
+
+    @classmethod
+    def _response_locator_ids(cls, *values: Any) -> list[str]:
+        locator_ids: set[str] = set()
+
+        def collect(value: Any, key: str | None = None) -> None:
+            if key == "source_locator_ids":
+                for locator_id in value if isinstance(value, (list, tuple, set)) else ():
+                    collect(locator_id, "source_locator_id")
+                return
+            if isinstance(value, Mapping):
+                for item_key, item_value in value.items():
+                    collect(item_value, str(item_key))
+                return
+            if isinstance(value, (list, tuple, set)):
+                for item in value:
+                    collect(item, key)
+                return
+            if key == "source_locator_id" and value is not None:
+                locator_ids.add(str(value))
+
+        for item in values:
+            collect(item)
+        return sorted(locator_ids)
 
     @staticmethod
     def _project_understanding_materialization(
