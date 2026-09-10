@@ -69,9 +69,9 @@ class QwenVisionOcrAdapter:
     """Loopback Qwen vision OCR with image bytes and validated layout evidence."""
 
     adapter_key = "qwen3.8-27b-local-vision"
-    adapter_version = "qwen-vision-ocr-v2"
+    adapter_version = "qwen-vision-ocr-v3"
 
-    def __init__(self, endpoint: str, *, timeout_seconds: float = 180.0) -> None:
+    def __init__(self, endpoint: str, *, timeout_seconds: float = 600.0) -> None:
         self._endpoint = endpoint
         self._timeout_seconds = timeout_seconds
 

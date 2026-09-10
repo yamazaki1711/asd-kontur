@@ -374,8 +374,8 @@ def test_qwen_vision_ocr_uses_bounded_page_generation_budget(tmp_path: Path) -> 
         )
 
     assert json.loads(cast(bytes, captured["payload"]))["max_tokens"] == 800
-    assert captured["timeout"] == 180.0
-    assert result.adapter_version == "qwen-vision-ocr-v2"
+    assert captured["timeout"] == 600.0
+    assert result.adapter_version == "qwen-vision-ocr-v3"
 
 
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
