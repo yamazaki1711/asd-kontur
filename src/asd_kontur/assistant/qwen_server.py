@@ -98,7 +98,11 @@ def main() -> None:
 
                     image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
                 prompt = prompt_utils.apply_chat_template(
-                    processor, config, prompt_text, num_images=1 if image is not None else 0
+                    processor,
+                    config,
+                    prompt_text,
+                    num_images=1 if image is not None else 0,
+                    enable_thinking=False,
                 )
                 if self.path == "/vision":
                     response_text = _collect_generated_text(
