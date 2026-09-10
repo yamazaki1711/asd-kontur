@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
+from sqlalchemy import Engine
 
+from asd_kontur.application_spine.models import ClaimedJob, JobKind
 from asd_kontur.document_understanding import ocr
 from asd_kontur.document_understanding.models import (
     CandidateDecision,
     DocumentRole,
+    ExactLocator,
+    LayoutElement,
     OcrRoute,
     PageHealthKind,
 )
@@ -22,6 +29,8 @@ from asd_kontur.document_understanding.native import (
     analyze_page_health,
     inspect_and_extract,
 )
+from asd_kontur.document_understanding.ocr import OcrAdapterResult
+from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.document_understanding.semantic import (
     classify_pages,
     extract_structured_candidates,
@@ -244,3 +253,62 @@ def test_pdf_renderer_uses_known_local_location_when_launchd_path_is_restricted(
     monkeypatch.setattr(Path, "stat", lambda self: type("Stat", (), {"st_mode": 0o755})())
 
     assert ocr._pdf_renderer() == str(candidate)
+
+
+def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorded_sql: list[str] = []
+
+    class RecordingSession:
+        def execute(self, statement: Any, _parameters: dict[str, Any]) -> None:
+            recorded_sql.append(str(statement))
+
+    @contextmanager
+    def recording_session(_claimed: ClaimedJob) -> Iterator[RecordingSession]:
+        yield RecordingSession()
+
+    repository = IndustrialUnderstandingRepository(cast(Engine, object()))
+    monkeypatch.setattr(repository, "_session", recording_session)
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000001"),
+        UUID("40000000-0000-4000-8000-000000000001"),
+        UUID("50000000-0000-4000-8000-000000000001"),
+        JobKind.OCR_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+        },
+        "sha256:" + "a" * 64,
+        1,
+        1,
+        "none",
+    )
+    locator = ExactLocator(
+        SOURCE_VERSION_ID,
+        UUID("60000000-0000-4000-8000-000000000001"),
+        DOCUMENT_ID,
+        1,
+        1,
+        (0.0, 0.0, 1.0, 1.0),
+        "sha256:" + "b" * 64,
+    )
+    result = OcrAdapterResult(
+        "apple_vision",
+        "apple-vision-ocr-v1",
+        "rus+eng",
+        (
+            LayoutElement(
+                UUID("70000000-0000-4000-8000-000000000001"), "ocr_word", "К-1", "к-1", 1, locator
+            ),
+        ),
+        "sha256:" + "c" * 64,
+        "sha256:" + "d" * 64,
+    )
+
+    repository.persist_ocr_result(claimed, page_number=1, result=result)
+
+    assert (
+        "ON CONFLICT (organization_id,workspace_id,source_locator_id) DO NOTHING" in recorded_sql[1]
+    )
