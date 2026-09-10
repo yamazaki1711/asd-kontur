@@ -361,6 +361,7 @@ class ProjectUnderstandingView(ApiModel):
     defects: list[dict[str, Any]]
     evidence_index: dict[str, dict[str, Any]]
     candidates: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    structure_nodes: list[dict[str, Any]] = Field(default_factory=list)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
     authority_layers: dict[str, str]

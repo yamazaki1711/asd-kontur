@@ -2472,6 +2472,9 @@ class SpinePostgresRepository:
             candidates = self._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            structure_nodes = self._project_structure_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2499,6 +2502,7 @@ class SpinePostgresRepository:
                 str(row["source_locator_id"]): _jsonable_row(row) for row in evidence_rows
             },
             "candidates": candidates,
+            "structure_nodes": structure_nodes,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "authority_layers": {
@@ -2852,6 +2856,9 @@ class SpinePostgresRepository:
             "candidates": cls._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
+            "structure_nodes": cls._project_structure_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
@@ -2866,6 +2873,22 @@ class SpinePostgresRepository:
                 "ai_candidate": "candidate_only",
             },
         }
+
+    @staticmethod
+    def _project_structure_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        """Return source-backed structural candidates before reconciliation materializes facts."""
+        rows = session.execute(
+            sa.text(
+                "SELECT structure_node_id,version,node_kind,raw_name,normalized_name,"
+                "parent_node_id,source_locator_id,status,fingerprint FROM "
+                "workspace.project_structure_node_versions WHERE organization_id=:organization "
+                "AND workspace_id=:workspace ORDER BY recorded_at,structure_node_id,version"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        ).mappings()
+        return [_jsonable_row(row) for row in rows]
 
     @staticmethod
     def _project_understanding_materialization(

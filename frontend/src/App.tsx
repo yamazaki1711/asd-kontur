@@ -3527,6 +3527,10 @@ function ProjectUnderstandingPage() {
             string,
             Record<string, unknown>[]
           >;
+          const structureNodes = (value.structure_nodes ?? []) as Record<
+            string,
+            unknown
+          >[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3627,7 +3631,11 @@ function ProjectUnderstandingPage() {
                     Неразрешённые пространственные сведения остаются пробелом.
                   </p>
                   <EvidenceObject
-                    value={definition.fields ?? {}}
+                    value={{
+                      candidates: structureNodes,
+                      status:
+                        "Кандидаты извлечены из документов; они не являются подтверждёнными фактами до reconciliation.",
+                    }}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                     evidenceIndex={evidenceIndex}

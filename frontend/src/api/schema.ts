@@ -1848,6 +1848,10 @@ export interface components {
             review_decisions?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Nodes */
+            structure_nodes?: {
+                [key: string]: unknown;
+            }[];
             /** Work Packages */
             work_packages: {
                 [key: string]: unknown;
