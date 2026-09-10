@@ -10,6 +10,7 @@ import signal
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import Event, Thread
 from typing import BinaryIO
 from uuid import UUID
 
@@ -63,6 +64,51 @@ class WorkerOutcome:
     outcome_code: str
 
 
+class _LeaseKeepalive:
+    """Extend a durable-job lease while one bounded handler is executing."""
+
+    def __init__(
+        self,
+        repository: SpinePostgresRepository,
+        claimed: ClaimedJob,
+        *,
+        worker_identity: str,
+        lease_seconds: int,
+    ) -> None:
+        self._repository = repository
+        self._claimed = claimed
+        self._worker_identity = worker_identity
+        self._lease_seconds = lease_seconds
+        self._interval_seconds = max(0.1, min(10.0, lease_seconds / 3))
+        self._stopped = Event()
+        self._failure: SpinePersistenceError | None = None
+        self._thread = Thread(target=self._run, name="asd-document-job-lease", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stopped.set()
+        self._thread.join(timeout=self._interval_seconds + 1)
+
+    def raise_if_lost(self) -> None:
+        if self._failure is not None:
+            raise self._failure
+
+    def _run(self) -> None:
+        while not self._stopped.wait(self._interval_seconds):
+            try:
+                self._repository.heartbeat_job(
+                    self._claimed,
+                    worker_identity=self._worker_identity,
+                    lease_seconds=self._lease_seconds,
+                )
+            except SpinePersistenceError as exc:
+                self._failure = exc
+                self._stopped.set()
+                return
+
+
 class DocumentWorker:
     """One-process worker; PostgreSQL leases and fences are the source of truth."""
 
@@ -114,8 +160,16 @@ class DocumentWorker:
                 "job_cancelled_before_effect",
                 {"semantic_effect": False},
             )
+        keepalive = _LeaseKeepalive(
+            self._repository,
+            claimed,
+            worker_identity=self._worker_identity,
+            lease_seconds=self._lease_seconds,
+        )
+        keepalive.start()
         try:
             result = self._execute(claimed)
+            keepalive.raise_if_lost()
         except RetryableJobFailure as exc:
             scheduled = self._repository.retry_job(
                 claimed,
@@ -183,6 +237,8 @@ class DocumentWorker:
                 str(code),
                 {"exception_type": type(exc).__name__},
             )
+        finally:
+            keepalive.stop()
         return self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:

@@ -289,6 +289,22 @@ def test_qwen_vision_result_is_validated_with_exact_page_locator(tmp_path: Path)
     assert result.elements[0].locator.source_version_id == SOURCE_VERSION_ID
 
 
+def test_qwen_vision_accepts_one_complete_json_object_in_model_prose(tmp_path: Path) -> None:
+    image = tmp_path / "page.png"
+    image.write_bytes(b"bounded-image-bytes")
+
+    result = QwenVisionOcrAdapter("http://127.0.0.1:8790/vision")._parse_result(
+        'Результат распознавания: {"observations":[{"text":"Котлован № 1","region":[0,0,1,1]}]}',
+        image,
+        document_id=DOCUMENT_ID,
+        document_version=1,
+        source_version_id=SOURCE_VERSION_ID,
+        page_number=7,
+    )
+
+    assert result.elements[0].raw_text == "Котлован № 1"
+
+
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -5,12 +5,13 @@ import plistlib
 import sys
 import zipfile
 from pathlib import Path
+from threading import Event
 from uuid import UUID
 
 import pytest
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import semantic_digest
+from asd_kontur.application_spine.models import ClaimedJob, JobKind, semantic_digest
 from asd_kontur.application_spine.object_store import (
     IntakeError,
     WorkspaceObjectStore,
@@ -19,7 +20,7 @@ from asd_kontur.application_spine.object_store import (
     sanitize_relative_path,
 )
 from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
-from asd_kontur.application_spine.worker import verify_bytes_digest
+from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
@@ -170,6 +171,39 @@ def test_archive_expansion_preserves_relative_paths_and_rejects_traversal(tmp_pa
 def test_semantic_digest_ignores_mapping_order_but_not_typed_payload() -> None:
     assert semantic_digest({"b": 2, "a": 1}) == semantic_digest({"a": 1, "b": 2})
     assert semantic_digest({"value": "1"}) != semantic_digest({"value": 1})
+
+
+def test_lease_keepalive_extends_a_long_running_job_lease() -> None:
+    class RecordingRepository:
+        def __init__(self) -> None:
+            self.called = Event()
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            self.called.set()
+
+    repository = RecordingRepository()
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001803"),
+        JobKind.OCR_EXTRACTION,
+        {},
+        "sha256:" + "0" * 64,
+        1,
+        1,
+        "none",
+    )
+    keepalive = _LeaseKeepalive(  # type: ignore[arg-type]
+        repository,
+        claimed,
+        worker_identity="synthetic-worker",
+        lease_seconds=1,
+    )
+
+    keepalive.start()
+    assert repository.called.wait(timeout=1)
+    keepalive.stop()
+    keepalive.raise_if_lost()
 
 
 def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

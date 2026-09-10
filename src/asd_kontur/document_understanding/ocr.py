@@ -156,7 +156,9 @@ class QwenVisionOcrAdapter:
         try:
             payload = json.loads(candidate)
         except json.JSONDecodeError as exc:
-            raise OcrFailure("qwen_vision_result_malformed") from exc
+            payload = _embedded_json_object(candidate)
+            if payload is None:
+                raise OcrFailure("qwen_vision_result_malformed") from exc
         if not isinstance(payload, dict) or not isinstance(payload.get("observations"), list):
             raise OcrFailure("qwen_vision_result_schema_invalid")
         elements: list[LayoutElement] = []
@@ -187,6 +189,22 @@ class QwenVisionOcrAdapter:
                 )
             )
         return _result(self.adapter_key, self.adapter_version, "ru-RU+en-US", image_path, elements)
+
+
+def _embedded_json_object(value: str) -> object | None:
+    """Return one complete JSON object embedded in an otherwise textual model response."""
+
+    decoder = json.JSONDecoder()
+    for start, character in enumerate(value):
+        if character != "{":
+            continue
+        try:
+            payload, _end = decoder.raw_decode(value[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
 
 
 class AppleVisionOcrAdapter:
