@@ -402,6 +402,7 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
             ),
             worker_identity="qualified-corpus-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,
         )
         outcomes = []
         for _ in range(1000):

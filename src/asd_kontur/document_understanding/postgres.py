@@ -40,6 +40,7 @@ from .models import (
     ReconciliationDefect,
     RoleCandidate,
     RoleDecision,
+    StructureNodeCandidate,
     WorkTypeCandidate,
 )
 from .native import NativeDocument
@@ -400,6 +401,8 @@ class IndustrialUnderstandingRepository:
         with self._session(claimed) as session:
             for field_candidate in bundle.project_fields:
                 self._insert_project_field(session, claimed, field_candidate)
+            for structure_candidate in bundle.structures:
+                self._insert_structure(session, claimed, structure_candidate)
             for work_candidate in bundle.works:
                 self._insert_work(session, claimed, work_candidate)
             for quantity_candidate in bundle.quantities:
@@ -782,6 +785,18 @@ class IndustrialUnderstandingRepository:
             fields = self._select_json_rows(
                 session, "project_field_candidates", organization_id, workspace_id
             )
+            structures = (
+                session.execute(
+                    sa.text(
+                        "SELECT structure_node_id,version,node_kind,raw_name,normalized_name,parent_node_id,"
+                        "source_locator_id,status,fingerprint FROM workspace.project_structure_node_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w ORDER BY recorded_at,structure_node_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
             works = self._select_json_rows(
                 session, "work_type_candidates", organization_id, workspace_id
             )
@@ -857,7 +872,7 @@ class IndustrialUnderstandingRepository:
             tuple(_plain(dict(row)) for row in roles),
             _plain(dict(project)) if project else None,
             tuple(fields),
-            (),
+            tuple(_plain(dict(row)) for row in structures),
             tuple(works),
             tuple(quantities),
             tuple(materials),
@@ -965,6 +980,32 @@ class IndustrialUnderstandingRepository:
                 "status": value.status.value,
                 "profile": PROJECT_EXTRACTION_PROFILE_VERSION,
                 "digest": semantic_digest(value),
+            },
+        )
+
+    @staticmethod
+    def _insert_structure(
+        session: Session, claimed: ClaimedJob, value: StructureNodeCandidate
+    ) -> None:
+        fingerprint = semantic_digest(value)
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.project_structure_node_versions "
+                "(organization_id,workspace_id,structure_node_id,version,node_kind,raw_name,"
+                "normalized_name,parent_node_id,source_locator_id,status,fingerprint) VALUES "
+                "(:o,:w,:node,1,:kind,:raw,:normalized,NULL,:locator,:status,:fingerprint) "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "node": value.structure_node_id,
+                "kind": value.node_kind,
+                "raw": value.raw_name,
+                "normalized": value.normalized_name,
+                "locator": value.locator.source_locator_id,
+                "status": value.status.value,
+                "fingerprint": fingerprint,
             },
         )
 

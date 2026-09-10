@@ -33,6 +33,7 @@ from .models import (
     ReconciliationDefectKind,
     RoleCandidate,
     RoleDecision,
+    StructureNodeCandidate,
     WorkTypeCandidate,
 )
 
@@ -152,6 +153,7 @@ class StructuredCandidates:
     materials: tuple[MaterialCandidate, ...]
     estimates: tuple[EstimatePositionCandidate, ...]
     defects: tuple[ReconciliationDefect, ...]
+    structures: tuple[StructureNodeCandidate, ...] = ()
 
 
 def classify_pages(elements: Iterable[LayoutElement]) -> ClassificationBundle:

@@ -17,6 +17,7 @@ from .models import (
     UNDERSTANDING_PROFILE_VERSION,
     WORK_EXTRACTION_PROFILE_VERSION,
     OcrRoute,
+    StructureNodeCandidate,
 )
 from .native import NativeExtractionFailure, inspect_and_extract
 from .ocr import (
@@ -266,9 +267,22 @@ class IndustrialDocumentUnderstandingPipeline:
 
     def _project_fields(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)
-        fields_only = StructuredCandidates(bundle.project_fields, (), (), (), (), ())
+        structures: tuple[StructureNodeCandidate, ...] = ()
+        if self._qwen_semantic is not None:
+            try:
+                structures = self._qwen_semantic.extract_structures(
+                    self._repository.load_elements(claimed)
+                )
+            except QwenSemanticFailure as exc:
+                raise UnderstandingStageFailure(exc.code) from exc
+        fields_only = StructuredCandidates(
+            bundle.project_fields, (), (), (), (), (), structures=structures
+        )
         self._repository.persist_structured(claimed, fields_only)
-        return {"project_field_candidate_count": len(bundle.project_fields)}
+        return {
+            "project_field_candidate_count": len(bundle.project_fields),
+            "structure_candidate_count": len(structures),
+        }
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)

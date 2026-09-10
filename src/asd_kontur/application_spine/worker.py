@@ -121,6 +121,7 @@ class DocumentWorker:
         worker_identity: str,
         lease_seconds: int,
         qwen_vision_url: str = "http://127.0.0.1:8790/vision",
+        qwen_semantic_url: str | None = "http://127.0.0.1:8790/generate",
     ) -> None:
         if len(worker_identity) < 3:
             raise ValueError("worker identity is required")
@@ -132,8 +133,10 @@ class DocumentWorker:
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
-            qwen_semantic=QwenDocumentSemanticAdapter(
-                qwen_vision_url.removesuffix("/vision") + "/generate"
+            qwen_semantic=(
+                QwenDocumentSemanticAdapter(qwen_semantic_url)
+                if qwen_semantic_url is not None
+                else None
             ),
         )
 

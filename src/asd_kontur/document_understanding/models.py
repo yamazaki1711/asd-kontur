@@ -208,6 +208,16 @@ class ProjectFieldCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class StructureNodeCandidate:
+    structure_node_id: UUID
+    node_kind: str
+    raw_name: str
+    normalized_name: str
+    locator: ExactLocator
+    status: CandidateDecision = CandidateDecision.CANDIDATE
+
+
+@dataclass(frozen=True, slots=True)
 class WorkTypeCandidate:
     candidate_id: UUID
     raw_name: str

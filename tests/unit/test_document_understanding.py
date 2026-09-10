@@ -517,6 +517,28 @@ def test_qwen_semantic_classification_rejects_hallucinated_locator() -> None:
         adapter.classify(document.pages[0].elements)
 
 
+def test_qwen_structure_extraction_requires_exact_locator() -> None:
+    document = _extract_csv("Котлован К-1 расположен у насосной станции\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "structures": [
+                    {"kind": "excavation_pit", "name": "Котлован К-1", "locator_id": locator_id}
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_structures(document.pages[0].elements)
+
+    assert len(result) == 1
+    assert result[0].node_kind == "excavation_pit"
+    assert result[0].locator.source_locator_id == UUID(locator_id)
+
+
 def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() -> None:
     document = _extract_csv("Пояснительная записка\nНазначение объекта: насосная станция\n")
     locator_id = str(document.pages[0].elements[0].locator.source_locator_id)

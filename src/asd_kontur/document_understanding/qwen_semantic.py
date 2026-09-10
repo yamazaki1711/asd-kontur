@@ -22,6 +22,7 @@ from .models import (
     LayoutElement,
     RoleCandidate,
     RoleDecision,
+    StructureNodeCandidate,
 )
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
@@ -111,6 +112,33 @@ class QwenDocumentSemanticAdapter:
         )
         return QwenSemanticClassification(tuple(role_candidates), (decision,))
 
+    def extract_structures(
+        self, elements: Iterable[LayoutElement]
+    ) -> tuple[StructureNodeCandidate, ...]:
+        pages = _sample_pages(elements)
+        if not pages:
+            raise QwenSemanticFailure("qwen_structure_input_unavailable")
+        payload = _complete(self._endpoint, _structure_prompt(pages), self._timeout_seconds)
+        allowed = {str(item.locator.source_locator_id): item for item in pages}
+        observations = _parse_structures(payload, allowed)
+        values: list[StructureNodeCandidate] = []
+        for kind, name, locator_id in observations:
+            locator = allowed[locator_id].locator
+            normalized = " ".join(name.casefold().split())
+            values.append(
+                StructureNodeCandidate(
+                    structure_node_id=deterministic_uuid(
+                        f"qwen-structure:{locator.source_version_id}:{locator.source_locator_id}:"
+                        f"{kind}:{normalized}:{QWEN_SEMANTIC_CLASSIFICATION_PROFILE}"
+                    ),
+                    node_kind=kind,
+                    raw_name=name,
+                    normalized_name=normalized,
+                    locator=locator,
+                )
+            )
+        return tuple(values)
+
 
 def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
     by_page: dict[int, list[LayoutElement]] = defaultdict(list)
@@ -150,6 +178,27 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         "normative_reference_list, executive_documentation, drawing_or_scheme, "
         "correspondence_administrative, unknown. locator_ids должны ссылаться только на "
         "фрагменты, подтверждающие выбранные roles. Не придумывай данные.\nФРАГМЕНТЫ:\n"
+        + json.dumps(pages, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def _structure_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
+    pages = [
+        {
+            "page": item.locator.page_number,
+            "locator_id": str(item.locator.source_locator_id),
+            "text": item.text,
+        }
+        for item in elements
+    ]
+    return (
+        "Извлеки только явно обозначенные элементы структуры строительного объекта из фрагментов. "
+        'Верни только JSON без Markdown: {"structures":[{"kind":"...","name":"...",'
+        '"locator_id":"..."}]}. Допустимые kind: excavation_pit, structure, zone. '
+        "Котлован включай только если фрагмент прямо устанавливает отдельный экземпляр, "
+        "а не типовое решение или общее слово. locator_id обязан быть одним из входных. "
+        "Не придумывай геометрию, количество, связи или имена. Если подтверждённых "
+        "элементов нет, верни пустой массив.\nФРАГМЕНТЫ:\n"
         + json.dumps(pages, ensure_ascii=False, separators=(",", ":"))
     )
 
@@ -220,3 +269,37 @@ def _parse(
     if any(item not in allowed for item in locator_ids):
         raise QwenSemanticFailure("qwen_semantic_response_invalid_locator")
     return roles, locator_ids
+
+
+def _parse_structures(
+    answer: str, allowed: dict[str, _SemanticFragment]
+) -> tuple[tuple[str, str, str], ...]:
+    text = answer.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.rsplit("```", 1)[0].strip()
+    try:
+        value: Any = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise QwenSemanticFailure("qwen_structure_response_invalid_json") from exc
+    rows = value.get("structures") if isinstance(value, dict) else None
+    if not isinstance(rows, list) or len(rows) > 32:
+        raise QwenSemanticFailure("qwen_structure_response_invalid_shape")
+    observed: list[tuple[str, str, str]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            raise QwenSemanticFailure("qwen_structure_response_invalid_shape")
+        kind = str(row.get("kind", ""))
+        name = " ".join(str(row.get("name", "")).split())
+        locator_id = str(row.get("locator_id", ""))
+        if kind not in {"excavation_pit", "structure", "zone"}:
+            raise QwenSemanticFailure("qwen_structure_response_invalid_kind")
+        if not 2 <= len(name) <= 500 or locator_id not in allowed:
+            raise QwenSemanticFailure("qwen_structure_response_invalid_evidence")
+        item = (kind, name, locator_id)
+        if item in seen:
+            continue
+        seen.add(item)
+        observed.append(item)
+    return tuple(observed)
