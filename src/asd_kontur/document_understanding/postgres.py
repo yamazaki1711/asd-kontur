@@ -871,8 +871,7 @@ class IndustrialUnderstandingRepository:
                     "kind": "document_page_region"
                     if locator.cell is None
                     else "document_table_cell",
-                    "key": f"understanding:{locator.page_number}:{locator.cell or element.reading_order}:"
-                    f"{locator.evidence_digest}",
+                    "key": f"understanding:{extraction_method}:{locator.source_locator_id}",
                     "value": _json(locator_value),
                     "fragment": locator.evidence_digest,
                 },

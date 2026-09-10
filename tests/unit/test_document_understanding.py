@@ -258,11 +258,11 @@ def test_pdf_renderer_uses_known_local_location_when_launchd_path_is_restricted(
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    recorded_sql: list[str] = []
+    recorded_calls: list[tuple[str, dict[str, Any]]] = []
 
     class RecordingSession:
-        def execute(self, statement: Any, _parameters: dict[str, Any]) -> None:
-            recorded_sql.append(str(statement))
+        def execute(self, statement: Any, parameters: dict[str, Any]) -> None:
+            recorded_calls.append((str(statement), parameters))
 
     @contextmanager
     def recording_session(_claimed: ClaimedJob) -> Iterator[RecordingSession]:
@@ -309,4 +309,8 @@ def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
 
     repository.persist_ocr_result(claimed, page_number=1, result=result)
 
-    assert "ON CONFLICT DO NOTHING" in recorded_sql[1]
+    locator_sql, locator_parameters = recorded_calls[1]
+    assert "ON CONFLICT DO NOTHING" in locator_sql
+    assert (
+        locator_parameters["key"] == f"understanding:ocr:apple_vision:{locator.source_locator_id}"
+    )
