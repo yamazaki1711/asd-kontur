@@ -7,13 +7,14 @@ import json
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from http.client import IncompleteRead, RemoteDisconnected
 from typing import Any
 from uuid import UUID
 
+from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import deterministic_uuid
 
 from .models import (
@@ -33,6 +34,7 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v1"
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
@@ -54,6 +56,17 @@ class QwenSemanticClassification:
 class _SemanticFragment:
     locator: ExactLocator
     text: str
+
+
+@dataclass(frozen=True, slots=True)
+class QwenEngineeringBatch:
+    ordinal: int
+    digest: str
+    fragments: tuple[_SemanticFragment, ...]
+
+    @property
+    def locator_ids(self) -> tuple[UUID, ...]:
+        return tuple(item.locator.source_locator_id for item in self.fragments)
 
 
 class QwenDocumentSemanticAdapter:
@@ -146,22 +159,41 @@ class QwenDocumentSemanticAdapter:
             )
         return tuple(values)
 
-    def extract_engineering(self, elements: Iterable[LayoutElement]) -> StructuredCandidates:
+    def extract_engineering(
+        self,
+        elements: Iterable[LayoutElement],
+        *,
+        accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
+    ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
-        fragments = _fragments(elements)
-        if not fragments:
+        batches = _engineering_batches(elements)
+        if not batches:
             raise QwenSemanticFailure("qwen_engineering_input_unavailable")
+        accepted = accepted_batches or {}
+        extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
+        for batch in batches:
+            allowed = {str(item.locator.source_locator_id): item for item in batch.fragments}
+            persisted = accepted.get(batch.digest)
+            if persisted is None:
+                payload = _complete(
+                    self._endpoint, _engineering_prompt(batch.fragments), self._timeout_seconds
+                )
+                parsed = _parse_engineering(payload, allowed)
+                if on_accepted_batch is not None:
+                    on_accepted_batch(batch, _engineering_manifest(parsed))
+            else:
+                parsed = _parse_engineering_manifest(persisted, allowed)
+            extracted.append((allowed, parsed))
         fields: list[ProjectFieldCandidate] = []
         structures: list[StructureNodeCandidate] = []
         works: list[WorkTypeCandidate] = []
         quantities: list[QuantityCandidate] = []
         materials: list[MaterialCandidate] = []
-        for ordinal in range(0, len(fragments), 24):
-            batch = fragments[ordinal : ordinal + 24]
-            allowed = {str(item.locator.source_locator_id): item for item in batch}
-            payload = _complete(self._endpoint, _engineering_prompt(batch), self._timeout_seconds)
-            parsed = _parse_engineering(payload, allowed)
-            batch_works: dict[str, WorkTypeCandidate] = {}
+        parsed_quantities: list[tuple[str, str, str, ExactLocator]] = []
+        parsed_materials: list[tuple[str, str, str, str, ExactLocator]] = []
+        work_by_normalized_name: dict[str, WorkTypeCandidate] = {}
+        for allowed, parsed in extracted:
             for name, locator_id in parsed["works"]:
                 locator = allowed[locator_id].locator
                 normalized = " ".join(name.casefold().split())
@@ -176,7 +208,7 @@ class QwenDocumentSemanticAdapter:
                     DocumentRole.PROJECT_DOCUMENTATION,
                     MappingStatus.UNRESOLVED,
                 )
-                batch_works[normalized] = value
+                work_by_normalized_name[normalized] = value
                 works.append(value)
             for key, raw, locator_id in parsed["fields"]:
                 locator = allowed[locator_id].locator
@@ -209,56 +241,62 @@ class QwenDocumentSemanticAdapter:
                     )
                 )
             for work_name, raw, unit, locator_id in parsed["quantities"]:
-                work = batch_works.get(" ".join(work_name.casefold().split()))
-                if work is None:
-                    continue
                 locator = allowed[locator_id].locator
-                try:
-                    parsed_value = Decimal(raw.replace(",", "."))
-                except InvalidOperation:
-                    parsed_value = None
-                quantities.append(
-                    QuantityCandidate(
-                        deterministic_uuid(
-                            f"qwen-quantity:{locator.source_version_id}:{locator_id}:{work.candidate_id}:{raw}:{unit}"
-                        ),
-                        work.candidate_id,
-                        raw,
-                        parsed_value,
-                        unit,
-                        parsed_value,
-                        unit if parsed_value is not None else None,
-                        None,
-                        work.scope_key,
-                        locator,
-                        CandidateDecision.CANDIDATE,
-                    )
-                )
+                parsed_quantities.append((work_name, raw, unit, locator))
             for work_name, name, raw, unit, locator_id in parsed["materials"]:
-                work = batch_works.get(" ".join(work_name.casefold().split()))
-                if work is None:
-                    continue
                 locator = allowed[locator_id].locator
-                try:
-                    parsed_value = Decimal(raw.replace(",", ".")) if raw else None
-                except InvalidOperation:
-                    parsed_value = None
-                materials.append(
-                    MaterialCandidate(
-                        deterministic_uuid(
-                            f"qwen-material:{locator.source_version_id}:{locator_id}:{work.candidate_id}:{name}"
-                        ),
-                        work.candidate_id,
-                        name,
-                        " ".join(name.casefold().split()),
-                        raw or None,
-                        parsed_value,
-                        unit or None,
-                        unit or None,
-                        locator,
-                        CandidateDecision.CANDIDATE,
-                    )
+                parsed_materials.append((work_name, name, raw, unit, locator))
+        for work_name, raw, unit, locator in parsed_quantities:
+            work = work_by_normalized_name.get(" ".join(work_name.casefold().split()))
+            if work is None:
+                continue
+            try:
+                parsed_value = Decimal(raw.replace(",", "."))
+            except InvalidOperation:
+                parsed_value = None
+            quantities.append(
+                QuantityCandidate(
+                    deterministic_uuid(
+                        f"qwen-quantity:{locator.source_version_id}:{locator.source_locator_id}:"
+                        f"{work.candidate_id}:{raw}:{unit}"
+                    ),
+                    work.candidate_id,
+                    raw,
+                    parsed_value,
+                    unit,
+                    parsed_value,
+                    unit if parsed_value is not None else None,
+                    None,
+                    work.scope_key,
+                    locator,
+                    CandidateDecision.CANDIDATE,
                 )
+            )
+        for work_name, name, raw, unit, locator in parsed_materials:
+            work = work_by_normalized_name.get(" ".join(work_name.casefold().split()))
+            if work is None:
+                continue
+            try:
+                parsed_value = Decimal(raw.replace(",", "."))
+            except InvalidOperation:
+                parsed_value = None
+            materials.append(
+                MaterialCandidate(
+                    deterministic_uuid(
+                        f"qwen-material:{locator.source_version_id}:{locator.source_locator_id}:"
+                        f"{work.candidate_id}:{name}"
+                    ),
+                    work.candidate_id,
+                    name,
+                    " ".join(name.casefold().split()),
+                    raw or None,
+                    parsed_value,
+                    unit or None,
+                    unit or None,
+                    locator,
+                    CandidateDecision.CANDIDATE,
+                )
+            )
         return StructuredCandidates(
             tuple(fields),
             tuple(works),
@@ -295,6 +333,33 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
         for item in elements
         if item.normalized_text
     )
+
+
+def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEngineeringBatch, ...]:
+    fragments = _fragments(elements)
+    batches: list[QwenEngineeringBatch] = []
+    for ordinal, offset in enumerate(range(0, len(fragments), 24), start=1):
+        batch = fragments[offset : offset + 24]
+        batch_payload = [
+            {
+                "locator_id": str(item.locator.source_locator_id),
+                "evidence_digest": item.locator.evidence_digest,
+                "text": item.text,
+            }
+            for item in batch
+        ]
+        digest = semantic_digest(
+            {
+                "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                "fragments": batch_payload,
+            }
+        )
+        batches.append(QwenEngineeringBatch(ordinal, digest, batch))
+    return tuple(batches)
+
+
+def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str, object]:
+    return {key: [list(item) for item in values] for key, values in parsed.items()}
 
 
 def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
@@ -353,6 +418,39 @@ def _parse_engineering(
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
+            result[key].append(item)
+    return result
+
+
+def _parse_engineering_manifest(
+    manifest: dict[str, object], allowed: dict[str, _SemanticFragment]
+) -> dict[str, list[tuple[str, ...]]]:
+    result: dict[str, list[tuple[str, ...]]] = {
+        "fields": [],
+        "structures": [],
+        "works": [],
+        "quantities": [],
+        "materials": [],
+    }
+    specs = {
+        "fields": ("key", "value", "locator_id"),
+        "structures": ("kind", "name", "locator_id"),
+        "works": ("name", "locator_id"),
+        "quantities": ("work_name", "value", "unit", "locator_id"),
+        "materials": ("work_name", "name", "quantity", "unit", "locator_id"),
+    }
+    for key, names in specs.items():
+        rows = manifest.get(key, [])
+        if not isinstance(rows, list) or len(rows) > 64:
+            raise QwenSemanticFailure("qwen_engineering_manifest_invalid_shape")
+        for row in rows:
+            if not isinstance(row, list) or len(row) != len(names):
+                raise QwenSemanticFailure("qwen_engineering_manifest_invalid_shape")
+            item = tuple(" ".join(str(value).split()) for value in row)
+            if not all(item) or item[-1] not in allowed:
+                raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
+            if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
+                raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
             result[key].append(item)
     return result
 

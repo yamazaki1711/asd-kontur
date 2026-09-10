@@ -29,7 +29,12 @@ from .ocr import (
     select_adapters,
 )
 from .postgres import IndustrialUnderstandingRepository
-from .qwen_semantic import QwenDocumentSemanticAdapter, QwenSemanticFailure
+from .qwen_semantic import (
+    QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    QwenDocumentSemanticAdapter,
+    QwenEngineeringBatch,
+    QwenSemanticFailure,
+)
 from .semantic import (
     ClassificationBundle,
     StructuredCandidates,
@@ -270,8 +275,15 @@ class IndustrialDocumentUnderstandingPipeline:
         structures: tuple[StructureNodeCandidate, ...] = ()
         if self._qwen_semantic is not None:
             try:
+                accepted_batches = self._repository.load_accepted_engineering_batches(
+                    claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+                )
                 semantic = self._qwen_semantic.extract_engineering(
-                    self._repository.load_elements(claimed)
+                    self._repository.load_elements(claimed),
+                    accepted_batches=accepted_batches,
+                    on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
+                        claimed, batch, manifest
+                    ),
                 )
             except QwenSemanticFailure as exc:
                 raise UnderstandingStageFailure(exc.code) from exc
@@ -292,6 +304,21 @@ class IndustrialDocumentUnderstandingPipeline:
             "quantity_candidate_count": len(bundle.quantities),
             "material_candidate_count": len(bundle.materials),
         }
+
+    def _record_engineering_batch(
+        self,
+        claimed: ClaimedJob,
+        batch: QwenEngineeringBatch,
+        manifest: dict[str, object],
+    ) -> None:
+        self._repository.record_accepted_engineering_batch(
+            claimed,
+            profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            batch_ordinal=batch.ordinal,
+            batch_digest=batch.digest,
+            source_locator_ids=batch.locator_ids,
+            output_manifest=manifest,
+        )
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)

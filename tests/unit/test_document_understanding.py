@@ -42,6 +42,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     QwenSemanticFailure,
 )
 from asd_kontur.document_understanding.semantic import (
+    StructuredCandidates,
     classify_pages,
     extract_structured_candidates,
     parse_exact_decimal,
@@ -558,6 +559,177 @@ def test_qwen_structure_extraction_requires_exact_locator() -> None:
     assert len(result) == 1
     assert result[0].node_kind == "excavation_pit"
     assert result[0].locator.source_locator_id == UUID(locator_id)
+
+
+def test_qwen_engineering_extraction_resolves_work_references_across_batches() -> None:
+    document = _extract_csv(
+        "\n".join(f"строка {index};значение {index}" for index in range(1, 15)) + "\n"
+    )
+    elements = document.pages[0].elements
+    assert len(elements) > 24
+    first_locator_id = str(elements[0].locator.source_locator_id)
+    last_locator_id = str(elements[-1].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=(
+            json.dumps(
+                {
+                    "fields": [],
+                    "structures": [],
+                    "works": [{"name": "Устройство основания", "locator_id": first_locator_id}],
+                    "quantities": [],
+                    "materials": [],
+                },
+                ensure_ascii=False,
+            ),
+            json.dumps(
+                {
+                    "fields": [],
+                    "structures": [],
+                    "works": [],
+                    "quantities": [
+                        {
+                            "work_name": "Устройство основания",
+                            "value": "12,5",
+                            "unit": "м3",
+                            "locator_id": last_locator_id,
+                        }
+                    ],
+                    "materials": [
+                        {
+                            "work_name": "Устройство основания",
+                            "name": "Щебень",
+                            "quantity": "12,5",
+                            "unit": "м3",
+                            "locator_id": last_locator_id,
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        ),
+    ) as complete:
+        result = adapter.extract_engineering(elements)
+
+    assert complete.call_count == 2
+    assert len(result.works) == 1
+    assert len(result.quantities) == 1
+    assert result.quantities[0].work_candidate_id == result.works[0].candidate_id
+    assert result.quantities[0].locator.source_locator_id == UUID(last_locator_id)
+    assert len(result.materials) == 1
+    assert result.materials[0].work_candidate_id == result.works[0].candidate_id
+    assert result.materials[0].locator.source_locator_id == UUID(last_locator_id)
+
+
+def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> None:
+    document = _extract_csv("проектная запись;значение\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: dict[str, dict[str, object]] = {}
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [{"key": "project_purpose", "value": "Объект", "locator_id": locator_id}],
+                "structures": [],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        first = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.__setitem__(batch.digest, manifest),
+        )
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+        resumed = adapter.extract_engineering(document.pages[0].elements, accepted_batches=accepted)
+
+    complete.assert_not_called()
+    assert resumed == first
+    assert len(accepted) == 1
+
+
+def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> None:
+    document = _extract_csv("Котлован К-1;подтверждено\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000002"),
+        UUID("40000000-0000-4000-8000-000000000002"),
+        UUID("50000000-0000-4000-8000-000000000002"),
+        JobKind.PROJECT_DEFINITION_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+        },
+        "sha256:" + "b" * 64,
+        1,
+        1,
+        "none",
+    )
+    persisted: dict[str, object] = {}
+
+    class Repository:
+        def load_accepted_engineering_batches(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-engineering-extraction-v1"
+            return {}
+
+        def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:
+            return document.pages[0].elements
+
+        def record_accepted_engineering_batch(self, _claimed: ClaimedJob, **values: object) -> None:
+            persisted.update(values)
+
+        def persist_structured(self, _claimed: ClaimedJob, bundle: StructuredCandidates) -> None:
+            persisted["bundle"] = bundle
+
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=adapter,
+    )
+    with (
+        patch.object(
+            pipeline, "_structured", return_value=StructuredCandidates((), (), (), (), (), ())
+        ),
+        patch(
+            "asd_kontur.document_understanding.qwen_semantic._complete",
+            return_value=json.dumps(
+                {
+                    "fields": [],
+                    "structures": [
+                        {
+                            "kind": "excavation_pit",
+                            "name": "Котлован К-1",
+                            "locator_id": locator_id,
+                        }
+                    ],
+                    "works": [],
+                    "quantities": [],
+                    "materials": [],
+                },
+                ensure_ascii=False,
+            ),
+        ),
+    ):
+        result = pipeline._project_fields(claimed, BytesIO())
+
+    assert result["structure_candidate_count"] == 1
+    assert persisted["batch_ordinal"] == 1
+    assert persisted["source_locator_ids"] == (
+        UUID(locator_id),
+        UUID(str(document.pages[0].elements[1].locator.source_locator_id)),
+    )
+    assert len(cast(StructuredCandidates, persisted["bundle"]).structures) == 1
 
 
 def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() -> None:

@@ -109,6 +109,61 @@ class IndustrialUnderstandingRepository:
             )
         return stage_result_id
 
+    def load_accepted_engineering_batches(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, dict[str, object]]:
+        with self._session(claimed) as session:
+            rows = session.execute(
+                sa.text(
+                    "SELECT batch_digest, output_manifest FROM workspace.engineering_extraction_batches "
+                    "WHERE organization_id=:o AND workspace_id=:w AND source_version_id=:source "
+                    "AND profile_version=:profile AND terminal_status='accepted'"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "source": self._source_version_id(claimed),
+                    "profile": profile_version,
+                },
+            ).mappings()
+            return {
+                str(row["batch_digest"]): dict(row["output_manifest"])
+                for row in rows
+                if isinstance(row["output_manifest"], dict)
+            }
+
+    def record_accepted_engineering_batch(
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+        batch_ordinal: int,
+        batch_digest: str,
+        source_locator_ids: tuple[UUID, ...],
+        output_manifest: dict[str, object],
+    ) -> None:
+        with self._session(claimed) as session:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.engineering_extraction_batches "
+                    "(organization_id,workspace_id,source_version_id,profile_version,batch_ordinal,"
+                    "batch_digest,source_locator_ids,output_manifest,output_digest,terminal_status) VALUES "
+                    "(:o,:w,:source,:profile,:ordinal,:batch,:locators,CAST(:manifest AS jsonb),"
+                    ":output,'accepted') ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "source": self._source_version_id(claimed),
+                    "profile": profile_version,
+                    "ordinal": batch_ordinal,
+                    "batch": batch_digest,
+                    "locators": list(source_locator_ids),
+                    "manifest": _json(output_manifest),
+                    "output": semantic_digest(output_manifest),
+                },
+            )
+
     def persist_native_document(self, claimed: ClaimedJob, document: NativeDocument) -> None:
         inventory_id = deterministic_uuid(
             f"format-inventory:{self._source_version_id(claimed)}:{document.fingerprint}"
