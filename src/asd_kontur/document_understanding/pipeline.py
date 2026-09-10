@@ -28,7 +28,13 @@ from .ocr import (
     select_adapters,
 )
 from .postgres import IndustrialUnderstandingRepository
-from .semantic import StructuredCandidates, classify_pages, extract_structured_candidates
+from .qwen_semantic import QwenDocumentSemanticAdapter, QwenSemanticFailure
+from .semantic import (
+    ClassificationBundle,
+    StructuredCandidates,
+    classify_pages,
+    extract_structured_candidates,
+)
 
 MAX_BOUNDED_PROCESSING_BYTES = 256 * 1024 * 1024
 
@@ -47,9 +53,11 @@ class IndustrialDocumentUnderstandingPipeline:
         repository: IndustrialUnderstandingRepository,
         *,
         qwen_vision: QwenVisionOcrAdapter,
+        qwen_semantic: QwenDocumentSemanticAdapter | None = None,
     ) -> None:
         self._repository = repository
         self._qwen_vision = qwen_vision
+        self._qwen_semantic = qwen_semantic
 
     def execute(self, claimed: ClaimedJob, source: BinaryIO) -> dict[str, object]:
         handlers = {
@@ -220,10 +228,22 @@ class IndustrialDocumentUnderstandingPipeline:
         if not elements:
             raise UnderstandingStageFailure("classification_evidence_unavailable")
         bundle = classify_pages(elements)
+        qwen_candidate_count = 0
+        if self._qwen_semantic is not None:
+            try:
+                semantic = self._qwen_semantic.classify(elements)
+            except QwenSemanticFailure as exc:
+                raise UnderstandingStageFailure(exc.code) from exc
+            bundle = ClassificationBundle(
+                candidates=(*bundle.candidates, *semantic.candidates),
+                decisions=(*bundle.decisions, *semantic.decisions),
+            )
+            qwen_candidate_count = len(semantic.candidates)
         self._repository.persist_classification(claimed, bundle.candidates, bundle.decisions)
         return {
             "candidate_count": len(bundle.candidates),
             "decision_count": len(bundle.decisions),
+            "qwen_semantic_candidate_count": qwen_candidate_count,
             "selected_roles": sorted(
                 {role.value for decision in bundle.decisions for role in decision.selected_roles}
             ),

@@ -37,6 +37,10 @@ from asd_kontur.document_understanding.native import (
 from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.pipeline import IndustrialDocumentUnderstandingPipeline
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.qwen_semantic import (
+    QwenDocumentSemanticAdapter,
+    QwenSemanticFailure,
+)
 from asd_kontur.document_understanding.semantic import (
     classify_pages,
     extract_structured_candidates,
@@ -479,3 +483,80 @@ def test_ocr_retry_does_not_resend_pages_already_completed_by_qwen() -> None:
         "blocked_pages": [],
         "results": [],
     }
+
+
+def test_qwen_semantic_classification_accepts_only_returned_evidence_locators() -> None:
+    document = _extract_csv("Пояснительная записка\\nНазначение объекта: насосная станция\\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {"roles": ["explanatory_note"], "locator_ids": [locator_id]}, ensure_ascii=False
+        ),
+    ):
+        result = adapter.classify(document.pages[0].elements)
+
+    assert result.candidates[0].role is DocumentRole.EXPLANATORY_NOTE
+    assert result.candidates[0].locators[0].source_locator_id == UUID(locator_id)
+    assert result.decisions[0].decision_code == "qwen_bounded_document_semantic"
+
+
+def test_qwen_semantic_classification_rejects_hallucinated_locator() -> None:
+    document = _extract_csv("Пояснительная записка\\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with (
+        patch(
+            "asd_kontur.document_understanding.qwen_semantic._complete",
+            return_value='{"roles":["explanatory_note"],"locator_ids":["missing"]}',
+        ),
+        pytest.raises(QwenSemanticFailure, match="qwen_semantic_response_invalid_locator"),
+    ):
+        adapter.classify(document.pages[0].elements)
+
+
+def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() -> None:
+    document = _extract_csv("Пояснительная записка\nНазначение объекта: насосная станция\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    qwen = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {"roles": ["explanatory_note"], "locator_ids": [locator_id]}, ensure_ascii=False
+        ),
+    ):
+        semantic = qwen.classify(document.pages[0].elements)
+
+    captured: dict[str, object] = {}
+
+    class Repository:
+        def load_elements(self, _claimed: ClaimedJob) -> tuple[object, ...]:
+            return document.pages[0].elements
+
+        def persist_classification(
+            self,
+            _claimed: ClaimedJob,
+            candidates: tuple[object, ...],
+            decisions: tuple[object, ...],
+        ) -> None:
+            captured["candidates"] = candidates
+            captured["decisions"] = decisions
+
+    class SemanticAdapter:
+        def classify(self, _elements: tuple[object, ...]):
+            return semantic
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, SemanticAdapter()),
+    )
+    result = pipeline._classification(cast(ClaimedJob, object()), BytesIO())
+
+    assert result["qwen_semantic_candidate_count"] == 1
+    assert any(
+        candidate.extraction_profile_version == "qwen-document-semantic-v1"
+        for candidate in cast(tuple[Any, ...], captured["candidates"])
+    )

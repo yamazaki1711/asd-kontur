@@ -28,6 +28,7 @@ from asd_kontur.document_understanding.pipeline import (
     translate_stage_error,
 )
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.qwen_semantic import QwenDocumentSemanticAdapter
 from asd_kontur.domain import deterministic_uuid, uuid7
 from asd_kontur.support.models import FieldResolution, ResolutionState
 from asd_kontur.support.production import TemplateBackedDocxRenderer
@@ -131,6 +132,9 @@ class DocumentWorker:
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
+            qwen_semantic=QwenDocumentSemanticAdapter(
+                qwen_vision_url.removesuffix("/vision") + "/generate"
+            ),
         )
 
     def request_stop(self) -> None:
