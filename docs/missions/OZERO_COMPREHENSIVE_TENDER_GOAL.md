@@ -383,3 +383,25 @@ into accepted child batches; it does not invalidate accepted fragments or justif
 document-wide retry. Next: complete this source, verify candidate persistence and
 downstream materialization, then continue eligible sources and reconcile facility
 identity, project-wide coverage, Tender findings, and grounded consultation.
+
+### Continuation checkpoint — 2026-09-11 17:51 UTC+12
+
+The scoped durable read confirms that the POS successor is still `running` under
+`document-worker:57884` with a fresh heartbeat. Its v15 ledger has 132 accepted batch
+receipts and two immutable failed parent receipts (`invalid_json` and
+`invalid_evidence`); the split child receipts required for those parents are accepted.
+The deterministic POS denominator remains 438 base batches, so this is in-progress
+semantic coverage rather than candidate persistence, source completion, or a Tender
+result. The live worker keeps a loopback connection to the local Qwen process; it must
+not be restarted merely to inspect progress.
+
+The owner-scoped application boundary was also re-read at this point. It still returns
+the same truthful partial model across the 22 active source versions and 2,529 pages:
+291 project fields, 304 structure candidates, 505 work candidates, 146 quantities,
+79 materials, 505 provisional work packages, and 154 reconciliation defects. No
+accepted structure relationships are present yet. Candidate counts and successful
+native extraction must not be presented as a reconciled facility/LOS/KNS/pit inventory.
+After POS terminal success, the next executable work is to verify its candidate
+persistence, replacement-lineage recovery, and project-view materialization before
+scheduling the next source; if it terminates unsuccessfully, inspect only the exact
+failed batch lineage and recover the bounded input.
