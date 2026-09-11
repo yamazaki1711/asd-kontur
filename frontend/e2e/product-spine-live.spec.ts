@@ -6,9 +6,14 @@ import { resolve } from "node:path";
 const repository = resolve(import.meta.dirname, "../..");
 const statePath = process.env.ASD_E2E_STATE_PATH;
 
-test("live platform construction consultant answers and restores a durable dialog", async ({
+test("platform consultant API persists a model answer and restores a durable dialog", async ({
   page,
 }) => {
+  test.setTimeout(150_000);
+  if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
+  const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+    synthetic_qwen_answer?: string | null;
+  };
   await page.goto("/login");
   await page.getByLabel("Пользователь").fill("synthetic-live-owner");
   await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
@@ -24,10 +29,22 @@ test("live platform construction consultant answers and restores a durable dialo
       ? "Какие требования к уходу за бетоном?"
       : "Что проверяют при входном контроле строительных материалов?";
   await page.getByLabel("Ваш вопрос").fill(question);
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/construction-consultant/conversations/") &&
+      response.url().endsWith("/questions"),
+    { timeout: 120_000 },
+  );
   await page.getByRole("button", { name: "Отправить вопрос" }).click();
+  const response = await responsePromise;
+  expect(response.ok(), await response.text()).toBe(true);
   const answer = page.locator(".construction-consultant-message-assistant");
   await expect(answer).toBeVisible({ timeout: 120_000 });
   await expect(answer).not.toHaveText("");
+  if (state.synthetic_qwen_answer) {
+    await expect(answer).toHaveText(state.synthetic_qwen_answer);
+  }
   if (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1") {
     const sources = answer.locator(".construction-consultant-sources");
     await expect(sources).toBeVisible();

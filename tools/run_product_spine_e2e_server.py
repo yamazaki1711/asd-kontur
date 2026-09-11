@@ -10,7 +10,9 @@ import shutil
 import tempfile
 from argparse import Namespace
 from datetime import UTC, date, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -36,6 +38,41 @@ from asd_kontur.ntd.rules import (
     decide_rule_activation,
 )
 from asd_kontur.web_app import create_app
+
+SYNTHETIC_QWEN_ANSWER = "Synthetic CI model response: dialog persistence verified."
+
+
+def _start_synthetic_qwen() -> ThreadingHTTPServer:
+    """Provide only the model transport; API, Gateway and history remain real."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            if self.path != "/generate" or not 0 < length <= 128_000:
+                self.send_error(400)
+                return
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload.get("prompt"), str) or not payload["prompt"]:
+                self.send_error(400)
+                return
+            body = (
+                json.dumps({"event": "delta", "text": SYNTHETIC_QWEN_ANSWER})
+                + "\n"
+                + json.dumps({"event": "completed"})
+                + "\n"
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/x-ndjson")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    return server
 
 
 def _required(name: str) -> str:
@@ -208,6 +245,7 @@ def main() -> None:
     runtime_root = Path(tempfile.mkdtemp(prefix="asd-spine-live-e2e-"))
     database_url = base_url.set(database=database_name)
     app_engine: sa.Engine | None = None
+    qwen_server: ThreadingHTTPServer | None = None
     try:
         template_database = os.environ.get("ASD_E2E_TEMPLATE_DATABASE")
         with cluster.begin() as connection:
@@ -244,6 +282,10 @@ def main() -> None:
         archives = runtime_root / "archives"
         objects.mkdir()
         archives.mkdir()
+        if os.environ.get("ASD_E2E_SYNTHETIC_QWEN") == "1":
+            if os.environ.get("ASD_E2E_EXPECT_CONSULTANT_CITATIONS") == "1":
+                raise RuntimeError("Synthetic model cannot qualify real-Qwen citation acceptance")
+            qwen_server = _start_synthetic_qwen()
         settings = SpineSettings(
             database_url=role_urls["application"].render_as_string(hide_password=False),
             lifecycle_database_url=role_urls["lifecycle"].render_as_string(hide_password=False),
@@ -258,6 +300,11 @@ def main() -> None:
             job_lease_seconds=5,
             frontend_dist=repository / "frontend" / "dist",
             ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
+            qwen_bind_port=(
+                qwen_server.server_port
+                if qwen_server is not None
+                else int(os.environ.get("ASD_QWEN_BIND_PORT", "8790"))
+            ),
         )
         app_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         if os.environ.get("ASD_E2E_SEED_ACTIVE_RULE") == "1":
@@ -285,6 +332,9 @@ def main() -> None:
                     "database_name": database_name,
                     "roles": list(roles.values()),
                     "support_workspace_id": support_workspace_id,
+                    "synthetic_qwen_answer": (
+                        SYNTHETIC_QWEN_ANSWER if qwen_server is not None else None
+                    ),
                 },
                 sort_keys=True,
             ),
@@ -302,6 +352,9 @@ def main() -> None:
         )
         server.run()
     finally:
+        if qwen_server is not None:
+            qwen_server.shutdown()
+            qwen_server.server_close()
         if app_engine is not None:
             app_engine.dispose()
         state_path.unlink(missing_ok=True)
