@@ -36,14 +36,16 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v5"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v6"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v5",
     "qwen-engineering-extraction-v4",
     "qwen-engineering-extraction-v3",
 )
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
+_MAX_ENGINEERING_BATCH_FRAGMENTS = 6
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",
@@ -380,9 +382,7 @@ class QwenDocumentSemanticAdapter:
         compatible_accepted_batches: Mapping[str, dict[str, object]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
     ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
-        allowed = {
-            str(item.fragment_id): item for item in batch.fragments if item.fragment_id is not None
-        }
+        allowed = _engineering_allowed_fragments(batch.fragments)
         persisted = accepted.get(batch.digest)
         if persisted is None and batch.prompt_strategy == "standard":
             for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
@@ -530,8 +530,14 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
 def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEngineeringBatch, ...]:
     fragments = _fragments(elements)
     batches: list[QwenEngineeringBatch] = []
-    for ordinal, offset in enumerate(range(0, len(fragments), 24), start=1):
-        batches.append(_engineering_batch(ordinal, fragments[offset : offset + 24]))
+    for ordinal, offset in enumerate(
+        range(0, len(fragments), _MAX_ENGINEERING_BATCH_FRAGMENTS), start=1
+    ):
+        batches.append(
+            _engineering_batch(
+                ordinal, fragments[offset : offset + _MAX_ENGINEERING_BATCH_FRAGMENTS]
+            )
+        )
     return tuple(batches)
 
 
@@ -593,19 +599,30 @@ def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str,
     return {key: [list(item) for item in values] for key, values in parsed.items()}
 
 
+def _engineering_allowed_fragments(
+    fragments: tuple[_SemanticFragment, ...],
+) -> dict[str, _SemanticFragment]:
+    allowed: dict[str, _SemanticFragment] = {}
+    for ordinal, fragment in enumerate(fragments, start=1):
+        if fragment.fragment_id is None:
+            continue
+        allowed[str(fragment.fragment_id)] = fragment
+        allowed[f"F{ordinal}"] = fragment
+    return allowed
+
+
 def _engineering_prompt(
     elements: tuple[_SemanticFragment, ...], *, strategy: str = "standard"
 ) -> str:
     fragments = [
         {
-            "fragment_id": item.fragment_id,
-            "locator_id": str(item.locator.source_locator_id),
+            "fragment_id": f"F{ordinal}",
             "page": item.locator.page_number,
             "character_start": item.character_start,
             "character_end": item.character_end,
             "text": item.text,
         }
-        for item in elements
+        for ordinal, item in enumerate(elements, start=1)
     ]
     prompt = (
         "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
@@ -617,8 +634,8 @@ def _engineering_prompt(
         "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
         "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
         "если источник их не указывает или имя работы дано только вне этого пакета. "
-        "fragment_id обязан быть одним из входных. work_fragment_id, если не пуст, также обязан "
-        "быть одним из входных. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
+        "fragment_id обязан быть одним из коротких идентификаторов F1, F2 и т.д. во входе. "
+        "work_fragment_id, если не пуст, также обязан быть одним из них. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
     if strategy == "single_fragment_repair-v1":
@@ -677,10 +694,31 @@ def _parse_engineering(
             item = tuple(" ".join(str(row.get(name, "")).split()) for name in names)
             if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
+            item = _canonicalize_engineering_item(key, item, allowed)
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
             result[key].append(item)
     return result
+
+
+def _canonicalize_engineering_item(
+    key: str, item: tuple[str, ...], allowed: Mapping[str, _SemanticFragment]
+) -> tuple[str, ...]:
+    locator_positions = {
+        "fields": (2,),
+        "structures": (2,),
+        "works": (1,),
+        "quantities": (3, 4),
+        "materials": (4, 5),
+    }[key]
+    values = list(item)
+    for position in locator_positions:
+        if values[position]:
+            fragment = allowed[values[position]]
+            if fragment.fragment_id is None:
+                raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
+            values[position] = str(fragment.fragment_id)
+    return tuple(values)
 
 
 def _parse_engineering_manifest(

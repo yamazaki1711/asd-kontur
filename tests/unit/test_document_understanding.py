@@ -572,55 +572,56 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
     assert len(elements) > 24
     last_locator_id = str(elements[-1].locator.source_locator_id)
     batches = _engineering_batches(elements)
-    first_fragment_id = str(batches[0].fragments[0].fragment_id)
-    last_fragment_id = str(batches[-1].fragments[-1].fragment_id)
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    responses = [
+        json.dumps({"fields": [], "structures": [], "works": [], "quantities": [], "materials": []})
+        for _ in batches
+    ]
+    responses[0] = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "works": [{"name": "Устройство основания", "fragment_id": "F1"}],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+    responses[-1] = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "works": [],
+            "quantities": [
+                {
+                    "work_name": "Устройство основания",
+                    "value": "12,5",
+                    "unit": "м3",
+                    "fragment_id": f"F{len(batches[-1].fragments)}",
+                    "work_fragment_id": "",
+                }
+            ],
+            "materials": [
+                {
+                    "work_name": "Устройство основания",
+                    "name": "Щебень",
+                    "quantity": "12,5",
+                    "unit": "м3",
+                    "fragment_id": f"F{len(batches[-1].fragments)}",
+                    "work_fragment_id": "",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
 
     with patch(
         "asd_kontur.document_understanding.qwen_semantic._complete",
-        side_effect=(
-            json.dumps(
-                {
-                    "fields": [],
-                    "structures": [],
-                    "works": [{"name": "Устройство основания", "fragment_id": first_fragment_id}],
-                    "quantities": [],
-                    "materials": [],
-                },
-                ensure_ascii=False,
-            ),
-            json.dumps(
-                {
-                    "fields": [],
-                    "structures": [],
-                    "works": [],
-                    "quantities": [
-                        {
-                            "work_name": "Устройство основания",
-                            "value": "12,5",
-                            "unit": "м3",
-                            "fragment_id": last_fragment_id,
-                            "work_fragment_id": "",
-                        }
-                    ],
-                    "materials": [
-                        {
-                            "work_name": "Устройство основания",
-                            "name": "Щебень",
-                            "quantity": "12,5",
-                            "unit": "м3",
-                            "fragment_id": last_fragment_id,
-                            "work_fragment_id": "",
-                        }
-                    ],
-                },
-                ensure_ascii=False,
-            ),
-        ),
+        side_effect=responses,
     ) as complete:
         result = adapter.extract_engineering(elements)
 
-    assert complete.call_count == 2
+    assert complete.call_count == len(batches)
     assert len(result.works) == 1
     assert len(result.quantities) == 1
     assert result.quantities[0].work_candidate_id == result.works[0].candidate_id
@@ -747,13 +748,13 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v1"
 
 
-def test_qwen_engineering_batch_v5_manifest_preserves_fragment_coverage() -> None:
+def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> None:
     document = _extract_csv("строка 1;строка 2\n")
     batch = _engineering_batches(document.pages[0].elements)[0]
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v5"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v6"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -844,6 +845,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v6",
                 "qwen-engineering-extraction-v5",
                 "qwen-engineering-extraction-v4",
                 "qwen-engineering-extraction-v3",
