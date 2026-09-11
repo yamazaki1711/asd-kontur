@@ -1,5 +1,28 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 21:09 UTC+12 — v15 complete-source pass continues
+
+API release `8159206681f681ed84a3807c9b09120e90461d07` is ready at migration
+`0047_profile_scoped_engineering_candidates`. The document worker imports the same
+release worktree. Its recorded launchd label is older (`22142e2`), so the next safe
+worker transition must correct that release-manifest label; the code path itself was
+verified from `PYTHONPATH` and is not inferred from the label.
+
+The only active Qwen document workload is job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` for
+`Раздел ПД №12.3 005.2-2025-СМ3. Изм.3.pdf` (121 pages, source version
+`01a088ac-7f97-761a-b857-f5d3b4c5be8b`). Its native evidence denominator is 5,957
+locators. At this observation the job had durable base progress `309/497`, 3,672
+accepted fragment inputs, and 135 immutable failed-attempt inputs. It remains running
+with a fresh lease and a live worker-to-local-Qwen loopback connection. This is active
+semantic processing, not source completion or a Tender result.
+
+The partial candidate ledger now contains 684 fields, 1,156 works, 281 quantities,
+124 materials, 864 source-scoped structure observations, and 169 relationship
+observations. None is a reconciled cross-document facility, LOS/KNS, excavation-pit
+inventory, or confirmed fact. The current UI can expose expired job leases honestly;
+browser acceptance is still unverified because no browser binding is available.
+
 ## 2026-09-11 20:56 UTC+12 — exact-evidence graph components live
 
 API/frontend release `6739b203269dd20e0eab1d22532271217e1a451c` is live at migration

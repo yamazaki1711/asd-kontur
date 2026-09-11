@@ -497,6 +497,37 @@ persistence, replacement-lineage recovery, and project-view materialization befo
 scheduling the next source; if it terminates unsuccessfully, inspect only the exact
 failed batch lineage and recover the bounded input.
 
+### Continuation checkpoint — 2026-09-11 21:09 UTC+12
+
+The controlled database is at `0047_profile_scoped_engineering_candidates`. API
+release `8159206681f681ed84a3807c9b09120e90461d07` is healthy and imports its
+explicit release worktree. The document worker imports that same worktree, although
+its launchd environment label still says `22142e2`; treat the label mismatch as a
+release-manifest repair to make only at a safe worker boundary, not as evidence of a
+different executing code path.
+
+The only live Qwen document execution is
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096`, for the active 121-page source version
+`01a088ac-7f97-761a-b857-f5d3b4c5be8b` (`Раздел ПД №12.3 005.2-2025-СМ3. Изм.3.pdf`).
+It has 5,957 native evidence locators and its v15 semantic job has a fresh lease,
+durable base progress `309/497`, 3,672 accepted fragment inputs, and 135 input
+fragments represented only by immutable failed-attempt receipts. The local Qwen
+process has a live loopback connection from the worker; do not restart it or create a
+second successor while this job runs.
+
+An earlier v15 job for a different source is visibly `running` with an expired lease
+owned by a no-longer-running worker process. The deployed effective-jobs UI exposes
+this as an unavailable executor rather than live progress. Its replacement must be
+claimed through the existing durable claim function at a safe serial worker boundary;
+do not update its row manually or run a competing Qwen job.
+
+The owner-scoped current candidate ledger contains 684 project fields, 1,156 works,
+281 quantities, 124 materials, 864 source-scoped structure observations, and 169
+relationship observations. These remain candidate evidence. They do not establish a
+cross-document LOS/KNS/facility inventory, pit count, Tender finding, or consultant
+acceptance. Browser-based UI acceptance is unverified because no in-app browser
+binding is currently available.
+
 ### Continuation checkpoint — 2026-09-11 18:08 UTC+12
 
 The active POS job remains `running` under the pinned `13f50af` worker. Its Qwen v15
