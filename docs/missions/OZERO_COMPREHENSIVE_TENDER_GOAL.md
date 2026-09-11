@@ -157,3 +157,31 @@ connection to local Qwen. This is active recovery evidence, not semantic coverag
 materialization. The next engineering change after this active job reaches a terminal state is to add
 sanitized per-row validation diagnostics to failed receipts, then adjust only the demonstrated Qwen output
 contract and retry the failed lineage once.
+
+### Continuation checkpoint — 2026-09-11 14:45 UTC+12
+
+The live database remains at `0045_bounded_dep_recovery`. The source package denominator is 22 accepted
+source versions / 2,529 pages. Source version `01a088ac-7f16-73ef-9d2c-3957b2393f66` has 1,453 native,
+readable layout elements (75,923 characters), deterministically partitioned by the current v10 contract
+into 243 standard semantic batches. This is a source-specific denominator, not package semantic coverage.
+
+The v9 descendant `01a08e4f-09a6-7436-935e-099934df66ab` is terminal with one accepted and twelve failed
+batch receipts. Sanitized v9 diagnostics established that the failed quantity rows cited valid fragments
+but omitted one or more of work name, value, or unit. Commit `61b78d8d7f9fe4dc6c176b6da818f3a426f804a7`
+introduces `qwen-engineering-extraction-v10`: such cited observations persist as non-blocking,
+evidence-linked `incomplete_quantity_candidate` reconciliation defects; they are never quantity candidates
+or project totals. Ruff, strict mypy, and 42 focused document-understanding tests passed.
+
+Worker release `61b78d8` is live, with `PYTHONPATH` and executable pinned to its release worktree.
+The only v10 successor is `01a08e56-2374-72b4-b529-c79ba809d3e9`, caused by the terminal v9 job. It is
+running, has a live worker-to-local-Qwen connection, and had durably persisted 35 accepted v10 batch
+receipts at the snapshot. No second retry may be created while it runs.
+
+Commit `c0047116336625b7d7a48baaf7bee6afdb3aa618` is pushed but not deployed. It versions the profile
+as v11 and prevents identically named work observations from being merged merely because they occur on
+the same page. A quantity/material relation with an explicit work fragment resolves only to that exact
+evidence-bound work; an unqualified same-name relation remains a reconciliation defect. Ruff, strict
+mypy, and 43 focused tests passed. Deploy v11 only after the v10 successor is terminal, then create one
+version-aware successor to materialize the source using compatible v10 batch evidence and recover its
+causally linked downstream stages. Validate candidate provenance and the project view before scheduling
+the next eligible source; do not claim project facts, a pit count, or package completion before then.
