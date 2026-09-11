@@ -2652,6 +2652,9 @@ class SpinePostgresRepository:
             structure_dossiers = self._structure_dossier_rows(
                 structure_nodes, structure_relationships
             )
+            structure_components = self._structure_component_rows(
+                structure_nodes, structure_relationships
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2675,6 +2678,7 @@ class SpinePostgresRepository:
                     candidates,
                     structure_nodes,
                     structure_relationships,
+                    structure_components,
                 ),
             )
         return {
@@ -2699,6 +2703,7 @@ class SpinePostgresRepository:
             "structure_nodes": structure_nodes,
             "structure_relationships": structure_relationships,
             "structure_dossiers": structure_dossiers,
+            "structure_components": structure_components,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -3302,6 +3307,92 @@ class SpinePostgresRepository:
             )
         return rows
 
+    @staticmethod
+    def _structure_component_rows(
+        nodes: list[dict[str, Any]], relationships: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Expose only exact-evidence graph components without cross-source identity merges.
+
+        A component is an aid for navigating observations already linked by an
+        extracted relationship whose two endpoints were resolved in the same source
+        evidence. It is never a canonical facility, and equal names in separate
+        documents deliberately cannot join a component.
+        """
+        by_id = {str(node["structure_node_id"]): node for node in nodes}
+        parent = {node_id: node_id for node_id in by_id}
+
+        def find(node_id: str) -> str:
+            while parent[node_id] != node_id:
+                parent[node_id] = parent[parent[node_id]]
+                node_id = parent[node_id]
+            return node_id
+
+        def union(left: str, right: str) -> None:
+            left_root, right_root = find(left), find(right)
+            if left_root != right_root:
+                parent[right_root] = left_root
+
+        resolved: list[dict[str, Any]] = []
+        for relationship in relationships:
+            if relationship.get("resolution_state") != "resolved_same_evidence":
+                continue
+            subject = str(relationship.get("subject_structure_node_id") or "")
+            object_ = str(relationship.get("object_structure_node_id") or "")
+            if subject not in by_id or object_ not in by_id:
+                continue
+            union(subject, object_)
+            resolved.append(relationship)
+
+        components: dict[str, list[str]] = {}
+        for node_id in by_id:
+            components.setdefault(find(node_id), []).append(node_id)
+        rows: list[dict[str, Any]] = []
+        for members in components.values():
+            if len(members) < 2:
+                continue
+            member_set = set(members)
+            component_relationships = [
+                relationship
+                for relationship in resolved
+                if str(relationship.get("subject_structure_node_id")) in member_set
+                and str(relationship.get("object_structure_node_id")) in member_set
+            ]
+            if not component_relationships:
+                continue
+            component_nodes = [by_id[node_id] for node_id in sorted(members)]
+            locator_ids = sorted(
+                {
+                    *(
+                        str(node["source_locator_id"])
+                        for node in component_nodes
+                        if node.get("source_locator_id") is not None
+                    ),
+                    *(
+                        str(relationship["source_locator_id"])
+                        for relationship in component_relationships
+                        if relationship.get("source_locator_id") is not None
+                    ),
+                }
+            )
+            rows.append(
+                {
+                    "candidate_state": "exact_evidence_graph_component",
+                    "component_key": semantic_digest(
+                        {
+                            "nodes": sorted(members),
+                            "relationships": sorted(
+                                str(item["relationship_candidate_id"])
+                                for item in component_relationships
+                            ),
+                        }
+                    ),
+                    "nodes": component_nodes,
+                    "relationships": component_relationships,
+                    "source_locator_ids": locator_ids,
+                }
+            )
+        return sorted(rows, key=lambda item: str(item["component_key"]))
+
     @classmethod
     def _empty_project_understanding_view(
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
@@ -3316,6 +3407,9 @@ class SpinePostgresRepository:
             session, organization_id=organization_id, workspace_id=workspace_id
         )
         structure_dossiers = cls._structure_dossier_rows(structure_nodes, structure_relationships)
+        structure_components = cls._structure_component_rows(
+            structure_nodes, structure_relationships
+        )
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -3332,13 +3426,14 @@ class SpinePostgresRepository:
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 locator_ids=cls._response_locator_ids(
-                    candidates, structure_nodes, structure_relationships
+                    candidates, structure_nodes, structure_relationships, structure_components
                 ),
             ),
             "candidates": candidates,
             "structure_nodes": structure_nodes,
             "structure_relationships": structure_relationships,
             "structure_dossiers": structure_dossiers,
+            "structure_components": structure_components,
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),

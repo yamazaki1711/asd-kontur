@@ -3554,6 +3554,8 @@ function ProjectUnderstandingPage() {
             string,
             unknown
           >[];
+          const structureComponents = (value.structure_components ??
+            []) as Record<string, unknown>[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3710,6 +3712,7 @@ function ProjectUnderstandingPage() {
                     nodes={structureNodes}
                     relationships={structureRelationships}
                     dossiers={structureDossiers}
+                    components={structureComponents}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
@@ -3849,12 +3852,14 @@ function StructureCandidateList({
   nodes,
   relationships,
   dossiers,
+  components,
   workspaceId,
   modeSlug,
 }: {
   nodes: Record<string, unknown>[];
   relationships: Record<string, unknown>[];
   dossiers: Record<string, unknown>[];
+  components: Record<string, unknown>[];
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
@@ -3945,6 +3950,45 @@ function StructureCandidateList({
                       Открыть исходный фрагмент
                     </Link>
                   )}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {components.length > 0 && (
+        <>
+          <h3>Связанные исходные наблюдения</h3>
+          <p>
+            Эти группы построены только по связям, чьи оба конца извлечены из
+            одного исходного фрагмента. Это кандидаты, а не объединённые объекты
+            проекта.
+          </p>
+          <div className="card-grid">
+            {components.slice(0, visibleNodeCount).map((component) => {
+              const nodes = Array.isArray(component.nodes)
+                ? (component.nodes as Record<string, unknown>[])
+                : [];
+              const relationships = Array.isArray(component.relationships)
+                ? component.relationships
+                : [];
+              return (
+                <article
+                  className="candidate-row"
+                  key={displayValue(component.component_key)}
+                >
+                  <strong>Исходно-связанная группа</strong>
+                  <p>
+                    {nodes
+                      .map((node) =>
+                        displayValue(node.raw_name, "Без наименования"),
+                      )
+                      .join(" → ")}
+                  </p>
+                  <small>
+                    Кандидат; элементов: {nodes.length}, связей:{" "}
+                    {relationships.length}
+                  </small>
                 </article>
               );
             })}

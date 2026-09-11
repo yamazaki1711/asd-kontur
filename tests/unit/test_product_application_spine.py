@@ -72,6 +72,39 @@ def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
     assert dossiers[1]["unresolved_relationship_count"] == 0
 
 
+def test_structure_components_require_exact_resolved_evidence() -> None:
+    nodes = [
+        {"structure_node_id": "facility", "source_locator_id": "locator-a"},
+        {"structure_node_id": "pit", "source_locator_id": "locator-a"},
+        {"structure_node_id": "same-name-other-source", "source_locator_id": "locator-b"},
+    ]
+    relationships = [
+        {
+            "relationship_candidate_id": "relation-a",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "facility",
+            "object_structure_node_id": "pit",
+            "resolution_state": "resolved_same_evidence",
+        },
+        {
+            "relationship_candidate_id": "relation-b",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": "pit",
+            "object_structure_node_id": "same-name-other-source",
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+    ]
+
+    components = SpinePostgresRepository._structure_component_rows(nodes, relationships)
+
+    assert len(components) == 1
+    assert [item["structure_node_id"] for item in components[0]["nodes"]] == [
+        "facility",
+        "pit",
+    ]
+    assert components[0]["relationships"] == [relationships[0]]
+
+
 def settings(root: Path, **overrides: object) -> SpineSettings:
     values: dict[str, object] = {
         "database_url": "postgresql+psycopg://app:synthetic@127.0.0.1/spine",
