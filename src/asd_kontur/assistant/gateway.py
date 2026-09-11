@@ -433,16 +433,18 @@ class ProfessionalAssistantKnowledgeQuery:
         )
         model_view: dict[str, Any] | None = None
         dossier_source_items: list[dict[str, Any]] = []
+        overview_dossiers: list[dict[str, Any]] = []
         if owner_identity_id is not None:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
 
             model_view = SpinePostgresRepository(self._engine).project_understanding_view(
                 owner_identity_id=owner_identity_id, workspace_id=workspace_id
             )
+            overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
             locator_ids = {
                 str(locator_id)
-                for dossier in (model_view or {}).get("structure_dossiers", [])
+                for dossier in overview_dossiers
                 for locator_id in dossier.get("source_locator_ids", [])
             }
             for locator_id in sorted(locator_ids):
@@ -460,9 +462,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "discrepancies": _public_value([_json_row(row) for row in defects]),
             "mode_result": _public_value(_mode_result_row(result)),
             "documents": _public_value([_json_row(row) for row in documents]),
-            "structure_dossiers": _public_value(
-                list((model_view or {}).get("structure_dossiers", []))
-            ),
+            "structure_dossiers": _public_value(overview_dossiers),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "source_items": [*source_items, *dossier_source_items],
         }
