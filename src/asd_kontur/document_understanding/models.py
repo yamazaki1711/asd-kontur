@@ -218,6 +218,25 @@ class StructureNodeCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class StructureRelationshipCandidate:
+    """A source-backed relationship observation between named project structures.
+
+    The endpoints intentionally remain evidence-bound names at extraction time.  A
+    later reconciliation can resolve them to canonical nodes only when scope and
+    provenance make that safe; extraction must not join same-named facilities.
+    """
+
+    relationship_candidate_id: UUID
+    relationship_kind: str
+    subject_raw_name: str
+    subject_normalized_name: str
+    object_raw_name: str
+    object_normalized_name: str
+    locator: ExactLocator
+    status: CandidateDecision = CandidateDecision.CANDIDATE
+
+
+@dataclass(frozen=True, slots=True)
 class WorkTypeCandidate:
     candidate_id: UUID
     raw_name: str

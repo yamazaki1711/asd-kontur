@@ -1856,6 +1856,10 @@ export interface components {
             structure_nodes?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Relationships */
+            structure_relationships?: {
+                [key: string]: unknown;
+            }[];
             /** Work Packages */
             work_packages: {
                 [key: string]: unknown;

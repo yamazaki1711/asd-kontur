@@ -362,6 +362,7 @@ class ProjectUnderstandingView(ApiModel):
     evidence_index: dict[str, dict[str, Any]]
     candidates: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     structure_nodes: list[dict[str, Any]] = Field(default_factory=list)
+    structure_relationships: list[dict[str, Any]] = Field(default_factory=list)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
     semantic_coverage: list[dict[str, Any]] = Field(default_factory=list)

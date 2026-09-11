@@ -41,6 +41,7 @@ from .models import (
     RoleCandidate,
     RoleDecision,
     StructureNodeCandidate,
+    StructureRelationshipCandidate,
     WorkTypeCandidate,
 )
 from .native import NativeDocument
@@ -503,6 +504,8 @@ class IndustrialUnderstandingRepository:
                 self._insert_project_field(session, claimed, field_candidate)
             for structure_candidate in bundle.structures:
                 self._insert_structure(session, claimed, structure_candidate)
+            for relationship_candidate in bundle.structure_relationships:
+                self._insert_structure_relationship(session, claimed, relationship_candidate)
             for work_candidate in bundle.works:
                 self._insert_work(session, claimed, work_candidate)
             for quantity_candidate in bundle.quantities:
@@ -1114,6 +1117,36 @@ class IndustrialUnderstandingRepository:
                 "locator": value.locator.source_locator_id,
                 "status": value.status.value,
                 "fingerprint": fingerprint,
+            },
+        )
+
+    @staticmethod
+    def _insert_structure_relationship(
+        session: Session, claimed: ClaimedJob, value: StructureRelationshipCandidate
+    ) -> None:
+        """Persist unresolved relationship endpoints without name-based node joins."""
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.project_structure_relationship_candidates "
+                "(organization_id,workspace_id,relationship_candidate_id,version,relationship_kind,"
+                "subject_raw_name,subject_normalized_name,object_raw_name,object_normalized_name,"
+                "source_version_id,source_locator_id,status,candidate_digest) VALUES "
+                "(:o,:w,:candidate,1,:kind,:subject_raw,:subject_normalized,:object_raw,"
+                ":object_normalized,:source,:locator,:status,:digest) ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": value.relationship_candidate_id,
+                "kind": value.relationship_kind,
+                "subject_raw": value.subject_raw_name,
+                "subject_normalized": value.subject_normalized_name,
+                "object_raw": value.object_raw_name,
+                "object_normalized": value.object_normalized_name,
+                "source": value.locator.source_version_id,
+                "locator": value.locator.source_locator_id,
+                "status": value.status.value,
+                "digest": semantic_digest(value),
             },
         )
 

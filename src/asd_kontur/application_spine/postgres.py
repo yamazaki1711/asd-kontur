@@ -2594,6 +2594,9 @@ class SpinePostgresRepository:
             structure_nodes = self._project_structure_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            structure_relationships = self._project_structure_relationship_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2616,6 +2619,7 @@ class SpinePostgresRepository:
                     defects,
                     candidates,
                     structure_nodes,
+                    structure_relationships,
                 ),
             )
         return {
@@ -2638,6 +2642,7 @@ class SpinePostgresRepository:
             "evidence_index": evidence_index,
             "candidates": candidates,
             "structure_nodes": structure_nodes,
+            "structure_relationships": structure_relationships,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -2983,6 +2988,9 @@ class SpinePostgresRepository:
         structure_nodes = cls._project_structure_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
+        structure_relationships = cls._project_structure_relationship_rows(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -2998,10 +3006,13 @@ class SpinePostgresRepository:
                 session,
                 organization_id=organization_id,
                 workspace_id=workspace_id,
-                locator_ids=cls._response_locator_ids(candidates, structure_nodes),
+                locator_ids=cls._response_locator_ids(
+                    candidates, structure_nodes, structure_relationships
+                ),
             ),
             "candidates": candidates,
             "structure_nodes": structure_nodes,
+            "structure_relationships": structure_relationships,
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
@@ -3092,6 +3103,24 @@ class SpinePostgresRepository:
                 "parent_node_id,source_locator_id,status,fingerprint FROM "
                 "workspace.project_structure_node_versions WHERE organization_id=:organization "
                 "AND workspace_id=:workspace ORDER BY recorded_at,structure_node_id,version"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        ).mappings()
+        return [_jsonable_row(row) for row in rows]
+
+    @staticmethod
+    def _project_structure_relationship_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        """Return evidence-bound relationship observations before identity reconciliation."""
+        rows = session.execute(
+            sa.text(
+                "SELECT relationship_candidate_id,version,relationship_kind,subject_raw_name,"
+                "subject_normalized_name,object_raw_name,object_normalized_name,source_version_id,"
+                "source_locator_id,status,candidate_digest FROM "
+                "workspace.project_structure_relationship_candidates WHERE "
+                "organization_id=:organization AND workspace_id=:workspace "
+                "ORDER BY recorded_at,relationship_candidate_id,version"
             ),
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()

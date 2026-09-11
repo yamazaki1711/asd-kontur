@@ -575,13 +575,23 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
     batches = _engineering_batches(elements)
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     responses = [
-        json.dumps({"fields": [], "structures": [], "works": [], "quantities": [], "materials": []})
+        json.dumps(
+            {
+                "fields": [],
+                "structures": [],
+                "structure_relationships": [],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            }
+        )
         for _ in batches
     ]
     responses[0] = json.dumps(
         {
             "fields": [],
             "structures": [],
+            "structure_relationships": [],
             "works": [{"name": "Устройство основания", "fragment_id": "F1"}],
             "quantities": [],
             "materials": [],
@@ -592,6 +602,7 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
         {
             "fields": [],
             "structures": [],
+            "structure_relationships": [],
             "works": [],
             "quantities": [
                 {
@@ -643,6 +654,7 @@ def test_qwen_engineering_extraction_keeps_same_named_works_distinct_by_fragment
             {
                 "fields": [],
                 "structures": [],
+                "structure_relationships": [],
                 "works": [
                     {"name": "Монтаж", "fragment_id": "F1"},
                     {"name": "Монтаж", "fragment_id": "F2"},
@@ -717,6 +729,7 @@ def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optio
             {
                 "fields": [],
                 "structures": [],
+                "structure_relationships": [],
                 "works": [{"name": "Монтаж", "fragment_id": fragments[0].fragment_id}],
                 "quantities": [
                     {
@@ -759,6 +772,7 @@ def test_qwen_engineering_extraction_preserves_incomplete_quantity_as_evidenced_
         {
             "fields": [],
             "structures": [],
+            "structure_relationships": [],
             "works": [],
             "quantities": [
                 {
@@ -821,6 +835,7 @@ def test_qwen_engineering_extraction_normalizes_only_terminal_prompt_alias_punct
                 "structures": [
                     {"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1."}
                 ],
+                "structure_relationships": [],
                 "works": [],
                 "quantities": [],
                 "materials": [],
@@ -832,6 +847,47 @@ def test_qwen_engineering_extraction_normalizes_only_terminal_prompt_alias_punct
 
     assert len(result.structures) == 1
     assert result.structures[0].raw_name == "Котлован К-1"
+
+
+def test_qwen_engineering_extraction_preserves_evidence_bound_structure_relationship() -> None:
+    document = _extract_csv("Котлован К-1 обслуживает КНС-2\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [
+                    {"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1"},
+                    {"kind": "structure", "name": "КНС-2", "fragment_id": "F1"},
+                ],
+                "structure_relationships": [
+                    {
+                        "kind": "serves",
+                        "subject_name": "Котлован К-1",
+                        "object_name": "КНС-2",
+                        "fragment_id": "F1",
+                    }
+                ],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert len(result.structure_relationships) == 1
+    relationship = result.structure_relationships[0]
+    assert relationship.relationship_kind == "serves"
+    assert relationship.subject_normalized_name == "котлован к-1"
+    assert relationship.object_normalized_name == "кнс-2"
+    assert (
+        relationship.locator.source_locator_id
+        == document.pages[0].elements[0].locator.source_locator_id
+    )
 
 
 def test_qwen_engineering_extraction_accepts_unique_source_locator_but_not_ambiguous_one() -> None:
@@ -851,6 +907,7 @@ def test_qwen_engineering_extraction_accepts_unique_source_locator_but_not_ambig
                         "fragment_id": locator_id,
                     }
                 ],
+                "structure_relationships": [],
                 "works": [],
                 "quantities": [],
                 "materials": [],
@@ -872,6 +929,7 @@ def test_qwen_engineering_extraction_repairs_recoverable_invalid_batch_before_sp
         {
             "fields": [{"key": "purpose", "value": "Объект", "fragment_id": "F1"}],
             "structures": [],
+            "structure_relationships": [],
             "works": [],
             "quantities": [],
             "materials": [],
@@ -907,6 +965,7 @@ def test_qwen_engineering_extraction_reuses_accepted_recovery_children_before_ca
         child.digest: {
             "fields": [],
             "structures": [],
+            "structure_relationships": [],
             "works": [],
             "quantities": [],
             "materials": [],
@@ -930,7 +989,14 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     accepted: list[tuple[object, dict[str, object]]] = []
     valid = json.dumps(
-        {"fields": [], "structures": [], "works": [], "quantities": [], "materials": []}
+        {
+            "fields": [],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
     )
 
     with patch(
@@ -956,7 +1022,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v13"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v14"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -977,6 +1043,7 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
                     {"key": "project_purpose", "value": "Объект", "fragment_id": fragment_id}
                 ],
                 "structures": [],
+                "structure_relationships": [],
                 "works": [],
                 "quantities": [],
                 "materials": [],
@@ -1006,6 +1073,7 @@ def test_qwen_engineering_extraction_reuses_compatible_v3_batch_manifest() -> No
         _compatible_batch_digest(batch.fragments, "qwen-engineering-extraction-v3"): {
             "fields": [["project_purpose", "Объект", fragment_id]],
             "structures": [],
+            "structure_relationships": [],
             "works": [],
             "quantities": [],
             "materials": [],
@@ -1047,6 +1115,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v14",
                 "qwen-engineering-extraction-v13",
                 "qwen-engineering-extraction-v12",
                 "qwen-engineering-extraction-v11",
@@ -1092,6 +1161,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
                             "fragment_id": fragment_id,
                         }
                     ],
+                    "structure_relationships": [],
                     "works": [{"name": "Разработка котлована", "fragment_id": fragment_id}],
                     "quantities": [
                         {

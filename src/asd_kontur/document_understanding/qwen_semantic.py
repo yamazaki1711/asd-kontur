@@ -32,13 +32,15 @@ from .models import (
     RoleCandidate,
     RoleDecision,
     StructureNodeCandidate,
+    StructureRelationshipCandidate,
     WorkTypeCandidate,
 )
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v13"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v14"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v13",
     "qwen-engineering-extraction-v12",
     "qwen-engineering-extraction-v11",
     "qwen-engineering-extraction-v10",
@@ -241,6 +243,7 @@ class QwenDocumentSemanticAdapter:
             )
         fields: list[ProjectFieldCandidate] = []
         structures: list[StructureNodeCandidate] = []
+        structure_relationships: list[StructureRelationshipCandidate] = []
         works: list[WorkTypeCandidate] = []
         quantities: list[QuantityCandidate] = []
         materials: list[MaterialCandidate] = []
@@ -298,6 +301,25 @@ class QwenDocumentSemanticAdapter:
                         kind,
                         name,
                         normalized,
+                        locator,
+                    )
+                )
+            for kind, subject_name, object_name, locator_id in parsed["structure_relationships"]:
+                locator = allowed[locator_id].locator
+                normalized_subject = " ".join(subject_name.casefold().split())
+                normalized_object = " ".join(object_name.casefold().split())
+                structure_relationships.append(
+                    StructureRelationshipCandidate(
+                        deterministic_uuid(
+                            "qwen-structure-relationship:"
+                            f"{locator.source_version_id}:{locator_id}:{kind}:"
+                            f"{normalized_subject}:{normalized_object}"
+                        ),
+                        kind,
+                        subject_name,
+                        normalized_subject,
+                        object_name,
+                        normalized_object,
                         locator,
                     )
                 )
@@ -414,6 +436,7 @@ class QwenDocumentSemanticAdapter:
             (),
             tuple(defects),
             tuple(structures),
+            tuple(structure_relationships),
         )
 
     def _extract_engineering_batch(
@@ -764,10 +787,11 @@ def _engineering_prompt(
         "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
         '{"fields":[{"key":"...","value":"...","fragment_id":"..."}],'
         '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","fragment_id":"..."}],'
+        '"structure_relationships":[{"kind":"contains|located_in|serves|connects_to|depends_on","subject_name":"...","object_name":"...","fragment_id":"..."}],'
         '"works":[{"name":"...","fragment_id":"..."}],'
         '"quantities":[{"work_name":"...","value":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}],'
         '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}]}. '
-        "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
+        "Все шесть ключей JSON обязательны, даже если соответствующий массив пуст. "
         "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
         "если источник их не указывает или имя работы дано только вне этого пакета. "
         "Для quantity пустые work_name, value или unit означают неполное наблюдение: "
@@ -794,8 +818,8 @@ def _engineering_evidence_repair_prompt(
 
     return (
         "Исправь только JSON ниже: сохрани только кандидаты, которые уже есть в ответе и "
-        "привяжи каждый к одному допустимому fragment_id. Верни полный JSON с пятью обязательными "
-        "массивами fields, structures, works, quantities, materials. Для fragment_id используй только "
+        "привяжи каждый к одному допустимому fragment_id. Верни полный JSON с шестью обязательными "
+        "массивами fields, structures, structure_relationships, works, quantities, materials. Для fragment_id используй только "
         "буквальные F1, F2 и т.д. из списка; если доказательство сопоставить нельзя, удали этот "
         "кандидат. Не добавляй новые инженерные сведения.\n"
         "ДОПУСТИМЫЕ ФРАГМЕНТЫ:\n"
@@ -827,6 +851,7 @@ def _parse_engineering(
     if not isinstance(value, dict) or set(value) != {
         "fields",
         "structures",
+        "structure_relationships",
         "works",
         "quantities",
         "materials",
@@ -835,6 +860,7 @@ def _parse_engineering(
     result: dict[str, list[tuple[str, ...]]] = {
         "fields": [],
         "structures": [],
+        "structure_relationships": [],
         "works": [],
         "quantities": [],
         "incomplete_quantities": [],
@@ -843,6 +869,12 @@ def _parse_engineering(
     specs = {
         "fields": ("key", "value", "fragment_id"),
         "structures": ("kind", "name", "fragment_id"),
+        "structure_relationships": (
+            "kind",
+            "subject_name",
+            "object_name",
+            "fragment_id",
+        ),
         "works": ("name", "fragment_id"),
         "quantities": ("work_name", "value", "unit", "fragment_id", "work_fragment_id"),
         "materials": (
@@ -884,6 +916,14 @@ def _parse_engineering(
             item = _canonicalize_engineering_item(key, item, allowed)
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
+            if key == "structure_relationships" and item[0] not in {
+                "contains",
+                "located_in",
+                "serves",
+                "connects_to",
+                "depends_on",
+            }:
+                raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
             result[key].append(item)
     return result
 
@@ -899,6 +939,7 @@ def _normalize_engineering_evidence_aliases(key: str, item: tuple[str, ...]) -> 
     locator_positions = {
         "fields": (2,),
         "structures": (2,),
+        "structure_relationships": (3,),
         "works": (1,),
         "quantities": (3, 4),
         "materials": (4, 5),
@@ -917,6 +958,7 @@ def _engineering_evidence_references(key: str, item: tuple[str, ...]) -> list[st
         for position in {
             "fields": (2,),
             "structures": (2,),
+            "structure_relationships": (3,),
             "works": (1,),
             "quantities": (3, 4),
             "materials": (4, 5),
@@ -931,6 +973,7 @@ def _canonicalize_engineering_item(
     locator_positions = {
         "fields": (2,),
         "structures": (2,),
+        "structure_relationships": (3,),
         "works": (1,),
         "quantities": (3, 4),
         "materials": (4, 5),
@@ -951,6 +994,7 @@ def _parse_engineering_manifest(
     result: dict[str, list[tuple[str, ...]]] = {
         "fields": [],
         "structures": [],
+        "structure_relationships": [],
         "works": [],
         "quantities": [],
         "incomplete_quantities": [],
@@ -959,6 +1003,12 @@ def _parse_engineering_manifest(
     specs = {
         "fields": ("key", "value", "fragment_id"),
         "structures": ("kind", "name", "fragment_id"),
+        "structure_relationships": (
+            "kind",
+            "subject_name",
+            "object_name",
+            "fragment_id",
+        ),
         "works": ("name", "fragment_id"),
         "quantities": ("work_name", "value", "unit", "fragment_id", "work_fragment_id"),
         "incomplete_quantities": (
@@ -992,6 +1042,14 @@ def _parse_engineering_manifest(
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
+            if key == "structure_relationships" and item[0] not in {
+                "contains",
+                "located_in",
+                "serves",
+                "connects_to",
+                "depends_on",
+            }:
+                raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
             result[key].append(item)
     return result
 
@@ -1000,6 +1058,8 @@ def _engineering_item_valid(
     key: str, item: tuple[str, ...], allowed: dict[str, _SemanticFragment]
 ) -> bool:
     if key in {"fields", "structures", "works"}:
+        return all(item) and item[-1] in allowed
+    if key == "structure_relationships":
         return all(item) and item[-1] in allowed
     if key == "quantities":
         work_name, raw_value, unit, fragment_id, work_fragment_id = item

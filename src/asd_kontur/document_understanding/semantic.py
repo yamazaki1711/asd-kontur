@@ -34,6 +34,7 @@ from .models import (
     RoleCandidate,
     RoleDecision,
     StructureNodeCandidate,
+    StructureRelationshipCandidate,
     WorkTypeCandidate,
 )
 
@@ -154,6 +155,7 @@ class StructuredCandidates:
     estimates: tuple[EstimatePositionCandidate, ...]
     defects: tuple[ReconciliationDefect, ...]
     structures: tuple[StructureNodeCandidate, ...] = ()
+    structure_relationships: tuple[StructureRelationshipCandidate, ...] = ()
 
 
 def classify_pages(elements: Iterable[LayoutElement]) -> ClassificationBundle:

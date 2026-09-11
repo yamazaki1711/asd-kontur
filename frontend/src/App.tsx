@@ -3531,6 +3531,8 @@ function ProjectUnderstandingPage() {
             string,
             unknown
           >[];
+          const structureRelationships = (value.structure_relationships ??
+            []) as Record<string, unknown>[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3579,6 +3581,10 @@ function ProjectUnderstandingPage() {
                 <Metric
                   label="Структур-кандидатов"
                   value={structureNodes.length}
+                />
+                <Metric
+                  label="Связей-кандидатов"
+                  value={structureRelationships.length}
                 />
                 <Metric
                   label="Работ-кандидатов"
@@ -3676,6 +3682,7 @@ function ProjectUnderstandingPage() {
                   </p>
                   <StructureCandidateList
                     nodes={structureNodes}
+                    relationships={structureRelationships}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
@@ -3813,10 +3820,12 @@ function ProjectUnderstandingPage() {
 
 function StructureCandidateList({
   nodes,
+  relationships,
   workspaceId,
   modeSlug,
 }: {
   nodes: Record<string, unknown>[];
+  relationships: Record<string, unknown>[];
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
@@ -3825,7 +3834,14 @@ function StructureCandidateList({
     structure: "Сооружение или конструкция",
     zone: "Зона или участок",
   };
-  if (!nodes.length)
+  const relationshipLabels: Record<string, string> = {
+    contains: "содержит",
+    located_in: "расположен в",
+    serves: "обслуживает",
+    connects_to: "соединён с",
+    depends_on: "зависит от",
+  };
+  if (!nodes.length && !relationships.length)
     return (
       <p className="empty-state">Структурные кандидаты ещё не извлечены.</p>
     );
@@ -3867,6 +3883,49 @@ function StructureCandidateList({
           </article>
         );
       })}
+      {relationships.length > 0 && (
+        <>
+          <h3>Связи между структурными кандидатами</h3>
+          <p>
+            Связи показаны как извлечённые наблюдения. Имена ещё не объединяются
+            автоматически с одноимёнными объектами из других документов.
+          </p>
+          {relationships.slice(0, 200).map((relationship) => {
+            const identity = displayValue(
+              relationship.relationship_candidate_id,
+            );
+            const locator = displayValue(relationship.source_locator_id, "");
+            const kind = displayValue(relationship.relationship_kind, "");
+            return (
+              <article className="candidate-row" key={identity}>
+                <div>
+                  <strong>
+                    {displayValue(relationship.subject_raw_name)}{" "}
+                    {relationshipLabels[kind] ?? "связан с"}{" "}
+                    {displayValue(relationship.object_raw_name)}
+                  </strong>
+                  <small>
+                    {humanizeStatus(
+                      displayValue(relationship.status, "candidate"),
+                    )}
+                  </small>
+                  {locator && (
+                    <Link
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </>
+      )}
     </div>
   );
 }
