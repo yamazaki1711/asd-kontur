@@ -76,6 +76,7 @@ class QwenEngineeringBatch:
     ordinal: int
     digest: str
     fragments: tuple[_SemanticFragment, ...]
+    prompt_strategy: str = "standard"
 
     @property
     def locator_ids(self) -> tuple[UUID, ...]:
@@ -90,6 +91,7 @@ class QwenEngineeringBatch:
                 "evidence_digest": item.locator.evidence_digest,
                 "character_start": item.character_start,
                 "character_end": item.character_end,
+                "prompt_strategy": self.prompt_strategy,
             }
             for item in self.fragments
         ]
@@ -369,14 +371,26 @@ class QwenDocumentSemanticAdapter:
         try:
             payload = _complete(
                 self._endpoint,
-                _engineering_prompt(batch.fragments),
+                _engineering_prompt(batch.fragments, strategy=batch.prompt_strategy),
                 self._timeout_seconds,
-                max_tokens=1_200,
+                max_tokens=350 if batch.prompt_strategy != "standard" else 1_200,
             )
             parsed = _parse_engineering(payload, allowed)
         except QwenSemanticFailure as exc:
-            if exc.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES or len(batch.fragments) == 1:
+            if exc.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
                 raise
+            if len(batch.fragments) == 1:
+                if batch.prompt_strategy != "standard":
+                    raise
+                return self._extract_engineering_batch(
+                    _engineering_batch(
+                        batch.ordinal,
+                        batch.fragments,
+                        prompt_strategy="single_fragment_repair-v1",
+                    ),
+                    accepted=accepted,
+                    on_accepted_batch=on_accepted_batch,
+                )
             values: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
             for child in _split_engineering_batch(batch):
                 values.extend(
@@ -493,7 +507,10 @@ def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEnginee
 
 
 def _engineering_batch(
-    ordinal: int, fragments: tuple[_SemanticFragment, ...]
+    ordinal: int,
+    fragments: tuple[_SemanticFragment, ...],
+    *,
+    prompt_strategy: str = "standard",
 ) -> QwenEngineeringBatch:
     batch_payload = [
         {
@@ -511,10 +528,12 @@ def _engineering_batch(
         semantic_digest(
             {
                 "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                "prompt_strategy": prompt_strategy,
                 "fragments": batch_payload,
             }
         ),
         fragments,
+        prompt_strategy,
     )
 
 
@@ -532,7 +551,9 @@ def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str,
     return {key: [list(item) for item in values] for key, values in parsed.items()}
 
 
-def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
+def _engineering_prompt(
+    elements: tuple[_SemanticFragment, ...], *, strategy: str = "standard"
+) -> str:
     fragments = [
         {
             "fragment_id": item.fragment_id,
@@ -544,7 +565,7 @@ def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         }
         for item in elements
     ]
-    return (
+    prompt = (
         "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
         '{"fields":[{"key":"...","value":"...","fragment_id":"..."}],'
         '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","fragment_id":"..."}],'
@@ -558,6 +579,14 @@ def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         "быть одним из входных. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
+    if strategy == "single_fragment_repair-v1":
+        return (
+            "Исправь только формат доказательства для одного входного фрагмента. "
+            "Верни полный JSON по указанной схеме. fragment_id копируй только точно из входа; "
+            "если фрагмент не подтверждает кандидат, верни соответствующий пустой массив. "
+            "Не используй locator_id как fragment_id.\n" + prompt
+        )
+    return prompt
 
 
 def _parse_engineering(

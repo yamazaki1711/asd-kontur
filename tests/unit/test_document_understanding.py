@@ -721,6 +721,30 @@ def test_qwen_engineering_extraction_subdivides_recoverable_invalid_batch() -> N
     assert len(accepted) == 2
 
 
+def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_response() -> None:
+    document = _extract_csv("A\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: list[tuple[object, dict[str, object]]] = []
+    valid = json.dumps(
+        {"fields": [], "structures": [], "works": [], "quantities": [], "materials": []}
+    )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=("{}", valid),
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
+        )
+
+    assert complete.call_count == 2
+    assert result == StructuredCandidates((), (), (), (), (), ())
+    batch, _manifest = accepted[0]
+    assert batch.prompt_strategy == "single_fragment_repair-v1"
+    assert batch.input_manifest[0]["prompt_strategy"] == "single_fragment_repair-v1"
+
+
 def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> None:
     document = _extract_csv("проектная запись;значение\n")
     fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
