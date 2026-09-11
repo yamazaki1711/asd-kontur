@@ -366,6 +366,38 @@ acceptance remain open.
 
 ### Continuation checkpoint — 2026-09-11 17:46 UTC+12
 
+### Continuation checkpoint — 2026-09-11 19:14 UTC+12
+
+The POS extraction job `01a08ee8-946f-7cbd-b190-32c8d7af0025` is terminal succeeded
+with receipt `01a08f49-d11d-7f8e-b895-e1764c4d6536`. Its immutable v15 ledger has
+443 accepted batches for all 5,252 exact-layout manifest fragments. Five invalid
+attempt receipts cover 60 attempt fragments; accepted bounded children preserve
+effective coverage without erasing those failures. The old persistence profile wrote
+299 fields, 494 structural nodes, 148 relationship observations, 478 works, 94
+quantities, and 45 materials for POS. These are source-backed candidates only.
+
+A verified consistent backup was made after POS reached terminal state. The controlled
+application database is now at `0047_profile_scoped_engineering_candidates`; API,
+document worker, and assistant worker import release
+`e28da91a57879602f727faedf74acbd9e8fe7adb`, and `/api/v1/health/ready` returns
+`ready`. The frontend was rebuilt from that release. The service reload initially
+waited for launchd to release SIGTERM'd instances, then succeeded; no source or job
+record was rewritten.
+
+Using the supported application repository command as the existing OZERO owner
+scheduled 22 profile-aware semantic successors plus one reconciliation job. It reuses
+accepted compatible semantic manifests and does not schedule OCR. POS successor
+`01a08f4e-3b70-76ff-8245-15626d8da266` is queued with both v15 semantic and candidate
+persistence provenance, so it will materialize the exact current profile rather than
+mixing generic historical candidates. The single worker is currently processing the
+first queued source, `Раздел ПД №12.5 005.2-2025-СМ5_ПИР_pdf.pdf`
+(`01a088ac-7f16-73ef-9d2c-3957b2393f66`); it has seven accepted v15 batches / 84
+semantic fragments at this snapshot. Twenty-one source jobs and the reconciliation
+remain queued. Next action: observe the source to a persisted v15 stage result, prove
+candidate profile selection and downstream materialization, then continue the single
+worker through all eligible sources. Do not call Tender, facility reconciliation,
+normative analysis, or consultant acceptance complete from this checkpoint.
+
 The deployed application boundary now returns a truthful partial OZERO model from
 previously accepted source evidence: 291 project-field candidates, 304 structural
 candidates, 505 work candidates, 146 quantity candidates, 79 material candidates,
