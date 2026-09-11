@@ -690,6 +690,53 @@ def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optio
     assert result.materials[0].raw_unit is None
 
 
+def test_qwen_engineering_extraction_preserves_incomplete_quantity_as_evidenced_defect() -> None:
+    document = _extract_csv("A;B;C\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: dict[str, dict[str, object]] = {}
+    response = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "works": [],
+            "quantities": [
+                {
+                    "work_name": "",
+                    "value": "",
+                    "unit": "",
+                    "fragment_id": "F1",
+                    "work_fragment_id": "",
+                }
+            ],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+        first = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.__setitem__(batch.digest, manifest),
+        )
+
+    assert not first.quantities
+    assert len(first.defects) == 1
+    assert first.defects[0].parameters == {
+        "code": "incomplete_quantity_candidate",
+        "work_name": None,
+        "raw_value": None,
+        "unit": None,
+        "work_fragment_id": None,
+    }
+    assert "incomplete_quantities" in next(iter(accepted.values()))
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+        resumed = adapter.extract_engineering(document.pages[0].elements, accepted_batches=accepted)
+
+    complete.assert_not_called()
+    assert resumed == first
+
+
 def test_qwen_engineering_extraction_rejects_incomplete_schema() -> None:
     document = _extract_csv("проектная запись;значение\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
@@ -819,7 +866,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v9"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v10"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -910,6 +957,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v10",
                 "qwen-engineering-extraction-v9",
                 "qwen-engineering-extraction-v8",
                 "qwen-engineering-extraction-v7",

@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v9"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v10"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v9",
     "qwen-engineering-extraction-v8",
     "qwen-engineering-extraction-v7",
     "qwen-engineering-extraction-v6",
@@ -240,6 +241,7 @@ class QwenDocumentSemanticAdapter:
         quantities: list[QuantityCandidate] = []
         materials: list[MaterialCandidate] = []
         parsed_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
+        incomplete_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
         parsed_materials: list[tuple[str, str, str, str, ExactLocator, str]] = []
         work_by_identity: dict[tuple[UUID, str, str], WorkTypeCandidate] = {}
         works_by_name: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
@@ -298,10 +300,37 @@ class QwenDocumentSemanticAdapter:
             for work_name, raw, unit, locator_id, work_fragment_id in parsed["quantities"]:
                 locator = allowed[locator_id].locator
                 parsed_quantities.append((work_name, raw, unit, locator, work_fragment_id))
+            for work_name, raw, unit, locator_id, work_fragment_id in parsed[
+                "incomplete_quantities"
+            ]:
+                locator = allowed[locator_id].locator
+                incomplete_quantities.append((work_name, raw, unit, locator, work_fragment_id))
             for work_name, name, raw, unit, locator_id, work_fragment_id in parsed["materials"]:
                 locator = allowed[locator_id].locator
                 parsed_materials.append((work_name, name, raw, unit, locator, work_fragment_id))
         defects: list[ReconciliationDefect] = []
+        for work_name, raw, unit, locator, work_fragment_id in incomplete_quantities:
+            defects.append(
+                ReconciliationDefect(
+                    deterministic_uuid(
+                        "qwen-incomplete-quantity-candidate:"
+                        f"{locator.source_version_id}:{locator.source_locator_id}:"
+                        f"{work_name}:{raw}:{unit}:{work_fragment_id}"
+                    ),
+                    ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                    f"qwen_quantity:{locator.source_locator_id}",
+                    " ".join(work_name.casefold().split()) or None,
+                    (locator,),
+                    {
+                        "code": "incomplete_quantity_candidate",
+                        "work_name": work_name or None,
+                        "raw_value": raw or None,
+                        "unit": unit or None,
+                        "work_fragment_id": work_fragment_id or None,
+                    },
+                    False,
+                )
+            )
         for work_name, raw, unit, locator, work_fragment_id in parsed_quantities:
             work, defect = _resolve_work_reference(
                 work_name,
@@ -690,6 +719,8 @@ def _engineering_prompt(
         "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
         "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
         "если источник их не указывает или имя работы дано только вне этого пакета. "
+        "Для quantity пустые work_name, value или unit означают неполное наблюдение: "
+        "всё равно укажи fragment_id, чтобы оно было сохранено как вопрос, "
         "fragment_id обязан быть одним из коротких идентификаторов F1, F2 и т.д. во входе: "
         "копируй его буквально, без точки, двоеточия, пробела или другого текста. "
         "work_fragment_id, если не пуст, также обязан быть одним из них. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
@@ -755,6 +786,7 @@ def _parse_engineering(
         "structures": [],
         "works": [],
         "quantities": [],
+        "incomplete_quantities": [],
         "materials": [],
     }
     specs = {
@@ -782,6 +814,13 @@ def _parse_engineering(
                 key,
                 tuple(" ".join(str(row.get(name, "")).split()) for name in names),
             )
+            if key == "quantities" and _engineering_quantity_evidence_valid(item, allowed):
+                item = _canonicalize_engineering_item(key, item, allowed)
+                if all(item[:3]):
+                    result[key].append(item)
+                else:
+                    result["incomplete_quantities"].append(item)
+                continue
             if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure(
                     "qwen_engineering_response_invalid_evidence",
@@ -863,6 +902,7 @@ def _parse_engineering_manifest(
         "structures": [],
         "works": [],
         "quantities": [],
+        "incomplete_quantities": [],
         "materials": [],
     }
     specs = {
@@ -870,6 +910,13 @@ def _parse_engineering_manifest(
         "structures": ("kind", "name", "fragment_id"),
         "works": ("name", "fragment_id"),
         "quantities": ("work_name", "value", "unit", "fragment_id", "work_fragment_id"),
+        "incomplete_quantities": (
+            "work_name",
+            "value",
+            "unit",
+            "fragment_id",
+            "work_fragment_id",
+        ),
         "materials": (
             "work_name",
             "name",
@@ -887,7 +934,10 @@ def _parse_engineering_manifest(
             if not isinstance(row, list) or len(row) != len(names):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_shape")
             item = tuple(" ".join(str(value).split()) for value in row)
-            if not _engineering_item_valid(key, item, allowed):
+            if key == "incomplete_quantities":
+                if not _engineering_quantity_evidence_valid(item, allowed) or all(item[:3]):
+                    raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
+            elif not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
@@ -915,6 +965,19 @@ def _engineering_item_valid(
             and (not work_fragment_id or work_fragment_id in allowed)
         )
     return False
+
+
+def _engineering_quantity_evidence_valid(
+    item: tuple[str, ...], allowed: Mapping[str, _SemanticFragment]
+) -> bool:
+    """Validate quantity provenance independently from the observation's completeness.
+
+    A cited but incomplete quantity is a durable unresolved observation, not a
+    quantity candidate and not a reason to discard the entire semantic batch.
+    """
+
+    _work_name, _raw_value, _unit, fragment_id, work_fragment_id = item
+    return fragment_id in allowed and (not work_fragment_id or work_fragment_id in allowed)
 
 
 def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
