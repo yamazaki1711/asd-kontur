@@ -3839,6 +3839,9 @@ function StructureCandidateList({
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
+  const [filter, setFilter] = useState("");
+  const [visibleNodeCount, setVisibleNodeCount] = useState(200);
+  const [visibleRelationshipCount, setVisibleRelationshipCount] = useState(200);
   const kindLabels: Record<string, string> = {
     local_area: "Локальная площадка или участок",
     facility: "Объект или сооружение",
@@ -3857,6 +3860,29 @@ function StructureCandidateList({
     return (
       <p className="empty-state">Структурные кандидаты ещё не извлечены.</p>
     );
+  const normalizedFilter = filter.trim().toLocaleLowerCase("ru-RU");
+  const matchesFilter = (values: unknown[]) =>
+    !normalizedFilter ||
+    values.some((value) =>
+      displayValue(value, "")
+        .toLocaleLowerCase("ru-RU")
+        .includes(normalizedFilter),
+    );
+  const filteredNodes = nodes.filter((node) =>
+    matchesFilter([node.raw_name, node.normalized_name, node.node_kind]),
+  );
+  const filteredRelationships = relationships.filter((relationship) =>
+    matchesFilter([
+      relationship.subject_raw_name,
+      relationship.object_raw_name,
+      relationship.relationship_kind,
+    ]),
+  );
+  const visibleNodes = filteredNodes.slice(0, visibleNodeCount);
+  const visibleRelationships = filteredRelationships.slice(
+    0,
+    visibleRelationshipCount,
+  );
   return (
     <div className="candidate-list">
       <h3>Структурные кандидаты</h3>
@@ -3865,7 +3891,22 @@ function StructureCandidateList({
         подтверждёнными фактами до reconciliation; одинаковые упоминания в
         разных разделах могут относиться к одному объекту.
       </p>
-      {nodes.slice(0, 200).map((node) => {
+      <label className="field-label">
+        Поиск по наименованию или виду
+        <input
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setVisibleNodeCount(200);
+            setVisibleRelationshipCount(200);
+          }}
+          placeholder="Например: КНС, ЛОС или котлован"
+        />
+      </label>
+      <p className="candidate-list-summary">
+        Показано структур: {visibleNodes.length} из {filteredNodes.length}.
+      </p>
+      {visibleNodes.map((node) => {
         const identity = displayValue(node.structure_node_id);
         const locator = displayValue(node.source_locator_id, "");
         const kind = displayValue(node.node_kind, "structure");
@@ -3895,6 +3936,15 @@ function StructureCandidateList({
           </article>
         );
       })}
+      {visibleNodes.length < filteredNodes.length && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setVisibleNodeCount((count) => count + 200)}
+        >
+          Показать ещё структуры
+        </button>
+      )}
       {relationships.length > 0 && (
         <>
           <h3>Связи между структурными кандидатами</h3>
@@ -3902,7 +3952,11 @@ function StructureCandidateList({
             Связи показаны как извлечённые наблюдения. Имена ещё не объединяются
             автоматически с одноимёнными объектами из других документов.
           </p>
-          {relationships.slice(0, 200).map((relationship) => {
+          <p className="candidate-list-summary">
+            Показано связей: {visibleRelationships.length} из{" "}
+            {filteredRelationships.length}.
+          </p>
+          {visibleRelationships.map((relationship) => {
             const identity = displayValue(
               relationship.relationship_candidate_id,
             );
@@ -3936,6 +3990,17 @@ function StructureCandidateList({
               </article>
             );
           })}
+          {visibleRelationships.length < filteredRelationships.length && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                setVisibleRelationshipCount((count) => count + 200)
+              }
+            >
+              Показать ещё связи
+            </button>
+          )}
         </>
       )}
     </div>
