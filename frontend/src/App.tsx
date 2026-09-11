@@ -3972,6 +3972,11 @@ function StructureCandidateList({
               const relationships = Array.isArray(component.relationships)
                 ? component.relationships
                 : [];
+              const locatorIds = Array.isArray(component.source_locator_ids)
+                ? component.source_locator_ids.map((item) =>
+                    displayValue(item, ""),
+                  )
+                : [];
               return (
                 <article
                   className="candidate-row"
@@ -3989,6 +3994,22 @@ function StructureCandidateList({
                     Кандидат; элементов: {nodes.length}, связей:{" "}
                     {relationships.length}
                   </small>
+                  {locatorIds.length > 0 && (
+                    <p>
+                      {locatorIds.map((locatorId) => (
+                        <Link
+                          key={locatorId}
+                          to={workspaceRouteFromSlug(
+                            modeSlug,
+                            workspaceId,
+                            `/evidence/locators/${locatorId}`,
+                          )}
+                        >
+                          Открыть исходный фрагмент
+                        </Link>
+                      ))}
+                    </p>
+                  )}
                 </article>
               );
             })}
