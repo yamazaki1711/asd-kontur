@@ -146,3 +146,14 @@ It is running under the v8 worker with a current lease and an established Qwen l
 will reuse valid v6/v7 evidence only through declared compatibility. Next action: observe the first v8
 accepted or failed receipt; a failed receipt will identify the exact bounded input lineage for the next
 contract change without exposing document text. Do not restart or duplicate this job.
+
+### Live observation — 2026-09-11 14:25 UTC+12
+
+The v8 successor remains running. Its durable receipts show one accepted one-fragment repair result and
+seven failed evidence-validation attempts covering 27 bounded input fragments. Failed receipts retain
+only exact batch ordinal, source-fragment identity, and typed failure; for example, the first failure was
+base batch 13 on six page-4 fragments. The worker has not restarted the source and maintains a live
+connection to local Qwen. This is active recovery evidence, not semantic coverage or candidate
+materialization. The next engineering change after this active job reaches a terminal state is to add
+sanitized per-row validation diagnostics to failed receipts, then adjust only the demonstrated Qwen output
+contract and retry the failed lineage once.
