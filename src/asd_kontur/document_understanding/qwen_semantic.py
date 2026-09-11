@@ -681,7 +681,14 @@ class QwenDocumentSemanticAdapter:
                 raise failure from None
             if len(batch.fragments) == 1:
                 if batch.prompt_strategy != "standard":
-                    raise
+                    # This is the bounded terminal recovery attempt for one exact
+                    # source fragment.  Its failed receipt is already durable via
+                    # ``on_failed_batch``.  Do not let one malformed model output
+                    # discard independently accepted evidence from the source or
+                    # starve other eligible documents.  Coverage remains partial:
+                    # the failed batch is deliberately not returned as an accepted
+                    # manifest and the caller can expose its typed failure.
+                    return ()
                 return self._extract_engineering_batch(
                     _engineering_batch(
                         batch.ordinal,

@@ -933,12 +933,17 @@ def test_qwen_engineering_extraction_preserves_incomplete_quantity_as_evidenced_
 def test_qwen_engineering_extraction_rejects_incomplete_schema() -> None:
     document = _extract_csv("проектная запись;значение\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    failed: list[tuple[object, str]] = []
 
-    with (
-        patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value="{}"),
-        pytest.raises(QwenSemanticFailure, match="qwen_engineering_response_invalid_shape"),
-    ):
-        adapter.extract_engineering(document.pages[0].elements)
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value="{}"):
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_failed_batch=lambda batch, code, _details: failed.append((batch, code)),
+        )
+
+    assert result == StructuredCandidates((), (), (), (), (), ())
+    assert failed
+    assert all(code == "qwen_engineering_response_invalid_shape" for _, code in failed)
 
 
 def test_qwen_engineering_extraction_normalizes_only_terminal_prompt_alias_punctuation() -> None:
@@ -1168,6 +1173,32 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert batch.prompt_strategy == "single_fragment_repair-v1"
     assert batch.input_manifest["prompt_strategy"] == "single_fragment_repair-v1"
     assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v1"
+
+
+def test_qwen_engineering_extraction_preserves_unrepaired_leaf_as_partial_coverage() -> None:
+    document = _extract_csv("A\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    failed: list[tuple[object, str]] = []
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=("{}", "{}", "{}"),
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_failed_batch=lambda batch, code, _details: failed.append((batch, code)),
+        )
+
+    assert complete.call_count == 3
+    assert result == StructuredCandidates((), (), (), (), (), ())
+    assert [code for _, code in failed] == [
+        "qwen_engineering_response_invalid_shape",
+        "qwen_engineering_response_invalid_shape",
+    ]
+    assert [batch.prompt_strategy for batch, _ in failed] == [
+        "standard",
+        "single_fragment_repair-v1",
+    ]
 
 
 def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> None:
