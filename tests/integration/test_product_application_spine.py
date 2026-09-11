@@ -1154,3 +1154,11 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
         assert refresh["priority"] == 165
         assert refresh["causation_id"] == row["job_id"]
         assert refresh["contract"] == "project-understanding.incremental-reconciliation@1.0.0"
+        with postgres_environment.owner_engine.connect() as connection:
+            claim_definition = connection.scalar(
+                sa.text(
+                    "SELECT pg_get_functiondef("
+                    "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                )
+            )
+        assert "incremental_source_job_id" in str(claim_definition)
