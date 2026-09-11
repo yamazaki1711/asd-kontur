@@ -16,8 +16,28 @@ from asd_kontur.assistant.reasoning import (
     parse_adequacy_decision,
     parse_search_plan,
     parse_synthesized_answer,
+    requires_workspace_document_content,
     validate_answer,
 )
+
+
+@pytest.mark.parametrize(
+    ("question", "expected"),
+    [
+        ("Какие документы нужны для АОСР?", False),
+        ("Какие документы нужны для приёмки бетона?", False),
+        ("В каких документах установлены требования к АОСР?", False),
+        ("Сколько котлованов в этом проекте?", True),
+        ("Какие работы перечислены в загруженных документах?", True),
+        ("Какие работы указаны в документах?", True),
+        ("Какие документы я загрузил?", True),
+        ("Где на чертежах расположена КНС?", True),
+    ],
+)
+def test_content_requirement_distinguishes_general_practice_from_project_evidence(
+    question: str, expected: bool
+) -> None:
+    assert requires_workspace_document_content(question) is expected
 
 
 def test_plan_accepts_bounded_granular_tools_and_rejects_megapack() -> None:

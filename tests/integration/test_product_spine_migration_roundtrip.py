@@ -145,6 +145,23 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                     )
                     == 0
                 )
+            run_migration(str(repository_root), database_url, "0041_engineering_v4_manifest")
+            with database_engine.connect() as connection:
+                definition = connection.scalar(
+                    sa.text(
+                        "SELECT pg_get_functiondef("
+                        "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                    )
+                )
+                assert "dependency_success_satisfied" not in str(definition)
+                assert (
+                    connection.execute(
+                        sa.text(
+                            "SELECT * FROM workspace.claim_next_durable_job('migration-test', 5)"
+                        )
+                    ).all()
+                    == []
+                )
             run_migration(str(repository_root), database_url, "0018_product_spine")
         finally:
             if prior is None:

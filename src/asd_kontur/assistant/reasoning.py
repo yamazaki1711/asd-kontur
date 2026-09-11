@@ -326,8 +326,14 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
 
 def requires_workspace_document_content(question: str) -> bool:
     normalized = " ".join(question.casefold().split())
+    # Mentioning documents alone does not identify the current workspace: e.g.
+    # "Which documents are needed for an AOSR?" is a general practice question.
     if not re.search(
-        r"\b(?:проект\w*|пд|рд|документ\w*|чертеж\w*|лист\w*|объект\w*)\b",
+        r"\b(?:проект\w*|пд|рд|чертеж\w*|лист\w*|объект\w*)\b|"
+        r"\b(?:в|из|по|согласно)\s+(?:(?:этих|этом|данных|данном|наших|"
+        r"загруженн\w*|предоставленн\w*|имеющ\w*)\s+)*документ\w*\b|"
+        r"\b(?:загруженн\w*|предоставленн\w*)\s+документ\w*\b|"
+        r"\bдокумент\w*\s+(?:(?:я|мы|были|уже)\s+)*(?:загруз\w*|предостав\w*)\b",
         normalized,
     ):
         return False
