@@ -40,6 +40,43 @@ def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> No
     assert _semantic_extraction_priority(()) == 130
 
 
+def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures() -> None:
+    state = SpinePostgresRepository._semantic_coverage_state
+
+    assert (
+        state(
+            accepted_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=2,
+        )
+        == "failed"
+    )
+    assert (
+        state(
+            accepted_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "not_started"
+    )
+    assert (
+        state(
+            accepted_fragment_count=7,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=1,
+        )
+        == "partial"
+    )
+    assert (
+        state(
+            accepted_fragment_count=8,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "complete"
+    )
+
+
 def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
     nodes = [
         {

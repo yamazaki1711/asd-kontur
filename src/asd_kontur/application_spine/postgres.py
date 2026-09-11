@@ -3683,26 +3683,52 @@ class SpinePostgresRepository:
                 " SELECT source_version_id,SUM(CEIL(length(normalized_text)::numeric/2400))::bigint "
                 " AS expected_fragment_count FROM latest_elements WHERE normalized_text<>'' "
                 " GROUP BY source_version_id"
-                "), accepted AS ("
-                " SELECT b.source_version_id,b.profile_version,COUNT(DISTINCT b.batch_digest) "
-                " AS accepted_batch_count,COUNT(DISTINCT fragment->>'fragment_id') "
-                " AS accepted_fragment_count FROM workspace.engineering_extraction_batches b "
+                "), accepted_fragments AS ("
+                " SELECT DISTINCT b.source_version_id,b.profile_version,fragment->>'fragment_id' "
+                " AS fragment_id FROM workspace.engineering_extraction_batches b "
                 " CROSS JOIN LATERAL jsonb_array_elements(CASE "
                 " WHEN jsonb_typeof(b.input_manifest)='array' THEN b.input_manifest "
                 " ELSE COALESCE(b.input_manifest->'fragments','[]'::jsonb) END) AS fragment "
                 " WHERE b.organization_id=:o AND b.workspace_id=:w "
                 " AND b.terminal_status='accepted' AND b.input_manifest IS NOT NULL "
-                " GROUP BY b.source_version_id,b.profile_version"
-                "), failed AS ("
+                "), accepted_batches AS ("
                 " SELECT b.source_version_id,b.profile_version,COUNT(DISTINCT b.batch_digest) "
-                " AS failed_batch_count,COUNT(DISTINCT fragment->>'fragment_id') "
-                " AS failed_fragment_count FROM workspace.engineering_extraction_batches b "
+                " AS accepted_batch_count FROM workspace.engineering_extraction_batches b "
+                " WHERE b.organization_id=:o AND b.workspace_id=:w AND b.terminal_status='accepted' "
+                " AND b.input_manifest IS NOT NULL GROUP BY b.source_version_id,b.profile_version"
+                "), accepted AS ("
+                " SELECT fragments.source_version_id,fragments.profile_version,"
+                " batches.accepted_batch_count,COUNT(*) AS accepted_fragment_count "
+                " FROM accepted_fragments fragments JOIN accepted_batches batches "
+                " ON batches.source_version_id=fragments.source_version_id AND "
+                " batches.profile_version=fragments.profile_version GROUP BY "
+                " fragments.source_version_id,fragments.profile_version,batches.accepted_batch_count"
+                "), failed_fragments AS ("
+                " SELECT DISTINCT b.source_version_id,b.profile_version,fragment->>'fragment_id' "
+                " AS fragment_id FROM workspace.engineering_extraction_batches b "
                 " CROSS JOIN LATERAL jsonb_array_elements(CASE "
                 " WHEN jsonb_typeof(b.input_manifest)='array' THEN b.input_manifest "
                 " ELSE COALESCE(b.input_manifest->'fragments','[]'::jsonb) END) AS fragment "
                 " WHERE b.organization_id=:o AND b.workspace_id=:w "
                 " AND b.terminal_status='failed' AND b.input_manifest IS NOT NULL "
-                " GROUP BY b.source_version_id,b.profile_version"
+                "), failed_batches AS ("
+                " SELECT b.source_version_id,b.profile_version,COUNT(DISTINCT b.batch_digest) "
+                " AS failed_batch_count FROM workspace.engineering_extraction_batches b "
+                " WHERE b.organization_id=:o AND b.workspace_id=:w AND b.terminal_status='failed' "
+                " AND b.input_manifest IS NOT NULL GROUP BY b.source_version_id,b.profile_version"
+                "), failed AS ("
+                " SELECT fragments.source_version_id,fragments.profile_version,"
+                " batches.failed_batch_count,COUNT(*) AS failed_fragment_count "
+                " FROM failed_fragments fragments JOIN failed_batches batches "
+                " ON batches.source_version_id=fragments.source_version_id AND "
+                " batches.profile_version=fragments.profile_version GROUP BY "
+                " fragments.source_version_id,fragments.profile_version,batches.failed_batch_count"
+                "), unresolved_failed AS ("
+                " SELECT failed.source_version_id,failed.profile_version,COUNT(*) "
+                " AS unresolved_failed_fragment_count FROM failed_fragments failed "
+                " LEFT JOIN accepted_fragments accepted ON accepted.source_version_id=failed.source_version_id "
+                " AND accepted.profile_version=failed.profile_version AND accepted.fragment_id=failed.fragment_id "
+                " WHERE accepted.fragment_id IS NULL GROUP BY failed.source_version_id,failed.profile_version"
                 "), latest_activity AS (SELECT DISTINCT ON (source_version_id) source_version_id,"
                 " profile_version FROM workspace.engineering_extraction_batches WHERE "
                 " organization_id=:o AND workspace_id=:w AND input_manifest IS NOT NULL "
@@ -3712,6 +3738,7 @@ class SpinePostgresRepository:
                 " COALESCE(a.accepted_fragment_count,0) AS accepted_fragment_count,"
                 " COALESCE(f.failed_batch_count,0) AS failed_batch_count,"
                 " COALESCE(f.failed_fragment_count,0) AS failed_fragment_count,"
+                " COALESCE(u.unresolved_failed_fragment_count,0) AS unresolved_failed_fragment_count,"
                 " COALESCE(e.expected_fragment_count,0) AS expected_fragment_count,"
                 " v.document_id,v.version AS document_version,v.safe_display_name,"
                 " COALESCE(s.page_count,0) AS page_count "
@@ -3721,6 +3748,8 @@ class SpinePostgresRepository:
                 " AND a.profile_version=activity.profile_version "
                 " LEFT JOIN failed f ON f.source_version_id=v.source_version_id "
                 " AND f.profile_version=activity.profile_version "
+                " LEFT JOIN unresolved_failed u ON u.source_version_id=v.source_version_id "
+                " AND u.profile_version=activity.profile_version "
                 " LEFT JOIN LATERAL (SELECT page_count FROM workspace.document_processing_states state "
                 " WHERE state.organization_id=v.organization_id AND state.workspace_id=v.workspace_id "
                 " AND state.document_id=v.document_id AND state.document_version=v.version "
@@ -3741,25 +3770,32 @@ class SpinePostgresRepository:
                 "accepted_fragment_count": int(row["accepted_fragment_count"]),
                 "failed_batch_count": int(row["failed_batch_count"]),
                 "failed_fragment_count": int(row["failed_fragment_count"]),
+                "unresolved_failed_fragment_count": int(row["unresolved_failed_fragment_count"]),
+                "recovered_failed_fragment_count": max(
+                    0,
+                    int(row["failed_fragment_count"])
+                    - int(row["unresolved_failed_fragment_count"]),
+                ),
                 "expected_fragment_count": int(row["expected_fragment_count"]),
-                "state": (
-                    "failed"
-                    if int(row["accepted_fragment_count"]) == 0
-                    and int(row["failed_fragment_count"]) > 0
-                    else (
-                        "not_started"
-                        if int(row["accepted_fragment_count"]) == 0
-                        else (
-                            "complete"
-                            if int(row["accepted_fragment_count"])
-                            == int(row["expected_fragment_count"])
-                            else "partial"
-                        )
-                    )
+                "state": SpinePostgresRepository._semantic_coverage_state(
+                    accepted_fragment_count=int(row["accepted_fragment_count"]),
+                    expected_fragment_count=int(row["expected_fragment_count"]),
+                    unresolved_failed_fragment_count=int(row["unresolved_failed_fragment_count"]),
                 ),
             }
             for row in rows
         ]
+
+    @staticmethod
+    def _semantic_coverage_state(
+        *,
+        accepted_fragment_count: int,
+        expected_fragment_count: int,
+        unresolved_failed_fragment_count: int,
+    ) -> str:
+        if accepted_fragment_count == 0:
+            return "failed" if unresolved_failed_fragment_count else "not_started"
+        return "complete" if accepted_fragment_count == expected_fragment_count else "partial"
 
     @staticmethod
     def _project_structure_rows(

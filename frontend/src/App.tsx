@@ -3646,6 +3646,12 @@ function ProjectUnderstandingPage() {
                         item.expected_fragment_count ?? 0,
                       );
                       const failed = Number(item.failed_fragment_count ?? 0);
+                      const unresolved = Number(
+                        item.unresolved_failed_fragment_count ?? 0,
+                      );
+                      const recovered = Number(
+                        item.recovered_failed_fragment_count ?? 0,
+                      );
                       const profile = displayValue(
                         item.profile_version,
                         "профиль",
@@ -3657,11 +3663,19 @@ function ProjectUnderstandingPage() {
                       const pages = Number(item.page_count ?? 0);
                       const pageLabel =
                         pages > 0 ? `, ${pages.toString()} стр.` : "";
-                      const failedLabel =
-                        failed > 0
-                          ? `, исторические неуспешные попытки: ${failed.toString()} фрагм.`
+                      const unresolvedLabel =
+                        unresolved > 0
+                          ? `, требуется восстановление: ${unresolved.toString()} фрагм.`
                           : "";
-                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${failedLabel} (${profile})`;
+                      const recoveredLabel =
+                        recovered > 0
+                          ? `, восстановленные исторические попытки: ${recovered.toString()} фрагм.`
+                          : "";
+                      const legacyFailureLabel =
+                        failed > 0 && unresolved === 0 && recovered === 0
+                          ? `, неуспешные попытки: ${failed.toString()} фрагм.`
+                          : "";
+                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel} (${profile})`;
                     })
                     .join("; ")}
                   . Это покрытие извлечения-кандидата, а не подтверждённые
