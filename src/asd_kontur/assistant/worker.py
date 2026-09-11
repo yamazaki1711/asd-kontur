@@ -155,6 +155,7 @@ class AssistantWorker:
                 intent=plan.intent,
                 tool_names=tuple(item["tool"] for item in receipts),
                 sources=available_sources,
+                question=claimed.question,
             )
             repairable_deterministic = set(deterministic["problems"]) <= {
                 "clarification_has_unverified_numeric_estimate",
@@ -174,6 +175,7 @@ class AssistantWorker:
                     intent=plan.intent,
                     tool_names=tuple(item["tool"] for item in receipts),
                     sources=available_sources,
+                    question=claimed.question,
                 )
                 model_checks = self._model_quality_check(claimed, answer, receipts)
             quality_passed = bool(deterministic["passed"] and model_checks["passed"])

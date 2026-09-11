@@ -284,7 +284,7 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
 
     if plan.needs_clarification or plan.intent not in {"workspace", "mixed"}:
         return plan
-    if not _requires_workspace_document_content(question):
+    if not requires_workspace_document_content(question):
         return plan
     content_tools = {
         "consultant.search_workspace_documents",
@@ -324,7 +324,7 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
     return SearchPlan(plan.intent, False, None, tuple(steps))
 
 
-def _requires_workspace_document_content(question: str) -> bool:
+def requires_workspace_document_content(question: str) -> bool:
     normalized = " ".join(question.casefold().split())
     if not re.search(
         r"\b(?:проект\w*|пд|рд|документ\w*|чертеж\w*|лист\w*|объект\w*)\b",
@@ -501,6 +501,7 @@ def validate_answer(
     intent: str,
     tool_names: tuple[str, ...],
     sources: tuple[dict[str, Any], ...],
+    question: str | None = None,
 ) -> dict[str, Any]:
     selected = [item for item in sources if str(item.get("source_id")) in answer.used_source_ids]
     selected_layers = {str(item.get("authority_layer")) for item in selected}
@@ -533,6 +534,16 @@ def validate_answer(
     }
     if intent == "workspace" and not workspace_tools.intersection(tool_names):
         problems.append("workspace_answer_without_workspace_tool")
+    content_tools = {
+        "consultant.search_workspace_documents",
+        "consultant.get_workspace_fragment",
+    }
+    if (
+        question is not None
+        and requires_workspace_document_content(question)
+        and not content_tools.intersection(tool_names)
+    ):
+        problems.append("workspace_content_question_without_content_retrieval")
     if (
         intent in {"workspace", "mixed"}
         and workspace_tools.intersection(tool_names)

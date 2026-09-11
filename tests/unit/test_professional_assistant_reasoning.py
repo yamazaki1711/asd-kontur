@@ -187,6 +187,37 @@ def test_project_enumeration_cannot_use_metadata_only_workspace_overview() -> No
     assert required.steps[-1].arguments["query"] == "Сколько котлованов в этом проекте?"
 
 
+def test_project_enumeration_answer_rejects_metadata_only_receipt() -> None:
+    source = {
+        "source_id": "11111111-1111-4111-8111-111111111111",
+        "authority_layer": "workspace_fact",
+    }
+    answer = parse_synthesized_answer(
+        json.dumps(
+            {
+                "answer": "Точный подсчёт котлованов пока не подтверждён.",
+                "answer_type": "workspace_conclusion",
+                "needs_clarification": False,
+                "used_source_ids": [source["source_id"]],
+                "dialogue_summary": "Проверяется число котлованов.",
+                "active_subjects": ["котлованы"],
+            },
+            ensure_ascii=False,
+        ),
+        {source["source_id"]},
+    )
+
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.get_workspace_overview",),
+        sources=(source,),
+        question="Сколько котлованов в этом проекте?",
+    )
+
+    assert "workspace_content_question_without_content_retrieval" in receipt["problems"]
+
+
 def test_project_enumeration_replaces_metadata_when_plan_is_at_tool_budget() -> None:
     plan = SearchPlan(
         "workspace",
