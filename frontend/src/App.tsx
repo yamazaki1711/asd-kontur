@@ -4097,6 +4097,8 @@ function CandidateReviewTable({
   }) => void;
   pending: boolean;
 }) {
+  const [filter, setFilter] = useState("");
+  const [visibleCount, setVisibleCount] = useState(100);
   const titles = {
     project_field: "Общие сведения",
     work_type: "Виды работ",
@@ -4105,10 +4107,34 @@ function CandidateReviewTable({
   };
   if (!candidates.length)
     return <p className="empty-state">{titles[kind]} ещё не извлечены.</p>;
+  const normalizedFilter = filter.trim().toLocaleLowerCase("ru-RU");
+  const filteredCandidates = candidates.filter((candidate) =>
+    !normalizedFilter
+      ? true
+      : [candidate.label, candidate.value, candidate.normalized_value]
+          .map((value) => displayValue(value, "").toLocaleLowerCase("ru-RU"))
+          .some((value) => value.includes(normalizedFilter)),
+  );
+  const visibleCandidates = filteredCandidates.slice(0, visibleCount);
   return (
     <div className="candidate-list">
       <h3>{titles[kind]}</h3>
-      {candidates.slice(0, 100).map((candidate) => {
+      <p>
+        Это исходно связанные кандидаты, а не подтверждённые факты. Показано:{" "}
+        {visibleCandidates.length} из {filteredCandidates.length}.
+      </p>
+      <label className="field-label">
+        Поиск по наименованию или значению
+        <input
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setVisibleCount(100);
+          }}
+          placeholder="Например: котлован, шпунт или м³"
+        />
+      </label>
+      {visibleCandidates.map((candidate) => {
         const identity = String(candidate.candidate_id);
         const decision = decisions.find(
           (item) => String(item.candidate_id) === identity,
@@ -4126,6 +4152,15 @@ function CandidateReviewTable({
           />
         );
       })}
+      {visibleCandidates.length < filteredCandidates.length && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setVisibleCount((count) => count + 100)}
+        >
+          Показать ещё
+        </button>
+      )}
     </div>
   );
 }
