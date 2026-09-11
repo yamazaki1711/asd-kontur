@@ -3830,6 +3830,8 @@ function StructureCandidateList({
   modeSlug?: string | undefined;
 }) {
   const kindLabels: Record<string, string> = {
+    local_area: "Локальная площадка или участок",
+    facility: "Объект или сооружение",
     excavation_pit: "Котлован",
     structure: "Сооружение или конструкция",
     zone: "Зона или участок",

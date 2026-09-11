@@ -38,7 +38,7 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v14"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v15"
 # v14 adds a required relationship collection.  Prior batch manifests did not ask
 # the model to inspect or report those observations, so treating them as compatible
 # would silently turn missing relationship coverage into an accepted empty result.
@@ -56,6 +56,9 @@ _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
         "qwen_engineering_repair_empty",
         "qwen_semantic_response_output_exhausted",
     }
+)
+_ENGINEERING_STRUCTURE_KINDS = frozenset(
+    {"local_area", "facility", "excavation_pit", "structure", "zone"}
 )
 
 
@@ -777,7 +780,7 @@ def _engineering_prompt(
     prompt = (
         "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
         '{"fields":[{"key":"...","value":"...","fragment_id":"..."}],'
-        '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","fragment_id":"..."}],'
+        '"structures":[{"kind":"local_area|facility|excavation_pit|structure|zone","name":"...","fragment_id":"..."}],'
         '"structure_relationships":[{"kind":"contains|located_in|serves|connects_to|depends_on","subject_name":"...","object_name":"...","fragment_id":"..."}],'
         '"works":[{"name":"...","fragment_id":"..."}],'
         '"quantities":[{"work_name":"...","value":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}],'
@@ -905,7 +908,7 @@ def _parse_engineering(
                     },
                 )
             item = _canonicalize_engineering_item(key, item, allowed)
-            if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
+            if key == "structures" and item[0] not in _ENGINEERING_STRUCTURE_KINDS:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
             if key == "structure_relationships" and item[0] not in {
                 "contains",
@@ -1031,7 +1034,7 @@ def _parse_engineering_manifest(
                     raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
             elif not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
-            if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
+            if key == "structures" and item[0] not in _ENGINEERING_STRUCTURE_KINDS:
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
             if key == "structure_relationships" and item[0] not in {
                 "contains",

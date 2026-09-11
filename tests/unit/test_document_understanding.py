@@ -860,7 +860,7 @@ def test_qwen_engineering_extraction_preserves_evidence_bound_structure_relation
                 "fields": [],
                 "structures": [
                     {"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1"},
-                    {"kind": "structure", "name": "КНС-2", "fragment_id": "F1"},
+                    {"kind": "facility", "name": "КНС-2", "fragment_id": "F1"},
                 ],
                 "structure_relationships": [
                     {
@@ -880,6 +880,7 @@ def test_qwen_engineering_extraction_preserves_evidence_bound_structure_relation
         result = adapter.extract_engineering(document.pages[0].elements)
 
     assert len(result.structure_relationships) == 1
+    assert {value.node_kind for value in result.structures} == {"excavation_pit", "facility"}
     relationship = result.structure_relationships[0]
     assert relationship.relationship_kind == "serves"
     assert relationship.subject_normalized_name == "котлован к-1"
@@ -1022,7 +1023,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v14"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v15"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -1127,7 +1128,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
-                "qwen-engineering-extraction-v14",
+                "qwen-engineering-extraction-v15",
             }
             return {}
 
