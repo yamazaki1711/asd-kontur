@@ -80,3 +80,27 @@ successor for this source, release the already-migrated dependency-recovery work
 blocked downstream stages through the verified replacement lineage, and verify workspace assembly before
 scheduling the next eligible active source. Do not leave the OZERO queue empty while eligible sources
 remain.
+
+### Continuation checkpoint — 2026-09-11 14:00 UTC+12
+
+The active database is at `0045_bounded_dep_recovery`, backed up before that migration. API release
+`b88507e` is compatible and ready at that revision. The supervised document worker is release
+`4b0582f`, with `PYTHONPATH` pinned to that release and an explicit RLS scope limited to the OZERO
+organization/workspace. This corrected a live deployment defect: the copied launchd plist had retained
+the prior release's `PYTHONPATH`, so its executable and imported source did not match. The worker's
+initial global dependency-recovery scan also bypassed useful scoped work and stalled over historical
+failures; scoped workers now claim runnable work before any unscoped maintenance scan.
+
+The existing v5 successor `01a08e16-f10b-7d6f-90fd-e0f9d9153d2e` is running under
+`document-worker:36829`, not duplicated. It replaced only the expired diagnostic lease and has an
+established worker-to-local-Qwen loopback connection. One v5 batch for source
+`01a088ac-7f16-73ef-9d2c-3957b2393f66` has been accepted and durably recorded; the source still has
+61 base batches, so this is progress evidence only, not source or package semantic coverage.
+
+Commit `f5eae86` is pushed and qualified by 39 focused unit tests. It corrects an independent delivery
+break: Qwen engineering works, quantities, materials, and unresolved-relationship defects were computed
+but discarded by the project-definition path. The pending release preserves those candidates alongside
+deterministic supplements and reuses accepted batch receipts rather than asking Qwen again. Do not deploy
+it until the active v5 job reaches a terminal state. Next executable action: observe the active job to a
+durable batch/result transition, then release `f5eae86`, recover its source-scoped downstream stages,
+validate candidate provenance and materialize the project view before scheduling the next active source.
