@@ -631,6 +631,52 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
     assert result.materials[0].locator.source_locator_id == UUID(last_locator_id)
 
 
+def test_qwen_engineering_extraction_keeps_same_named_works_distinct_by_fragment() -> None:
+    document = _extract_csv("A;B;C\n")
+    fragments = _engineering_batches(document.pages[0].elements)[0].fragments
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [],
+                "works": [
+                    {"name": "Монтаж", "fragment_id": "F1"},
+                    {"name": "Монтаж", "fragment_id": "F2"},
+                ],
+                "quantities": [
+                    {
+                        "work_name": "Монтаж",
+                        "value": "2",
+                        "unit": "шт",
+                        "fragment_id": "F2",
+                        "work_fragment_id": "F2",
+                    },
+                    {
+                        "work_name": "Монтаж",
+                        "value": "3",
+                        "unit": "шт",
+                        "fragment_id": "F3",
+                        "work_fragment_id": "",
+                    },
+                ],
+                "materials": [],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert len(fragments) >= 3
+    assert len(result.works) == 2
+    assert len(result.quantities) == 1
+    assert result.quantities[0].work_candidate_id == result.works[1].candidate_id
+    assert len(result.defects) == 1
+    assert result.defects[0].parameters["code"] == "unresolved_work_reference"
+
+
 def test_qwen_engineering_fragments_preserve_full_text_with_traceable_spans() -> None:
     document = _extract_csv("Текст;" + "длинный " * 500 + "\n")
     element = document.pages[0].elements[1]
@@ -866,7 +912,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v10"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v11"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -957,6 +1003,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v11",
                 "qwen-engineering-extraction-v10",
                 "qwen-engineering-extraction-v9",
                 "qwen-engineering-extraction-v8",

@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v10"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v11"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v10",
     "qwen-engineering-extraction-v9",
     "qwen-engineering-extraction-v8",
     "qwen-engineering-extraction-v7",
@@ -243,7 +244,7 @@ class QwenDocumentSemanticAdapter:
         parsed_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
         incomplete_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
         parsed_materials: list[tuple[str, str, str, str, ExactLocator, str]] = []
-        work_by_identity: dict[tuple[UUID, str, str], WorkTypeCandidate] = {}
+        work_by_fragment_identity: dict[tuple[str, str], WorkTypeCandidate] = {}
         works_by_name: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
         works_by_fragment: dict[str, WorkTypeCandidate] = {}
         for allowed, parsed in extracted:
@@ -261,12 +262,12 @@ class QwenDocumentSemanticAdapter:
                     DocumentRole.PROJECT_DOCUMENTATION,
                     MappingStatus.UNRESOLVED,
                 )
-                identity = (locator.source_version_id, normalized, value.scope_key)
-                if identity not in work_by_identity:
-                    work_by_identity[identity] = value
+                identity = (locator_id, normalized)
+                if identity not in work_by_fragment_identity:
+                    work_by_fragment_identity[identity] = value
                     works_by_name[(locator.source_version_id, normalized)].append(value)
                     works.append(value)
-                works_by_fragment[locator_id] = work_by_identity[identity]
+                works_by_fragment[locator_id] = work_by_fragment_identity[identity]
             for key, raw, locator_id in parsed["fields"]:
                 locator = allowed[locator_id].locator
                 fields.append(
