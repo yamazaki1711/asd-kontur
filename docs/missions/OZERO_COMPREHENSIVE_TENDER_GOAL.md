@@ -690,3 +690,25 @@ command to re-evaluate queued source priorities, verify a classified structural/
 technical source is claimed ahead of lower-tier estimates, and then continue source
 candidate persistence and model materialization. Do not claim facility dossiers, pit
 inventory, Tender analysis, or consultant acceptance yet.
+
+### Continuation checkpoint — 2026-09-11 21:37 UTC+12
+
+Release `43b2ac1f22938014db5ee53645983693a0f41482` is pushed and present in the
+pinned release worktree but is **not yet executed** by the document worker. It combines
+the role-based fair source scheduler and an incremental project-reconciliation trigger.
+After a successful `PROJECT_DEFINITION_EXTRACTION`, the worker will queue one
+idempotent, causally linked reconciliation at priority 165. It materializes only
+profile-selected completed source candidates, so partial evidence becomes visible before
+the full corpus drains; it neither confirms candidates nor merges cross-document names.
+The implementation passed Ruff and strict mypy; PostgreSQL fixture integration is
+available in CI but skipped in this checkout, while a rollback-only scoped OZERO
+transaction independently proved the real insert, idempotency, causation, and priority.
+
+The current v15 source job is still active and must be allowed to finish before the
+worker is restarted. At the latest observation it had 338/497 accepted progress units;
+the local Qwen process remains the sole heavy model workload. Next executable action:
+on terminal receipt, safely restart the worker onto `43b2ac1`, verify the existing
+source's candidate persistence, then observe the incremental reconciliation and the
+role-prioritized next source through the actual API. Full package coverage, facility
+identity reconciliation, project-specific NTD findings, Tender outputs, and consultant
+acceptance remain open.
