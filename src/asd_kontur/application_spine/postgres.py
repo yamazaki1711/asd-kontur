@@ -3132,15 +3132,32 @@ class SpinePostgresRepository:
     def _project_structure_relationship_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> list[dict[str, Any]]:
-        """Return evidence-bound relationship observations before identity reconciliation."""
+        """Return relationship observations with only source-scoped endpoint resolution.
+
+        A raw normalized name is deliberately insufficient to connect entities across
+        documents.  We expose an endpoint only when exactly one structural candidate
+        with that name was extracted from the same evidence locator; all other links
+        remain unresolved observations for cross-document reconciliation.
+        """
         rows = session.execute(
             sa.text(
-                "SELECT relationship_candidate_id,version,relationship_kind,subject_raw_name,"
-                "subject_normalized_name,object_raw_name,object_normalized_name,source_version_id,"
-                "source_locator_id,status,candidate_digest FROM "
-                "workspace.project_structure_relationship_candidates WHERE "
-                "organization_id=:organization AND workspace_id=:workspace "
-                "ORDER BY recorded_at,relationship_candidate_id,version"
+                "SELECT r.relationship_candidate_id,r.version,r.relationship_kind,r.subject_raw_name,"
+                "r.subject_normalized_name,r.object_raw_name,r.object_normalized_name,r.source_version_id,"
+                "r.source_locator_id,r.status,r.candidate_digest,subject.node_id AS subject_structure_node_id,"
+                "object.node_id AS object_structure_node_id,CASE WHEN subject.node_id IS NOT NULL "
+                "AND object.node_id IS NOT NULL THEN 'resolved_same_evidence' ELSE "
+                "'unresolved_source_scoped_identity' END AS resolution_state FROM "
+                "workspace.project_structure_relationship_candidates r LEFT JOIN LATERAL (SELECT "
+                "(array_agg(DISTINCT n.structure_node_id))[1] AS node_id FROM workspace.project_structure_node_versions n "
+                "WHERE n.organization_id=r.organization_id AND n.workspace_id=r.workspace_id "
+                "AND n.source_locator_id=r.source_locator_id AND n.normalized_name=r.subject_normalized_name "
+                "HAVING COUNT(DISTINCT n.structure_node_id)=1) subject ON true LEFT JOIN LATERAL "
+                "(SELECT (array_agg(DISTINCT n.structure_node_id))[1] AS node_id FROM workspace.project_structure_node_versions n "
+                "WHERE n.organization_id=r.organization_id AND n.workspace_id=r.workspace_id "
+                "AND n.source_locator_id=r.source_locator_id AND n.normalized_name=r.object_normalized_name "
+                "HAVING COUNT(DISTINCT n.structure_node_id)=1) object ON true WHERE "
+                "r.organization_id=:organization AND r.workspace_id=:workspace "
+                "ORDER BY r.recorded_at,r.relationship_candidate_id,r.version"
             ),
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()
