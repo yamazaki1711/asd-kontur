@@ -40,6 +40,14 @@ QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v3"
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
+_RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
+    {
+        "qwen_engineering_response_invalid_json",
+        "qwen_engineering_response_invalid_shape",
+        "qwen_engineering_response_invalid_evidence",
+        "qwen_semantic_response_output_exhausted",
+    }
+)
 
 
 class QwenSemanticFailure(RuntimeError):
@@ -191,25 +199,11 @@ class QwenDocumentSemanticAdapter:
         accepted = accepted_batches or {}
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
         for batch in batches:
-            allowed = {
-                str(item.fragment_id): item
-                for item in batch.fragments
-                if item.fragment_id is not None
-            }
-            persisted = accepted.get(batch.digest)
-            if persisted is None:
-                payload = _complete(
-                    self._endpoint,
-                    _engineering_prompt(batch.fragments),
-                    self._timeout_seconds,
-                    max_tokens=1_200,
+            extracted.extend(
+                self._extract_engineering_batch(
+                    batch, accepted=accepted, on_accepted_batch=on_accepted_batch
                 )
-                parsed = _parse_engineering(payload, allowed)
-                if on_accepted_batch is not None:
-                    on_accepted_batch(batch, _engineering_manifest(parsed))
-            else:
-                parsed = _parse_engineering_manifest(persisted, allowed)
-            extracted.append((allowed, parsed))
+            )
         fields: list[ProjectFieldCandidate] = []
         structures: list[StructureNodeCandidate] = []
         works: list[WorkTypeCandidate] = []
@@ -359,6 +353,42 @@ class QwenDocumentSemanticAdapter:
             tuple(structures),
         )
 
+    def _extract_engineering_batch(
+        self,
+        batch: QwenEngineeringBatch,
+        *,
+        accepted: Mapping[str, dict[str, object]],
+        on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
+    ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
+        allowed = {
+            str(item.fragment_id): item for item in batch.fragments if item.fragment_id is not None
+        }
+        persisted = accepted.get(batch.digest)
+        if persisted is not None:
+            return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
+        try:
+            payload = _complete(
+                self._endpoint,
+                _engineering_prompt(batch.fragments),
+                self._timeout_seconds,
+                max_tokens=1_200,
+            )
+            parsed = _parse_engineering(payload, allowed)
+        except QwenSemanticFailure as exc:
+            if exc.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES or len(batch.fragments) == 1:
+                raise
+            values: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
+            for child in _split_engineering_batch(batch):
+                values.extend(
+                    self._extract_engineering_batch(
+                        child, accepted=accepted, on_accepted_batch=on_accepted_batch
+                    )
+                )
+            return tuple(values)
+        if on_accepted_batch is not None:
+            on_accepted_batch(batch, _engineering_manifest(parsed))
+        return ((allowed, parsed),)
+
 
 def _resolve_work_reference(
     work_name: str,
@@ -458,26 +488,44 @@ def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEnginee
     fragments = _fragments(elements)
     batches: list[QwenEngineeringBatch] = []
     for ordinal, offset in enumerate(range(0, len(fragments), 24), start=1):
-        batch = fragments[offset : offset + 24]
-        batch_payload = [
-            {
-                "fragment_id": item.fragment_id,
-                "locator_id": str(item.locator.source_locator_id),
-                "evidence_digest": item.locator.evidence_digest,
-                "character_start": item.character_start,
-                "character_end": item.character_end,
-                "text": item.text,
-            }
-            for item in batch
-        ]
-        digest = semantic_digest(
+        batches.append(_engineering_batch(ordinal, fragments[offset : offset + 24]))
+    return tuple(batches)
+
+
+def _engineering_batch(
+    ordinal: int, fragments: tuple[_SemanticFragment, ...]
+) -> QwenEngineeringBatch:
+    batch_payload = [
+        {
+            "fragment_id": item.fragment_id,
+            "locator_id": str(item.locator.source_locator_id),
+            "evidence_digest": item.locator.evidence_digest,
+            "character_start": item.character_start,
+            "character_end": item.character_end,
+            "text": item.text,
+        }
+        for item in fragments
+    ]
+    return QwenEngineeringBatch(
+        ordinal,
+        semantic_digest(
             {
                 "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
                 "fragments": batch_payload,
             }
-        )
-        batches.append(QwenEngineeringBatch(ordinal, digest, batch))
-    return tuple(batches)
+        ),
+        fragments,
+    )
+
+
+def _split_engineering_batch(batch: QwenEngineeringBatch) -> tuple[QwenEngineeringBatch, ...]:
+    midpoint = len(batch.fragments) // 2
+    if midpoint < 1:
+        return ()
+    return (
+        _engineering_batch(batch.ordinal * 100 + 1, batch.fragments[:midpoint]),
+        _engineering_batch(batch.ordinal * 100 + 2, batch.fragments[midpoint:]),
+    )
 
 
 def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str, object]:

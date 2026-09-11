@@ -699,6 +699,28 @@ def test_qwen_engineering_extraction_rejects_incomplete_schema() -> None:
         adapter.extract_engineering(document.pages[0].elements)
 
 
+def test_qwen_engineering_extraction_subdivides_recoverable_invalid_batch() -> None:
+    document = _extract_csv("A;B;C\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: dict[str, dict[str, object]] = {}
+    valid = json.dumps(
+        {"fields": [], "structures": [], "works": [], "quantities": [], "materials": []}
+    )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=("{}", valid, valid),
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.__setitem__(batch.digest, manifest),
+        )
+
+    assert complete.call_count == 3
+    assert result == StructuredCandidates((), (), (), (), (), ())
+    assert len(accepted) == 2
+
+
 def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> None:
     document = _extract_csv("проектная запись;значение\n")
     fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
