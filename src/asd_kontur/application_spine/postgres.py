@@ -3152,14 +3152,16 @@ class SpinePostgresRepository:
             "project_fields": profile_scope
             + "SELECT candidate.candidate_id,candidate.version,candidate.field_key AS label,candidate.raw_value AS value,"
             "candidate.normalized_value,candidate.source_version_id,candidate.source_locator_id,candidate.status,"
-            "candidate.uncertainty_codes,candidate.conflicts FROM workspace.project_field_candidates candidate "
+            "candidate.uncertainty_codes,candidate.conflicts,candidate.extraction_profile_version "
+            "FROM workspace.project_field_candidates candidate "
             "JOIN selected_profiles selected ON selected.source_version_id=candidate.source_version_id WHERE "
             "candidate.organization_id=:o AND candidate.workspace_id=:w AND candidate.extraction_profile_version="
             "CASE WHEN selected.semantic_profile LIKE 'qwen-engineering-extraction-%' THEN selected.semantic_profile "
             "ELSE 'project-definition-extraction-v0.1' END",
             "work_types": profile_scope
             + "SELECT candidate.candidate_id,candidate.version,candidate.normalized_name AS label,candidate.raw_name AS value,"
-            "candidate.source_version_id,candidate.source_locator_id,candidate.canonical_mapping_status AS status "
+            "candidate.source_version_id,candidate.source_locator_id,candidate.canonical_mapping_status AS status,"
+            "candidate.extraction_profile_version "
             "FROM workspace.work_type_candidates candidate JOIN selected_profiles selected "
             "ON selected.source_version_id=candidate.source_version_id WHERE candidate.organization_id=:o "
             "AND candidate.workspace_id=:w AND candidate.extraction_profile_version=CASE WHEN "
@@ -3168,7 +3170,8 @@ class SpinePostgresRepository:
             "quantities": profile_scope
             + "SELECT q.candidate_id,q.version,w.normalized_name AS label,q.raw_value AS value,"
             "q.parsed_value AS normalized_value,w.source_version_id,q.source_locator_id,q.status,q.raw_unit,"
-            "q.normalized_unit FROM workspace.quantity_candidates q JOIN workspace.work_type_candidates w "
+            "q.normalized_unit,w.extraction_profile_version FROM workspace.quantity_candidates q "
+            "JOIN workspace.work_type_candidates w "
             "ON w.organization_id=q.organization_id AND w.workspace_id=q.workspace_id AND "
             "w.candidate_id=q.work_candidate_id AND w.version=q.work_candidate_version JOIN selected_profiles selected "
             "ON selected.source_version_id=w.source_version_id WHERE q.organization_id=:o AND q.workspace_id=:w "
@@ -3178,7 +3181,8 @@ class SpinePostgresRepository:
             "materials": profile_scope
             + "SELECT m.candidate_id,m.version,w.normalized_name AS label,m.raw_name AS value,"
             "m.parsed_quantity AS normalized_value,w.source_version_id,m.source_locator_id,m.status,"
-            "m.raw_quantity,m.raw_unit,m.normalized_unit FROM workspace.material_candidates m JOIN "
+            "m.raw_quantity,m.raw_unit,m.normalized_unit,w.extraction_profile_version "
+            "FROM workspace.material_candidates m JOIN "
             "workspace.work_type_candidates w ON w.organization_id=m.organization_id AND "
             "w.workspace_id=m.workspace_id AND w.candidate_id=m.work_candidate_id AND "
             "w.version=m.work_candidate_version JOIN selected_profiles selected ON "

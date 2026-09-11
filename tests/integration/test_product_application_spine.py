@@ -933,3 +933,4 @@ def test_project_view_selects_only_the_latest_source_semantic_profile(
         assert response.status_code == 200, response.text
         values = response.json()["candidates"]["project_fields"]
         assert [item["value"] for item in values] == ["current observation"]
+        assert values[0]["extraction_profile_version"] == "qwen-engineering-extraction-v15"
