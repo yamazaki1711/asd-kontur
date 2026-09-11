@@ -850,3 +850,22 @@ promotion, or a complete Tender model. Focused format/check, strict mypy, and 53
 tests passed. The release has not yet been exercised through PostgreSQL with the
 application repository or deployed, and the active old worker must not be interrupted
 while it owns the current Qwen request.
+
+### Continuation checkpoint — 2026-09-12 00:25 UTC+12
+
+The pending exact release is now `de7f4033e35ce8d6af1e3d5f26b11c6ac5c5dd9f`, staged
+at `/Users/oleg/asd-kontur-pilot-release-2b48e05`. It corrects partial publication so
+coverage is expressed by the source/batch state rather than being frozen into an
+otherwise identical field candidate by `ON CONFLICT DO NOTHING`. The staged
+application repository was read against the correctly scoped OZERO database: its
+profile-selection queries returned the existing candidate projection (1,824 fields,
+1,080 works, 342 quantities, 160 materials, and 1,308 structural observations) without
+raising SQL or RLS errors. These are candidate-observation counts, not facility totals,
+confirmed facts, or a completeness claim.
+
+The active old-worker source remains running and has 89/1,074 accepted v15 batch
+progress units at the recorded observation. Do not restart it merely to activate the
+partial-publication release. At its terminal boundary, first capture its terminal
+receipt/provenance and current candidate projection, create a fresh recoverable backup,
+then deploy the pinned compatible API/worker/assistant release and exercise the real
+partial-state API/UI path before allowing a newly unstarted source to claim dense work.
