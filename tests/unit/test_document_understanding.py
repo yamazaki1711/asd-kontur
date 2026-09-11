@@ -40,6 +40,7 @@ from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRe
 from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
+    _compatible_v3_batch_digest,
     _engineering_batches,
     _fragments,
 )
@@ -779,6 +780,30 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
     assert len(accepted) == 1
 
 
+def test_qwen_engineering_extraction_reuses_compatible_v3_batch_manifest() -> None:
+    document = _extract_csv("проектная запись;значение\n")
+    batch = _engineering_batches(document.pages[0].elements)[0]
+    fragment_id = str(batch.fragments[0].fragment_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    compatible = {
+        _compatible_v3_batch_digest(batch.fragments): {
+            "fields": [["project_purpose", "Объект", fragment_id]],
+            "structures": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+    }
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements, compatible_accepted_batches=compatible
+        )
+
+    complete.assert_not_called()
+    assert result.project_fields[0].raw_value == "Объект"
+
+
 def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> None:
     document = _extract_csv("Котлован К-1;подтверждено\n")
     locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
@@ -804,7 +829,10 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         def load_accepted_engineering_batches(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-engineering-extraction-v3"
+            assert profile_version in {
+                "qwen-engineering-extraction-v3",
+                "qwen-engineering-extraction-v4",
+            }
             return {}
 
         def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:

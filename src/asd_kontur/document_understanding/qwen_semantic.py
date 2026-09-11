@@ -36,7 +36,8 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v3"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v4"
+_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v3"
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
@@ -84,17 +85,19 @@ class QwenEngineeringBatch:
 
     @property
     def input_manifest(self) -> list[dict[str, object]]:
-        return [
-            {
+        values: list[dict[str, object]] = []
+        for item in self.fragments:
+            value: dict[str, object] = {
                 "fragment_id": item.fragment_id,
                 "source_locator_id": str(item.locator.source_locator_id),
                 "evidence_digest": item.locator.evidence_digest,
                 "character_start": item.character_start,
                 "character_end": item.character_end,
-                "prompt_strategy": self.prompt_strategy,
             }
-            for item in self.fragments
-        ]
+            if self.prompt_strategy != "standard":
+                value["prompt_strategy"] = self.prompt_strategy
+            values.append(value)
+        return values
 
 
 class QwenDocumentSemanticAdapter:
@@ -192,6 +195,7 @@ class QwenDocumentSemanticAdapter:
         elements: Iterable[LayoutElement],
         *,
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
@@ -199,11 +203,15 @@ class QwenDocumentSemanticAdapter:
         if not batches:
             raise QwenSemanticFailure("qwen_engineering_input_unavailable")
         accepted = accepted_batches or {}
+        compatible = compatible_accepted_batches or {}
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
         for batch in batches:
             extracted.extend(
                 self._extract_engineering_batch(
-                    batch, accepted=accepted, on_accepted_batch=on_accepted_batch
+                    batch,
+                    accepted=accepted,
+                    on_accepted_batch=on_accepted_batch,
+                    compatible_accepted_batches=compatible,
                 )
             )
         fields: list[ProjectFieldCandidate] = []
@@ -360,12 +368,17 @@ class QwenDocumentSemanticAdapter:
         batch: QwenEngineeringBatch,
         *,
         accepted: Mapping[str, dict[str, object]],
+        compatible_accepted_batches: Mapping[str, dict[str, object]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
     ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
         allowed = {
             str(item.fragment_id): item for item in batch.fragments if item.fragment_id is not None
         }
         persisted = accepted.get(batch.digest)
+        if persisted is None and batch.prompt_strategy == "standard":
+            persisted = compatible_accepted_batches.get(
+                _compatible_v3_batch_digest(batch.fragments)
+            )
         if persisted is not None:
             return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
         try:
@@ -389,13 +402,17 @@ class QwenDocumentSemanticAdapter:
                         prompt_strategy="single_fragment_repair-v1",
                     ),
                     accepted=accepted,
+                    compatible_accepted_batches=compatible_accepted_batches,
                     on_accepted_batch=on_accepted_batch,
                 )
             values: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
             for child in _split_engineering_batch(batch):
                 values.extend(
                     self._extract_engineering_batch(
-                        child, accepted=accepted, on_accepted_batch=on_accepted_batch
+                        child,
+                        accepted=accepted,
+                        on_accepted_batch=on_accepted_batch,
+                        compatible_accepted_batches=compatible_accepted_batches,
                     )
                 )
             return tuple(values)
@@ -512,7 +529,23 @@ def _engineering_batch(
     *,
     prompt_strategy: str = "standard",
 ) -> QwenEngineeringBatch:
-    batch_payload = [
+    batch_payload = _engineering_batch_payload(fragments)
+    digest_input: dict[str, object] = {
+        "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
+        "fragments": batch_payload,
+    }
+    if prompt_strategy != "standard":
+        digest_input["prompt_strategy"] = prompt_strategy
+    return QwenEngineeringBatch(
+        ordinal,
+        semantic_digest(digest_input),
+        fragments,
+        prompt_strategy,
+    )
+
+
+def _engineering_batch_payload(fragments: tuple[_SemanticFragment, ...]) -> list[dict[str, object]]:
+    return [
         {
             "fragment_id": item.fragment_id,
             "locator_id": str(item.locator.source_locator_id),
@@ -523,17 +556,14 @@ def _engineering_batch(
         }
         for item in fragments
     ]
-    return QwenEngineeringBatch(
-        ordinal,
-        semantic_digest(
-            {
-                "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
-                "prompt_strategy": prompt_strategy,
-                "fragments": batch_payload,
-            }
-        ),
-        fragments,
-        prompt_strategy,
+
+
+def _compatible_v3_batch_digest(fragments: tuple[_SemanticFragment, ...]) -> str:
+    return semantic_digest(
+        {
+            "profile_version": _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE,
+            "fragments": _engineering_batch_payload(fragments),
+        }
     )
 
 
