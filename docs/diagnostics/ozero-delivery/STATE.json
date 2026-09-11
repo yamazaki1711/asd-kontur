@@ -1,22 +1,22 @@
 {
-  "recorded_at": "2026-09-11T19:42:00+12:00",
+  "recorded_at": "2026-09-11T19:51:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
     "api": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
-    "frontend": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
-    "document_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "frontend_static_artifact": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
+    "document_worker": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "assistant_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
     "database_migration": "0047_profile_scoped_engineering_candidates"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_completed_sources": 3,
+    "semantic_completed_sources": 4,
     "semantic_partial_sources": 1,
-    "semantic_not_started_sources": 18,
-    "semantic_active_source": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
-    "semantic_active_source_expected_fragment_inputs": null,
-    "semantic_active_source_accepted_fragment_inputs": 1284,
+    "semantic_not_started_sources": 17,
+    "semantic_active_source": "01a088ac-7f59-7a03-b342-fd7187e8d472",
+    "semantic_active_source_expected_fragment_inputs": 497,
+    "semantic_active_source_accepted_fragment_inputs": 2,
     "semantic_active_source_failed_fragment_inputs": 0,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
@@ -58,15 +58,17 @@
   "active_job": {
     "kind": "PROJECT_DEFINITION_EXTRACTION",
     "state": "running",
-    "source_version_id": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
-    "successor_count_queued": 21,
+    "source_version_id": "01a088ac-7f59-7a03-b342-fd7187e8d472",
+    "successor_count_queued": 20,
     "reconciliation_state": "queued"
   },
   "job_progress_release": {
-    "api_frontend_commit": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
-    "document_worker_commit": "13f50af54c61c3847cac285087c9308f9a2fe7be",
-    "real_semantic_progress_event_observed": false,
-    "status": "worker_transition_pending_active_job_terminal"
+    "api_commit": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
+    "frontend_static_artifact_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
+    "document_worker_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
+    "real_semantic_progress_event_observed": true,
+    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 2, "total": 497},
+    "status": "live_worker_progress_event_persisted"
   },
   "pos_failure": {
     "job_id": "01a08edb-97d7-7ce6-89b8-bd4a518d79c6",

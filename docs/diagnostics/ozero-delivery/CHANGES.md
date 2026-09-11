@@ -1,5 +1,16 @@
 # OZERO Tender delivery changes
 
+## 2026-09-11 — deployed worker progress transition
+
+- The document worker now runs pinned release `22142e2` after a controlled safe-boundary
+  transition. The local Qwen runtime remained in place.
+- Real job `01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` persisted the first two accepted
+  `engineering.semantic_batch_progress` events (`1/497`, `2/497`). This is operational
+  evidence for the worker path, whereas prior validation was disposable PostgreSQL only.
+- The live static frontend artifact is `22142e2`; it presents only this specific event
+  category as Russian semantic-batch progress. API code remains `f533d5c`, compatible at
+  database migration `0047`.
+
 ## 2026-09-11 — current semantic job progress
 
 - `c98db6a` appends an idempotently deduplicated, content-free event after each

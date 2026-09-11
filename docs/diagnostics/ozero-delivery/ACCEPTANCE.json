@@ -5,9 +5,9 @@
     {
       "id": "effective-job-semantic-progress-contract",
       "expected": "The effective jobs API preserves a linked current retry beyond historical rows and returns the latest safe semantic batch current/total values without document content.",
-      "observed": "A disposable PostgreSQL integration test inserted 205 historical jobs, a failed/replacement lineage, and a 7/10 semantic event. The API returned the running replacement with current=7, total=10, and engineering_semantic_batch_accepted. API/frontend commit f533d5c is live; the current document worker remains on the prior release until its active Qwen job is terminal.",
-      "status": "UNVERIFIED",
-      "evidence": "tests/integration/test_product_application_spine.py::test_effective_jobs_keep_running_retry_visible_beyond_history_window; /api/v1/health/ready; live bundle HTTP 200. Real worker-event proof is pending."
+      "observed": "A disposable PostgreSQL integration test inserted 205 historical jobs, a failed/replacement lineage, and a 7/10 semantic event. After a safe-boundary transition, real OZERO job 01a08f4e-3b5b-7851-9f3d-fcaf3e84c096 under worker release 22142e2 persisted engineering_semantic_batch_accepted events 1/497 and 2/497. The compatible API is f533d5c and migration 0047 is ready.",
+      "status": "PASS",
+      "evidence": "tests/integration/test_product_application_spine.py::test_effective_jobs_keep_running_retry_visible_beyond_history_window; scoped workspace.job_progress_events; launchd worker manifest; /api/v1/health/ready."
     },
     {
       "id": "profile-scoped-release-transition",

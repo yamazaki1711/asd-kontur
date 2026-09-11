@@ -1,5 +1,25 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 19:51 UTC+12 — real worker batch-progress proof; corpus remains partial
+
+The document worker was transitioned at a safe semantic-job boundary to pinned release
+`22142e2c2737d97e8bfbdfce22d7e7ef211b2f40`; Qwen remained loaded and was not restarted.
+The new worker claimed OZERO job `01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` for source version
+`01a088ac-7f59-7a03-b342-fd7187e8d472` and appended durable, content-free events
+`engineering.semantic_batch_progress` for `1/497` and `2/497` accepted base batches.
+This proves the deployed document-worker → local-Qwen → PostgreSQL progress-event path.
+It does **not** prove source completion, candidate persistence, facility reconciliation,
+or a usable Tender result.
+
+The API remains pinned to `f533d5c6586448369fe58ae5a9d1de2a91cbac6b`; the static frontend
+artifact was rebuilt from `22142e2` and labels only genuine semantic-batch events as
+`Семантические пакеты`. The API readiness check is still healthy at migration
+`0047_profile_scoped_engineering_candidates`. The assistant worker remains unchanged.
+The prior source `01a088ac-7f16-73ef-9d2c-3957b2393f66` completed before the transition;
+its workspace-wide candidate totals are raw profile-scoped candidate evidence, not facts
+or a project inventory. The active 497-batch source, its 20 remaining semantic successors,
+and workspace reconciliation remain open.
+
 ## 2026-09-11 19:42 UTC+12 — API/frontend progress release active; source pass continues
 
 The API/frontend is pinned to `f533d5c6586448369fe58ae5a9d1de2a91cbac6b` and the
