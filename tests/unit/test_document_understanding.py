@@ -819,7 +819,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v8"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v9"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -910,6 +910,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v9",
                 "qwen-engineering-extraction-v8",
                 "qwen-engineering-extraction-v7",
                 "qwen-engineering-extraction-v6",

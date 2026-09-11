@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v8"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v9"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v8",
     "qwen-engineering-extraction-v7",
     "qwen-engineering-extraction-v6",
     "qwen-engineering-extraction-v5",
