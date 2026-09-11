@@ -1,5 +1,26 @@
 # OZERO Tender delivery changes
 
+## 2026-09-11 — profile-scoped candidate release activated
+
+- `b0b80a8`, `3c42300`, and `c29e8e3` form the profile-scoped persistence change;
+  `e28da91` is the exact deployed release record. It adds migration
+  `0047_profile_scoped_engineering_candidates` and makes a completed semantic-stage
+  receipt plus exact semantic and persistence profile provenance necessary before
+  scheduling is suppressed. This prevents generic historical candidates from being
+  silently mixed with later Qwen profile results.
+- The controlled database backup was created and checked before the additive schema
+  transition. API, document worker, and assistant worker now import the exact e28da91
+  release and the API readiness contract expects 0047.
+- Calling the existing project-understanding command scheduled 22 source-scoped,
+  profile-aware semantic successors and one reconciliation job. Existing compatible
+  accepted batch manifests are reused; no OCR was requested. POS’s successor has
+  explicit `engineering_semantic_profile` and `candidate_persistence_profile` v15
+  provenance.
+
+Known limitation: processing and candidate persistence are active; cross-document
+facility reconciliation, NTD checks, Tender findings, source-link browser acceptance,
+and consultant acceptance remain open.
+
 ## 2026-09-11 checkpoint
 
 - `4de2561` derives project-definition, work-package, requirement-matrix, and

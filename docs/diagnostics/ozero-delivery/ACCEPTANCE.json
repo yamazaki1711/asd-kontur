@@ -3,6 +3,20 @@
   "scope": "OZERO comprehensive Tender delivery",
   "cases": [
     {
+      "id": "profile-scoped-release-transition",
+      "expected": "A compatible API, document-worker, and assistant-worker release runs at the additive profile-scoping migration head without interrupting the accepted POS batch run.",
+      "observed": "After POS reached terminal success, a verified pre-0047 backup was created, migration 0047 was applied, and all three supervised services were restarted from e28da91. The loopback readiness route returned ready at 0047.",
+      "status": "PASS",
+      "evidence": "restricted backup record; alembic current; launchd process paths; /api/v1/health/ready"
+    },
+    {
+      "id": "pos-v15-batch-completeness-before-profile-persistence",
+      "expected": "The original POS v15 manifest completes with accepted recovery evidence while invalid model attempts remain visible independently.",
+      "observed": "443 accepted batches cover 5,252 manifest fragments. Five failed attempt receipts cover 60 attempt fragments; their accepted recovery lineage remains immutable. The resulting old-profile candidates are explicitly not accepted project facts.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches; POS durable-job receipt 01a08f49-d11d-7f8e-b895-e1764c4d6536"
+    },
+    {
       "id": "release-ready",
       "expected": "The pinned API and document-worker releases start at the expected database revision.",
       "observed": "API 8e0c2f5, document worker 18c6893, and assistant worker a9a693a are pinned; /api/v1/health/ready reports PostgreSQL reachable and migration 0045_bounded_dep_recovery.",

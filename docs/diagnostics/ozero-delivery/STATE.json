@@ -1,19 +1,19 @@
 {
-  "recorded_at": "2026-09-11T17:11:00+12:00",
+  "recorded_at": "2026-09-11T19:12:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da",
-    "document_worker": "18c6893fdbee5186b351bdddaab2920c8f7eda3d",
-    "assistant_worker": "a9a693a854f4dd4120de6e8f16451923d82fe4ab",
-    "database_migration": "0045_bounded_dep_recovery"
+    "api": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "document_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "assistant_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "database_migration": "0047_profile_scoped_engineering_candidates"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
     "semantic_completed_sources": 3,
-    "semantic_partial_sources": 0,
-    "semantic_not_started_sources": 19,
-    "semantic_active_source": null,
+    "semantic_partial_sources": 1,
+    "semantic_not_started_sources": 18,
+    "semantic_active_source": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
     "semantic_active_source_expected_fragment_inputs": null,
     "semantic_active_source_accepted_fragment_inputs": null,
     "semantic_active_source_failed_fragment_inputs": null,
@@ -54,15 +54,38 @@
     "established_pit_count": null,
     "full_package_tender_accepted": false
   },
-  "active_job": null,
+  "active_job": {
+    "kind": "PROJECT_DEFINITION_EXTRACTION",
+    "state": "running",
+    "source_version_id": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
+    "successor_count_queued": 21,
+    "reconciliation_state": "queued"
+  },
   "pos_failure": {
     "job_id": "01a08edb-97d7-7ce6-89b8-bd4a518d79c6",
     "outcome": "structured_extraction_evidence_unavailable",
     "demonstrated_cause": "deployed pipeline required deterministic page-role decisions before Qwen semantic extraction"
   },
-  "pending_release": {
-    "commits": ["ce9cd3be3561f3f90e50cb12304f49cf5a38935f"],
-    "database_migration": "0046_structure_relationship_candidates",
-    "status": "not_deployed_current_full_backup_permission_denied"
+  "profile_scoped_release": {
+    "commit": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "database_migration": "0047_profile_scoped_engineering_candidates",
+    "status": "deployed_ready"
+  },
+  "pos_v15_historical_run": {
+    "source_version_id": "01a088ac-81c2-7033-8f75-8160ffeb2cb2",
+    "accepted_batches": 443,
+    "accepted_fragment_inputs": 5252,
+    "failed_attempt_batches": 5,
+    "failed_attempt_fragment_inputs": 60,
+    "generic_candidate_counts": {
+      "project_fields": 299,
+      "structures": 494,
+      "relationships": 148,
+      "works": 478,
+      "quantities": 94,
+      "materials": 45
+    },
+    "profile_successor_job_id": "01a08f4e-3b70-76ff-8245-15626d8da266",
+    "status": "candidate_evidence_only"
   }
 }

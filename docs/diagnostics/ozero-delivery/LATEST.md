@@ -1,5 +1,33 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 19:12 UTC+12 — profile-scoped release live; complete corpus pass active
+
+The controlled OZERO release is now pinned to `e28da91a57879602f727faedf74acbd9e8fe7adb`
+for API, document worker, and assistant worker. The API readiness route is `ready` at
+database head `0047_profile_scoped_engineering_candidates`. The exact pre-0047
+database backup was successfully created and verified in the restricted operational
+store before the additive migration; its path and digest are deliberately not copied
+into Git.
+
+The POS source version `01a088ac-81c2-7033-8f75-8160ffeb2cb2` completed its original
+v15 run as durable historical evidence: 443 accepted batches cover its complete
+5,252-fragment manifest. Five rejected attempts cover 60 attempt fragments, with
+accepted bounded recovery children present in the same immutable ledger. The old
+worker wrote a complete generic persistence stage and source-backed candidates
+(299 fields, 494 structural nodes, 148 raw relationship observations, 478 work
+candidates, 94 quantities, and 45 materials). These are candidates under the old
+profile, not reconciled facilities, Tender facts, or an exhaustive pit inventory.
+
+The live profile-aware `start_project_understanding` command has scheduled one
+version-aware semantic successor for each of the 22 active source versions plus one
+workspace reconciliation job. It neither re-runs OCR nor mutates historical attempts.
+POS successor `01a08f4e-3b70-76ff-8245-15626d8da266` is queued with explicit v15
+semantic and candidate-persistence provenance and will reuse compatible POS batches.
+The single supervised document worker is currently processing
+`Раздел ПД №12.5 005.2-2025-СМ5_ПИР_pdf.pdf`; 21 successors remain queued. This is
+full-package processing in progress, not semantic coverage completion or Tender
+acceptance.
+
 Updated: 2026-09-11 16:41 UTC+12
 
 The live API is pinned to `8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da`, the scoped
