@@ -1,5 +1,23 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 20:56 UTC+12 — exact-evidence graph components live
+
+API/frontend release `6739b203269dd20e0eab1d22532271217e1a451c` is live at migration
+`0047_profile_scoped_engineering_candidates`; its launchd source path is explicitly
+pinned to the release worktree. Live OpenAPI exposes `structure_components`, and the
+owner-scoped OZERO project-model boundary returns 32 exact-evidence graph components
+from 864 structural candidates and 169 relationship observations. A component joins
+only endpoints already resolved inside the same source evidence; it deliberately does
+not merge equal names across documents, establish a facility identity, or determine a
+pit total. The Russian model UI displays these as source-linked candidate groups.
+
+The active document worker remains `22142e2` and local Qwen was not restarted. Job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` is still processing source version
+`01a088ac-7f97-761a-b857-f5d3b4c5be8b`, with durable base progress `282/497` at the
+checkpoint. Full semantic coverage, cross-document reconciliation, project-specific
+NTD checks, Tender findings, browser source-link acceptance, and consultant acceptance
+remain open.
+
 ## 2026-09-11 19:59 UTC+12 — partial structural dossiers deployed
 
 API/frontend release `43244dba95d8d8974e45401e1790cfa45be67cc6` is live at the

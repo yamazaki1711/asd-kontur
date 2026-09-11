@@ -1,5 +1,15 @@
 # OZERO Tender delivery changes
 
+## 2026-09-11 — exact-evidence graph navigation
+
+- `6739b20` adds graph components composed only of source-scoped relationship endpoints
+  that have an exact same-evidence resolution. The API and Russian project-model UI
+  expose the component separately from source-scoped dossiers; cross-document names are
+  never auto-merged and components remain `candidate_only` evidence.
+- Live verification at migration `0047` found 32 such components in the existing OZERO
+  candidate graph. This helps navigate partial evidence but does not deliver a
+  reconciled project inventory, a pit count, or Tender acceptance.
+
 ## 2026-09-11 — source-scoped structural dossiers
 
 - `43244db` exposes every existing facility, local-area, excavation, structure, and

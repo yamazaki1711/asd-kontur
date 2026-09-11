@@ -1,9 +1,9 @@
 {
-  "recorded_at": "2026-09-11T20:25:00+12:00",
+  "recorded_at": "2026-09-11T20:56:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "3c64021bc720f0a0e56172945d1a3be63a0ffdd6",
-    "frontend_static_artifact": "3c64021bc720f0a0e56172945d1a3be63a0ffdd6",
+    "api": "6739b203269dd20e0eab1d22532271217e1a451c",
+    "frontend_static_artifact": "6739b203269dd20e0eab1d22532271217e1a451c",
     "document_worker": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "assistant_worker": "f1d9e453981f7b352856365719b15479f044c072",
     "database_migration": "0047_profile_scoped_engineering_candidates"
@@ -15,9 +15,9 @@
     "semantic_partial_sources": 2,
     "semantic_not_started_sources": 14,
     "semantic_active_source": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
-    "semantic_active_source_expected_fragment_inputs": 497,
-    "semantic_active_source_accepted_fragment_inputs": 102,
-    "semantic_active_source_failed_fragment_inputs": 0,
+    "semantic_active_source_expected_fragment_inputs": 5957,
+    "semantic_active_source_accepted_fragment_inputs": 3312,
+    "semantic_active_source_failed_fragment_inputs": 78,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
       "expected_fragment_inputs": 2960,
@@ -49,7 +49,8 @@
     "materials": 124,
     "structures": 864,
     "relationship_candidates": 169,
-    "excavation_pit_candidates": null
+    "excavation_pit_candidates": null,
+    "exact_evidence_structure_components": 32
   },
   "materialization": {
     "state": "partial",
@@ -59,7 +60,7 @@
   "active_job": {
     "kind": "PROJECT_DEFINITION_EXTRACTION",
     "state": "running",
-    "source_version_id": "01a088ac-7f59-7a03-b342-fd7187e8d472",
+    "source_version_id": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
     "successor_count_queued": 20,
     "reconciliation_state": "queued"
   },
@@ -68,7 +69,7 @@
     "frontend_static_artifact_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "document_worker_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "real_semantic_progress_event_observed": true,
-    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 102, "total": 497},
+    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 282, "total": 497},
     "status": "live_worker_progress_event_persisted"
   },
   "pos_failure": {
