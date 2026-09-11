@@ -19,13 +19,25 @@ from asd_kontur.application_spine.object_store import (
     sanitize_display_name,
     sanitize_relative_path,
 )
-from asd_kontur.application_spine.postgres import SpinePostgresRepository
+from asd_kontur.application_spine.postgres import (
+    SpinePostgresRepository,
+    _semantic_extraction_priority,
+)
 from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
+    """A one-slot worker reaches source-backed structural evidence before estimates."""
+
+    assert _semantic_extraction_priority(("local_estimate",)) == 150
+    assert _semantic_extraction_priority(("project_documentation",)) == 170
+    assert _semantic_extraction_priority(("local_estimate", "drawing_or_scheme")) == 170
+    assert _semantic_extraction_priority(()) == 130
 
 
 def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:

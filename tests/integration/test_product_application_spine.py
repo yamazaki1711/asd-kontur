@@ -824,6 +824,28 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
             connection.execute(
                 sa.text(
+                    "INSERT INTO workspace.document_role_decisions "
+                    "(organization_id,workspace_id,decision_id,decision_version,document_id,"
+                    "document_version,scope,selected_roles,candidate_ids,decision_code,"
+                    "validator_version,source_locator_ids,decision_digest) VALUES "
+                    "(:organization,:workspace,:decision,1,:document,:version,'page:1',"
+                    "CAST(:roles AS text[]),CAST(:candidates AS uuid[]),'synthetic_role',"
+                    "'synthetic-role-v1',ARRAY[:locator]::uuid[],:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "decision": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "roles": ["drawing_or_scheme"],
+                    "candidates": [],
+                    "locator": locator_id,
+                    "digest": semantic_digest({"synthetic": "drawing-role"}),
+                },
+            )
+            connection.execute(
+                sa.text(
                     "UPDATE workspace.durable_jobs SET state='paused' "
                     "WHERE organization_id=:organization AND workspace_id=:workspace "
                     "AND job_kind='PROJECT_DEFINITION_EXTRACTION'"
@@ -841,7 +863,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             rows = (
                 connection.execute(
                     sa.text(
-                        "SELECT job_id,provenance FROM workspace.durable_jobs WHERE "
+                        "SELECT job_id,priority,provenance FROM workspace.durable_jobs WHERE "
                         "organization_id=:organization AND workspace_id=:workspace "
                         "AND job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
                         "provenance->>'engineering_semantic_profile'='qwen-engineering-extraction-v15'"
@@ -855,6 +877,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 .all()
             )
         assert len(rows) == 1
+        assert rows[0]["priority"] == 170
         assert rows[0]["provenance"]["semantic_recovery_of"]
         assert (
             rows[0]["provenance"]["candidate_persistence_profile"]

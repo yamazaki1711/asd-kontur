@@ -45,6 +45,35 @@ TERMINAL_STATES = frozenset(
     }
 )
 
+# Dispatch priorities are intentionally coarse and derived only from durable
+# document-role decisions.  They influence which independent source uses the
+# single local-Qwen slot next; they do not change candidate authority, evidence
+# selection, or fairness within a tier.
+_SEMANTIC_PRIORITY_BY_ROLE = {
+    "drawing_or_scheme": 170,
+    "working_documentation": 170,
+    "project_documentation": 170,
+    "explanatory_note": 160,
+    "specification": 160,
+    "bill_of_quantities": 150,
+    "local_estimate": 150,
+    "object_estimate": 150,
+    "consolidated_estimate": 150,
+}
+_SEMANTIC_DEFAULT_PRIORITY = 130
+
+
+def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
+    """Return the durable dispatch priority for a classified active document."""
+
+    return max(
+        (
+            _SEMANTIC_PRIORITY_BY_ROLE.get(role, _SEMANTIC_DEFAULT_PRIORITY)
+            for role in document_roles
+        ),
+        default=_SEMANTIC_DEFAULT_PRIORITY,
+    )
+
 
 class SpinePersistenceError(RuntimeError):
     def __init__(self, code: str) -> None:
@@ -2739,6 +2768,9 @@ class SpinePostgresRepository:
         for source in sources:
             source_version_id = UUID(str(source["source_version_id"]))
             locator_count = int(source["native_locator_count"])
+            semantic_priority = _semantic_extraction_priority(
+                tuple(str(role) for role in source.get("document_roles", ()))
+            )
             latest = (
                 session.execute(
                     sa.text(
@@ -2765,11 +2797,46 @@ class SpinePostgresRepository:
                 )
                 continue
             if latest is not None and str(latest["state"]) in {"queued", "running"}:
+                # Priority is dispatch metadata, not an engineering result.  Update
+                # only an unclaimed, compatible semantic pass; a running lease must
+                # keep its existing ordering and immutable input contract.
+                latest_provenance = dict(latest["provenance"])
+                if (
+                    str(latest["state"]) == "queued"
+                    and latest_provenance.get("engineering_semantic_profile")
+                    == ENGINEERING_SEMANTIC_PROFILE_VERSION
+                    and int(latest["priority"]) != semantic_priority
+                ):
+                    session.execute(
+                        sa.text(
+                            "UPDATE workspace.durable_jobs SET priority=:priority WHERE "
+                            "organization_id=:organization AND workspace_id=:workspace AND "
+                            "job_id=:job AND state='queued'"
+                        ),
+                        {
+                            "organization": organization_id,
+                            "workspace": workspace_id,
+                            "job": latest["job_id"],
+                            "priority": semantic_priority,
+                        },
+                    )
+                    self._append_event(
+                        session,
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                        job_id=UUID(str(latest["job_id"])),
+                        event_type="job.priority_recomputed",
+                        safe_message_code="semantic_priority_recomputed_from_document_role",
+                        current=None,
+                        total=None,
+                        terminal=False,
+                    )
                 scheduled.append(
                     {
                         "source_version_id": str(source_version_id),
                         "job_id": str(latest["job_id"]),
                         "state": str(latest["state"]),
+                        "priority": semantic_priority,
                     }
                 )
                 continue
@@ -2835,7 +2902,7 @@ class SpinePostgresRepository:
                     "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
                     "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,"
                     "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,'queued',"
-                    "130,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                    ":priority,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
                 ),
                 {
                     "organization": organization_id,
@@ -2854,6 +2921,7 @@ class SpinePostgresRepository:
                     "correlation": correlation_id,
                     "causation": latest["job_id"] if latest is not None else None,
                     "owner": owner_identity_id,
+                    "priority": semantic_priority,
                 },
             )
             self._append_event(
@@ -2872,6 +2940,7 @@ class SpinePostgresRepository:
                     "source_version_id": str(source_version_id),
                     "job_id": str(job_id),
                     "state": "queued",
+                    "priority": semantic_priority,
                 }
             )
         return scheduled
@@ -2899,18 +2968,23 @@ class SpinePostgresRepository:
                         " ) activation ON activation.selected_document_version=v.version WHERE "
                         " v.organization_id=:organization AND v.workspace_id=:workspace "
                         " AND v.media_type<>'application/zip'"
-                        ") SELECT active_versions.*,COUNT(elements.source_locator_id) FILTER ("
-                        " WHERE coalesce(elements.raw_text,'')<>'') AS native_locator_count FROM active_versions "
-                        "LEFT JOIN workspace.source_locators locators ON "
-                        " locators.organization_id=:organization AND locators.workspace_id=:workspace "
-                        " AND locators.source_version_id=active_versions.source_version_id "
-                        "LEFT JOIN workspace.native_layout_element_versions elements ON "
-                        " elements.organization_id=locators.organization_id AND "
-                        " elements.workspace_id=locators.workspace_id AND "
-                        " elements.source_locator_id=locators.source_locator_id "
-                        "GROUP BY active_versions.document_id,active_versions.version,"
-                        "active_versions.source_version_id,active_versions.object_key,active_versions.media_type,"
-                        "active_versions.content_digest,active_versions.recorded_at "
+                        "), native_counts AS (SELECT locators.source_version_id,COUNT(DISTINCT elements.source_locator_id) "
+                        "FILTER (WHERE coalesce(elements.raw_text,'')<>'') AS native_locator_count "
+                        "FROM workspace.source_locators locators LEFT JOIN workspace.native_layout_element_versions elements ON "
+                        "elements.organization_id=locators.organization_id AND elements.workspace_id=locators.workspace_id "
+                        "AND elements.source_locator_id=locators.source_locator_id "
+                        "WHERE locators.organization_id=:organization AND locators.workspace_id=:workspace "
+                        "GROUP BY locators.source_version_id), role_summaries AS (SELECT d.document_id,d.document_version,"
+                        "array_agg(DISTINCT role.value ORDER BY role.value) AS document_roles "
+                        "FROM workspace.document_role_decisions d CROSS JOIN LATERAL "
+                        "unnest(d.selected_roles) AS role(value) "
+                        "WHERE d.organization_id=:organization AND d.workspace_id=:workspace "
+                        "GROUP BY d.document_id,d.document_version) SELECT active_versions.*,"
+                        "COALESCE(native_counts.native_locator_count,0) AS native_locator_count,"
+                        "COALESCE(role_summaries.document_roles,ARRAY[]::text[]) AS document_roles "
+                        "FROM active_versions LEFT JOIN native_counts ON native_counts.source_version_id=active_versions.source_version_id "
+                        "LEFT JOIN role_summaries ON role_summaries.document_id=active_versions.document_id "
+                        "AND role_summaries.document_version=active_versions.version "
                         "ORDER BY active_versions.recorded_at DESC,active_versions.document_id"
                     ),
                     {"organization": organization_id, "workspace": workspace_id},
