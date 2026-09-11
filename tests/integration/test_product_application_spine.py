@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 from typing import Any, cast
+from uuid import UUID
 
 import pytest
 import sqlalchemy as sa
@@ -157,6 +158,7 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert outcomes[-1].outcome_code in {
             "classification_evidence_unavailable",
             "pdf_renderer_unavailable",
+            "ocr_adapters_exhausted:none_available",
         }
         duplicate = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents",
@@ -455,3 +457,105 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
         assert by_id[str(running.job_id)]["terminal_receipt_id"] is not None
         assert by_id[retry_job]["state"] == "reconciliation_required"
         assert by_id[retry_job]["terminal_receipt_id"] is not None
+
+
+def test_dependency_terminal_stage_recovers_only_from_matching_successor(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="dependency-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Dependency owner",
+    )
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    application_repository = SpinePostgresRepository(postgres_environment.application_engine)
+    worker = "dependency-recovery-worker"
+    with TestClient(app) as client:
+        _login(client, "dependency-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Dependency recovery"},
+            headers=csrf,
+        ).json()
+        workspace_id = workspace["workspace_id"]
+        client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("recovery.pdf", _pdf(), "application/pdf"))],
+            headers=csrf,
+        ).raise_for_status()
+
+        admission = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        assert admission is not None
+        repository.mark_job_running(admission, worker_identity=worker)
+        repository.finish_job(
+            admission,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_admission_complete",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+        original_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        assert original_hash is not None
+        assert original_hash.job_kind.value == "DOCUMENT_HASH"
+        repository.mark_job_running(original_hash, worker_identity=worker)
+        repository.finish_job(
+            original_hash,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_hash_failure",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+        assert repository.reconcile_unclaimable_jobs() >= 1
+
+        with postgres_environment.owner_engine.connect() as connection:
+            owner = str(
+                connection.scalar(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.workspaces "
+                        "WHERE workspace_id=:workspace"
+                    ),
+                    {"workspace": workspace_id},
+                )
+            )
+        retry = application_repository.manually_retry_job(
+            owner_identity_id=owner,
+            workspace_id=UUID(workspace_id),
+            job_id=original_hash.job_id,
+        )
+        recovered_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        assert recovered_hash is not None
+        assert recovered_hash.job_id == retry.job_id
+        repository.mark_job_running(recovered_hash, worker_identity=worker)
+        repository.finish_job(
+            recovered_hash,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_hash_recovered",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+
+        assert repository.recover_dependency_terminal_failures() == 1
+        assert repository.recover_dependency_terminal_failures() == 0
+        recovered_inventory = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        assert recovered_inventory is not None
+        assert recovered_inventory.job_kind.value == "PDF_INVENTORY"
+        repository.mark_job_running(recovered_inventory, worker_identity=worker)
+        repository.finish_job(
+            recovered_inventory,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_inventory_recovered",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+
+        with postgres_environment.owner_engine.connect() as connection:
+            provenance = connection.scalar(
+                sa.text("SELECT provenance FROM workspace.durable_jobs WHERE job_id=:job"),
+                {"job": recovered_inventory.job_id},
+            )
+        assert provenance["dependency_recovery_of"]
+        assert provenance["dependency_recovery_replacement"] == str(recovered_hash.job_id)

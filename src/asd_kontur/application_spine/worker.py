@@ -149,7 +149,9 @@ class DocumentWorker:
 
     def run_once(self) -> WorkerOutcome | None:
         for _ in range(1024):
-            if self._repository.reconcile_unclaimable_jobs() == 0:
+            recovered = self._repository.recover_dependency_terminal_failures()
+            reconciled = self._repository.reconcile_unclaimable_jobs()
+            if recovered == 0 and reconciled == 0:
                 break
         else:
             raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")

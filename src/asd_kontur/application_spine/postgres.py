@@ -1926,6 +1926,16 @@ class SpinePostgresRepository:
                 or 0
             )
 
+    def recover_dependency_terminal_failures(self) -> int:
+        """Queue audited replacements only after an equivalent prerequisite succeeds."""
+        with self._engine.begin() as connection:
+            return int(
+                connection.scalar(
+                    sa.text("SELECT workspace.recover_dependency_terminal_failures()")
+                )
+                or 0
+            )
+
     def latest_document_state(
         self, claimed: ClaimedJob
     ) -> tuple[str, str, int | None, tuple[str, ...]]:
