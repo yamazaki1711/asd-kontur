@@ -1,102 +1,47 @@
 {
-  "recorded_at": "2026-09-11T20:56:00+12:00",
+  "recorded_at": "2026-09-12T00:32:43+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "6739b203269dd20e0eab1d22532271217e1a451c",
-    "frontend_static_artifact": "6739b203269dd20e0eab1d22532271217e1a451c",
-    "document_worker": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
-    "assistant_worker": "f1d9e453981f7b352856365719b15479f044c072",
-    "database_migration": "0047_profile_scoped_engineering_candidates"
+    "api_document_worker_assistant_live": "9394b466a222d915d77f12b9577afd815a8476ba",
+    "database_migration": "0048_incremental_reconciliation_claim_priority",
+    "staged_candidate_release": "70d90110af700c98e7b8ca23fe2667b4ca80ec7b",
+    "staged_candidate_status": "not_deployed_while_active_worker_job_runs"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_completed_sources": 6,
-    "semantic_partial_sources": 2,
-    "semantic_not_started_sources": 14,
-    "semantic_active_source": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
-    "semantic_active_source_expected_fragment_inputs": 5957,
-    "semantic_active_source_accepted_fragment_inputs": 3384,
-    "semantic_active_source_failed_fragment_inputs": 114,
-    "kr1_v13": {
-      "accepted_fragment_inputs": 2960,
-      "expected_fragment_inputs": 2960,
-      "historical_failed_attempt_inputs": 12
-    },
-    "kr2_v13": {
-      "accepted_fragment_inputs": 1525,
-      "expected_fragment_inputs": 1525,
-      "historical_failed_attempt_inputs": 24
+    "semantic_coverage": {
+      "complete_sources": 7,
+      "partial_sources": 3,
+      "not_started_sources": 12,
+      "meaning": "Coverage states describe exact accepted semantic input fragments, not confirmed engineering analysis or Tender acceptance."
     }
-  },
-  "pzu_v12": {
-    "source_version_id": "01a088ac-8125-7031-8659-a57bd97ff1c6",
-    "accepted_fragment_inputs": 5021,
-    "failed_attempts": 5,
-    "failed_attempt_fragment_entries": 96,
-    "persisted_candidates": {
-      "project_fields": 61,
-      "works": 252,
-      "quantities": 86,
-      "materials": 39,
-      "structures": 177
-    }
-  },
-  "workspace_candidates": {
-    "project_fields": 639,
-    "works": 980,
-    "quantities": 246,
-    "materials": 124,
-    "structures": 864,
-    "relationship_candidates": 169,
-    "excavation_pit_candidates": null,
-    "exact_evidence_structure_components": 32
-  },
-  "materialization": {
-    "state": "partial",
-    "established_pit_count": null,
-    "full_package_tender_accepted": false
   },
   "active_job": {
+    "job_id": "01a08f4e-3b5e-798c-9d5b-b3acd1724683",
     "kind": "PROJECT_DEFINITION_EXTRACTION",
     "state": "running",
-    "source_version_id": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
-    "successor_count_queued": 20,
-    "reconciliation_state": "queued"
+    "source_version_id": "01a088ac-7fdb-7b12-be33-e3a325af8edf",
+    "safe_display_name": "Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf",
+    "accepted_batch_progress": {"current": 110, "total": 1074},
+    "progress_observed_at": "2026-09-12T00:32:30+12:00"
   },
-  "job_progress_release": {
-    "api_commit": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
-    "frontend_static_artifact_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
-    "document_worker_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
-    "real_semantic_progress_event_observed": true,
-    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 282, "total": 497},
-    "status": "live_worker_progress_event_persisted"
+  "candidate_projection": {
+    "project_fields": 1824,
+    "works": 1080,
+    "quantities": 342,
+    "materials": 160,
+    "structure_observations": 1308,
+    "relationship_observations": 417,
+    "authority": "candidate_only",
+    "pit_count": null,
+    "facility_inventory_reconciled": false
   },
-  "pos_failure": {
-    "job_id": "01a08edb-97d7-7ce6-89b8-bd4a518d79c6",
-    "outcome": "structured_extraction_evidence_unavailable",
-    "demonstrated_cause": "deployed pipeline required deterministic page-role decisions before Qwen semantic extraction"
-  },
-  "profile_scoped_release": {
-    "commit": "e28da91a57879602f727faedf74acbd9e8fe7adb",
-    "database_migration": "0047_profile_scoped_engineering_candidates",
-    "status": "deployed_ready"
-  },
-  "pos_v15_historical_run": {
-    "source_version_id": "01a088ac-81c2-7033-8f75-8160ffeb2cb2",
-    "accepted_batches": 443,
-    "accepted_fragment_inputs": 5252,
-    "failed_attempt_batches": 5,
-    "failed_attempt_fragment_inputs": 60,
-    "generic_candidate_counts": {
-      "project_fields": 299,
-      "structures": 494,
-      "relationships": 148,
-      "works": 478,
-      "quantities": 94,
-      "materials": 45
-    },
-    "profile_successor_job_id": "01a08f4e-3b70-76ff-8245-15626d8da266",
-    "status": "candidate_evidence_only"
+  "acceptance": {
+    "complete_package_tender_accepted": false,
+    "cross_document_facility_reconciliation": "open",
+    "project_specific_ntd_checks": "open",
+    "consultant_source_answer_acceptance": "open",
+    "browser_source_navigation": "unverified"
   }
 }

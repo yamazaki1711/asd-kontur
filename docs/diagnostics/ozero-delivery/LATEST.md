@@ -1,5 +1,30 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-12 00:32 UTC+12 — complete-source pass remains active
+
+The active OZERO source is `Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`
+(`01a088ac-7fdb-7b12-be33-e3a325af8edf`). Its live v15 job has an immutable
+accepted-batch progress event of `110/1074`. The document worker and Qwen process
+remain live; no source, retry lineage, or accepted batch has been reset.
+
+The scoped application projection currently reports 22 active source versions and
+2,529 pages: 7 semantic sources complete, 3 partial, and 12 not started. It exposes
+1,824 field, 1,080 work, 342 quantity, 160 material, 1,308 structural, and 417
+relationship **candidate observations**. These figures are not facility identities,
+confirmed facts, an excavation-pit total, or a complete Tender analysis.
+
+`de7f403` is the tested pending delivery change. It publishes accepted semantic-batch
+observations as exact-locator partial candidates and makes the API select a current
+accepted batch profile before terminal source completion. Cross-batch quantities and
+materials remain deferred until their work relationship can be reconciled. The staged
+release is not activated while the old worker owns the active Qwen job.
+
+Next operational action: wait for this source's terminal receipt, inspect its persisted
+candidate provenance, make a fresh recoverable backup, deploy the pinned release, and
+exercise the live partial project-model view. Full corpus extraction, cross-document
+facility reconciliation, project-specific NTD checks, Tender findings, and consultant/
+browser acceptance remain open.
+
 ## 2026-09-11 21:09 UTC+12 — v15 complete-source pass continues
 
 API release `8159206681f681ed84a3807c9b09120e90461d07` is ready at migration
