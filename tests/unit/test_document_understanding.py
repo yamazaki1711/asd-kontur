@@ -1208,6 +1208,80 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
     assert len(bundle.materials) == 1
 
 
+def test_project_field_stage_uses_qwen_evidence_when_classification_is_unavailable() -> None:
+    document = _extract_csv("КНС-1;котлован К-1\n")
+    fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000003"),
+        UUID("40000000-0000-4000-8000-000000000003"),
+        UUID("50000000-0000-4000-8000-000000000003"),
+        JobKind.PROJECT_DEFINITION_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+        },
+        "sha256:" + "c" * 64,
+        1,
+        1,
+        "none",
+    )
+    persisted: dict[str, object] = {}
+
+    class Repository:
+        def load_accepted_engineering_batches(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return {}
+
+        def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:
+            return document.pages[0].elements
+
+        def load_role_decisions(self, _claimed: ClaimedJob) -> tuple[object, ...]:
+            return ()
+
+        def record_accepted_engineering_batch(
+            self, _claimed: ClaimedJob, **_values: object
+        ) -> None:
+            return None
+
+        def persist_structured(self, _claimed: ClaimedJob, bundle: StructuredCandidates) -> None:
+            persisted["bundle"] = bundle
+
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=adapter,
+    )
+    response = json.dumps(
+        {
+            "fields": [],
+            "structures": [{"kind": "facility", "name": "КНС-1", "fragment_id": fragment_id}],
+            "structure_relationships": [
+                {
+                    "kind": "contains",
+                    "subject_name": "КНС-1",
+                    "object_name": "котлован К-1",
+                    "fragment_id": fragment_id,
+                }
+            ],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+        result = pipeline._project_fields(claimed, BytesIO())
+
+    assert result["structure_candidate_count"] == 1
+    bundle = cast(StructuredCandidates, persisted["bundle"])
+    assert len(bundle.structures) == 1
+    assert len(bundle.structure_relationships) == 1
+
+
 def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() -> None:
     document = _extract_csv("Пояснительная записка\nНазначение объекта: насосная станция\n")
     locator_id = str(document.pages[0].elements[0].locator.source_locator_id)

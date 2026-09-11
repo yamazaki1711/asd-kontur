@@ -271,8 +271,8 @@ class IndustrialDocumentUnderstandingPipeline:
         }
 
     def _project_fields(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        bundle = self._structured(claimed)
         semantic = self._engineering_semantic(claimed)
+        bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
         if semantic is not None:
             bundle = StructuredCandidates(
                 (*bundle.project_fields, *semantic.project_fields),
@@ -281,7 +281,11 @@ class IndustrialDocumentUnderstandingPipeline:
                 (*bundle.materials, *semantic.materials),
                 bundle.estimates,
                 (*bundle.defects, *semantic.defects),
-                structures=semantic.structures,
+                structures=(*bundle.structures, *semantic.structures),
+                structure_relationships=(
+                    *bundle.structure_relationships,
+                    *semantic.structure_relationships,
+                ),
             )
         self._repository.persist_structured(claimed, bundle)
         return {
@@ -327,8 +331,8 @@ class IndustrialDocumentUnderstandingPipeline:
         )
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        bundle = self._structured(claimed)
         semantic = self._engineering_semantic(claimed)
+        bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
         if semantic is not None:
             bundle = StructuredCandidates(
                 bundle.project_fields,
@@ -381,10 +385,16 @@ class IndustrialDocumentUnderstandingPipeline:
         except QwenSemanticFailure as exc:
             raise UnderstandingStageFailure(exc.code) from exc
 
-    def _structured(self, claimed: ClaimedJob) -> StructuredCandidates:
+    def _structured(
+        self, claimed: ClaimedJob, *, allow_missing_role_decisions: bool = False
+    ) -> StructuredCandidates:
         elements = self._repository.load_elements(claimed)
         decisions = self._repository.load_role_decisions(claimed)
-        if not elements or not decisions:
+        if not elements:
+            raise UnderstandingStageFailure("structured_extraction_evidence_unavailable")
+        if not decisions:
+            if allow_missing_role_decisions:
+                return StructuredCandidates((), (), (), (), (), ())
             raise UnderstandingStageFailure("structured_extraction_evidence_unavailable")
         return extract_structured_candidates(elements, decisions)
 
