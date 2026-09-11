@@ -765,7 +765,7 @@ def test_qwen_engineering_accepted_batch_materializes_only_local_candidates() ->
     )
 
     assert len(result.project_fields) == 1
-    assert "partial_source_batch" in result.project_fields[0].uncertainty_codes
+    assert result.project_fields[0].uncertainty_codes == ("qwen_semantic_candidate",)
     assert len(result.structures) == 1
     assert len(result.structure_relationships) == 1
     assert len(result.works) == 1

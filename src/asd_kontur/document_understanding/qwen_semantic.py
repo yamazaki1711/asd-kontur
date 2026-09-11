@@ -494,7 +494,7 @@ class QwenDocumentSemanticAdapter:
                     "text",
                     locator,
                     QWEN_ENGINEERING_EXTRACTION_PROFILE,
-                    ("qwen_semantic_candidate", "partial_source_batch"),
+                    ("qwen_semantic_candidate",),
                     extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
                 )
             )
