@@ -1,11 +1,11 @@
 {
-  "recorded_at": "2026-09-11T20:19:00+12:00",
+  "recorded_at": "2026-09-11T20:25:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "bb7c86743e8324fa5b7c808bca7fd7ce29d08945",
-    "frontend_static_artifact": "bb7c86743e8324fa5b7c808bca7fd7ce29d08945",
+    "api": "3c64021bc720f0a0e56172945d1a3be63a0ffdd6",
+    "frontend_static_artifact": "3c64021bc720f0a0e56172945d1a3be63a0ffdd6",
     "document_worker": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
-    "assistant_worker": "f42cbcd00969bd19de7aba529d53b761683a6e85",
+    "assistant_worker": "f1d9e453981f7b352856365719b15479f044c072",
     "database_migration": "0047_profile_scoped_engineering_candidates"
   },
   "corpus": {
@@ -16,7 +16,7 @@
     "semantic_not_started_sources": 14,
     "semantic_active_source": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
     "semantic_active_source_expected_fragment_inputs": 497,
-    "semantic_active_source_accepted_fragment_inputs": 72,
+    "semantic_active_source_accepted_fragment_inputs": 102,
     "semantic_active_source_failed_fragment_inputs": 0,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
@@ -68,7 +68,7 @@
     "frontend_static_artifact_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "document_worker_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "real_semantic_progress_event_observed": true,
-    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 72, "total": 497},
+    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 102, "total": 497},
     "status": "live_worker_progress_event_persisted"
   },
   "pos_failure": {

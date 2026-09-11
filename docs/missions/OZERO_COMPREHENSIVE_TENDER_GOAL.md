@@ -578,3 +578,18 @@ workspace locators rather than unrelated overview candidates. The document worke
 local Qwen process were not restarted. Next: keep the active source running, validate
 its candidate persistence and downstream materialization when terminal, then proceed
 source-by-source with facility reconciliation and Tender acceptance.
+
+### Continuation checkpoint — 2026-09-11 20:25 UTC+12
+
+API/frontend release `3c64021bc720f0a0e56172945d1a3be63a0ffdd6` is now live and ready
+at migration `0047_profile_scoped_engineering_candidates`. The project page no longer
+silently drops candidate works, quantities, or materials after the first 100: it offers
+Russian local filtering and explicit incremental display while preserving candidate
+status and exact evidence links. Assistant worker `f1d9e453981f7b352856365719b15479f044c072`
+adds explicit 22-source semantic coverage and candidate-only counts to its workspace
+overview, so an incomplete corpus cannot be treated as an exhaustive inventory.
+
+The active Qwen source is still the same estimate document/job and had 102/497 accepted
+batches at this observation. There is no browser attached to this Codex session, so
+browser acceptance remains unverified; the deployed API readiness and bounded
+application/repository reads pass. Keep the single document Qwen workload uninterrupted.

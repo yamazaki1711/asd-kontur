@@ -221,3 +221,18 @@ migration `0047_profile_scoped_engineering_candidates`; readiness reports Postgr
 reachable. Assistant worker release `f42cbcd00969bd19de7aba529d53b761683a6e85` is
 live. It ensures derived work-package/matrix/discrepancy tools cite their own exact
 workspace evidence. Document worker and Qwen remained running without interruption.
+
+## 2026-09-11 20:25 UTC+12 — visibility and consultation safeguards deployed
+
+API/frontend `3c64021bc720f0a0e56172945d1a3be63a0ffdd6` is live and ready at migration
+`0047_profile_scoped_engineering_candidates`. Candidate schedules no longer silently
+stop after the first 100 rows: Russian local filtering and explicit incremental display
+make the persisted partial works, quantities, and materials inspectable with their
+source links. The change does not reconcile identities or promote candidate data.
+
+Assistant worker `f1d9e453981f7b352856365719b15479f044c072` is live. Its workspace
+overview exposes the per-source semantic-coverage state and an explicitly
+candidate-only summary; its derived work/package/matrix/discrepancy tools retain their
+own exact evidence items. This prevents an incomplete model from appearing to support
+an exhaustive factual answer. Browser acceptance is still unverified because this
+Codex session has no attached browser; no browser PASS is claimed.
