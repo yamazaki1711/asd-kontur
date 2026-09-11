@@ -660,6 +660,10 @@ class IndustrialUnderstandingRepository:
             works = self._current_rows(session, claimed, "work_type_candidates", source_ids)
             quantities = self._work_child_rows(session, claimed, "quantity_candidates", source_ids)
             materials = self._work_child_rows(session, claimed, "material_candidates", source_ids)
+            structures = self._current_structure_rows(session, claimed, source_ids)
+            structure_relationships = self._current_structure_relationship_rows(
+                session, claimed, source_ids
+            )
             defects = self._current_defects(session, claimed, source_ids)
             project_id, project_fingerprint, field_gaps, project_dimensions = (
                 self._assemble_project_definition(
@@ -701,6 +705,11 @@ class IndustrialUnderstandingRepository:
                     *[str(item["code"]) for item in normative_profile["gaps"]],
                     *package_gaps,
                     *field_gaps,
+                    *(
+                        {"STRUCTURE_CANDIDATE_RECONCILIATION_PENDING"}
+                        if structures or structure_relationships
+                        else set()
+                    ),
                 }
             )
             terminal_status = (
@@ -713,6 +722,14 @@ class IndustrialUnderstandingRepository:
                     "project": project_fingerprint,
                     "matrix": matrix_fingerprint,
                     "packages": [item["fingerprint"] for item in package_rows],
+                    "structure_candidates": [
+                        (str(item["structure_node_id"]), int(item["version"]))
+                        for item in structures
+                    ],
+                    "structure_relationship_candidates": [
+                        (str(item["relationship_candidate_id"]), int(item["version"]))
+                        for item in structure_relationships
+                    ],
                     "defects": [str(item["defect_id"]) for item in defects],
                     "gaps": gaps,
                 }
@@ -739,7 +756,14 @@ class IndustrialUnderstandingRepository:
                     "matrix": matrix_id,
                     "sources": len(source_ids),
                     "pages": page_count,
-                    "accepted": len(fields) + len(works) + len(quantities) + len(materials),
+                    "accepted": (
+                        len(fields)
+                        + len(works)
+                        + len(quantities)
+                        + len(materials)
+                        + len(structures)
+                        + len(structure_relationships)
+                    ),
                     "unresolved": unresolved_work_count,
                     "defects": len(defects),
                     "gaps": gaps,
@@ -762,6 +786,8 @@ class IndustrialUnderstandingRepository:
             "project_definition_id": str(project_id),
             "matrix_id": str(matrix_id),
             "work_package_count": len(package_rows),
+            "structure_candidate_count": len(structures),
+            "structure_relationship_candidate_count": len(structure_relationships),
             "defect_count": len(defects),
             "gaps": gaps,
             "structural_fingerprint": structural,
@@ -1454,6 +1480,72 @@ class IndustrialUnderstandingRepository:
             kind,
             [dict(row) for row in rows],
         )
+
+    @staticmethod
+    def _current_structure_rows(
+        session: Session, claimed: ClaimedJob, source_ids: list[UUID]
+    ) -> list[dict[str, Any]]:
+        rows = session.execute(
+            sa.text(
+                "WITH selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) "
+                "result.source_version_id,COALESCE(job.provenance->>'engineering_semantic_profile',"
+                "result.profile_version) AS semantic_profile FROM workspace.project_understanding_stage_results "
+                "result JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                "WHERE result.organization_id=:o AND result.workspace_id=:w "
+                "AND result.source_version_id=ANY(:sources) "
+                "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                "AND result.terminal_status='complete' ORDER BY result.source_version_id,"
+                "result.recorded_at DESC,result.stage_result_id DESC) "
+                "SELECT node.* FROM workspace.project_structure_node_versions node JOIN "
+                "workspace.source_locators locator ON locator.organization_id=node.organization_id "
+                "AND locator.workspace_id=node.workspace_id AND locator.source_locator_id=node.source_locator_id "
+                "JOIN selected_profiles selected ON selected.source_version_id=locator.source_version_id "
+                "WHERE node.organization_id=:o AND node.workspace_id=:w AND "
+                "node.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE :default_profile END "
+                "ORDER BY node.structure_node_id,node.version"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "sources": source_ids,
+                "default_profile": PROJECT_EXTRACTION_PROFILE_VERSION,
+            },
+        ).mappings()
+        return [dict(row) for row in rows]
+
+    @staticmethod
+    def _current_structure_relationship_rows(
+        session: Session, claimed: ClaimedJob, source_ids: list[UUID]
+    ) -> list[dict[str, Any]]:
+        rows = session.execute(
+            sa.text(
+                "WITH selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) "
+                "result.source_version_id,COALESCE(job.provenance->>'engineering_semantic_profile',"
+                "result.profile_version) AS semantic_profile FROM workspace.project_understanding_stage_results "
+                "result JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                "WHERE result.organization_id=:o AND result.workspace_id=:w "
+                "AND result.source_version_id=ANY(:sources) "
+                "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                "AND result.terminal_status='complete' ORDER BY result.source_version_id,"
+                "result.recorded_at DESC,result.stage_result_id DESC) "
+                "SELECT relationship.* FROM workspace.project_structure_relationship_candidates relationship "
+                "JOIN selected_profiles selected ON selected.source_version_id=relationship.source_version_id "
+                "WHERE relationship.organization_id=:o AND relationship.workspace_id=:w AND "
+                "relationship.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE :default_profile END "
+                "ORDER BY relationship.relationship_candidate_id,relationship.version"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "sources": source_ids,
+                "default_profile": PROJECT_EXTRACTION_PROFILE_VERSION,
+            },
+        ).mappings()
+        return [dict(row) for row in rows]
 
     @staticmethod
     def _apply_reviews(
