@@ -3622,6 +3622,7 @@ function ProjectUnderstandingPage() {
                       const expected = Number(
                         item.expected_fragment_count ?? 0,
                       );
+                      const failed = Number(item.failed_fragment_count ?? 0);
                       const profile = displayValue(
                         item.profile_version,
                         "профиль",
@@ -3633,7 +3634,11 @@ function ProjectUnderstandingPage() {
                       const pages = Number(item.page_count ?? 0);
                       const pageLabel =
                         pages > 0 ? `, ${pages.toString()} стр.` : "";
-                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов (${profile})`;
+                      const failedLabel =
+                        failed > 0
+                          ? `, не принято ${failed.toString()} фрагм.`
+                          : "";
+                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${failedLabel} (${profile})`;
                     })
                     .join("; ")}
                   . Это покрытие извлечения-кандидата, а не подтверждённые
