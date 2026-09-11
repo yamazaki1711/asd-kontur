@@ -45,7 +45,7 @@ def test_workspace_context_uses_production_ntd_path_when_endpoint_configured(
     monkeypatch.setattr(
         query,
         "_workspace_context",
-        lambda organization, workspace, mode, question: {
+        lambda organization, workspace, mode, question, *, owner_identity_id=None: {
             "workspace_id": str(workspace),
             "name": "Изолированный ОКС",
             "project_definition": {"purpose": "test"},
