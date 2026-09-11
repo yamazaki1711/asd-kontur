@@ -1129,6 +1129,22 @@
             "title": "Job Kind",
             "type": "string"
           },
+          "lease_expired": {
+            "title": "Lease Expired",
+            "type": "boolean"
+          },
+          "lease_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Expires At"
+          },
           "max_attempts": {
             "title": "Max Attempts",
             "type": "integer"
@@ -1248,6 +1264,8 @@
           "started_at",
           "heartbeat_at",
           "completed_at",
+          "lease_expires_at",
+          "lease_expired",
           "progress_current",
           "progress_total",
           "progress_message_code",

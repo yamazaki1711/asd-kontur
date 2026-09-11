@@ -625,6 +625,7 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
                 )
             failed_job = uuid4()
             replacement_job = uuid4()
+            stale_lease_job = uuid4()
             shared = {"synthetic": "retry-lineage"}
             for job_id, state, provenance in (
                 (failed_job, "queued", {"contract": "synthetic"}),
@@ -639,10 +640,13 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
                         "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
                         "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
                         "max_attempts,retry_policy_version,provenance,correlation_id,"
-                        "created_by_identity_id,started_at) VALUES (:organization,:workspace,:job,"
+                        "created_by_identity_id,started_at,lease_expires_at) VALUES "
+                        "(:organization,:workspace,:job,"
                         "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
                         ":state,99,3,'synthetic',CAST(:provenance AS jsonb),:correlation,:owner,"
-                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP ELSE NULL END)"
+                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP ELSE NULL END,"
+                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP + interval '10 minutes' "
+                        "ELSE NULL END)"
                     ),
                     {
                         "organization": organization_id,
@@ -657,6 +661,30 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
                         "owner": owner,
                     },
                 )
+            stale_manifest = {"synthetic": "expired-lease"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,"
+                    "created_by_identity_id,started_at,lease_expires_at) VALUES "
+                    "(:organization,:workspace,:job,'PROJECT_DEFINITION_EXTRACTION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'running',98,3,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner,CURRENT_TIMESTAMP,"
+                    "CURRENT_TIMESTAMP - interval '1 minute')"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": stale_lease_job,
+                    "manifest": json.dumps(stale_manifest),
+                    "digest": semantic_digest(stale_manifest),
+                    "key": f"synthetic-expired-{stale_lease_job}",
+                    "provenance": json.dumps({"contract": "synthetic"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
             connection.execute(
                 sa.text(
                     "INSERT INTO workspace.job_progress_events "
@@ -693,6 +721,10 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
         assert replacement["progress_current"] == 7
         assert replacement["progress_total"] == 10
         assert replacement["progress_message_code"] == "engineering_semantic_batch_accepted"
+        assert replacement["lease_expired"] is False
+        stale = next(item for item in jobs if item["job_id"] == str(stale_lease_job))
+        assert stale["state"] == "running"
+        assert stale["lease_expired"] is True
 
 
 def test_start_project_understanding_queues_native_semantic_recovery_once(

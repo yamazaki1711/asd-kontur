@@ -1313,6 +1313,10 @@ export interface components {
             job_id: string;
             /** Job Kind */
             job_kind: string;
+            /** Lease Expired */
+            lease_expired: boolean;
+            /** Lease Expires At */
+            lease_expires_at: string | null;
             /** Max Attempts */
             max_attempts: number;
             /**

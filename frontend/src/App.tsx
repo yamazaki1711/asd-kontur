@@ -1965,13 +1965,16 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
               <td>
                 <StatusPill
                   tone={
+                    job.lease_expired ||
                     job.state === "failed" ||
                     job.state === "reconciliation_required"
                       ? "danger"
                       : "default"
                   }
                 >
-                  {humanizeStatus(job.state)}
+                  {job.lease_expired
+                    ? "Исполнитель недоступен; восстановление ожидается"
+                    : humanizeStatus(job.state)}
                 </StatusPill>
               </td>
               <td>

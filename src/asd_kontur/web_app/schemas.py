@@ -133,6 +133,8 @@ class JobView(ApiModel):
     started_at: datetime | None
     heartbeat_at: datetime | None
     completed_at: datetime | None
+    lease_expires_at: datetime | None
+    lease_expired: bool
     progress_current: int | None
     progress_total: int | None
     progress_message_code: str | None

@@ -1901,9 +1901,13 @@ class SpinePostgresRepository:
             if effective_only:
                 rows = session.execute(
                     sa.text(
-                        "WITH ranked AS (SELECT j.*,row_number() OVER (PARTITION BY j.job_kind,"
-                        "j.input_digest ORDER BY CASE WHEN j.state IN ('running','leased') THEN 0 "
-                        "WHEN j.state IN ('queued','paused') THEN 1 ELSE 2 END,j.created_at DESC,"
+                        "WITH ranked AS (SELECT j.*,CASE WHEN j.state IN ('running','leased') "
+                        "AND j.lease_expires_at < CURRENT_TIMESTAMP THEN true ELSE false END AS "
+                        "lease_expired,row_number() OVER (PARTITION BY j.job_kind,"
+                        "j.input_digest ORDER BY CASE WHEN j.state IN ('running','leased') "
+                        "AND j.lease_expires_at >= CURRENT_TIMESTAMP THEN 0 WHEN j.state IN "
+                        "('queued','paused') THEN 1 WHEN j.state IN ('running','leased') THEN 2 "
+                        "ELSE 3 END,j.created_at DESC,"
                         "j.job_id DESC) AS effective_rank FROM workspace.durable_jobs j WHERE "
                         "j.organization_id=:organization AND j.workspace_id=:workspace) SELECT ranked.*,"
                         "progress.progress_current,progress.progress_total,progress.safe_message_code AS "
@@ -1912,9 +1916,9 @@ class SpinePostgresRepository:
                         "FROM workspace.job_progress_events event WHERE event.organization_id=ranked.organization_id "
                         "AND event.workspace_id=ranked.workspace_id AND event.job_id=ranked.job_id "
                         "ORDER BY event.event_sequence DESC LIMIT 1) progress ON true WHERE effective_rank=1 "
-                        "ORDER BY CASE WHEN state IN "
-                        "('running','leased') THEN 0 WHEN state IN ('queued','paused') THEN 1 "
-                        "ELSE 2 END,created_at DESC,job_id DESC LIMIT :limit"
+                        "ORDER BY CASE WHEN state IN ('running','leased') AND NOT lease_expired "
+                        "THEN 0 WHEN state IN ('queued','paused') THEN 1 WHEN state IN "
+                        "('running','leased') THEN 2 ELSE 3 END,created_at DESC,job_id DESC LIMIT :limit"
                     ),
                     {
                         "organization": organization_id,
@@ -1925,7 +1929,9 @@ class SpinePostgresRepository:
             else:
                 rows = session.execute(
                     sa.text(
-                        "SELECT j.*,progress.progress_current,progress.progress_total,"
+                        "SELECT j.*,CASE WHEN j.state IN ('running','leased') AND "
+                        "j.lease_expires_at < CURRENT_TIMESTAMP THEN true ELSE false END AS "
+                        "lease_expired,progress.progress_current,progress.progress_total,"
                         "progress.safe_message_code AS progress_message_code,progress.recorded_at "
                         "AS progress_recorded_at FROM workspace.durable_jobs j LEFT JOIN LATERAL "
                         "(SELECT progress_current,progress_total,safe_message_code,recorded_at FROM "
@@ -4297,6 +4303,8 @@ def _job_summary(row: Any) -> JobSummary:
         row.started_at,
         row.heartbeat_at,
         row.completed_at,
+        row.lease_expires_at,
+        bool(getattr(row, "lease_expired", False)),
         int(row.progress_current) if getattr(row, "progress_current", None) is not None else None,
         int(row.progress_total) if getattr(row, "progress_total", None) is not None else None,
         (
