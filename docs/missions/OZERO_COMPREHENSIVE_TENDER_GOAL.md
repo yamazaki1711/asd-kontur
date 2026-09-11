@@ -546,3 +546,35 @@ that the POS successor reuses its accepted batches, persists candidates under v1
 recovers the dependent model path, and appears correctly in the deployed API before
 scheduling the remaining corpus. Full 22-document coverage, facility dossiers, NTD
 checks, Tender findings, pit inventory, and consultant acceptance are all still open.
+
+### Continuation checkpoint — 2026-09-11 20:19 UTC+12
+
+POS is now terminal and its version-aware dependent stages completed. Its v15 semantic
+coverage is 5,252/5,252 accepted source fragments, with five immutable failed-parent
+attempts covering 60 inputs whose accepted bounded children supply the coverage. The
+source persisted 299 field, 478 work, 94 quantity, 45 material, 494 structural, and
+148 relationship **candidates**. Those records remain evidence-bound candidates, not
+reconciled facilities, project facts, or a pit inventory.
+
+The workspace view remains partial across 22 active sources/2,529 pages: 6 sources
+complete, 2 partial, and 14 not started. Its selected compatible candidate collections
+currently contain 639 fields, 980 works, 246 quantities, 124 materials, 864 structural
+nodes, and 169 raw relationship observations. Materialization gaps and unqualified
+normative inputs remain visible; no Tender or consultant acceptance is claimed.
+
+The sole live Qwen document workload is source `01a088ac-7f97-761a-b857-f5d3b4c5be8b`
+(`Раздел ПД №12.3 005.2-2025-СМ3. Изм.3.pdf`), durable job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096`. It had 72/497 accepted batches at the
+observation. An older job held by dead worker `document-worker:69134` has an expired
+lease and no semantic progress; it remains immutable historical state and will be
+recovered only through the supported claim protocol.
+
+Release `bb7c86743e8324fa5b7c808bca7fd7ce29d08945` is live for API/frontend at
+migration `0047_profile_scoped_engineering_candidates`. It marks expired leases in the
+effective processing view instead of presenting them as active. Assistant worker
+release `f42cbcd00969bd19de7aba529d53b761683a6e85` is live and makes structured
+work-package, matrix, discrepancy, and information-gap tools cite their own exact
+workspace locators rather than unrelated overview candidates. The document worker and
+local Qwen process were not restarted. Next: keep the active source running, validate
+its candidate persistence and downstream materialization when terminal, then proceed
+source-by-source with facility reconciliation and Tender acceptance.

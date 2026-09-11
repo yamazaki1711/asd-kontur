@@ -191,3 +191,33 @@ silently suppress recovery. Activation waits for the current POS worker job to b
 accepted batches and lease are preserved. The next executable action is to verify that
 terminal receipt, apply the additive migration through the existing recoverable release
 procedure, and schedule the profile-aware persistence successor exactly once.
+
+## 2026-09-11 20:19 UTC+12 — current OZERO delivery state
+
+POS (`Раздел ПД №7 005.2-2025-ПОС_изм.8.pdf`, source version
+`01a088ac-81c2-7033-8f75-8160ffeb2cb2`) has completed its v15 source denominator:
+5,252/5,252 accepted semantic fragment inputs. Five immutable failed-parent attempts
+cover 60 inputs; accepted bounded children provide the covered evidence. Its downstream
+candidate and materialization stages completed and persisted 299 field, 478 work, 94
+quantity, 45 material, 494 structural, and 148 relationship candidates. They are not
+confirmed project facts, reconciled LOS/KNS dossiers, or a project-wide pit count.
+
+The live candidate-only workspace view is still partial: 22 active sources / 2,529
+pages, with 6 semantic-complete sources, 2 partial sources, and 14 not started. The
+selected compatible collections contain 639 fields, 980 works, 246 quantities, 124
+materials, 864 structure candidates, and 169 relationship observations. Full-package
+coverage, cross-document reconciliation, normative evaluation, Tender findings,
+browser source-link acceptance, and consultant acceptance remain open.
+
+The only active Qwen document workload is job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` for
+`Раздел ПД №12.3 005.2-2025-СМ3. Изм.3.pdf`: 72/497 accepted batches at this snapshot.
+It is progressing through one supervised worker and the local Qwen runtime. An older
+dead-worker lease is now explicitly surfaced as expired rather than falsely displayed
+as active.
+
+API/frontend release `bb7c86743e8324fa5b7c808bca7fd7ce29d08945` is live at database
+migration `0047_profile_scoped_engineering_candidates`; readiness reports PostgreSQL
+reachable. Assistant worker release `f42cbcd00969bd19de7aba529d53b761683a6e85` is
+live. It ensures derived work-package/matrix/discrepancy tools cite their own exact
+workspace evidence. Document worker and Qwen remained running without interruption.

@@ -1,22 +1,22 @@
 {
-  "recorded_at": "2026-09-11T19:51:00+12:00",
+  "recorded_at": "2026-09-11T20:19:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
-    "frontend_static_artifact": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
+    "api": "bb7c86743e8324fa5b7c808bca7fd7ce29d08945",
+    "frontend_static_artifact": "bb7c86743e8324fa5b7c808bca7fd7ce29d08945",
     "document_worker": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
-    "assistant_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "assistant_worker": "f42cbcd00969bd19de7aba529d53b761683a6e85",
     "database_migration": "0047_profile_scoped_engineering_candidates"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_completed_sources": 4,
-    "semantic_partial_sources": 1,
-    "semantic_not_started_sources": 17,
-    "semantic_active_source": "01a088ac-7f59-7a03-b342-fd7187e8d472",
+    "semantic_completed_sources": 6,
+    "semantic_partial_sources": 2,
+    "semantic_not_started_sources": 14,
+    "semantic_active_source": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
     "semantic_active_source_expected_fragment_inputs": 497,
-    "semantic_active_source_accepted_fragment_inputs": 2,
+    "semantic_active_source_accepted_fragment_inputs": 72,
     "semantic_active_source_failed_fragment_inputs": 0,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
@@ -43,12 +43,13 @@
     }
   },
   "workspace_candidates": {
-    "project_fields": 231,
-    "works": 486,
-    "quantities": 142,
-    "materials": 68,
-    "structures": 274,
-    "excavation_pit_candidates": 5
+    "project_fields": 639,
+    "works": 980,
+    "quantities": 246,
+    "materials": 124,
+    "structures": 864,
+    "relationship_candidates": 169,
+    "excavation_pit_candidates": null
   },
   "materialization": {
     "state": "partial",
@@ -67,7 +68,7 @@
     "frontend_static_artifact_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "document_worker_commit": "22142e2c2737d97e8bfbdfce22d7e7ef211b2f40",
     "real_semantic_progress_event_observed": true,
-    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 2, "total": 497},
+    "observed_progress": {"job_id": "01a08f4e-3b5b-7851-9f3d-fcaf3e84c096", "current": 72, "total": 497},
     "status": "live_worker_progress_event_persisted"
   },
   "pos_failure": {
