@@ -749,3 +749,27 @@ source's candidate persistence, then observe the incremental reconciliation and 
 role-prioritized next source through the actual API. Full package coverage, facility
 identity reconciliation, project-specific NTD findings, Tender outputs, and consultant
 acceptance remain open.
+### Continuation checkpoint — 2026-09-11 22:29 UTC+12
+
+The active Qwen v15 source remains `01a088ac-7f97-761a-b857-f5d3b4c5be8b`
+(`Раздел ПД №12.3 005.2-2025-СМ3. Изм.3.pdf`), job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096`. It is held by
+`document-worker:74713` with a fresh lease and has progressed to 393/497 base
+batches. The local loopback Qwen3.8-27B process is the only model workload and
+the worker has a live connection to it. At this observation, the immutable batch
+ledger contains 420 accepted outputs and 36 failed parent receipts; parent failures
+are not a coverage count because accepted bounded descendants may recover them.
+
+Do not interrupt this source. A Codex-authored, un-deployed scheduler correction is
+prepared in isolated commit `a98bbc3`: migration 0048 makes the durable claim function
+choose an explicit incremental project-reconciliation job before unrelated semantic
+inference. This covers already-persisted priority-165 incremental jobs as well as
+future priority-175 jobs, without modifying job lineage or using a direct database
+priority update. Ruff format/check and strict mypy pass; the focused PostgreSQL test is
+environment-skipped and must be exercised against the controlled release database
+before it is accepted. At source terminal: inspect its stage result and candidates,
+then integrate, migrate, and restart only the document worker through the controlled
+release procedure; verify the reconciliation is claimed before any next Qwen source.
+
+No facility inventory, excavation-pit total, NTD project finding, Tender acceptance, or
+consultant acceptance is established by this checkpoint.
