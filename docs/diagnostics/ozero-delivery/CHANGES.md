@@ -42,3 +42,10 @@ consultant/browser workflows.
   scoped OZERO application-repository read: 22 documents, 1 complete, 2 partial, and
   19 not started. The previous surface only listed already accepted sources and could
   understate incomplete package coverage.
+- `742357b` prevents profile v14 from reusing earlier engineering manifests: those
+  manifests never requested relationship observations and therefore cannot establish a
+  valid empty v14 relation set. Existing candidates remain preserved; relationship
+  coverage needs a separately versioned local-Qwen pass.
+- `a36ee21` adds source-scoped endpoint resolution to the relationship API response.
+  It resolves an endpoint only where the same evidence locator has exactly one matching
+  structure candidate; cross-document or same-name ambiguity remains explicit.

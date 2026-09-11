@@ -265,3 +265,24 @@ verified the current denominator as 22 documents: 1 complete, 2 partial and 19 n
 started. The new release must wait until the active v13 source is terminal; then apply
 the additive migration through the controlled release path and qualify one v14 document
 worker batch before broader v14 scheduling.
+
+### Continuation checkpoint — 2026-09-11 16:48 UTC+12
+
+KR1 v13 completed at 16:44 UTC+12 with 2,960 accepted inputs and one retained
+12-input failed child receipt. Its candidate evidence reached the partial live model:
+231 project fields, 486 works, 142 quantities, 68 materials and 274 structural
+candidates across the workspace. These are candidates; no facility or pit inventory is
+established from them. Its `WORK_QUANTITY_MATERIAL_EXTRACTION` successor is queued at
+priority 87 while KR2 uses the single Qwen slot.
+
+KR2 successor `01a08ec5-b223-7f78-8c1c-893ca2bb8eff` is the only active Qwen job. It
+has a 21-page source and 600 accepted v13 fragment inputs at this checkpoint. Do not
+restart or duplicate it.
+
+Commit `742357b` corrects a v14 contract error before deployment: pre-v14 accepted
+batches are not compatible with a relationship-required profile, because they never
+asked Qwen to inspect relationships. They remain immutable candidate evidence but cannot
+prove an empty v14 relationship set. Commit `a36ee21` resolves a relationship endpoint
+only when exactly one structure candidate with that normalized name exists at the same
+evidence locator; all cross-document identities remain unresolved. The prepared v14
+release must use the latest source commit, not the older e4b2083 worktree.
