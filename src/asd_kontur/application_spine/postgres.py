@@ -1346,6 +1346,130 @@ class SpinePostgresRepository:
             )
         return receipt_id
 
+    def schedule_incremental_project_reconciliation(self, claimed: ClaimedJob) -> UUID | None:
+        """Queue one idempotent partial-model refresh after a source semantic pass.
+
+        The reconciliation reads only profile-selected completed stage results, so a
+        refresh may safely materialize candidate-only partial results while other
+        source passes remain queued.  Its priority deliberately sits below
+        structural/document source extraction (170) and above lower evidence tiers,
+        preventing either a stale UI or permanent starvation of the corpus.
+        """
+
+        if claimed.job_kind is not JobKind.PROJECT_DEFINITION_EXTRACTION:
+            return None
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            source = (
+                session.execute(
+                    sa.text(
+                        "SELECT subject_document_id,input_manifest,input_digest,provenance,correlation_id,"
+                        "created_by_identity_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job "
+                        "AND state='succeeded' FOR UPDATE"
+                    ),
+                    {
+                        "organization": claimed.organization_id,
+                        "workspace": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if source is None:
+                return None
+            provenance = dict(source["provenance"])
+            semantic_profile = provenance.get("engineering_semantic_profile")
+            if not isinstance(semantic_profile, str) or not semantic_profile:
+                return None
+            stage_complete = session.scalar(
+                sa.text(
+                    "SELECT EXISTS (SELECT 1 FROM workspace.project_understanding_stage_results "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_id=:job AND stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "AND terminal_status='complete')"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "job": claimed.job_id,
+                },
+            )
+            if not stage_complete:
+                return None
+            source_manifest = dict(source["input_manifest"])
+            manifest = {
+                "document_id": str(source_manifest["document_id"]),
+                "document_version": int(source_manifest["document_version"]),
+                "source_version_id": str(source_manifest["source_version_id"]),
+                "object_key": str(source_manifest["object_key"]),
+                "media_type": str(source_manifest["media_type"]),
+                "content_digest": str(source_manifest["content_digest"]),
+                "incremental_source_job_id": str(claimed.job_id),
+                "incremental_source_input_digest": str(source["input_digest"]),
+                "engineering_semantic_profile": semantic_profile,
+            }
+            input_digest = semantic_digest(manifest)
+            idempotency_key = f"project-understanding-incremental:{claimed.job_id}:{input_digest}"
+            existing = session.scalar(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_kind='PROJECT_UNDERSTANDING_RECONCILIATION' "
+                    "AND idempotency_key=:key"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "key": idempotency_key,
+                },
+            )
+            if existing is not None:
+                return UUID(str(existing))
+            reconciliation_job_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,causation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_UNDERSTANDING_RECONCILIATION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',165,3,'spine-retry-v0.1',"
+                    "CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "job": reconciliation_job_id,
+                    "document": source["subject_document_id"],
+                    "manifest": _json(manifest),
+                    "digest": input_digest,
+                    "key": idempotency_key,
+                    "provenance": _json(
+                        {
+                            "contract": "project-understanding.incremental-reconciliation@1.0.0",
+                            "source_semantic_job_id": str(claimed.job_id),
+                            "engineering_semantic_profile": semantic_profile,
+                        }
+                    ),
+                    "correlation": source["correlation_id"],
+                    "causation": claimed.job_id,
+                    "owner": source["created_by_identity_id"],
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_id=reconciliation_job_id,
+                event_type="job.queued",
+                safe_message_code="project_model_incremental_refresh_queued",
+                current=0,
+                total=1,
+                terminal=False,
+            )
+        return reconciliation_job_id
+
     def retry_job(
         self, claimed: ClaimedJob, *, worker_identity: str, failure_code: str, delay_seconds: int
     ) -> bool:

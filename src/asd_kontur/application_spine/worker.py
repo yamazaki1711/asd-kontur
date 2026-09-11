@@ -264,6 +264,11 @@ class DocumentWorker:
             keepalive.stop()
         outcome = self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
         self._repository.recover_dependents_from_success(claimed)
+        if claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION:
+            # A workspace-wide reconciliation is a materialized view.  Refresh it
+            # after a durable source result becomes effective instead of leaving
+            # partial, useful evidence invisible until the complete corpus drains.
+            self._repository.schedule_incremental_project_reconciliation(claimed)
         return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
