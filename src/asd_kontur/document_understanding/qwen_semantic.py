@@ -36,8 +36,11 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v4"
-_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v3"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v5"
+_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v4",
+    "qwen-engineering-extraction-v3",
+)
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
@@ -84,7 +87,7 @@ class QwenEngineeringBatch:
         return tuple(item.locator.source_locator_id for item in self.fragments)
 
     @property
-    def input_manifest(self) -> list[dict[str, object]]:
+    def input_manifest(self) -> dict[str, object]:
         values: list[dict[str, object]] = []
         for item in self.fragments:
             value: dict[str, object] = {
@@ -97,7 +100,13 @@ class QwenEngineeringBatch:
             if self.prompt_strategy != "standard":
                 value["prompt_strategy"] = self.prompt_strategy
             values.append(value)
-        return values
+        manifest: dict[str, object] = {
+            "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            "fragments": values,
+        }
+        if self.prompt_strategy != "standard":
+            manifest["prompt_strategy"] = self.prompt_strategy
+        return manifest
 
 
 class QwenDocumentSemanticAdapter:
@@ -376,9 +385,12 @@ class QwenDocumentSemanticAdapter:
         }
         persisted = accepted.get(batch.digest)
         if persisted is None and batch.prompt_strategy == "standard":
-            persisted = compatible_accepted_batches.get(
-                _compatible_v3_batch_digest(batch.fragments)
-            )
+            for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
+                persisted = compatible_accepted_batches.get(
+                    _compatible_batch_digest(batch.fragments, profile_version)
+                )
+                if persisted is not None:
+                    break
         if persisted is not None:
             return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
         try:
@@ -558,10 +570,10 @@ def _engineering_batch_payload(fragments: tuple[_SemanticFragment, ...]) -> list
     ]
 
 
-def _compatible_v3_batch_digest(fragments: tuple[_SemanticFragment, ...]) -> str:
+def _compatible_batch_digest(fragments: tuple[_SemanticFragment, ...], profile_version: str) -> str:
     return semantic_digest(
         {
-            "profile_version": _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE,
+            "profile_version": profile_version,
             "fragments": _engineering_batch_payload(fragments),
         }
     )

@@ -40,7 +40,7 @@ from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRe
 from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
-    _compatible_v3_batch_digest,
+    _compatible_batch_digest,
     _engineering_batches,
     _fragments,
 )
@@ -743,7 +743,21 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert result == StructuredCandidates((), (), (), (), (), ())
     batch, _manifest = accepted[0]
     assert batch.prompt_strategy == "single_fragment_repair-v1"
-    assert batch.input_manifest[0]["prompt_strategy"] == "single_fragment_repair-v1"
+    assert batch.input_manifest["prompt_strategy"] == "single_fragment_repair-v1"
+    assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v1"
+
+
+def test_qwen_engineering_batch_v5_manifest_preserves_fragment_coverage() -> None:
+    document = _extract_csv("строка 1;строка 2\n")
+    batch = _engineering_batches(document.pages[0].elements)[0]
+
+    manifest = batch.input_manifest
+
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v5"
+    assert isinstance(manifest["fragments"], list)
+    assert {item["fragment_id"] for item in manifest["fragments"]} == {
+        item.fragment_id for item in batch.fragments
+    }
 
 
 def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> None:
@@ -786,7 +800,7 @@ def test_qwen_engineering_extraction_reuses_compatible_v3_batch_manifest() -> No
     fragment_id = str(batch.fragments[0].fragment_id)
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     compatible = {
-        _compatible_v3_batch_digest(batch.fragments): {
+        _compatible_batch_digest(batch.fragments, "qwen-engineering-extraction-v3"): {
             "fields": [["project_purpose", "Объект", fragment_id]],
             "structures": [],
             "works": [],
@@ -830,8 +844,9 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
-                "qwen-engineering-extraction-v3",
+                "qwen-engineering-extraction-v5",
                 "qwen-engineering-extraction-v4",
+                "qwen-engineering-extraction-v3",
             }
             return {}
 

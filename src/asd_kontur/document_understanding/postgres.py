@@ -140,7 +140,7 @@ class IndustrialUnderstandingRepository:
         batch_ordinal: int,
         batch_digest: str,
         source_locator_ids: tuple[UUID, ...],
-        input_manifest: list[dict[str, object]],
+        input_manifest: dict[str, object],
         output_manifest: dict[str, object],
     ) -> None:
         with self._session(claimed) as session:

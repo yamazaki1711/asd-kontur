@@ -30,7 +30,7 @@ from .ocr import (
 )
 from .postgres import IndustrialUnderstandingRepository
 from .qwen_semantic import (
-    _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE,
+    _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES,
     QWEN_ENGINEERING_EXTRACTION_PROFILE,
     QwenDocumentSemanticAdapter,
     QwenEngineeringBatch,
@@ -279,9 +279,13 @@ class IndustrialDocumentUnderstandingPipeline:
                 accepted_batches = self._repository.load_accepted_engineering_batches(
                     claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
                 )
-                compatible_accepted_batches = self._repository.load_accepted_engineering_batches(
-                    claimed, profile_version=_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILE
-                )
+                compatible_accepted_batches: dict[str, dict[str, object]] = {}
+                for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
+                    compatible_accepted_batches.update(
+                        self._repository.load_accepted_engineering_batches(
+                            claimed, profile_version=profile_version
+                        )
+                    )
                 semantic = self._qwen_semantic.extract_engineering(
                     self._repository.load_elements(claimed),
                     accepted_batches=accepted_batches,
