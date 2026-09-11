@@ -73,3 +73,26 @@ table permission check. No migration, service reload, or source mutation was mad
 The next active work is locating the already-authorized full-backup/migration path;
 then deploy exact `ce9cd3b` with additive migration 0046 and retry only the POS
 failure lineage.
+
+## 2026-09-11 18:23 UTC+12 — profile-isolation release prepared
+
+The active POS v15 semantic job remains `running` under the existing pinned worker;
+at this observation it had 308 accepted durable batch receipts (3,672 fragment inputs)
+and two immutable failed parent receipts whose recovery children are accepted. It has
+not yet reached candidate persistence, project materialization, or Tender acceptance.
+
+Commit `b0b80a8275519e569b0faf38ffa1f6e50a359a24` is pushed but **not deployed**.
+It adds additive migration `0047_profile_scoped_engineering_candidates` and keeps
+Qwen engineering observations, structural nodes, relationships, and extraction defects
+scoped to the exact semantic profile that produced them. The active project view and
+reconciliation will select only the completed profile for each active source; legacy
+generic candidates remain immutable historical evidence rather than being mixed into a
+newer Qwen pass. A profile-aware successor can reuse compatible accepted v15 manifests
+to persist the corrected candidate identities without rerunning OCR or duplicating Qwen
+inference.
+
+Focused unit, PostgreSQL integration, format, lint, and strict type checks passed for
+this release. Activation waits for the current POS worker job to become terminal so its
+accepted batches and lease are preserved. The next executable action is to verify that
+terminal receipt, apply the additive migration through the existing recoverable release
+procedure, and schedule the profile-aware persistence successor exactly once.
