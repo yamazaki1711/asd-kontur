@@ -461,6 +461,135 @@ class QwenDocumentSemanticAdapter:
             tuple(structure_relationships),
         )
 
+    def accepted_batch_candidates(
+        self, batch: QwenEngineeringBatch, manifest: Mapping[str, object]
+    ) -> StructuredCandidates:
+        """Materialize only source-backed observations from one accepted batch.
+
+        This is deliberately a partial view.  Quantities and materials can refer
+        to a work emitted in another batch, so they remain in the immutable batch
+        receipt until the complete-source pass reconciles their work reference.
+        Fields, structures, relationships, and work observations have exact local
+        evidence and deterministic identifiers and can safely be made visible
+        while Qwen continues with the remaining batches.
+        """
+        allowed = _engineering_allowed_fragments(batch.fragments)
+        parsed = _parse_engineering_manifest(dict(manifest), allowed)
+        fields: list[ProjectFieldCandidate] = []
+        structures: list[StructureNodeCandidate] = []
+        relationships: list[StructureRelationshipCandidate] = []
+        works: list[WorkTypeCandidate] = []
+        seen_works: set[tuple[str, str]] = set()
+        for key, raw, locator_id in parsed["fields"]:
+            locator = allowed[locator_id].locator
+            fields.append(
+                ProjectFieldCandidate(
+                    deterministic_uuid(
+                        f"qwen-field:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                        f"{locator.source_version_id}:{locator_id}:{key}:{raw}"
+                    ),
+                    key,
+                    raw,
+                    raw,
+                    "text",
+                    locator,
+                    QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                    ("qwen_semantic_candidate", "partial_source_batch"),
+                    extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                )
+            )
+        for kind, name, locator_id in parsed["structures"]:
+            locator = allowed[locator_id].locator
+            normalized = " ".join(name.casefold().split())
+            structures.append(
+                StructureNodeCandidate(
+                    deterministic_uuid(
+                        f"qwen-structure:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                        f"{locator.source_version_id}:{locator_id}:{kind}:{normalized}"
+                    ),
+                    kind,
+                    name,
+                    normalized,
+                    locator,
+                    extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                )
+            )
+        for kind, subject_name, object_name, locator_id in parsed["structure_relationships"]:
+            locator = allowed[locator_id].locator
+            subject = " ".join(subject_name.casefold().split())
+            object_ = " ".join(object_name.casefold().split())
+            relationships.append(
+                StructureRelationshipCandidate(
+                    deterministic_uuid(
+                        "qwen-structure-relationship:"
+                        f"{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                        f"{locator.source_version_id}:{locator_id}:{kind}:{subject}:{object_}"
+                    ),
+                    kind,
+                    subject_name,
+                    subject,
+                    object_name,
+                    object_,
+                    locator,
+                    extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                )
+            )
+        for name, locator_id in parsed["works"]:
+            locator = allowed[locator_id].locator
+            normalized = " ".join(name.casefold().split())
+            identity = (locator_id, normalized)
+            if identity in seen_works:
+                continue
+            seen_works.add(identity)
+            works.append(
+                WorkTypeCandidate(
+                    deterministic_uuid(
+                        f"qwen-work:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                        f"{locator.source_version_id}:{locator_id}:{normalized}"
+                    ),
+                    name,
+                    normalized,
+                    f"page:{locator.page_number}",
+                    locator,
+                    DocumentRole.PROJECT_DOCUMENTATION,
+                    MappingStatus.UNRESOLVED,
+                    extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                )
+            )
+        return StructuredCandidates(
+            tuple(fields),
+            tuple(works),
+            (),
+            (),
+            (),
+            (),
+            tuple(structures),
+            tuple(relationships),
+        )
+
+    def accepted_source_batch_candidates(
+        self,
+        elements: Iterable[LayoutElement],
+        *,
+        accepted_batches: Mapping[str, dict[str, object]],
+        batching_policy_version: str | None = None,
+    ) -> tuple[StructuredCandidates, ...]:
+        """Recover publishable candidates from already accepted exact manifests.
+
+        No Qwen call is made.  The batch digest is regenerated from the current
+        elements and the persisted policy, so a changed source or batching
+        contract cannot accidentally materialize an unrelated receipt.
+        """
+        batches = _engineering_batches(
+            elements,
+            batching_policy_version=(None if accepted_batches else batching_policy_version),
+        )
+        return tuple(
+            self.accepted_batch_candidates(batch, manifest)
+            for batch in batches
+            if (manifest := accepted_batches.get(batch.digest)) is not None
+        )
+
     def _extract_engineering_batch(
         self,
         batch: QwenEngineeringBatch,

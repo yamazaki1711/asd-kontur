@@ -745,6 +745,66 @@ def test_qwen_engineering_batches_reject_unknown_batching_policy() -> None:
         _engineering_batches(document.pages[0].elements, batching_policy_version="unknown")
 
 
+def test_qwen_engineering_accepted_batch_materializes_only_local_candidates() -> None:
+    document = _extract_csv("КНС-1;Устройство котлована\n")
+    batch = _engineering_batches(document.pages[0].elements)[0]
+    first = str(batch.fragments[0].fragment_id)
+    second = str(batch.fragments[1].fragment_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    result = adapter.accepted_batch_candidates(
+        batch,
+        {
+            "fields": [["project_purpose", "КНС", first]],
+            "structures": [["facility", "КНС-1", first]],
+            "structure_relationships": [["contains", "КНС-1", "котлован", first]],
+            "works": [["Устройство котлована", second]],
+            "quantities": [["Устройство котлована", "12", "м3", second, second]],
+            "materials": [],
+        },
+    )
+
+    assert len(result.project_fields) == 1
+    assert "partial_source_batch" in result.project_fields[0].uncertainty_codes
+    assert len(result.structures) == 1
+    assert len(result.structure_relationships) == 1
+    assert len(result.works) == 1
+    assert not result.quantities
+    assert not result.materials
+
+
+def test_qwen_engineering_recovers_partial_candidates_only_from_exact_batch_manifest() -> None:
+    document = _extract_csv("КНС-1;значение\n")
+    batches = _engineering_batches(document.pages[0].elements)
+    fragment_id = str(batches[0].fragments[0].fragment_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    recovered = adapter.accepted_source_batch_candidates(
+        document.pages[0].elements,
+        accepted_batches={
+            batches[0].digest: {
+                "fields": [],
+                "structures": [["facility", "КНС-1", fragment_id]],
+                "structure_relationships": [],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+            "sha256:" + "0" * 64: {
+                "fields": [],
+                "structures": [["facility", "Подмена", fragment_id]],
+                "structure_relationships": [],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+        },
+    )
+
+    assert len(recovered) == 1
+    assert recovered[0].structures[0].raw_name == "КНС-1"
+
+
 def test_qwen_engineering_progress_reports_each_completed_base_batch() -> None:
     document = _extract_csv(
         "\n".join(f"строка {index};значение {index}" for index in range(1, 31)) + "\n"
@@ -1232,7 +1292,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             persisted.update(values)
 
         def persist_structured(self, _claimed: ClaimedJob, bundle: StructuredCandidates) -> None:
-            persisted["bundle"] = bundle
+            persisted.setdefault("bundles", []).append(bundle)
 
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     pipeline = IndustrialDocumentUnderstandingPipeline(
@@ -1295,7 +1355,14 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
     )
     assert persisted["input_manifest"]
     assert persisted["input_manifest"]["batching_policy_version"] == "dense-fragments-v1"
-    bundle = cast(StructuredCandidates, persisted["bundle"])
+    bundles = cast(list[StructuredCandidates], persisted["bundles"])
+    assert len(bundles) == 2
+    partial = bundles[0]
+    assert len(partial.structures) == 1
+    assert len(partial.works) == 1
+    assert not partial.quantities
+    assert not partial.materials
+    bundle = bundles[-1]
     assert len(bundle.structures) == 1
     assert len(bundle.works) == 1
     assert len(bundle.quantities) == 1

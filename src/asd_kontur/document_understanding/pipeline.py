@@ -312,6 +312,10 @@ class IndustrialDocumentUnderstandingPipeline:
             input_manifest=batch.input_manifest,
             output_manifest=manifest,
         )
+        if self._qwen_semantic is not None:
+            self._repository.persist_structured(
+                claimed, self._qwen_semantic.accepted_batch_candidates(batch, manifest)
+            )
 
     def _record_failed_engineering_batch(
         self,
@@ -372,6 +376,7 @@ class IndustrialDocumentUnderstandingPipeline:
         if self._qwen_semantic is None:
             return None
         try:
+            elements = self._repository.load_elements(claimed)
             accepted_batches = self._repository.load_accepted_engineering_batches(
                 claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
             )
@@ -382,8 +387,14 @@ class IndustrialDocumentUnderstandingPipeline:
                         claimed, profile_version=profile_version
                     )
                 )
+            for partial_bundle in self._qwen_semantic.accepted_source_batch_candidates(
+                elements,
+                accepted_batches=accepted_batches,
+                batching_policy_version=_DENSE_ENGINEERING_BATCHING_POLICY,
+            ):
+                self._repository.persist_structured(claimed, partial_bundle)
             return self._qwen_semantic.extract_engineering(
-                self._repository.load_elements(claimed),
+                elements,
                 accepted_batches=accepted_batches,
                 compatible_accepted_batches=compatible_accepted_batches,
                 batching_policy_version=_DENSE_ENGINEERING_BATCHING_POLICY,
