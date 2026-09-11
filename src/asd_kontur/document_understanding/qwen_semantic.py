@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -36,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v6"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v7"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v6",
     "qwen-engineering-extraction-v5",
     "qwen-engineering-extraction-v4",
     "qwen-engineering-extraction-v3",
@@ -608,6 +610,16 @@ def _engineering_allowed_fragments(
             continue
         allowed[str(fragment.fragment_id)] = fragment
         allowed[f"F{ordinal}"] = fragment
+    locator_counts: dict[str, int] = defaultdict(int)
+    for fragment in fragments:
+        locator_counts[str(fragment.locator.source_locator_id)] += 1
+    # Some local Qwen responses preserve a provided locator UUID rather than the
+    # short prompt alias.  Accept it only when it identifies exactly one input
+    # fragment; otherwise it would lose the split-fragment attribution boundary.
+    for fragment in fragments:
+        locator_id = str(fragment.locator.source_locator_id)
+        if locator_counts[locator_id] == 1:
+            allowed[locator_id] = fragment
     return allowed
 
 
@@ -634,7 +646,8 @@ def _engineering_prompt(
         "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
         "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
         "если источник их не указывает или имя работы дано только вне этого пакета. "
-        "fragment_id обязан быть одним из коротких идентификаторов F1, F2 и т.д. во входе. "
+        "fragment_id обязан быть одним из коротких идентификаторов F1, F2 и т.д. во входе: "
+        "копируй его буквально, без точки, двоеточия, пробела или другого текста. "
         "work_fragment_id, если не пуст, также обязан быть одним из них. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
@@ -691,7 +704,10 @@ def _parse_engineering(
         for row in rows:
             if not isinstance(row, dict):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
-            item = tuple(" ".join(str(row.get(name, "")).split()) for name in names)
+            item = _normalize_engineering_evidence_aliases(
+                key,
+                tuple(" ".join(str(row.get(name, "")).split()) for name in names),
+            )
             if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
             item = _canonicalize_engineering_item(key, item, allowed)
@@ -699,6 +715,29 @@ def _parse_engineering(
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
             result[key].append(item)
     return result
+
+
+def _normalize_engineering_evidence_aliases(key: str, item: tuple[str, ...]) -> tuple[str, ...]:
+    """Normalize only harmless terminal punctuation on short prompt aliases.
+
+    This is deliberately narrower than fuzzy locator matching: a model cannot
+    turn an arbitrary label into evidence, and an unknown or ambiguous reference
+    remains a typed extraction failure.
+    """
+
+    locator_positions = {
+        "fields": (2,),
+        "structures": (2,),
+        "works": (1,),
+        "quantities": (3, 4),
+        "materials": (4, 5),
+    }[key]
+    values = list(item)
+    for position in locator_positions:
+        value = values[position]
+        if re.fullmatch(r"F[1-9][0-9]*[.,;:]", value, flags=re.IGNORECASE):
+            values[position] = value[:-1].upper()
+    return tuple(values)
 
 
 def _canonicalize_engineering_item(

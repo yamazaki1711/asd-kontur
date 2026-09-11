@@ -701,6 +701,60 @@ def test_qwen_engineering_extraction_rejects_incomplete_schema() -> None:
         adapter.extract_engineering(document.pages[0].elements)
 
 
+def test_qwen_engineering_extraction_normalizes_only_terminal_prompt_alias_punctuation() -> None:
+    document = _extract_csv("Котлован К-1;подтверждено\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [
+                    {"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1."}
+                ],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert len(result.structures) == 1
+    assert result.structures[0].raw_name == "Котлован К-1"
+
+
+def test_qwen_engineering_extraction_accepts_unique_source_locator_but_not_ambiguous_one() -> None:
+    document = _extract_csv("Котлован К-1;подтверждено\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [
+                    {
+                        "kind": "excavation_pit",
+                        "name": "Котлован К-1",
+                        "fragment_id": locator_id,
+                    }
+                ],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert result.structures[0].locator.source_locator_id == UUID(locator_id)
+
+
 def test_qwen_engineering_extraction_subdivides_recoverable_invalid_batch() -> None:
     document = _extract_csv("A;B;C\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
@@ -754,7 +808,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v6"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v7"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -845,6 +899,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v7",
                 "qwen-engineering-extraction-v6",
                 "qwen-engineering-extraction-v5",
                 "qwen-engineering-extraction-v4",
