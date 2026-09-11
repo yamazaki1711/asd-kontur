@@ -1975,7 +1975,8 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 </StatusPill>
               </td>
               <td>
-                {job.progress_current !== null && job.progress_total !== null
+                {Number.isInteger(job.progress_current) &&
+                Number.isInteger(job.progress_total)
                   ? `${String(job.progress_current)} / ${String(job.progress_total)}`
                   : "—"}
               </td>
