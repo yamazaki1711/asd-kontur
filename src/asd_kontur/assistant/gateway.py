@@ -180,12 +180,20 @@ class ProfessionalAssistantKnowledgeQuery:
                 _canonical_workspace_sources(view, workspace_id, mode, "Комплект ИД"),
             )
         else:
-            workspace = self._workspace_context(organization_id, workspace_id, mode, "")
+            workspace = self._workspace_context(
+                organization_id,
+                workspace_id,
+                mode,
+                "",
+                owner_identity_id=context.actor_identity_id,
+            )
             selected = {
                 "consultant.get_workspace_overview": {
                     "name": workspace["name"],
                     "project_definition": workspace["project_definition"],
                     "documents": workspace["documents"],
+                    "structure_dossiers": workspace["structure_dossiers"],
+                    "materialization": workspace["materialization"],
                 },
                 "consultant.get_work_packages": {"work_packages": workspace["work_packages"]},
                 "consultant.get_requirement_matrix": {
@@ -226,7 +234,11 @@ class ProfessionalAssistantKnowledgeQuery:
         if len(query) < 2 or mode not in {"Tender", "Support", "Audit", "Restoration"}:
             raise ValueError("assistant_context_request_invalid")
         workspace = self._workspace_context(
-            context.organization_id, context.workspace_id, mode, query
+            context.organization_id,
+            context.workspace_id,
+            mode,
+            query,
+            owner_identity_id=context.actor_identity_id,
         )
         search_query = _search_query(query)
         practice = self._practice_context(search_query, 4)
@@ -314,7 +326,13 @@ class ProfessionalAssistantKnowledgeQuery:
         }
 
     def _workspace_context(
-        self, organization_id: UUID, workspace_id: UUID, mode: str, query: str
+        self,
+        organization_id: UUID,
+        workspace_id: UUID,
+        mode: str,
+        query: str,
+        *,
+        owner_identity_id: str | None = None,
     ) -> dict[str, Any]:
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
@@ -413,6 +431,26 @@ class ProfessionalAssistantKnowledgeQuery:
             if query
             else []
         )
+        model_view: dict[str, Any] | None = None
+        dossier_source_items: list[dict[str, Any]] = []
+        if owner_identity_id is not None:
+            from asd_kontur.application_spine.postgres import SpinePostgresRepository
+
+            model_view = SpinePostgresRepository(self._engine).project_understanding_view(
+                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            )
+            evidence_index = dict((model_view or {}).get("evidence_index", {}))
+            locator_ids = {
+                str(locator_id)
+                for dossier in (model_view or {}).get("structure_dossiers", [])
+                for locator_id in dossier.get("source_locator_ids", [])
+            }
+            for locator_id in sorted(locator_ids):
+                evidence_row = evidence_index.get(locator_id)
+                if evidence_row is not None:
+                    dossier_source_items.append(
+                        self._workspace_item(evidence_row, workspace_id, mode)
+                    )
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -422,7 +460,11 @@ class ProfessionalAssistantKnowledgeQuery:
             "discrepancies": _public_value([_json_row(row) for row in defects]),
             "mode_result": _public_value(_mode_result_row(result)),
             "documents": _public_value([_json_row(row) for row in documents]),
-            "source_items": source_items,
+            "structure_dossiers": _public_value(
+                list((model_view or {}).get("structure_dossiers", []))
+            ),
+            "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
+            "source_items": [*source_items, *dossier_source_items],
         }
 
     def _practice_context(self, query: str, limit: int) -> list[dict[str, Any]]:
@@ -1366,7 +1408,7 @@ class ProfessionalAssistantKnowledgeQuery:
 
     @staticmethod
     def _workspace_item(row: Any, workspace_id: UUID, mode: str) -> dict[str, Any]:
-        page = int(row["page_number"] or _page_from_locator(row["locator_value"]))
+        page = int(row.get("page_number") or _page_from_locator(row["locator_value"]))
         return {
             "content": {
                 "document": str(row["safe_display_name"]),
