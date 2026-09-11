@@ -3674,15 +3674,10 @@ function ProjectUnderstandingPage() {
                     только при наличии точного исходного фрагмента.
                     Неразрешённые пространственные сведения остаются пробелом.
                   </p>
-                  <EvidenceObject
-                    value={{
-                      candidates: structureNodes,
-                      status:
-                        "Кандидаты извлечены из документов; они не являются подтверждёнными фактами до reconciliation.",
-                    }}
+                  <StructureCandidateList
+                    nodes={structureNodes}
                     workspaceId={workspaceId}
                     modeSlug={mode}
-                    evidenceIndex={evidenceIndex}
                   />
                   <h3>Классифицированные страницы</h3>
                   <EvidenceObject value={{ pages: value.page_roles }} />
@@ -3813,6 +3808,66 @@ function ProjectUnderstandingPage() {
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function StructureCandidateList({
+  nodes,
+  workspaceId,
+  modeSlug,
+}: {
+  nodes: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const kindLabels: Record<string, string> = {
+    excavation_pit: "Котлован",
+    structure: "Сооружение или конструкция",
+    zone: "Зона или участок",
+  };
+  if (!nodes.length)
+    return (
+      <p className="empty-state">Структурные кандидаты ещё не извлечены.</p>
+    );
+  return (
+    <div className="candidate-list">
+      <h3>Структурные кандидаты</h3>
+      <p>
+        Это сведения, извлечённые из исходных документов. Они не являются
+        подтверждёнными фактами до reconciliation; одинаковые упоминания в
+        разных разделах могут относиться к одному объекту.
+      </p>
+      {nodes.slice(0, 200).map((node) => {
+        const identity = displayValue(node.structure_node_id);
+        const locator = displayValue(node.source_locator_id, "");
+        const kind = displayValue(node.node_kind, "structure");
+        return (
+          <article
+            className="candidate-row"
+            key={`${identity}:${displayValue(node.version)}`}
+          >
+            <div>
+              <strong>{kindLabels[kind] ?? "Структурный элемент"}</strong>
+              <p>{displayValue(node.raw_name, "Наименование не извлечено")}</p>
+              <small>
+                {humanizeStatus(displayValue(node.status, "candidate"))}
+              </small>
+              {locator && (
+                <Link
+                  to={workspaceRouteFromSlug(
+                    modeSlug,
+                    workspaceId,
+                    `/evidence/locators/${locator}`,
+                  )}
+                >
+                  Открыть исходный фрагмент
+                </Link>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
