@@ -175,6 +175,11 @@ def _migrate(settings: SpineSettings) -> int:
     repository = Path(__file__).resolve().parents[3]
     configuration = Config(str(repository / "alembic.ini"))
     configuration.set_main_option("sqlalchemy.url", settings.database_url)
+    # ``migrations/env.py`` deliberately accepts the target connection only as
+    # Alembic's explicit ``-x database_url=...`` argument.  The runtime command
+    # must preserve that fail-closed contract instead of relying on the config
+    # value, which the migration environment intentionally ignores.
+    configuration.cmd_opts = argparse.Namespace(x=[f"database_url={settings.database_url}"])
     command.upgrade(configuration, "head")
     return 0
 

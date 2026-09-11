@@ -23,7 +23,7 @@ from asd_kontur.application_spine.postgres import (
     SpinePostgresRepository,
     _semantic_extraction_priority,
 )
-from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
+from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.web_app.app import _parse_range
 
@@ -162,6 +162,25 @@ def test_release_identity_is_explicit_and_version_pinned(tmp_path: Path) -> None
     assert configured.frontend_build_digest == "sha256:frontend"
     assert configured.openapi_digest == "sha256:openapi"
     assert configured.expected_migration_head == "0027_public_deployment"
+
+
+def test_runtime_migration_supplies_the_required_explicit_database_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+
+    configured = settings(tmp_path)
+    assert _migrate(configured) == 0
+    assert captured == {
+        "revision": "head",
+        "database_url": [f"database_url={configured.database_url}"],
+    }
 
 
 @pytest.mark.parametrize(
