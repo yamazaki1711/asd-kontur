@@ -185,3 +185,25 @@ mypy, and 43 focused tests passed. Deploy v11 only after the v10 successor is te
 version-aware successor to materialize the source using compatible v10 batch evidence and recover its
 causally linked downstream stages. Validate candidate provenance and the project view before scheduling
 the next eligible source; do not claim project facts, a pit count, or package completion before then.
+
+### Continuation checkpoint — 2026-09-11 15:15 UTC+12
+
+The v10 successor completed successfully at 15:11 UTC+12. Its terminal receipt recorded 45 project-field,
+160 work, and 31 quantity candidates for source `01a088ac-7f16-73ef-9d2c-3957b2393f66`; this source had
+no extracted structures or materials. The v11 materialization successor
+`01a08e74-4695-7a56-9ee2-01f1f5829f0d` completed under release `c004711` without an additional Qwen
+request by replaying compatible v10 manifests. It persisted 176 evidence-distinct work candidates, proving
+that same-name work observations are no longer overwritten. Its success recovered source-scoped evidence,
+work-quantity-material, work-package, matrix, and reconciliation stages through the durable dependency
+lineage. The application repository now exposes a partial workspace view containing candidates and coverage;
+it is not a completed Tender model or browser acceptance.
+
+Commit `f04d28d4cf069faed691c50ec275e099508cd6f4` introduces `qwen-engineering-extraction-v12`, a bounded
+delivery-throughput contract: every fragment remains traceable, but short fragments are packed to at most
+24 fragments and 12,000 characters per Qwen request. The source-specific test proves exact full fragment
+coverage under both bounds; Ruff, strict mypy, and 44 focused tests passed. Worker release `f04d28d` is
+live. The only active successor is `01a08e75-ba75-775a-8137-f9984ff63a39` for PZU source
+`01a088ac-8125-7031-8659-a57bd97ff1c6` (56 pages; 5,021 deterministic semantic fragments). It is
+processing with local Qwen under the v12 bounded contract. Do not create another PZU retry while it runs.
+After PZU reaches a terminal state, validate candidate provenance and the partial project view, then choose
+the next structural source (KR1/KR2/POS) using the same v12 path.
