@@ -1863,7 +1863,12 @@ function JobsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/jobs",
-        { params: { path: { workspace_id: workspaceId } } },
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: { effective_only: true },
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -1883,7 +1888,7 @@ function JobsPage() {
   return (
     <Page
       title="Обработка документов"
-      lead="Текущие и завершённые задания обработки загруженных материалов."
+      lead="Текущие эффективные задания обработки. Исторические попытки сохраняются отдельно и не заменяют актуальный статус."
     >
       <QueryState query={jobs} empty="Заданий обработки пока нет.">
         {(items) => <JobTable jobs={items} workspaceId={workspaceId} />}

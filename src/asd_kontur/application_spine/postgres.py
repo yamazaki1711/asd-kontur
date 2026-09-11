@@ -1878,18 +1878,50 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("reset_challenge_plan_binding_failed")
 
     def list_jobs(
-        self, *, owner_identity_id: str, workspace_id: UUID, limit: int = 200
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        limit: int = 200,
+        effective_only: bool = False,
     ) -> tuple[JobSummary, ...]:
+        """List job history or one current attempt for each exact work input.
+
+        A manual retry is a new immutable job, so raw creation order can leave a
+        user looking at an old terminal failure while its replacement is running.
+        ``effective_only`` intentionally collapses *only* rows with the same
+        job kind and input digest.  It therefore cannot substitute a result from
+        another source version or another stage for the current work item.
+        """
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
-            rows = session.execute(
-                sa.text(
-                    "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
-                    "AND workspace_id=:workspace ORDER BY created_at,job_id LIMIT :limit"
-                ),
-                {"organization": organization_id, "workspace": workspace_id, "limit": limit},
-            ).all()
+            if effective_only:
+                rows = session.execute(
+                    sa.text(
+                        "WITH ranked AS (SELECT j.*,row_number() OVER (PARTITION BY j.job_kind,"
+                        "j.input_digest ORDER BY CASE WHEN j.state IN ('running','leased') THEN 0 "
+                        "WHEN j.state IN ('queued','paused') THEN 1 ELSE 2 END,j.created_at DESC,"
+                        "j.job_id DESC) AS effective_rank FROM workspace.durable_jobs j WHERE "
+                        "j.organization_id=:organization AND j.workspace_id=:workspace) SELECT * "
+                        "FROM ranked WHERE effective_rank=1 ORDER BY CASE WHEN state IN "
+                        "('running','leased') THEN 0 WHEN state IN ('queued','paused') THEN 1 "
+                        "ELSE 2 END,created_at DESC,job_id DESC LIMIT :limit"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "limit": limit,
+                    },
+                ).all()
+            else:
+                rows = session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace ORDER BY created_at DESC,job_id DESC LIMIT :limit"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id, "limit": limit},
+                ).all()
         return tuple(_job_summary(row) for row in rows)
 
     def list_progress_events(

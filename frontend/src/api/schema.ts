@@ -3138,7 +3138,9 @@ export interface operations {
     };
     jobs_api_v1_workspaces__workspace_id__jobs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                effective_only?: boolean;
+            };
             header?: never;
             path: {
                 workspace_id: string;

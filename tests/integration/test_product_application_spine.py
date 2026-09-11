@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 from typing import Any, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import JobState
+from asd_kontur.application_spine.models import JobState, semantic_digest
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
@@ -560,3 +561,109 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             )
         assert provenance["dependency_recovery_of"]
         assert provenance["dependency_recovery_replacement"] == str(recovered_hash.job_id)
+
+
+def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The jobs page must not hide a replacement behind old immutable attempts."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="effective-jobs-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Effective jobs owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "effective-jobs-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Effective jobs workspace"},
+            headers=_csrf(client),
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        organization_id = UUID(workspace["organization_id"])
+        with postgres_environment.owner_engine.begin() as connection:
+            owner = str(
+                connection.scalar(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.workspaces "
+                        "WHERE workspace_id=:workspace"
+                    ),
+                    {"workspace": workspace_id},
+                )
+            )
+            connection.execute(
+                sa.select(
+                    sa.func.set_config("asd.organization_id", str(organization_id), True),
+                    sa.func.set_config("asd.workspace_id", str(workspace_id), True),
+                )
+            )
+            for ordinal in range(205):
+                manifest = {"synthetic": ordinal}
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                        "max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                        "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                        "'queued',1,1,'synthetic',CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": uuid4(),
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
+                        "key": f"synthetic-history-{ordinal}",
+                        "provenance": json.dumps({"contract": "synthetic"}),
+                        "correlation": uuid4(),
+                        "owner": owner,
+                    },
+                )
+            failed_job = uuid4()
+            replacement_job = uuid4()
+            shared = {"synthetic": "retry-lineage"}
+            for job_id, state, provenance in (
+                (failed_job, "queued", {"contract": "synthetic"}),
+                (
+                    replacement_job,
+                    "running",
+                    {"contract": "synthetic", "manual_retry_of": str(failed_job)},
+                ),
+            ):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                        "max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id,started_at) VALUES (:organization,:workspace,:job,"
+                        "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                        ":state,99,3,'synthetic',CAST(:provenance AS jsonb),:correlation,:owner,"
+                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP ELSE NULL END)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": job_id,
+                        "manifest": json.dumps(shared),
+                        "digest": semantic_digest(shared),
+                        "key": f"synthetic-retry-{job_id}",
+                        "state": state,
+                        "provenance": json.dumps(provenance),
+                        "correlation": uuid4(),
+                        "owner": owner,
+                    },
+                )
+        response = client.get(f"/api/v1/workspaces/{workspace_id}/jobs?effective_only=true")
+        assert response.status_code == 200, response.text
+        jobs = response.json()
+        job_ids = {item["job_id"] for item in jobs}
+        assert str(replacement_job) in job_ids
+        assert str(failed_job) not in job_ids
+        assert (
+            next(item for item in jobs if item["job_id"] == str(replacement_job))["state"]
+            == "running"
+        )

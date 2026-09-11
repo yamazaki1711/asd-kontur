@@ -4773,6 +4773,16 @@
               "title": "Workspace Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "effective_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Effective Only",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

@@ -581,12 +581,14 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        effective_only: bool = False,
     ) -> list[JobView]:
         return [
             JobView(**jsonable_encoder(asdict(value)))
             for value in _container(request).service.list_jobs(
                 owner_identity_id=principal.owner_identity_id,
                 workspace_id=workspace_id,
+                effective_only=effective_only,
             )
         ]
 

@@ -368,10 +368,17 @@ class ProductSpineService:
             source_locator_id=source_locator_id,
         )
 
-    def list_jobs(self, *, owner_identity_id: str, workspace_id: UUID) -> tuple[JobSummary, ...]:
+    def list_jobs(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        effective_only: bool = False,
+    ) -> tuple[JobSummary, ...]:
         return self._repository.list_jobs(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+            effective_only=effective_only,
         )
 
     def progress_events(
