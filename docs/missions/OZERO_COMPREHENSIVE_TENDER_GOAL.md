@@ -51,7 +51,25 @@ source completed with 2,154 accepted locator fragments and partial candidates; t
 not full-package acceptance. Database migration `0039_engineering_batches` is live. Commit `fbb7131`
 contains the versioned v2 extraction correction but is not deployed at this checkpoint.
 
-Next: qualify/deploy the v2 worker without interrupting unrelated workloads, select the next eligible
-structural/site source-version through the existing durable lifecycle, and verify source → Qwen →
-candidate → project view → evidence path before expanding the queue. Continue the complete package and
-all programme steps above; do not close this goal on an intermediate counter, patch, or model.
+### Continuation checkpoint — 2026-09-11
+
+The former v2 checkpoint is superseded by versioned engineering extraction releases. Migration
+`0041_engineering_v4_manifest` is applied to the controlled workspace database. Worker and local Qwen
+are currently pinned to the preceding `b6b2b0c` release while its duplicate v3 attempt acknowledges a
+supported cancellation request; no unrelated workload was interrupted. The successor `bd34f90` is
+tested, pushed, and prepared for controlled release. It restores profile lineage: v4 can replay only
+the exact compatible v3 manifests and records its one-fragment corrective prompt strategy distinctly.
+
+For source version `01a088ac-7f16-73ef-9d2c-3957b2393f66`, the complete deterministic v4 manifest
+has 1,453 native elements/fragments and 61 base batches. Earlier v2/v3 rows are immutable historical
+evidence. Real local-Qwen v3 processing accepted multiple batch manifests before output exhaustion and
+invalid-evidence failures; child-batch persistence was proven, but that source has not yet reached
+candidate persistence or project materialization. No project-wide result is accepted from it.
+
+The committed UI/API coverage surface reports accepted semantic fragments separately from classified
+pages and from reconciled facts. It is not yet deployed with the corresponding API/frontend release.
+
+Next executable action: wait for the requested v3 cancellation to become terminal, release the pinned
+`bd34f90` worker/Qwen pair, retry the source through v4 with compatible v3 replay, and verify durable
+candidate persistence followed by workspace assembly. Then schedule the next eligible active source;
+do not leave the OZERO queue empty while eligible sources remain.
