@@ -497,6 +497,25 @@ persistence, replacement-lineage recovery, and project-view materialization befo
 scheduling the next source; if it terminates unsuccessfully, inspect only the exact
 failed batch lineage and recover the bounded input.
 
+### Continuation checkpoint — 2026-09-11 21:45 UTC+12
+
+The live worker release is the pinned `75666044b2598bffaa5418f40cc830f36cd773b6`
+worktree, not an assumed GitHub branch head. The active OZERO semantic job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` remained `running` under
+`document-worker:74713` at 21:44 UTC+12 with a fresh heartbeat and durable progress
+350/497. Its worker had an established loopback connection to the Qwen runtime. This
+is progress through a per-source batch manifest only, not semantic completion or a
+Tender finding.
+
+The owner-scoped `start_project_understanding` command was executed once through its
+supported repository contract while that source continued. It did not create a second
+attempt for the running input. It persisted queued reconciliation
+`01a08fd8-5866-7a9d-9697-6e74e32dc94e` and reprioritized only compatible queued
+semantic jobs: ten are now priority 170 (including PZU and KR sources), eight remain
+priority 130 pending stronger role evidence. The document worker must be allowed to
+finish the active source; then verify candidate persistence and the priority-165
+incremental reconciliation before asserting any user-visible facility or pit result.
+
 ### Continuation checkpoint — 2026-09-11 21:09 UTC+12
 
 The controlled database is at `0047_profile_scoped_engineering_candidates`. API

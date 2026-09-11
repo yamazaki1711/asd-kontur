@@ -281,3 +281,22 @@ candidate-only summary; its derived work/package/matrix/discrepancy tools retain
 own exact evidence items. This prevents an incomplete model from appearing to support
 an exhaustive factual answer. Browser acceptance is still unverified because this
 Codex session has no attached browser; no browser PASS is claimed.
+
+## 2026-09-11 21:45 UTC+12 — active-source completion and fair queue are live
+
+The currently deployed document-worker source tree is pinned at
+`75666044b2598bffaa5418f40cc830f36cd773b6`. Its only active Qwen semantic source,
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` for source version
+`01a088ac-7f97-761a-b857-f5d3b4c5be8b`, was `running` with a fresh worker heartbeat
+and durable base-batch progress **350/497**. At this point its v15 ledger contained
+365 accepted and 21 immutable failed-parent receipts; child recovery lineage must be
+evaluated at terminal completion, so those receipt counts are not published semantic
+coverage or Tender findings.
+
+The supported owner-scoped project-understanding command was invoked once while that
+job ran. It preserved the running job, placed reconciliation
+`01a08fd8-5866-7a9d-9697-6e74e32dc94e` in the durable queue, and recomputed priority
+only for compatible queued source jobs. Ten source extractions (including PZU and KR
+inputs) now have priority 170; eight stay priority 130 pending better available role
+evidence. The next observable product boundary remains source candidate persistence
+and a priority-165 partial reconciliation after this current source is terminal.
