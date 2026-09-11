@@ -2462,6 +2462,9 @@ class SpinePostgresRepository:
             intake_summary = self._intake_summary(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            semantic_coverage = self._semantic_extraction_coverage(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             evidence_index = self._workspace_evidence_index(
                 session,
                 organization_id=organization_id,
@@ -2499,6 +2502,7 @@ class SpinePostgresRepository:
             "structure_nodes": structure_nodes,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
+            "semantic_coverage": semantic_coverage,
             "authority_layers": {
                 "workspace_fact": "project_definition_and_document_registry",
                 "methodological_practice": "advisory_only",
@@ -2866,6 +2870,9 @@ class SpinePostgresRepository:
             "intake_summary": cls._intake_summary(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
+            "semantic_coverage": cls._semantic_extraction_coverage(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
             "authority_layers": {
                 "workspace_fact": "project_definition_and_document_registry",
                 "methodological_practice": "advisory_only",
@@ -2874,6 +2881,54 @@ class SpinePostgresRepository:
                 "ai_candidate": "candidate_only",
             },
         }
+
+    @staticmethod
+    def _semantic_extraction_coverage(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        """Expose accepted semantic fragments without treating them as reconciled facts."""
+        rows = session.execute(
+            sa.text(
+                "WITH latest_elements AS ("
+                " SELECT DISTINCT ON (source_locator_id) source_version_id,source_locator_id,"
+                " normalized_text FROM workspace.native_layout_element_versions "
+                " WHERE organization_id=:o AND workspace_id=:w "
+                " ORDER BY source_locator_id,version DESC"
+                "), expected AS ("
+                " SELECT source_version_id,SUM(CEIL(length(normalized_text)::numeric/2400))::bigint "
+                " AS expected_fragment_count FROM latest_elements WHERE normalized_text<>'' "
+                " GROUP BY source_version_id"
+                "), accepted AS ("
+                " SELECT b.source_version_id,b.profile_version,COUNT(DISTINCT b.batch_digest) "
+                " AS accepted_batch_count,COUNT(DISTINCT fragment->>'fragment_id') "
+                " AS accepted_fragment_count FROM workspace.engineering_extraction_batches b "
+                " CROSS JOIN LATERAL jsonb_array_elements(b.input_manifest) AS fragment "
+                " WHERE b.organization_id=:o AND b.workspace_id=:w "
+                " AND b.terminal_status='accepted' AND b.input_manifest IS NOT NULL "
+                " GROUP BY b.source_version_id,b.profile_version"
+                ") SELECT a.source_version_id,a.profile_version,a.accepted_batch_count,"
+                " a.accepted_fragment_count,COALESCE(e.expected_fragment_count,0) "
+                " AS expected_fragment_count FROM accepted a LEFT JOIN expected e "
+                " ON e.source_version_id=a.source_version_id "
+                " ORDER BY a.source_version_id,a.profile_version"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        ).mappings()
+        return [
+            {
+                "source_version_id": str(row["source_version_id"]),
+                "profile_version": str(row["profile_version"]),
+                "accepted_batch_count": int(row["accepted_batch_count"]),
+                "accepted_fragment_count": int(row["accepted_fragment_count"]),
+                "expected_fragment_count": int(row["expected_fragment_count"]),
+                "state": (
+                    "complete"
+                    if int(row["accepted_fragment_count"]) == int(row["expected_fragment_count"])
+                    else "partial"
+                ),
+            }
+            for row in rows
+        ]
 
     @staticmethod
     def _project_structure_rows(

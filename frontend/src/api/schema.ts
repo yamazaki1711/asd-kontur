@@ -1848,6 +1848,10 @@ export interface components {
             review_decisions?: {
                 [key: string]: unknown;
             }[];
+            /** Semantic Coverage */
+            semantic_coverage?: {
+                [key: string]: unknown;
+            }[];
             /** Structure Nodes */
             structure_nodes?: {
                 [key: string]: unknown;

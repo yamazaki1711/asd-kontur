@@ -2457,6 +2457,14 @@
             "title": "Review Decisions",
             "type": "array"
           },
+          "semantic_coverage": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Semantic Coverage",
+            "type": "array"
+          },
           "structure_nodes": {
             "items": {
               "additionalProperties": true,

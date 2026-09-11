@@ -3550,6 +3550,9 @@ function ProjectUnderstandingPage() {
             typeof materialization.state === "string"
               ? materialization.state
               : "not_requested";
+          const semanticCoverage = Array.isArray(value.semantic_coverage)
+            ? (value.semantic_coverage as Record<string, unknown>[])
+            : [];
           const materializationMessages: Record<string, string> = {
             not_requested:
               "Модель объекта ещё не запускалась. Загруженные документы сохранены отдельно от модели.",
@@ -3588,6 +3591,28 @@ function ProjectUnderstandingPage() {
                     "Состояние формирования модели требует проверки."}
                   {typeof materialization.failure_code === "string" &&
                     ` Причина: ${materialization.failure_code}.`}
+                </InfoNotice>
+              )}
+              {semanticCoverage.length > 0 && (
+                <InfoNotice>
+                  Семантическая обработка сохраняет результаты по фрагментам:{" "}
+                  {semanticCoverage
+                    .map((item) => {
+                      const accepted = Number(
+                        item.accepted_fragment_count ?? 0,
+                      );
+                      const expected = Number(
+                        item.expected_fragment_count ?? 0,
+                      );
+                      const profile = displayValue(
+                        item.profile_version,
+                        "профиль",
+                      );
+                      return `${accepted.toString()}/${expected.toString()} фрагментов (${profile})`;
+                    })
+                    .join("; ")}
+                  . Это покрытие извлечения-кандидата, а не подтверждённые
+                  факты.
                 </InfoNotice>
               )}
               {section === "general" && (

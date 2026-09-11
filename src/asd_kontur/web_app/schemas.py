@@ -364,6 +364,7 @@ class ProjectUnderstandingView(ApiModel):
     structure_nodes: list[dict[str, Any]] = Field(default_factory=list)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
+    semantic_coverage: list[dict[str, Any]] = Field(default_factory=list)
     authority_layers: dict[str, str]
 
 
