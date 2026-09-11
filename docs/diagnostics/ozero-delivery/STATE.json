@@ -1,11 +1,12 @@
 {
-  "recorded_at": "2026-09-12T00:32:43+12:00",
+  "recorded_at": "2026-09-12T00:51:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api_document_worker_assistant_live": "9394b466a222d915d77f12b9577afd815a8476ba",
+    "api_live": "6194eb31fd82630b136dd0f404252b532a8cae44",
+    "document_worker_and_assistant_live": "9394b466a222d915d77f12b9577afd815a8476ba",
     "database_migration": "0048_incremental_reconciliation_claim_priority",
-    "staged_candidate_release": "70d90110af700c98e7b8ca23fe2667b4ca80ec7b",
-    "staged_candidate_status": "not_deployed_while_active_worker_job_runs"
+    "frontend_build_digest": "sha256:e97ded3a614e01641278bb70013f231b6963c93875684cdecf0dc8b34ace7b87",
+    "worker_transition": "deferred_until_current_Qwen_job_terminal"
   },
   "corpus": {
     "active_source_versions": 22,
@@ -23,13 +24,13 @@
     "state": "running",
     "source_version_id": "01a088ac-7fdb-7b12-be33-e3a325af8edf",
     "safe_display_name": "Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf",
-    "accepted_batch_progress": {"current": 110, "total": 1074},
-    "progress_observed_at": "2026-09-12T00:32:30+12:00"
+    "accepted_batch_progress": {"current": 127, "total": 1074},
+    "progress_observed_at": "2026-09-12T00:43:59+12:00"
   },
   "candidate_projection": {
-    "project_fields": 1824,
-    "works": 1080,
-    "quantities": 342,
+    "project_fields": 1869,
+    "works": 1256,
+    "quantities": 377,
     "materials": 160,
     "structure_observations": 1308,
     "relationship_observations": 417,

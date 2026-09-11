@@ -1,5 +1,37 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-12 00:51 UTC+12 — candidate-only partial model release active
+
+The public API and rebuilt frontend are pinned to
+`6194eb31fd82630b136dd0f404252b532a8cae44`, with PostgreSQL migration
+`0048_incremental_reconciliation_claim_priority`. A loopback readiness request
+returned `ready` at that exact migration. The release was qualified in an isolated
+loopback API process before activation; the preceding launchd registration failure
+was recovered using the preserved API plist and did not affect data or workers.
+
+The document worker was deliberately not restarted. It still owns OZERO semantic job
+`01a08f4e-3b5e-798c-9d5b-b3acd1724683` for
+`Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`; its durable progress is `127/1074`.
+The API now selects accepted semantic-batch receipts for partial candidate publication.
+That makes already accepted source evidence available to the real project-model
+surface without treating it as reconciled facts. The assistant worker was not changed
+while the document worker uses the single local-Qwen slot.
+
+At this snapshot the exact semantic-input denominator is 22 documents / 2,529 pages /
+133,407 fragments: 7 documents have complete accepted semantic input coverage, 3 are
+partial, and 12 are not started. Accepted input fragments total 24,499; 888 are
+historical failed-attempt inputs with successor handling, not a second document count.
+The current projection contains 1,869 field, 1,256 work, 377 quantity, 160 material,
+and 417 structural-relationship candidates. They remain source-backed candidates only:
+no reconciled facility/LOS/KNS inventory, pit total, Tender conclusion, or consultant
+acceptance has been established.
+
+Next active work: allow the running source to reach a terminal receipt, validate its
+candidate provenance and dependent recovery, then transition the document worker at
+that safe boundary to the same pinned release for dense manifests and continue the
+remaining eligible sources. Cross-document facility reconciliation, project-specific
+NTD checks, Tender findings, and grounded consultant/browser acceptance remain open.
+
 ## 2026-09-12 00:32 UTC+12 — complete-source pass remains active
 
 The active OZERO source is `Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`

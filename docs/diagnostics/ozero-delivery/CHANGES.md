@@ -67,6 +67,26 @@ and consultant acceptance remain open.
 
 ## Pending controlled release — 2026-09-12
 
+## API/frontend activation — 2026-09-12
+
+- API and frontend release `6194eb31fd82630b136dd0f404252b532a8cae44` is active at
+  database migration `0048_incremental_reconciliation_claim_priority`. A direct
+  loopback readiness call established PostgreSQL reachability and exact migration
+  compatibility. The document and assistant workers were intentionally not restarted.
+- The release activates already-qualified accepted-batch candidate publication. It
+  makes exact-locator fields, structures, relationships, and works from accepted v15
+  receipts visible while a source remains in progress; it does not create quantities
+  or materials before cross-batch work identity can be resolved.
+- The rollout used a preserved launchd plist and isolated process qualification. The
+  ordinary launchd registration path failed and was recovered; forced reload activated
+  the same qualified API configuration. This operational incident did not mutate OZERO
+  source versions, durable jobs, or accepted receipts.
+
+Known limitation: API partial publication is live, but the document worker remains on
+the prior pinned release until its active Qwen extraction reaches a terminal receipt.
+Therefore full-package coverage, facility reconciliation, Tender findings, and
+consultant acceptance remain open.
+
 - `53cafdf` makes accepted v15 engineering-batch receipts materialize their exact,
   source-backed fields, structures, relationships, and work observations immediately.
   This is explicitly a partial candidate view: cross-batch quantities and materials

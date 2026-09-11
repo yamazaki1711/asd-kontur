@@ -869,3 +869,24 @@ partial-publication release. At its terminal boundary, first capture its termina
 receipt/provenance and current candidate projection, create a fresh recoverable backup,
 then deploy the pinned compatible API/worker/assistant release and exercise the real
 partial-state API/UI path before allowing a newly unstarted source to claim dense work.
+
+### Continuation checkpoint — 2026-09-12 00:51 UTC+12
+
+The API/frontend alone were moved through a controlled, recoverable release to
+`6194eb31fd82630b136dd0f404252b532a8cae44` at database migration
+`0048_incremental_reconciliation_claim_priority`. An isolated loopback process and
+the activated API readiness route both returned `ready`. The API now exposes accepted
+v15 batch receipts as exact-locator partial candidates. A launchd registration failure
+was recovered from a preserved plist before activation; it did not change OZERO rows,
+source objects, receipts, or workers.
+
+The Qwen document worker was not restarted. Job
+`01a08f4e-3b5e-798c-9d5b-b3acd1724683` for source
+`01a088ac-7fdb-7b12-be33-e3a325af8edf` remains running with durable `127/1074`
+accepted-batch progress. The current exact coverage is 22 documents / 2,529 pages /
+133,407 fragments: 7 complete, 3 partial, 12 not started; 24,499 accepted input
+fragments and 888 historical failed-attempt inputs. Candidate evidence remains
+candidate-only and cannot establish a facility inventory, pit count, Tender finding, or
+consultant answer. Next executable action: wait for this job's terminal receipt, then
+validate its candidate/dependency lineage and move the worker at that safe boundary to
+the matching release before continuing the remaining eligible sources.
