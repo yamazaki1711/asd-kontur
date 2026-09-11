@@ -166,6 +166,47 @@ class IndustrialUnderstandingRepository:
                 },
             )
 
+    def record_failed_engineering_batch(
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+        batch_ordinal: int,
+        batch_digest: str,
+        source_locator_ids: tuple[UUID, ...],
+        input_manifest: dict[str, object],
+        failure_code: str,
+    ) -> None:
+        """Persist a sanitized failed model attempt without accepting its output."""
+        output_manifest = {
+            "contract": "engineering-extraction-batch-failure-v1",
+            "typed_failure_code": failure_code,
+        }
+        with self._session(claimed) as session:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.engineering_extraction_batches "
+                    "(organization_id,workspace_id,source_version_id,profile_version,batch_ordinal,"
+                    "batch_digest,source_locator_ids,input_manifest,output_manifest,output_digest,"
+                    "terminal_status,typed_failure_code) VALUES "
+                    "(:o,:w,:source,:profile,:ordinal,:batch,:locators,CAST(:input_manifest AS jsonb),"
+                    "CAST(:manifest AS jsonb),:output,'failed',:failure) ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "source": self._source_version_id(claimed),
+                    "profile": profile_version,
+                    "ordinal": batch_ordinal,
+                    "batch": batch_digest,
+                    "locators": list(source_locator_ids),
+                    "input_manifest": _json(input_manifest),
+                    "manifest": _json(output_manifest),
+                    "output": semantic_digest(output_manifest),
+                    "failure": failure_code,
+                },
+            )
+
     def persist_native_document(self, claimed: ClaimedJob, document: NativeDocument) -> None:
         inventory_id = deterministic_uuid(
             f"format-inventory:{self._source_version_id(claimed)}:{document.fingerprint}"

@@ -755,26 +755,37 @@ def test_qwen_engineering_extraction_accepts_unique_source_locator_but_not_ambig
     assert result.structures[0].locator.source_locator_id == UUID(locator_id)
 
 
-def test_qwen_engineering_extraction_subdivides_recoverable_invalid_batch() -> None:
+def test_qwen_engineering_extraction_repairs_recoverable_invalid_batch_before_splitting() -> None:
     document = _extract_csv("A;B;C\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
-    accepted: dict[str, dict[str, object]] = {}
-    valid = json.dumps(
-        {"fields": [], "structures": [], "works": [], "quantities": [], "materials": []}
+    accepted: list[tuple[object, dict[str, object]]] = []
+    failed: list[tuple[object, str]] = []
+    repaired = json.dumps(
+        {
+            "fields": [{"key": "purpose", "value": "Объект", "fragment_id": "F1"}],
+            "structures": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
     )
 
     with patch(
         "asd_kontur.document_understanding.qwen_semantic._complete",
-        side_effect=("{}", valid, valid),
+        side_effect=("{}", repaired),
     ) as complete:
         result = adapter.extract_engineering(
             document.pages[0].elements,
-            on_accepted_batch=lambda batch, manifest: accepted.__setitem__(batch.digest, manifest),
+            on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
+            on_failed_batch=lambda batch, code: failed.append((batch, code)),
         )
 
-    assert complete.call_count == 3
-    assert result == StructuredCandidates((), (), (), (), (), ())
-    assert len(accepted) == 2
+    assert complete.call_count == 2
+    assert result.project_fields[0].raw_value == "Объект"
+    assert len(accepted) == 1
+    assert accepted[0][0].prompt_strategy == "evidence_reference_repair-v1"
+    assert not failed
 
 
 def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_response() -> None:
@@ -787,14 +798,14 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
 
     with patch(
         "asd_kontur.document_understanding.qwen_semantic._complete",
-        side_effect=("{}", valid),
+        side_effect=("{}", "{}", valid),
     ) as complete:
         result = adapter.extract_engineering(
             document.pages[0].elements,
             on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
         )
 
-    assert complete.call_count == 2
+    assert complete.call_count == 3
     assert result == StructuredCandidates((), (), (), (), (), ())
     batch, _manifest = accepted[0]
     assert batch.prompt_strategy == "single_fragment_repair-v1"
@@ -808,7 +819,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v7"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v8"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -899,6 +910,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v8",
                 "qwen-engineering-extraction-v7",
                 "qwen-engineering-extraction-v6",
                 "qwen-engineering-extraction-v5",

@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v7"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v8"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v7",
     "qwen-engineering-extraction-v6",
     "qwen-engineering-extraction-v5",
     "qwen-engineering-extraction-v4",
@@ -53,6 +54,7 @@ _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
         "qwen_engineering_response_invalid_json",
         "qwen_engineering_response_invalid_shape",
         "qwen_engineering_response_invalid_evidence",
+        "qwen_engineering_repair_empty",
         "qwen_semantic_response_output_exhausted",
     }
 )
@@ -210,6 +212,7 @@ class QwenDocumentSemanticAdapter:
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
+        on_failed_batch: Callable[[QwenEngineeringBatch, str], None] | None = None,
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
         batches = _engineering_batches(elements)
@@ -224,6 +227,7 @@ class QwenDocumentSemanticAdapter:
                     batch,
                     accepted=accepted,
                     on_accepted_batch=on_accepted_batch,
+                    on_failed_batch=on_failed_batch,
                     compatible_accepted_batches=compatible,
                 )
             )
@@ -383,6 +387,7 @@ class QwenDocumentSemanticAdapter:
         accepted: Mapping[str, dict[str, object]],
         compatible_accepted_batches: Mapping[str, dict[str, object]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
+        on_failed_batch: Callable[[QwenEngineeringBatch, str], None] | None,
     ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
         allowed = _engineering_allowed_fragments(batch.fragments)
         persisted = accepted.get(batch.digest)
@@ -395,6 +400,7 @@ class QwenDocumentSemanticAdapter:
                     break
         if persisted is not None:
             return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
+        payload = ""
         try:
             payload = _complete(
                 self._endpoint,
@@ -404,8 +410,37 @@ class QwenDocumentSemanticAdapter:
             )
             parsed = _parse_engineering(payload, allowed)
         except QwenSemanticFailure as exc:
-            if exc.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
-                raise
+            if (
+                batch.prompt_strategy == "standard"
+                and exc.code in _RECOVERABLE_ENGINEERING_BATCH_FAILURES
+            ):
+                try:
+                    repaired = _complete(
+                        self._endpoint,
+                        _engineering_evidence_repair_prompt(batch.fragments, payload),
+                        self._timeout_seconds,
+                        max_tokens=1_200,
+                    )
+                    parsed = _parse_engineering(repaired, allowed)
+                    if not _has_engineering_observations(parsed):
+                        raise QwenSemanticFailure("qwen_engineering_repair_empty")
+                except QwenSemanticFailure as repair_exc:
+                    failure = repair_exc
+                else:
+                    repair_batch = _engineering_batch(
+                        batch.ordinal,
+                        batch.fragments,
+                        prompt_strategy="evidence_reference_repair-v1",
+                    )
+                    if on_accepted_batch is not None:
+                        on_accepted_batch(repair_batch, _engineering_manifest(parsed))
+                    return ((allowed, parsed),)
+            else:
+                failure = exc
+            if on_failed_batch is not None:
+                on_failed_batch(batch, failure.code)
+            if failure.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
+                raise failure from None
             if len(batch.fragments) == 1:
                 if batch.prompt_strategy != "standard":
                     raise
@@ -418,6 +453,7 @@ class QwenDocumentSemanticAdapter:
                     accepted=accepted,
                     compatible_accepted_batches=compatible_accepted_batches,
                     on_accepted_batch=on_accepted_batch,
+                    on_failed_batch=on_failed_batch,
                 )
             values: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
             for child in _split_engineering_batch(batch):
@@ -426,6 +462,7 @@ class QwenDocumentSemanticAdapter:
                         child,
                         accepted=accepted,
                         on_accepted_batch=on_accepted_batch,
+                        on_failed_batch=on_failed_batch,
                         compatible_accepted_batches=compatible_accepted_batches,
                     )
                 )
@@ -601,6 +638,10 @@ def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str,
     return {key: [list(item) for item in values] for key, values in parsed.items()}
 
 
+def _has_engineering_observations(parsed: Mapping[str, list[tuple[str, ...]]]) -> bool:
+    return any(parsed.values())
+
+
 def _engineering_allowed_fragments(
     fragments: tuple[_SemanticFragment, ...],
 ) -> dict[str, _SemanticFragment]:
@@ -659,6 +700,36 @@ def _engineering_prompt(
             "Не используй locator_id как fragment_id.\n" + prompt
         )
     return prompt
+
+
+def _engineering_evidence_repair_prompt(
+    elements: tuple[_SemanticFragment, ...], prior_answer: str
+) -> str:
+    """Ask Qwen to correct evidence references without accepting the invalid output."""
+
+    return (
+        "Исправь только JSON ниже: сохрани только кандидаты, которые уже есть в ответе и "
+        "привяжи каждый к одному допустимому fragment_id. Верни полный JSON с пятью обязательными "
+        "массивами fields, structures, works, quantities, materials. Для fragment_id используй только "
+        "буквальные F1, F2 и т.д. из списка; если доказательство сопоставить нельзя, удали этот "
+        "кандидат. Не добавляй новые инженерные сведения.\n"
+        "ДОПУСТИМЫЕ ФРАГМЕНТЫ:\n"
+        + json.dumps(
+            [
+                {
+                    "fragment_id": f"F{ordinal}",
+                    "page": fragment.locator.page_number,
+                    "character_start": fragment.character_start,
+                    "character_end": fragment.character_end,
+                }
+                for ordinal, fragment in enumerate(elements, start=1)
+            ],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        + "\nНЕКОРРЕКТНЫЙ ОТВЕТ ДЛЯ ИСПРАВЛЕНИЯ:\n"
+        + prior_answer
+    )
 
 
 def _parse_engineering(

@@ -308,6 +308,19 @@ class IndustrialDocumentUnderstandingPipeline:
             output_manifest=manifest,
         )
 
+    def _record_failed_engineering_batch(
+        self, claimed: ClaimedJob, batch: QwenEngineeringBatch, failure_code: str
+    ) -> None:
+        self._repository.record_failed_engineering_batch(
+            claimed,
+            profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            batch_ordinal=batch.ordinal,
+            batch_digest=batch.digest,
+            source_locator_ids=batch.locator_ids,
+            input_manifest=batch.input_manifest,
+            failure_code=failure_code,
+        )
+
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)
         semantic = self._engineering_semantic(claimed)
@@ -353,6 +366,9 @@ class IndustrialDocumentUnderstandingPipeline:
                 compatible_accepted_batches=compatible_accepted_batches,
                 on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
                     claimed, batch, manifest
+                ),
+                on_failed_batch=lambda batch, failure_code: self._record_failed_engineering_batch(
+                    claimed, batch, failure_code
                 ),
             )
         except QwenSemanticFailure as exc:
