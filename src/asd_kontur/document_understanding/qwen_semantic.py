@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v11"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v12"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v11",
     "qwen-engineering-extraction-v10",
     "qwen-engineering-extraction-v9",
     "qwen-engineering-extraction-v8",
@@ -51,7 +52,8 @@ _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
-_MAX_ENGINEERING_BATCH_FRAGMENTS = 6
+_MAX_ENGINEERING_BATCH_FRAGMENTS = 24
+_MAX_ENGINEERING_BATCH_CHARS = 12_000
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",
@@ -602,14 +604,20 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
 def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEngineeringBatch, ...]:
     fragments = _fragments(elements)
     batches: list[QwenEngineeringBatch] = []
-    for ordinal, offset in enumerate(
-        range(0, len(fragments), _MAX_ENGINEERING_BATCH_FRAGMENTS), start=1
-    ):
-        batches.append(
-            _engineering_batch(
-                ordinal, fragments[offset : offset + _MAX_ENGINEERING_BATCH_FRAGMENTS]
-            )
-        )
+    current: list[_SemanticFragment] = []
+    current_chars = 0
+    for fragment in fragments:
+        if current and (
+            len(current) >= _MAX_ENGINEERING_BATCH_FRAGMENTS
+            or current_chars + len(fragment.text) > _MAX_ENGINEERING_BATCH_CHARS
+        ):
+            batches.append(_engineering_batch(len(batches) + 1, tuple(current)))
+            current = []
+            current_chars = 0
+        current.append(fragment)
+        current_chars += len(fragment.text)
+    if current:
+        batches.append(_engineering_batch(len(batches) + 1, tuple(current)))
     return tuple(batches)
 
 
