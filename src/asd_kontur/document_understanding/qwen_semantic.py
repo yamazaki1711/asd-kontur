@@ -39,19 +39,10 @@ from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v14"
-_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
-    "qwen-engineering-extraction-v13",
-    "qwen-engineering-extraction-v12",
-    "qwen-engineering-extraction-v11",
-    "qwen-engineering-extraction-v10",
-    "qwen-engineering-extraction-v9",
-    "qwen-engineering-extraction-v8",
-    "qwen-engineering-extraction-v7",
-    "qwen-engineering-extraction-v6",
-    "qwen-engineering-extraction-v5",
-    "qwen-engineering-extraction-v4",
-    "qwen-engineering-extraction-v3",
-)
+# v14 adds a required relationship collection.  Prior batch manifests did not ask
+# the model to inspect or report those observations, so treating them as compatible
+# would silently turn missing relationship coverage into an accepted empty result.
+_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES: tuple[str, ...] = ()
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800

@@ -1064,7 +1064,7 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
     assert len(accepted) == 1
 
 
-def test_qwen_engineering_extraction_reuses_compatible_v3_batch_manifest() -> None:
+def test_qwen_engineering_extraction_does_not_reuse_prior_profile_without_relationships() -> None:
     document = _extract_csv("проектная запись;значение\n")
     batch = _engineering_batches(document.pages[0].elements)[0]
     fragment_id = str(batch.fragments[0].fragment_id)
@@ -1080,13 +1080,25 @@ def test_qwen_engineering_extraction_reuses_compatible_v3_batch_manifest() -> No
         }
     }
 
-    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+    response = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+    )
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete", return_value=response
+    ) as complete:
         result = adapter.extract_engineering(
             document.pages[0].elements, compatible_accepted_batches=compatible
         )
 
-    complete.assert_not_called()
-    assert result.project_fields[0].raw_value == "Объект"
+    complete.assert_called_once()
+    assert not result.project_fields
 
 
 def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> None:
@@ -1116,17 +1128,6 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
                 "qwen-engineering-extraction-v14",
-                "qwen-engineering-extraction-v13",
-                "qwen-engineering-extraction-v12",
-                "qwen-engineering-extraction-v11",
-                "qwen-engineering-extraction-v10",
-                "qwen-engineering-extraction-v9",
-                "qwen-engineering-extraction-v8",
-                "qwen-engineering-extraction-v7",
-                "qwen-engineering-extraction-v6",
-                "qwen-engineering-extraction-v5",
-                "qwen-engineering-extraction-v4",
-                "qwen-engineering-extraction-v3",
             }
             return {}
 
