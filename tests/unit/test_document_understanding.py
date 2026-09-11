@@ -43,6 +43,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     _compatible_batch_digest,
     _engineering_batches,
     _fragments,
+    _split_engineering_batch,
 )
 from asd_kontur.document_understanding.semantic import (
     StructuredCandidates,
@@ -893,6 +894,35 @@ def test_qwen_engineering_extraction_repairs_recoverable_invalid_batch_before_sp
     assert len(accepted) == 1
     assert accepted[0][0].prompt_strategy == "evidence_reference_repair-v1"
     assert not failed
+
+
+def test_qwen_engineering_extraction_reuses_accepted_recovery_children_before_calling_qwen() -> (
+    None
+):
+    document = _extract_csv("A;B;C\n")
+    parent = _engineering_batches(document.pages[0].elements)[0]
+    children = _split_engineering_batch(parent)
+    assert children
+    accepted = {
+        child.digest: {
+            "fields": [],
+            "structures": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+        for child in children
+    }
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            accepted_batches=accepted,
+        )
+
+    complete.assert_not_called()
+    assert result == StructuredCandidates((), (), (), (), (), ())
 
 
 def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_response() -> None:

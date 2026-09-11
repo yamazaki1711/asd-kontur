@@ -436,6 +436,33 @@ class QwenDocumentSemanticAdapter:
                     break
         if persisted is not None:
             return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
+        # A failed parent batch can already have fully accepted standard child
+        # batches from its bounded recovery.  Reuse those exact child manifests
+        # instead of asking Qwen to repeat the failed parent request during a
+        # dependent extraction stage.
+        recovered_children = _split_engineering_batch(batch)
+        if recovered_children and all(
+            _accepted_engineering_batch_available(
+                child,
+                accepted=accepted,
+                compatible_accepted_batches=compatible_accepted_batches,
+            )
+            for child in recovered_children
+        ):
+            recovered_values: list[
+                tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]
+            ] = []
+            for child in recovered_children:
+                recovered_values.extend(
+                    self._extract_engineering_batch(
+                        child,
+                        accepted=accepted,
+                        compatible_accepted_batches=compatible_accepted_batches,
+                        on_accepted_batch=on_accepted_batch,
+                        on_failed_batch=on_failed_batch,
+                    )
+                )
+            return tuple(recovered_values)
         payload = ""
         try:
             payload = _complete(
@@ -663,6 +690,20 @@ def _compatible_batch_digest(fragments: tuple[_SemanticFragment, ...], profile_v
             "profile_version": profile_version,
             "fragments": _engineering_batch_payload(fragments),
         }
+    )
+
+
+def _accepted_engineering_batch_available(
+    batch: QwenEngineeringBatch,
+    *,
+    accepted: Mapping[str, dict[str, object]],
+    compatible_accepted_batches: Mapping[str, dict[str, object]],
+) -> bool:
+    if batch.digest in accepted:
+        return True
+    return any(
+        _compatible_batch_digest(batch.fragments, profile_version) in compatible_accepted_batches
+        for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES
     )
 
 
