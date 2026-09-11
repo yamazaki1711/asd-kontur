@@ -3608,7 +3608,14 @@ function ProjectUnderstandingPage() {
                         item.profile_version,
                         "профиль",
                       );
-                      return `${accepted.toString()}/${expected.toString()} фрагментов (${profile})`;
+                      const documentName = displayValue(
+                        item.safe_display_name,
+                        "документ",
+                      );
+                      const pages = Number(item.page_count ?? 0);
+                      const pageLabel =
+                        pages > 0 ? `, ${pages.toString()} стр.` : "";
+                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов (${profile})`;
                     })
                     .join("; ")}
                   . Это покрытие извлечения-кандидата, а не подтверждённые
