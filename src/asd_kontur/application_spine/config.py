@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from uuid import UUID
 
 
 class SessionProfile(StrEnum):
@@ -49,6 +50,8 @@ class SpineSettings:
     qwen_bind_host: str = "127.0.0.1"
     qwen_bind_port: int = 8790
     ntd_embedding_endpoint: str | None = None
+    document_worker_organization_id: UUID | None = None
+    document_worker_workspace_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -84,6 +87,10 @@ class SpineSettings:
             raise ValueError("invalid batch limits")
         if self.qwen_bind_host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("local Qwen must bind to loopback")
+        if (self.document_worker_organization_id is None) != (
+            self.document_worker_workspace_id is None
+        ):
+            raise ValueError("document_worker_scope_incomplete")
 
     @property
     def secure_cookie(self) -> bool:
@@ -128,6 +135,8 @@ class SpineSettings:
             qwen_bind_host=os.environ.get("ASD_QWEN_BIND_HOST", "127.0.0.1"),
             qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
             ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
+            document_worker_organization_id=_optional_uuid("ASD_DOCUMENT_WORKER_ORGANIZATION_ID"),
+            document_worker_workspace_id=_optional_uuid("ASD_DOCUMENT_WORKER_WORKSPACE_ID"),
         )
 
 
@@ -136,3 +145,8 @@ def _required(name: str) -> str:
     if not value:
         raise ValueError(f"{name} is required")
     return value
+
+
+def _optional_uuid(name: str) -> UUID | None:
+    value = os.environ.get(name)
+    return UUID(value) if value else None

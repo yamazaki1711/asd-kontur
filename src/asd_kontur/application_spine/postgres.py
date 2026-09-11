@@ -1072,9 +1072,20 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("document_not_found")
         return str(value)
 
-    def claim_next_job(self, *, worker_identity: str, lease_seconds: int) -> ClaimedJob | None:
-        with self._engine.begin() as connection:
-            row = connection.execute(
+    def claim_next_job(
+        self,
+        *,
+        worker_identity: str,
+        lease_seconds: int,
+        organization_id: UUID | None = None,
+        workspace_id: UUID | None = None,
+    ) -> ClaimedJob | None:
+        if (organization_id is None) != (workspace_id is None):
+            raise ValueError("document_worker_scope_incomplete")
+        with Session(self._engine) as session, session.begin():
+            if organization_id is not None and workspace_id is not None:
+                _set_scope(session, organization_id, workspace_id)
+            row = session.execute(
                 sa.text("SELECT * FROM workspace.claim_next_durable_job(:worker,:lease)"),
                 {"worker": worker_identity, "lease": lease_seconds},
             ).one_or_none()

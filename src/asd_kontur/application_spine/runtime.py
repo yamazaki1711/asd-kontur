@@ -102,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
             worker_identity=args.identity,
             lease_seconds=settings.job_lease_seconds,
             qwen_vision_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/vision",
+            qwen_semantic_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
+            organization_id=settings.document_worker_organization_id,
+            workspace_id=settings.document_worker_workspace_id,
         )
         try:
             worker_instance.run_forever()

@@ -122,13 +122,19 @@ class DocumentWorker:
         lease_seconds: int,
         qwen_vision_url: str = "http://127.0.0.1:8790/vision",
         qwen_semantic_url: str | None = "http://127.0.0.1:8790/generate",
+        organization_id: UUID | None = None,
+        workspace_id: UUID | None = None,
     ) -> None:
         if len(worker_identity) < 3:
             raise ValueError("worker identity is required")
+        if (organization_id is None) != (workspace_id is None):
+            raise ValueError("document_worker_scope_incomplete")
         self._repository = repository
         self._object_store = object_store
         self._worker_identity = worker_identity
         self._lease_seconds = lease_seconds
+        self._organization_id = organization_id
+        self._workspace_id = workspace_id
         self._stopping = False
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
@@ -151,6 +157,8 @@ class DocumentWorker:
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
+            organization_id=self._organization_id,
+            workspace_id=self._workspace_id,
         )
         if claimed is None:
             # Recoveries are maintenance work, not a prerequisite for runnable
@@ -161,6 +169,8 @@ class DocumentWorker:
             claimed = self._repository.claim_next_job(
                 worker_identity=self._worker_identity,
                 lease_seconds=self._lease_seconds,
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
             )
         if claimed is None:
             return None
