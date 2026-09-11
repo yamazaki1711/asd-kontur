@@ -1,0 +1,47 @@
+{
+  "recorded_at": "2026-09-11T16:14:00+12:00",
+  "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+  "release": {
+    "api": "18c6893fdbee5186b351bdddaab2920c8f7eda3d",
+    "document_worker": "18c6893fdbee5186b351bdddaab2920c8f7eda3d",
+    "database_migration": "0045_bounded_dep_recovery"
+  },
+  "corpus": {
+    "active_source_versions": 22,
+    "page_denominator": 2529,
+    "semantic_completed_sources": 2,
+    "semantic_active_source": "01a088ac-8084-7c59-8b1a-c9bda7ad8208"
+  },
+  "pzu_v12": {
+    "source_version_id": "01a088ac-8125-7031-8659-a57bd97ff1c6",
+    "accepted_fragment_inputs": 5021,
+    "failed_attempts": 5,
+    "failed_attempt_fragment_entries": 96,
+    "persisted_candidates": {
+      "project_fields": 61,
+      "works": 252,
+      "quantities": 86,
+      "materials": 39,
+      "structures": 177
+    }
+  },
+  "workspace_candidates": {
+    "project_fields": 109,
+    "works": 429,
+    "quantities": 121,
+    "materials": 41,
+    "structures": 188,
+    "excavation_pit_candidates": 5
+  },
+  "materialization": {
+    "state": "partial",
+    "established_pit_count": null,
+    "full_package_tender_accepted": false
+  },
+  "active_job": {
+    "job_id": "01a08eac-9094-73c6-b936-3ca9bc2a0044",
+    "kind": "PROJECT_DEFINITION_EXTRACTION",
+    "source_version_id": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
+    "state_at_snapshot": "running"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "recorded_at": "2026-09-11T16:14:00+12:00",
+  "scope": "OZERO comprehensive Tender delivery",
+  "cases": [
+    {
+      "id": "release-ready",
+      "expected": "The pinned API and document-worker releases start at the expected database revision.",
+      "observed": "Both services run 18c6893; /api/v1/health/ready reports PostgreSQL reachable and migration 0045_bounded_dep_recovery.",
+      "status": "PASS",
+      "evidence": "launchd service manifest and local readiness response"
+    },
+    {
+      "id": "pzu-semantic-coverage",
+      "expected": "Every deterministic PZU semantic input is represented by an accepted bounded batch or a visible unresolved outcome.",
+      "observed": "5,021 accepted fragment inputs for the 5,021-fragment PZU denominator; five rejected model attempts remain historical receipts.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches, profile qwen-engineering-extraction-v12"
+    },
+    {
+      "id": "pzu-materialization",
+      "expected": "Accepted semantic evidence reaches persistent candidate collections and downstream materialization.",
+      "observed": "PZU successor stages completed; candidates and a partial reconciliation are persisted.",
+      "status": "PASS",
+      "evidence": "source-scoped durable-job lineage and project-understanding view"
+    },
+    {
+      "id": "full-package-semantic-coverage",
+      "expected": "All 22 active source versions and 2,529 pages have the required processing disposition and eligible semantic analysis.",
+      "observed": "Only two source versions have accepted engineering-batch coverage at this checkpoint; KR1 is active.",
+      "status": "FAIL",
+      "evidence": "semantic coverage rows and active KR1 job"
+    },
+    {
+      "id": "facility-dossiers-and-pit-inventory",
+      "expected": "A reconciled facility/area/pit inventory with revision-aware evidence is accessible in the application.",
+      "observed": "The view contains candidate structures, including five pit candidates, but no cross-document identity reconciliation or exhaustive inventory.",
+      "status": "FAIL",
+      "evidence": "partial project-understanding view"
+    },
+    {
+      "id": "consultant-project-acceptance",
+      "expected": "The consultant answers project-wide and facility-specific questions with persisted project evidence and working source links.",
+      "observed": "Not yet exercised after comprehensive model completion.",
+      "status": "UNVERIFIED",
+      "evidence": "requires browser/application acceptance after source reconciliation"
+    }
+  ]
+}

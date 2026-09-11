@@ -207,3 +207,35 @@ live. The only active successor is `01a08e75-ba75-775a-8137-f9984ff63a39` for PZ
 processing with local Qwen under the v12 bounded contract. Do not create another PZU retry while it runs.
 After PZU reaches a terminal state, validate candidate provenance and the partial project view, then choose
 the next structural source (KR1/KR2/POS) using the same v12 path.
+
+### Continuation checkpoint — 2026-09-11 16:14 UTC+12
+
+PZU source version `01a088ac-8125-7031-8659-a57bd97ff1c6` completed its v12 semantic manifest at
+16:05 UTC+12: 5,021/5,021 accepted fragment inputs. Five failed model attempts (96 input-fragment
+entries across immutable failed receipts) remain visible as failed attempts; their successful bounded
+children provide the accepted coverage and were not relabelled as parent success. The source-scoped
+`WORK_QUANTITY_MATERIAL_EXTRACTION`, work-package, matrix, reconciliation, and evidence-index
+successors then completed through the accepted dependency lineage.
+
+The PZU source contributed 61 project-field candidates, 252 work candidates, 86 quantity candidates,
+39 material candidates, and 177 structural candidates. These remain source-backed candidates, not
+confirmed project facts or an excavation-pit total. Across the workspace, the current partial model has
+109 field candidates, 429 work candidates, 121 quantities, 41 materials, 188 structural candidates, and
+five excavation-pit candidates. The latest reconciliation remains `partial` with explicit field conflicts,
+missing project-definition fields, unresolved work-type mappings, and unqualified normative/rule inputs.
+
+Release `18c6893fdbee5186b351bdddaab2920c8f7eda3d` is live for both API and worker at database migration
+`0045_bounded_dep_recovery`; its API serves the matching built frontend and `/api/v1/health/ready` reports
+PostgreSQL reachable at that migration. It replaces the unconditional work-type catalog placeholder with
+evaluated work-mapping gaps, makes project/matrix/reconciliation state derived rather than hard-coded, and
+shows partial candidate categories in the Russian UI. It also reuses accepted recovery child batches rather
+than re-running the failed parent request in a dependent stage. Static checks and 16 focused engineering
+semantic tests passed; the disposable-PostgreSQL integration test was skipped because
+`ASD_TEST_DATABASE_URL` was not configured, so live evidence remains the controlled OZERO run above.
+
+The next active source is KR1, source version `01a088ac-8084-7c59-8b1a-c9bda7ad8208` (29 pages). Its sole
+authorized replacement `01a08eac-9094-73c6-b936-3ca9bc2a0044` was claimed by the new scoped worker at
+16:14 UTC+12 and had four accepted v13 batches / 48 fragment inputs at the checkpoint, with a live worker
+connection to local Qwen. Continue that source to terminal materialization, then schedule KR2 and POS
+without duplicating active work. Full-package coverage, reconciled facility dossiers, Tender findings,
+normative project checks, source-link browser acceptance, and consultant acceptance remain open.
