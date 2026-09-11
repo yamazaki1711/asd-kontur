@@ -717,6 +717,27 @@ def test_qwen_engineering_batches_cover_every_fragment_with_bounded_context() ->
     assert all(sum(len(item.text) for item in batch.fragments) <= 9_000 for batch in batches)
 
 
+def test_qwen_engineering_dense_batches_are_explicit_and_legacy_batches_stay_stable() -> None:
+    document = _extract_csv(
+        "\n".join(f"строка {index};значение {index}" for index in range(1, 31)) + "\n"
+    )
+
+    legacy = _engineering_batches(document.pages[0].elements)
+    dense = _engineering_batches(
+        document.pages[0].elements, batching_policy_version="dense-fragments-v1"
+    )
+
+    assert len(dense) < len(legacy)
+    assert tuple(item for batch in dense for item in batch.fragments) == tuple(
+        item for batch in legacy for item in batch.fragments
+    )
+    assert all(len(batch.fragments) <= 48 for batch in dense)
+    assert all(
+        batch.input_manifest["batching_policy_version"] == "dense-fragments-v1" for batch in dense
+    )
+    assert all("batching_policy_version" not in batch.input_manifest for batch in legacy)
+
+
 def test_qwen_engineering_progress_reports_each_completed_base_batch() -> None:
     document = _extract_csv(
         "\n".join(f"строка {index};значение {index}" for index in range(1, 31)) + "\n"
@@ -1266,6 +1287,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         UUID(str(document.pages[0].elements[1].locator.source_locator_id)),
     )
     assert persisted["input_manifest"]
+    assert persisted["input_manifest"]["batching_policy_version"] == "dense-fragments-v1"
     bundle = cast(StructuredCandidates, persisted["bundle"])
     assert len(bundle.structures) == 1
     assert len(bundle.works) == 1

@@ -46,8 +46,10 @@ _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES: tuple[str, ...] = ()
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
-_MAX_ENGINEERING_BATCH_FRAGMENTS = 12
+_LEGACY_ENGINEERING_BATCH_FRAGMENTS = 12
+_DENSE_ENGINEERING_BATCH_FRAGMENTS = 48
 _MAX_ENGINEERING_BATCH_CHARS = 9_000
+_DENSE_ENGINEERING_BATCHING_POLICY = "dense-fragments-v1"
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",
@@ -90,6 +92,7 @@ class QwenEngineeringBatch:
     digest: str
     fragments: tuple[_SemanticFragment, ...]
     prompt_strategy: str = "standard"
+    batching_policy_version: str | None = None
 
     @property
     def locator_ids(self) -> tuple[UUID, ...]:
@@ -113,6 +116,8 @@ class QwenEngineeringBatch:
             "profile_version": QWEN_ENGINEERING_EXTRACTION_PROFILE,
             "fragments": values,
         }
+        if self.batching_policy_version is not None:
+            manifest["batching_policy_version"] = self.batching_policy_version
         if self.prompt_strategy != "standard":
             manifest["prompt_strategy"] = self.prompt_strategy
         return manifest
@@ -214,17 +219,25 @@ class QwenDocumentSemanticAdapter:
         *,
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        batching_policy_version: str | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
         on_batch_progress: Callable[[int, int], None] | None = None,
         on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None]
         | None = None,
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
-        batches = _engineering_batches(elements)
-        if not batches:
-            raise QwenSemanticFailure("qwen_engineering_input_unavailable")
         accepted = accepted_batches or {}
         compatible = compatible_accepted_batches or {}
+        # Existing accepted v15 batches predate the dense packing policy. Resume
+        # them with byte-identical manifests so their evidence can be reused.
+        # Callers opt into dense packing explicitly; the adapter's default stays
+        # legacy-compatible for direct consumers and existing tests.
+        batches = _engineering_batches(
+            elements,
+            batching_policy_version=(None if accepted or compatible else batching_policy_version),
+        )
+        if not batches:
+            raise QwenSemanticFailure("qwen_engineering_input_unavailable")
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
         for current, batch in enumerate(batches, start=1):
             extracted.extend(
@@ -526,6 +539,7 @@ class QwenDocumentSemanticAdapter:
                         batch.ordinal,
                         batch.fragments,
                         prompt_strategy="evidence_reference_repair-v1",
+                        batching_policy_version=batch.batching_policy_version,
                     )
                     if on_accepted_batch is not None:
                         on_accepted_batch(repair_batch, _engineering_manifest(parsed))
@@ -544,6 +558,7 @@ class QwenDocumentSemanticAdapter:
                         batch.ordinal,
                         batch.fragments,
                         prompt_strategy="single_fragment_repair-v1",
+                        batching_policy_version=batch.batching_policy_version,
                     ),
                     accepted=accepted,
                     compatible_accepted_batches=compatible_accepted_batches,
@@ -664,23 +679,42 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
     return tuple(fragments)
 
 
-def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEngineeringBatch, ...]:
+def _engineering_batches(
+    elements: Iterable[LayoutElement], *, batching_policy_version: str | None = None
+) -> tuple[QwenEngineeringBatch, ...]:
     fragments = _fragments(elements)
+    max_fragments = (
+        _LEGACY_ENGINEERING_BATCH_FRAGMENTS
+        if batching_policy_version is None
+        else _DENSE_ENGINEERING_BATCH_FRAGMENTS
+    )
     batches: list[QwenEngineeringBatch] = []
     current: list[_SemanticFragment] = []
     current_chars = 0
     for fragment in fragments:
         if current and (
-            len(current) >= _MAX_ENGINEERING_BATCH_FRAGMENTS
+            len(current) >= max_fragments
             or current_chars + len(fragment.text) > _MAX_ENGINEERING_BATCH_CHARS
         ):
-            batches.append(_engineering_batch(len(batches) + 1, tuple(current)))
+            batches.append(
+                _engineering_batch(
+                    len(batches) + 1,
+                    tuple(current),
+                    batching_policy_version=batching_policy_version,
+                )
+            )
             current = []
             current_chars = 0
         current.append(fragment)
         current_chars += len(fragment.text)
     if current:
-        batches.append(_engineering_batch(len(batches) + 1, tuple(current)))
+        batches.append(
+            _engineering_batch(
+                len(batches) + 1,
+                tuple(current),
+                batching_policy_version=batching_policy_version,
+            )
+        )
     return tuple(batches)
 
 
@@ -689,6 +723,7 @@ def _engineering_batch(
     fragments: tuple[_SemanticFragment, ...],
     *,
     prompt_strategy: str = "standard",
+    batching_policy_version: str | None = None,
 ) -> QwenEngineeringBatch:
     batch_payload = _engineering_batch_payload(fragments)
     digest_input: dict[str, object] = {
@@ -697,11 +732,14 @@ def _engineering_batch(
     }
     if prompt_strategy != "standard":
         digest_input["prompt_strategy"] = prompt_strategy
+    if batching_policy_version is not None:
+        digest_input["batching_policy_version"] = batching_policy_version
     return QwenEngineeringBatch(
         ordinal,
         semantic_digest(digest_input),
         fragments,
         prompt_strategy,
+        batching_policy_version,
     )
 
 
@@ -747,8 +785,16 @@ def _split_engineering_batch(batch: QwenEngineeringBatch) -> tuple[QwenEngineeri
     if midpoint < 1:
         return ()
     return (
-        _engineering_batch(batch.ordinal * 100 + 1, batch.fragments[:midpoint]),
-        _engineering_batch(batch.ordinal * 100 + 2, batch.fragments[midpoint:]),
+        _engineering_batch(
+            batch.ordinal * 100 + 1,
+            batch.fragments[:midpoint],
+            batching_policy_version=batch.batching_policy_version,
+        ),
+        _engineering_batch(
+            batch.ordinal * 100 + 2,
+            batch.fragments[midpoint:],
+            batching_policy_version=batch.batching_policy_version,
+        ),
     )
 
 
