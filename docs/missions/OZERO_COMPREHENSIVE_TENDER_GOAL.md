@@ -497,6 +497,39 @@ persistence, replacement-lineage recovery, and project-view materialization befo
 scheduling the next source; if it terminates unsuccessfully, inspect only the exact
 failed batch lineage and recover the bounded input.
 
+### Continuation checkpoint — 2026-09-11 23:57 UTC+12
+
+The POS source and the later СМ3 source have both reached durable terminal success;
+their dependent work/package, matrix, reconciliation, and evidence-index stages ran.
+The live database is now at additive migration
+`0048_incremental_reconciliation_claim_priority`. Its claim policy was exercised on
+the real queue: incremental reconciliation `01a08fce-76c0-7cb9-97bd-3b1236718625`
+was claimed and succeeded before further source inference. A non-empty current
+owner-authorized PostgreSQL backup was made immediately before that migration in the
+restricted operational backup store. Runtime command commit `11a37bb14aacef91c779cb9f4accf4ccc4753ecb`
+also repairs the migration wrapper so it supplies Alembic's mandatory explicit
+database URL; its focused unit test, Ruff, and strict source mypy pass.
+
+The sole live Qwen workload is currently source `01a088ac-7fdb-7b12-be33-e3a325af8edf`
+(`Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`), job
+`01a08f4e-3b5e-798c-9d5b-b3acd1724683`. The document worker has a live loopback
+connection to Qwen, and sampled Qwen execution shows MLX Metal kernels, not a CPU-only
+fallback. It must continue without interruption. A different pre-restart СМ5 lease,
+`01a08f4e-3b5d-713f-b1f8-9feb58a7a565`, is expired with no live executor; retain it as
+historical lineage and recover it through the durable lifecycle only after the active
+request reaches a terminal boundary. Do not mark it successful or create a duplicate
+active source attempt.
+
+The latest materialization remains explicitly `partial`: it covers the active 22
+source versions / 2,529 pages as an intake denominator, not complete semantic
+analysis. It holds 5,131 accepted candidate observations, 1,080 unresolved candidate
+observations, 357 open reconciliation defects, and source-backed candidate nodes
+(including 65 pit-labelled nodes). Those are neither deduplicated facility dossiers
+nor an established pit inventory/count. Next: observe the active СМ2 terminal result,
+verify its candidate persistence and incremental materialization, then continue the
+eligible corpus while implementing version-aware recovery of the expired СМ5 lease and
+cross-document facility reconciliation.
+
 ### Continuation checkpoint — 2026-09-11 21:45 UTC+12
 
 The live worker release is the pinned `75666044b2598bffaa5418f40cc830f36cd773b6`
