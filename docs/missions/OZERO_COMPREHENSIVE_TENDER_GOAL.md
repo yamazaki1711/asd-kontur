@@ -54,22 +54,24 @@ contains the versioned v2 extraction correction but is not deployed at this chec
 ### Continuation checkpoint — 2026-09-11
 
 The former v2 checkpoint is superseded by versioned engineering extraction releases. Migration
-`0041_engineering_v4_manifest` is applied to the controlled workspace database. Worker and local Qwen
-are currently pinned to the preceding `b6b2b0c` release while its duplicate v3 attempt acknowledges a
-supported cancellation request; no unrelated workload was interrupted. The successor `bd34f90` is
-tested, pushed, and prepared for controlled release. It restores profile lineage: v4 can replay only
-the exact compatible v3 manifests and records its one-fragment corrective prompt strategy distinctly.
+`0042_dependency_recovery` is applied to the controlled workspace database after a consistent local
+backup. The active document worker and local Qwen remain pinned to `bd34f90` while the existing v4
+extraction request runs; no active Qwen request was interrupted. Commit `b88507e` is tested and pushed
+for the next controlled worker release. It records auditable dependent replacements only when a
+causally-linked prerequisite with the same job kind, source manifest digest, and subject succeeds; it
+does not erase the historical terminal job or treat an arbitrary newer job as a prerequisite.
 
 For source version `01a088ac-7f16-73ef-9d2c-3957b2393f66`, the complete deterministic v4 manifest
 has 1,453 native elements/fragments and 61 base batches. Earlier v2/v3 rows are immutable historical
-evidence. Real local-Qwen v3 processing accepted multiple batch manifests before output exhaustion and
-invalid-evidence failures; child-batch persistence was proven, but that source has not yet reached
-candidate persistence or project materialization. No project-wide result is accepted from it.
+evidence. The active v4 retry `01a08e02-1fba-7e43-b1f3-5f2371f65d52` is the sole effective attempt;
+it has persisted accepted v4 batches but has not yet reached candidate persistence or project
+materialization. No project-wide result is accepted from it.
 
 The committed UI/API coverage surface reports accepted semantic fragments separately from classified
 pages and from reconciled facts. It is not yet deployed with the corresponding API/frontend release.
 
-Next executable action: wait for the requested v3 cancellation to become terminal, release the pinned
-`bd34f90` worker/Qwen pair, retry the source through v4 with compatible v3 replay, and verify durable
-candidate persistence followed by workspace assembly. Then schedule the next eligible active source;
-do not leave the OZERO queue empty while eligible sources remain.
+Next executable action: allow the sole v4 attempt to complete without duplication; inspect its immutable
+batch/candidate receipts. Then release the already-migrated `b88507e` worker, recover only the blocked
+downstream stages through the verified replacement lineage, and verify workspace assembly before
+scheduling the next eligible active source. Do not leave the OZERO queue empty while eligible sources
+remain.
