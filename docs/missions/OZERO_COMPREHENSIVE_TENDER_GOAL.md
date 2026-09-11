@@ -363,3 +363,23 @@ version-aware dependent recovery, partial project-view materialization, and evid
 links before scheduling the next eligible source. Full 22-document coverage,
 cross-document facility reconciliation, NTD checks, Tender outputs, and consultant
 acceptance remain open.
+
+### Continuation checkpoint — 2026-09-11 17:46 UTC+12
+
+The deployed application boundary now returns a truthful partial OZERO model from
+previously accepted source evidence: 291 project-field candidates, 304 structural
+candidates, 505 work candidates, 146 quantity candidates, 79 material candidates,
+505 provisional work packages, and 154 reconciliation defects across the active
+22-source / 2,529-page manifest. The reconciliation is explicitly `partial`; its
+gaps include unresolved work mapping, project-field conflicts, missing normative
+applicability inputs, and unavailable verified PD/RD rule versions. These values are
+candidate evidence and unresolved findings, not a reconciled LOS/KNS/pit inventory or
+a complete Tender conclusion.
+
+POS semantic job `01a08ee8-946f-7cbd-b190-32c8d7af0025` remains the sole active Qwen
+document workload. At this snapshot its v15 ledger has 119 accepted batches and one
+immutable `qwen_engineering_response_invalid_json` parent record. The parent was split
+into accepted child batches; it does not invalidate accepted fragments or justify a
+document-wide retry. Next: complete this source, verify candidate persistence and
+downstream materialization, then continue eligible sources and reconcile facility
+identity, project-wide coverage, Tender findings, and grounded consultation.
