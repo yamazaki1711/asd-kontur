@@ -1,16 +1,19 @@
 {
-  "recorded_at": "2026-09-11T16:14:00+12:00",
+  "recorded_at": "2026-09-11T16:27:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "18c6893fdbee5186b351bdddaab2920c8f7eda3d",
+    "api": "8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da",
     "document_worker": "18c6893fdbee5186b351bdddaab2920c8f7eda3d",
+    "assistant_worker": "a9a693a854f4dd4120de6e8f16451923d82fe4ab",
     "database_migration": "0045_bounded_dep_recovery"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
     "semantic_completed_sources": 2,
-    "semantic_active_source": "01a088ac-8084-7c59-8b1a-c9bda7ad8208"
+    "semantic_active_source": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
+    "semantic_active_source_expected_fragment_inputs": 2960,
+    "semantic_active_source_accepted_fragment_inputs": 1764
   },
   "pzu_v12": {
     "source_version_id": "01a088ac-8125-7031-8659-a57bd97ff1c6",

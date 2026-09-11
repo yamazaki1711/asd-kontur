@@ -1,11 +1,11 @@
 {
-  "recorded_at": "2026-09-11T16:14:00+12:00",
+  "recorded_at": "2026-09-11T16:27:00+12:00",
   "scope": "OZERO comprehensive Tender delivery",
   "cases": [
     {
       "id": "release-ready",
       "expected": "The pinned API and document-worker releases start at the expected database revision.",
-      "observed": "Both services run 18c6893; /api/v1/health/ready reports PostgreSQL reachable and migration 0045_bounded_dep_recovery.",
+      "observed": "API 8e0c2f5, document worker 18c6893, and assistant worker a9a693a are pinned; /api/v1/health/ready reports PostgreSQL reachable and migration 0045_bounded_dep_recovery.",
       "status": "PASS",
       "evidence": "launchd service manifest and local readiness response"
     },

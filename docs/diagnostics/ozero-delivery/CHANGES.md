@@ -12,9 +12,17 @@
   dependent stages no longer repeat that parent Qwen request when exact validated
   child evidence already exists.
 
-The deployed release set is `18c6893fdbee5186b351bdddaab2920c8f7eda3d` for API and
-document worker. It is compatible with migration `0045_bounded_dep_recovery`; no
-migration was required for these changes.
+The initial deployed release set was `18c6893fdbee5186b351bdddaab2920c8f7eda3d` for
+API and document worker. It was compatible with migration `0045_bounded_dep_recovery`;
+no migration was required for these changes.
+
+- `a9a693a` prevents metadata-only workspace tools from satisfying a question that
+  requires project-document content (for example, an exhaustive pit inventory).
+- `8e0c2f5` presents structural candidates as Russian-labelled, source-linked cards
+  instead of raw schema-shaped JSON in the project model UI.
+
+The live release set is now API `8e0c2f5`, document worker `18c6893`, and assistant
+worker `a9a693a`, all compatible with migration `0045_bounded_dep_recovery`.
 
 Known limitation: this release provides durable, source-backed partial candidates.
 It does not yet provide complete multi-document facility reconciliation, a verified
