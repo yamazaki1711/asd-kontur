@@ -23,6 +23,10 @@ observations. None is a reconciled cross-document facility, LOS/KNS, excavation-
 inventory, or confirmed fact. The current UI can expose expired job leases honestly;
 browser acceptance is still unverified because no browser binding is available.
 
+The next supervised-worker plist was staged with the verified `8159206` release
+identity and backed up before the edit. It was deliberately **not** reloaded: the
+running job retained its original process, fresh lease, and worker-to-Qwen connection.
+
 ## 2026-09-11 20:56 UTC+12 — exact-evidence graph components live
 
 API/frontend release `6739b203269dd20e0eab1d22532271217e1a451c` is live at migration

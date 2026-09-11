@@ -528,6 +528,13 @@ cross-document LOS/KNS/facility inventory, pit count, Tender finding, or consult
 acceptance. Browser-based UI acceptance is unverified because no in-app browser
 binding is currently available.
 
+The next worker plist is now staged with that same exact `8159206` release identity
+and a recoverable pre-change copy is retained in the restricted release record. The
+loaded worker was not restarted and still correctly reports its prior `22142e2` label;
+the changed plist only takes effect at a later safe boundary. A new live observation
+after the configuration write confirms the semantic job lease and worker PID remain
+unchanged and fresh.
+
 ### Continuation checkpoint — 2026-09-11 18:08 UTC+12
 
 The active POS job remains `running` under the pinned `13f50af` worker. Its Qwen v15
