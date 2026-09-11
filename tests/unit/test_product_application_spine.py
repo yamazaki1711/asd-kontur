@@ -19,12 +19,57 @@ from asd_kontur.application_spine.object_store import (
     sanitize_display_name,
     sanitize_relative_path,
 )
+from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
+    nodes = [
+        {
+            "structure_node_id": "node-a",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-a",
+        },
+        {
+            "structure_node_id": "node-b",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-b",
+        },
+    ]
+    relationships = [
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "node-a",
+            "object_structure_node_id": None,
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": None,
+            "object_structure_node_id": "node-b",
+            "resolution_state": "resolved_same_evidence",
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, relationships)
+
+    assert [item["structure_node"]["structure_node_id"] for item in dossiers] == [
+        "node-a",
+        "node-b",
+    ]
+    assert dossiers[0]["relationships"] == [relationships[0]]
+    assert dossiers[0]["unresolved_relationship_count"] == 1
+    assert dossiers[1]["relationships"] == [relationships[1]]
+    assert dossiers[1]["unresolved_relationship_count"] == 0
 
 
 def settings(root: Path, **overrides: object) -> SpineSettings:

@@ -1860,6 +1860,10 @@ export interface components {
             semantic_coverage?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Dossiers */
+            structure_dossiers?: {
+                [key: string]: unknown;
+            }[];
             /** Structure Nodes */
             structure_nodes?: {
                 [key: string]: unknown;

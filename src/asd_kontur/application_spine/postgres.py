@@ -2643,6 +2643,9 @@ class SpinePostgresRepository:
             structure_relationships = self._project_structure_relationship_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            structure_dossiers = self._structure_dossier_rows(
+                structure_nodes, structure_relationships
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2689,6 +2692,7 @@ class SpinePostgresRepository:
             "candidates": candidates,
             "structure_nodes": structure_nodes,
             "structure_relationships": structure_relationships,
+            "structure_dossiers": structure_dossiers,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -3245,6 +3249,53 @@ class SpinePostgresRepository:
         ).mappings()
         return [_jsonable_row(row) for row in rows]
 
+    @staticmethod
+    def _structure_dossier_rows(
+        nodes: list[dict[str, Any]], relationships: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Expose source-scoped facility/area candidate dossiers without identity merging.
+
+        A dossier is deliberately one extracted observation, not a canonical facility.
+        Only relationships whose endpoint was resolved to this exact source-scoped node
+        are included; same-name observations in other documents stay separate until a
+        later reconciliation has adequate evidence.
+        """
+        eligible_kinds = {"local_area", "facility", "excavation_pit", "structure", "zone"}
+        rows: list[dict[str, Any]] = []
+        for node in nodes:
+            node_id = str(node["structure_node_id"])
+            linked = [
+                relationship
+                for relationship in relationships
+                if str(relationship.get("subject_structure_node_id") or "") == node_id
+                or str(relationship.get("object_structure_node_id") or "") == node_id
+            ]
+            if str(node.get("node_kind")) not in eligible_kinds:
+                continue
+            rows.append(
+                {
+                    "candidate_state": "source_scoped_candidate",
+                    "structure_node": node,
+                    "relationships": linked,
+                    "source_locator_ids": sorted(
+                        {
+                            str(node["source_locator_id"]),
+                            *(
+                                str(item["source_locator_id"])
+                                for item in linked
+                                if item.get("source_locator_id") is not None
+                            ),
+                        }
+                    ),
+                    "unresolved_relationship_count": sum(
+                        1
+                        for item in linked
+                        if item.get("resolution_state") != "resolved_same_evidence"
+                    ),
+                }
+            )
+        return rows
+
     @classmethod
     def _empty_project_understanding_view(
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
@@ -3258,6 +3309,7 @@ class SpinePostgresRepository:
         structure_relationships = cls._project_structure_relationship_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
+        structure_dossiers = cls._structure_dossier_rows(structure_nodes, structure_relationships)
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -3280,6 +3332,7 @@ class SpinePostgresRepository:
             "candidates": candidates,
             "structure_nodes": structure_nodes,
             "structure_relationships": structure_relationships,
+            "structure_dossiers": structure_dossiers,
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),

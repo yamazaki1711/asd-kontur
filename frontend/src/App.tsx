@@ -3547,6 +3547,10 @@ function ProjectUnderstandingPage() {
           >[];
           const structureRelationships = (value.structure_relationships ??
             []) as Record<string, unknown>[];
+          const structureDossiers = (value.structure_dossiers ?? []) as Record<
+            string,
+            unknown
+          >[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3702,6 +3706,7 @@ function ProjectUnderstandingPage() {
                   <StructureCandidateList
                     nodes={structureNodes}
                     relationships={structureRelationships}
+                    dossiers={structureDossiers}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
@@ -3840,11 +3845,13 @@ function ProjectUnderstandingPage() {
 function StructureCandidateList({
   nodes,
   relationships,
+  dossiers,
   workspaceId,
   modeSlug,
 }: {
   nodes: Record<string, unknown>[];
   relationships: Record<string, unknown>[];
+  dossiers: Record<string, unknown>[];
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
@@ -3894,6 +3901,53 @@ function StructureCandidateList({
   );
   return (
     <div className="candidate-list">
+      {dossiers.length > 0 && (
+        <>
+          <h3>Карточки площадок и сооружений</h3>
+          <p>
+            Каждая карточка — отдельное исходно-связанное наблюдение. Совпадения
+            наименований в других документах пока не объединяются автоматически.
+          </p>
+          <div className="card-grid">
+            {dossiers.slice(0, visibleNodeCount).map((dossier) => {
+              const node = (dossier.structure_node ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const locator = displayValue(node.source_locator_id, "");
+              const kind = displayValue(node.node_kind, "structure");
+              const linked = Array.isArray(dossier.relationships)
+                ? dossier.relationships.length
+                : 0;
+              return (
+                <article
+                  className="candidate-row"
+                  key={`dossier:${displayValue(node.structure_node_id)}`}
+                >
+                  <strong>{kindLabels[kind] ?? "Структурный элемент"}</strong>
+                  <p>
+                    {displayValue(node.raw_name, "Наименование не извлечено")}
+                  </p>
+                  <small>
+                    Кандидат; связей с тем же исходным фрагментом: {linked}
+                  </small>
+                  {locator && (
+                    <Link
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
       <h3>Структурные кандидаты</h3>
       <p>
         Это сведения, извлечённые из исходных документов. Они не являются

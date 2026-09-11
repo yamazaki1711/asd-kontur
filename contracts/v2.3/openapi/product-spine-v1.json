@@ -2514,6 +2514,14 @@
             "title": "Semantic Coverage",
             "type": "array"
           },
+          "structure_dossiers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Dossiers",
+            "type": "array"
+          },
           "structure_nodes": {
             "items": {
               "additionalProperties": true,
