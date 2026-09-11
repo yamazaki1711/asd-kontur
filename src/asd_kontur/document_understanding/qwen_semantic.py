@@ -682,6 +682,8 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
 def _engineering_batches(
     elements: Iterable[LayoutElement], *, batching_policy_version: str | None = None
 ) -> tuple[QwenEngineeringBatch, ...]:
+    if batching_policy_version not in {None, _DENSE_ENGINEERING_BATCHING_POLICY}:
+        raise ValueError("qwen_engineering_batching_policy_unsupported")
     fragments = _fragments(elements)
     max_fragments = (
         _LEGACY_ENGINEERING_BATCH_FRAGMENTS

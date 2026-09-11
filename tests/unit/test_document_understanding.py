@@ -738,6 +738,13 @@ def test_qwen_engineering_dense_batches_are_explicit_and_legacy_batches_stay_sta
     assert all("batching_policy_version" not in batch.input_manifest for batch in legacy)
 
 
+def test_qwen_engineering_batches_reject_unknown_batching_policy() -> None:
+    document = _extract_csv("строка;значение\n")
+
+    with pytest.raises(ValueError, match="qwen_engineering_batching_policy_unsupported"):
+        _engineering_batches(document.pages[0].elements, batching_policy_version="unknown")
+
+
 def test_qwen_engineering_progress_reports_each_completed_base_batch() -> None:
     document = _extract_csv(
         "\n".join(f"строка {index};значение {index}" for index in range(1, 31)) + "\n"
