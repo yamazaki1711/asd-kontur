@@ -140,6 +140,7 @@ class IndustrialUnderstandingRepository:
         batch_ordinal: int,
         batch_digest: str,
         source_locator_ids: tuple[UUID, ...],
+        input_manifest: list[dict[str, object]],
         output_manifest: dict[str, object],
     ) -> None:
         with self._session(claimed) as session:
@@ -147,8 +148,8 @@ class IndustrialUnderstandingRepository:
                 sa.text(
                     "INSERT INTO workspace.engineering_extraction_batches "
                     "(organization_id,workspace_id,source_version_id,profile_version,batch_ordinal,"
-                    "batch_digest,source_locator_ids,output_manifest,output_digest,terminal_status) VALUES "
-                    "(:o,:w,:source,:profile,:ordinal,:batch,:locators,CAST(:manifest AS jsonb),"
+                    "batch_digest,source_locator_ids,input_manifest,output_manifest,output_digest,terminal_status) VALUES "
+                    "(:o,:w,:source,:profile,:ordinal,:batch,:locators,CAST(:input_manifest AS jsonb),CAST(:manifest AS jsonb),"
                     ":output,'accepted') ON CONFLICT DO NOTHING"
                 ),
                 {
@@ -159,6 +160,7 @@ class IndustrialUnderstandingRepository:
                     "ordinal": batch_ordinal,
                     "batch": batch_digest,
                     "locators": list(source_locator_ids),
+                    "input_manifest": _json(input_manifest),
                     "manifest": _json(output_manifest),
                     "output": semantic_digest(output_manifest),
                 },

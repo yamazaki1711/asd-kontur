@@ -26,6 +26,8 @@ from .models import (
     MaterialCandidate,
     ProjectFieldCandidate,
     QuantityCandidate,
+    ReconciliationDefect,
+    ReconciliationDefectKind,
     RoleCandidate,
     RoleDecision,
     StructureNodeCandidate,
@@ -34,7 +36,7 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v2"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v3"
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
@@ -56,6 +58,9 @@ class QwenSemanticClassification:
 class _SemanticFragment:
     locator: ExactLocator
     text: str
+    fragment_id: str | None = None
+    character_start: int = 0
+    character_end: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +72,19 @@ class QwenEngineeringBatch:
     @property
     def locator_ids(self) -> tuple[UUID, ...]:
         return tuple(item.locator.source_locator_id for item in self.fragments)
+
+    @property
+    def input_manifest(self) -> list[dict[str, object]]:
+        return [
+            {
+                "fragment_id": item.fragment_id,
+                "source_locator_id": str(item.locator.source_locator_id),
+                "evidence_digest": item.locator.evidence_digest,
+                "character_start": item.character_start,
+                "character_end": item.character_end,
+            }
+            for item in self.fragments
+        ]
 
 
 class QwenDocumentSemanticAdapter:
@@ -173,7 +191,11 @@ class QwenDocumentSemanticAdapter:
         accepted = accepted_batches or {}
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
         for batch in batches:
-            allowed = {str(item.locator.source_locator_id): item for item in batch.fragments}
+            allowed = {
+                str(item.fragment_id): item
+                for item in batch.fragments
+                if item.fragment_id is not None
+            }
             persisted = accepted.get(batch.digest)
             if persisted is None:
                 payload = _complete(
@@ -193,9 +215,11 @@ class QwenDocumentSemanticAdapter:
         works: list[WorkTypeCandidate] = []
         quantities: list[QuantityCandidate] = []
         materials: list[MaterialCandidate] = []
-        parsed_quantities: list[tuple[str, str, str, ExactLocator]] = []
-        parsed_materials: list[tuple[str, str, str, str, ExactLocator]] = []
-        work_by_normalized_name: dict[str, WorkTypeCandidate] = {}
+        parsed_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
+        parsed_materials: list[tuple[str, str, str, str, ExactLocator, str]] = []
+        work_by_identity: dict[tuple[UUID, str, str], WorkTypeCandidate] = {}
+        works_by_name: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
+        works_by_fragment: dict[str, WorkTypeCandidate] = {}
         for allowed, parsed in extracted:
             for name, locator_id in parsed["works"]:
                 locator = allowed[locator_id].locator
@@ -211,8 +235,12 @@ class QwenDocumentSemanticAdapter:
                     DocumentRole.PROJECT_DOCUMENTATION,
                     MappingStatus.UNRESOLVED,
                 )
-                work_by_normalized_name[normalized] = value
-                works.append(value)
+                identity = (locator.source_version_id, normalized, value.scope_key)
+                if identity not in work_by_identity:
+                    work_by_identity[identity] = value
+                    works_by_name[(locator.source_version_id, normalized)].append(value)
+                    works.append(value)
+                works_by_fragment[locator_id] = work_by_identity[identity]
             for key, raw, locator_id in parsed["fields"]:
                 locator = allowed[locator_id].locator
                 fields.append(
@@ -243,15 +271,26 @@ class QwenDocumentSemanticAdapter:
                         locator,
                     )
                 )
-            for work_name, raw, unit, locator_id in parsed["quantities"]:
+            for work_name, raw, unit, locator_id, work_fragment_id in parsed["quantities"]:
                 locator = allowed[locator_id].locator
-                parsed_quantities.append((work_name, raw, unit, locator))
-            for work_name, name, raw, unit, locator_id in parsed["materials"]:
+                parsed_quantities.append((work_name, raw, unit, locator, work_fragment_id))
+            for work_name, name, raw, unit, locator_id, work_fragment_id in parsed["materials"]:
                 locator = allowed[locator_id].locator
-                parsed_materials.append((work_name, name, raw, unit, locator))
-        for work_name, raw, unit, locator in parsed_quantities:
-            work = work_by_normalized_name.get(" ".join(work_name.casefold().split()))
+                parsed_materials.append((work_name, name, raw, unit, locator, work_fragment_id))
+        defects: list[ReconciliationDefect] = []
+        for work_name, raw, unit, locator, work_fragment_id in parsed_quantities:
+            work, defect = _resolve_work_reference(
+                work_name,
+                locator,
+                work_fragment_id,
+                works_by_name,
+                works_by_fragment,
+                relationship_kind="quantity",
+                payload={"value": raw, "unit": unit},
+            )
             if work is None:
+                if defect is not None:
+                    defects.append(defect)
                 continue
             try:
                 parsed_value = Decimal(raw.replace(",", "."))
@@ -275,9 +314,19 @@ class QwenDocumentSemanticAdapter:
                     CandidateDecision.CANDIDATE,
                 )
             )
-        for work_name, name, raw, unit, locator in parsed_materials:
-            work = work_by_normalized_name.get(" ".join(work_name.casefold().split()))
+        for work_name, name, raw, unit, locator, work_fragment_id in parsed_materials:
+            work, defect = _resolve_work_reference(
+                work_name,
+                locator,
+                work_fragment_id,
+                works_by_name,
+                works_by_fragment,
+                relationship_kind="material",
+                payload={"name": name, "quantity": raw, "unit": unit},
+            )
             if work is None:
+                if defect is not None:
+                    defects.append(defect)
                 continue
             try:
                 parsed_value = Decimal(raw.replace(",", "."))
@@ -306,9 +355,60 @@ class QwenDocumentSemanticAdapter:
             tuple(quantities),
             tuple(materials),
             (),
-            (),
+            tuple(defects),
             tuple(structures),
         )
+
+
+def _resolve_work_reference(
+    work_name: str,
+    locator: ExactLocator,
+    work_fragment_id: str,
+    works_by_name: Mapping[tuple[UUID, str], list[WorkTypeCandidate]],
+    works_by_fragment: Mapping[str, WorkTypeCandidate],
+    *,
+    relationship_kind: str,
+    payload: dict[str, str],
+) -> tuple[WorkTypeCandidate | None, ReconciliationDefect | None]:
+    normalized = " ".join(work_name.casefold().split())
+    candidates = list(works_by_name.get((locator.source_version_id, normalized), ()))
+    resolution = "source_name"
+    if work_fragment_id:
+        fragment_candidate = works_by_fragment.get(work_fragment_id)
+        if fragment_candidate is not None and fragment_candidate.normalized_name == normalized:
+            candidates = [fragment_candidate]
+            resolution = "work_fragment_id"
+    if len(candidates) != 1:
+        page_candidates = [
+            item for item in candidates if item.scope_key == f"page:{locator.page_number}"
+        ]
+        if len(page_candidates) == 1:
+            candidates = page_candidates
+            resolution = "page_scope"
+    if len(candidates) == 1:
+        return candidates[0], None
+    candidate_ids = tuple(sorted(str(item.candidate_id) for item in candidates))
+    defect = ReconciliationDefect(
+        deterministic_uuid(
+            f"qwen-unresolved-work-reference:{relationship_kind}:{locator.source_version_id}:"
+            f"{locator.source_locator_id}:{normalized}:{payload}:{candidate_ids}"
+        ),
+        ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+        f"qwen_{relationship_kind}:{locator.source_locator_id}",
+        normalized or None,
+        (locator,),
+        {
+            "code": "unresolved_work_reference",
+            "relationship_kind": relationship_kind,
+            "work_name": work_name,
+            "work_fragment_id": work_fragment_id or None,
+            "resolution_attempt": resolution,
+            "candidate_work_ids": list(candidate_ids),
+            "payload": payload,
+        },
+        False,
+    )
+    return None, defect
 
 
 def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
@@ -335,7 +435,22 @@ def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ..
     for item in elements:
         text = item.normalized_text
         for offset in range(0, len(text), 2_400):
-            fragments.append(_SemanticFragment(item.locator, text[offset : offset + 2_400]))
+            end = min(offset + 2_400, len(text))
+            fragments.append(
+                _SemanticFragment(
+                    item.locator,
+                    text[offset:end],
+                    str(
+                        deterministic_uuid(
+                            f"qwen-engineering-fragment:{item.locator.source_version_id}:"
+                            f"{item.locator.source_locator_id}:{item.locator.evidence_digest}:"
+                            f"{offset}:{end}"
+                        )
+                    ),
+                    offset,
+                    end,
+                )
+            )
     return tuple(fragments)
 
 
@@ -346,8 +461,11 @@ def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEnginee
         batch = fragments[offset : offset + 24]
         batch_payload = [
             {
+                "fragment_id": item.fragment_id,
                 "locator_id": str(item.locator.source_locator_id),
                 "evidence_digest": item.locator.evidence_digest,
+                "character_start": item.character_start,
+                "character_end": item.character_end,
                 "text": item.text,
             }
             for item in batch
@@ -369,22 +487,27 @@ def _engineering_manifest(parsed: dict[str, list[tuple[str, ...]]]) -> dict[str,
 def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
     fragments = [
         {
+            "fragment_id": item.fragment_id,
             "locator_id": str(item.locator.source_locator_id),
             "page": item.locator.page_number,
+            "character_start": item.character_start,
+            "character_end": item.character_end,
             "text": item.text,
         }
         for item in elements
     ]
     return (
         "Извлеки только явно подтверждённые инженерные кандидаты. Верни один JSON: "
-        '{"fields":[{"key":"...","value":"...","locator_id":"..."}],'
-        '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","locator_id":"..."}],'
-        '"works":[{"name":"...","locator_id":"..."}],'
-        '"quantities":[{"work_name":"...","value":"...","unit":"...","locator_id":"..."}],'
-        '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","locator_id":"..."}]}. '
+        '{"fields":[{"key":"...","value":"...","fragment_id":"..."}],'
+        '"structures":[{"kind":"excavation_pit|structure|zone","name":"...","fragment_id":"..."}],'
+        '"works":[{"name":"...","fragment_id":"..."}],'
+        '"quantities":[{"work_name":"...","value":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}],'
+        '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}]}. '
         "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
-        "quantity и unit материала могут быть пустыми строками, если источник их не указывает. "
-        "Каждый locator_id только из входа; если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
+        "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
+        "если источник их не указывает или имя работы дано только вне этого пакета. "
+        "fragment_id обязан быть одним из входных. work_fragment_id, если не пуст, также обязан "
+        "быть одним из входных. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
 
@@ -412,11 +535,18 @@ def _parse_engineering(
         "materials": [],
     }
     specs = {
-        "fields": ("key", "value", "locator_id"),
-        "structures": ("kind", "name", "locator_id"),
-        "works": ("name", "locator_id"),
-        "quantities": ("work_name", "value", "unit", "locator_id"),
-        "materials": ("work_name", "name", "quantity", "unit", "locator_id"),
+        "fields": ("key", "value", "fragment_id"),
+        "structures": ("kind", "name", "fragment_id"),
+        "works": ("name", "fragment_id"),
+        "quantities": ("work_name", "value", "unit", "fragment_id", "work_fragment_id"),
+        "materials": (
+            "work_name",
+            "name",
+            "quantity",
+            "unit",
+            "fragment_id",
+            "work_fragment_id",
+        ),
     }
     for key, names in specs.items():
         rows = value.get(key, [])
@@ -426,8 +556,7 @@ def _parse_engineering(
             if not isinstance(row, dict):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
             item = tuple(" ".join(str(row.get(name, "")).split()) for name in names)
-            required = item[:-3] + item[-1:] if key == "materials" else item
-            if not all(required) or item[-1] not in allowed:
+            if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
@@ -446,11 +575,18 @@ def _parse_engineering_manifest(
         "materials": [],
     }
     specs = {
-        "fields": ("key", "value", "locator_id"),
-        "structures": ("kind", "name", "locator_id"),
-        "works": ("name", "locator_id"),
-        "quantities": ("work_name", "value", "unit", "locator_id"),
-        "materials": ("work_name", "name", "quantity", "unit", "locator_id"),
+        "fields": ("key", "value", "fragment_id"),
+        "structures": ("kind", "name", "fragment_id"),
+        "works": ("name", "fragment_id"),
+        "quantities": ("work_name", "value", "unit", "fragment_id", "work_fragment_id"),
+        "materials": (
+            "work_name",
+            "name",
+            "quantity",
+            "unit",
+            "fragment_id",
+            "work_fragment_id",
+        ),
     }
     for key, names in specs.items():
         rows = manifest.get(key, [])
@@ -460,12 +596,34 @@ def _parse_engineering_manifest(
             if not isinstance(row, list) or len(row) != len(names):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_shape")
             item = tuple(" ".join(str(value).split()) for value in row)
-            if not all(item) or item[-1] not in allowed:
+            if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_kind")
             result[key].append(item)
     return result
+
+
+def _engineering_item_valid(
+    key: str, item: tuple[str, ...], allowed: dict[str, _SemanticFragment]
+) -> bool:
+    if key in {"fields", "structures", "works"}:
+        return all(item) and item[-1] in allowed
+    if key == "quantities":
+        work_name, raw_value, unit, fragment_id, work_fragment_id = item
+        return (
+            bool(work_name and raw_value and unit)
+            and fragment_id in allowed
+            and (not work_fragment_id or work_fragment_id in allowed)
+        )
+    if key == "materials":
+        work_name, name, _raw_quantity, _unit, fragment_id, work_fragment_id = item
+        return (
+            bool(work_name and name)
+            and fragment_id in allowed
+            and (not work_fragment_id or work_fragment_id in allowed)
+        )
+    return False
 
 
 def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
@@ -524,6 +682,7 @@ def _complete(endpoint: str, prompt: str, timeout_seconds: float, *, max_tokens:
     )
     parts: list[str] = []
     completed = False
+    limit_reached = False
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
         with opener.open(request, timeout=timeout_seconds) as response:
@@ -533,6 +692,7 @@ def _complete(endpoint: str, prompt: str, timeout_seconds: float, *, max_tokens:
                     parts.append(str(event.get("text", "")))
                 elif event.get("event") == "completed":
                     completed = True
+                    limit_reached = bool(event.get("limit_reached", False))
                     break
     except (
         urllib.error.URLError,
@@ -547,6 +707,8 @@ def _complete(endpoint: str, prompt: str, timeout_seconds: float, *, max_tokens:
     answer = "".join(parts).strip()
     if not completed or not answer:
         raise QwenSemanticFailure("qwen_semantic_response_incomplete")
+    if limit_reached:
+        raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
     return answer
 
 

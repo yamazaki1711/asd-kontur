@@ -130,6 +130,7 @@ def main() -> None:
                 self.end_headers()
                 self._write({"event": "started", "model": "Qwen3.8-27B"})
                 prior = ""
+                generation_events = 0
                 for result in mlx_vlm.stream_generate(
                     model,
                     processor,
@@ -138,12 +139,20 @@ def main() -> None:
                     max_tokens=max_tokens,
                     temperature=temperature,
                 ):
+                    generation_events += 1
                     current = str(result.text)
                     delta = current[len(prior) :] if current.startswith(prior) else current
                     prior = current
                     if delta:
                         self._write({"event": "delta", "text": delta})
-                self._write({"event": "completed"})
+                self._write(
+                    {
+                        "event": "completed",
+                        "generation_events": generation_events,
+                        "max_tokens": max_tokens,
+                        "limit_reached": generation_events >= max_tokens,
+                    }
+                )
             except (BrokenPipeError, ConnectionResetError):
                 pass
             finally:

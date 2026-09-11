@@ -40,6 +40,8 @@ from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRe
 from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
+    _engineering_batches,
+    _fragments,
 )
 from asd_kontur.document_understanding.semantic import (
     StructuredCandidates,
@@ -567,8 +569,10 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
     )
     elements = document.pages[0].elements
     assert len(elements) > 24
-    first_locator_id = str(elements[0].locator.source_locator_id)
     last_locator_id = str(elements[-1].locator.source_locator_id)
+    batches = _engineering_batches(elements)
+    first_fragment_id = str(batches[0].fragments[0].fragment_id)
+    last_fragment_id = str(batches[-1].fragments[-1].fragment_id)
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
 
     with patch(
@@ -578,7 +582,7 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
                 {
                     "fields": [],
                     "structures": [],
-                    "works": [{"name": "Устройство основания", "locator_id": first_locator_id}],
+                    "works": [{"name": "Устройство основания", "fragment_id": first_fragment_id}],
                     "quantities": [],
                     "materials": [],
                 },
@@ -594,7 +598,8 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
                             "work_name": "Устройство основания",
                             "value": "12,5",
                             "unit": "м3",
-                            "locator_id": last_locator_id,
+                            "fragment_id": last_fragment_id,
+                            "work_fragment_id": "",
                         }
                     ],
                     "materials": [
@@ -603,7 +608,8 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
                             "name": "Щебень",
                             "quantity": "12,5",
                             "unit": "м3",
-                            "locator_id": last_locator_id,
+                            "fragment_id": last_fragment_id,
+                            "work_fragment_id": "",
                         }
                     ],
                 },
@@ -623,9 +629,79 @@ def test_qwen_engineering_extraction_resolves_work_references_across_batches() -
     assert result.materials[0].locator.source_locator_id == UUID(last_locator_id)
 
 
+def test_qwen_engineering_fragments_preserve_full_text_with_traceable_spans() -> None:
+    document = _extract_csv("Текст;" + "длинный " * 500 + "\n")
+    element = document.pages[0].elements[1]
+
+    fragments = _fragments((element,))
+
+    assert "".join(item.text for item in fragments) == element.normalized_text
+    assert fragments[0].character_start == 0
+    assert fragments[-1].character_end == len(element.normalized_text)
+    assert len({item.fragment_id for item in fragments}) == len(fragments)
+
+
+def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optional_material() -> (
+    None
+):
+    document = _extract_csv("A;B;C\n")
+    fragments = _engineering_batches(document.pages[0].elements)[0].fragments
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [],
+                "works": [{"name": "Монтаж", "fragment_id": fragments[0].fragment_id}],
+                "quantities": [
+                    {
+                        "work_name": "Неустановленная работа",
+                        "value": "4",
+                        "unit": "шт",
+                        "fragment_id": fragments[2].fragment_id,
+                        "work_fragment_id": "",
+                    }
+                ],
+                "materials": [
+                    {
+                        "work_name": "Монтаж",
+                        "name": "Сталь",
+                        "quantity": "",
+                        "unit": "",
+                        "fragment_id": fragments[2].fragment_id,
+                        "work_fragment_id": fragments[0].fragment_id,
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert not result.quantities
+    assert len(result.defects) == 1
+    assert result.defects[0].parameters["code"] == "unresolved_work_reference"
+    assert len(result.materials) == 1
+    assert result.materials[0].raw_quantity is None
+    assert result.materials[0].raw_unit is None
+
+
+def test_qwen_engineering_extraction_rejects_incomplete_schema() -> None:
+    document = _extract_csv("проектная запись;значение\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with (
+        patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value="{}"),
+        pytest.raises(QwenSemanticFailure, match="qwen_engineering_response_invalid_shape"),
+    ):
+        adapter.extract_engineering(document.pages[0].elements)
+
+
 def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> None:
     document = _extract_csv("проектная запись;значение\n")
-    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     accepted: dict[str, dict[str, object]] = {}
 
@@ -633,7 +709,9 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
         "asd_kontur.document_understanding.qwen_semantic._complete",
         return_value=json.dumps(
             {
-                "fields": [{"key": "project_purpose", "value": "Объект", "locator_id": locator_id}],
+                "fields": [
+                    {"key": "project_purpose", "value": "Объект", "fragment_id": fragment_id}
+                ],
                 "structures": [],
                 "works": [],
                 "quantities": [],
@@ -658,6 +736,7 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
 def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> None:
     document = _extract_csv("Котлован К-1;подтверждено\n")
     locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
     claimed = ClaimedJob(
         UUID("30000000-0000-4000-8000-000000000002"),
         UUID("40000000-0000-4000-8000-000000000002"),
@@ -679,7 +758,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         def load_accepted_engineering_batches(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-engineering-extraction-v2"
+            assert profile_version == "qwen-engineering-extraction-v3"
             return {}
 
         def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:
@@ -710,7 +789,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
                         {
                             "kind": "excavation_pit",
                             "name": "Котлован К-1",
-                            "locator_id": locator_id,
+                            "fragment_id": fragment_id,
                         }
                     ],
                     "works": [],
@@ -729,6 +808,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         UUID(locator_id),
         UUID(str(document.pages[0].elements[1].locator.source_locator_id)),
     )
+    assert persisted["input_manifest"]
     assert len(cast(StructuredCandidates, persisted["bundle"]).structures) == 1
 
 

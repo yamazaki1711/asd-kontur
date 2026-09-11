@@ -317,6 +317,7 @@ class IndustrialDocumentUnderstandingPipeline:
             batch_ordinal=batch.ordinal,
             batch_digest=batch.digest,
             source_locator_ids=batch.locator_ids,
+            input_manifest=batch.input_manifest,
             output_manifest=manifest,
         )
 
