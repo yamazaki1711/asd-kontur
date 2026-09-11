@@ -16,8 +16,8 @@
     "semantic_not_started_sources": 14,
     "semantic_active_source": "01a088ac-7f97-761a-b857-f5d3b4c5be8b",
     "semantic_active_source_expected_fragment_inputs": 5957,
-    "semantic_active_source_accepted_fragment_inputs": 3312,
-    "semantic_active_source_failed_fragment_inputs": 78,
+    "semantic_active_source_accepted_fragment_inputs": 3384,
+    "semantic_active_source_failed_fragment_inputs": 114,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
       "expected_fragment_inputs": 2960,
