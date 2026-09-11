@@ -194,6 +194,8 @@ class ProfessionalAssistantKnowledgeQuery:
                     "documents": workspace["documents"],
                     "structure_dossiers": workspace["structure_dossiers"],
                     "materialization": workspace["materialization"],
+                    "semantic_coverage": workspace.get("semantic_coverage", []),
+                    "candidate_summary": workspace.get("candidate_summary", {}),
                 },
                 "consultant.get_work_packages": {"work_packages": workspace["work_packages"]},
                 "consultant.get_requirement_matrix": {
@@ -205,6 +207,8 @@ class ProfessionalAssistantKnowledgeQuery:
                     "project_definition": workspace["project_definition"],
                     "discrepancies": workspace["discrepancies"],
                     "mode_result": workspace["mode_result"],
+                    "materialization": workspace["materialization"],
+                    "semantic_coverage": workspace.get("semantic_coverage", []),
                 },
             }[tool]
             selected_sources = {
@@ -493,6 +497,23 @@ class ProfessionalAssistantKnowledgeQuery:
             "documents": _public_value([_json_row(row) for row in documents]),
             "structure_dossiers": _public_value(overview_dossiers),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
+            "semantic_coverage": _public_value(
+                list((model_view or {}).get("semantic_coverage", []))
+            ),
+            "candidate_summary": {
+                "authority": "candidate_only",
+                "counts": {
+                    key: len(value)
+                    for key, value in dict((model_view or {}).get("candidates", {})).items()
+                },
+                "structure_candidate_count": len(
+                    list((model_view or {}).get("structure_nodes", []))
+                ),
+                "relationship_candidate_count": len(
+                    list((model_view or {}).get("structure_relationships", []))
+                ),
+                "meaning": "Извлечённые кандидаты не являются подтверждёнными фактами или полным перечнем.",
+            },
             "source_items": [*source_items, *dossier_source_items],
             "overview_source_items": dossier_source_items,
             "work_package_source_items": work_package_source_items,
