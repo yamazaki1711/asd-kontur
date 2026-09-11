@@ -1,9 +1,9 @@
 {
-  "recorded_at": "2026-09-11T19:12:00+12:00",
+  "recorded_at": "2026-09-11T19:42:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api": "e28da91a57879602f727faedf74acbd9e8fe7adb",
-    "frontend": "de98eaf4f1f535692c6af7d7c712767aa65fdae0",
+    "api": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
+    "frontend": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
     "document_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
     "assistant_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
     "database_migration": "0047_profile_scoped_engineering_candidates"
@@ -16,8 +16,8 @@
     "semantic_not_started_sources": 18,
     "semantic_active_source": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
     "semantic_active_source_expected_fragment_inputs": null,
-    "semantic_active_source_accepted_fragment_inputs": null,
-    "semantic_active_source_failed_fragment_inputs": null,
+    "semantic_active_source_accepted_fragment_inputs": 1284,
+    "semantic_active_source_failed_fragment_inputs": 0,
     "kr1_v13": {
       "accepted_fragment_inputs": 2960,
       "expected_fragment_inputs": 2960,
@@ -61,6 +61,12 @@
     "source_version_id": "01a088ac-7f16-73ef-9d2c-3957b2393f66",
     "successor_count_queued": 21,
     "reconciliation_state": "queued"
+  },
+  "job_progress_release": {
+    "api_frontend_commit": "f533d5c6586448369fe58ae5a9d1de2a91cbac6b",
+    "document_worker_commit": "13f50af54c61c3847cac285087c9308f9a2fe7be",
+    "real_semantic_progress_event_observed": false,
+    "status": "worker_transition_pending_active_job_terminal"
   },
   "pos_failure": {
     "job_id": "01a08edb-97d7-7ce6-89b8-bd4a518d79c6",

@@ -1,5 +1,29 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 19:42 UTC+12 — API/frontend progress release active; source pass continues
+
+The API/frontend is pinned to `f533d5c6586448369fe58ae5a9d1de2a91cbac6b` and the
+current bundle returns HTTP 200 through the actual loopback application route. Readiness
+reports PostgreSQL reachable at migration `0047_profile_scoped_engineering_candidates`.
+The document worker intentionally remains on `13f50af54c61c3847cac285087c9308f9a2fe7be`
+while its active Qwen request is in progress; the assistant worker is unchanged. This
+split is backwards-compatible: the UI displays an em dash until an older API or worker
+supplies the new safe progress fields.
+
+The worker's active source, `01a088ac-7f16-73ef-9d2c-3957b2393f66`, remains running
+with a current lease. At the snapshot its v15 immutable ledger has 107 accepted batches
+and 1,284 accepted fragment inputs, with no failed v15 receipt. This is not a completed
+source, candidate persistence, project-model materialization, facility reconciliation,
+or Tender result. The 21 other profile-aware source successors and the reconciliation
+job remain queued.
+
+`c98db6a` adds content-free durable semantic-batch events; `4406e23` exposes the latest
+event on effective jobs; `f533d5c` makes the UI robust while an older API is still in
+place. A disposable PostgreSQL regression proves the effective jobs API retains a linked
+running retry beyond 205 historical jobs and returns `7 / 10` progress. A real semantic
+event remains unverified until the active source reaches terminal state and the document
+worker is transitioned.
+
 ## 2026-09-11 19:12 UTC+12 — profile-scoped release live; complete corpus pass active
 
 The controlled OZERO release is now pinned to `e28da91a57879602f727faedf74acbd9e8fe7adb`

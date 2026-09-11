@@ -1,5 +1,18 @@
 # OZERO Tender delivery changes
 
+## 2026-09-11 — current semantic job progress
+
+- `c98db6a` appends an idempotently deduplicated, content-free event after each
+  completed base semantic batch, locking only the durable job row while writing the
+  event. It does not retain document text or alter candidate persistence.
+- `4406e23` adds the latest event to both effective and history job responses and shows
+  Russian current/total progress in the jobs table. Its integration regression covers a
+  running retry beyond 205 historical rows.
+- `f533d5c` makes the frontend tolerate a prior API response while services transition.
+  The API/frontend half is live. The worker half remains deliberately deferred until
+  active job `01a08f4e-3b54-7dd6-8114-39b798d51740` becomes terminal; hence a real worker
+  event is not yet claimed.
+
 ## 2026-09-11 — profile-scoped candidate release activated
 
 - `b0b80a8`, `3c42300`, and `c29e8e3` form the profile-scoped persistence change;
