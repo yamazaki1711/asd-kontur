@@ -62,7 +62,7 @@
   },
   "pending_release": {
     "commits": ["ce9cd3be3561f3f90e50cb12304f49cf5a38935f"],
-    "database_migration": "0046_structure_relationship_candidates",
+    "database_migration": "0046_structure_rel_candidates",
     "status": "not_deployed_current_full_backup_permission_denied"
   }
 }

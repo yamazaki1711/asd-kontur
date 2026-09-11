@@ -256,7 +256,7 @@ bound to source version `01a088ac-8065-7088-9fe9-298e3848e7ae`. It is queued beh
 KR1, not claimed concurrently, so eligible processing will not become idle after KR1.
 
 Commits `c460131` and `e4b2083` are pushed but not deployed. They add the additive
-`0046_structure_relationship_candidates` migration and profile v15: Qwen can persist
+`0046_structure_rel_candidates` migration and profile v15: Qwen can persist
 exact-locator relationship observations (for example, facility-to-pit associations)
 without performing a name-only canonical join. The UI/API exposes such observations
 as candidates with source links. The same change fixes semantic coverage reporting to

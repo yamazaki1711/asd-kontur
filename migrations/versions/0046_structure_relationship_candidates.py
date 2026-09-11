@@ -1,6 +1,6 @@
 """Persist evidence-bound structural relationship candidates.
 
-Revision ID: 0046_structure_relationship_candidates
+Revision ID: 0046_structure_rel_candidates
 Revises: 0045_bounded_dep_recovery
 """
 
@@ -10,7 +10,7 @@ import os
 
 from alembic import op
 
-revision = "0046_structure_relationship_candidates"
+revision = "0046_structure_rel_candidates"
 down_revision = "0045_bounded_dep_recovery"
 branch_labels = None
 depends_on = None
