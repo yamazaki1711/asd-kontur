@@ -81,7 +81,8 @@ at this observation it had 308 accepted durable batch receipts (3,672 fragment i
 and two immutable failed parent receipts whose recovery children are accepted. It has
 not yet reached candidate persistence, project materialization, or Tender acceptance.
 
-Commit `b0b80a8275519e569b0faf38ffa1f6e50a359a24` is pushed but **not deployed**.
+Release candidate `c29e8e3` (including
+`b0b80a8275519e569b0faf38ffa1f6e50a359a24`) is pushed but **not deployed**.
 It adds additive migration `0047_profile_scoped_engineering_candidates` and keeps
 Qwen engineering observations, structural nodes, relationships, and extraction defects
 scoped to the exact semantic profile that produced them. The active project view and
@@ -92,7 +93,9 @@ to persist the corrected candidate identities without rerunning OCR or duplicati
 inference.
 
 Focused unit, PostgreSQL integration, format, lint, and strict type checks passed for
-this release. Activation waits for the current POS worker job to become terminal so its
+this release. A job is reusable only when its exact profile provenance and immutable
+`PROJECT_DEFINITION_EXTRACTION` stage receipt both exist; a terminal state alone cannot
+silently suppress recovery. Activation waits for the current POS worker job to become terminal so its
 accepted batches and lease are preserved. The next executable action is to verify that
 terminal receipt, apply the additive migration through the existing recoverable release
 procedure, and schedule the profile-aware persistence successor exactly once.
