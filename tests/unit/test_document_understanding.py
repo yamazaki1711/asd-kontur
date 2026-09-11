@@ -679,7 +679,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         def load_accepted_engineering_batches(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-engineering-extraction-v1"
+            assert profile_version == "qwen-engineering-extraction-v2"
             return {}
 
         def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:

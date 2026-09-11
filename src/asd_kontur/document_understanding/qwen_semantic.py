@@ -34,7 +34,7 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v1"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v2"
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
@@ -177,7 +177,10 @@ class QwenDocumentSemanticAdapter:
             persisted = accepted.get(batch.digest)
             if persisted is None:
                 payload = _complete(
-                    self._endpoint, _engineering_prompt(batch.fragments), self._timeout_seconds
+                    self._endpoint,
+                    _engineering_prompt(batch.fragments),
+                    self._timeout_seconds,
+                    max_tokens=1_200,
                 )
                 parsed = _parse_engineering(payload, allowed)
                 if on_accepted_batch is not None:
@@ -328,11 +331,12 @@ def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment,
 
 
 def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
-    return tuple(
-        _SemanticFragment(item.locator, item.normalized_text[:800])
-        for item in elements
-        if item.normalized_text
-    )
+    fragments: list[_SemanticFragment] = []
+    for item in elements:
+        text = item.normalized_text
+        for offset in range(0, len(text), 2_400):
+            fragments.append(_SemanticFragment(item.locator, text[offset : offset + 2_400]))
+    return tuple(fragments)
 
 
 def _engineering_batches(elements: Iterable[LayoutElement]) -> tuple[QwenEngineeringBatch, ...]:
@@ -378,6 +382,8 @@ def _engineering_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         '"works":[{"name":"...","locator_id":"..."}],'
         '"quantities":[{"work_name":"...","value":"...","unit":"...","locator_id":"..."}],'
         '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","locator_id":"..."}]}. '
+        "Все пять ключей JSON обязательны, даже если соответствующий массив пуст. "
+        "quantity и unit материала могут быть пустыми строками, если источник их не указывает. "
         "Каждый locator_id только из входа; если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
@@ -390,7 +396,13 @@ def _parse_engineering(
         value = _json_object(answer)
     except json.JSONDecodeError as exc:
         raise QwenSemanticFailure("qwen_engineering_response_invalid_json") from exc
-    if not isinstance(value, dict):
+    if not isinstance(value, dict) or set(value) != {
+        "fields",
+        "structures",
+        "works",
+        "quantities",
+        "materials",
+    }:
         raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
     result: dict[str, list[tuple[str, ...]]] = {
         "fields": [],
@@ -414,7 +426,8 @@ def _parse_engineering(
             if not isinstance(row, dict):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
             item = tuple(" ".join(str(row.get(name, "")).split()) for name in names)
-            if not all(item) or item[-1] not in allowed:
+            required = item[:-3] + item[-1:] if key == "materials" else item
+            if not all(required) or item[-1] not in allowed:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
@@ -500,11 +513,11 @@ def _structure_prompt(elements: tuple[_SemanticFragment, ...]) -> str:
     )
 
 
-def _complete(endpoint: str, prompt: str, timeout_seconds: float) -> str:
+def _complete(endpoint: str, prompt: str, timeout_seconds: float, *, max_tokens: int = 350) -> str:
     request = urllib.request.Request(
         endpoint,
         data=json.dumps(
-            {"prompt": prompt, "max_tokens": 350, "temperature": 0.0}, ensure_ascii=False
+            {"prompt": prompt, "max_tokens": max_tokens, "temperature": 0.0}, ensure_ascii=False
         ).encode(),
         headers={"Content-Type": "application/json"},
         method="POST",
