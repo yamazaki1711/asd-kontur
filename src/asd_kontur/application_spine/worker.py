@@ -161,11 +161,12 @@ class DocumentWorker:
             workspace_id=self._workspace_id,
         )
         if claimed is None:
-            # Recoveries are maintenance work, not a prerequisite for runnable
-            # jobs.  One bounded pass avoids an unbounded scan from starving a
-            # newly eligible document job.
-            self._repository.recover_dependency_terminal_failures()
-            self._repository.reconcile_unclaimable_jobs()
+            if self._organization_id is None:
+                # Recoveries are maintenance work, not a prerequisite for
+                # runnable jobs.  One bounded pass avoids an unbounded scan
+                # from starving a newly eligible document job.
+                self._repository.recover_dependency_terminal_failures()
+                self._repository.reconcile_unclaimable_jobs()
             claimed = self._repository.claim_next_job(
                 worker_identity=self._worker_identity,
                 lease_seconds=self._lease_seconds,
