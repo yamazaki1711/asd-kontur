@@ -890,3 +890,27 @@ candidate-only and cannot establish a facility inventory, pit count, Tender find
 consultant answer. Next executable action: wait for this job's terminal receipt, then
 validate its candidate/dependency lineage and move the worker at that safe boundary to
 the matching release before continuing the remaining eligible sources.
+
+### Continuation checkpoint — 2026-09-12 01:06 UTC+12
+
+The active source and Qwen process remain uninterrupted. Durable base progress for
+`01a08f4e-3b5e-798c-9d5b-b3acd1724683` is `162/1074`; its live worker is still
+release `9394b46`. Pushed release candidate `d5d1cefe5d3c1742e20c1f320f69eed666a3f2fb`
+contains two compatible, un-deployed recovery improvements: (1) a malformed
+single-fragment Qwen leaf remains an immutable failed-coverage receipt and cannot roll
+back independent accepted source evidence; (2) the API/UI distinguish failed attempts
+that have an accepted successor from actually unresolved semantic coverage.
+
+The revised scoped coverage query executed against the controlled OZERO database:
+22 documents, 7 complete, 3 partial, 12 not started, 948 recovered historical failed
+fragment attempts, and zero currently unresolved failed fragments. This is coverage
+and operational evidence only. It does not establish a reconciled facility/LOS/KNS/pit
+inventory, Tender findings, NTD evaluation, browser flow, or consultant acceptance.
+
+The staged release worktree is `/Users/oleg/asd-kontur-pilot-release-a898ca3` at
+`a898ca36d502484a3b2b0c95c579e3dd6a9cfdb4`; its runtime import succeeds. Next
+executable action: observe the active job to a safe terminal state, then create the
+required fresh recoverable database backup, install the matching worker configuration
+through the existing controlled launchd procedure, and invoke only the supported
+source-scoped recovery. Validate candidate provenance and project-view materialization
+before allowing the next Qwen source to claim work.
