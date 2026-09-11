@@ -425,3 +425,33 @@ Focused integration tests (5), Ruff, formatter, and strict mypy pass for that re
 Once POS is terminal, release `aa16603` may be activated without a migration; then the
 existing model action will schedule the remaining native-readable active sources while
 leaving sources without native layout explicitly uncovered for the Qwen visual path.
+
+### Continuation checkpoint — 2026-09-11 18:32 UTC+12
+
+The sole active Qwen workload remains POS job
+`01a08ee8-946f-7cbd-b190-32c8d7af0025`, with a current worker heartbeat and no typed
+failure. Its v15 durable ledger contains 339 accepted recovery/batch receipts covering
+4,032 exact fragment inputs, plus three immutable failed parent receipts; accepted
+children exist for the observed bounded recoveries. The base manifest denominator is
+still 438 batches / 5,252 fragments. This is active semantic processing only, not
+complete source coverage, candidate publication, object reconciliation, or Tender
+acceptance. Do not restart the worker or create another POS job.
+
+Release candidate `892335ccc93218f5beddd33109b1297d363c2282` is pushed and prepared
+in isolated worktree `/Users/oleg/asd-kontur-pilot-release-892335c`, but not deployed.
+It contains additive migration `0047_profile_scoped_engineering_candidates`. It scopes
+Qwen fields, works, structures, relationships, and extraction defects to the exact
+semantic profile, filters active project assembly/UI candidates to the latest completed
+profile per active source, exposes the profile in the API, and requires both profile
+provenance and a complete immutable stage receipt before a source can suppress a
+successor. The new release can deterministically reassemble already accepted v15 POS
+batch manifests into profile-scoped candidate identities without rerunning Qwen or OCR.
+
+Focused Qwen semantic unit tests, the PostgreSQL scheduler/profile-isolation integration
+tests, Ruff, formatter, and strict mypy pass. After POS reaches a terminal receipt: take
+the already-required recoverable backup, migrate only 0047, switch API/document worker
+to this pinned worktree, then issue one supported project-understanding command. Verify
+that the POS successor reuses its accepted batches, persists candidates under v15,
+recovers the dependent model path, and appears correctly in the deployed API before
+scheduling the remaining corpus. Full 22-document coverage, facility dossiers, NTD
+checks, Tender findings, pit inventory, and consultant acceptance are all still open.
