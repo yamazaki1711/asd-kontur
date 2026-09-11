@@ -1,5 +1,14 @@
 # OZERO Tender delivery changes
 
+## 2026-09-12 — current processing coverage versus historical retries
+
+- 4f41617 calculates accepted and failed fragment identities separately, then exposes
+  unresolved failed coverage only where no accepted successor exists. It avoids
+  misrepresenting a recoverable historical retry as the current document state.
+- The change was validated with 22 focused spine tests, frontend format/type/lint
+  checks, and execution of the scoped coverage query on OZERO. It is a staged release,
+  not proof of browser rendering or complete project analysis.
+
 ## 2026-09-12 — bounded malformed-leaf recovery candidate
 
 - `a898ca3` keeps Qwen schema and evidence validation strict. A failed terminal

@@ -1,5 +1,21 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-12 01:06 UTC+12 — effective failure coverage is separated from retry history
+
+Pushed release candidate 4f41617eb2c27784bd969f76de3b49a69f60547b makes the
+application coverage projection separate failed fragment attempts that have an accepted
+successor from fragments still requiring recovery. The Russian project view now says
+“требуется восстановление” only for the latter and labels the former as recovered
+historical attempts. It neither changes source evidence, job lineage, candidate
+authority, nor Qwen requests.
+
+The revised scoped PostgreSQL query executed against the live OZERO data and returned
+22 documents: 7 complete, 3 partial, and 12 not started. It found 948 historical
+failed-attempt fragments with accepted successors and zero currently unresolved failed
+fragments. Focused Python and frontend checks passed, including the actual scoped query;
+browser verification remains unavailable because no browser is attached. This change is
+not deployed while the document worker owns the active Qwen job.
+
 ## 2026-09-12 01:01 UTC+12 — isolated malformed leaves no longer starve a source
 
 Pushed release candidate `a898ca36d502484a3b2b0c95c579e3dd6a9cfdb4` preserves the
