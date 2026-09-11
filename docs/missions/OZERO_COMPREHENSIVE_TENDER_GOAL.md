@@ -806,3 +806,29 @@ release procedure; verify the reconciliation is claimed before any next Qwen sou
 
 No facility inventory, excavation-pit total, NTD project finding, Tender acceptance, or
 consultant acceptance is established by this checkpoint.
+
+### Continuation checkpoint — 2026-09-12 00:14 UTC+12
+
+The active semantic job is now `01a08f4e-3b5e-798c-9d5b-b3acd1724683` for source
+`01a088ac-7fdb-7b12-be33-e3a325af8edf` (`Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`).
+It is held by `document-worker:5939`; at the recorded observation it had accepted
+57 of 1,074 legacy v15 batches. The Qwen3.8-27B MLX process is the only heavy model
+workload. The accepted receipts are partial candidate evidence, not complete semantic
+coverage, a reconciled facility inventory, or a Tender result.
+
+Feature release `2b48e05f4d19de12d2cbd5d9e17881d80ddc5e79` is pushed to
+`implementation/ntd-canonical-memory-build-01` and staged in
+`/Users/oleg/asd-kontur-pilot-release-2b48e05`; it is not deployed. It retains
+byte-identical legacy manifests whenever any accepted v15 batch exists, and gives
+only a previously unstarted source an explicit, digest-recorded
+`dense-fragments-v1` 48-fragment packing policy. It does not change the Qwen prompt,
+candidate schema, or extraction-profile version. Focused format/check, strict mypy,
+and 51 document-understanding unit tests passed. No migration is required.
+
+Next executable action: allow this active source to terminally persist or fail under
+the existing release; then verify its receipt and candidate provenance, make a fresh
+recoverable database backup, and perform the controlled worker transition to the
+pinned release. Confirm that a new, unstarted eligible source receives dense manifests
+and that a source with accepted legacy batches is resumed without duplicate Qwen work.
+Continue then with all active OZERO sources, reconciliation, project model, Tender
+analysis, NTD evaluation, and grounded consultant acceptance.
