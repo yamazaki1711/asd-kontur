@@ -329,3 +329,37 @@ credential/mechanism, take a nonempty consistent backup, apply only additive
 0046, switch the three affected services to the pinned ce9cd3b release, and
 create one replacement from the new POS failure lineage. Do not rerun OCR or
 create another retry before that release.
+
+### Continuation checkpoint — 2026-09-11 17:28 UTC+12
+
+The preceding deployment blocker is resolved. A consistent owner-authorized backup was
+created locally before the schema transition (its path and digest are retained in the
+restricted operational record), the additive migration head is now
+`0046_structure_relationship_candidates`, and API, document worker, and assistant
+worker are all pinned to release `13f50af54c61c3847cac285087c9308f9a2fe7be`.
+The API readiness check reports PostgreSQL reachable at that migration head. This is a
+compatible release set, not Tender acceptance.
+
+The only authorized successor of the failed POS extraction is
+`01a08ee8-946f-7cbd-b190-32c8d7af0025`, caused by
+`01a08edb-97d7-7ce6-89b8-bd4a518d79c6`, for POS source version
+`01a088ac-81c2-7033-8f75-8160ffeb2cb2`. It was claimed at 17:20 UTC+12 by the
+pinned document worker. A live loopback connection from that worker to the local Qwen
+runtime was observed; the durable v15 batch ledger had 32 accepted batches at 17:27
+UTC+12 and continued to advance. The deterministic manifest for this source contains
+5,252 exact-layout fragments in 438 bounded batches. Accepted batches are durable
+candidate evidence only; project candidates are deliberately persisted after the
+complete manifest validates, so no POS facts, facility dossier, or pit count may be
+published yet.
+
+Current code confirms the required v15 safeguards: engineering fragments retain
+traceable full spans rather than being limited to the classification sampler; standard
+engineering requests use a 1,200-token output ceiling and explicitly reject output
+exhaustion; all six response collections are mandatory; material quantity and unit are
+optional; and same-name work references resolve only by source/fragment/page evidence
+or remain durable unresolved observations. Focused engineering semantic tests passed.
+Continue the active POS job without interruption, then verify candidate persistence,
+version-aware dependent recovery, partial project-view materialization, and evidence
+links before scheduling the next eligible source. Full 22-document coverage,
+cross-document facility reconciliation, NTD checks, Tender outputs, and consultant
+acceptance remain open.
