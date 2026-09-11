@@ -1951,7 +1951,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
           <tr>
             <th>Вид обработки</th>
             <th>Состояние</th>
-            <th>Ход</th>
+            <th>Семантические пакеты</th>
             <th>Попытки</th>
             <th>Причина ошибки</th>
             <th>Результат</th>
@@ -1975,7 +1975,9 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 </StatusPill>
               </td>
               <td>
-                {Number.isInteger(job.progress_current) &&
+                {job.progress_message_code ===
+                  "engineering_semantic_batch_accepted" &&
+                Number.isInteger(job.progress_current) &&
                 Number.isInteger(job.progress_total)
                   ? `${String(job.progress_current)} / ${String(job.progress_total)}`
                   : "—"}
