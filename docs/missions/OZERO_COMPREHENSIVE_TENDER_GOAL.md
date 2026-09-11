@@ -104,3 +104,29 @@ deterministic supplements and reuses accepted batch receipts rather than asking 
 it until the active v5 job reaches a terminal state. Next executable action: observe the active job to a
 durable batch/result transition, then release `f5eae86`, recover its source-scoped downstream stages,
 validate candidate provenance and materialize the project view before scheduling the next active source.
+
+### Continuation checkpoint — 2026-09-11 14:16 UTC+12
+
+The controlled database remains at `0045_bounded_dep_recovery`. API and frontend release
+`058bf960d3d025ba63efd41342d9898c6ce43ad2` is live with its source explicitly pinned through
+`PYTHONPATH`; it exposes semantic extraction coverage with document identity, revision, and page
+denominator rather than an opaque source UUID. A scoped application-boundary read returned a partial
+model view with source-identified coverage and candidate-only collections; this does not establish
+project facts or UI-browser acceptance.
+
+The prior v6 successor `01a08e37-1b2b-74f4-9b7e-9ed5e4ea91de` preserved 179 accepted fragments
+from 32 durable receipts and then failed as `qwen_engineering_response_invalid_evidence`. It did not
+persist candidates for that source, and the historical failure remains immutable. Commit
+`99100771e098c78feefc8ae727ca3a3da89e34c1` introduces `qwen-engineering-extraction-v7`: it reuses
+only compatible validated v6 receipts, accepts a Qwen short evidence alias only with harmless terminal
+punctuation normalization, and accepts a source-locator UUID only where it maps to one input fragment.
+Unknown or ambiguous evidence stays a typed failure. Focused semantic tests: 41 passed; Ruff and strict
+mypy passed. The scoped document worker is live at that release.
+
+One authorized manual successor, `01a08e40-42f4-79e4-9159-538249e87fc9`, is running from the v6
+failure lineage. It is the only replacement, has a current lease heartbeat, and has a live loopback
+connection to the local Qwen runtime. Do not create another retry while it remains running. Next
+executable action: observe its first durable v7 batch or terminal transition. On success, validate exact
+v6/v7 batch coverage, candidate provenance, and targeted dependent recovery before materializing the
+source through the project view; then schedule the next eligible active OZERO source without global
+recovery scans. On failure, inspect the exact typed result and change only the demonstrated batch contract.
