@@ -453,6 +453,28 @@ active semantic job reaches a terminal state, then prove a fresh worker batch wr
 the application returns current/total progress. This is a processing-visibility repair,
 not Tender acceptance or project-model materialization.
 
+### Continuation checkpoint — 2026-09-11 19:54 UTC+12
+
+The completed source `01a088ac-7f16-73ef-9d2c-3957b2393f66` was preserved through
+candidate persistence; the workspace remains a **partial** model across 22 active
+source versions / 2,529 pages. A controlled safe-boundary release placed the document
+worker on `22142e2c2737d97e8bfbdfce22d7e7ef211b2f40` without restarting the loaded
+local Qwen runtime. Its new active job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` has a 497-batch v15 manifest and durable
+content-free `engineering.semantic_batch_progress` receipts (`2/497` at this snapshot).
+That is verified worker-to-Qwen processing visibility, not source completion.
+
+The scoped application boundary exposes a partial materialization: six source versions
+complete, two partial, fourteen not started; 639 field candidates, 980 work candidates,
+246 quantities, 124 materials, 864 structural candidates, and 169 relationship
+observations. These evidence-bound candidates have not been reconciled into facilities,
+LOS/KNS dossiers, excavation inventory, Tender findings, or consultant answers.
+One expired lease from the pre-transition worker remains historical/inflight until the
+current bounded Qwen job reaches a claim boundary; do not duplicate it or mutate the
+old attempt. Next: let the active job persist its candidate set, verify its downstream
+replacement lineage and partial project view, then continue the remaining eligible
+source manifest and implement cross-document facility/area reconciliation.
+
 ### Continuation checkpoint — 2026-09-11 17:51 UTC+12
 
 The scoped durable read confirms that the POS successor is still `running` under
