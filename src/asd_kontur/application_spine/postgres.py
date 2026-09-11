@@ -34,6 +34,7 @@ from .models import (
 from .object_store import StagedObject, WorkspaceObjectStore
 
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
+ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,
@@ -2687,6 +2688,145 @@ class SpinePostgresRepository:
             },
         }
 
+    def _schedule_workspace_semantic_extractions(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        sources: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        """Queue one explicit v15 semantic pass per native-readable active source.
+
+        The intake pipeline historically chained semantic extraction behind OCR and
+        page-role classification.  Native-readable project content must instead be
+        eligible for the evidence-bound Qwen pass once its persisted layout exists.
+        This does not alter the old dependency graph or terminal receipts; each new
+        job has an explicit semantic-profile provenance and never duplicates an
+        active equivalent pass.
+        """
+        scheduled: list[dict[str, object]] = []
+        for source in sources:
+            source_version_id = UUID(str(source["source_version_id"]))
+            locator_count = int(source["native_locator_count"])
+            latest = (
+                session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
+                        "AND input_manifest->>'source_version_id'=:source ORDER BY "
+                        "created_at DESC,job_id DESC LIMIT 1"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "source": str(source_version_id),
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if locator_count == 0:
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "state": "native_layout_unavailable",
+                    }
+                )
+                continue
+            if latest is not None and str(latest["state"]) in {"queued", "running"}:
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "job_id": str(latest["job_id"]),
+                        "state": str(latest["state"]),
+                    }
+                )
+                continue
+            latest_provenance = dict(latest["provenance"]) if latest is not None else {}
+            if (
+                latest is not None
+                and str(latest["state"]) == "succeeded"
+                and latest_provenance.get("engineering_semantic_profile")
+                == ENGINEERING_SEMANTIC_PROFILE_VERSION
+            ):
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "job_id": str(latest["job_id"]),
+                        "state": "succeeded",
+                    }
+                )
+                continue
+
+            control_id = uuid7()
+            job_id = uuid7()
+            manifest = {
+                "document_id": str(source["document_id"]),
+                "document_version": int(source["version"]),
+                "source_version_id": str(source_version_id),
+                "object_key": str(source["object_key"]),
+                "media_type": str(source["media_type"]),
+                "content_digest": str(source["content_digest"]),
+                "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+            }
+            provenance = {
+                "contract": "project-understanding.semantic-recovery@1.0.0",
+                "source_version_id": str(source_version_id),
+                "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                "control_decision_id": str(control_id),
+                "semantic_recovery_of": str(latest["job_id"]) if latest is not None else None,
+            }
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,"
+                    "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,'queued',"
+                    "130,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "document": source["document_id"],
+                    "manifest": _json(manifest),
+                    "digest": semantic_digest(
+                        {"kind": JobKind.PROJECT_DEFINITION_EXTRACTION.value, "manifest": manifest}
+                    ),
+                    "key": (
+                        "semantic-recovery:"
+                        f"{source_version_id}:{ENGINEERING_SEMANTIC_PROFILE_VERSION}:{control_id}"
+                    ),
+                    "provenance": _json(provenance),
+                    "correlation": correlation_id,
+                    "causation": latest["job_id"] if latest is not None else None,
+                    "owner": owner_identity_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.queued",
+                safe_message_code="semantic_extraction_queued_from_native_layout",
+                current=0,
+                total=1,
+                terminal=False,
+            )
+            scheduled.append(
+                {
+                    "source_version_id": str(source_version_id),
+                    "job_id": str(job_id),
+                    "state": "queued",
+                }
+            )
+        return scheduled
+
     def start_project_understanding(
         self,
         *,
@@ -2697,34 +2837,50 @@ class SpinePostgresRepository:
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
-            document = (
+            sources = list(
                 session.execute(
                     sa.text(
-                        "SELECT v.document_id,v.version,v.source_version_id,v.object_key,v.media_type,"
-                        "v.content_digest FROM workspace.document_versions v JOIN "
-                        "workspace.document_version_activation_decisions a ON "
-                        "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
-                        "a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
-                        "v.organization_id=:organization AND v.workspace_id=:workspace AND NOT EXISTS "
-                        "(SELECT 1 FROM workspace.document_version_activation_decisions newer WHERE "
-                        "newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
-                        "AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
-                        "AND v.media_type<>'application/zip' ORDER BY v.recorded_at DESC,v.document_id LIMIT 1"
+                        "WITH active_versions AS ("
+                        " SELECT v.document_id,v.version,v.source_version_id,v.object_key,v.media_type,"
+                        " v.content_digest,v.recorded_at FROM workspace.document_versions v JOIN LATERAL ("
+                        " SELECT selected_document_version FROM "
+                        " workspace.document_version_activation_decisions a WHERE "
+                        " a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                        " AND a.document_id=v.document_id ORDER BY a.decision_version DESC LIMIT 1"
+                        " ) activation ON activation.selected_document_version=v.version WHERE "
+                        " v.organization_id=:organization AND v.workspace_id=:workspace "
+                        " AND v.media_type<>'application/zip'"
+                        ") SELECT active_versions.*,COUNT(elements.source_locator_id) FILTER ("
+                        " WHERE coalesce(elements.raw_text,'')<>'') AS native_locator_count FROM active_versions "
+                        "LEFT JOIN workspace.source_locators locators ON "
+                        " locators.organization_id=:organization AND locators.workspace_id=:workspace "
+                        " AND locators.source_version_id=active_versions.source_version_id "
+                        "LEFT JOIN workspace.native_layout_element_versions elements ON "
+                        " elements.organization_id=locators.organization_id AND "
+                        " elements.workspace_id=locators.workspace_id AND "
+                        " elements.source_locator_id=locators.source_locator_id "
+                        "GROUP BY active_versions.document_id,active_versions.version,"
+                        "active_versions.source_version_id,active_versions.object_key,active_versions.media_type,"
+                        "active_versions.content_digest,active_versions.recorded_at "
+                        "ORDER BY active_versions.recorded_at DESC,active_versions.document_id"
                     ),
                     {"organization": organization_id, "workspace": workspace_id},
                 )
                 .mappings()
-                .one_or_none()
+                .all()
             )
-            if document is None:
+            if not sources:
                 raise SpinePersistenceError("project_understanding_sources_unavailable")
-            source_ids = session.scalars(
-                sa.text(
-                    "SELECT source_version_id FROM workspace.document_versions WHERE "
-                    "organization_id=:organization AND workspace_id=:workspace ORDER BY source_version_id"
-                ),
-                {"organization": organization_id, "workspace": workspace_id},
-            ).all()
+            document = sources[0]
+            source_ids = [UUID(str(source["source_version_id"])) for source in sources]
+            semantic_jobs = self._schedule_workspace_semantic_extractions(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=owner_identity_id,
+                correlation_id=correlation_id,
+                sources=[dict(source) for source in sources],
+            )
             reviews = session.scalars(
                 sa.text(
                     "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
@@ -2734,7 +2890,11 @@ class SpinePostgresRepository:
                 {"organization": organization_id, "workspace": workspace_id},
             ).all()
             semantic_input = semantic_digest(
-                {"source_version_ids": [str(item) for item in source_ids], "reviews": list(reviews)}
+                {
+                    "source_version_ids": [str(item) for item in source_ids],
+                    "reviews": list(reviews),
+                    "semantic_jobs": semantic_jobs,
+                }
             )
             idempotency_key = f"project-understanding:{semantic_input}"
             existing = session.execute(

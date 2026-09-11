@@ -667,3 +667,134 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
             next(item for item in jobs if item["job_id"] == str(replacement_job))["state"]
             == "running"
         )
+
+
+def test_start_project_understanding_queues_native_semantic_recovery_once(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """A failed OCR/classification chain cannot hide usable native project text."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="semantic-recovery-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Semantic recovery owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "semantic-recovery-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Native semantic recovery"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[
+                (
+                    "files",
+                    (
+                        "project.txt",
+                        b"\xd0\x9a\xd0\xbe\xd1\x82\xd0\xbb\xd0\xbe\xd0\xb2\xd0\xb0\xd0\xbd 1",
+                        "text/plain",
+                    ),
+                )
+            ],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id "
+                        "FROM workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,"
+                    "locator_kind,locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region','synthetic',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"synthetic": "native-layout"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.native_layout_element_versions "
+                    "(organization_id,workspace_id,element_id,version,document_id,document_version,"
+                    "source_version_id,source_locator_id,page_number,element_kind,raw_text,"
+                    "normalized_text,reading_order,region,cell_locator,row_index,column_index,"
+                    "evidence_digest,extraction_method,profile_version,semantic_digest) VALUES "
+                    "(:organization,:workspace,:element,1,:document,:version,:source,:locator,1,"
+                    "'paragraph','Котлован 1','котлован 1',1,CAST(:region AS jsonb),NULL,NULL,NULL,"
+                    ":evidence,'native_layout','native-layout-v0.1',:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "element": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "locator": locator_id,
+                    "region": json.dumps([0, 0, 1, 1]),
+                    "evidence": semantic_digest({"synthetic": "native-layout"}),
+                    "digest": semantic_digest({"synthetic": "native-layout-element"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='paused' "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_kind='PROJECT_DEFINITION_EXTRACTION'"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            )
+
+        endpoint = f"/api/v1/workspaces/{workspace_id}/project-understanding/runs"
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        with postgres_environment.owner_engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,provenance FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace "
+                        "AND job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
+                        "provenance->>'engineering_semantic_profile'='qwen-engineering-extraction-v15'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert len(rows) == 1
+        assert rows[0]["provenance"]["semantic_recovery_of"]
