@@ -37,8 +37,9 @@ from .models import (
 from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v12"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v13"
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
+    "qwen-engineering-extraction-v12",
     "qwen-engineering-extraction-v11",
     "qwen-engineering-extraction-v10",
     "qwen-engineering-extraction-v9",
@@ -52,8 +53,8 @@ _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = (
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
-_MAX_ENGINEERING_BATCH_FRAGMENTS = 24
-_MAX_ENGINEERING_BATCH_CHARS = 12_000
+_MAX_ENGINEERING_BATCH_FRAGMENTS = 12
+_MAX_ENGINEERING_BATCH_CHARS = 9_000
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",

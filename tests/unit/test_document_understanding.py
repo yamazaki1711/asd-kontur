@@ -697,10 +697,10 @@ def test_qwen_engineering_batches_cover_every_fragment_with_bounded_context() ->
     fragments = _fragments(document.pages[0].elements)
     batches = _engineering_batches(document.pages[0].elements)
 
-    assert len(batches) == 3
+    assert len(batches) == 5
     assert tuple(item for batch in batches for item in batch.fragments) == fragments
-    assert all(len(batch.fragments) <= 24 for batch in batches)
-    assert all(sum(len(item.text) for item in batch.fragments) <= 12_000 for batch in batches)
+    assert all(len(batch.fragments) <= 12 for batch in batches)
+    assert all(sum(len(item.text) for item in batch.fragments) <= 9_000 for batch in batches)
 
 
 def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optional_material() -> (
@@ -926,7 +926,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v12"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v13"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -1017,6 +1017,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
+                "qwen-engineering-extraction-v13",
                 "qwen-engineering-extraction-v12",
                 "qwen-engineering-extraction-v11",
                 "qwen-engineering-extraction-v10",
