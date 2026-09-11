@@ -659,3 +659,34 @@ document worker to the pinned compatible release, invoke only the supported sour
 downstream recovery, and inspect the refreshed application model before scheduling the
 next eligible source. Cross-document facility reconciliation, package-wide coverage,
 NTD project checks, Tender findings, and consultant/browser acceptance remain open.
+
+### Continuation checkpoint — 2026-09-11 21:23 UTC+12
+
+The active Qwen source/job is unchanged and remains healthy: durable job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` has a fresh
+`document-worker:74713` lease and 326/497 accepted batch-progress units. It must reach
+a safe terminal receipt before any worker restart. The local Qwen3.8 process is the
+only heavy model process and has not been interrupted.
+
+The worker's durable claim function orders equal work by `priority DESC, created_at,
+job_id`. Scoped evidence established that the pending source semantic jobs were all
+priority 130 even where durable `document_role_decisions` identify
+`drawing_or_scheme`, `project_documentation`, or `working_documentation`. This delayed
+multidisciplinary structural/site/technical evidence behind estimates.
+
+Feature release candidate `7c819d09d9fcc756a8a9c0f7eadea1e1fd89a669` is pushed to
+`implementation/ntd-canonical-memory-build-01`; it is not deployed. It derives bounded
+fair dispatch priorities from persisted roles (170 structural/drawing/project,
+160 explanatory/specification, 150 BoQ/estimate, 130 unclassified), records an auditable
+`job.priority_recomputed` event for compatible queued passes, and leaves running leases,
+input manifests, candidate authority, and history unchanged. Focused Ruff, strict mypy
+for the changed adapter, and three unit tests pass. The PostgreSQL integration test is
+skipped because this checkout's integration database fixture is unavailable; deployment
+requires an application-boundary check before release.
+
+Next executable action: at the active job's terminal boundary, deploy the pinned worker
+release including this scheduling repair, issue the supported workspace-understanding
+command to re-evaluate queued source priorities, verify a classified structural/site/
+technical source is claimed ahead of lower-tier estimates, and then continue source
+candidate persistence and model materialization. Do not claim facility dossiers, pit
+inventory, Tender analysis, or consultant acceptance yet.
