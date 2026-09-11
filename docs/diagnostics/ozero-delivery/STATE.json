@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-11T16:27:00+12:00",
+  "recorded_at": "2026-09-11T16:41:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
     "api": "8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da",
@@ -10,10 +10,13 @@
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_completed_sources": 2,
+    "semantic_completed_sources": 1,
+    "semantic_partial_sources": 2,
+    "semantic_not_started_sources": 19,
     "semantic_active_source": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
     "semantic_active_source_expected_fragment_inputs": 2960,
-    "semantic_active_source_accepted_fragment_inputs": 1764
+    "semantic_active_source_accepted_fragment_inputs": 2442,
+    "semantic_active_source_failed_fragment_inputs": 12
   },
   "pzu_v12": {
     "source_version_id": "01a088ac-8125-7031-8659-a57bd97ff1c6",
@@ -46,5 +49,16 @@
     "kind": "PROJECT_DEFINITION_EXTRACTION",
     "source_version_id": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
     "state_at_snapshot": "running"
+  },
+  "queued_successor": {
+    "job_id": "01a08ec5-b223-7f78-8c1c-893ca2bb8eff",
+    "kind": "PROJECT_DEFINITION_EXTRACTION",
+    "source_version_id": "01a088ac-8065-7088-9fe9-298e3848e7ae",
+    "state_at_snapshot": "queued"
+  },
+  "pending_release": {
+    "commits": ["c460131", "e4b2083"],
+    "database_migration": "0046_structure_relationship_candidates",
+    "status": "not_deployed_while_v13_job_is_running"
   }
 }

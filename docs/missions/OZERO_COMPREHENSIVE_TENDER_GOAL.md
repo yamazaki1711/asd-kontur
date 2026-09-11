@@ -239,3 +239,29 @@ authorized replacement `01a08eac-9094-73c6-b936-3ca9bc2a0044` was claimed by the
 connection to local Qwen. Continue that source to terminal materialization, then schedule KR2 and POS
 without duplicating active work. Full-package coverage, reconciled facility dossiers, Tender findings,
 normative project checks, source-link browser acceptance, and consultant acceptance remain open.
+
+### Continuation checkpoint — 2026-09-11 16:41 UTC+12
+
+KR1 remains the only running semantic extraction successor
+`01a08eac-9094-73c6-b936-3ca9bc2a0044` under worker release `18c6893`. Its durable
+v13 ledger records 204 accepted batches / 2,442 accepted fragment inputs, plus one
+immutable failed child receipt for 12 input fragments. It has a current lease and a
+live worker-to-local-Qwen loopback connection. The source denominator remains 2,960
+fragments; this is not candidate persistence or source completion. Do not duplicate
+the active successor.
+
+The next structural source KR2 now has exactly one supported queued replacement
+`01a08ec5-b223-7f78-8c1c-893ca2bb8eff`, caused by its historical terminal job and
+bound to source version `01a088ac-8065-7088-9fe9-298e3848e7ae`. It is queued behind
+KR1, not claimed concurrently, so eligible processing will not become idle after KR1.
+
+Commits `c460131` and `e4b2083` are pushed but not deployed. They add the additive
+`0046_structure_relationship_candidates` migration and profile v14: Qwen can persist
+exact-locator relationship observations (for example, facility-to-pit associations)
+without performing a name-only canonical join. The UI/API exposes such observations
+as candidates with source links. The same change fixes semantic coverage reporting to
+enumerate every active document, including `not_started` sources. A scoped live read
+verified the current denominator as 22 documents: 1 complete, 2 partial and 19 not
+started. The new release must wait until the active v13 source is terminal; then apply
+the additive migration through the controlled release path and qualify one v14 document
+worker batch before broader v14 scheduling.

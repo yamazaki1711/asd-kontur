@@ -28,3 +28,17 @@ Known limitation: this release provides durable, source-backed partial candidate
 It does not yet provide complete multi-document facility reconciliation, a verified
 pit total, complete Tender findings, project-specific normative checks, or accepted
 consultant/browser workflows.
+
+## Pending controlled release
+
+- `c460131` adds profile v14 and an additive relationship-candidate ledger. Qwen may
+  emit an exact-locator relation (`contains`, `located_in`, `serves`, `connects_to`, or
+  `depends_on`) between named observations. Persistence deliberately retains raw,
+  evidence-bound endpoints and does not turn same-name matches into canonical links.
+  The project-model UI/API displays them as source-linked candidates. Migration
+  `0046_structure_relationship_candidates` is required before this release.
+- `e4b2083` corrects the semantic-coverage query so the project view includes active
+  source versions with no accepted batch as `not_started`. It was exercised through a
+  scoped OZERO application-repository read: 22 documents, 1 complete, 2 partial, and
+  19 not started. The previous surface only listed already accepted sources and could
+  understate incomplete package coverage.

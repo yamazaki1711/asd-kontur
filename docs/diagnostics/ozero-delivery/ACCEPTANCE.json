@@ -31,6 +31,13 @@
       "evidence": "semantic coverage rows and active KR1 job"
     },
     {
+      "id": "all-document-coverage-surface",
+      "expected": "The project view distinguishes every active source with no accepted semantic batch from a completed document.",
+      "observed": "A scoped application-repository read of pending commit e4b2083 returned 22 active documents: 1 complete, 2 partial, 19 not_started.",
+      "status": "UNVERIFIED",
+      "evidence": "controlled scoped repository read; API/frontend release is pending migration 0046 and worker quiescence"
+    },
+    {
       "id": "facility-dossiers-and-pit-inventory",
       "expected": "A reconciled facility/area/pit inventory with revision-aware evidence is accessible in the application.",
       "observed": "The view contains candidate structures, including five pit candidates, but no cross-document identity reconciliation or exhaustive inventory.",
