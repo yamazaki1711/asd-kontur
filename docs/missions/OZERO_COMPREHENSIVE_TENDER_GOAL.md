@@ -593,3 +593,31 @@ The active Qwen source is still the same estimate document/job and had 102/497 a
 batches at this observation. There is no browser attached to this Codex session, so
 browser acceptance remains unverified; the deployed API readiness and bounded
 application/repository reads pass. Keep the single document Qwen workload uninterrupted.
+
+### Continuation checkpoint — 2026-09-11 20:35 UTC+12
+
+The only Qwen document workload remains the same v15 semantic extraction job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096` for source version
+`01a088ac-7f97-761a-b857-f5d3b4c5be8b`. A scoped durable read recorded a current
+worker heartbeat and lease, 198 accepted batch receipts covering 2,304 exact input
+fragments, and six immutable failed parent receipts covering 66 fragment inputs. No
+replacement was scheduled and no worker or Qwen process was restarted. Accepted child
+receipts may cover failed-parent inputs, so the 497 base-batch workload counter is not
+by itself semantic coverage; the source coverage projection remains the publication
+authority.
+
+The current API/frontend release is `4de01ae25088b79d0b16f9f9d3ed8fb147531ddd` at
+migration `0047_profile_scoped_engineering_candidates`; the document worker still runs
+the previously pinned `22142e2c2737d97e8bfbdfce22d7e7ef211b2f40` release. Commit
+`4ee4f6c` is contained in the API release but its document-worker reconciliation behavior
+has deliberately not been activated during the live Qwen request. It makes raw,
+profile-scoped structural candidates and relationships participate in a fresh
+reconciliation fingerprint and exposes `STRUCTURE_CANDIDATE_RECONCILIATION_PENDING`;
+it does not manufacture canonical facilities, a pit inventory, or Tender findings.
+
+Next executable action: observe this source to a terminal receipt. At the safe Qwen
+boundary, verify its candidate provenance and replacement lineage, transition the
+document worker to the pinned compatible release, invoke only the supported source
+downstream recovery, and inspect the refreshed application model before scheduling the
+next eligible source. Cross-document facility reconciliation, package-wide coverage,
+NTD project checks, Tender findings, and consultant/browser acceptance remain open.
