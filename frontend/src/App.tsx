@@ -3636,7 +3636,7 @@ function ProjectUnderstandingPage() {
                         pages > 0 ? `, ${pages.toString()} стр.` : "";
                       const failedLabel =
                         failed > 0
-                          ? `, не принято ${failed.toString()} фрагм.`
+                          ? `, исторические неуспешные попытки: ${failed.toString()} фрагм.`
                           : "";
                       return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${failedLabel} (${profile})`;
                     })

@@ -3078,10 +3078,11 @@ class SpinePostgresRepository:
                 " WHERE b.organization_id=:o AND b.workspace_id=:w "
                 " AND b.terminal_status='failed' AND b.input_manifest IS NOT NULL "
                 " GROUP BY b.source_version_id,b.profile_version"
-                "), latest_accepted AS (SELECT DISTINCT ON (source_version_id) "
-                " source_version_id,profile_version,accepted_batch_count,accepted_fragment_count "
-                " FROM accepted ORDER BY source_version_id,profile_version DESC"
-                ") SELECT v.source_version_id,COALESCE(a.profile_version,'not_started') AS profile_version,"
+                "), latest_activity AS (SELECT DISTINCT ON (source_version_id) source_version_id,"
+                " profile_version FROM workspace.engineering_extraction_batches WHERE "
+                " organization_id=:o AND workspace_id=:w AND input_manifest IS NOT NULL "
+                " ORDER BY source_version_id,recorded_at DESC,batch_ordinal DESC,batch_digest DESC"
+                ") SELECT v.source_version_id,COALESCE(activity.profile_version,'not_started') AS profile_version,"
                 " COALESCE(a.accepted_batch_count,0) AS accepted_batch_count,"
                 " COALESCE(a.accepted_fragment_count,0) AS accepted_fragment_count,"
                 " COALESCE(f.failed_batch_count,0) AS failed_batch_count,"
@@ -3090,9 +3091,11 @@ class SpinePostgresRepository:
                 " v.document_id,v.version AS document_version,v.safe_display_name,"
                 " COALESCE(s.page_count,0) AS page_count "
                 " FROM active_documents v LEFT JOIN expected e ON e.source_version_id=v.source_version_id "
-                " LEFT JOIN latest_accepted a ON a.source_version_id=v.source_version_id "
+                " LEFT JOIN latest_activity activity ON activity.source_version_id=v.source_version_id "
+                " LEFT JOIN accepted a ON a.source_version_id=v.source_version_id "
+                " AND a.profile_version=activity.profile_version "
                 " LEFT JOIN failed f ON f.source_version_id=v.source_version_id "
-                " AND f.profile_version=a.profile_version "
+                " AND f.profile_version=activity.profile_version "
                 " LEFT JOIN LATERAL (SELECT page_count FROM workspace.document_processing_states state "
                 " WHERE state.organization_id=v.organization_id AND state.workspace_id=v.workspace_id "
                 " AND state.document_id=v.document_id AND state.document_version=v.version "
@@ -3115,13 +3118,18 @@ class SpinePostgresRepository:
                 "failed_fragment_count": int(row["failed_fragment_count"]),
                 "expected_fragment_count": int(row["expected_fragment_count"]),
                 "state": (
-                    "not_started"
+                    "failed"
                     if int(row["accepted_fragment_count"]) == 0
+                    and int(row["failed_fragment_count"]) > 0
                     else (
-                        "complete"
-                        if int(row["accepted_fragment_count"])
-                        == int(row["expected_fragment_count"])
-                        else "partial"
+                        "not_started"
+                        if int(row["accepted_fragment_count"]) == 0
+                        else (
+                            "complete"
+                            if int(row["accepted_fragment_count"])
+                            == int(row["expected_fragment_count"])
+                            else "partial"
+                        )
                     )
                 ),
             }
