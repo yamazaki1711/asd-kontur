@@ -207,10 +207,18 @@ class ProfessionalAssistantKnowledgeQuery:
                     "mode_result": workspace["mode_result"],
                 },
             }[tool]
+            selected_sources = {
+                "consultant.get_workspace_overview": workspace.get("overview_source_items", []),
+                "consultant.get_work_packages": workspace.get("work_package_source_items", []),
+                "consultant.get_requirement_matrix": workspace.get("work_package_source_items", []),
+                "consultant.get_discrepancies": workspace.get("discrepancy_source_items", []),
+                "consultant.get_mode_result": workspace.get("overview_source_items", []),
+                "consultant.get_information_gaps": workspace.get("gap_source_items", []),
+            }[tool]
             result = self._plain_tool_result(
                 tool,
                 selected,
-                [dict(item["source"]) for item in workspace["source_items"]],
+                [dict(item["source"]) for item in selected_sources],
             )
         sources = tuple(dict(item) for item in result.pop("sources", []))
         evidence = tuple(_evidence(item) for item in sources)
@@ -433,6 +441,8 @@ class ProfessionalAssistantKnowledgeQuery:
         )
         model_view: dict[str, Any] | None = None
         dossier_source_items: list[dict[str, Any]] = []
+        work_package_source_items: list[dict[str, Any]] = []
+        discrepancy_source_items: list[dict[str, Any]] = []
         overview_dossiers: list[dict[str, Any]] = []
         if owner_identity_id is not None:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
@@ -442,17 +452,36 @@ class ProfessionalAssistantKnowledgeQuery:
             )
             overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
-            locator_ids = {
-                str(locator_id)
-                for dossier in overview_dossiers
-                for locator_id in dossier.get("source_locator_ids", [])
-            }
-            for locator_id in sorted(locator_ids):
-                evidence_row = evidence_index.get(locator_id)
-                if evidence_row is not None:
-                    dossier_source_items.append(
-                        self._workspace_item(evidence_row, workspace_id, mode)
-                    )
+
+            def evidence_items(locator_ids: set[str]) -> list[dict[str, Any]]:
+                return [
+                    self._workspace_item(evidence_row, workspace_id, mode)
+                    for locator_id in sorted(locator_ids)[:30]
+                    if (evidence_row := evidence_index.get(locator_id)) is not None
+                ]
+
+            dossier_source_items = evidence_items(
+                {
+                    str(locator_id)
+                    for dossier in overview_dossiers
+                    for locator_id in dossier.get("source_locator_ids", [])
+                }
+            )
+            work_package_source_items = evidence_items(
+                {
+                    str(locator_id)
+                    for row in packages
+                    for locator_id in dict(row["package"]).get("source_locator_ids", [])
+                }
+            )
+            discrepancy_source_items = evidence_items(
+                {str(locator_id) for row in defects for locator_id in row["source_locator_ids"]}
+            )
+        gap_source_items = [
+            *dossier_source_items,
+            *work_package_source_items,
+            *discrepancy_source_items,
+        ][:30]
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -465,6 +494,10 @@ class ProfessionalAssistantKnowledgeQuery:
             "structure_dossiers": _public_value(overview_dossiers),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "source_items": [*source_items, *dossier_source_items],
+            "overview_source_items": dossier_source_items,
+            "work_package_source_items": work_package_source_items,
+            "discrepancy_source_items": discrepancy_source_items,
+            "gap_source_items": gap_source_items,
         }
 
     def _practice_context(self, query: str, limit: int) -> list[dict[str, Any]]:

@@ -95,3 +95,52 @@ def test_workspace_context_uses_production_ntd_path_when_endpoint_configured(
     assert response.result["workspace"]["workspace_id"] == str(workspace_id)
     assert response.result["normative_authority"][0]["document"] == "СП 70"
     assert response.evidence_pack.evidence[0].source_version_id == "СП 70-version"
+
+
+def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    package_source = _source("Лист работ")
+    package_source["authority_layer"] = "workspace_fact"
+
+    monkeypatch.setattr(
+        query,
+        "_workspace_context",
+        lambda organization, workspace, mode, question, *, owner_identity_id=None: {
+            "workspace_id": str(workspace),
+            "name": "Изолированный ОКС",
+            "project_definition": {"purpose": "test"},
+            "work_packages": [{"package": {"work_type": {"raw": "Разработка грунта"}}}],
+            "requirement_matrix": {},
+            "discrepancies": [],
+            "mode_result": None,
+            "documents": [],
+            "structure_dossiers": [],
+            "materialization": {"state": "partial"},
+            "source_items": [],
+            "overview_source_items": [],
+            "work_package_source_items": [{"source": package_source}],
+            "discrepancy_source_items": [],
+            "gap_source_items": [],
+        },
+    )
+
+    response = query.execute(
+        "consultant.get_work_packages",
+        {"mode": "Tender"},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert response.result["value"]["work_packages"][0]["package"]["work_type"]["raw"] == (
+        "Разработка грунта"
+    )
+    assert response.evidence_pack.evidence[0].evidence_link_id == "Лист работ-source"
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
