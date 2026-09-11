@@ -2746,11 +2746,36 @@ class SpinePostgresRepository:
                 )
                 continue
             latest_provenance = dict(latest["provenance"]) if latest is not None else {}
+            latest_completed_v15 = bool(
+                latest is not None
+                and session.scalar(
+                    sa.text(
+                        "SELECT EXISTS (SELECT 1 FROM workspace.project_understanding_stage_results result "
+                        "WHERE result.organization_id=:organization AND result.workspace_id=:workspace "
+                        "AND result.job_id=:job AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                        "AND result.terminal_status='complete') AND EXISTS (SELECT 1 FROM "
+                        "workspace.engineering_extraction_batches batch WHERE "
+                        "batch.organization_id=:organization AND batch.workspace_id=:workspace "
+                        "AND batch.source_version_id=:source AND batch.profile_version=:profile "
+                        "AND batch.terminal_status='accepted')"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": latest["job_id"],
+                        "source": source_version_id,
+                        "profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                    },
+                )
+            )
             if (
                 latest is not None
                 and str(latest["state"]) == "succeeded"
-                and latest_provenance.get("engineering_semantic_profile")
-                == ENGINEERING_SEMANTIC_PROFILE_VERSION
+                and (
+                    latest_provenance.get("engineering_semantic_profile")
+                    == ENGINEERING_SEMANTIC_PROFILE_VERSION
+                    or latest_completed_v15
+                )
             ):
                 scheduled.append(
                     {
