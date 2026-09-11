@@ -1,5 +1,30 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-12 01:01 UTC+12 — isolated malformed leaves no longer starve a source
+
+Pushed release candidate `a898ca36d502484a3b2b0c95c579e3dd6a9cfdb4` preserves the
+strict six-collection engineering response schema and keeps malformed model output
+out of candidate persistence.  After the bounded recovery reaches one exact source
+fragment, it now records that fragment as failed coverage and continues the source;
+it does not roll back accepted receipts or prevent other eligible sources from being
+claimed.  Focused validation: Ruff format/check, strict mypy, and 54
+`test_document_understanding` cases passed.  It is not deployed while the running
+document worker owns the only Qwen workload.
+
+The live worker remains release `9394b46`.  Its current source is
+`Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf`; durable base progress is `158/1074`.
+At the observation, its immutable v15 ledger contained 183 accepted receipts (1,800
+input fragments) and 25 failed receipts (240 input fragments).  Accepted receipts
+contain 125 field, 44 structural, 11 relationship, 251 work, 149 quantity, and 17
+material observations.  The old worker has not materialized any of those observations
+into this source's candidate projection, so they are not yet a project-model result.
+
+Next active work: let this job reach its safe terminal boundary; then validate its
+receipt lineage, make the required recoverable backup, transition the worker to the
+matching partial-materialization release, and use supported downstream recovery.
+This remains partial semantic evidence, not a facility inventory, pit count, Tender
+finding, or consultant acceptance.
+
 ## 2026-09-12 00:51 UTC+12 — candidate-only partial model release active
 
 The public API and rebuilt frontend are pinned to

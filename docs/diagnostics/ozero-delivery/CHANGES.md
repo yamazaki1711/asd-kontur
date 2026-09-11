@@ -1,5 +1,15 @@
 # OZERO Tender delivery changes
 
+## 2026-09-12 — bounded malformed-leaf recovery candidate
+
+- `a898ca3` keeps Qwen schema and evidence validation strict. A failed terminal
+  single-fragment repair is persisted as typed unresolved coverage rather than
+  accepted data, while the remaining batches of the source can complete. This prevents
+  one pathological model response from rolling back independent accepted evidence or
+  starving other eligible documents.
+- The change is not deployed. The worker is deliberately kept on its current release
+  until its active Qwen request reaches a terminal boundary.
+
 ## 2026-09-11 — exact-evidence graph navigation
 
 - `6739b20` adds graph components composed only of source-scoped relationship endpoints
