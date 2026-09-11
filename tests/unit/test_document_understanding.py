@@ -717,6 +717,35 @@ def test_qwen_engineering_batches_cover_every_fragment_with_bounded_context() ->
     assert all(sum(len(item.text) for item in batch.fragments) <= 9_000 for batch in batches)
 
 
+def test_qwen_engineering_progress_reports_each_completed_base_batch() -> None:
+    document = _extract_csv(
+        "\n".join(f"строка {index};значение {index}" for index in range(1, 31)) + "\n"
+    )
+    batches = _engineering_batches(document.pages[0].elements)
+    progress: list[tuple[int, int]] = []
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [],
+                "structure_relationships": [],
+                "works": [],
+                "quantities": [],
+                "materials": [],
+            }
+        ),
+    ):
+        adapter.extract_engineering(
+            document.pages[0].elements,
+            on_batch_progress=lambda current, total: progress.append((current, total)),
+        )
+
+    assert progress == [(index, len(batches)) for index in range(1, len(batches) + 1)]
+
+
 def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optional_material() -> (
     None
 ):

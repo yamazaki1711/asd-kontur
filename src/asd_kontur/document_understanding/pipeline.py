@@ -330,6 +330,18 @@ class IndustrialDocumentUnderstandingPipeline:
             failure_diagnostics=failure_diagnostics,
         )
 
+    def _record_engineering_batch_progress(
+        self, claimed: ClaimedJob, *, completed_batches: int, total_batches: int
+    ) -> None:
+        """Publish durable, content-free semantic progress when the repository supports it."""
+        recorder = getattr(self._repository, "record_engineering_batch_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_batches=completed_batches,
+                total_batches=total_batches,
+            )
+
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         semantic = self._engineering_semantic(claimed)
         bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
@@ -375,6 +387,11 @@ class IndustrialDocumentUnderstandingPipeline:
                 compatible_accepted_batches=compatible_accepted_batches,
                 on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
                     claimed, batch, manifest
+                ),
+                on_batch_progress=lambda completed, total: self._record_engineering_batch_progress(
+                    claimed,
+                    completed_batches=completed,
+                    total_batches=total,
                 ),
                 on_failed_batch=lambda batch, failure_code, failure_diagnostics: (
                     self._record_failed_engineering_batch(

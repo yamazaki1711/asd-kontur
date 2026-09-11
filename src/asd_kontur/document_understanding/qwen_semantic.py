@@ -215,6 +215,7 @@ class QwenDocumentSemanticAdapter:
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
+        on_batch_progress: Callable[[int, int], None] | None = None,
         on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None]
         | None = None,
     ) -> StructuredCandidates:
@@ -225,7 +226,7 @@ class QwenDocumentSemanticAdapter:
         accepted = accepted_batches or {}
         compatible = compatible_accepted_batches or {}
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
-        for batch in batches:
+        for current, batch in enumerate(batches, start=1):
             extracted.extend(
                 self._extract_engineering_batch(
                     batch,
@@ -235,6 +236,8 @@ class QwenDocumentSemanticAdapter:
                     compatible_accepted_batches=compatible,
                 )
             )
+            if on_batch_progress is not None:
+                on_batch_progress(current, len(batches))
         fields: list[ProjectFieldCandidate] = []
         structures: list[StructureNodeCandidate] = []
         structure_relationships: list[StructureRelationshipCandidate] = []

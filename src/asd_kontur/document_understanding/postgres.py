@@ -8,7 +8,7 @@ import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, is_dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -207,6 +207,85 @@ class IndustrialUnderstandingRepository:
                     "manifest": _json(output_manifest),
                     "output": semantic_digest(output_manifest),
                     "failure": failure_code,
+                },
+            )
+
+    def record_engineering_batch_progress(
+        self,
+        claimed: ClaimedJob,
+        *,
+        completed_batches: int,
+        total_batches: int,
+    ) -> None:
+        """Append a deduplicated, content-free progress event for a Qwen batch pass."""
+        if total_batches < 1 or not 0 <= completed_batches <= total_batches:
+            raise ValueError("engineering_batch_progress_invalid")
+        with self._session(claimed) as session:
+            session.execute(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "AND workspace_id=:w AND job_id=:job FOR UPDATE"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+            ).one()
+            existing = session.scalar(
+                sa.text(
+                    "SELECT EXISTS (SELECT 1 FROM workspace.job_progress_events WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job AND "
+                    "event_type='engineering.semantic_batch_progress' AND "
+                    "progress_current=:current AND progress_total=:total)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "current": completed_batches,
+                    "total": total_batches,
+                },
+            )
+            if existing:
+                return
+            sequence = int(
+                session.scalar(
+                    sa.text(
+                        "SELECT COALESCE(max(event_sequence),0)+1 FROM workspace.job_progress_events "
+                        "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
+                )
+            )
+            recorded_at = datetime.now(UTC)
+            event_digest = semantic_digest(
+                {
+                    "job_id": claimed.job_id,
+                    "sequence": sequence,
+                    "event_type": "engineering.semantic_batch_progress",
+                    "current": completed_batches,
+                    "total": total_batches,
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_progress_events "
+                    "(organization_id,workspace_id,job_id,event_sequence,event_type,progress_current,"
+                    "progress_total,safe_message_code,terminal,recorded_at,retention_until,event_digest) "
+                    "VALUES (:o,:w,:job,:sequence,'engineering.semantic_batch_progress',:current,:total,"
+                    "'engineering_semantic_batch_accepted',false,:recorded,:retention,:digest)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "sequence": sequence,
+                    "current": completed_batches,
+                    "total": total_batches,
+                    "recorded": recorded_at,
+                    "retention": recorded_at + timedelta(days=1),
+                    "digest": event_digest,
                 },
             )
 
