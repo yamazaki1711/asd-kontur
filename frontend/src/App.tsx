@@ -3542,17 +3542,14 @@ function ProjectUnderstandingPage() {
           const matrixRows = Array.isArray(matrixValue.rows)
             ? (matrixValue.rows as Record<string, unknown>[])
             : [];
-          const reconciliation = value.reconciliation as Record<
-            string,
-            unknown
-          >;
           const materialization = value.materialization as Record<
             string,
             unknown
           >;
-          const materializationState = String(
-            materialization.state ?? "not_requested",
-          );
+          const materializationState =
+            typeof materialization.state === "string"
+              ? materialization.state
+              : "not_requested";
           const materializationMessages: Record<string, string> = {
             not_requested:
               "Модель объекта ещё не запускалась. Загруженные документы сохранены отдельно от модели.",
@@ -3569,18 +3566,21 @@ function ProjectUnderstandingPage() {
             <>
               <div className="metrics">
                 <Metric
-                  label="Сведений"
+                  label="Сведений-кандидатов"
                   value={Object.keys(definition.fields ?? {}).length}
                 />
                 <Metric
-                  label="Разобрано страниц"
+                  label="Классифицировано страниц"
                   value={value.page_roles.length}
                 />
                 <Metric
                   label="Пакетов работ"
                   value={value.work_packages.length}
                 />
-                <Metric label="Замечаний" value={value.defects.length} />
+                <Metric
+                  label="Открытых замечаний"
+                  value={value.defects.length}
+                />
               </div>
               {materializationState !== "complete" && (
                 <InfoNotice>
@@ -3745,8 +3745,16 @@ function ProjectUnderstandingPage() {
                   <h2>Расхождения и пробелы</h2>
                   {value.defects.length ? (
                     <EvidenceObject value={{ differences: value.defects }} />
+                  ) : materializationState === "complete" ? (
+                    <p>
+                      По сформированной модели открытые расхождения не
+                      зарегистрированы.
+                    </p>
                   ) : (
-                    <p>Расхождения ВОР и сметы пока не обнаружены.</p>
+                    <p>
+                      Анализ расхождений ещё не завершён; отсутствие записей не
+                      означает, что документы не содержат расхождений.
+                    </p>
                   )}
                   <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
                   <GapList
