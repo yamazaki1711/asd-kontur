@@ -65,6 +65,26 @@ Known limitation: processing and candidate persistence are active; cross-documen
 facility reconciliation, NTD checks, Tender findings, source-link browser acceptance,
 and consultant acceptance remain open.
 
+## Pending controlled release — 2026-09-12
+
+- `53cafdf` makes accepted v15 engineering-batch receipts materialize their exact,
+  source-backed fields, structures, relationships, and work observations immediately.
+  This is explicitly a partial candidate view: cross-batch quantities and materials
+  remain in the receipt until complete-source work identity reconciliation can safely
+  attach them.
+- The API profile selection includes accepted batch receipts, so a partial source is
+  no longer hidden solely because its terminal source stage is still running. Exact
+  receipt digests, source locators, candidate status, and RLS scope remain unchanged.
+- `2b48e05` records a dense policy only for an otherwise unstarted source. Existing
+  v15 accepted manifests stay byte-identical and resume without duplicate model calls.
+
+The pinned candidate release is `436cba06a24d88345af6dc9ca77f6f67b09a6803`; it has
+not been deployed while document worker `5939` owns the active Qwen request. Focused
+format/check, strict mypy, 53 document-understanding tests, and a scoped read through
+the staged application repository passed. None of these checks establishes complete
+OZERO semantic coverage, a reconciled facility inventory, Tender acceptance, browser
+source navigation, or a grounded consultant answer.
+
 ## 2026-09-11 — full structural-candidate inspection
 
 - `de98eaf` replaces the silent first-200 truncation in the Russian project-model
