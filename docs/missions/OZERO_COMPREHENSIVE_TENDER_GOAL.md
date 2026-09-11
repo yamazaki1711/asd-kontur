@@ -516,6 +516,24 @@ priority 130 pending stronger role evidence. The document worker must be allowed
 finish the active source; then verify candidate persistence and the priority-165
 incremental reconciliation before asserting any user-visible facility or pit result.
 
+### Pending controlled release — 2026-09-11 21:53 UTC+12
+
+Isolated commit `83fe4c9dbf2ac6e758c4914ea867e54b5b893a6d` corrects a demonstrated
+publication-order defect: an incremental reconciliation is a bounded database-only
+materialization and must run at priority 175, ahead of queued Qwen source extraction,
+so a completed source is visible before unrelated sources start. It does not invoke
+inference or alter source candidates. Ruff/format/strict mypy pass; the focused
+PostgreSQL integration case is environment-skipped and is not acceptance evidence.
+
+The live worker was sent its supported graceful TERM request while it was processing
+the active 497-batch source. Its signal handler retains the source lease and Qwen
+request until that source has a terminal outcome, then stops before claiming another
+job. Do not overwrite the release worktree or restart the worker before that boundary.
+After terminal verification, cherry-pick `83fe4c9` into the pinned release, run the
+targeted checks, restart only the document worker, and verify the priority-175
+materialization produces a current partial model before the next Qwen source is
+claimed.
+
 ### Continuation checkpoint — 2026-09-11 21:09 UTC+12
 
 The controlled database is at `0047_profile_scoped_engineering_candidates`. API
