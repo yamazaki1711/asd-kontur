@@ -3038,7 +3038,18 @@ class SpinePostgresRepository:
         """Expose accepted semantic fragments without treating them as reconciled facts."""
         rows = session.execute(
             sa.text(
-                "WITH latest_elements AS ("
+                "WITH active_documents AS ("
+                " SELECT DISTINCT ON (v.document_id) v.organization_id,v.workspace_id,v.document_id,"
+                " v.version,v.source_version_id,v.safe_display_name FROM workspace.document_versions v JOIN "
+                " workspace.document_version_activation_decisions a ON "
+                " a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
+                " a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
+                " v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+                " workspace.document_version_activation_decisions newer WHERE "
+                " newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
+                " AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
+                " ORDER BY v.document_id,a.decision_version DESC"
+                "), latest_elements AS ("
                 " SELECT DISTINCT ON (source_locator_id) source_version_id,source_locator_id,"
                 " normalized_text FROM workspace.native_layout_element_versions "
                 " WHERE organization_id=:o AND workspace_id=:w "
@@ -3057,18 +3068,22 @@ class SpinePostgresRepository:
                 " WHERE b.organization_id=:o AND b.workspace_id=:w "
                 " AND b.terminal_status='accepted' AND b.input_manifest IS NOT NULL "
                 " GROUP BY b.source_version_id,b.profile_version"
-                ") SELECT a.source_version_id,a.profile_version,a.accepted_batch_count,"
-                " a.accepted_fragment_count,COALESCE(e.expected_fragment_count,0) "
-                " AS expected_fragment_count,v.document_id,v.version AS document_version,"
-                " v.safe_display_name,COALESCE(s.page_count,0) AS page_count "
-                " FROM accepted a LEFT JOIN expected e ON e.source_version_id=a.source_version_id "
-                " JOIN workspace.document_versions v ON v.organization_id=:o AND v.workspace_id=:w "
-                " AND v.source_version_id=a.source_version_id "
+                "), latest_accepted AS (SELECT DISTINCT ON (source_version_id) "
+                " source_version_id,profile_version,accepted_batch_count,accepted_fragment_count "
+                " FROM accepted ORDER BY source_version_id,profile_version DESC"
+                ") SELECT v.source_version_id,COALESCE(a.profile_version,'not_started') AS profile_version,"
+                " COALESCE(a.accepted_batch_count,0) AS accepted_batch_count,"
+                " COALESCE(a.accepted_fragment_count,0) AS accepted_fragment_count,"
+                " COALESCE(e.expected_fragment_count,0) AS expected_fragment_count,"
+                " v.document_id,v.version AS document_version,v.safe_display_name,"
+                " COALESCE(s.page_count,0) AS page_count "
+                " FROM active_documents v LEFT JOIN expected e ON e.source_version_id=v.source_version_id "
+                " LEFT JOIN latest_accepted a ON a.source_version_id=v.source_version_id "
                 " LEFT JOIN LATERAL (SELECT page_count FROM workspace.document_processing_states state "
                 " WHERE state.organization_id=v.organization_id AND state.workspace_id=v.workspace_id "
                 " AND state.document_id=v.document_id AND state.document_version=v.version "
                 " ORDER BY state.state_sequence DESC LIMIT 1) s ON TRUE "
-                " ORDER BY a.source_version_id,a.profile_version"
+                " ORDER BY v.safe_display_name,v.source_version_id"
             ),
             {"o": organization_id, "w": workspace_id},
         ).mappings()
@@ -3084,9 +3099,14 @@ class SpinePostgresRepository:
                 "accepted_fragment_count": int(row["accepted_fragment_count"]),
                 "expected_fragment_count": int(row["expected_fragment_count"]),
                 "state": (
-                    "complete"
-                    if int(row["accepted_fragment_count"]) == int(row["expected_fragment_count"])
-                    else "partial"
+                    "not_started"
+                    if int(row["accepted_fragment_count"]) == 0
+                    else (
+                        "complete"
+                        if int(row["accepted_fragment_count"])
+                        == int(row["expected_fragment_count"])
+                        else "partial"
+                    )
                 ),
             }
             for row in rows
