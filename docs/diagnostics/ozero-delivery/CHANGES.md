@@ -31,7 +31,7 @@ consultant/browser workflows.
 
 ## Pending controlled release
 
-- `c460131` adds profile v14 and an additive relationship-candidate ledger. Qwen may
+- `c460131` adds the initial relationship-candidate ledger. The final pending profile is v15. Qwen may
   emit an exact-locator relation (`contains`, `located_in`, `serves`, `connects_to`, or
   `depends_on`) between named observations. Persistence deliberately retains raw,
   evidence-bound endpoints and does not turn same-name matches into canonical links.

@@ -57,7 +57,7 @@
     "state_at_snapshot": "queued"
   },
   "pending_release": {
-    "commits": ["c460131", "e4b2083"],
+    "commits": ["c460131", "e4b2083", "742357b", "a36ee21", "e1c3908"],
     "database_migration": "0046_structure_relationship_candidates",
     "status": "not_deployed_while_v13_job_is_running"
   }

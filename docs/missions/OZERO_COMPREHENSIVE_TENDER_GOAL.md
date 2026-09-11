@@ -256,7 +256,7 @@ bound to source version `01a088ac-8065-7088-9fe9-298e3848e7ae`. It is queued beh
 KR1, not claimed concurrently, so eligible processing will not become idle after KR1.
 
 Commits `c460131` and `e4b2083` are pushed but not deployed. They add the additive
-`0046_structure_relationship_candidates` migration and profile v14: Qwen can persist
+`0046_structure_relationship_candidates` migration and profile v15: Qwen can persist
 exact-locator relationship observations (for example, facility-to-pit associations)
 without performing a name-only canonical join. The UI/API exposes such observations
 as candidates with source links. The same change fixes semantic coverage reporting to
@@ -264,7 +264,7 @@ enumerate every active document, including `not_started` sources. A scoped live 
 verified the current denominator as 22 documents: 1 complete, 2 partial and 19 not
 started. The new release must wait until the active v13 source is terminal; then apply
 the additive migration through the controlled release path and qualify one v14 document
-worker batch before broader v14 scheduling.
+worker batch before broader v15 scheduling.
 
 ### Continuation checkpoint — 2026-09-11 16:48 UTC+12
 
@@ -279,10 +279,12 @@ KR2 successor `01a08ec5-b223-7f78-8c1c-893ca2bb8eff` is the only active Qwen job
 has a 21-page source and 600 accepted v13 fragment inputs at this checkpoint. Do not
 restart or duplicate it.
 
-Commit `742357b` corrects a v14 contract error before deployment: pre-v14 accepted
+Commit `742357b` corrects a relationship-contract error before deployment: pre-v15 accepted
 batches are not compatible with a relationship-required profile, because they never
 asked Qwen to inspect relationships. They remain immutable candidate evidence but cannot
-prove an empty v14 relationship set. Commit `a36ee21` resolves a relationship endpoint
+prove an empty v15 relationship set. Commit `a36ee21` resolves a relationship endpoint
 only when exactly one structure candidate with that normalized name exists at the same
 evidence locator; all cross-document identities remain unresolved. The prepared v14
+Commit `e1c3908` adds `facility` and `local_area` to the v15 candidate vocabulary; this
+is required to distinguish LOS/KNS and local sites from generic structures. The prepared
 release must use the latest source commit, not the older e4b2083 worktree.
