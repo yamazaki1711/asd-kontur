@@ -434,6 +434,25 @@ document-wide retry. Next: complete this source, verify candidate persistence an
 downstream materialization, then continue eligible sources and reconcile facility
 identity, project-wide coverage, Tender findings, and grounded consultation.
 
+### Continuation checkpoint — 2026-09-11 19:39 UTC+12
+
+The live document worker remains the pinned `e28da91` release and has one active Qwen
+semantic job, `01a08f4e-3b54-7dd6-8114-39b798d51740`, for source version
+`01a088ac-7f16-73ef-9d2c-3957b2393f66`. Its scoped durable ledger has 98 accepted
+v15 batches / 1,176 accepted fragment inputs and no failed v15 receipt at this
+checkpoint. The job has a current lease heartbeat; do not restart or duplicate it.
+
+Commits `c98db6ab964f23d8f4b5123e082ad7738893f920` and
+`f533d5c6586448369fe58ae5a9d1de2a91cbac6b` are pushed and qualified but their Python
+worker/API changes are not loaded yet. They append a deduplicated, content-free durable
+semantic-batch progress event and expose the latest event in the effective job API and
+Russian jobs table. The API behavior is regression-tested against 205 historical jobs
+and a linked running retry in a disposable PostgreSQL database; the frontend tolerates
+an older API response until the compatible service transition. Deploy only after the
+active semantic job reaches a terminal state, then prove a fresh worker batch writes and
+the application returns current/total progress. This is a processing-visibility repair,
+not Tender acceptance or project-model materialization.
+
 ### Continuation checkpoint — 2026-09-11 17:51 UTC+12
 
 The scoped durable read confirms that the POS successor is still `running` under
