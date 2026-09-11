@@ -171,6 +171,8 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert package["quantities"][0]["raw_value"] == "+12,350"
         assert package["quantities"][0]["raw_unit"] == "м³"
         assert package["materials"][0]["raw_name"] == "Бетон В25"
+        assert package["uncertainties"] == ["WORK_TYPE_MAPPING_UNRESOLVED"]
+        assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}
         denominator = view["normative_profile"]["corpus_denominator"]

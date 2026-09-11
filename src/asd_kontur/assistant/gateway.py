@@ -1656,6 +1656,8 @@ _PUBLIC_GAP_LABELS = {
     "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE": "автоматическая проверка не настроена",
     "NORMATIVE_APPLICABILITY_INPUT_MISSING": "не указаны сведения для проверки применимости",
     "WORK_TYPE_CATALOG_UNAVAILABLE": "вид работы требует уточнения специалистом",
+    "WORK_TYPE_MAPPING_UNRESOLVED": "вид работы пока не сопоставлен с утверждённым каталогом",
+    "WORK_TYPE_MAPPING_AMBIGUOUS": "для вида работы найдены неоднозначные варианты сопоставления",
 }
 
 

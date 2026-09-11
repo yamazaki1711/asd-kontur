@@ -608,12 +608,21 @@ class IndustrialUnderstandingRepository:
                 )
                 or 0
             )
+            unresolved_work_count = sum(
+                1 for item in works if item["canonical_mapping_status"] != "resolved"
+            )
+            package_gaps = {
+                str(gap) for package in package_rows for gap in package["uncertainties"]
+            }
             gaps = sorted(
                 {
                     *[str(item["code"]) for item in normative_profile["gaps"]],
-                    "WORK_TYPE_CATALOG_UNAVAILABLE",
+                    *package_gaps,
                     *field_gaps,
                 }
+            )
+            terminal_status = (
+                "complete" if not gaps and not defects and unresolved_work_count == 0 else "partial"
             )
             structural = semantic_digest(
                 {
@@ -637,7 +646,7 @@ class IndustrialUnderstandingRepository:
                     "page_count,accepted_candidate_count,unresolved_candidate_count,open_defect_count,gaps,"
                     "structural_fingerprint,terminal_status) VALUES "
                     "(:o,:w,:reconciliation,1,:run,1,:project,1,:matrix,1,:sources,:pages,:accepted,"
-                    ":unresolved,:defects,:gaps,:fingerprint,'partial') ON CONFLICT DO NOTHING"
+                    ":unresolved,:defects,:gaps,:fingerprint,:status) ON CONFLICT DO NOTHING"
                 ),
                 {
                     "o": claimed.organization_id,
@@ -649,12 +658,11 @@ class IndustrialUnderstandingRepository:
                     "sources": len(source_ids),
                     "pages": page_count,
                     "accepted": len(fields) + len(works) + len(quantities) + len(materials),
-                    "unresolved": sum(
-                        1 for item in works if item["canonical_mapping_status"] != "resolved"
-                    ),
+                    "unresolved": unresolved_work_count,
                     "defects": len(defects),
                     "gaps": gaps,
                     "fingerprint": structural,
+                    "status": terminal_status,
                 },
             )
             self._rebuild_projection_in_session(
@@ -675,7 +683,7 @@ class IndustrialUnderstandingRepository:
             "defect_count": len(defects),
             "gaps": gaps,
             "structural_fingerprint": structural,
-            "terminal_status": "partial",
+            "terminal_status": terminal_status,
         }
 
     def rebuild_project_understanding_projection(
@@ -1422,7 +1430,7 @@ class IndustrialUnderstandingRepository:
         definition = {
             "fields": selected,
             "gaps": sorted(gaps),
-            "complete": False,
+            "complete": not gaps,
             "authority": "workspace_verified_facts_only",
         }
         project_id = deterministic_uuid(
@@ -1489,6 +1497,12 @@ class IndustrialUnderstandingRepository:
                 continue
             work_id = str(work["candidate_id"])
             package_id = deterministic_uuid(f"construction-work-package:{project_id}:{work_id}")
+            mapping_status = str(work["canonical_mapping_status"])
+            uncertainties = (
+                []
+                if mapping_status == "resolved"
+                else [f"WORK_TYPE_MAPPING_{mapping_status.upper()}"]
+            )
             package = {
                 "work_package_id": str(package_id),
                 "version": 1,
@@ -1496,14 +1510,14 @@ class IndustrialUnderstandingRepository:
                 "work_type": {
                     "raw": work["raw_name"],
                     "normalized": work["normalized_name"],
-                    "mapping_status": work["canonical_mapping_status"],
+                    "mapping_status": mapping_status,
                 },
                 "scope": work["scope_key"],
                 "quantities": [_plain(item) for item in quantity_by_work.get(work_id, [])],
                 "materials": [_plain(item) for item in material_by_work.get(work_id, [])],
                 "source_locator_ids": [str(work["source_locator_id"])],
-                "uncertainties": ["WORK_TYPE_CATALOG_UNAVAILABLE"],
-                "complete": False,
+                "uncertainties": uncertainties,
+                "complete": not uncertainties,
             }
             fingerprint = semantic_digest(package)
             session.execute(
@@ -1662,9 +1676,9 @@ class IndustrialUnderstandingRepository:
                 "customer_additions": [],
                 "gaps": [
                     *[str(item["code"]) for item in normative_profile["gaps"]],
-                    "WORK_TYPE_CATALOG_UNAVAILABLE",
+                    *[str(item) for item in package["uncertainties"]],
                 ],
-                "complete": False,
+                "complete": not normative_profile["gaps"] and bool(package["complete"]),
             }
             for package in packages
         ]
@@ -1673,7 +1687,7 @@ class IndustrialUnderstandingRepository:
             "version": 1,
             "project_definition_id": str(project_id),
             "rows": rows,
-            "complete": False,
+            "complete": bool(rows) and all(bool(item["complete"]) for item in rows),
             "authority_layers": {
                 "workspace_facts": "available",
                 "methodological_practice": "advisory_only",

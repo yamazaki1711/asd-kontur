@@ -392,10 +392,7 @@ class IndustrialDocumentUnderstandingPipeline:
         return self._repository.assemble_workspace(claimed)
 
     def _reconciliation(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        result = self._repository.assemble_workspace(claimed)
-        if result["terminal_status"] == "complete":
-            raise UnderstandingStageFailure("project_understanding_must_expose_authority_gaps")
-        return result
+        return self._repository.assemble_workspace(claimed)
 
 
 def _read_bounded(source: BinaryIO) -> bytes:
