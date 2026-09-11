@@ -146,6 +146,7 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             ),
             worker_identity="synthetic-understanding-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,  # This fixture exercises native DOCX/CSV extraction.
         )
         outcomes = []
         while outcome := worker.run_once():
@@ -312,6 +313,7 @@ def test_zip_intake_retains_container_and_registers_members(
             ),
             worker_identity="synthetic-archive-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,  # Archive members are native DOCX/CSV fixtures.
         )
         outcomes = []
         while outcome := worker.run_once():

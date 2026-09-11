@@ -2473,6 +2473,14 @@
             "title": "Structure Nodes",
             "type": "array"
           },
+          "structure_relationships": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Relationships",
+            "type": "array"
+          },
           "work_packages": {
             "items": {
               "additionalProperties": true,

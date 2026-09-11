@@ -199,7 +199,7 @@ def test_conversation_is_workspace_scoped_durable_and_streamed(
                 '"answer_type":"direct","needs_clarification":false,'
                 '"used_source_ids":[],"dialogue_summary":"Обсуждается комплект АОСР.",'
                 '"active_subjects":["АОСР"]}',
-                '{"passed":true,"issues":[]}',
+                "PASS",
             )
         )
         monkeypatch.setattr(worker, "_model_complete", lambda *args, **kwargs: next(model_outputs))

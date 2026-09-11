@@ -162,8 +162,25 @@ def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
         raise RuntimeError("Dependency recovery downgrade requires a disposable database")
     op.execute("DROP INDEX workspace.durable_jobs_dependency_recovery_pending_idx")
-    op.execute("DROP FUNCTION workspace.recover_dependency_terminal_failures()")
+    # Restore the 0044 wrapper without consuming its preserved v1 implementation.
+    # The following 0044 downgrade still needs that function under its v1 name.
     op.execute(
-        "ALTER FUNCTION workspace.recover_dependency_terminal_failures_v1() "
-        "RENAME TO recover_dependency_terminal_failures"
+        """
+        CREATE OR REPLACE FUNCTION workspace.recover_dependency_terminal_failures()
+        RETURNS integer
+        LANGUAGE plpgsql SECURITY DEFINER
+        SET search_path = pg_catalog, workspace
+        AS $$
+        DECLARE
+          violated_constraint text;
+        BEGIN
+          RETURN workspace.recover_dependency_terminal_failures_v1();
+        EXCEPTION WHEN unique_violation THEN
+          GET STACKED DIAGNOSTICS violated_constraint = CONSTRAINT_NAME;
+          IF violated_constraint = 'durable_jobs_organization_id_workspace_id_job_kind_idempote_key' THEN
+            RETURN 0;
+          END IF;
+          RAISE;
+        END $$;
+        """
     )

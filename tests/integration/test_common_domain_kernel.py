@@ -349,7 +349,10 @@ def _rule_command(
     )
 
 
-def test_wp11_schema_role_and_migration_head(postgres_environment: PostgreSQLEnvironment) -> None:
+def test_wp11_schema_role_and_migration_head(
+    migration_head: str,
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
     inspector = sa.inspect(postgres_environment.owner_engine)
     assert {
         "workspace_facts",
@@ -365,8 +368,7 @@ def test_wp11_schema_role_and_migration_head(postgres_environment: PostgreSQLEnv
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0036_ntd_search_binding"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == migration_head
         )
         assert (
             connection.scalar(
@@ -766,7 +768,7 @@ def test_full_common_chain_serves_all_modes_and_reset_preserves_platform(
 
 
 def test_disposable_0005_downgrade_upgrade(
-    postgres_environment: PostgreSQLEnvironment, repository_root: object
+    migration_head: str, postgres_environment: PostgreSQLEnvironment, repository_root: object
 ) -> None:
     suffix = hashlib.sha256(os.urandom(16)).hexdigest()[:12]
     database_name = f"asd_g04_test_wp11_{suffix}"
@@ -783,7 +785,7 @@ def test_disposable_0005_downgrade_upgrade(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0036_ntd_search_binding"
+                == migration_head
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

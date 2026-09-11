@@ -28,6 +28,9 @@ def valid_profile():
         ),
         chunk_profile_id=uuid.uuid4(),
         min_relevance=0.18,
+        reranker_profile_id=uuid.uuid4(),
+        graph_max_depth=2,
+        reranker_top_n=20,
     )
 
 
@@ -101,6 +104,7 @@ def test_load_dense_candidates_valid(mock_connection, valid_profile):
         "embedding_profile_id": valid_profile.embedding_profile_id,
         "chunk_profile_id": valid_profile.chunk_profile_id,
         "limit": candidate_limit,
+        "corpus_object_id": None,
     }
 
 

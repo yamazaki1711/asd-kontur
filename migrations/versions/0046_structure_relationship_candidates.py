@@ -17,6 +17,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Keep the published revision identity valid on both fresh and existing DBs.
+    # Alembic creates version_num as varchar(32); this revision needs 38 characters.
+    # Do not shrink it on downgrade: Alembic updates the marker after this function.
+    op.execute("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(128)")
     op.execute(
         """
         CREATE TABLE workspace.project_structure_relationship_candidates (

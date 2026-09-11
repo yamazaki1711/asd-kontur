@@ -178,6 +178,7 @@ def _insert_request(
 
 
 def test_g07_schema_roles_rls_and_migration_chain(
+    migration_head: str,
     postgres_environment: PostgreSQLEnvironment,
 ) -> None:
     inspector = sa.inspect(postgres_environment.owner_engine)
@@ -196,8 +197,7 @@ def test_g07_schema_roles_rls_and_migration_chain(
             == "asd_harness_service"
         )
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0036_ntd_search_binding"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == migration_head
         )
 
 
@@ -371,7 +371,7 @@ def test_reset_adapter_purges_harness_data_but_platform_profile_survives(
 
 
 def test_disposable_head_to_0003_to_head(
-    postgres_environment: PostgreSQLEnvironment, repository_root: str
+    migration_head: str, postgres_environment: PostgreSQLEnvironment, repository_root: str
 ) -> None:
     database_name = f"asd_g04_test_g07_roundtrip_{os.getpid()}"
     cluster = sa.create_engine(postgres_environment.cluster_admin_url, isolation_level="AUTOCOMMIT")
@@ -385,7 +385,7 @@ def test_disposable_head_to_0003_to_head(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0036_ntd_search_binding"
+                == migration_head
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

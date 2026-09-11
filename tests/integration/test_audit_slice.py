@@ -105,6 +105,7 @@ def insert_mission(
 
 
 def test_wp14_schema_role_rls_and_force_rls(
+    migration_head: str,
     postgres_environment: PostgreSQLEnvironment,
 ) -> None:
     inspector = sa.inspect(postgres_environment.owner_engine)
@@ -122,8 +123,7 @@ def test_wp14_schema_role_rls_and_force_rls(
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0036_ntd_search_binding"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == migration_head
         )
         assert (
             connection.scalar(
@@ -372,7 +372,7 @@ def test_storage_inventory_and_exact_reset_preserve_workspace_b_and_platform(
 
 
 def test_disposable_0008_to_0007_to_0008(
-    postgres_environment: PostgreSQLEnvironment, repository_root: object
+    migration_head: str, postgres_environment: PostgreSQLEnvironment, repository_root: object
 ) -> None:
     suffix = hashlib.sha256(os.urandom(16)).hexdigest()[:12]
     database_name = f"asd_g04_test_wp14_{suffix}"
@@ -390,7 +390,7 @@ def test_disposable_0008_to_0007_to_0008(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0036_ntd_search_binding"
+                == migration_head
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

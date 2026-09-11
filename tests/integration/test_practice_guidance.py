@@ -964,6 +964,7 @@ def test_platform_guide_ingestion_gateway_and_workspace_independence(
 
 
 def test_disposable_practice_memory_head_to_0008_to_head(
+    migration_head: str,
     postgres_environment: PostgreSQLEnvironment,
     repository_root: object,
 ) -> None:
@@ -984,7 +985,7 @@ def test_disposable_practice_memory_head_to_0008_to_head(
         with disposable_engine.connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0036_ntd_search_binding"
+                == migration_head
             )
         with pytest.raises(IntegrityFailure) as missing_relation:
             memory_relation_inventory(

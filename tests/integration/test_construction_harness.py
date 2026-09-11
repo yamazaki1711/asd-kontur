@@ -85,6 +85,7 @@ def _scope(connection: sa.Connection, organization_id: UUID, workspace_id: UUID)
 
 
 def test_unified_harness_schema_role_rls_and_scoped_repository(
+    migration_head: str,
     postgres_environment: PostgreSQLEnvironment,
 ) -> None:
     inspector = sa.inspect(postgres_environment.owner_engine)
@@ -293,8 +294,7 @@ def test_unified_harness_schema_role_rls_and_scoped_repository(
         )
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0036_ntd_search_binding"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == migration_head
         )
         assert (
             connection.scalar(
