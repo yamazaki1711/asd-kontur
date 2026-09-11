@@ -32,11 +32,11 @@
     }
   },
   "workspace_candidates": {
-    "project_fields": 109,
-    "works": 429,
-    "quantities": 121,
-    "materials": 41,
-    "structures": 188,
+    "project_fields": 231,
+    "works": 486,
+    "quantities": 142,
+    "materials": 68,
+    "structures": 274,
     "excavation_pit_candidates": 5
   },
   "materialization": {

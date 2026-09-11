@@ -39,6 +39,14 @@ not perform a name-only facility merge. Its migration is
 `0046_structure_relationship_candidates`; release waits for the active v13 job to
 become terminal.
 
+KR1 v13 has now completed its 2,960 accepted fragment-input denominator. The immutable
+failed child receipt remains separate. Its accepted candidate evidence has reached the
+partial live project view: 231 field candidates, 486 work candidates, 142 quantity
+candidates, 68 material candidates and 274 structure candidates across the workspace.
+Examples visible through source links include KNS observations in IOS1 pages 10, 12–13,
+and 52. They are not yet reconciled facility dossiers, nor evidence of an exhaustive KNS
+or excavation inventory.
+
 Next active work: materialize KR1 through the durable dependency chain; then run KR2
 and POS. Assemble facility/area relationships, complete the source manifest, perform
 cross-document Tender reconciliation and normative evaluation, and verify the project

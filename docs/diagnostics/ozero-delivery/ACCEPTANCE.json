@@ -24,6 +24,13 @@
       "evidence": "source-scoped durable-job lineage and project-understanding view"
     },
     {
+      "id": "kr1-semantic-coverage-and-materialization",
+      "expected": "Every deterministic KR1 semantic input reaches an accepted bounded batch or a separate durable unresolved attempt, and accepted candidates reach the partial project view.",
+      "observed": "2,960 accepted v13 fragment inputs; one failed 12-input child receipt retained independently. The live partial view increased to 231 fields, 486 works, 142 quantities, 68 materials and 274 structures across the workspace.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches; KR1 successor lineage; scoped live project_understanding_view"
+    },
+    {
       "id": "full-package-semantic-coverage",
       "expected": "All 22 active source versions and 2,529 pages have the required processing disposition and eligible semantic analysis.",
       "observed": "Only two source versions have accepted engineering-batch coverage at this checkpoint; KR1 is active.",
