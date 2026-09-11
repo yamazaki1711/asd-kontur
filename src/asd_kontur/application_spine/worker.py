@@ -153,92 +153,15 @@ class DocumentWorker:
             lease_seconds=self._lease_seconds,
         )
         if claimed is None:
-            for _ in range(1024):
-                recovered = self._repository.recover_dependency_terminal_failures()
-                reconciled = self._repository.reconcile_unclaimable_jobs()
-                if recovered == 0 and reconciled == 0:
-                    break
-            else:
-                raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")
+            # Recoveries are maintenance work, not a prerequisite for runnable
+            # jobs.  One bounded pass avoids an unbounded scan from starving a
+            # newly eligible document job.
+            self._repository.recover_dependency_terminal_failures()
+            self._repository.reconcile_unclaimable_jobs()
             claimed = self._repository.claim_next_job(
                 worker_identity=self._worker_identity,
                 lease_seconds=self._lease_seconds,
             )
-        if claimed is None:
-            return None
-        self._repository.mark_job_running(claimed, worker_identity=self._worker_identity)
-        if self._repository.cancellation_requested(claimed):
-            return self._terminal(
-                claimed,
-                JobState.CANCELLED,
-                "job_cancelled_before_effect",
-                {"semantic_effect": False},
-            )
-        keepalive = _LeaseKeepalive(
-            self._repository,
-            claimed,
-            worker_identity=self._worker_identity,
-            lease_seconds=self._lease_seconds,
-        )
-        keepalive.start()
-        try:
-            result = self._execute(claimed)
-            keepalive.raise_if_lost()
-        except RetryableJobFailure as exc:
-            scheduled = self._repository.retry_job(
-                claimed,
-                worker_identity=self._worker_identity,
-                failure_code=exc.code,
-                delay_seconds=min(2**claimed.attempt_number, 30),
-            )
-            if scheduled:
-                return WorkerOutcome(str(claimed.job_id), JobState.QUEUED, exc.code)
-            return self._terminal(
-                claimed,
-                JobState.RECONCILIATION_REQUIRED,
-                "retry_exhausted",
-                {"retryable_failure_code": exc.code},
-            )
-        except DeterministicJobFailure as exc:
-            return self._terminal(
-                claimed,
-                JobState.FAILED,
-                exc.code,
-                {"semantic_effect": False},
-            )
-        except SpinePersistenceError as exc:
-            return self._terminal(
-                claimed,
-                JobState.RECONCILIATION_REQUIRED,
-                str(exc),
-                {"semantic_effect": False},
-            )
-        except Exception as exc:
-            code = f"worker_{type(exc).__name__.casefold()}"
-            if isinstance(exc, OSError):
-                code = "worker_io_unavailable"
-            return self._terminal(
-                claimed,
-                JobState.RECONCILIATION_REQUIRED,
-                code,
-                {"exception_type": type(exc).__name__},
-            )
-        finally:
-            keepalive.stop()
-        return self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
-
-    def _run_once_before_recovery(self) -> WorkerOutcome | None:
-        for _ in range(1024):
-            recovered = self._repository.recover_dependency_terminal_failures()
-            reconciled = self._repository.reconcile_unclaimable_jobs()
-            if recovered == 0 and reconciled == 0:
-                break
-        else:
-            raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")
-        claimed = self._repository.claim_next_job(
-            worker_identity=self._worker_identity,
-            lease_seconds=self._lease_seconds,
-        )
         if claimed is None:
             return None
         self._repository.mark_job_running(claimed, worker_identity=self._worker_identity)

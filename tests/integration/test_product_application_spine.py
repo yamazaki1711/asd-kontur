@@ -172,9 +172,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         succeeded_count = len(outcomes) - 1
         assert sum(value["state"] == "succeeded" for value in jobs) == succeeded_count
         assert sum(value["state"] == "failed" for value in jobs) == 1
-        assert sum(value["state"] == "reconciliation_required" for value in jobs) == (
-            16 - succeeded_count
-        )
+        # A terminal page-classification failure remains visible, but its
+        # descendants are now recovered from the accepted replacement lineage
+        # rather than leaving every dependent stage permanently blocked.
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 1
         failed_job = next(value for value in jobs if value["state"] == "failed")
         assert failed_job["typed_failure_code"] == outcomes[-1].outcome_code
         job_states = {value["job_kind"]: value["state"] for value in jobs}
