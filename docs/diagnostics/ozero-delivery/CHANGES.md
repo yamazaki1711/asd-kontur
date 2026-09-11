@@ -49,3 +49,22 @@ consultant/browser workflows.
 - `a36ee21` adds source-scoped endpoint resolution to the relationship API response.
   It resolves an endpoint only where the same evidence locator has exactly one matching
   structure candidate; cross-document or same-name ambiguity remains explicit.
+
+## 2026-09-11: semantic role-gate and status corrections
+
+- `1f1575a` makes semantic coverage select the latest activity profile, including a
+  profile with only failed attempts. The UI calls failed entries historical attempts;
+  accepted coverage and immutable failed receipts are no longer conflated.
+- `ce9cd3b` permits project/work semantic extraction to use evidence-bearing native
+  elements when deterministic page classification is unavailable. Missing native
+  elements still fail with `structured_extraction_evidence_unavailable`; the change
+  does not create a fallback extractor. It also preserves Qwen
+  `structure_relationships` in the persisted project bundle. A focused regression
+  covers a role-less source whose Qwen structure and facility-to-pit relationship
+  candidates persist with exact evidence.
+
+`ce9cd3b` is prepared as a complete API/document-worker/assistant-worker release
+with additive migration `0046_structure_relationship_candidates`. It is not live:
+the current public application database role cannot make the required full recovery
+backup. No services were restarted and no schema change was attempted after that
+backup gate failed.

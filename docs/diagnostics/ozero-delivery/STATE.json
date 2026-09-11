@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-11T16:41:00+12:00",
+  "recorded_at": "2026-09-11T17:11:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
     "api": "8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da",
@@ -10,13 +10,23 @@
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_completed_sources": 1,
-    "semantic_partial_sources": 2,
+    "semantic_completed_sources": 3,
+    "semantic_partial_sources": 0,
     "semantic_not_started_sources": 19,
-    "semantic_active_source": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
-    "semantic_active_source_expected_fragment_inputs": 2960,
-    "semantic_active_source_accepted_fragment_inputs": 2442,
-    "semantic_active_source_failed_fragment_inputs": 12
+    "semantic_active_source": null,
+    "semantic_active_source_expected_fragment_inputs": null,
+    "semantic_active_source_accepted_fragment_inputs": null,
+    "semantic_active_source_failed_fragment_inputs": null,
+    "kr1_v13": {
+      "accepted_fragment_inputs": 2960,
+      "expected_fragment_inputs": 2960,
+      "historical_failed_attempt_inputs": 12
+    },
+    "kr2_v13": {
+      "accepted_fragment_inputs": 1525,
+      "expected_fragment_inputs": 1525,
+      "historical_failed_attempt_inputs": 24
+    }
   },
   "pzu_v12": {
     "source_version_id": "01a088ac-8125-7031-8659-a57bd97ff1c6",
@@ -44,21 +54,15 @@
     "established_pit_count": null,
     "full_package_tender_accepted": false
   },
-  "active_job": {
-    "job_id": "01a08eac-9094-73c6-b936-3ca9bc2a0044",
-    "kind": "PROJECT_DEFINITION_EXTRACTION",
-    "source_version_id": "01a088ac-8084-7c59-8b1a-c9bda7ad8208",
-    "state_at_snapshot": "running"
-  },
-  "queued_successor": {
-    "job_id": "01a08ec5-b223-7f78-8c1c-893ca2bb8eff",
-    "kind": "PROJECT_DEFINITION_EXTRACTION",
-    "source_version_id": "01a088ac-8065-7088-9fe9-298e3848e7ae",
-    "state_at_snapshot": "queued"
+  "active_job": null,
+  "pos_failure": {
+    "job_id": "01a08edb-97d7-7ce6-89b8-bd4a518d79c6",
+    "outcome": "structured_extraction_evidence_unavailable",
+    "demonstrated_cause": "deployed pipeline required deterministic page-role decisions before Qwen semantic extraction"
   },
   "pending_release": {
-    "commits": ["c460131", "e4b2083", "742357b", "a36ee21", "e1c3908"],
+    "commits": ["ce9cd3be3561f3f90e50cb12304f49cf5a38935f"],
     "database_migration": "0046_structure_relationship_candidates",
-    "status": "not_deployed_while_v13_job_is_running"
+    "status": "not_deployed_current_full_backup_permission_denied"
   }
 }

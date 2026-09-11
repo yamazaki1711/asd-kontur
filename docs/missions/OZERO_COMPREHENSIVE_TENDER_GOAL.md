@@ -288,3 +288,44 @@ evidence locator; all cross-document identities remain unresolved. The prepared 
 Commit `e1c3908` adds `facility` and `local_area` to the v15 candidate vocabulary; this
 is required to distinguish LOS/KNS and local sites from generic structures. The prepared
 release must use the latest source commit, not the older e4b2083 worktree.
+
+### Continuation checkpoint — 2026-09-11 17:11 UTC+12
+
+KR2 source version `01a088ac-8065-7088-9fe9-298e3848e7ae` completed its v13
+semantic input denominator: 1,525/1,525 accepted inputs. Four immutable failed
+receipts cover 24 attempt inputs; successful recovery batches supply the accepted
+coverage and the failed receipts remain audit history, not a current 24-input
+gap. Its source-scoped work/quantity/material, work-package, matrix,
+reconciliation, and evidence-index descendants also succeeded.
+
+Commit `1f1575a92d26121227fd762c8f64320446c3e79c` corrects the semantic coverage
+query to select the latest activity profile, not the latest profile with an
+accepted batch. It exposes failed attempts separately and labels the Russian UI
+accordingly. A scoped live read returned all 22 active documents and confirmed
+KR1 2,960/2,960 accepted inputs plus 12 failed historical attempt inputs, and
+KR2 1,525/1,525 plus 24. This is semantic candidate coverage, not complete
+engineering analysis.
+
+The sole supported POS retry `01a08edb-97d7-7ce6-89b8-bd4a518d79c6` was claimed
+after the queue drained, then failed without source mutation as
+`structured_extraction_evidence_unavailable`. Its receipt proves the old worker
+required deterministic page-role decisions before it invoked Qwen, despite
+native POS elements being available. Commit
+`ce9cd3be3561f3f90e50cb12304f49cf5a38935f` fixes that gating defect: evidence
+bound native elements now reach Qwen semantic extraction when page classification
+is absent; no-element input still fails explicitly. It also retains Qwen
+structure-relationship candidates in the project bundle. Qualification: 64
+focused backend tests, scoped Ruff/strict mypy, and frontend format/lint/typecheck/build.
+
+The controlled release is prepared but not activated. A full `pg_dump` using the
+configured `asd_public_app` connection fails at `platform_records` permission
+denial, so no current recoverable full-database backup exists from this attempt.
+No migration and no launchd plist was changed. Database `0046` and the exact
+ce9cd3b API/worker/assistant release must not be activated until an already
+authorized full-backup/migration connection is supplied or located. Existing
+pre-0045 backups preserve older state but do not cover current OZERO extraction
+evidence. The next executable action is to use the approved migration-backup
+credential/mechanism, take a nonempty consistent backup, apply only additive
+0046, switch the three affected services to the pinned ce9cd3b release, and
+create one replacement from the new POS failure lineage. Do not rerun OCR or
+create another retry before that release.

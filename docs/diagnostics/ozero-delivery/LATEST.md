@@ -51,3 +51,25 @@ Next active work: materialize KR1 through the durable dependency chain; then run
 and POS. Assemble facility/area relationships, complete the source manifest, perform
 cross-document Tender reconciliation and normative evaluation, and verify the project
 consultant through the user-facing application.
+
+## 2026-09-11 17:11 UTC+12 — current correction and release gate
+
+KR1 and KR2 are no longer active: their v13 semantic manifests have respectively
+accepted 2,960/2,960 and 1,525/1,525 fragment inputs. Failed input counts (12 and
+24) are immutable historical attempt records; they do not reduce accepted coverage.
+The source-scoped KR2 downstream chain completed. Package completion, facility
+reconciliation, and Tender acceptance remain open.
+
+The one permitted POS replacement failed immediately as
+`structured_extraction_evidence_unavailable`. Its receipt demonstrated that the
+deployed worker gates Qwen semantic extraction on deterministic role decisions.
+Commit `ce9cd3b` removes that incorrect gate for evidence-bearing native elements
+and retains Qwen relationship candidates; it is fully qualified but **not
+deployed**.
+
+Deployment is blocked solely by the required current full-backup gate. The existing
+application role can access scoped OZERO records but `pg_dump` fails on a platform
+table permission check. No migration, service reload, or source mutation was made.
+The next active work is locating the already-authorized full-backup/migration path;
+then deploy exact `ce9cd3b` with additive migration 0046 and retry only the POS
+failure lineage.
