@@ -61,9 +61,10 @@ _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
 
 
 class QwenSemanticFailure(RuntimeError):
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, diagnostics: dict[str, object] | None = None) -> None:
         super().__init__(code)
         self.code = code
+        self.diagnostics = diagnostics or {}
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,7 +213,8 @@ class QwenDocumentSemanticAdapter:
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
-        on_failed_batch: Callable[[QwenEngineeringBatch, str], None] | None = None,
+        on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None]
+        | None = None,
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
         batches = _engineering_batches(elements)
@@ -387,7 +389,7 @@ class QwenDocumentSemanticAdapter:
         accepted: Mapping[str, dict[str, object]],
         compatible_accepted_batches: Mapping[str, dict[str, object]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
-        on_failed_batch: Callable[[QwenEngineeringBatch, str], None] | None,
+        on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None] | None,
     ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
         allowed = _engineering_allowed_fragments(batch.fragments)
         persisted = accepted.get(batch.digest)
@@ -438,7 +440,7 @@ class QwenDocumentSemanticAdapter:
             else:
                 failure = exc
             if on_failed_batch is not None:
-                on_failed_batch(batch, failure.code)
+                on_failed_batch(batch, failure.code, failure.diagnostics)
             if failure.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
                 raise failure from None
             if len(batch.fragments) == 1:
@@ -772,7 +774,7 @@ def _parse_engineering(
         rows = value.get(key, [])
         if not isinstance(rows, list) or len(rows) > 64:
             raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
-        for row in rows:
+        for row_ordinal, row in enumerate(rows, start=1):
             if not isinstance(row, dict):
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_shape")
             item = _normalize_engineering_evidence_aliases(
@@ -780,7 +782,14 @@ def _parse_engineering(
                 tuple(" ".join(str(row.get(name, "")).split()) for name in names),
             )
             if not _engineering_item_valid(key, item, allowed):
-                raise QwenSemanticFailure("qwen_engineering_response_invalid_evidence")
+                raise QwenSemanticFailure(
+                    "qwen_engineering_response_invalid_evidence",
+                    {
+                        "collection": key,
+                        "row_ordinal": row_ordinal,
+                        "evidence_references": _engineering_evidence_references(key, item),
+                    },
+                )
             item = _canonicalize_engineering_item(key, item, allowed)
             if key == "structures" and item[0] not in {"excavation_pit", "structure", "zone"}:
                 raise QwenSemanticFailure("qwen_engineering_response_invalid_kind")
@@ -809,6 +818,20 @@ def _normalize_engineering_evidence_aliases(key: str, item: tuple[str, ...]) -> 
         if re.fullmatch(r"F[1-9][0-9]*[.,;:]", value, flags=re.IGNORECASE):
             values[position] = value[:-1].upper()
     return tuple(values)
+
+
+def _engineering_evidence_references(key: str, item: tuple[str, ...]) -> list[str]:
+    return [
+        item[position]
+        for position in {
+            "fields": (2,),
+            "structures": (2,),
+            "works": (1,),
+            "quantities": (3, 4),
+            "materials": (4, 5),
+        }[key]
+        if item[position]
+    ]
 
 
 def _canonicalize_engineering_item(

@@ -778,7 +778,7 @@ def test_qwen_engineering_extraction_repairs_recoverable_invalid_batch_before_sp
         result = adapter.extract_engineering(
             document.pages[0].elements,
             on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
-            on_failed_batch=lambda batch, code: failed.append((batch, code)),
+            on_failed_batch=lambda batch, code, _details: failed.append((batch, code)),
         )
 
     assert complete.call_count == 2

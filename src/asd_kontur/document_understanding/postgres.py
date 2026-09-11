@@ -176,11 +176,13 @@ class IndustrialUnderstandingRepository:
         source_locator_ids: tuple[UUID, ...],
         input_manifest: dict[str, object],
         failure_code: str,
+        failure_diagnostics: dict[str, object],
     ) -> None:
         """Persist a sanitized failed model attempt without accepting its output."""
         output_manifest = {
             "contract": "engineering-extraction-batch-failure-v1",
             "typed_failure_code": failure_code,
+            "diagnostics": failure_diagnostics,
         }
         with self._session(claimed) as session:
             session.execute(
