@@ -43,7 +43,9 @@ test("platform consultant API persists a model answer and restores a durable dia
   await expect(answer).toBeVisible({ timeout: 120_000 });
   await expect(answer).not.toHaveText("");
   if (state.synthetic_qwen_answer) {
-    await expect(answer).toHaveText(state.synthetic_qwen_answer);
+    await expect(answer.locator(":scope > div")).toHaveText(
+      state.synthetic_qwen_answer,
+    );
   }
   if (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1") {
     const sources = answer.locator(".construction-consultant-sources");
