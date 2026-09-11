@@ -3553,6 +3553,10 @@ function ProjectUnderstandingPage() {
           const semanticCoverage = Array.isArray(value.semantic_coverage)
             ? (value.semantic_coverage as Record<string, unknown>[])
             : [];
+          const projectFieldCandidates = candidates.project_fields ?? [];
+          const workCandidates = candidates.work_types ?? [];
+          const quantityCandidates = candidates.quantities ?? [];
+          const materialCandidates = candidates.materials ?? [];
           const materializationMessages: Record<string, string> = {
             not_requested:
               "Модель объекта ещё не запускалась. Загруженные документы сохранены отдельно от модели.",
@@ -3570,19 +3574,27 @@ function ProjectUnderstandingPage() {
               <div className="metrics">
                 <Metric
                   label="Сведений-кандидатов"
-                  value={Object.keys(definition.fields ?? {}).length}
+                  value={projectFieldCandidates.length}
+                />
+                <Metric
+                  label="Структур-кандидатов"
+                  value={structureNodes.length}
+                />
+                <Metric
+                  label="Работ-кандидатов"
+                  value={workCandidates.length}
+                />
+                <Metric
+                  label="Количеств-кандидатов"
+                  value={quantityCandidates.length}
+                />
+                <Metric
+                  label="Материалов-кандидатов"
+                  value={materialCandidates.length}
                 />
                 <Metric
                   label="Классифицировано страниц"
                   value={value.page_roles.length}
-                />
-                <Metric
-                  label="Пакетов работ"
-                  value={value.work_packages.length}
-                />
-                <Metric
-                  label="Открытых замечаний"
-                  value={value.defects.length}
                 />
               </div>
               {materializationState !== "complete" && (
