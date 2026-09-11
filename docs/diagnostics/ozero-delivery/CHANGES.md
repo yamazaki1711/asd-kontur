@@ -1,5 +1,15 @@
 # OZERO Tender delivery changes
 
+## 2026-09-11 — source-scoped structural dossiers
+
+- `43244db` exposes every existing facility, local-area, excavation, structure, and
+  zone observation as an evidence-linked **candidate dossier** in the existing project
+  model UI/API. Relationships are included only on exact source-scoped endpoint
+  resolution; same-name items across documents remain separate and unresolved.
+- The API/frontend release is live and readiness remains healthy at migration `0047`.
+  This improves inspection of partial evidence; it does not establish a reconciled
+  object model, comprehensive coverage, or Tender acceptance.
+
 ## 2026-09-11 — deployed worker progress transition
 
 - The document worker now runs pinned release `22142e2` after a controlled safe-boundary

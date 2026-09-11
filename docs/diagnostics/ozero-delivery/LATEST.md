@@ -1,5 +1,19 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-11 19:59 UTC+12 — partial structural dossiers deployed
+
+API/frontend release `43244dba95d8d8974e45401e1790cfa45be67cc6` is live at the
+same migration `0047`. The actual scoped project-model boundary now returns 864
+source-scoped structural dossiers alongside the candidate nodes and relationship
+observations. Each dossier retains its original source locator and only includes
+relationships resolved to that exact evidence-scoped node; no cross-document name
+merge, facility identity decision, or excavation-pit total is asserted. Browser
+acceptance remains unverified in this checkpoint.
+
+The document worker remains `22142e2` and local Qwen continues job
+`01a08f4e-3b5b-7851-9f3d-fcaf3e84c096`; its current durable base-batch progress is
+`25/497`. The entire Tender acceptance remains open.
+
 ## 2026-09-11 19:51 UTC+12 — real worker batch-progress proof; corpus remains partial
 
 The document worker was transitioned at a safe semantic-job boundary to pinned release
