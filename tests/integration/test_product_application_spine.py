@@ -798,3 +798,138 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
         assert len(rows) == 1
         assert rows[0]["provenance"]["semantic_recovery_of"]
+        assert (
+            rows[0]["provenance"]["candidate_persistence_profile"]
+            == "qwen-engineering-extraction-v15"
+        )
+
+
+def test_project_view_selects_only_the_latest_source_semantic_profile(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """Legacy generic observations cannot mix with a completed Qwen semantic pass."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="profile-scope-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Profile scope owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "profile-scope-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Profile-scoped candidates"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("project.txt", b"native project text", "text/plain"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id FROM "
+                        "workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            job_id = connection.execute(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "ORDER BY created_at,job_id LIMIT 1"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            ).scalar_one()
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,locator_kind,"
+                    "locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region','profile-test',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"test": "profile-locator"}),
+                },
+            )
+            for candidate_id, value, profile in (
+                (uuid4(), "legacy observation", "project-definition-extraction-v0.1"),
+                (uuid4(), "current observation", "qwen-engineering-extraction-v15"),
+            ):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_field_candidates "
+                        "(organization_id,workspace_id,candidate_id,version,field_key,raw_value,"
+                        "normalized_value,value_type,source_version_id,source_locator_id,"
+                        "extraction_method,confidence,uncertainty_codes,conflicts,status,"
+                        "extraction_profile_version,candidate_digest) VALUES "
+                        "(:organization,:workspace,:candidate,1,'purpose',:value,"
+                        "CAST(:normalized AS jsonb),'text',:source,:locator,'synthetic',1,"
+                        "'{}','{}',"
+                        "'candidate',:profile,:digest)"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "candidate": candidate_id,
+                        "value": value,
+                        "normalized": json.dumps(value),
+                        "source": source["source_version_id"],
+                        "locator": locator_id,
+                        "profile": profile,
+                        "digest": semantic_digest({"candidate": str(candidate_id)}),
+                    },
+                )
+            stage_id = uuid4()
+            output = {"profile_scope": "qwen-engineering-extraction-v15"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_understanding_stage_results "
+                    "(organization_id,workspace_id,stage_result_id,job_id,document_id,document_version,"
+                    "source_version_id,stage_kind,profile_version,input_digest,output_manifest,"
+                    "output_digest,terminal_status) VALUES "
+                    "(:organization,:workspace,:result,:job,:document,:version,:source,"
+                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v15',:input,"
+                    "CAST(:output AS jsonb),:digest,'complete')"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "result": stage_id,
+                    "job": job_id,
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "input": semantic_digest({"test": "profile-input"}),
+                    "output": json.dumps(output),
+                    "digest": semantic_digest(output),
+                },
+            )
+        response = client.get(f"/api/v1/workspaces/{workspace_id}/project-understanding")
+        assert response.status_code == 200, response.text
+        values = response.json()["candidates"]["project_fields"]
+        assert [item["value"] for item in values] == ["current observation"]

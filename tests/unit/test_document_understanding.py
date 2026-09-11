@@ -51,6 +51,7 @@ from asd_kontur.document_understanding.semantic import (
     extract_structured_candidates,
     parse_exact_decimal,
 )
+from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
 SOURCE_VERSION_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -888,6 +889,41 @@ def test_qwen_engineering_extraction_preserves_evidence_bound_structure_relation
     assert (
         relationship.locator.source_locator_id
         == document.pages[0].elements[0].locator.source_locator_id
+    )
+
+
+def test_qwen_engineering_candidates_are_profile_scoped() -> None:
+    """A later semantic profile must not collide with legacy generic candidates."""
+    document = _extract_csv("Котлован К-1;устройство шпунтового ограждения\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    response = json.dumps(
+        {
+            "fields": [{"key": "purpose", "value": "котлован", "fragment_id": "F1"}],
+            "structures": [{"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1"}],
+            "structure_relationships": [],
+            "works": [{"name": "устройство шпунтового ограждения", "fragment_id": "F1"}],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    qwen_field = next(
+        value
+        for value in result.project_fields
+        if value.extraction_profile_version == "qwen-engineering-extraction-v15"
+    )
+    assert result.works[0].extraction_profile_version == "qwen-engineering-extraction-v15"
+    assert result.structures[0].extraction_profile_version == "qwen-engineering-extraction-v15"
+    fragment_id = _engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id
+    assert qwen_field.candidate_id == deterministic_uuid(
+        "qwen-field:qwen-engineering-extraction-v15:"
+        f"{qwen_field.locator.source_version_id}:{fragment_id}:purpose:котлован"
+    )
+    assert qwen_field.candidate_id != deterministic_uuid(
+        f"qwen-field:{qwen_field.locator.source_version_id}:{fragment_id}:purpose:котлован"
     )
 
 

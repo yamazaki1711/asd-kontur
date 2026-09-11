@@ -1089,7 +1089,7 @@ class IndustrialUnderstandingRepository:
                 "method": value.extraction_method,
                 "uncertainty": list(value.uncertainty_codes),
                 "status": value.status.value,
-                "profile": PROJECT_EXTRACTION_PROFILE_VERSION,
+                "profile": value.extraction_profile_version,
                 "digest": semantic_digest(value),
             },
         )
@@ -1103,8 +1103,8 @@ class IndustrialUnderstandingRepository:
             sa.text(
                 "INSERT INTO workspace.project_structure_node_versions "
                 "(organization_id,workspace_id,structure_node_id,version,node_kind,raw_name,"
-                "normalized_name,parent_node_id,source_locator_id,status,fingerprint) VALUES "
-                "(:o,:w,:node,1,:kind,:raw,:normalized,NULL,:locator,:status,:fingerprint) "
+                "normalized_name,parent_node_id,source_locator_id,status,extraction_profile_version,fingerprint) VALUES "
+                "(:o,:w,:node,1,:kind,:raw,:normalized,NULL,:locator,:status,:profile,:fingerprint) "
                 "ON CONFLICT DO NOTHING"
             ),
             {
@@ -1116,6 +1116,7 @@ class IndustrialUnderstandingRepository:
                 "normalized": value.normalized_name,
                 "locator": value.locator.source_locator_id,
                 "status": value.status.value,
+                "profile": value.extraction_profile_version,
                 "fingerprint": fingerprint,
             },
         )
@@ -1130,9 +1131,9 @@ class IndustrialUnderstandingRepository:
                 "INSERT INTO workspace.project_structure_relationship_candidates "
                 "(organization_id,workspace_id,relationship_candidate_id,version,relationship_kind,"
                 "subject_raw_name,subject_normalized_name,object_raw_name,object_normalized_name,"
-                "source_version_id,source_locator_id,status,candidate_digest) VALUES "
+                "source_version_id,source_locator_id,status,extraction_profile_version,candidate_digest) VALUES "
                 "(:o,:w,:candidate,1,:kind,:subject_raw,:subject_normalized,:object_raw,"
-                ":object_normalized,:source,:locator,:status,:digest) ON CONFLICT DO NOTHING"
+                ":object_normalized,:source,:locator,:status,:profile,:digest) ON CONFLICT DO NOTHING"
             ),
             {
                 "o": claimed.organization_id,
@@ -1146,6 +1147,7 @@ class IndustrialUnderstandingRepository:
                 "source": value.locator.source_version_id,
                 "locator": value.locator.source_locator_id,
                 "status": value.status.value,
+                "profile": value.extraction_profile_version,
                 "digest": semantic_digest(value),
             },
         )
@@ -1172,7 +1174,7 @@ class IndustrialUnderstandingRepository:
                 "locator": value.locator.source_locator_id,
                 "mapping": value.canonical_mapping_status.value,
                 "canonical": value.canonical_work_type_id,
-                "profile": WORK_EXTRACTION_PROFILE_VERSION,
+                "profile": value.extraction_profile_version,
                 "digest": semantic_digest(value),
             },
         )
@@ -1243,9 +1245,9 @@ class IndustrialUnderstandingRepository:
             sa.text(
                 "INSERT INTO workspace.project_reconciliation_defects "
                 "(organization_id,workspace_id,defect_id,version,defect_kind,subject_identity,related_identity,"
-                "source_locator_ids,parameters,blocking,status,defect_digest) VALUES "
+                "source_locator_ids,parameters,blocking,status,extraction_profile_version,defect_digest) VALUES "
                 "(:o,:w,:defect,1,:kind,:subject,:related,:locators,CAST(:parameters AS jsonb),:blocking,'open',"
-                ":digest) ON CONFLICT DO NOTHING"
+                ":profile,:digest) ON CONFLICT DO NOTHING"
             ),
             {
                 "o": claimed.organization_id,
@@ -1257,6 +1259,7 @@ class IndustrialUnderstandingRepository:
                 "locators": [item.source_locator_id for item in value.evidence_locators],
                 "parameters": _json(value.parameters),
                 "blocking": value.blocking,
+                "profile": value.extraction_profile_version,
                 "digest": semantic_digest(value),
             },
         )
@@ -1284,13 +1287,37 @@ class IndustrialUnderstandingRepository:
     ) -> list[dict[str, Any]]:
         if table not in {"project_field_candidates", "work_type_candidates"}:
             raise ValueError("invalid current-row relation")
+        default_profile = (
+            PROJECT_EXTRACTION_PROFILE_VERSION
+            if table == "project_field_candidates"
+            else WORK_EXTRACTION_PROFILE_VERSION
+        )
         rows = (
             session.execute(
                 sa.text(
-                    f"SELECT * FROM workspace.{table} WHERE organization_id=:o AND workspace_id=:w "
-                    "AND source_version_id=ANY(:sources) ORDER BY candidate_id,version"
+                    "WITH selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) "
+                    "result.source_version_id,COALESCE(job.provenance->>'engineering_semantic_profile',"
+                    "result.profile_version) AS semantic_profile FROM workspace.project_understanding_stage_results "
+                    "result JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                    "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                    "WHERE result.organization_id=:o AND result.workspace_id=:w "
+                    "AND result.source_version_id=ANY(:sources) "
+                    "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "AND result.terminal_status='complete' ORDER BY result.source_version_id,"
+                    "result.recorded_at DESC,result.stage_result_id DESC) "
+                    f"SELECT candidate.* FROM workspace.{table} candidate JOIN selected_profiles selected "
+                    "ON selected.source_version_id=candidate.source_version_id WHERE "
+                    "candidate.organization_id=:o AND candidate.workspace_id=:w AND "
+                    "candidate.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                    "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE :default_profile END "
+                    "ORDER BY candidate.candidate_id,candidate.version"
                 ),
-                {"o": claimed.organization_id, "w": claimed.workspace_id, "sources": source_ids},
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "sources": source_ids,
+                    "default_profile": default_profile,
+                },
             )
             .mappings()
             .all()
@@ -1312,13 +1339,31 @@ class IndustrialUnderstandingRepository:
         rows = (
             session.execute(
                 sa.text(
+                    "WITH selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) "
+                    "result.source_version_id,COALESCE(job.provenance->>'engineering_semantic_profile',"
+                    "result.profile_version) AS semantic_profile FROM workspace.project_understanding_stage_results "
+                    "result JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                    "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                    "WHERE result.organization_id=:o AND result.workspace_id=:w "
+                    "AND result.source_version_id=ANY(:sources) "
+                    "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "AND result.terminal_status='complete' ORDER BY result.source_version_id,"
+                    "result.recorded_at DESC,result.stage_result_id DESC) "
                     f"SELECT child.* FROM workspace.{table} child JOIN workspace.work_type_candidates work "
                     "ON work.organization_id=child.organization_id AND work.workspace_id=child.workspace_id "
                     "AND work.candidate_id=child.work_candidate_id AND work.version=child.work_candidate_version "
-                    "WHERE child.organization_id=:o AND child.workspace_id=:w AND work.source_version_id=ANY(:sources) "
+                    "JOIN selected_profiles selected ON selected.source_version_id=work.source_version_id "
+                    "WHERE child.organization_id=:o AND child.workspace_id=:w AND "
+                    "work.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                    "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE :work_profile END "
                     "ORDER BY child.candidate_id,child.version"
                 ),
-                {"o": claimed.organization_id, "w": claimed.workspace_id, "sources": source_ids},
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "sources": source_ids,
+                    "work_profile": WORK_EXTRACTION_PROFILE_VERSION,
+                },
             )
             .mappings()
             .all()
@@ -1382,14 +1427,35 @@ class IndustrialUnderstandingRepository:
     def _current_defects(
         session: Session, claimed: ClaimedJob, source_ids: list[UUID]
     ) -> list[dict[str, Any]]:
-        del source_ids
         rows = (
             session.execute(
                 sa.text(
-                    "SELECT * FROM workspace.project_reconciliation_defects WHERE organization_id=:o "
-                    "AND workspace_id=:w AND status='open' ORDER BY defect_id,version"
+                    "WITH selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) "
+                    "result.source_version_id,COALESCE(job.provenance->>'engineering_semantic_profile',"
+                    "result.profile_version) AS semantic_profile FROM workspace.project_understanding_stage_results "
+                    "result JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                    "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                    "WHERE result.organization_id=:o AND result.workspace_id=:w "
+                    "AND result.source_version_id=ANY(:sources) "
+                    "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "AND result.terminal_status='complete' ORDER BY result.source_version_id,"
+                    "result.recorded_at DESC,result.stage_result_id DESC) SELECT defect.* FROM "
+                    "workspace.project_reconciliation_defects defect WHERE defect.organization_id=:o "
+                    "AND defect.workspace_id=:w AND defect.status='open' AND EXISTS (SELECT 1 FROM "
+                    "workspace.source_locators locator JOIN selected_profiles selected ON "
+                    "selected.source_version_id=locator.source_version_id WHERE "
+                    "locator.organization_id=defect.organization_id AND locator.workspace_id=defect.workspace_id "
+                    "AND locator.source_locator_id=ANY(defect.source_locator_ids) AND "
+                    "defect.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                    "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE :default_profile END) "
+                    "ORDER BY defect.defect_id,defect.version"
                 ),
-                {"o": claimed.organization_id, "w": claimed.workspace_id},
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "sources": source_ids,
+                    "default_profile": PROJECT_EXTRACTION_PROFILE_VERSION,
+                },
             )
             .mappings()
             .all()

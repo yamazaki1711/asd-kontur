@@ -205,6 +205,7 @@ class ProjectFieldCandidate:
     extraction_method: str
     uncertainty_codes: tuple[str, ...]
     status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -215,6 +216,7 @@ class StructureNodeCandidate:
     normalized_name: str
     locator: ExactLocator
     status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,6 +236,7 @@ class StructureRelationshipCandidate:
     object_normalized_name: str
     locator: ExactLocator
     status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +249,7 @@ class WorkTypeCandidate:
     source_role: DocumentRole
     canonical_mapping_status: MappingStatus = MappingStatus.UNRESOLVED
     canonical_work_type_id: UUID | None = None
+    extraction_profile_version: str = WORK_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +301,7 @@ class ReconciliationDefect:
     evidence_locators: tuple[ExactLocator, ...]
     parameters: dict[str, Any]
     blocking: bool
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)

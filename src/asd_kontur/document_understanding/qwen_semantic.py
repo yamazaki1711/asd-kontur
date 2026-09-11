@@ -253,7 +253,8 @@ class QwenDocumentSemanticAdapter:
                 normalized = " ".join(name.casefold().split())
                 value = WorkTypeCandidate(
                     deterministic_uuid(
-                        f"qwen-work:{locator.source_version_id}:{locator_id}:{normalized}"
+                        f"qwen-work:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                        f"{locator.source_version_id}:{locator_id}:{normalized}"
                     ),
                     name,
                     normalized,
@@ -261,6 +262,7 @@ class QwenDocumentSemanticAdapter:
                     locator,
                     DocumentRole.PROJECT_DOCUMENTATION,
                     MappingStatus.UNRESOLVED,
+                    extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
                 )
                 identity = (locator_id, normalized)
                 if identity not in work_by_fragment_identity:
@@ -273,15 +275,17 @@ class QwenDocumentSemanticAdapter:
                 fields.append(
                     ProjectFieldCandidate(
                         deterministic_uuid(
-                            f"qwen-field:{locator.source_version_id}:{locator_id}:{key}:{raw}"
+                            f"qwen-field:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                            f"{locator.source_version_id}:{locator_id}:{key}:{raw}"
                         ),
                         key,
                         raw,
                         raw,
                         "text",
                         locator,
-                        QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                        QWEN_ENGINEERING_EXTRACTION_PROFILE,
                         ("qwen_semantic_candidate",),
+                        extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
                     )
                 )
             for kind, name, locator_id in parsed["structures"]:
@@ -290,12 +294,14 @@ class QwenDocumentSemanticAdapter:
                 structures.append(
                     StructureNodeCandidate(
                         deterministic_uuid(
-                            f"qwen-structure:{locator.source_version_id}:{locator_id}:{kind}:{normalized}"
+                            f"qwen-structure:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+                            f"{locator.source_version_id}:{locator_id}:{kind}:{normalized}"
                         ),
                         kind,
                         name,
                         normalized,
                         locator,
+                        extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
                     )
                 )
             for kind, subject_name, object_name, locator_id in parsed["structure_relationships"]:
@@ -306,6 +312,7 @@ class QwenDocumentSemanticAdapter:
                     StructureRelationshipCandidate(
                         deterministic_uuid(
                             "qwen-structure-relationship:"
+                            f"{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
                             f"{locator.source_version_id}:{locator_id}:{kind}:"
                             f"{normalized_subject}:{normalized_object}"
                         ),
@@ -315,6 +322,7 @@ class QwenDocumentSemanticAdapter:
                         object_name,
                         normalized_object,
                         locator,
+                        extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
                     )
                 )
             for work_name, raw, unit, locator_id, work_fragment_id in parsed["quantities"]:
@@ -334,7 +342,8 @@ class QwenDocumentSemanticAdapter:
                 ReconciliationDefect(
                     deterministic_uuid(
                         "qwen-incomplete-quantity-candidate:"
-                        f"{locator.source_version_id}:{locator.source_locator_id}:"
+                        f"{QWEN_ENGINEERING_EXTRACTION_PROFILE}:{locator.source_version_id}:"
+                        f"{locator.source_locator_id}:"
                         f"{work_name}:{raw}:{unit}:{work_fragment_id}"
                     ),
                     ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
@@ -349,6 +358,7 @@ class QwenDocumentSemanticAdapter:
                         "work_fragment_id": work_fragment_id or None,
                     },
                     False,
+                    QWEN_ENGINEERING_EXTRACTION_PROFILE,
                 )
             )
         for work_name, raw, unit, locator, work_fragment_id in parsed_quantities:
@@ -360,6 +370,7 @@ class QwenDocumentSemanticAdapter:
                 works_by_fragment,
                 relationship_kind="quantity",
                 payload={"value": raw, "unit": unit},
+                extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
             )
             if work is None:
                 if defect is not None:
@@ -396,6 +407,7 @@ class QwenDocumentSemanticAdapter:
                 works_by_fragment,
                 relationship_kind="material",
                 payload={"name": name, "quantity": raw, "unit": unit},
+                extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
             )
             if work is None:
                 if defect is not None:
@@ -561,6 +573,7 @@ def _resolve_work_reference(
     *,
     relationship_kind: str,
     payload: dict[str, str],
+    extraction_profile_version: str = QWEN_ENGINEERING_EXTRACTION_PROFILE,
 ) -> tuple[WorkTypeCandidate | None, ReconciliationDefect | None]:
     normalized = " ".join(work_name.casefold().split())
     candidates = list(works_by_name.get((locator.source_version_id, normalized), ()))
@@ -582,7 +595,8 @@ def _resolve_work_reference(
     candidate_ids = tuple(sorted(str(item.candidate_id) for item in candidates))
     defect = ReconciliationDefect(
         deterministic_uuid(
-            f"qwen-unresolved-work-reference:{relationship_kind}:{locator.source_version_id}:"
+            f"qwen-unresolved-work-reference:{extraction_profile_version}:{relationship_kind}:"
+            f"{locator.source_version_id}:"
             f"{locator.source_locator_id}:{normalized}:{payload}:{candidate_ids}"
         ),
         ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
@@ -599,6 +613,7 @@ def _resolve_work_reference(
             "payload": payload,
         },
         False,
+        extraction_profile_version,
     )
     return None, defect
 

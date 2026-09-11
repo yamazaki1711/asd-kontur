@@ -35,6 +35,7 @@ from .object_store import StagedObject, WorkspaceObjectStore
 
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
+ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,
@@ -2746,36 +2747,13 @@ class SpinePostgresRepository:
                 )
                 continue
             latest_provenance = dict(latest["provenance"]) if latest is not None else {}
-            latest_completed_v15 = bool(
-                latest is not None
-                and session.scalar(
-                    sa.text(
-                        "SELECT EXISTS (SELECT 1 FROM workspace.project_understanding_stage_results result "
-                        "WHERE result.organization_id=:organization AND result.workspace_id=:workspace "
-                        "AND result.job_id=:job AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' "
-                        "AND result.terminal_status='complete') AND EXISTS (SELECT 1 FROM "
-                        "workspace.engineering_extraction_batches batch WHERE "
-                        "batch.organization_id=:organization AND batch.workspace_id=:workspace "
-                        "AND batch.source_version_id=:source AND batch.profile_version=:profile "
-                        "AND batch.terminal_status='accepted')"
-                    ),
-                    {
-                        "organization": organization_id,
-                        "workspace": workspace_id,
-                        "job": latest["job_id"],
-                        "source": source_version_id,
-                        "profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
-                    },
-                )
-            )
             if (
                 latest is not None
                 and str(latest["state"]) == "succeeded"
-                and (
-                    latest_provenance.get("engineering_semantic_profile")
-                    == ENGINEERING_SEMANTIC_PROFILE_VERSION
-                    or latest_completed_v15
-                )
+                and latest_provenance.get("engineering_semantic_profile")
+                == ENGINEERING_SEMANTIC_PROFILE_VERSION
+                and latest_provenance.get("candidate_persistence_profile")
+                == ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE
             ):
                 scheduled.append(
                     {
@@ -2796,11 +2774,13 @@ class SpinePostgresRepository:
                 "media_type": str(source["media_type"]),
                 "content_digest": str(source["content_digest"]),
                 "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                "candidate_persistence_profile": ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE,
             }
             provenance = {
                 "contract": "project-understanding.semantic-recovery@1.0.0",
                 "source_version_id": str(source_version_id),
                 "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                "candidate_persistence_profile": ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE,
                 "control_decision_id": str(control_id),
                 "semantic_recovery_of": str(latest["job_id"]) if latest is not None else None,
             }
@@ -3150,25 +3130,62 @@ class SpinePostgresRepository:
     def _project_candidate_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> dict[str, list[dict[str, Any]]]:
+        profile_scope = (
+            "WITH active_sources AS (SELECT DISTINCT ON (v.document_id) v.source_version_id "
+            "FROM workspace.document_versions v JOIN workspace.document_version_activation_decisions a "
+            "ON a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+            "AND a.document_id=v.document_id AND a.selected_document_version=v.version "
+            "WHERE v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+            "workspace.document_version_activation_decisions newer WHERE newer.organization_id=a.organization_id "
+            "AND newer.workspace_id=a.workspace_id AND newer.document_id=a.document_id "
+            "AND newer.decision_version>a.decision_version) ORDER BY v.document_id,a.decision_version DESC), "
+            "selected_profiles AS (SELECT DISTINCT ON (result.source_version_id) result.source_version_id,"
+            "COALESCE(job.provenance->>'engineering_semantic_profile',result.profile_version) AS semantic_profile "
+            "FROM workspace.project_understanding_stage_results result JOIN workspace.durable_jobs job "
+            "ON job.organization_id=result.organization_id AND job.workspace_id=result.workspace_id "
+            "AND job.job_id=result.job_id JOIN active_sources active ON active.source_version_id=result.source_version_id "
+            "WHERE result.organization_id=:o AND result.workspace_id=:w "
+            "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' AND result.terminal_status='complete' "
+            "ORDER BY result.source_version_id,result.recorded_at DESC,result.stage_result_id DESC) "
+        )
         queries = {
-            "project_fields": "SELECT candidate_id,version,field_key AS label,raw_value AS value,"
-            "normalized_value,source_version_id,source_locator_id,status,uncertainty_codes,conflicts "
-            "FROM workspace.project_field_candidates WHERE organization_id=:o AND workspace_id=:w",
-            "work_types": "SELECT candidate_id,version,normalized_name AS label,raw_name AS value,"
-            "source_version_id,source_locator_id,canonical_mapping_status AS status "
-            "FROM workspace.work_type_candidates WHERE organization_id=:o AND workspace_id=:w",
-            "quantities": "SELECT q.candidate_id,q.version,w.normalized_name AS label,q.raw_value AS value,"
+            "project_fields": profile_scope
+            + "SELECT candidate.candidate_id,candidate.version,candidate.field_key AS label,candidate.raw_value AS value,"
+            "candidate.normalized_value,candidate.source_version_id,candidate.source_locator_id,candidate.status,"
+            "candidate.uncertainty_codes,candidate.conflicts FROM workspace.project_field_candidates candidate "
+            "JOIN selected_profiles selected ON selected.source_version_id=candidate.source_version_id WHERE "
+            "candidate.organization_id=:o AND candidate.workspace_id=:w AND candidate.extraction_profile_version="
+            "CASE WHEN selected.semantic_profile LIKE 'qwen-engineering-extraction-%' THEN selected.semantic_profile "
+            "ELSE 'project-definition-extraction-v0.1' END",
+            "work_types": profile_scope
+            + "SELECT candidate.candidate_id,candidate.version,candidate.normalized_name AS label,candidate.raw_name AS value,"
+            "candidate.source_version_id,candidate.source_locator_id,candidate.canonical_mapping_status AS status "
+            "FROM workspace.work_type_candidates candidate JOIN selected_profiles selected "
+            "ON selected.source_version_id=candidate.source_version_id WHERE candidate.organization_id=:o "
+            "AND candidate.workspace_id=:w AND candidate.extraction_profile_version=CASE WHEN "
+            "selected.semantic_profile LIKE 'qwen-engineering-extraction-%' THEN selected.semantic_profile "
+            "ELSE 'work-quantity-material-extraction-v0.1' END",
+            "quantities": profile_scope
+            + "SELECT q.candidate_id,q.version,w.normalized_name AS label,q.raw_value AS value,"
             "q.parsed_value AS normalized_value,w.source_version_id,q.source_locator_id,q.status,q.raw_unit,"
             "q.normalized_unit FROM workspace.quantity_candidates q JOIN workspace.work_type_candidates w "
             "ON w.organization_id=q.organization_id AND w.workspace_id=q.workspace_id AND "
-            "w.candidate_id=q.work_candidate_id AND w.version=q.work_candidate_version WHERE "
-            "q.organization_id=:o AND q.workspace_id=:w",
-            "materials": "SELECT m.candidate_id,m.version,w.normalized_name AS label,m.raw_name AS value,"
+            "w.candidate_id=q.work_candidate_id AND w.version=q.work_candidate_version JOIN selected_profiles selected "
+            "ON selected.source_version_id=w.source_version_id WHERE q.organization_id=:o AND q.workspace_id=:w "
+            "AND w.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+            "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE "
+            "'work-quantity-material-extraction-v0.1' END",
+            "materials": profile_scope
+            + "SELECT m.candidate_id,m.version,w.normalized_name AS label,m.raw_name AS value,"
             "m.parsed_quantity AS normalized_value,w.source_version_id,m.source_locator_id,m.status,"
             "m.raw_quantity,m.raw_unit,m.normalized_unit FROM workspace.material_candidates m JOIN "
             "workspace.work_type_candidates w ON w.organization_id=m.organization_id AND "
             "w.workspace_id=m.workspace_id AND w.candidate_id=m.work_candidate_id AND "
-            "w.version=m.work_candidate_version WHERE m.organization_id=:o AND m.workspace_id=:w",
+            "w.version=m.work_candidate_version JOIN selected_profiles selected ON "
+            "selected.source_version_id=w.source_version_id WHERE m.organization_id=:o AND m.workspace_id=:w "
+            "AND w.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+            "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE "
+            "'work-quantity-material-extraction-v0.1' END",
         }
         return {
             key: [
@@ -3360,10 +3377,32 @@ class SpinePostgresRepository:
         """Return source-backed structural candidates before reconciliation materializes facts."""
         rows = session.execute(
             sa.text(
-                "SELECT structure_node_id,version,node_kind,raw_name,normalized_name,"
-                "parent_node_id,source_locator_id,status,fingerprint FROM "
-                "workspace.project_structure_node_versions WHERE organization_id=:organization "
-                "AND workspace_id=:workspace ORDER BY recorded_at,structure_node_id,version"
+                "WITH active_sources AS (SELECT DISTINCT ON (v.document_id) v.source_version_id "
+                "FROM workspace.document_versions v JOIN workspace.document_version_activation_decisions a "
+                "ON a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                "AND a.document_id=v.document_id AND a.selected_document_version=v.version "
+                "WHERE v.organization_id=:organization AND v.workspace_id=:workspace AND NOT EXISTS "
+                "(SELECT 1 FROM workspace.document_version_activation_decisions newer WHERE "
+                "newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
+                "AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
+                "ORDER BY v.document_id,a.decision_version DESC), selected_profiles AS (SELECT DISTINCT ON "
+                "(result.source_version_id) result.source_version_id,COALESCE(job.provenance->>"
+                "'engineering_semantic_profile',result.profile_version) AS semantic_profile FROM "
+                "workspace.project_understanding_stage_results result JOIN workspace.durable_jobs job ON "
+                "job.organization_id=result.organization_id AND job.workspace_id=result.workspace_id AND "
+                "job.job_id=result.job_id JOIN active_sources active ON active.source_version_id=result.source_version_id "
+                "WHERE result.organization_id=:organization AND result.workspace_id=:workspace AND "
+                "result.stage_kind='PROJECT_DEFINITION_EXTRACTION' AND result.terminal_status='complete' "
+                "ORDER BY result.source_version_id,result.recorded_at DESC,result.stage_result_id DESC) "
+                "SELECT n.structure_node_id,n.version,n.node_kind,n.raw_name,n.normalized_name,n.parent_node_id,"
+                "n.source_locator_id,n.status,n.extraction_profile_version,n.fingerprint FROM "
+                "workspace.project_structure_node_versions n JOIN workspace.source_locators locator ON "
+                "locator.organization_id=n.organization_id AND locator.workspace_id=n.workspace_id AND "
+                "locator.source_locator_id=n.source_locator_id JOIN selected_profiles selected ON "
+                "selected.source_version_id=locator.source_version_id WHERE n.organization_id=:organization "
+                "AND n.workspace_id=:workspace AND n.extraction_profile_version=CASE WHEN "
+                "selected.semantic_profile LIKE 'qwen-engineering-extraction-%' THEN selected.semantic_profile "
+                "ELSE 'project-definition-extraction-v0.1' END ORDER BY n.recorded_at,n.structure_node_id,n.version"
             ),
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()
@@ -3382,9 +3421,26 @@ class SpinePostgresRepository:
         """
         rows = session.execute(
             sa.text(
+                "WITH active_sources AS (SELECT DISTINCT ON (v.document_id) v.source_version_id "
+                "FROM workspace.document_versions v JOIN workspace.document_version_activation_decisions a "
+                "ON a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                "AND a.document_id=v.document_id AND a.selected_document_version=v.version "
+                "WHERE v.organization_id=:organization AND v.workspace_id=:workspace AND NOT EXISTS "
+                "(SELECT 1 FROM workspace.document_version_activation_decisions newer WHERE "
+                "newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
+                "AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
+                "ORDER BY v.document_id,a.decision_version DESC), selected_profiles AS (SELECT DISTINCT ON "
+                "(result.source_version_id) result.source_version_id,COALESCE(job.provenance->>"
+                "'engineering_semantic_profile',result.profile_version) AS semantic_profile FROM "
+                "workspace.project_understanding_stage_results result JOIN workspace.durable_jobs job ON "
+                "job.organization_id=result.organization_id AND job.workspace_id=result.workspace_id AND "
+                "job.job_id=result.job_id JOIN active_sources active ON active.source_version_id=result.source_version_id "
+                "WHERE result.organization_id=:organization AND result.workspace_id=:workspace AND "
+                "result.stage_kind='PROJECT_DEFINITION_EXTRACTION' AND result.terminal_status='complete' "
+                "ORDER BY result.source_version_id,result.recorded_at DESC,result.stage_result_id DESC) "
                 "SELECT r.relationship_candidate_id,r.version,r.relationship_kind,r.subject_raw_name,"
                 "r.subject_normalized_name,r.object_raw_name,r.object_normalized_name,r.source_version_id,"
-                "r.source_locator_id,r.status,r.candidate_digest,subject.node_id AS subject_structure_node_id,"
+                "r.source_locator_id,r.status,r.extraction_profile_version,r.candidate_digest,subject.node_id AS subject_structure_node_id,"
                 "object.node_id AS object_structure_node_id,CASE WHEN subject.node_id IS NOT NULL "
                 "AND object.node_id IS NOT NULL THEN 'resolved_same_evidence' ELSE "
                 "'unresolved_source_scoped_identity' END AS resolution_state FROM "
@@ -3392,12 +3448,18 @@ class SpinePostgresRepository:
                 "(array_agg(DISTINCT n.structure_node_id))[1] AS node_id FROM workspace.project_structure_node_versions n "
                 "WHERE n.organization_id=r.organization_id AND n.workspace_id=r.workspace_id "
                 "AND n.source_locator_id=r.source_locator_id AND n.normalized_name=r.subject_normalized_name "
+                "AND n.extraction_profile_version=r.extraction_profile_version "
                 "HAVING COUNT(DISTINCT n.structure_node_id)=1) subject ON true LEFT JOIN LATERAL "
                 "(SELECT (array_agg(DISTINCT n.structure_node_id))[1] AS node_id FROM workspace.project_structure_node_versions n "
                 "WHERE n.organization_id=r.organization_id AND n.workspace_id=r.workspace_id "
                 "AND n.source_locator_id=r.source_locator_id AND n.normalized_name=r.object_normalized_name "
-                "HAVING COUNT(DISTINCT n.structure_node_id)=1) object ON true WHERE "
+                "AND n.extraction_profile_version=r.extraction_profile_version "
+                "HAVING COUNT(DISTINCT n.structure_node_id)=1) object ON true JOIN selected_profiles selected "
+                "ON selected.source_version_id=r.source_version_id WHERE "
                 "r.organization_id=:organization AND r.workspace_id=:workspace "
+                "AND r.extraction_profile_version=CASE WHEN selected.semantic_profile LIKE "
+                "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE "
+                "'project-definition-extraction-v0.1' END "
                 "ORDER BY r.recorded_at,r.relationship_candidate_id,r.version"
             ),
             {"organization": organization_id, "workspace": workspace_id},
