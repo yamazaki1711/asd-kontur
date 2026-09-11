@@ -832,3 +832,21 @@ pinned release. Confirm that a new, unstarted eligible source receives dense man
 and that a source with accepted legacy batches is resumed without duplicate Qwen work.
 Continue then with all active OZERO sources, reconciliation, project model, Tender
 analysis, NTD evaluation, and grounded consultant acceptance.
+
+### Continuation checkpoint — 2026-09-12 00:20 UTC+12
+
+Release `53cafdf` is pushed but not deployed. In addition to the explicit dense
+policy, it publishes deterministic, source-backed fields, structure observations,
+exact-locator relationships, and work observations immediately after an engineering
+batch receipt is accepted. On a restart it safely backfills those partial candidates
+from exact v15 batch manifests without another Qwen call. The project-view profile
+selection now includes accepted batch receipts, so these entries can be displayed as
+partial candidates before a source's terminal stage result exists. Quantities and
+materials that need a cross-batch work identity remain in their immutable receipt
+until the complete-source reconciliation resolves or preserves the relationship.
+
+This is a partial-publication mechanism, not a facility identity merger, an authority
+promotion, or a complete Tender model. Focused format/check, strict mypy, and 53 unit
+tests passed. The release has not yet been exercised through PostgreSQL with the
+application repository or deployed, and the active old worker must not be interrupted
+while it owns the current Qwen request.
