@@ -133,6 +133,10 @@ class JobSummary:
     started_at: datetime | None
     heartbeat_at: datetime | None
     completed_at: datetime | None
+    progress_current: int | None
+    progress_total: int | None
+    progress_message_code: str | None
+    progress_recorded_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)

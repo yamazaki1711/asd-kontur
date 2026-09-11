@@ -1322,6 +1322,14 @@ export interface components {
             organization_id: string;
             /** Priority */
             priority: number;
+            /** Progress Current */
+            progress_current: number | null;
+            /** Progress Message Code */
+            progress_message_code: string | null;
+            /** Progress Recorded At */
+            progress_recorded_at: string | null;
+            /** Progress Total */
+            progress_total: number | null;
             /** Started At */
             started_at: string | null;
             /** State */

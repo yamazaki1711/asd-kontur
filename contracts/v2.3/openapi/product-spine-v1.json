@@ -1142,6 +1142,51 @@
             "title": "Priority",
             "type": "integer"
           },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_message_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Message Code"
+          },
+          "progress_recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Recorded At"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -1202,7 +1247,11 @@
           "created_at",
           "started_at",
           "heartbeat_at",
-          "completed_at"
+          "completed_at",
+          "progress_current",
+          "progress_total",
+          "progress_message_code",
+          "progress_recorded_at"
         ],
         "title": "JobView",
         "type": "object"

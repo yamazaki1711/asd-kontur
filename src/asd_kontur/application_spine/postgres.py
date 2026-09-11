@@ -1905,8 +1905,14 @@ class SpinePostgresRepository:
                         "j.input_digest ORDER BY CASE WHEN j.state IN ('running','leased') THEN 0 "
                         "WHEN j.state IN ('queued','paused') THEN 1 ELSE 2 END,j.created_at DESC,"
                         "j.job_id DESC) AS effective_rank FROM workspace.durable_jobs j WHERE "
-                        "j.organization_id=:organization AND j.workspace_id=:workspace) SELECT * "
-                        "FROM ranked WHERE effective_rank=1 ORDER BY CASE WHEN state IN "
+                        "j.organization_id=:organization AND j.workspace_id=:workspace) SELECT ranked.*,"
+                        "progress.progress_current,progress.progress_total,progress.safe_message_code AS "
+                        "progress_message_code,progress.recorded_at AS progress_recorded_at FROM ranked "
+                        "LEFT JOIN LATERAL (SELECT progress_current,progress_total,safe_message_code,recorded_at "
+                        "FROM workspace.job_progress_events event WHERE event.organization_id=ranked.organization_id "
+                        "AND event.workspace_id=ranked.workspace_id AND event.job_id=ranked.job_id "
+                        "ORDER BY event.event_sequence DESC LIMIT 1) progress ON true WHERE effective_rank=1 "
+                        "ORDER BY CASE WHEN state IN "
                         "('running','leased') THEN 0 WHEN state IN ('queued','paused') THEN 1 "
                         "ELSE 2 END,created_at DESC,job_id DESC LIMIT :limit"
                     ),
@@ -1919,8 +1925,14 @@ class SpinePostgresRepository:
             else:
                 rows = session.execute(
                     sa.text(
-                        "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
-                        "AND workspace_id=:workspace ORDER BY created_at DESC,job_id DESC LIMIT :limit"
+                        "SELECT j.*,progress.progress_current,progress.progress_total,"
+                        "progress.safe_message_code AS progress_message_code,progress.recorded_at "
+                        "AS progress_recorded_at FROM workspace.durable_jobs j LEFT JOIN LATERAL "
+                        "(SELECT progress_current,progress_total,safe_message_code,recorded_at FROM "
+                        "workspace.job_progress_events event WHERE event.organization_id=j.organization_id "
+                        "AND event.workspace_id=j.workspace_id AND event.job_id=j.job_id ORDER BY "
+                        "event.event_sequence DESC LIMIT 1) progress ON true WHERE j.organization_id=:organization "
+                        "AND j.workspace_id=:workspace ORDER BY j.created_at DESC,j.job_id DESC LIMIT :limit"
                     ),
                     {"organization": organization_id, "workspace": workspace_id, "limit": limit},
                 ).all()
@@ -4232,6 +4244,14 @@ def _job_summary(row: Any) -> JobSummary:
         row.started_at,
         row.heartbeat_at,
         row.completed_at,
+        int(row.progress_current) if getattr(row, "progress_current", None) is not None else None,
+        int(row.progress_total) if getattr(row, "progress_total", None) is not None else None,
+        (
+            str(row.progress_message_code)
+            if getattr(row, "progress_message_code", None) is not None
+            else None
+        ),
+        getattr(row, "progress_recorded_at", None),
     )
 
 

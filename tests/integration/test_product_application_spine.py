@@ -657,16 +657,42 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
                         "owner": owner,
                     },
                 )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_progress_events "
+                    "(organization_id,workspace_id,job_id,event_sequence,event_type,progress_current,"
+                    "progress_total,safe_message_code,terminal,recorded_at,"
+                    "retention_until,event_digest) "
+                    "VALUES (:organization,:workspace,:job,1,"
+                    "'engineering.semantic_batch_progress',7,10,"
+                    "'engineering_semantic_batch_accepted',false,CURRENT_TIMESTAMP,"
+                    "CURRENT_TIMESTAMP + interval '1 day',:digest)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": replacement_job,
+                    "digest": semantic_digest(
+                        {
+                            "job_id": replacement_job,
+                            "event_type": "engineering.semantic_batch_progress",
+                            "current": 7,
+                            "total": 10,
+                        }
+                    ),
+                },
+            )
         response = client.get(f"/api/v1/workspaces/{workspace_id}/jobs?effective_only=true")
         assert response.status_code == 200, response.text
         jobs = response.json()
         job_ids = {item["job_id"] for item in jobs}
         assert str(replacement_job) in job_ids
         assert str(failed_job) not in job_ids
-        assert (
-            next(item for item in jobs if item["job_id"] == str(replacement_job))["state"]
-            == "running"
-        )
+        replacement = next(item for item in jobs if item["job_id"] == str(replacement_job))
+        assert replacement["state"] == "running"
+        assert replacement["progress_current"] == 7
+        assert replacement["progress_total"] == 10
+        assert replacement["progress_message_code"] == "engineering_semantic_batch_accepted"
 
 
 def test_start_project_understanding_queues_native_semantic_recovery_once(

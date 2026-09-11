@@ -1951,6 +1951,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
           <tr>
             <th>Вид обработки</th>
             <th>Состояние</th>
+            <th>Ход</th>
             <th>Попытки</th>
             <th>Причина ошибки</th>
             <th>Результат</th>
@@ -1972,6 +1973,11 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 >
                   {humanizeStatus(job.state)}
                 </StatusPill>
+              </td>
+              <td>
+                {job.progress_current !== null && job.progress_total !== null
+                  ? `${String(job.progress_current)} / ${String(job.progress_total)}`
+                  : "—"}
               </td>
               <td>
                 {job.attempt_count} / {job.max_attempts}
