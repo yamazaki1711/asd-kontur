@@ -405,3 +405,23 @@ After POS terminal success, the next executable work is to verify its candidate
 persistence, replacement-lineage recovery, and project-view materialization before
 scheduling the next source; if it terminates unsuccessfully, inspect only the exact
 failed batch lineage and recover the bounded input.
+
+### Continuation checkpoint — 2026-09-11 18:08 UTC+12
+
+The active POS job remains `running` under the pinned `13f50af` worker. Its Qwen v15
+ledger has 186 accepted batch receipts and two immutable failed parent receipts; the
+worker-to-Qwen loopback connection is established and the model process is active. No
+restart or replacement was performed while that request is in flight.
+
+Feature release `aa16603` is pushed and qualified, but not deployed. It changes the
+existing project-model command into a safe semantic-recovery scheduler: for every
+active source with persisted, nonempty native layout it queues one profile-explicit
+v15 `PROJECT_DEFINITION_EXTRACTION` successor only when no active or completed v15
+stage already exists. It uses the active document-version decision rather than all
+historical versions, preserves terminal predecessors through `causation_id`, and
+records the scheduled semantic inputs in the reconciliation digest. A PostgreSQL
+regression test proves that repeated user commands do not duplicate the recovery job.
+Focused integration tests (5), Ruff, formatter, and strict mypy pass for that release.
+Once POS is terminal, release `aa16603` may be activated without a migration; then the
+existing model action will schedule the remaining native-readable active sources while
+leaving sources without native layout explicitly uncovered for the Qwen visual path.
