@@ -881,9 +881,26 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
                             "fragment_id": fragment_id,
                         }
                     ],
-                    "works": [],
-                    "quantities": [],
-                    "materials": [],
+                    "works": [{"name": "Разработка котлована", "fragment_id": fragment_id}],
+                    "quantities": [
+                        {
+                            "work_name": "Разработка котлована",
+                            "value": "12",
+                            "unit": "м3",
+                            "fragment_id": fragment_id,
+                            "work_fragment_id": fragment_id,
+                        }
+                    ],
+                    "materials": [
+                        {
+                            "work_name": "Разработка котлована",
+                            "name": "Песок",
+                            "quantity": "",
+                            "unit": "",
+                            "fragment_id": fragment_id,
+                            "work_fragment_id": fragment_id,
+                        }
+                    ],
                 },
                 ensure_ascii=False,
             ),
@@ -892,13 +909,20 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
         result = pipeline._project_fields(claimed, BytesIO())
 
     assert result["structure_candidate_count"] == 1
+    assert result["work_candidate_count"] == 1
+    assert result["quantity_candidate_count"] == 1
+    assert result["material_candidate_count"] == 1
     assert persisted["batch_ordinal"] == 1
     assert persisted["source_locator_ids"] == (
         UUID(locator_id),
         UUID(str(document.pages[0].elements[1].locator.source_locator_id)),
     )
     assert persisted["input_manifest"]
-    assert len(cast(StructuredCandidates, persisted["bundle"]).structures) == 1
+    bundle = cast(StructuredCandidates, persisted["bundle"])
+    assert len(bundle.structures) == 1
+    assert len(bundle.works) == 1
+    assert len(bundle.quantities) == 1
+    assert len(bundle.materials) == 1
 
 
 def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() -> None:

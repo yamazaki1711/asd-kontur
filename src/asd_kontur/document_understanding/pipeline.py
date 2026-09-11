@@ -17,7 +17,6 @@ from .models import (
     UNDERSTANDING_PROFILE_VERSION,
     WORK_EXTRACTION_PROFILE_VERSION,
     OcrRoute,
-    StructureNodeCandidate,
 )
 from .native import NativeExtractionFailure, inspect_and_extract
 from .ocr import (
@@ -273,37 +272,16 @@ class IndustrialDocumentUnderstandingPipeline:
 
     def _project_fields(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)
-        structures: tuple[StructureNodeCandidate, ...] = ()
-        if self._qwen_semantic is not None:
-            try:
-                accepted_batches = self._repository.load_accepted_engineering_batches(
-                    claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
-                )
-                compatible_accepted_batches: dict[str, dict[str, object]] = {}
-                for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
-                    compatible_accepted_batches.update(
-                        self._repository.load_accepted_engineering_batches(
-                            claimed, profile_version=profile_version
-                        )
-                    )
-                semantic = self._qwen_semantic.extract_engineering(
-                    self._repository.load_elements(claimed),
-                    accepted_batches=accepted_batches,
-                    compatible_accepted_batches=compatible_accepted_batches,
-                    on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
-                        claimed, batch, manifest
-                    ),
-                )
-            except QwenSemanticFailure as exc:
-                raise UnderstandingStageFailure(exc.code) from exc
+        semantic = self._engineering_semantic(claimed)
+        if semantic is not None:
             bundle = StructuredCandidates(
                 (*bundle.project_fields, *semantic.project_fields),
-                semantic.works,
-                semantic.quantities,
-                semantic.materials,
-                (),
-                (),
-                structures=(*structures, *semantic.structures),
+                (*bundle.works, *semantic.works),
+                (*bundle.quantities, *semantic.quantities),
+                (*bundle.materials, *semantic.materials),
+                bundle.estimates,
+                (*bundle.defects, *semantic.defects),
+                structures=semantic.structures,
             )
         self._repository.persist_structured(claimed, bundle)
         return {
@@ -332,6 +310,17 @@ class IndustrialDocumentUnderstandingPipeline:
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         bundle = self._structured(claimed)
+        semantic = self._engineering_semantic(claimed)
+        if semantic is not None:
+            bundle = StructuredCandidates(
+                bundle.project_fields,
+                (*bundle.works, *semantic.works),
+                (*bundle.quantities, *semantic.quantities),
+                (*bundle.materials, *semantic.materials),
+                bundle.estimates,
+                (*bundle.defects, *semantic.defects),
+                structures=bundle.structures,
+            )
         values_only = StructuredCandidates(
             (), bundle.works, bundle.quantities, bundle.materials, bundle.estimates, bundle.defects
         )
@@ -343,6 +332,31 @@ class IndustrialDocumentUnderstandingPipeline:
             "estimate_position_candidate_count": len(bundle.estimates),
             "reconciliation_defect_count": len(bundle.defects),
         }
+
+    def _engineering_semantic(self, claimed: ClaimedJob) -> StructuredCandidates | None:
+        if self._qwen_semantic is None:
+            return None
+        try:
+            accepted_batches = self._repository.load_accepted_engineering_batches(
+                claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+            )
+            compatible_accepted_batches: dict[str, dict[str, object]] = {}
+            for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
+                compatible_accepted_batches.update(
+                    self._repository.load_accepted_engineering_batches(
+                        claimed, profile_version=profile_version
+                    )
+                )
+            return self._qwen_semantic.extract_engineering(
+                self._repository.load_elements(claimed),
+                accepted_batches=accepted_batches,
+                compatible_accepted_batches=compatible_accepted_batches,
+                on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
+                    claimed, batch, manifest
+                ),
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
 
     def _structured(self, claimed: ClaimedJob) -> StructuredCandidates:
         elements = self._repository.load_elements(claimed)
