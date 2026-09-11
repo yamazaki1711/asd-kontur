@@ -21,6 +21,15 @@ Known limitation: processing and candidate persistence are active; cross-documen
 facility reconciliation, NTD checks, Tender findings, source-link browser acceptance,
 and consultant acceptance remain open.
 
+## 2026-09-11 — full structural-candidate inspection
+
+- `de98eaf` replaces the silent first-200 truncation in the Russian project-model
+  structure panel with local search plus explicit incremental display for structures
+  and relationship observations. The built frontend artifact is served by the
+  compatible e28 API release. Frontend Prettier, ESLint, TypeScript, and production
+  build passed. The change is presentation-only: it neither updates candidates nor
+  asserts a reconciled entity inventory.
+
 ## 2026-09-11 checkpoint
 
 - `4de2561` derives project-definition, work-package, requirement-matrix, and

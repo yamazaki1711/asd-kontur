@@ -3,6 +3,7 @@
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
     "api": "e28da91a57879602f727faedf74acbd9e8fe7adb",
+    "frontend": "de98eaf4f1f535692c6af7d7c712767aa65fdae0",
     "document_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
     "assistant_worker": "e28da91a57879602f727faedf74acbd9e8fe7adb",
     "database_migration": "0047_profile_scoped_engineering_candidates"

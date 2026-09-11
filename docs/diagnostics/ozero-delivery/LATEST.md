@@ -28,6 +28,12 @@ The single supervised document worker is currently processing
 full-package processing in progress, not semantic coverage completion or Tender
 acceptance.
 
+The frontend artifact from `de98eaf4f1f535692c6af7d7c712767aa65fdae0` is also live
+with the compatible e28 API: the Russian structural-candidate panel now supports a
+name/kind search and incremental display of every returned structure and relationship
+candidate. It no longer silently stops after 200 rows. This makes partial evidence
+inspectable; it does not reconcile aliases or convert candidates into confirmed facts.
+
 Updated: 2026-09-11 16:41 UTC+12
 
 The live API is pinned to `8e0c2f5c68ff2c36a4b428dba9e8ec70b18338da`, the scoped
