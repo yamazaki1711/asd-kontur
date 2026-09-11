@@ -1947,6 +1947,123 @@ class SpinePostgresRepository:
                 or 0
             )
 
+    def recover_dependents_from_success(self, claimed: ClaimedJob) -> int:
+        """Reconnect only terminal dependents of this accepted causal lineage.
+
+        The document worker already holds a concrete organization/workspace scope.
+        Recovering from that successful job avoids a global scan of historical
+        failures and never changes the original terminal attempt.
+        """
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            candidates = session.execute(
+                sa.text(
+                    "WITH RECURSIVE ancestors AS ("
+                    "SELECT job_id,causation_id,0 AS depth FROM workspace.durable_jobs "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace AND job_id=:success "
+                    "UNION ALL "
+                    "SELECT parent.job_id,parent.causation_id,ancestors.depth+1 "
+                    "FROM workspace.durable_jobs parent JOIN ancestors "
+                    "ON parent.job_id=ancestors.causation_id "
+                    "WHERE parent.organization_id=:organization AND parent.workspace_id=:workspace "
+                    "AND ancestors.depth<32"
+                    ") "
+                    "SELECT dependent.job_id AS blocked_job_id,dependent.subject_document_id,"
+                    "dependent.job_kind,dependent.input_manifest,dependent.input_digest,dependent.priority,"
+                    "dependent.max_attempts,dependent.retry_policy_version,dependent.provenance,"
+                    "dependent.correlation_id,dependent.created_by_identity_id "
+                    "FROM workspace.durable_jobs dependent "
+                    "JOIN workspace.durable_job_dependencies dependency "
+                    "ON dependency.organization_id=dependent.organization_id "
+                    "AND dependency.workspace_id=dependent.workspace_id "
+                    "AND dependency.job_id=dependent.job_id "
+                    "AND dependency.dependency_kind='success_required' "
+                    "JOIN ancestors ON ancestors.job_id=dependency.depends_on_job_id "
+                    "WHERE dependent.organization_id=:organization AND dependent.workspace_id=:workspace "
+                    "AND dependent.state='reconciliation_required' "
+                    "AND dependent.typed_failure_code='dependency_terminal_failure' "
+                    "ORDER BY dependent.created_at,dependent.job_id LIMIT 32"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "success": claimed.job_id,
+                },
+            ).mappings()
+            recovered = 0
+            for candidate in candidates:
+                recovery_id = uuid7()
+                idempotency_key = (
+                    f"dependency-recovery:{candidate['blocked_job_id']}:{claimed.job_id}"
+                )
+                inserted = session.scalar(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs ("
+                        "organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                        "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                        "provenance,correlation_id,causation_id,created_by_identity_id"
+                        ") VALUES ("
+                        ":organization,:workspace,:job,:subject,:kind,CAST(:manifest AS jsonb),"
+                        ":digest,:idempotency,'queued',:priority,:attempts,:policy,"
+                        "CAST(:provenance AS jsonb),:correlation,:causation,:owner"
+                        ") ON CONFLICT (organization_id,workspace_id,job_kind,idempotency_key) "
+                        "DO NOTHING RETURNING job_id"
+                    ),
+                    {
+                        "organization": claimed.organization_id,
+                        "workspace": claimed.workspace_id,
+                        "job": recovery_id,
+                        "subject": candidate["subject_document_id"],
+                        "kind": candidate["job_kind"],
+                        "manifest": _json(candidate["input_manifest"]),
+                        "digest": candidate["input_digest"],
+                        "idempotency": idempotency_key,
+                        "priority": candidate["priority"],
+                        "attempts": candidate["max_attempts"],
+                        "policy": candidate["retry_policy_version"],
+                        "provenance": _json(
+                            {
+                                **dict(candidate["provenance"]),
+                                "dependency_recovery_of": str(candidate["blocked_job_id"]),
+                                "dependency_recovery_replacement": str(claimed.job_id),
+                            }
+                        ),
+                        "correlation": candidate["correlation_id"],
+                        "causation": candidate["blocked_job_id"],
+                        "owner": candidate["created_by_identity_id"],
+                    },
+                )
+                if inserted is None:
+                    continue
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_job_dependencies "
+                        "(organization_id,workspace_id,job_id,depends_on_job_id,dependency_kind) "
+                        "SELECT organization_id,workspace_id,:recovery,depends_on_job_id,dependency_kind "
+                        "FROM workspace.durable_job_dependencies WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_id=:blocked"
+                    ),
+                    {
+                        "organization": claimed.organization_id,
+                        "workspace": claimed.workspace_id,
+                        "recovery": recovery_id,
+                        "blocked": candidate["blocked_job_id"],
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=claimed.organization_id,
+                    workspace_id=claimed.workspace_id,
+                    job_id=recovery_id,
+                    event_type="job.queued",
+                    safe_message_code="dependency_recovery_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                recovered += 1
+        return recovered
+
     def latest_document_state(
         self, claimed: ClaimedJob
     ) -> tuple[str, str, int | None, tuple[str, ...]]:

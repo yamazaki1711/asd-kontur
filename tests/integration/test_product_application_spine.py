@@ -539,8 +539,8 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             worker_identity=worker,
         )
 
-        assert repository.recover_dependency_terminal_failures() == 1
-        assert repository.recover_dependency_terminal_failures() == 0
+        assert repository.recover_dependents_from_success(recovered_hash) == 1
+        assert repository.recover_dependents_from_success(recovered_hash) == 0
         recovered_inventory = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
         assert recovered_inventory is not None
         assert recovered_inventory.job_kind.value == "PDF_INVENTORY"

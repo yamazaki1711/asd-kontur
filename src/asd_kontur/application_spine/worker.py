@@ -262,7 +262,9 @@ class DocumentWorker:
             )
         finally:
             keepalive.stop()
-        return self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        outcome = self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        self._repository.recover_dependents_from_success(claimed)
+        return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
         self.install_signal_handlers()
