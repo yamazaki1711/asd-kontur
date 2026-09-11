@@ -130,3 +130,19 @@ executable action: observe its first durable v7 batch or terminal transition. On
 v6/v7 batch coverage, candidate provenance, and targeted dependent recovery before materializing the
 source through the project view; then schedule the next eligible active OZERO source without global
 recovery scans. On failure, inspect the exact typed result and change only the demonstrated batch contract.
+
+### Continuation checkpoint — 2026-09-11 14:22 UTC+12
+
+The v7 successor failed after one accepted receipt, again with
+`qwen_engineering_response_invalid_evidence`; it remains immutable. Commit
+`a8267062faf8abacd227ee4d93605f68a6f15b96` is the active scoped worker release. It versions the
+contract as `qwen-engineering-extraction-v8`, performs a bounded local-Qwen evidence-reference repair
+before batch subdivision, rejects a vacuous repair response, and records sanitized failed batch metadata
+(input-fragment identities and typed failure only, never document text) under the existing immutable
+batch ledger. Unit validation: 41 passed, Ruff and strict mypy passed.
+
+The only active successor is `01a08e45-ecbd-708a-b322-3658cf96d6ff`, caused by the v7 terminal job.
+It is running under the v8 worker with a current lease and an established Qwen loopback connection. It
+will reuse valid v6/v7 evidence only through declared compatibility. Next action: observe the first v8
+accepted or failed receipt; a failed receipt will identify the exact bounded input lineage for the next
+contract change without exposing document text. Do not restart or duplicate this job.
