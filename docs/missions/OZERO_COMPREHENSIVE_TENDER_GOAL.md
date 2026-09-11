@@ -63,15 +63,20 @@ does not erase the historical terminal job or treat an arbitrary newer job as a 
 
 For source version `01a088ac-7f16-73ef-9d2c-3957b2393f66`, the complete deterministic v4 manifest
 has 1,453 native elements/fragments and 61 base batches. Earlier v2/v3 rows are immutable historical
-evidence. The active v4 retry `01a08e02-1fba-7e43-b1f3-5f2371f65d52` is the sole effective attempt;
-it has persisted accepted v4 batches but has not yet reached candidate persistence or project
-materialization. No project-wide result is accepted from it.
+evidence. The sole v4 retry `01a08e02-1fba-7e43-b1f3-5f2371f65d52` persisted 19 accepted v4 batch
+receipts, then correctly failed with `qwen_engineering_response_invalid_evidence`; it has not reached
+candidate persistence or project materialization. Inspection established a separate persistence-contract
+defect: v4 batch `input_manifest` is stored as a top-level array while the coverage query expects an
+object containing `fragments`. Treat the accepted rows as immutable semantic evidence, not as v4
+coverage proof. No project-wide result is accepted from this source.
 
 The committed UI/API coverage surface reports accepted semantic fragments separately from classified
 pages and from reconciled facts. It is not yet deployed with the corresponding API/frontend release.
 
-Next executable action: allow the sole v4 attempt to complete without duplication; inspect its immutable
-batch/candidate receipts. Then release the already-migrated `b88507e` worker, recover only the blocked
-downstream stages through the verified replacement lineage, and verify workspace assembly before
+Next executable action: implement and qualify a v5 engineering-batch manifest that stores the full
+object-shaped input contract, can replay only exact compatible v3/v4 accepted batch evidence, and records
+the failing single-fragment response lineage without accepting malformed evidence. Then run one targeted
+successor for this source, release the already-migrated dependency-recovery worker, recover only the
+blocked downstream stages through the verified replacement lineage, and verify workspace assembly before
 scheduling the next eligible active source. Do not leave the OZERO queue empty while eligible sources
 remain.
