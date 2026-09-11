@@ -398,6 +398,24 @@ candidate profile selection and downstream materialization, then continue the si
 worker through all eligible sources. Do not call Tender, facility reconciliation,
 normative analysis, or consultant acceptance complete from this checkpoint.
 
+### Continuation checkpoint — 2026-09-11 19:23 UTC+12
+
+The compatible frontend artifact from `de98eaf4f1f535692c6af7d7c712767aa65fdae0`
+is live through the e28 API. It makes every returned structural candidate and raw
+relationship observation inspectable with explicit incremental display and a
+Russian name/kind search; the prior silent first-200 truncation is removed. Frontend
+format, lint, TypeScript, production build, and the existing Vitest suite passed.
+This is an evidence-navigation improvement only, not facility reconciliation or
+browser acceptance.
+
+The active successor for `01a088ac-7f16-73ef-9d2c-3957b2393f66` remains
+`01a08f4e-3b54-7dd6-8114-39b798d51740` under the e28 document worker. It has a
+fresh lease and 41 accepted v15 batches / 492 accepted fragments with no failed
+receipt at this observation. The other 21 source successors and one reconciliation
+job remain queued. Next executable action remains terminal observation of this
+source, profile-aware candidate persistence and dependent recovery; do not run an
+assistant-Qwen request concurrently with this one heavy document workload.
+
 The deployed application boundary now returns a truthful partial OZERO model from
 previously accepted source evidence: 291 project-field candidates, 304 structural
 candidates, 505 work candidates, 146 quantity candidates, 79 material candidates,
