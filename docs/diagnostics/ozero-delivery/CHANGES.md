@@ -36,7 +36,7 @@ consultant/browser workflows.
   `depends_on`) between named observations. Persistence deliberately retains raw,
   evidence-bound endpoints and does not turn same-name matches into canonical links.
   The project-model UI/API displays them as source-linked candidates. Migration
-  `0046_structure_rel_candidates` is required before this release.
+  `0046_structure_relationship_candidates` is required before this release.
 - `e4b2083` corrects the semantic-coverage query so the project view includes active
   source versions with no accepted batch as `not_started`. It was exercised through a
   scoped OZERO application-repository read: 22 documents, 1 complete, 2 partial, and
@@ -64,7 +64,7 @@ consultant/browser workflows.
   candidates persist with exact evidence.
 
 `ce9cd3b` is prepared as a complete API/document-worker/assistant-worker release
-with additive migration `0046_structure_rel_candidates`. It is not live:
+with additive migration `0046_structure_relationship_candidates`. It is not live:
 the current public application database role cannot make the required full recovery
 backup. No services were restarted and no schema change was attempted after that
 backup gate failed.

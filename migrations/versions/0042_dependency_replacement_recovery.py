@@ -7,6 +7,8 @@ Revises: 0041_engineering_v4_manifest
 from __future__ import annotations
 
 import os
+from importlib.util import module_from_spec, spec_from_file_location
+from pathlib import Path
 
 from alembic import op
 
@@ -265,6 +267,14 @@ def downgrade() -> None:
         raise RuntimeError("Dependency recovery downgrade requires a disposable database")
     op.execute("DROP FUNCTION workspace.recover_dependency_terminal_failures()")
     op.execute("DROP FUNCTION workspace.dependency_success_satisfied(uuid,uuid,uuid)")
-    raise RuntimeError(
-        "Restore claim_next_durable_job from migration 0018 in a disposable database"
+    op.execute("DROP FUNCTION workspace.claim_next_durable_job(text,integer)")
+    op.execute("DROP FUNCTION workspace.reconcile_unclaimable_durable_jobs()")
+    specification = spec_from_file_location(
+        "asd_kontur_migration_0018",
+        Path(__file__).with_name("0018_product_application_spine.py"),
     )
+    if specification is None or specification.loader is None:
+        raise RuntimeError("product_spine_claim_function_source_unavailable")
+    migration = module_from_spec(specification)
+    specification.loader.exec_module(migration)
+    migration._create_worker_claim_function()

@@ -36,7 +36,7 @@ Qwen execution.
 Pushed but un-deployed commits `c460131`, `e4b2083`, `742357b`, `a36ee21`, and `e1c3908` add profile v15 and an additive
 relationship-candidate ledger. The ledger retains evidence-bound raw endpoints and does
 not perform a name-only facility merge. Its migration is
-`0046_structure_rel_candidates`; release waits for the active v13 job to
+`0046_structure_relationship_candidates`; release waits for the active v13 job to
 become terminal.
 
 KR1 v13 has now completed its 2,960 accepted fragment-input denominator. The immutable
