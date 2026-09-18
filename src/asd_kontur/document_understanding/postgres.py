@@ -1697,9 +1697,20 @@ class IndustrialUnderstandingRepository:
         fields: list[dict[str, Any]],
         corpus_digest: str,
     ) -> tuple[UUID, str, list[str], dict[str, Any]]:
+        # Engineering extraction deliberately retains measurements, materials and
+        # facility properties as generic field observations.  They are not safe
+        # project-wide attributes merely because their extraction batch happened
+        # to use the same ``field_key``.  Treating every such observation as a
+        # project-definition key made unrelated dimensions and equipment values
+        # manufacture thousands of false project conflicts, hiding an otherwise
+        # useful partial model.  Keep those candidates for the later
+        # evidence/scope reconciliation; only identity fields belong here.
+        project_identity_keys = frozenset({"object_name", "purpose", "object_composition"})
         by_key: dict[str, list[dict[str, Any]]] = {}
         for item in fields:
-            by_key.setdefault(str(item["field_key"]), []).append(item)
+            key = str(item["field_key"])
+            if key in project_identity_keys:
+                by_key.setdefault(key, []).append(item)
         selected: dict[str, Any] = {}
         gaps: list[str] = []
         for key, candidates in sorted(by_key.items()):
