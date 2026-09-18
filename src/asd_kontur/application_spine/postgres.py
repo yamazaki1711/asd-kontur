@@ -2808,6 +2808,9 @@ class SpinePostgresRepository:
             structure_components = self._structure_component_rows(
                 structure_nodes, structure_relationships
             )
+            structure_identity_candidates = self._structure_identity_candidate_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2832,6 +2835,7 @@ class SpinePostgresRepository:
                     structure_nodes,
                     structure_relationships,
                     structure_components,
+                    structure_identity_candidates,
                 ),
             )
         return {
@@ -2857,6 +2861,7 @@ class SpinePostgresRepository:
             "structure_relationships": structure_relationships,
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
+            "structure_identity_candidates": structure_identity_candidates,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -3659,6 +3664,29 @@ class SpinePostgresRepository:
             )
         return sorted(rows, key=lambda item: str(item["component_key"]))
 
+    @staticmethod
+    def _structure_identity_candidate_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        rows = (
+            session.execute(
+                sa.text(
+                    "SELECT identity_candidate_id,version,identity_kind,canonical_label,"
+                    "member_structure_node_ids,source_locator_ids,confidence,status,"
+                    "reconciliation_profile_version,recorded_at FROM "
+                    "workspace.project_structure_identity_candidates WHERE organization_id=:o "
+                    "AND workspace_id=:w ORDER BY recorded_at,identity_candidate_id,version"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+            .mappings()
+            .all()
+        )
+        return [
+            {**_jsonable_row(row), "candidate_state": "cross_source_identity_candidate"}
+            for row in rows
+        ]
+
     @classmethod
     def _empty_project_understanding_view(
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
@@ -3676,6 +3704,9 @@ class SpinePostgresRepository:
         structure_components = cls._structure_component_rows(
             structure_nodes, structure_relationships
         )
+        structure_identity_candidates = cls._structure_identity_candidate_rows(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -3692,7 +3723,11 @@ class SpinePostgresRepository:
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 locator_ids=cls._response_locator_ids(
-                    candidates, structure_nodes, structure_relationships, structure_components
+                    candidates,
+                    structure_nodes,
+                    structure_relationships,
+                    structure_components,
+                    structure_identity_candidates,
                 ),
             ),
             "candidates": candidates,
@@ -3700,6 +3735,7 @@ class SpinePostgresRepository:
             "structure_relationships": structure_relationships,
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
+            "structure_identity_candidates": structure_identity_candidates,
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
