@@ -3834,7 +3834,11 @@ function ProjectUnderstandingPage() {
                 <section className="panel">
                   <h2>Расхождения и пробелы</h2>
                   {value.defects.length ? (
-                    <EvidenceObject value={{ differences: value.defects }} />
+                    <TenderFindingList
+                      defects={value.defects}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                    />
                   ) : materializationState === "complete" ? (
                     <p>
                       По сформированной модели открытые расхождения не
@@ -4457,6 +4461,84 @@ function WorkPackageCard({
           : "не указаны"}
       </p>
     </article>
+  );
+}
+
+function TenderFindingList({
+  defects,
+  workspaceId,
+  modeSlug,
+}: {
+  defects: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const labels: Record<string, string> = {
+    project_work_missing_in_estimate:
+      "Проектная работа требует сопоставления со сметой",
+    quantity_mismatch: "Требуется сверка объёма по источникам",
+    project_material_missing_in_estimate:
+      "Материал требует сопоставления со сметой",
+    estimate_position_unsupported_by_project:
+      "Сметная позиция не подтверждена проектным источником",
+    incompatible_units: "Единицы измерения требуют проверки",
+    ambiguous_source_match: "Связь между исходными сведениями неоднозначна",
+    drawing_intelligence_required:
+      "Для вывода требуется разбор чертежа или схемы",
+    normative_authority_unavailable:
+      "Нормативное основание для проверки недоступно",
+    rule_coverage_unavailable:
+      "Детерминированное правило для проверки недоступно",
+  };
+  return (
+    <div className="candidate-list">
+      <p>
+        Это предварительные Tender-наблюдения по источникам. Они не означают
+        подтверждённое нарушение, пропуск в смете или окончательное решение.
+      </p>
+      {defects.map((defect) => {
+        const id = displayValue(defect.defect_id, "наблюдение");
+        const kind = displayValue(defect.defect_kind, "");
+        const locators = Array.isArray(defect.source_locator_ids)
+          ? defect.source_locator_ids.map(String)
+          : [];
+        const subject = displayValue(defect.subject_identity, "Не указан");
+        const related = displayValue(defect.related_identity, "");
+        return (
+          <article className="candidate-row" key={id}>
+            <div>
+              <strong>{labels[kind] ?? "Требуется инженерская сверка"}</strong>
+              <p>
+                Объект: {subject}
+                {related ? `; связано с: ${related}` : ""}.
+              </p>
+              <small>
+                {humanizeStatus(displayValue(defect.status, "open"))}
+              </small>
+              {locators.length > 0 && (
+                <p>
+                  Источники:{" "}
+                  {locators.map((locator, index) => (
+                    <span key={locator}>
+                      {index > 0 ? ", " : ""}
+                      <Link
+                        to={workspaceRouteFromSlug(
+                          modeSlug,
+                          workspaceId,
+                          `/evidence/locators/${locator}`,
+                        )}
+                      >
+                        открыть фрагмент
+                      </Link>
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
