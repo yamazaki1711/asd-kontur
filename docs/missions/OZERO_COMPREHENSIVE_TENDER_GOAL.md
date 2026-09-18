@@ -1023,3 +1023,23 @@ metadata-only correction: the active TX worker PID was neither restarted nor
 interrupted, and its durable heartbeat continued after the validation. The first
 post-TX start must verify the process import path and the IOS3 repair strategy receipt
 before any status is reported as recovered.
+
+### Continuation checkpoint — 2026-09-18 18:07 UTC+12
+
+TX remains the sole active Qwen document job at `279/980` durable base-batch
+progress with a fresh worker heartbeat. Its accepted-batch callback has already
+persisted candidate observations before the source terminal receipt (at this point:
+302 fields, 405 structures and 130 works for TX); quantities and materials are still
+zero for this source and are not a project schedule or Tender total.
+
+Commit `b9f84cd` corrects project-definition materialization: only identity fields
+(`object_name`, `purpose`, `object_composition`) can form a project-wide definition.
+All other evidence-bound engineering properties remain candidates for facility/scope
+reconciliation, rather than creating false project-wide conflicts. Ruff, strict
+mypy and the focused unit set passed; the local PostgreSQL integration test is
+environment-skipped, so this behavior still needs real reconciliation/API evidence.
+The API is running and ready on the pinned `b9f84cd` release at migration `0048`.
+The active document worker was not restarted; its launchd plist is prepared for
+`b9f84cd` only after the safe TX drain. The next executable action is still to let
+TX reach a terminal receipt, validate its effective semantic coverage, then restart
+the worker once and observe IOS3's bounded taxonomy repair before resuming POS.
