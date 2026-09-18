@@ -31,6 +31,7 @@ from .models import (
     ReconciliationDefectKind,
     RoleCandidate,
     RoleDecision,
+    StructureIdentityCandidate,
     StructureNodeCandidate,
     StructureRelationshipCandidate,
     WorkTypeCandidate,
@@ -213,6 +214,92 @@ class QwenDocumentSemanticAdapter:
                 )
             )
         return tuple(values)
+
+    def reconcile_structure_identities(
+        self, observations: Iterable[Mapping[str, object]]
+    ) -> tuple[StructureIdentityCandidate, ...]:
+        """Ask Qwen to propose only explicit multi-source identity groups.
+
+        The caller supplies a bounded, provenance-preserving observation set.  A
+        shared spelling is deliberately not enough: Qwen must return exact input
+        node IDs, and persistence rechecks their scoped membership.
+        """
+        rows = [dict(item) for item in observations]
+        if not 2 <= len(rows) <= 48:
+            raise QwenSemanticFailure("qwen_structure_identity_input_unavailable")
+        by_id = {str(item.get("structure_node_id", "")): item for item in rows}
+        if len(by_id) != len(rows) or not all(by_id):
+            raise QwenSemanticFailure("qwen_structure_identity_input_invalid")
+        prompt = (
+            "Сопоставь только явно подтверждённые одинаковые экземпляры объекта между "
+            "наблюдениями из разных документов. Одинаковое имя само по себе не является "
+            'доказательством. Верни один JSON {"identities":[{"kind":"local_area|facility|'
+            'excavation_pit|structure|zone","label":"...","member_node_ids":["..."],'
+            '"confidence":0.0}]}. Включай группу только с минимум двумя ID из входа и '
+            "только при подтверждении идентичности обозначением, назначением и/или местом. "
+            "Не создавай новые ID, не объединяй типовые элементы и не выводи одиночные наблюдения.\n"
+            "НАБЛЮДЕНИЯ:\n" + json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+        )
+        try:
+            value = _json_object(
+                _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=700)
+            )
+        except json.JSONDecodeError as exc:
+            raise QwenSemanticFailure("qwen_structure_identity_response_invalid_json") from exc
+        raw = value.get("identities") if isinstance(value, dict) else None
+        if not isinstance(raw, list) or len(raw) > 24:
+            raise QwenSemanticFailure("qwen_structure_identity_response_invalid_shape")
+        accepted: list[StructureIdentityCandidate] = []
+        seen_members: set[tuple[str, ...]] = set()
+        allowed_kinds = {"local_area", "facility", "excavation_pit", "structure", "zone"}
+        for item in raw:
+            if not isinstance(item, dict):
+                raise QwenSemanticFailure("qwen_structure_identity_response_invalid_shape")
+            kind = str(item.get("kind", ""))
+            label = " ".join(str(item.get("label", "")).split())
+            member_ids = tuple(str(value) for value in item.get("member_node_ids", []))
+            if (
+                kind not in allowed_kinds
+                or not 2 <= len(member_ids) <= 16
+                or len(set(member_ids)) != len(member_ids)
+                or any(value not in by_id for value in member_ids)
+                or not 2 <= len(label) <= 500
+            ):
+                raise QwenSemanticFailure("qwen_structure_identity_response_invalid_evidence")
+            member_key = tuple(sorted(member_ids))
+            if member_key in seen_members:
+                continue
+            seen_members.add(member_key)
+            source_locator_ids = tuple(
+                UUID(str(by_id[value]["source_locator_id"])) for value in member_ids
+            )
+            if len(set(source_locator_ids)) < 2:
+                continue
+            try:
+                confidence = Decimal(str(item.get("confidence", "")))
+            except InvalidOperation as exc:
+                raise QwenSemanticFailure("qwen_structure_identity_response_invalid_shape") from exc
+            if not Decimal("0") <= confidence <= Decimal("1"):
+                raise QwenSemanticFailure("qwen_structure_identity_response_invalid_shape")
+            accepted.append(
+                StructureIdentityCandidate(
+                    deterministic_uuid(
+                        "qwen-structure-identity:v1:"
+                        + kind
+                        + ":"
+                        + label.casefold()
+                        + ":"
+                        + ":".join(member_key)
+                    ),
+                    kind,
+                    label,
+                    tuple(UUID(value) for value in member_ids),
+                    source_locator_ids,
+                    confidence,
+                    "qwen-structure-identity-v1",
+                )
+            )
+        return tuple(accepted)
 
     def extract_engineering(
         self,

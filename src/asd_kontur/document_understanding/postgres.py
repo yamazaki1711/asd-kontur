@@ -728,6 +728,97 @@ class IndustrialUnderstandingRepository:
                     },
                 )
 
+    def load_structure_identity_observation_groups(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> tuple[tuple[dict[str, object], ...], ...]:
+        """Return bounded cross-source comparison groups without joining them."""
+        with self._session(claimed) as session:
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT n.structure_node_id,n.node_kind,n.raw_name,n.normalized_name,"
+                        "n.source_locator_id,locator.source_version_id,"
+                        "COALESCE(locator.locator_value->>'page','') AS page,"
+                        "document.safe_display_name,COALESCE(evidence.normalized_text,'') AS evidence_excerpt "
+                        "FROM workspace.project_structure_node_versions n "
+                        "JOIN workspace.source_locators locator ON locator.organization_id=n.organization_id "
+                        "AND locator.workspace_id=n.workspace_id AND locator.source_locator_id=n.source_locator_id "
+                        "JOIN workspace.document_versions document ON document.organization_id=locator.organization_id "
+                        "AND document.workspace_id=locator.workspace_id AND document.source_version_id=locator.source_version_id "
+                        "LEFT JOIN LATERAL (SELECT left(element.normalized_text,700) AS normalized_text "
+                        "FROM workspace.native_layout_element_versions element WHERE element.organization_id=n.organization_id "
+                        "AND element.workspace_id=n.workspace_id AND element.source_locator_id=n.source_locator_id "
+                        "ORDER BY element.version DESC LIMIT 1) evidence ON true "
+                        "WHERE n.organization_id=:o AND n.workspace_id=:w AND n.extraction_profile_version=:profile "
+                        "ORDER BY n.node_kind,n.normalized_name,locator.source_version_id,n.structure_node_id"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
+        for row in rows:
+            value = dict(row)
+            grouped.setdefault((str(value["node_kind"]), str(value["normalized_name"])), []).append(
+                value
+            )
+        result: list[tuple[dict[str, object], ...]] = []
+        for values in grouped.values():
+            if len({str(item["source_version_id"]) for item in values}) < 2:
+                continue
+            for offset in range(0, len(values), 48):
+                group = tuple(values[offset : offset + 48])
+                if len({str(item["source_version_id"]) for item in group}) >= 2:
+                    result.append(group)
+        return tuple(result)
+
+    def workspace_engineering_semantic_coverage(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, int | bool]:
+        """Require every active source to have a complete matching semantic receipt."""
+        with self._session(claimed) as session:
+            row = (
+                session.execute(
+                    sa.text(
+                        "WITH active_sources AS (SELECT DISTINCT ON (v.document_id) v.source_version_id "
+                        "FROM workspace.document_versions v JOIN workspace.document_version_activation_decisions a "
+                        "ON a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                        "AND a.document_id=v.document_id AND a.selected_document_version=v.version "
+                        "WHERE v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+                        "workspace.document_version_activation_decisions newer WHERE newer.organization_id=a.organization_id "
+                        "AND newer.workspace_id=a.workspace_id AND newer.document_id=a.document_id "
+                        "AND newer.decision_version>a.decision_version)), completed AS (SELECT DISTINCT "
+                        "result.source_version_id FROM workspace.project_understanding_stage_results result "
+                        "JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id "
+                        "AND job.workspace_id=result.workspace_id AND job.job_id=result.job_id "
+                        "WHERE result.organization_id=:o AND result.workspace_id=:w AND "
+                        "result.stage_kind='PROJECT_DEFINITION_EXTRACTION' AND result.terminal_status='complete' "
+                        "AND COALESCE(job.provenance->>'engineering_semantic_profile',result.profile_version)=:profile) "
+                        "SELECT count(*)::int AS source_count,count(completed.source_version_id)::int AS complete_source_count "
+                        "FROM active_sources LEFT JOIN completed USING(source_version_id)"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+        total = int(row["source_count"])
+        completed = int(row["complete_source_count"])
+        return {
+            "source_count": total,
+            "complete_source_count": completed,
+            "complete": total > 0 and total == completed,
+        }
+
     def assemble_workspace(self, claimed: ClaimedJob) -> dict[str, Any]:
         with self._session(claimed) as session:
             source_ids = self._active_source_ids(session, claimed)

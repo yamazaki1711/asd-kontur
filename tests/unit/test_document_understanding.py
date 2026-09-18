@@ -773,6 +773,99 @@ def test_qwen_engineering_accepted_batch_materializes_only_local_candidates() ->
     assert not result.materials
 
 
+def test_qwen_structure_identity_reconciliation_requires_exact_cross_source_members() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    left = deterministic_uuid("identity-left")
+    right = deterministic_uuid("identity-right")
+    left_locator = deterministic_uuid("identity-left-locator")
+    right_locator = deterministic_uuid("identity-right-locator")
+    observations = (
+        {
+            "structure_node_id": str(left),
+            "node_kind": "facility",
+            "raw_name": "КНС-4",
+            "normalized_name": "кнс-4",
+            "source_locator_id": str(left_locator),
+            "source_version_id": "20000000-0000-4000-8000-000000000001",
+            "page": "4",
+            "safe_display_name": "ПЗУ",
+        },
+        {
+            "structure_node_id": str(right),
+            "node_kind": "facility",
+            "raw_name": "КНС 4",
+            "normalized_name": "кнс 4",
+            "source_locator_id": str(right_locator),
+            "source_version_id": "20000000-0000-4000-8000-000000000002",
+            "page": "7",
+            "safe_display_name": "КР",
+        },
+    )
+    response = json.dumps(
+        {
+            "identities": [
+                {
+                    "kind": "facility",
+                    "label": "КНС-4",
+                    "member_node_ids": [str(left), str(right)],
+                    "confidence": 0.8,
+                }
+            ]
+        }
+    )
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+        result = adapter.reconcile_structure_identities(observations)
+
+    assert len(result) == 1
+    assert result[0].member_structure_node_ids == (left, right)
+    assert result[0].source_locator_ids == (left_locator, right_locator)
+
+
+def test_qwen_structure_identity_reconciliation_rejects_unknown_member() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    node = deterministic_uuid("identity-known")
+    locator = deterministic_uuid("identity-known-locator")
+    observations = (
+        {
+            "structure_node_id": str(node),
+            "node_kind": "facility",
+            "raw_name": "КНС-4",
+            "normalized_name": "кнс-4",
+            "source_locator_id": str(locator),
+            "source_version_id": "20000000-0000-4000-8000-000000000001",
+            "page": "4",
+            "safe_display_name": "ПЗУ",
+        },
+        {
+            "structure_node_id": str(deterministic_uuid("identity-other")),
+            "node_kind": "facility",
+            "raw_name": "КНС 4",
+            "normalized_name": "кнс 4",
+            "source_locator_id": str(deterministic_uuid("identity-other-locator")),
+            "source_version_id": "20000000-0000-4000-8000-000000000002",
+            "page": "7",
+            "safe_display_name": "КР",
+        },
+    )
+    response = json.dumps(
+        {
+            "identities": [
+                {
+                    "kind": "facility",
+                    "label": "КНС-4",
+                    "member_node_ids": [str(node), str(deterministic_uuid("unknown"))],
+                    "confidence": 0.8,
+                }
+            ]
+        }
+    )
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+        with pytest.raises(QwenSemanticFailure, match="invalid_evidence"):
+            adapter.reconcile_structure_identities(observations)
+
+
 def test_qwen_engineering_recovers_partial_candidates_only_from_exact_batch_manifest() -> None:
     document = _extract_csv("КНС-1;значение\n")
     batches = _engineering_batches(document.pages[0].elements)

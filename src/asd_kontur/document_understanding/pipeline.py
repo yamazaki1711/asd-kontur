@@ -451,7 +451,30 @@ class IndustrialDocumentUnderstandingPipeline:
         return self._repository.assemble_workspace(claimed)
 
     def _reconciliation(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        return self._repository.assemble_workspace(claimed)
+        coverage = self._repository.workspace_engineering_semantic_coverage(
+            claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+        )
+        if not coverage["complete"]:
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_reconciliation"] = "pending_semantic_coverage"
+            result["workspace_semantic_coverage"] = coverage
+            return result
+        if self._qwen_semantic is None:
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_reconciliation"] = "qwen_runtime_unavailable"
+            return result
+        groups = self._repository.load_structure_identity_observation_groups(
+            claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+        )
+        identity_count = 0
+        for group in groups:
+            candidates = self._qwen_semantic.reconcile_structure_identities(group)
+            self._repository.persist_structure_identity_candidates(claimed, candidates)
+            identity_count += len(candidates)
+        result = self._repository.assemble_workspace(claimed)
+        result["structure_identity_candidate_count"] = identity_count
+        result["structure_identity_reconciliation"] = "completed"
+        return result
 
 
 def _read_bounded(source: BinaryIO) -> bytes:
