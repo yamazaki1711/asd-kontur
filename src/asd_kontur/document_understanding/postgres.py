@@ -40,6 +40,7 @@ from .models import (
     ReconciliationDefect,
     RoleCandidate,
     RoleDecision,
+    StructureIdentityCandidate,
     StructureNodeCandidate,
     StructureRelationshipCandidate,
     WorkTypeCandidate,
@@ -672,6 +673,60 @@ class IndustrialUnderstandingRepository:
                 )
             for defect in bundle.defects:
                 self._insert_defect(session, claimed, defect)
+
+    def persist_structure_identity_candidates(
+        self, claimed: ClaimedJob, values: tuple[StructureIdentityCandidate, ...]
+    ) -> None:
+        """Persist only validated, multi-observation Qwen identity candidates.
+
+        Node membership is checked inside the scoped transaction.  The table uses
+        arrays to preserve immutable observation membership; this guard prevents an
+        adapter response from naming an unrelated workspace's node.
+        """
+        with self._session(claimed) as session:
+            for value in values:
+                member_ids = list(value.member_structure_node_ids)
+                locator_ids = list(value.source_locator_ids)
+                matched = int(
+                    session.scalar(
+                        sa.text(
+                            "SELECT count(DISTINCT structure_node_id) FROM "
+                            "workspace.project_structure_node_versions WHERE organization_id=:o "
+                            "AND workspace_id=:w AND structure_node_id=ANY(:members)"
+                        ),
+                        {
+                            "o": claimed.organization_id,
+                            "w": claimed.workspace_id,
+                            "members": member_ids,
+                        },
+                    )
+                    or 0
+                )
+                if matched != len(member_ids):
+                    raise UnderstandingPersistenceError("structure_identity_member_unavailable")
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_structure_identity_candidates "
+                        "(organization_id,workspace_id,identity_candidate_id,version,identity_kind,"
+                        "canonical_label,member_structure_node_ids,source_locator_ids,confidence,status,"
+                        "reconciliation_profile_version,candidate_digest) VALUES "
+                        "(:o,:w,:candidate,1,:kind,:label,:members,:locators,:confidence,:status,:profile,:digest) "
+                        "ON CONFLICT DO NOTHING"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "candidate": value.identity_candidate_id,
+                        "kind": value.identity_kind,
+                        "label": value.canonical_label,
+                        "members": member_ids,
+                        "locators": locator_ids,
+                        "confidence": value.confidence,
+                        "status": value.status.value,
+                        "profile": value.reconciliation_profile_version,
+                        "digest": semantic_digest(value),
+                    },
+                )
 
     def assemble_workspace(self, claimed: ClaimedJob) -> dict[str, Any]:
         with self._session(claimed) as session:

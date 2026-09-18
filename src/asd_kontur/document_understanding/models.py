@@ -240,6 +240,24 @@ class StructureRelationshipCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class StructureIdentityCandidate:
+    """A Qwen-proposed, evidence-bound cross-source identity observation.
+
+    This remains a candidate: consumers must not turn it into a confirmed facility
+    or pit without the project reconciliation/review boundary.
+    """
+
+    identity_candidate_id: UUID
+    identity_kind: str
+    canonical_label: str
+    member_structure_node_ids: tuple[UUID, ...]
+    source_locator_ids: tuple[UUID, ...]
+    confidence: Decimal
+    reconciliation_profile_version: str
+    status: CandidateDecision = CandidateDecision.CANDIDATE
+
+
+@dataclass(frozen=True, slots=True)
 class WorkTypeCandidate:
     candidate_id: UUID
     raw_name: str
