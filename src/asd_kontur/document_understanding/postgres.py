@@ -133,6 +133,63 @@ class IndustrialUnderstandingRepository:
                 if isinstance(row["output_manifest"], dict)
             }
 
+    def engineering_semantic_coverage(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, int | bool]:
+        """Return exact current-source coverage without accepting failed leaves.
+
+        The bounded batch ledger is immutable history.  A successful durable job
+        may therefore have useful accepted observations while one terminal leaf
+        remains unresolved; that result is partial, never a complete stage.
+        """
+        with self._session(claimed) as session:
+            row = (
+                session.execute(
+                    sa.text(
+                        "WITH latest_elements AS (SELECT DISTINCT ON (source_locator_id) normalized_text "
+                        "FROM workspace.native_layout_element_versions WHERE organization_id=:o AND "
+                        "workspace_id=:w AND source_version_id=:source ORDER BY source_locator_id,version DESC), "
+                        "expected AS (SELECT COALESCE(SUM(CEIL(length(normalized_text)::numeric/2400)),0)::bigint "
+                        "AS fragment_count FROM latest_elements WHERE normalized_text<>''), "
+                        "accepted AS (SELECT DISTINCT fragment->>'fragment_id' AS fragment_id FROM "
+                        "workspace.engineering_extraction_batches batch CROSS JOIN LATERAL "
+                        "jsonb_array_elements(CASE WHEN jsonb_typeof(batch.input_manifest)='array' "
+                        "THEN batch.input_manifest ELSE COALESCE(batch.input_manifest->'fragments','[]'::jsonb) END) "
+                        "AS fragment WHERE batch.organization_id=:o AND batch.workspace_id=:w AND "
+                        "batch.source_version_id=:source AND batch.profile_version=:profile AND "
+                        "batch.terminal_status='accepted'), failed AS (SELECT DISTINCT fragment->>'fragment_id' "
+                        "AS fragment_id FROM workspace.engineering_extraction_batches batch CROSS JOIN LATERAL "
+                        "jsonb_array_elements(CASE WHEN jsonb_typeof(batch.input_manifest)='array' "
+                        "THEN batch.input_manifest ELSE COALESCE(batch.input_manifest->'fragments','[]'::jsonb) END) "
+                        "AS fragment WHERE batch.organization_id=:o AND batch.workspace_id=:w AND "
+                        "batch.source_version_id=:source AND batch.profile_version=:profile AND "
+                        "batch.terminal_status='failed'), unresolved AS (SELECT COUNT(*)::bigint AS fragment_count "
+                        "FROM failed LEFT JOIN accepted USING (fragment_id) WHERE accepted.fragment_id IS NULL) "
+                        "SELECT expected.fragment_count AS expected_fragment_count,COUNT(accepted.fragment_id)::bigint "
+                        "AS accepted_fragment_count,unresolved.fragment_count AS unresolved_failed_fragment_count "
+                        "FROM expected CROSS JOIN unresolved LEFT JOIN accepted ON true GROUP BY expected.fragment_count,"
+                        "unresolved.fragment_count"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "source": self._source_version_id(claimed),
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+        expected = int(row["expected_fragment_count"])
+        accepted = int(row["accepted_fragment_count"])
+        unresolved = int(row["unresolved_failed_fragment_count"])
+        return {
+            "expected_fragment_count": expected,
+            "accepted_fragment_count": accepted,
+            "unresolved_failed_fragment_count": unresolved,
+            "complete": expected > 0 and accepted == expected and unresolved == 0,
+        }
+
     def record_accepted_engineering_batch(
         self,
         claimed: ClaimedJob,

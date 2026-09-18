@@ -2976,12 +2976,14 @@ class SpinePostgresRepository:
                 )
                 continue
             latest_provenance = dict(latest["provenance"]) if latest is not None else {}
+            coverage_complete = bool(coverage is not None and str(coverage["state"]) == "complete")
             latest_profile_persistence_complete = bool(
                 latest is not None
                 and latest_provenance.get("engineering_semantic_profile")
                 == ENGINEERING_SEMANTIC_PROFILE_VERSION
                 and latest_provenance.get("candidate_persistence_profile")
                 == ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE
+                and coverage_complete
                 and session.scalar(
                     sa.text(
                         "SELECT EXISTS (SELECT 1 FROM workspace.project_understanding_stage_results "
@@ -3010,6 +3012,28 @@ class SpinePostgresRepository:
                 )
                 continue
 
+            recovery_attempt = int(latest_provenance.get("semantic_coverage_recovery_attempt", 0))
+            if (
+                latest is not None
+                and str(latest["state"]) == "succeeded"
+                and coverage is not None
+                and str(coverage["state"]) == "partial"
+                and recovery_attempt >= 1
+            ):
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "job_id": str(latest["job_id"]),
+                        "state": "partial_coverage_requires_contract_repair",
+                        "accepted_fragment_count": int(coverage["accepted_fragment_count"]),
+                        "expected_fragment_count": int(coverage["expected_fragment_count"]),
+                        "unresolved_failed_fragment_count": int(
+                            coverage["unresolved_failed_fragment_count"]
+                        ),
+                    }
+                )
+                continue
+
             # A complete accepted manifest is reusable evidence, but it does not
             # by itself prove that candidates reached the project model.  A
             # terminal semantic job without a complete persistence receipt is
@@ -3022,6 +3046,9 @@ class SpinePostgresRepository:
             control_id = uuid7()
             job_id = uuid7()
             coverage_state = str(coverage["state"]) if coverage is not None else "not_started"
+            next_recovery_attempt = recovery_attempt + int(
+                coverage is not None and coverage_state == "partial"
+            )
             recovery_reason = (
                 "accepted_batches_pending_persistence"
                 if coverage_state == "complete"
@@ -3050,6 +3077,7 @@ class SpinePostgresRepository:
                 "expected_fragment_count": int(coverage["expected_fragment_count"])
                 if coverage is not None
                 else 0,
+                "semantic_coverage_recovery_attempt": next_recovery_attempt,
                 "control_decision_id": str(control_id),
                 "semantic_recovery_of": str(latest["job_id"]) if latest is not None else None,
             }

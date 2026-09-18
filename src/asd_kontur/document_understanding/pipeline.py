@@ -85,11 +85,23 @@ class IndustrialDocumentUnderstandingPipeline:
         if handler is None:
             raise UnderstandingStageFailure("understanding_stage_not_supported")
         result = handler(claimed, source)
+        terminal_status = "complete"
+        typed_failure_code: str | None = None
+        semantic_coverage = result.get("semantic_coverage")
+        if (
+            claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION
+            and isinstance(semantic_coverage, dict)
+            and semantic_coverage.get("complete") is False
+        ):
+            terminal_status = "partial"
+            typed_failure_code = "qwen_engineering_coverage_incomplete"
         self._repository.record_stage_result(
             claimed,
             stage_kind=claimed.job_kind.value,
             profile_version=_profile_for(claimed.job_kind),
             output_manifest=result,
+            terminal_status=terminal_status,
+            typed_failure_code=typed_failure_code,
         )
         return result
 
@@ -289,13 +301,20 @@ class IndustrialDocumentUnderstandingPipeline:
                 ),
             )
         self._repository.persist_structured(claimed, bundle)
-        return {
+        result: dict[str, object] = {
             "project_field_candidate_count": len(bundle.project_fields),
             "structure_candidate_count": len(bundle.structures),
             "work_candidate_count": len(bundle.works),
             "quantity_candidate_count": len(bundle.quantities),
             "material_candidate_count": len(bundle.materials),
         }
+        coverage = getattr(self._repository, "engineering_semantic_coverage", None)
+        if semantic is not None and callable(coverage):
+            result["semantic_coverage"] = coverage(
+                claimed,
+                profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            )
+        return result
 
     def _record_engineering_batch(
         self,

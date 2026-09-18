@@ -1400,6 +1400,52 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
     assert len(bundle.materials) == 1
 
 
+def test_project_field_stage_marks_unresolved_semantic_coverage_partial() -> None:
+    """A durable job may finish while one evidence leaf remains unresolved."""
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000004"),
+        UUID("40000000-0000-4000-8000-000000000004"),
+        UUID("50000000-0000-4000-8000-000000000004"),
+        JobKind.PROJECT_DEFINITION_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+        },
+        "sha256:" + "d" * 64,
+        1,
+        1,
+        "none",
+    )
+    persisted: dict[str, object] = {}
+
+    class Repository:
+        def record_stage_result(self, _claimed: ClaimedJob, **values: object) -> None:
+            persisted.update(values)
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+    )
+    with patch.object(
+        pipeline,
+        "_project_fields",
+        return_value={
+            "project_field_candidate_count": 1,
+            "semantic_coverage": {
+                "complete": False,
+                "accepted_fragment_count": 5,
+                "expected_fragment_count": 6,
+                "unresolved_failed_fragment_count": 1,
+            },
+        },
+    ):
+        pipeline.execute(claimed, BytesIO())
+
+    assert persisted["terminal_status"] == "partial"
+    assert persisted["typed_failure_code"] == "qwen_engineering_coverage_incomplete"
+
+
 def test_project_field_stage_uses_qwen_evidence_when_classification_is_unavailable() -> None:
     document = _extract_csv("КНС-1;котлован К-1\n")
     fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
