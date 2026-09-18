@@ -236,8 +236,15 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         )
         assert first_run.status_code == second_run.status_code == 202
         assert first_run.json()["job_id"] == second_run.json()["job_id"]
-        outcome = worker.run_once()
-        assert outcome is not None and outcome.state.value == "succeeded"
+        project_run_id = UUID(first_run.json()["job_id"])
+        post_review_outcomes = []
+        while outcome := worker.run_once():
+            post_review_outcomes.append(outcome)
+            if outcome.job_id == str(project_run_id):
+                break
+        assert post_review_outcomes
+        assert post_review_outcomes[-1].job_id == str(project_run_id)
+        assert post_review_outcomes[-1].state.value == "succeeded"
         revised = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding"
         ).json()
