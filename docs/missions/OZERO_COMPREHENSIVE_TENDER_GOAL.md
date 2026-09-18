@@ -945,3 +945,32 @@ which restores main-thread serving. The Qwen server passed readiness and the cur
 KR2 replacement job `01a0b2b2-ca9b-71f9-ade6-387b6469a0ed` is running with 98/128
 compatible accepted batches and an established worker-to-Qwen connection. Continue
 from this exact job; do not treat its initial reused count as source completeness.
+
+### Continuation checkpoint — 2026-09-18 16:18 UTC+12
+
+Controlled release worktree: `/private/tmp/asd-ozero-recovery-release`, HEAD
+`831592ea7b90b5634662ee7f93c70e7f2d590ce7`. API and document worker are live from
+this worktree; Qwen is the main-thread MLX server at release
+`300020daaca903798c096d687721e56490168978`. The Qwen process is actively serving
+one worker connection; do not restart either process while it is live.
+
+KR2 recovery job `01a0b2b2-ca9b-71f9-ade6-387b6469a0ed` reached a correct terminal
+partial receipt: `1524/1525` expected v15 semantic fragments accepted and one
+immutable failed leaf, `qwen_engineering_response_invalid_evidence`. The original
+failed leaf and its bounded retry lineage remain historical evidence. It did not
+erase accepted candidates. The succeeding iOS1 recovery job
+`01a0b2b2-cab0-7820-a8e3-6fc59c76978e` is live at `165/180` accepted batches;
+there is a current worker-to-Qwen socket and fresh heartbeat. Queue successors for
+iOS3, TX, POS and incremental reconciliation remain durable and must not be duplicated.
+
+The scoped application view is now materially nonempty but explicitly partial:
+6,987 project-field candidates, 6,540 structure candidates, 1,962 relationship
+candidates, 6,000 work candidates, 2,470 quantity candidates and 773 material
+candidates; its source coverage state is 18 complete / 4 partial. These are source
+observations only. KR2 includes locator-bound observations such as KNS 4, KNS8.1,
+LOS 4, LOS8.1 and an excavation observation, but no accepted cross-document
+facility identity reconciliation, distinct-pit inventory, Tender finding, NTD
+evaluation or consultant acceptance exists yet. Next executable action: let iOS1
+finish, capture coverage and stage output, then validate incremental materialization;
+continue the next queued source and implement source-backed cross-document facility
+reconciliation rather than merging equal names.
