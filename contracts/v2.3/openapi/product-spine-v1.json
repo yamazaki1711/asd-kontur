@@ -2548,6 +2548,14 @@
             "title": "Structure Dossiers",
             "type": "array"
           },
+          "structure_identity_candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Identity Candidates",
+            "type": "array"
+          },
           "structure_nodes": {
             "items": {
               "additionalProperties": true,

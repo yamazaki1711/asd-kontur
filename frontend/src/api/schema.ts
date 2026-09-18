@@ -1872,6 +1872,10 @@ export interface components {
             structure_dossiers?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Identity Candidates */
+            structure_identity_candidates?: {
+                [key: string]: unknown;
+            }[];
             /** Structure Nodes */
             structure_nodes?: {
                 [key: string]: unknown;

@@ -3556,6 +3556,11 @@ function ProjectUnderstandingPage() {
           >[];
           const structureComponents = (value.structure_components ??
             []) as Record<string, unknown>[];
+          const structureIdentityCandidates =
+            (value.structure_identity_candidates ?? []) as Record<
+              string,
+              unknown
+            >[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3608,6 +3613,10 @@ function ProjectUnderstandingPage() {
                 <Metric
                   label="Связей-кандидатов"
                   value={structureRelationships.length}
+                />
+                <Metric
+                  label="Междокументных групп-кандидатов"
+                  value={structureIdentityCandidates.length}
                 />
                 <Metric
                   label="Работ-кандидатов"
@@ -3727,6 +3736,7 @@ function ProjectUnderstandingPage() {
                     relationships={structureRelationships}
                     dossiers={structureDossiers}
                     components={structureComponents}
+                    identityCandidates={structureIdentityCandidates}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
@@ -3871,6 +3881,7 @@ function StructureCandidateList({
   relationships,
   dossiers,
   components,
+  identityCandidates,
   workspaceId,
   modeSlug,
 }: {
@@ -3878,6 +3889,7 @@ function StructureCandidateList({
   relationships: Record<string, unknown>[];
   dossiers: Record<string, unknown>[];
   components: Record<string, unknown>[];
+  identityCandidates: Record<string, unknown>[];
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
@@ -3898,7 +3910,7 @@ function StructureCandidateList({
     connects_to: "соединён с",
     depends_on: "зависит от",
   };
-  if (!nodes.length && !relationships.length)
+  if (!nodes.length && !relationships.length && !identityCandidates.length)
     return (
       <p className="empty-state">Структурные кандидаты ещё не извлечены.</p>
     );
@@ -3927,6 +3939,60 @@ function StructureCandidateList({
   );
   return (
     <div className="candidate-list">
+      {identityCandidates.length > 0 && (
+        <>
+          <h3>Междокументные группы-кандидаты</h3>
+          <p>
+            Эти группы предложены по исходным фрагментам разных документов. Они
+            не являются подтверждёнными фактами и не объединяют одноимённые
+            элементы автоматически.
+          </p>
+          <div className="card-grid">
+            {identityCandidates.slice(0, visibleNodeCount).map((candidate) => {
+              const locators = Array.isArray(candidate.source_locator_ids)
+                ? candidate.source_locator_ids.map(String)
+                : [];
+              return (
+                <article
+                  className="candidate-row"
+                  key={`identity:${displayValue(candidate.identity_candidate_id)}`}
+                >
+                  <strong>
+                    {kindLabels[displayValue(candidate.identity_kind)] ??
+                      "Структурная группа"}
+                  </strong>
+                  <p>
+                    {displayValue(
+                      candidate.canonical_label,
+                      "Наименование не извлечено",
+                    )}
+                  </p>
+                  <small>
+                    Кандидат; наблюдений:{" "}
+                    {Array.isArray(candidate.member_structure_node_ids)
+                      ? candidate.member_structure_node_ids.length
+                      : 0}
+                    ; уверенность:{" "}
+                    {displayValue(candidate.confidence, "не указана")}
+                  </small>
+                  {locators.slice(0, 4).map((locator) => (
+                    <Link
+                      key={locator}
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  ))}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
       {dossiers.length > 0 && (
         <>
           <h3>Карточки площадок и сооружений</h3>
