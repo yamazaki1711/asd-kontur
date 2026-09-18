@@ -884,6 +884,83 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             == "qwen-engineering-extraction-v15"
         )
 
+        # A later reconciliation receipt may refer to the same source, but it
+        # is not itself a semantic extraction attempt.  Recovery must continue
+        # from the failed semantic input rather than recursively treating that
+        # receipt as the source predecessor.
+        failed_semantic_job = UUID(str(rows[0]["job_id"]))
+        descendant_job = uuid4()
+        semantic_manifest = {
+            "document_id": str(source["document_id"]),
+            "document_version": int(source["version"]),
+            "source_version_id": str(source["source_version_id"]),
+        }
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='failed',"
+                    "completed_at=CURRENT_TIMESTAMP,"
+                    "typed_failure_code='synthetic_semantic_failure' "
+                    "WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": failed_semantic_job,
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,"
+                    "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                    "'reconciliation_required',120,3,'synthetic-v1',CAST(:provenance AS jsonb),"
+                    ":correlation,:causation,'semantic-recovery-owner')"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": descendant_job,
+                    "document": source["document_id"],
+                    "manifest": json.dumps(semantic_manifest),
+                    "digest": semantic_digest({"kind": "synthetic", "manifest": semantic_manifest}),
+                    "key": f"synthetic-reconciliation:{descendant_job}",
+                    "provenance": json.dumps({"contract": "synthetic.reconciliation@1.0.0"}),
+                    "correlation": uuid4(),
+                    "causation": failed_semantic_job,
+                },
+            )
+
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        with postgres_environment.owner_engine.connect() as connection:
+            semantic_rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,causation_id,provenance FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
+                        "provenance->>'engineering_semantic_profile'="
+                        "'qwen-engineering-extraction-v15' "
+                        "ORDER BY created_at,job_id"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert len(semantic_rows) == 2
+        successor = semantic_rows[-1]
+        assert UUID(str(successor["causation_id"])) == failed_semantic_job
+        assert successor["provenance"]["semantic_recovery_of"] == str(failed_semantic_job)
+        assert successor["provenance"]["semantic_recovery_reason"] == "incomplete_semantic_coverage"
+
 
 def test_project_view_selects_only_the_latest_source_semantic_profile(
     postgres_environment: PostgreSQLEnvironment,

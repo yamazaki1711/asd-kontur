@@ -2888,10 +2888,19 @@ class SpinePostgresRepository:
         job has an explicit semantic-profile provenance and never duplicates an
         active equivalent pass.
         """
+        coverage_by_source = {
+            str(row["source_version_id"]): row
+            for row in self._semantic_extraction_coverage(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            )
+        }
         scheduled: list[dict[str, object]] = []
         for source in sources:
             source_version_id = UUID(str(source["source_version_id"]))
             locator_count = int(source["native_locator_count"])
+            coverage = coverage_by_source.get(str(source_version_id))
             semantic_priority = _semantic_extraction_priority(
                 tuple(str(role) for role in source.get("document_roles", ()))
             )
@@ -2900,13 +2909,15 @@ class SpinePostgresRepository:
                     sa.text(
                         "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
                         "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
-                        "AND input_manifest->>'source_version_id'=:source ORDER BY "
+                        "AND input_manifest->>'source_version_id'=:source AND "
+                        "provenance->>'engineering_semantic_profile'=:profile ORDER BY "
                         "created_at DESC,job_id DESC LIMIT 1"
                     ),
                     {
                         "organization": organization_id,
                         "workspace": workspace_id,
                         "source": str(source_version_id),
+                        "profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                     },
                 )
                 .mappings()
@@ -2999,8 +3010,23 @@ class SpinePostgresRepository:
                 )
                 continue
 
+            # A complete accepted manifest is reusable evidence, but it does not
+            # by itself prove that candidates reached the project model.  A
+            # terminal semantic job without a complete persistence receipt is
+            # therefore allowed to run once more and reuse those exact batches.
+            # Conversely, incomplete coverage must never be hidden behind an
+            # arbitrary newer reconciliation job for the same source.  The
+            # coverage map is deliberately read before selecting lineage so the
+            # decision is based on effective source evidence, not job-list order.
+
             control_id = uuid7()
             job_id = uuid7()
+            coverage_state = str(coverage["state"]) if coverage is not None else "not_started"
+            recovery_reason = (
+                "accepted_batches_pending_persistence"
+                if coverage_state == "complete"
+                else "incomplete_semantic_coverage"
+            )
             manifest = {
                 "document_id": str(source["document_id"]),
                 "document_version": int(source["version"]),
@@ -3010,12 +3036,20 @@ class SpinePostgresRepository:
                 "content_digest": str(source["content_digest"]),
                 "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                 "candidate_persistence_profile": ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE,
+                "semantic_coverage_state": coverage_state,
             }
             provenance = {
                 "contract": "project-understanding.semantic-recovery@1.0.0",
                 "source_version_id": str(source_version_id),
                 "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                 "candidate_persistence_profile": ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE,
+                "semantic_recovery_reason": recovery_reason,
+                "accepted_fragment_count": int(coverage["accepted_fragment_count"])
+                if coverage is not None
+                else 0,
+                "expected_fragment_count": int(coverage["expected_fragment_count"])
+                if coverage is not None
+                else 0,
                 "control_decision_id": str(control_id),
                 "semantic_recovery_of": str(latest["job_id"]) if latest is not None else None,
             }
