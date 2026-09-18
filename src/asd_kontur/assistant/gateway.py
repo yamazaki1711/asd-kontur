@@ -193,6 +193,9 @@ class ProfessionalAssistantKnowledgeQuery:
                     "project_definition": workspace["project_definition"],
                     "documents": workspace["documents"],
                     "structure_dossiers": workspace["structure_dossiers"],
+                    "structure_identity_candidates": workspace.get(
+                        "structure_identity_candidates", []
+                    ),
                     "materialization": workspace["materialization"],
                     "semantic_coverage": workspace.get("semantic_coverage", []),
                     "candidate_summary": workspace.get("candidate_summary", {}),
@@ -448,6 +451,7 @@ class ProfessionalAssistantKnowledgeQuery:
         work_package_source_items: list[dict[str, Any]] = []
         discrepancy_source_items: list[dict[str, Any]] = []
         overview_dossiers: list[dict[str, Any]] = []
+        overview_identities: list[dict[str, Any]] = []
         if owner_identity_id is not None:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
 
@@ -455,6 +459,9 @@ class ProfessionalAssistantKnowledgeQuery:
                 owner_identity_id=owner_identity_id, workspace_id=workspace_id
             )
             overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
+            overview_identities = list((model_view or {}).get("structure_identity_candidates", []))[
+                :30
+            ]
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
 
             def evidence_items(locator_ids: set[str]) -> list[dict[str, Any]]:
@@ -469,6 +476,11 @@ class ProfessionalAssistantKnowledgeQuery:
                     str(locator_id)
                     for dossier in overview_dossiers
                     for locator_id in dossier.get("source_locator_ids", [])
+                }
+                | {
+                    str(locator_id)
+                    for identity in overview_identities
+                    for locator_id in identity.get("source_locator_ids", [])
                 }
             )
             work_package_source_items = evidence_items(
@@ -496,6 +508,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "mode_result": _public_value(_mode_result_row(result)),
             "documents": _public_value([_json_row(row) for row in documents]),
             "structure_dossiers": _public_value(overview_dossiers),
+            "structure_identity_candidates": _public_value(overview_identities),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "semantic_coverage": _public_value(
                 list((model_view or {}).get("semantic_coverage", []))
@@ -512,6 +525,7 @@ class ProfessionalAssistantKnowledgeQuery:
                 "relationship_candidate_count": len(
                     list((model_view or {}).get("structure_relationships", []))
                 ),
+                "cross_source_identity_candidate_count": len(overview_identities),
                 "meaning": "Извлечённые кандидаты не являются подтверждёнными фактами или полным перечнем.",
             },
             "source_items": [*source_items, *dossier_source_items],
