@@ -1,5 +1,22 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-18 17:54 UTC+12 — source-linked Tender observations deployed
+
+API/frontend release `38f637b6720b365aeb09b15fc1691e69674e913e` is active from the
+controlled recovery worktree. A loopback readiness request with proxy bypass returned
+PostgreSQL reachable at migration `0048_incremental_reconciliation_claim_priority`;
+the root document serves the current built asset `index-DQPBu5bf.js`. The application
+now presents persisted reconciliation defects as Russian, source-linked preliminary
+Tender observations instead of raw generic object output. Each remains explicitly
+non-final: it is neither a confirmed omission nor a verified noncompliance.
+
+The deployment corrected an actual stale-binding defect: the API launchd manifest had
+used the current virtual environment while importing Python and serving assets from an
+older release tree. Its next/current service configuration now pins the same recovery
+worktree and release SHA. The Qwen document worker was not restarted and its TX source
+continues independently. Browser-authenticated verification and complete Tender
+acceptance remain open.
+
 ## 2026-09-12 01:06 UTC+12 — effective failure coverage is separated from retry history
 
 Pushed release candidate 4f41617eb2c27784bd969f76de3b49a69f60547b makes the

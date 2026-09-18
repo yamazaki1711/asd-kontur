@@ -1,5 +1,16 @@
 # OZERO Tender delivery changes
 
+## 2026-09-18 — readable preliminary Tender findings
+
+- `38f637b` replaces the raw defect object on the Russian “Расхождения и пробелы”
+  surface with readable preliminary Tender observations. Each card carries the affected
+  candidate identities, its open/candidate state, and links only to its persisted exact
+  source locators. It does not convert an unresolved comparison into a confirmed
+  omission, noncompliance, or professional decision.
+- The API/frontend launchd binding was corrected from a stale release tree to the
+  controlled current worktree. Loopback readiness and the served asset identity were
+  verified after restart; browser-authenticated acceptance remains unverified.
+
 ## 2026-09-12 — current processing coverage versus historical retries
 
 - 4f41617 calculates accepted and failed fragment identities separately, then exposes
