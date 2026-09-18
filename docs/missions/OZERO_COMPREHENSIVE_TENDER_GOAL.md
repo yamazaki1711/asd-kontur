@@ -993,3 +993,22 @@ passed. The worker has received a graceful drain signal: it will finish TX witho
 POS successor, then the controlled worker release at `61e9628` will be activated and the failed IOS3
 leaf will be retried through its supported durable lineage. Do not claim corpus completeness, facility
 dossiers, a pit inventory, Tender findings, or browser acceptance at this checkpoint.
+
+### Continuation checkpoint — 2026-09-18 17:41 UTC+12
+
+TX remains the only active document semantic job. Its durable progress event is
+`226/980` accepted base batches, with a fresh `workspace.durable_jobs` heartbeat and
+the local Qwen MLX process (`86887`) actively consuming Metal-backed GPU kernels. The
+current source already has 271 field, 92 work, 334 structure, and 118 relationship
+candidate observations persisted from accepted batches. Quantities and materials are
+not yet safely linked to those in-progress work observations and must not be surfaced
+as TX totals.
+
+The worker process still predates the `61e9628` taxonomy-repair code in memory, even
+though its executable source worktree is current. It was deliberately asked to drain
+this source. At its terminal receipt, capture effective coverage, then restart the
+document worker from the pinned current worktree before it claims the prepared IOS3
+replacement `01a0b2f9-22f2-7ef6-9f57-cb1dc3373074`. Resume the paused POS job only
+after that IOS3 replacement has an inspected terminal outcome. No cross-document
+identity reconciliation, distinct-pit count, NTD evaluation, Tender finding, or
+grounded consultant answer is accepted at this checkpoint.
