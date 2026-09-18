@@ -13,7 +13,7 @@ import io
 import json
 import threading
 from collections.abc import Iterable
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -162,7 +162,12 @@ def main() -> None:
             self.wfile.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
             self.wfile.flush()
 
-    HTTPServer((args.host, args.port), Handler).serve_forever()
+    # Requests may be accepted concurrently, but generation itself remains
+    # deliberately single-flight under ``generation_lock``.  This keeps health
+    # observable during a long document batch and returns a bounded 429 to a
+    # second generation request rather than leaving it behind the HTTP accept
+    # loop with an unbounded apparent wait.
+    ThreadingHTTPServer((args.host, args.port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
