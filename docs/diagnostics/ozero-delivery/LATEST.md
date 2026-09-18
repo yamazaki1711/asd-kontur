@@ -398,3 +398,21 @@ only for compatible queued source jobs. Ten source extractions (including PZU an
 inputs) now have priority 170; eight stay priority 130 pending better available role
 evidence. The next observable product boundary remains source candidate persistence
 and a priority-165 partial reconciliation after this current source is terminal.
+
+## 2026-09-18 15:57 UTC+12 — active recovery and pending compatible release
+
+The scoped OZERO worker is actively processing iOS1 semantic recovery job
+`01a0b287-9b11-740a-ac24-a49a4f616b23`: its durable progress is **168/180** accepted
+bounded batches, with a fresh lease heartbeat. The local Qwen3.8 process has an
+established worker connection and is consuming CPU. This is active model work, not a
+claim of completed source coverage or Tender analysis.
+
+Two compatible commits are pushed but deliberately not deployed while that request
+owns the worker: `bd79d82` preserves accepted candidates from a partial source in
+assembly and API materialization, and `1628f3f` makes the loopback Qwen transport
+threaded while preserving its single generation lock. The latter will make health
+observable and return a bounded busy response during a document request; it does not
+allow concurrent Metal generation. After the active job terminals, the release
+procedure is: capture its receipts and coverage, take a fresh database backup, switch
+the API/document-worker/Qwen launchd units to the pinned release, verify health and
+candidate materialization, then continue only eligible source recovery.

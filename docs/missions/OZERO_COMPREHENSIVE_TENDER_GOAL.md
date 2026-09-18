@@ -914,3 +914,24 @@ required fresh recoverable database backup, install the matching worker configur
 through the existing controlled launchd procedure, and invoke only the supported
 source-scoped recovery. Validate candidate provenance and project-view materialization
 before allowing the next Qwen source to claim work.
+
+### Continuation checkpoint — 2026-09-18 15:57 UTC+12
+
+The active delivery remains comprehensive OZERO Tender, not an extraction-profile
+exercise. The current source is iOS1 recovery job
+`01a0b287-9b11-740a-ac24-a49a4f616b23`, running with durable accepted-batch progress
+168/180 and a fresh lease. Do not interrupt it. Candidate evidence from partial
+sources is not a coherent facility inventory, confirmed fact, pit count, Tender
+finding, NTD conclusion, or consultant acceptance.
+
+Pushed, un-deployed release `1628f3f75caacd3fd72723aceb759b5cfb2b5865` contains
+`bd79d82` (partial-stage candidates remain available to assembly/API with coverage
+visible) and a loopback Qwen transport repair. The staged worktree is
+`/private/tmp/asd-ozero-recovery-release`; its target database migration remains
+`0048_incremental_reconciliation_claim_priority`. At the active job terminal, first
+capture the exact terminal receipt and source coverage, then create a fresh recoverable
+backup before restarting only the API, document worker, and Qwen units. Verify the
+actual release/process bindings, Qwen health during a later document request, the
+partial materialization contract, and supported source-scoped scheduling. Continue
+full package coverage, cross-document facility reconciliation, NTD evaluation, Tender
+outputs, and grounded consultant acceptance afterwards.
