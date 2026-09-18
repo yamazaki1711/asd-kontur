@@ -1012,3 +1012,14 @@ replacement `01a0b2f9-22f2-7ef6-9f57-cb1dc3373074`. Resume the paused POS job on
 after that IOS3 replacement has an inspected terminal outcome. No cross-document
 identity reconciliation, distinct-pit count, NTD evaluation, Tender finding, or
 grounded consultant answer is accepted at this checkpoint.
+
+### Continuation checkpoint — 2026-09-18 17:49 UTC+12
+
+The launchd document-worker manifest has been validated and pinned for its **next**
+supervised start to `61e96282f4af5e16e18577af7783bcef085a5ce7`. The prior metadata
+incorrectly declared `7a491359` although the executable already referenced the
+controlled recovery worktree. A retained pre-change plist backup exists. This was a
+metadata-only correction: the active TX worker PID was neither restarted nor
+interrupted, and its durable heartbeat continued after the validation. The first
+post-TX start must verify the process import path and the IOS3 repair strategy receipt
+before any status is reported as recovered.
