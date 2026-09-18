@@ -935,3 +935,13 @@ actual release/process bindings, Qwen health during a later document request, th
 partial materialization contract, and supported source-scoped scheduling. Continue
 full package coverage, cross-document facility reconciliation, NTD evaluation, Tender
 outputs, and grounded consultant acceptance afterwards.
+
+### Continuation checkpoint — 2026-09-18 16:08 UTC+12
+
+Release `1628f3f` proved unsafe for MLX generation: `ThreadingHTTPServer` moved
+generation from the model-loading main thread and launchd restarted Qwen during real
+document requests. It is superseded by `300020daaca903798c096d687721e56490168978`,
+which restores main-thread serving. The Qwen server passed readiness and the current
+KR2 replacement job `01a0b2b2-ca9b-71f9-ade6-387b6469a0ed` is running with 98/128
+compatible accepted batches and an established worker-to-Qwen connection. Continue
+from this exact job; do not treat its initial reused count as source completeness.
