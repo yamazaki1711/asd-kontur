@@ -1043,3 +1043,22 @@ The active document worker was not restarted; its launchd plist is prepared for
 `b9f84cd` only after the safe TX drain. The next executable action is still to let
 TX reach a terminal receipt, validate its effective semantic coverage, then restart
 the worker once and observe IOS3's bounded taxonomy repair before resuming POS.
+
+### Continuation checkpoint — 2026-09-18 18:20 UTC+12
+
+TX remains the only active Qwen document job at `320/980` durable base-batch
+progress. Its current persisted candidate subset is 332 fields, 465 structure
+observations and 167 works; quantities and materials remain zero for TX and no
+authoritative totals have been inferred.
+
+The pending compatible release chain is `e73b33d`, `37cf779`, `f06b1c3`,
+`7e3c5bf`, and `8607316`: migration `0049` introduces immutable RLS-scoped
+cross-document identity candidates; bounded Qwen reconciliation consumes source
+excerpts plus document/page/locator provenance; the project API/UI and workspace
+consultant expose those groups as candidates with evidence links. Reconciliation
+is gated on complete active-source semantic coverage and cannot merge equal names
+deterministically. Static validation: document-understanding unit suite 58/58,
+focused gateway tests 2/2, Ruff and strict mypy pass; browser and real-Qwen
+identity acceptance remain unverified. Alembic head is `0049`; the live database
+is still `0048`, so this release must not be partially deployed before a safe
+worker drain and migration backup/upgrade.
