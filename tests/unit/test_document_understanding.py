@@ -1109,8 +1109,49 @@ def test_qwen_engineering_extraction_repairs_recoverable_invalid_batch_before_sp
     assert complete.call_count == 2
     assert result.project_fields[0].raw_value == "Объект"
     assert len(accepted) == 1
-    assert accepted[0][0].prompt_strategy == "evidence_reference_repair-v1"
+    assert accepted[0][0].prompt_strategy == "evidence_reference_and_kind_repair-v2"
     assert not failed
+
+
+def test_qwen_engineering_extraction_recovers_invalid_structure_kind_without_accepting_it() -> None:
+    document = _extract_csv("Объект;Котлован К-1\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: list[tuple[object, dict[str, object]]] = []
+    invalid_kind = json.dumps(
+        {
+            "fields": [],
+            "structures": [{"kind": "pit_group", "name": "Котлован К-1", "fragment_id": "F1"}],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+    repaired = json.dumps(
+        {
+            "fields": [],
+            "structures": [{"kind": "excavation_pit", "name": "Котлован К-1", "fragment_id": "F1"}],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=(invalid_kind, repaired),
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
+        )
+
+    assert complete.call_count == 2
+    assert result.structures[0].node_kind == "excavation_pit"
+    assert accepted[0][0].prompt_strategy == "evidence_reference_and_kind_repair-v2"
 
 
 def test_qwen_engineering_extraction_reuses_accepted_recovery_children_before_calling_qwen() -> (

@@ -55,6 +55,7 @@ _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
         "qwen_engineering_response_invalid_json",
         "qwen_engineering_response_invalid_shape",
         "qwen_engineering_response_invalid_evidence",
+        "qwen_engineering_response_invalid_kind",
         "qwen_engineering_repair_empty",
         "qwen_semantic_response_output_exhausted",
     }
@@ -667,7 +668,7 @@ class QwenDocumentSemanticAdapter:
                     repair_batch = _engineering_batch(
                         batch.ordinal,
                         batch.fragments,
-                        prompt_strategy="evidence_reference_repair-v1",
+                        prompt_strategy="evidence_reference_and_kind_repair-v2",
                         batching_policy_version=batch.batching_policy_version,
                     )
                     if on_accepted_batch is not None:
@@ -1017,7 +1018,10 @@ def _engineering_evidence_repair_prompt(
         "привяжи каждый к одному допустимому fragment_id. Верни полный JSON с шестью обязательными "
         "массивами fields, structures, structure_relationships, works, quantities, materials. Для fragment_id используй только "
         "буквальные F1, F2 и т.д. из списка; если доказательство сопоставить нельзя, удали этот "
-        "кандидат. Не добавляй новые инженерные сведения.\n"
+        "кандидат. Не добавляй новые инженерные сведения. Для structures kind допустимы только "
+        "local_area, facility, excavation_pit, structure, zone. Для structure_relationships kind "
+        "допустимы только contains, located_in, serves, connects_to, depends_on. Если исходный kind "
+        "не переводится в один из этих точных вариантов без догадки, удали кандидат.\n"
         "ДОПУСТИМЫЕ ФРАГМЕНТЫ:\n"
         + json.dumps(
             [
