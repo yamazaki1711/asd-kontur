@@ -1062,3 +1062,14 @@ focused gateway tests 2/2, Ruff and strict mypy pass; browser and real-Qwen
 identity acceptance remain unverified. Alembic head is `0049`; the live database
 is still `0048`, so this release must not be partially deployed before a safe
 worker drain and migration backup/upgrade.
+
+### Continuation checkpoint — 2026-09-18 18:25 UTC+12
+
+The currently running TX worker remains unchanged and its loaded launchd
+environment still reports its historical release metadata. The **on-disk** worker
+launchd plist was safely backed up and pinned to `f06b1c3` for the next supervised
+start; no restart, migration or second worker was started. This is compatible with
+the still-live database revision `0048`: semantic recovery does not query the new
+identity table until a future workspace-wide complete-coverage reconciliation.
+After TX drains, first validate its terminal receipt and the next worker's import
+path/release before interpreting IOS3 recovery or any candidate materialization.
