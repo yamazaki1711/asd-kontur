@@ -878,7 +878,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
         assert len(rows) == 1
         assert rows[0]["priority"] == 170
-        assert rows[0]["provenance"]["semantic_recovery_of"]
+        assert rows[0]["provenance"]["semantic_recovery_of"] is None
         assert (
             rows[0]["provenance"]["candidate_persistence_profile"]
             == "qwen-engineering-extraction-v15"
@@ -895,29 +895,33 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             "document_version": int(source["version"]),
             "source_version_id": str(source["source_version_id"]),
         }
+        repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        claimed = repository.claim_next_job(
+            worker_identity="semantic-recovery-test-worker",
+            lease_seconds=5,
+        )
+        assert claimed is not None
+        assert claimed.job_id == failed_semantic_job
+        repository.mark_job_running(claimed, worker_identity="semantic-recovery-test-worker")
+        repository.finish_job(
+            claimed,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_semantic_failure",
+            result_manifest={"semantic_effect": False},
+            worker_identity="semantic-recovery-test-worker",
+        )
         with postgres_environment.owner_engine.begin() as connection:
-            connection.execute(
-                sa.text(
-                    "UPDATE workspace.durable_jobs SET state='failed',"
-                    "completed_at=CURRENT_TIMESTAMP,"
-                    "typed_failure_code='synthetic_semantic_failure' "
-                    "WHERE organization_id=:organization "
-                    "AND workspace_id=:workspace AND job_id=:job"
-                ),
-                {
-                    "organization": workspace["organization_id"],
-                    "workspace": workspace["workspace_id"],
-                    "job": failed_semantic_job,
-                },
-            )
             connection.execute(
                 sa.text(
                     "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
                     "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
-                    "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
-                    "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,"
+                    "priority,attempt_count,max_attempts,retry_policy_version,lease_owner,"
+                    "lease_generation,lease_expires_at,provenance,correlation_id,"
+                    "causation_id,created_by_identity_id) "
+                    "VALUES (:organization,:workspace,:job,:document,"
                     "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
-                    "'reconciliation_required',120,3,'synthetic-v1',CAST(:provenance AS jsonb),"
+                    "'leased',120,1,3,'synthetic-v1','semantic-recovery-test-worker',1,"
+                    "CURRENT_TIMESTAMP + interval '1 minute',CAST(:provenance AS jsonb),"
                     ":correlation,:causation,'semantic-recovery-owner')"
                 ),
                 {
@@ -933,6 +937,24 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                     "causation": failed_semantic_job,
                 },
             )
+
+        repository.finish_job(
+            ClaimedJob(
+                UUID(workspace["organization_id"]),
+                workspace_id,
+                descendant_job,
+                JobKind.PROJECT_DEFINITION_EXTRACTION,
+                semantic_manifest,
+                semantic_digest({"kind": "synthetic", "manifest": semantic_manifest}),
+                1,
+                1,
+                "none",
+            ),
+            terminal_state=JobState.RECONCILIATION_REQUIRED,
+            outcome_code="synthetic_reconciliation_required",
+            result_manifest={"semantic_effect": False},
+            worker_identity="semantic-recovery-test-worker",
+        )
 
         assert client.post(endpoint, headers=csrf).status_code == 202
         assert client.post(endpoint, headers=csrf).status_code == 202
