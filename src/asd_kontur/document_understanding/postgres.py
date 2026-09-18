@@ -687,23 +687,32 @@ class IndustrialUnderstandingRepository:
             for value in values:
                 member_ids = list(value.member_structure_node_ids)
                 locator_ids = list(value.source_locator_ids)
-                matched = int(
-                    session.scalar(
+                membership = (
+                    session.execute(
                         sa.text(
-                            "SELECT count(DISTINCT structure_node_id) FROM "
-                            "workspace.project_structure_node_versions WHERE organization_id=:o "
-                            "AND workspace_id=:w AND structure_node_id=ANY(:members)"
+                            "SELECT count(DISTINCT structure_node_id) AS member_count, "
+                            "count(DISTINCT source_locator_id) AS member_locator_count, "
+                            "count(DISTINCT source_locator_id) FILTER (WHERE source_locator_id=ANY(:locators)) "
+                            "AS matched_locator_count FROM workspace.project_structure_node_versions "
+                            "WHERE organization_id=:o AND workspace_id=:w "
+                            "AND structure_node_id=ANY(:members)"
                         ),
                         {
                             "o": claimed.organization_id,
                             "w": claimed.workspace_id,
                             "members": member_ids,
+                            "locators": locator_ids,
                         },
                     )
-                    or 0
+                    .mappings()
+                    .one()
                 )
-                if matched != len(member_ids):
+                if int(membership["member_count"]) != len(member_ids):
                     raise UnderstandingPersistenceError("structure_identity_member_unavailable")
+                if int(membership["member_locator_count"]) != len(set(locator_ids)) or int(
+                    membership["matched_locator_count"]
+                ) != len(set(locator_ids)):
+                    raise UnderstandingPersistenceError("structure_identity_locator_unavailable")
                 session.execute(
                     sa.text(
                         "INSERT INTO workspace.project_structure_identity_candidates "
