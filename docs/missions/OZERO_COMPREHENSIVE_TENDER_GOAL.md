@@ -974,3 +974,22 @@ evaluation or consultant acceptance exists yet. Next executable action: let iOS1
 finish, capture coverage and stage output, then validate incremental materialization;
 continue the next queued source and implement source-backed cross-document facility
 reconciliation rather than merging equal names.
+
+### Continuation checkpoint — 2026-09-18 17:15 UTC+12
+
+The live workspace remains the preserved OZERO workspace. Its latest partial materialization contains
+candidate evidence (6,987 fields, 6,005 works, 2,470 quantities, 773 materials, 6,542 structural
+observations, and 1,963 relationship observations); these counts are not reconciled facilities, facts,
+or a Tender acceptance. Semantic coverage is complete for many source versions but still partial for
+KR2, IOS1, IOS3 and TX. The active TX successor
+`01a0b2b2-cab3-7bc7-b7b9-d4917b11a7fb` is processing 980 bounded batches under the local Qwen
+runtime and had durably accepted 185 batches at this snapshot. It is the sole active document job.
+
+The prior IOS3 successor ended with `qwen_engineering_response_invalid_kind` after preserving its
+accepted batch ledger. Commit `61e9628` makes that exact, evidence-valid taxonomy error eligible for
+one bounded taxonomy-aware repair (`evidence_reference_and_kind_repair-v2`), without accepting an
+unknown kind or replaying accepted batches. Focused Qwen extraction tests (37), Ruff and strict mypy
+passed. The worker has received a graceful drain signal: it will finish TX without claiming the queued
+POS successor, then the controlled worker release at `61e9628` will be activated and the failed IOS3
+leaf will be retried through its supported durable lineage. Do not claim corpus completeness, facility
+dossiers, a pit inventory, Tender findings, or browser acceptance at this checkpoint.
