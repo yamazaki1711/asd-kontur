@@ -73,6 +73,15 @@ OZERO is not needed for its acceptance. The next Audit increment is the
 separately scoped canonical Audit-process service and its immutable evidence
 ledger; this preflight must never be relabelled as that service's conclusion.
 
+Restoration now has a reusable, read-only recovery-plan projection built from
+the same exact matrix/package preflight. It distinguishes reviewable generated
+candidates from positions that require a real source document, field fact,
+test record, measurement, date, signature, or applicable requirement basis.
+It does not generate a document in place of missing evidence. Controlled data
+tests the non-fabrication boundary and application API; OZERO is not required.
+The next Restoration increment is durable recovery-process state plus
+evidence-bound document regeneration for a separately declared supported form.
+
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,
 generated/missing documents, persistence, authorization scope, and ZIP

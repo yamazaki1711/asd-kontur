@@ -101,6 +101,7 @@ from .schemas import (
     ResetExecuteRequest,
     ResetPrepareRequest,
     ResetReceiptView,
+    RestorationRecoveryPlanView,
     ReviewGeneratedCandidateRequest,
     SessionView,
     StartGenerationRequest,
@@ -1066,6 +1067,22 @@ def _api_router() -> APIRouter:
                 "ETag": f'"{value.content_digest[7:]}"',
             },
         )
+
+    @router.get(
+        "/workspaces/{workspace_id}/restoration/recovery-plan",
+        response_model=RestorationRecoveryPlanView,
+        tags=["restoration"],
+    )
+    def restoration_recovery_plan(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> RestorationRecoveryPlanView:
+        value = _container(request).service.restoration_recovery_plan(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return RestorationRecoveryPlanView(**jsonable_encoder(value))
 
     @router.post(
         "/workspaces/{workspace_id}/support/id-packages",

@@ -2819,6 +2819,67 @@
         "title": "ResetReceiptView",
         "type": "object"
       },
+      "RestorationRecoveryPlanView": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_boundary": {
+            "title": "Authority Boundary",
+            "type": "string"
+          },
+          "basis": {
+            "additionalProperties": true,
+            "title": "Basis",
+            "type": "object"
+          },
+          "blocked_actions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Blocked Actions",
+            "type": "array"
+          },
+          "global_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Global Blockers",
+            "type": "array"
+          },
+          "plan_kind": {
+            "const": "id_package_recovery_plan",
+            "title": "Plan Kind",
+            "type": "string"
+          },
+          "recoverable_actions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Recoverable Actions",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "partial",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_kind",
+          "status",
+          "basis",
+          "recoverable_actions",
+          "blocked_actions",
+          "global_blockers",
+          "authority_boundary"
+        ],
+        "title": "RestorationRecoveryPlanView",
+        "type": "object"
+      },
       "ReviewGeneratedCandidateRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6192,6 +6253,49 @@
         "summary": "Tender Findings Report",
         "tags": [
           "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan": {
+      "get": {
+        "operationId": "restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorationRecoveryPlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restoration Recovery Plan",
+        "tags": [
+          "restoration"
         ]
       }
     },

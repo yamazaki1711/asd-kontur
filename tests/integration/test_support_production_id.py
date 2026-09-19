@@ -289,6 +289,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert preflight_export.status_code == 200, preflight_export.text
         assert preflight_export.headers["content-type"].startswith("text/csv")
         assert "audit_boundary" in preflight_export.content.decode("utf-8-sig")
+        recovery_plan = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan"
+        )
+        assert recovery_plan.status_code == 200, recovery_plan.text
+        plan = recovery_plan.json()
+        assert plan["plan_kind"] == "id_package_recovery_plan"
+        assert all(item["fabrication_prohibited"] for item in plan["blocked_actions"])
         package_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
         )

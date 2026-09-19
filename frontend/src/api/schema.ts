@@ -809,6 +809,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Restoration Recovery Plan */
+        get: operations["restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
         parameters: {
             query?: never;
@@ -2086,6 +2103,35 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** RestorationRecoveryPlanView */
+        RestorationRecoveryPlanView: {
+            /** Authority Boundary */
+            authority_boundary: string;
+            /** Basis */
+            basis: {
+                [key: string]: unknown;
+            };
+            /** Blocked Actions */
+            blocked_actions: {
+                [key: string]: unknown;
+            }[];
+            /** Global Blockers */
+            global_blockers: string[];
+            /**
+             * Plan Kind
+             * @constant
+             */
+            plan_kind: "id_package_recovery_plan";
+            /** Recoverable Actions */
+            recoverable_actions: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "partial" | "blocked";
         };
         /** ReviewGeneratedCandidateRequest */
         ReviewGeneratedCandidateRequest: {
@@ -3981,6 +4027,37 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorationRecoveryPlanView"];
                 };
             };
             /** @description Validation Error */

@@ -428,6 +428,16 @@ class AuditExpectedActualPreflightView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class RestorationRecoveryPlanView(ApiModel):
+    plan_kind: Literal["id_package_recovery_plan"]
+    status: Literal["partial", "blocked"]
+    basis: dict[str, Any]
+    recoverable_actions: list[dict[str, Any]]
+    blocked_actions: list[dict[str, Any]]
+    global_blockers: list[str]
+    authority_boundary: str
+
+
 class FormIdPackageRequest(ApiModel):
     work_package_id: UUID
 

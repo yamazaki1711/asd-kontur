@@ -43,6 +43,8 @@ type AuditPreflightItem = {
   evidence_refs: string[];
   gaps: string[];
 };
+type RestorationRecoveryPlan =
+  components["schemas"]["RestorationRecoveryPlanView"];
 type PilotResult = components["schemas"]["PilotResultView"];
 type AssistantConversation = components["schemas"]["AssistantConversationView"];
 type AssistantMessage = components["schemas"]["AssistantMessageView"];
@@ -207,6 +209,10 @@ export function App() {
           <Route
             path="/modes/:mode/workspaces/:workspaceId/audit-preflight"
             element={<AuditExpectedActualPreflightPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/recovery-plan"
+            element={<RestorationRecoveryPlanPage />}
           />
           <Route
             path="/modes/:mode/workspaces/:workspaceId/result"
@@ -443,6 +449,12 @@ function ApplicationShell() {
             <NavItem
               to={`${workspaceBase}/audit-preflight`}
               label="Предварительная сверка"
+            />
+          )}
+          {mode === "Restoration" && (
+            <NavItem
+              to={`${workspaceBase}/recovery-plan`}
+              label="План восстановления"
             />
           )}
           <NavItem to={`${workspaceBase}/evidence`} label="Источники" />
@@ -2455,6 +2467,124 @@ function AuditExpectedActualPreflightBody({
         </section>
       ) : null}
     </>
+  );
+}
+
+function RestorationRecoveryPlanPage() {
+  const { workspaceId = "" } = useParams();
+  const plan = useQuery({
+    queryKey: ["restoration-recovery-plan", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="План восстановления комплекта"
+      lead="Очередность действий по требованиям и имеющимся доказательствам без подстановки отсутствующих фактов."
+    >
+      <QueryState query={plan}>
+        {(value) => <RestorationRecoveryPlanBody value={value} />}
+      </QueryState>
+    </Page>
+  );
+}
+
+function RestorationRecoveryPlanBody({
+  value,
+}: {
+  value: RestorationRecoveryPlan;
+}) {
+  const recoverable = value.recoverable_actions as unknown as Array<
+    Record<string, unknown>
+  >;
+  const blocked = value.blocked_actions as unknown as Array<
+    Record<string, unknown>
+  >;
+  return (
+    <>
+      <InfoNotice>
+        План не подтверждает выполнение работ и не создаёт даты, подписи,
+        измерения или результаты испытаний. Для отсутствующих исходных данных
+        указано, что именно необходимо получить.
+      </InfoNotice>
+      <section className="metrics" aria-label="Состояние восстановления">
+        <Metric label="Можно продолжить" value={recoverable.length} />
+        <Metric label="Требуют исходных данных" value={blocked.length} />
+      </section>
+      <RecoveryActionTable
+        title="Действия с доступными основаниями"
+        items={recoverable}
+      />
+      <RecoveryActionTable
+        title="Блокирующие отсутствующие сведения"
+        items={blocked}
+      />
+      {value.global_blockers.length ? (
+        <section className="panel">
+          <h2>Общие ограничения</h2>
+          <GapList gaps={value.global_blockers} />
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function RecoveryActionTable({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<Record<string, unknown>>;
+}) {
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      {items.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Документ</th>
+                <th>Действие</th>
+                <th>Необходимые данные</th>
+                <th>Основания</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={String(item.item_key)}>
+                  <td>
+                    <strong>
+                      {humanizeDocumentRole(String(item.document_type))}
+                    </strong>
+                    <small className="mono">
+                      {String(item.work_package_id)}
+                    </small>
+                  </td>
+                  <td>{humanizeRecoveryAction(String(item.action))}</td>
+                  <td>{String(item.required_input)}</td>
+                  <td>
+                    <GapList
+                      gaps={[
+                        ...((item.evidence_refs as string[] | undefined) ?? []),
+                        ...((item.blocker_codes as string[] | undefined) ?? []),
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <InfoNotice>Позиции этого типа не зарегистрированы.</InfoNotice>
+      )}
+    </section>
   );
 }
 
@@ -5494,6 +5624,19 @@ function humanizeAuditPreflightState(value: string) {
     blocked: "Заблокировано",
     conflict: "Есть расхождение",
     indeterminate: "Недостаточно доказательств",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeRecoveryAction(value: string) {
+  const labels: Record<string, string> = {
+    review_candidate_against_available_evidence:
+      "Проверить подготовленный кандидат по доступным основаниям",
+    start_independent_document_audit: "Провести независимую проверку документа",
+    collect_missing_source_evidence: "Получить отсутствующие исходные сведения",
+    resolve_requirement_authority: "Установить применимое основание требования",
+    resolve_evidence_or_relationship:
+      "Уточнить доказательства и связь с работой",
   };
   return labels[value] ?? humanizeStatus(value);
 }

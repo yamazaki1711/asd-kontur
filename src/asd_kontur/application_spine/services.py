@@ -23,6 +23,7 @@ from asd_kontur.pilot import (
 )
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
+from asd_kontur.restoration import build_recovery_plan
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.findings_report import render_tender_findings_docx
@@ -688,6 +689,16 @@ class ProductSpineService:
             len(data),
             (data,),
         )
+
+    def restoration_recovery_plan(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Return an evidence-constrained recovery plan for the workspace."""
+
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return build_recovery_plan(preflight)
 
     def form_support_id_package(
         self,
