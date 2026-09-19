@@ -31,6 +31,28 @@ The current product path is deliberately two connected increments:
 | Evidence-bound Tender comparison and findings schedule | Tender | Editable schedule of source-backed quantity/material comparisons, risks, consequences and exact missing inputs | Work packages currently mirror raw observations and generic reconciliation cards cannot distinguish a real comparison from unavailable comparison input | Controlled revisions, repeated names, distinct scopes, quantity discrepancy and missing-input cases; persistence, evidence navigation and isolation | Validate a selected available design/estimate subset only; no project-wide claim until coverage supports it |
 | Supported ID package formation and export | Support; reusable data prepared in Tender | Register-first editable ID package, generated supported forms, attachments/missing-field manifest and export | Existing package formation needs a scope-aware, deduplicated work package and a production-facing completeness/report boundary | Controlled known work type with composition, missing fields, revisions, export/render/edit/reload/isolation | Optional regression check only; OZERO does not supply execution dates, measurements, signatures or a Support transition |
 
+### Product-led delivery evidence — 2026-09-19
+
+The two current increments are implemented on feature release `145c819` and
+the API/worker/assistant release `adfc495`:
+
+* Tender now consolidates work observations only within an explicit source and
+  scope, retains conflicting quantities rather than summing them, exposes a
+  source-backed editable findings schedule, and states when estimate or
+  contract input is unavailable instead of emitting an unsupported omission or
+  generic contract-review conclusion.
+* Support can export the exact formed package as a deterministic editable ZIP:
+  its register is the first entry, available generated/finalized documents are
+  included, and missing/blocked positions are an explicit separate schedule.
+
+Controlled checks cover repeated names in different scopes, contradictory
+quantities, missing estimate input, contract-input state, register ordering,
+generated/missing documents, persistence, authorization scope, and ZIP
+content. These checks establish reusable behavior; they do not establish
+OZERO-wide extraction, Tender completeness, a Support field execution, or
+full-product readiness. OZERO remains available for a selected real-data
+regression only after the relevant live worker path is healthy.
+
 Blocked live processing and the local Qwen slot never block implementation,
 controlled verification, or outputs that do not require that live runtime.
 No capability is promoted to `CAPABILITY_READY` without its declared
