@@ -189,6 +189,17 @@ Its content order, partial-coverage notice, OOXML member and authenticated API
 delivery are verified on controlled PostgreSQL-backed project data; OZERO is
 not required for this output contract.
 
+Tender comparison findings now show the exact persisted operands in the
+application, editable CSV, and editable Russian DOCX report: the project value,
+estimate value, and shared unit, or the two incompatible units.  The renderer
+does not calculate a new total, convert units, or resolve an ambiguous match.
+This makes a source-backed discrepancy usable for bid preparation while
+preserving its candidate status.  Controlled quantity-mismatch fixtures and
+the authenticated PostgreSQL project-understanding export verify the output;
+OZERO is not used for this acceptance.  A real document check can only confirm
+that a particular persisted OZERO finding is rendered, not that all project
+quantities have been reconciled.
+
 The current reusable output is an **Audit expected-versus-package preflight**.
 It is a workspace-scoped application projection of exact
 requirement versions and ID-package memberships. It preserves repeated document

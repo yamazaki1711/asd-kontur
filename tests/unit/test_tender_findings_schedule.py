@@ -57,6 +57,29 @@ def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> No
     assert row["required_input"] == "parsed_estimate_or_bill_of_quantities_positions"
 
 
+def test_findings_expose_quantity_operands_and_units_without_calculating_a_total() -> None:
+    defect = {
+        "defect_id": "quantity-delta",
+        "defect_kind": "quantity_mismatch",
+        "subject_identity": "project-quantity",
+        "related_identity": "estimate-position",
+        "source_locator_ids": ["project-page", "estimate-page"],
+        "parameters": {"project": "12.5", "estimate": "11", "unit": "m3"},
+    }
+    content = render_tender_findings_csv(
+        (defect,), materialization_state="partial", coverage_gaps=()
+    )
+    row = next(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert row["comparison_details"] == "Проект: 12.5 m3; смета: 11 m3"
+
+    report = render_tender_findings_docx(
+        (defect,), materialization_state="partial", coverage_gaps=()
+    )
+    with zipfile.ZipFile(io.BytesIO(report)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Проект: 12.5 m3; смета: 11 m3" in xml
+
+
 def test_exports_resolve_work_context_only_by_exact_observation_membership() -> None:
     work_packages = (
         {

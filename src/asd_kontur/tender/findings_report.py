@@ -11,6 +11,7 @@ from xml.sax.saxutils import escape
 
 from .findings_schedule import (
     _work_packages_by_observation,
+    comparison_details,
     finding_presentation,
     finding_work_context,
     source_reference,
@@ -57,7 +58,17 @@ def render_tender_findings_docx(
     )
     gaps = tuple(sorted(str(item) for item in coverage_gaps))
     packages_by_observation = _work_packages_by_observation(work_packages)
-    rows = [("№", "Наблюдение", "Объект", "Нужные данные", "Последствие", "Источники")]
+    rows = [
+        (
+            "№",
+            "Наблюдение",
+            "Объект",
+            "Значения для сверки",
+            "Нужные данные",
+            "Последствие",
+            "Источники",
+        )
+    ]
     for ordinal, defect in enumerate(normalized, start=1):
         kind = str(defect.get("defect_kind", "unknown"))
         _, required_input, consequence = finding_presentation(kind)
@@ -72,6 +83,7 @@ def render_tender_findings_docx(
                 str(ordinal),
                 _RUSSIAN_TITLES.get(kind, "Требуется инженерская сверка"),
                 _subject(defect, finding_work_context(defect, packages_by_observation)),
+                comparison_details(parameters if isinstance(parameters, Mapping) else {}),
                 required_input,
                 consequence,
                 "; ".join(
@@ -102,7 +114,7 @@ def _subject(defect: Mapping[str, Any], work_context: Mapping[str, str]) -> str:
 
 def _document_xml(
     *,
-    rows: list[tuple[str, str, str, str, str, str]],
+    rows: list[tuple[str, str, str, str, str, str, str]],
     materialization_state: str,
     coverage_gaps: tuple[str, ...],
     no_findings: bool,
@@ -136,9 +148,9 @@ def _document_xml(
     return document.encode()
 
 
-def _row(values: tuple[str, str, str, str, str, str]) -> str:
+def _row(values: tuple[str, str, str, str, str, str, str]) -> str:
     cells = "".join(
-        '<w:tc><w:tcPr><w:tcW w:w="1600" w:type="dxa"/></w:tcPr>'
+        '<w:tc><w:tcPr><w:tcW w:w="1370" w:type="dxa"/></w:tcPr>'
         f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
         for value in values
     )

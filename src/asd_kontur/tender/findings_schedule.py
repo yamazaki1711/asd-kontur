@@ -89,6 +89,7 @@ def render_tender_findings_csv(
             "work_name",
             "scope",
             "work_relation",
+            "comparison_details",
             "required_input",
             "practical_consequence",
             "source_references",
@@ -124,6 +125,7 @@ def render_tender_findings_csv(
                 "work_name": work_context["work_name"],
                 "scope": work_context["scope"],
                 "work_relation": work_context["work_relation"],
+                "comparison_details": comparison_details(parameters),
                 "required_input": required_input,
                 "practical_consequence": consequence,
                 "source_references": ";".join(
@@ -137,6 +139,38 @@ def render_tender_findings_csv(
             }
         )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def comparison_details(parameters: Mapping[str, Any]) -> str:
+    """Render the exact available operands without calculating a new total.
+
+    Reconciliation persists source values under stable keys.  A Tender user
+    needs to see those values beside the candidate finding, rather than infer
+    a delta from opaque JSON or assume that a missing operand was zero.  This
+    is deliberately a presentation helper: it neither converts units nor
+    resolves an ambiguous source match.
+    """
+
+    project = parameters.get("project")
+    estimate = parameters.get("estimate")
+    unit = str(parameters.get("unit") or "").strip()
+    if project is not None or estimate is not None:
+        project_value = str(project) if project is not None else "не указано"
+        estimate_value = str(estimate) if estimate is not None else "не указано"
+        suffix = f" {unit}" if unit else ""
+        return f"Проект: {project_value}{suffix}; смета: {estimate_value}{suffix}"
+
+    project_unit = str(parameters.get("project_unit") or "").strip()
+    estimate_unit = str(parameters.get("estimate_unit") or "").strip()
+    if project_unit or estimate_unit:
+        project_value = project_unit or "не указано"
+        estimate_value = estimate_unit or "не указано"
+        return f"Единица проекта: {project_value}; единица сметы: {estimate_value}"
+
+    code = str(parameters.get("code") or "").strip()
+    if code:
+        return f"Сопоставление не разрешено: {code}"
+    return ""
 
 
 def finding_work_context(

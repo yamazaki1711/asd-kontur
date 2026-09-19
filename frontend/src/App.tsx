@@ -5333,6 +5333,26 @@ function TenderFindingList({
             : {};
         const missingInput = displayValue(parameters.missing_input, "");
         const consequence = displayValue(parameters.consequence, "");
+        const projectValue = displayValue(parameters.project, "");
+        const estimateValue = displayValue(parameters.estimate, "");
+        const sharedUnit = displayValue(parameters.unit, "");
+        const projectUnit = displayValue(parameters.project_unit, "");
+        const estimateUnit = displayValue(parameters.estimate_unit, "");
+        const comparisonCode = displayValue(parameters.code, "");
+        const comparisonDetails =
+          projectValue || estimateValue
+            ? `Проект: ${projectValue || "не указано"}${
+                sharedUnit ? ` ${sharedUnit}` : ""
+              }; смета: ${estimateValue || "не указано"}${
+                sharedUnit ? ` ${sharedUnit}` : ""
+              }.`
+            : projectUnit || estimateUnit
+              ? `Единицы: проект — ${projectUnit || "не указано"}; смета — ${
+                  estimateUnit || "не указано"
+                }.`
+              : comparisonCode
+                ? `Сопоставление не разрешено: ${comparisonCode}.`
+                : "";
         return (
           <article className="candidate-row" key={id}>
             <div>
@@ -5346,6 +5366,7 @@ function TenderFindingList({
               </small>
               {missingInput ? <p>Нужные данные: {missingInput}.</p> : null}
               {consequence ? <p>Последствие: {consequence}.</p> : null}
+              {comparisonDetails ? <p>{comparisonDetails}</p> : null}
               {locators.length > 0 && (
                 <p>
                   Источники:{" "}
