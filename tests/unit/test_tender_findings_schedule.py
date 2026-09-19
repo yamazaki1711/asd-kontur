@@ -17,6 +17,9 @@ from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
+from asd_kontur.tender.structure_identity_schedule import (
+    render_tender_structure_identity_schedule_csv,
+)
 
 
 def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> None:
@@ -255,6 +258,7 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
         findings_report=b"docx-payload",
         findings_schedule=b"findings-csv",
         scope_schedule=b"scope-csv",
+        structure_identity_schedule=b"identity-csv",
         document_coverage_schedule=b"coverage-csv",
         materialization={"state": "partial", "gaps": ["SEMANTIC_COVERAGE_PARTIAL"]},
     )
@@ -264,13 +268,15 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
             "01_tender_findings_report.docx",
             "02_tender_findings_schedule.csv",
             "03_tender_work_resource_schedule.csv",
-            "04_document_processing_coverage.csv",
-            "05_delivery_manifest.json",
+            "04_structure_identity_candidates.csv",
+            "05_document_processing_coverage.csv",
+            "06_delivery_manifest.json",
             "99_analysis_status.txt",
         ]
         assert exported.read("01_tender_findings_report.docx") == b"docx-payload"
-        assert exported.read("04_document_processing_coverage.csv") == b"coverage-csv"
-        manifest = json.loads(exported.read("05_delivery_manifest.json"))
+        assert exported.read("04_structure_identity_candidates.csv") == b"identity-csv"
+        assert exported.read("05_document_processing_coverage.csv") == b"coverage-csv"
+        manifest = json.loads(exported.read("06_delivery_manifest.json"))
         status = exported.read("99_analysis_status.txt").decode("utf-8")
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
@@ -278,6 +284,54 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
     assert (
         manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
     )
+
+
+def test_structure_identity_schedule_keeps_each_source_observation_unmerged() -> None:
+    content = render_tender_structure_identity_schedule_csv(
+        (
+            {
+                "identity_candidate_id": "identity-1",
+                "identity_kind": "facility",
+                "canonical_label": "Pump station 4",
+                "status": "candidate",
+                "confidence": "0.82",
+                "member_structure_node_ids": ["node-a", "node-b"],
+            },
+        ),
+        structure_nodes=(
+            {
+                "structure_node_id": "node-a",
+                "node_kind": "facility",
+                "raw_name": "Pump station-4",
+                "source_locator_id": "locator-a",
+            },
+            {
+                "structure_node_id": "node-b",
+                "node_kind": "facility",
+                "raw_name": "Pump station 4",
+                "source_locator_id": "locator-b",
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+        evidence_index={
+            "locator-a": {
+                "safe_display_name": "General plan.pdf",
+                "document_version": 1,
+                "locator_value": "page:3",
+            },
+            "locator-b": {
+                "safe_display_name": "Technology.pdf",
+                "document_version": 2,
+                "locator_value": "page:11",
+            },
+        },
+    )
+    rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert [row["member_raw_name"] for row in rows] == ["Pump station-4", "Pump station 4"]
+    assert {row["automatic_merge"] for row in rows} == {"false"}
+    assert {row["member_state"] for row in rows} == {"source_observation"}
+    assert rows[0]["source_reference"] == "General plan.pdf, version 1, page:3 (locator-a)"
 
 
 def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None:

@@ -171,6 +171,18 @@ is not needed.  A future reusable facility/scope reconciliation capability is
 required before these observations can become a deduplicated package basis for
 Support.
 
+Tender now also exports a **cross-document structure identity candidate
+schedule**. Each row is one original source observation with its candidate
+group, confidence, raw label, locator, and a literal `automatic_merge=false`.
+The same schedule is present in the Tender analysis ZIP and downloadable from
+the structure view. It makes facility aliases and possible cross-discipline
+links usable for review without creating a canonical facility, attaching work
+or quantities by name, or requiring a user to confirm unrelated observations.
+Controlled two-source alias fixtures and the authenticated PostgreSQL project
+understanding flow verify all rows, source links, ZIP order, and workspace
+scope. OZERO is not needed; it may later validate only the identity candidates
+its processed sources actually produced.
+
 The same project-understanding surface also provides a separate editable
 work/quantity/material CSV schedule. It has one row per candidate work package,
 retains raw and normalized quantity observations, materials, exact locator

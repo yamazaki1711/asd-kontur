@@ -35,6 +35,9 @@ from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
+from asd_kontur.tender.structure_identity_schedule import (
+    render_tender_structure_identity_schedule_csv,
+)
 
 from .config import SpineSettings
 from .models import (
@@ -674,6 +677,35 @@ class ProductSpineService:
             (data,),
         )
 
+    def tender_structure_identity_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate schedule of cross-document identities."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_structure_identity_schedule_csv(
+            view.get("structure_identity_candidates", []),
+            structure_nodes=view.get("structure_nodes", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-structure-identity-candidates-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
     def tender_analysis_export(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> DocumentContent:
@@ -703,6 +735,11 @@ class ProductSpineService:
             ),
             scope_schedule=render_tender_scope_schedule_csv(
                 view.get("work_packages", []),
+                **common,
+            ),
+            structure_identity_schedule=render_tender_structure_identity_schedule_csv(
+                view.get("structure_identity_candidates", []),
+                structure_nodes=view.get("structure_nodes", []),
                 **common,
             ),
             document_coverage_schedule=render_tender_document_coverage_csv(

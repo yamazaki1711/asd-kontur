@@ -4423,6 +4423,12 @@ function ProjectUnderstandingPage() {
                     только при наличии точного исходного фрагмента.
                     Неразрешённые пространственные сведения остаются пробелом.
                   </p>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-structure-identity-candidates.csv`}
+                  >
+                    Скачать ведомость междокументных групп-кандидатов
+                  </a>
                   <StructureCandidateList
                     nodes={structureNodes}
                     relationships={structureRelationships}
