@@ -4522,6 +4522,12 @@ function ProjectUnderstandingPage() {
                   >
                     Скачать покрытие документов
                   </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-facility-work-observations.csv`}
+                  >
+                    Скачать связь наблюдений работ с группами объектов
+                  </a>
                   {value.work_packages.length ? (
                     <div className="card-grid">
                       {value.work_packages.map((item) => (

@@ -183,6 +183,19 @@ understanding flow verify all rows, source links, ZIP order, and workspace
 scope. OZERO is not needed; it may later validate only the identity candidates
 its processed sources actually produced.
 
+Tender additionally publishes an editable **facility/work observation
+association schedule**. It links a raw work observation to one structure or
+facility identity candidate only where they share an exact persisted source
+locator. A single match is exposed as a candidate association; multiple matches
+remain an explicit ambiguity; no match is stated without inventing an
+association. It neither canonicalizes facilities nor promotes work observations
+to awarded work packages, and it never uses a shared normalized name as an
+identity key. Controlled fixtures verify same-named work in separate scopes,
+one exact locator match, and a two-candidate ambiguity; scoped PostgreSQL API
+coverage verifies authorization and download. OZERO is not needed for this
+reusable Tender output. It can later validate only links from its accepted
+source evidence.
+
 The project-understanding view now contains a reusable **Tender input
 assessment** derived only from active source versions and persisted document
 role decisions. It identifies design/working documentation, quantities or

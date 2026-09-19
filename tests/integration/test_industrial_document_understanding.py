@@ -235,6 +235,13 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         identity_csv = identity_schedule.content.decode("utf-8-sig")
         assert "automatic_merge" in identity_csv
         assert "member_raw_name" in identity_csv
+        facility_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-facility-work-observations.csv"
+        )
+        assert facility_scope_schedule.status_code == 200, facility_scope_schedule.text
+        assert facility_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "association_state" in facility_scope_schedule.content.decode("utf-8-sig")
         tender_archive = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
             "tender-analysis.zip"

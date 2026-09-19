@@ -32,6 +32,7 @@ from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
+from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -701,6 +702,34 @@ class ProductSpineService:
             len(data),
             digest,
             f"tender-structure-identity-candidates-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_facility_scope_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return a locator-bound work-to-facility candidate schedule."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_facility_scope_schedule_csv(
+            view.get("work_packages", []),
+            identity_candidates=view.get("structure_identity_candidates", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-facility-work-observations-{workspace_id}.csv",
             0,
             len(data),
             (data,),

@@ -14,6 +14,7 @@ from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.support.generation import validate_docx
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
+from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -332,6 +333,63 @@ def test_structure_identity_schedule_keeps_each_source_observation_unmerged() ->
     assert {row["automatic_merge"] for row in rows} == {"false"}
     assert {row["member_state"] for row in rows} == {"source_observation"}
     assert rows[0]["source_reference"] == "General plan.pdf, version 1, page:3 (locator-a)"
+
+
+def test_facility_scope_schedule_requires_one_exact_shared_locator() -> None:
+    work_packages = (
+        {
+            "work_package_id": "work-a",
+            "package": {
+                "work_package_id": "work-a",
+                "work_type": {"raw": "Excavation", "normalized": "excavation"},
+                "scope": "page:7",
+                "source_locator_ids": ["locator-a"],
+            },
+        },
+        {
+            "work_package_id": "work-b",
+            "package": {
+                "work_package_id": "work-b",
+                "work_type": {"raw": "Concrete", "normalized": "concrete"},
+                "scope": "page:8",
+                "source_locator_ids": ["locator-b", "locator-c"],
+            },
+        },
+    )
+    content = render_tender_facility_scope_schedule_csv(
+        work_packages,
+        identity_candidates=(
+            {
+                "identity_candidate_id": "facility-a",
+                "canonical_label": "Facility A",
+                "identity_kind": "facility",
+                "confidence": "0.81",
+                "source_locator_ids": ["locator-a"],
+            },
+            {
+                "identity_candidate_id": "facility-b",
+                "canonical_label": "Facility B",
+                "identity_kind": "facility",
+                "confidence": "0.74",
+                "source_locator_ids": ["locator-b"],
+            },
+            {
+                "identity_candidate_id": "facility-c",
+                "canonical_label": "Facility C",
+                "identity_kind": "facility",
+                "confidence": "0.69",
+                "source_locator_ids": ["locator-c"],
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+    )
+    rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert rows[0]["association_state"] == "exact_locator_identity_candidate"
+    assert rows[0]["identity_candidate_ids"] == "facility-a"
+    assert rows[1]["association_state"] == "ambiguous_identity_candidates"
+    assert rows[1]["identity_candidate_ids"] == "facility-b;facility-c"
+    assert rows[1]["candidate_status"] == "candidate_no_canonical_work_package"
 
 
 def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None:
