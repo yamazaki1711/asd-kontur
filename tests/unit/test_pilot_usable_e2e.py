@@ -173,6 +173,22 @@ def test_mode_results_are_professionally_distinct() -> None:
     assert len({value["fingerprint"] for value in values.values()}) == 4
 
 
+def test_audit_does_not_treat_completed_extraction_as_a_conformance_result() -> None:
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.AUDIT,
+        project=_project(),
+        documents=_documents(),
+        support={},
+    )
+
+    document_item = next(item for item in result["items"] if item["kind"] == "audit-input")
+    assert document_item["status"] == "requires_clarification"
+    assert "доступно как вход для аудита" in document_item["description"]
+    assert "не выполнены" in document_item["description"]
+
+
 def test_docx_and_pdf_exports_are_reproducible_and_readable() -> None:
     result = build_pilot_result(
         workspace_id=WORKSPACE_ID,

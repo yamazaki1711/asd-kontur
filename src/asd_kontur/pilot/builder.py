@@ -124,14 +124,12 @@ def _mode_items(
         items.extend(
             _item(
                 mode,
-                f"document:{item['document_id']}",
-                f"Проверка документа «{item['safe_display_name']}»",
-                "Документ принят и учтён в составе проверяемого комплекта."
-                if item["extraction_status"] == "complete"
-                else "Содержание документа обработано не полностью.",
-                "conforms" if item["extraction_status"] == "complete" else "requires_clarification",
+                f"audit-input:{item['document_id']}",
+                f"Исходный документ для аудита «{item['safe_display_name']}»",
+                _audit_input_description(item),
+                "requires_clarification",
                 (),
-                "Открыть документ и проверить отмеченные фрагменты.",
+                _audit_input_action(item),
             )
             for item in documents
         )
@@ -219,6 +217,32 @@ def _looks_like_contract_source(document: dict[str, Any]) -> bool:
         str(document.get(key) or "") for key in ("safe_display_name", "relative_path")
     ).casefold()
     return any(token in reference for token in ("договор", "контракт", "contract"))
+
+
+def _audit_input_description(document: dict[str, Any]) -> str:
+    """Keep extraction/readiness evidence separate from an Audit conclusion."""
+
+    if str(document.get("extraction_status")) == "complete":
+        return (
+            "Содержание документа доступно как вход для аудита. Проверки состава, формы, "
+            "редакции, подписей, приложений и доказательств по этому документу ещё не выполнены."
+        )
+    return (
+        "Содержание документа обработано не полностью; проверки состава, формы, редакции, "
+        "подписей, приложений и доказательств пока невозможны."
+    )
+
+
+def _audit_input_action(document: dict[str, Any]) -> str:
+    if str(document.get("extraction_status")) == "complete":
+        return (
+            "Запустить проверку ожидаемого и фактического состава; не считать извлечение "
+            "результатом аудита."
+        )
+    return (
+        "Восстановить обработку документа и затем выполнить проверку ожидаемого и "
+        "фактического состава."
+    )
 
 
 def _defect_item(
