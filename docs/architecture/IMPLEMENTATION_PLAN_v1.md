@@ -59,7 +59,9 @@ The two initial increments are implemented on feature releases `98b7363` and
   candidate/confirmed/missing state, and names the exact locator identifiers.
   A generated candidate therefore cannot make a missing material input appear
   completed.  This is independently covered by a disposable PostgreSQL
-  Support-package test; OZERO is not used for this acceptance.
+  Support-package test.  The Support UI presents the same field states and
+  linked source locators in a deduplicated table rather than labelling the
+  section as completed fields.  OZERO is not used for this acceptance.
 
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,

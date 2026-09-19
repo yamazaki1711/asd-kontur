@@ -23,6 +23,7 @@ import {
 import { api, requireData } from "./api/client";
 import type { components } from "./api/schema";
 import { StatusPill } from "./components/StatusPill";
+import { mergeFieldResolutionRows } from "./supportFieldRows";
 import { PdfEvidenceViewer } from "./viewer/PdfEvidenceViewer";
 
 type Workspace = components["schemas"]["WorkspaceView"];
@@ -2718,6 +2719,7 @@ function SupportProductionBody({
   const packageHistory = value.package_history ?? [];
   const registerHistory = value.register_history ?? [];
   const fields = value.field_resolutions ?? [];
+  const fieldRows = mergeFieldResolutionRows(fields);
   return (
     <>
       <section className="panel">
@@ -3062,31 +3064,63 @@ function SupportProductionBody({
             </article>
           </section>
           <section className="panel">
-            <h2>Заполненные поля документа</h2>
-            {fields.length ? (
-              <dl>
-                {fields.map((field) => (
-                  <div
-                    key={`${String(field.generation_run_id)}:${String(field.field_key)}`}
-                  >
-                    <dt>{humanizeFieldKey(String(field.field_key))}</dt>
-                    <dd>
-                      {String(field.display_value ?? field.state)}
-                      {Boolean(field.source_locator_id) && (
-                        <Link
-                          to={workspaceRouteFromSlug(
-                            modeSlug,
-                            workspaceId,
-                            `/evidence/locators/${String(field.source_locator_id)}`,
+            <h2>Поля, доказательства и недостающие входные данные</h2>
+            {fieldRows.length ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Поле</th>
+                      <th>Значение</th>
+                      <th>Состояние</th>
+                      <th>Источники</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fieldRows.map(({ field, locatorIds }) => (
+                      <tr
+                        key={`${String(field.generation_run_id)}:${String(field.field_key)}:${String(field.state)}`}
+                      >
+                        <td>{humanizeFieldKey(String(field.field_key))}</td>
+                        <td>
+                          {displayValue(field.display_value, "Не установлено")}
+                        </td>
+                        <td>
+                          <StatusPill
+                            tone={
+                              String(field.state) === "confirmed"
+                                ? "default"
+                                : "warning"
+                            }
+                          >
+                            {humanizeStatus(String(field.state))}
+                          </StatusPill>
+                        </td>
+                        <td>
+                          {locatorIds.length ? (
+                            locatorIds.map((locatorId, index) => (
+                              <span key={locatorId}>
+                                {index > 0 ? ", " : ""}
+                                <Link
+                                  to={workspaceRouteFromSlug(
+                                    modeSlug,
+                                    workspaceId,
+                                    `/evidence/locators/${locatorId}`,
+                                  )}
+                                >
+                                  открыть источник
+                                </Link>
+                              </span>
+                            ))
+                          ) : (
+                            <small>Источник ещё не установлен</small>
                           )}
-                        >
-                          открыть источник
-                        </Link>
-                      )}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p>Поля документа ещё не подготовлены.</p>
             )}
