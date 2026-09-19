@@ -136,7 +136,6 @@ class DocumentWorker:
         self._organization_id = organization_id
         self._workspace_id = workspace_id
         self._stopping = False
-        self._maintenance_not_before = 0.0
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
@@ -162,14 +161,10 @@ class DocumentWorker:
             workspace_id=self._workspace_id,
         )
         if claimed is None:
-            if self._organization_id is None and time.monotonic() >= self._maintenance_not_before:
-                # Recoveries are maintenance work, not a prerequisite for
-                # runnable jobs. The database recovery is bounded, and the
-                # cadence prevents an idle worker from repeatedly consuming
-                # maintenance capacity while no new work is eligible.
-                self._maintenance_not_before = time.monotonic() + 5.0
-                self._repository.recover_dependency_terminal_failures()
-                self._repository.reconcile_unclaimable_jobs()
+            # A newly accepted successor reconnects terminal dependents in
+            # ``_execute``. Historical backfill is intentionally a separately
+            # scheduled, bounded maintenance operation: it must never make an
+            # otherwise idle product worker unavailable to claim new work.
             claimed = self._repository.claim_next_job(
                 worker_identity=self._worker_identity,
                 lease_seconds=self._lease_seconds,
@@ -303,6 +298,7 @@ class DocumentWorker:
             JobKind.WORK_PACKAGE_ASSEMBLY,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
         }:
             try:
                 with self._open_source(claimed) as source:

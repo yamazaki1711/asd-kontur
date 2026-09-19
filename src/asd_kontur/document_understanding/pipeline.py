@@ -80,6 +80,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.WORK_PACKAGE_ASSEMBLY: self._assembly,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY: self._assembly,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: self._reconciliation,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION: self._reconciliation,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -504,6 +505,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.WORK_PACKAGE_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.REQUIREMENT_MATRIX_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
     }[kind]
 
 
