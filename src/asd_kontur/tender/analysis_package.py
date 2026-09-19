@@ -18,6 +18,7 @@ def build_tender_analysis_archive(
     findings_schedule: bytes,
     scope_schedule: bytes,
     structure_identity_schedule: bytes,
+    facility_scope_schedule: bytes,
     document_coverage_schedule: bytes,
     materialization: Mapping[str, Any],
 ) -> bytes:
@@ -35,12 +36,13 @@ def build_tender_analysis_archive(
             ("02_tender_findings_schedule.csv", findings_schedule),
             ("03_tender_work_resource_schedule.csv", scope_schedule),
             ("04_structure_identity_candidates.csv", structure_identity_schedule),
-            ("05_document_processing_coverage.csv", document_coverage_schedule),
+            ("05_facility_work_observation_candidates.csv", facility_scope_schedule),
+            ("06_document_processing_coverage.csv", document_coverage_schedule),
         )
         manifest = _delivery_manifest(entries, materialization)
         for name, payload in (
             *entries,
-            ("06_delivery_manifest.json", manifest),
+            ("07_delivery_manifest.json", manifest),
             ("99_analysis_status.txt", _status_text(materialization)),
         ):
             info = zipfile.ZipInfo(name, _FIXED_ZIP_TIME)
@@ -56,7 +58,7 @@ def _delivery_manifest(
     """Bind this download to exact candidate projections and coverage state."""
 
     payload = {
-        "contract": "tender.analysis-delivery@1.2.0",
+        "contract": "tender.analysis-delivery@1.3.0",
         "candidate_boundary": True,
         "materialization": {
             "state": str(materialization.get("state") or "not_requested"),
@@ -89,6 +91,8 @@ def _status_text(materialization: Mapping[str, Any]) -> bytes:
         "omissions, quantities, or contract conclusions.",
         "Same-named work in distinct source scopes is intentionally not aggregated.",
         "Cross-document structure identity rows are candidates and are not automatically merged.",
+        "Facility/work associations require an exact shared source locator; "
+        "ambiguous associations are retained.",
         "The document coverage schedule distinguishes native extraction from accepted "
         "semantic coverage.",
         "Coverage gaps: " + ("; ".join(gaps) if gaps else "none recorded"),

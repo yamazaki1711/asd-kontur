@@ -771,6 +771,12 @@ class ProductSpineService:
                 structure_nodes=view.get("structure_nodes", []),
                 **common,
             ),
+            facility_scope_schedule=render_tender_facility_scope_schedule_csv(
+                view.get("work_packages", []),
+                identity_candidates=view.get("structure_identity_candidates", []),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
+            ),
             document_coverage_schedule=render_tender_document_coverage_csv(
                 view.get("semantic_coverage", []),
                 materialization_state=common["materialization_state"],

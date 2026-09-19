@@ -196,6 +196,14 @@ coverage verifies authorization and download. OZERO is not needed for this
 reusable Tender output. It can later validate only links from its accepted
 source evidence.
 
+The same facility/work candidate schedule is also a member of the deterministic
+Tender analysis archive (`tender.analysis-delivery@1.3.0`), between identity
+candidates and document coverage. Its manifest binds the exact CSV digest and
+the status text states the exact-locator and ambiguity boundary. Controlled
+archive and PostgreSQL-backed API tests verify member order and workspace scope;
+OZERO is not used. This is a packaging improvement, not canonical facility or
+work-package reconciliation.
+
 The project-understanding view now contains a reusable **Tender input
 assessment** derived only from active source versions and persisted document
 role decisions. It identifies design/working documentation, quantities or

@@ -254,8 +254,9 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                 "02_tender_findings_schedule.csv",
                 "03_tender_work_resource_schedule.csv",
                 "04_structure_identity_candidates.csv",
-                "05_document_processing_coverage.csv",
-                "06_delivery_manifest.json",
+                "05_facility_work_observation_candidates.csv",
+                "06_document_processing_coverage.csv",
+                "07_delivery_manifest.json",
                 "99_analysis_status.txt",
             ]
         tender_report = client.get(
