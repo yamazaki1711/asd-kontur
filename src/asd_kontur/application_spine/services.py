@@ -771,6 +771,15 @@ class ProductSpineService:
             (data,),
         )
 
+    def latest_audit_report_projection(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Expose the immutable canonical-Audit read model without impersonation."""
+
+        return self._repository.latest_audit_report_projection(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
     def restoration_recovery_plan(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> dict[str, Any]:

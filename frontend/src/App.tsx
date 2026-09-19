@@ -34,6 +34,8 @@ type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
 type AuditExpectedActualPreflight =
   components["schemas"]["AuditExpectedActualPreflightView"];
+type AuditReportProjection =
+  components["schemas"]["AuditReportProjectionView"];
 type AuditPreflightItem = {
   item_key: string;
   work_package_id: string;
@@ -224,6 +226,10 @@ export function App() {
           <Route
             path="/modes/:mode/workspaces/:workspaceId/audit-preflight"
             element={<AuditExpectedActualPreflightPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/audit-report"
+            element={<AuditReportProjectionPage />}
           />
           <Route
             path="/modes/:mode/workspaces/:workspaceId/recovery-plan"
@@ -461,10 +467,16 @@ function ApplicationShell() {
             />
           )}
           {mode === "Audit" && (
-            <NavItem
-              to={`${workspaceBase}/audit-preflight`}
-              label="Предварительная сверка"
-            />
+            <>
+              <NavItem
+                to={`${workspaceBase}/audit-preflight`}
+                label="Предварительная сверка"
+              />
+              <NavItem
+                to={`${workspaceBase}/audit-report`}
+                label="Отчёт независимого аудита"
+              />
+            </>
           )}
           {mode === "Restoration" && (
             <NavItem
@@ -2371,6 +2383,124 @@ function AuditExpectedActualPreflightPage() {
         )}
       </QueryState>
     </Page>
+  );
+}
+
+function AuditReportProjectionPage() {
+  const { workspaceId = "" } = useParams();
+  const report = useQuery({
+    queryKey: ["audit-report-projection", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/audit/reports/latest",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="Отчёт независимого аудита"
+      lead="Неизменяемый отчёт по точной версии состава документов, доказательствам и запросам на исправление."
+    >
+      <QueryState query={report}>
+        {(value) => <AuditReportProjectionBody value={value} />}
+      </QueryState>
+    </Page>
+  );
+}
+
+function AuditReportProjectionBody({
+  value,
+}: {
+  value: AuditReportProjection;
+}) {
+  const gaps = value.gaps ?? [];
+  if (value.status === "not_published") {
+    return (
+      <InfoNotice>
+        Независимый отчёт ещё не опубликован. Предварительная сверка не заменяет
+        аудит содержания, подписей и приложений.
+        <GapList gaps={gaps} />
+      </InfoNotice>
+    );
+  }
+  const ptoPayload = (value.pto?.projection_payload ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const report = (ptoPayload.report ?? {}) as Record<string, unknown>;
+  const deltas = Array.isArray(ptoPayload.deltas)
+    ? (ptoPayload.deltas as Array<Record<string, unknown>>)
+    : [];
+  const requests = Array.isArray(ptoPayload.action_requests)
+    ? (ptoPayload.action_requests as Array<Record<string, unknown>>)
+    : [];
+  return (
+    <>
+      <InfoNotice>
+        Это опубликованная проекция канонического отчёта. Она не изменяет
+        исходные записи аудита и не подтверждает устранение замечаний без
+        отдельного доказательства.
+      </InfoNotice>
+      <section className="metrics" aria-label="Состояние независимого аудита">
+        <Metric label="Версия отчёта" value={Number(report.version ?? 0)} />
+        <Metric
+          label="Нерешённых кодов"
+          value={Array.isArray(report.unresolved_codes) ? report.unresolved_codes.length : 0}
+        />
+        <Metric label="Запросов на исправление" value={requests.length} />
+      </section>
+      <section className="panel">
+        <h2>Основание и результат</h2>
+        <p>
+          Статус: {humanizeStatus(
+            typeof report.outcome === "string" ? report.outcome : "unknown",
+          )}
+        </p>
+        <GapList
+          gaps={Array.isArray(report.unresolved_codes) ? report.unresolved_codes.map(String) : []}
+        />
+      </section>
+      <section className="panel">
+        <h2>Состояние проверок</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Контур</th><th>Состояния</th><th>Нерешённые позиции</th></tr>
+            </thead>
+            <tbody>
+              {deltas.map((delta) => {
+                const counts = (delta.counts ?? {}) as Record<string, unknown>;
+                const unresolved = Array.isArray(delta.unresolved_items)
+                  ? (delta.unresolved_items as Array<Record<string, unknown>>)
+                  : [];
+                return (
+                  <tr key={`${String(delta.delta_id)}:${String(delta.version)}`}>
+                    <td>
+                      {humanizeAuditDeltaKind(
+                        typeof delta.kind === "string" ? delta.kind : "unknown",
+                      )}
+                    </td>
+                    <td>{Object.entries(counts).map(([key, count]) => `${humanizeStatus(key)}: ${String(count)}`).join(", ")}</td>
+                    <td>{unresolved.map((item) => String(item.item_key)).join(", ") || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Запросы на исправление</h2>
+        {requests.length ? (
+          <div className="table-wrap"><table><thead><tr><th>Действие</th><th>Объект</th><th>Состояние</th><th>Основание и последствия</th></tr></thead><tbody>
+            {requests.map((item) => <tr key={`${String(item.action_request_id)}:${String(item.version)}`}><td>{String(item.action_code)}</td><td>{String(item.affected_object_ref)}</td><td>{humanizeStatus(String(item.state))}</td><td><GapList gaps={[...((item.evidence_refs as string[] | undefined) ?? []), ...((item.blocking_impacts as string[] | undefined) ?? [])]} /></td></tr>)}
+          </tbody></table></div>
+        ) : <InfoNotice>В этот отчёт не включены запросы на исправление.</InfoNotice>}
+      </section>
+      {gaps.length ? <GapList gaps={gaps} /> : null}
+    </>
   );
 }
 
@@ -5899,6 +6029,15 @@ function humanizeAuditPreflightState(value: string) {
     indeterminate: "Недостаточно доказательств",
   };
   return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeAuditDeltaKind(value: string) {
+  const labels: Record<string, string> = {
+    document: "Состав и содержание документов",
+    causal_readiness: "Готовность причин и доказательств",
+    package_signing_handover: "Комплект, подписание и передача",
+  };
+  return labels[value] ?? value;
 }
 
 function humanizeAuditCorrection(value: string) {

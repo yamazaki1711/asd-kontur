@@ -416,6 +416,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Audit Report Projection */
+        get: operations["latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents": {
         parameters: {
             query?: never;
@@ -1211,6 +1228,24 @@ export interface components {
              * @enum {string}
              */
             status: "not_started" | "partial";
+        };
+        /** AuditReportProjectionView */
+        AuditReportProjectionView: {
+            /** Customer */
+            customer?: {
+                [key: string]: unknown;
+            } | null;
+            /** Gaps */
+            gaps?: string[];
+            /** Pto */
+            pto?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_published" | "partial" | "published";
         };
         /** Body_upload_documents_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_documents_api_v1_workspaces__workspace_id__documents_post: {
@@ -3249,6 +3284,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditReportProjectionView"];
                 };
             };
             /** @description Validation Error */

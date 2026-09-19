@@ -429,6 +429,13 @@ class AuditExpectedActualPreflightView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class AuditReportProjectionView(ApiModel):
+    status: Literal["not_published", "partial", "published"]
+    customer: dict[str, Any] | None = None
+    pto: dict[str, Any] | None = None
+    gaps: list[str] = Field(default_factory=list)
+
+
 class RestorationRecoveryPlanView(ApiModel):
     plan_kind: Literal["id_package_recovery_plan"]
     status: Literal["partial", "blocked"]

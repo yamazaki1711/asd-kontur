@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -20,6 +21,7 @@ from asd_kontur.corpus import (
     PhysicalObjectInspection,
     ProcessingPlan,
 )
+from asd_kontur.domain import uuid7
 from asd_kontur.harness.models import digest_of
 from asd_kontur.persistence.scope import WorkspaceContext
 
@@ -251,6 +253,7 @@ class PostgresCorpusAuditStore:
                 if not outcome.accepted:
                     return outcome
                 self._insert_report(session, value)
+                self._persist_owner_read_projections(session, value)
                 self._advance_header(session, context, command, outcome)
                 return outcome
 
@@ -1174,6 +1177,216 @@ class PostgresCorpusAuditStore:
                     "Audit report action-request reference must resolve to one persisted version"
                 )
         return refs
+
+    @staticmethod
+    def _persist_owner_read_projections(session: Session, value: AuditReport) -> None:
+        """Publish bounded immutable read models beside an exact Audit report.
+
+        The canonical report, deltas and ActionRequest versions remain writable
+        only by ``asd_audit_service``.  These two projections are the sole
+        owner-readable representation and are built in the same transaction as
+        the report, so an application reader cannot observe a report without
+        its evidence-bound status and correction requests.
+        """
+
+        scope = value.audit_scope
+        document = PostgresCorpusAuditStore._owner_delta_projection(
+            session, scope, value.document_delta_id, "document"
+        )
+        causal = PostgresCorpusAuditStore._owner_delta_projection(
+            session, scope, value.causal_delta_id, "causal_readiness"
+        )
+        package = PostgresCorpusAuditStore._owner_delta_projection(
+            session, scope, value.package_readiness_id, "package_signing_handover"
+        )
+        report = {
+            "audit_report_id": str(value.audit_report_id),
+            "version": value.version,
+            "audit_process_id": str(scope.audit_process_id),
+            "corpus_snapshot": {
+                "corpus_snapshot_id": str(scope.corpus_snapshot_id),
+                "version": scope.corpus_snapshot_version,
+                "fingerprint": value.corpus_snapshot_fingerprint,
+            },
+            "outcome": value.outcome.value,
+            "unresolved_codes": list(value.unresolved_codes),
+            "created_at": value.created_at.isoformat(),
+            "product_ready": False,
+        }
+        customer_payload: dict[str, Any] = {
+            "assessment_kind": "canonical_audit_report",
+            "audience": "customer",
+            "report": report,
+            "deltas": (document, causal, package),
+            "action_requests": (),
+        }
+        pto_payload = {
+            **customer_payload,
+            "audience": "pto",
+            "action_requests": PostgresCorpusAuditStore._owner_action_requests_projection(
+                session, scope, value
+            ),
+        }
+        for projection_kind, payload in (
+            ("customer", customer_payload),
+            ("pto", pto_payload),
+        ):
+            fingerprint = digest_of(payload)
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT source_fingerprint,projection_fingerprint FROM "
+                        "workspace.audit_projection_versions WHERE organization_id=:o "
+                        "AND workspace_id=:w AND audit_report_id=:report "
+                        "AND audit_report_version=:report_version AND projection_kind=:kind "
+                        "ORDER BY version"
+                    ),
+                    {
+                        "o": scope.organization_id,
+                        "w": scope.workspace_id,
+                        "report": value.audit_report_id,
+                        "report_version": value.version,
+                        "kind": projection_kind,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+            if existing:
+                if len(existing) != 1 or any(
+                    row["source_fingerprint"] != value.fingerprint
+                    or row["projection_fingerprint"] != fingerprint
+                    for row in existing
+                ):
+                    raise ValueError("Audit owner projection identity is already bound differently")
+                continue
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_projection_versions "
+                    "(organization_id,workspace_id,projection_id,version,audit_report_id,"
+                    "audit_report_version,projection_kind,source_fingerprint,projection_payload,"
+                    "projection_fingerprint,state,built_at) VALUES "
+                    "(:o,:w,:projection,1,:report,:report_version,:kind,:source,CAST(:payload AS jsonb),"
+                    ":fingerprint,'current',CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "projection": uuid7(),
+                    "report": value.audit_report_id,
+                    "report_version": value.version,
+                    "kind": projection_kind,
+                    "source": value.fingerprint,
+                    "payload": json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                    "fingerprint": fingerprint,
+                },
+            )
+
+    @staticmethod
+    def _owner_delta_projection(
+        session: Session, scope: AuditScope, delta_id: UUID, expected_kind: str
+    ) -> dict[str, Any]:
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT version,delta_kind,satisfied_count,missing_count,conflict_count,"
+                    "indeterminate_count,blocked_count,fingerprint,evaluated_at FROM "
+                    "workspace.audit_delta_versions WHERE organization_id=:o AND "
+                    "workspace_id=:w AND audit_process_id=:process AND audit_delta_id=:delta "
+                    "AND delta_kind=:kind ORDER BY version DESC"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "process": scope.audit_process_id,
+                    "delta": delta_id,
+                    "kind": expected_kind,
+                },
+            )
+            .mappings()
+            .one()
+        )
+        items = session.execute(
+            sa.text(
+                "SELECT item_key,state,source_locator_ids,authority_decision_refs,uncertainty_codes,"
+                "blocker_codes,downstream_impacts FROM workspace.audit_delta_items WHERE "
+                "organization_id=:o AND workspace_id=:w AND audit_delta_id=:delta "
+                "AND delta_version=:version AND state<>'satisfied' ORDER BY item_key"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "delta": delta_id,
+                "version": row["version"],
+            },
+        ).mappings()
+        return {
+            "delta_id": str(delta_id),
+            "version": int(row["version"]),
+            "kind": str(row["delta_kind"]),
+            "counts": {
+                "satisfied": int(row["satisfied_count"]),
+                "missing": int(row["missing_count"]),
+                "conflict": int(row["conflict_count"]),
+                "indeterminate": int(row["indeterminate_count"]),
+                "blocked": int(row["blocked_count"]),
+            },
+            "fingerprint": str(row["fingerprint"]),
+            "evaluated_at": row["evaluated_at"].isoformat(),
+            "unresolved_items": [
+                {
+                    "item_key": str(item["item_key"]),
+                    "state": str(item["state"]),
+                    "source_locator_ids": [str(value) for value in item["source_locator_ids"]],
+                    "authority_decision_refs": list(item["authority_decision_refs"]),
+                    "uncertainty_codes": list(item["uncertainty_codes"]),
+                    "blocker_codes": list(item["blocker_codes"]),
+                    "downstream_impacts": list(item["downstream_impacts"]),
+                }
+                for item in items
+            ],
+        }
+
+    @staticmethod
+    def _owner_action_requests_projection(
+        session: Session, scope: AuditScope, value: AuditReport
+    ) -> tuple[dict[str, Any], ...]:
+        rows = session.execute(
+            sa.text(
+                "SELECT request.action_request_id,request.version,request.action_code,"
+                "request.affected_object_ref,request.evidence_refs,request.deadline,"
+                "request.blocking_impacts,request.state FROM "
+                "workspace.audit_report_action_request_memberships membership JOIN "
+                "workspace.audit_action_request_versions request ON "
+                "request.organization_id=membership.organization_id AND "
+                "request.workspace_id=membership.workspace_id AND "
+                "request.action_request_id=membership.action_request_id AND "
+                "request.version=membership.action_request_version WHERE "
+                "membership.organization_id=:o AND membership.workspace_id=:w AND "
+                "membership.audit_report_id=:report AND "
+                "membership.audit_report_version=:report_version ORDER BY "
+                "request.action_code,request.action_request_id,request.version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "report": value.audit_report_id,
+                "report_version": value.version,
+            },
+        ).mappings()
+        return tuple(
+            {
+                "action_request_id": str(row["action_request_id"]),
+                "version": int(row["version"]),
+                "action_code": str(row["action_code"]),
+                "affected_object_ref": str(row["affected_object_ref"]),
+                "evidence_refs": list(row["evidence_refs"]),
+                "deadline": row["deadline"].isoformat() if row["deadline"] is not None else None,
+                "blocking_impacts": list(row["blocking_impacts"]),
+                "state": str(row["state"]),
+            }
+            for row in rows
+        )
 
     @staticmethod
     def _resolve_report_delta_version(

@@ -904,6 +904,57 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
     )
     assert action_memberships == [(action_request.action_request_id, 1)]
 
+    # The canonical service publishes immutable owner-read projections in the
+    # same transaction.  The Product Application role has scoped SELECT only;
+    # it cannot use this boundary to alter canonical Audit rows.
+    with postgres_environment.application_engine.connect() as connection:
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_projection_versions"))
+            == 0
+        )
+    with postgres_environment.application_engine.begin() as connection:
+        set_scope(connection, tenant)
+        projections = connection.execute(
+            sa.text(
+                "SELECT projection_kind,projection_payload->>'audience',"
+                "projection_payload->'report'->>'outcome' FROM "
+                "workspace.audit_projection_versions WHERE audit_report_id=:report "
+                "ORDER BY projection_kind"
+            ),
+            {"report": report.audit_report_id},
+        ).all()
+        assert projections == [
+            ("customer", "customer", AuditTerminalOutcome.BLOCKED.value),
+            ("pto", "pto", AuditTerminalOutcome.BLOCKED.value),
+        ]
+        pto_actions = connection.scalar(
+            sa.text(
+                "SELECT jsonb_array_length(projection_payload->'action_requests') "
+                "FROM workspace.audit_projection_versions WHERE audit_report_id=:report "
+                "AND projection_kind='pto'"
+            ),
+            {"report": report.audit_report_id},
+        )
+        assert pto_actions == 1
+        with pytest.raises(DBAPIError):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_projection_versions "
+                    "(organization_id,workspace_id,projection_id,version,audit_report_id,"
+                    "audit_report_version,projection_kind,source_fingerprint,projection_payload,"
+                    "projection_fingerprint,state,built_at) VALUES "
+                    "(:o,:w,:projection,1,:report,1,'customer',:digest,'{}'::jsonb,:digest,"
+                    "'current',CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "o": tenant.organization_id,
+                    "w": tenant.workspace_id,
+                    "projection": uuid7(),
+                    "report": report.audit_report_id,
+                    "digest": DIGEST,
+                },
+            )
+
     other = create_tenant(postgres_environment, tenant.organization_id)
     activate(postgres_environment, other)
     with pytest.raises(ValueError, match="not visible"):

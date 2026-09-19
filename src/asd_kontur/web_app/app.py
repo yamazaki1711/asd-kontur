@@ -71,6 +71,7 @@ from .schemas import (
     AssistantQuestionRequest,
     AssistantTurnView,
     AuditExpectedActualPreflightView,
+    AuditReportProjectionView,
     CapabilityStatusView,
     ConstructionConsultantAnswerView,
     ConstructionConsultantConversationCreate,
@@ -1123,6 +1124,22 @@ def _api_router() -> APIRouter:
                 "ETag": f'"{value.content_digest[7:]}"',
             },
         )
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/reports/latest",
+        response_model=AuditReportProjectionView,
+        tags=["audit-report"],
+    )
+    def latest_audit_report_projection(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AuditReportProjectionView:
+        value = _container(request).service.latest_audit_report_projection(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return AuditReportProjectionView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/restoration/recovery-plan",

@@ -253,6 +253,57 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("workspace_not_found")
         return UUID(str(organization_id))
 
+    def latest_audit_report_projection(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Return the two exact owner-readable projections of the latest report.
+
+        This method deliberately reads only the immutable projection boundary;
+        it does not expose canonical Audit tables or give the Product
+        Application role a way to mutate audit process state.
+        """
+
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT audit_report_id,audit_report_version,projection_kind,"
+                        "projection_payload,projection_fingerprint,built_at FROM "
+                        "workspace.audit_projection_versions WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND state='current' ORDER BY "
+                        "built_at DESC,projection_id DESC,version DESC"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .all()
+            )
+        if not rows:
+            return {
+                "status": "not_published",
+                "customer": None,
+                "pto": None,
+                "gaps": ["CANONICAL_AUDIT_REPORT_NOT_PUBLISHED"],
+            }
+        latest_report = rows[0]["audit_report_id"]
+        latest_version = int(rows[0]["audit_report_version"])
+        projections = {
+            str(row["projection_kind"]): _jsonable_row(row)
+            for row in rows
+            if row["audit_report_id"] == latest_report
+            and int(row["audit_report_version"]) == latest_version
+        }
+        return {
+            "status": "published" if {"customer", "pto"} <= set(projections) else "partial",
+            "customer": projections.get("customer"),
+            "pto": projections.get("pto"),
+            "gaps": []
+            if {"customer", "pto"} <= set(projections)
+            else ["CANONICAL_AUDIT_PROJECTION_INCOMPLETE"],
+        }
+
     def register_batch(
         self,
         *,

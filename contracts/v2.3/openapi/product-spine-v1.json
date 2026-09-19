@@ -387,6 +387,56 @@
         "title": "AuditExpectedActualPreflightView",
         "type": "object"
       },
+      "AuditReportProjectionView": {
+        "additionalProperties": false,
+        "properties": {
+          "customer": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "pto": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pto"
+          },
+          "status": {
+            "enum": [
+              "not_published",
+              "partial",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "AuditReportProjectionView",
+        "type": "object"
+      },
       "Body_upload_documents_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "files": {
@@ -4701,6 +4751,49 @@
         "summary": "Audit Expected Actual Preflight Export",
         "tags": [
           "audit-preflight"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest": {
+      "get": {
+        "operationId": "latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditReportProjectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Audit Report Projection",
+        "tags": [
+          "audit-report"
         ]
       }
     },

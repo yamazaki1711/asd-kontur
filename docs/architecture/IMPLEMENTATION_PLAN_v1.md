@@ -178,6 +178,21 @@ and the append-only write fence. The next canonical dependency is versioned
 request membership in a final Audit report, followed by a separately scoped
 owner-readable projection. OZERO is not needed for this acceptance.
 
+The next Audit increment is now implemented as an **owner-readable immutable
+report projection**. Finalizing a canonical Audit report publishes customer and
+PTO projections in the same Audit-service transaction, each bound to the exact
+report version, snapshot fingerprint, three delta versions, unresolved items,
+and versioned correction requests. The Product Application role receives only
+scoped `SELECT` on this immutable projection boundary; it receives no Audit
+ledger write privilege. The Russian Audit UI shows either the published report
+or the truthful absence of a canonical report, without relabelling the package
+preflight as an independent audit. Controlled PostgreSQL acceptance verifies
+atomic publication, default-deny/scoped visibility, and application-write
+rejection; the generated OpenAPI and frontend build verify the application
+surface. OZERO is not used. Deployment remains a separate operation because
+the live OZERO-compatible database is at an earlier migration head and has no
+configured canonical Audit-service runtime.
+
 Final Audit reports now bind exact immutable ActionRequest versions through a
 separate membership table. Unknown, cross-process, or duplicate request
 versions are rejected before finalisation; reclassification is required after
