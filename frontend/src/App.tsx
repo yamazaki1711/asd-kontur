@@ -39,6 +39,8 @@ type SupportProduction = components["schemas"]["SupportProductionView"];
 type AuditExpectedActualPreflight =
   components["schemas"]["AuditExpectedActualPreflightView"];
 type AuditReportProjection = components["schemas"]["AuditReportProjectionView"];
+type TenderContractAnalysis =
+  components["schemas"]["TenderContractAnalysisView"];
 type AuditPreflightItem = {
   item_key: string;
   work_package_id: string;
@@ -221,6 +223,10 @@ export function App() {
           <Route
             path="/modes/:mode/workspaces/:workspaceId/project-understanding"
             element={<ProjectUnderstandingPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/tender-contract-analysis"
+            element={<TenderContractAnalysisPage />}
           />
           <Route
             path="/modes/:mode/workspaces/:workspaceId/support-id"
@@ -463,6 +469,12 @@ function ApplicationShell() {
             label="Работы и требования"
           />
           <NavItem to={`${workspaceBase}/result`} label="Результат режима" />
+          {mode === "Tender" && (
+            <NavItem
+              to={`${workspaceBase}/tender-contract-analysis`}
+              label="Договорный анализ"
+            />
+          )}
           {mode === "Support" && (
             <NavItem
               to={`${workspaceBase}/support-id`}
@@ -2426,6 +2438,182 @@ function AuditReportProjectionPage() {
         )}
       </QueryState>
     </Page>
+  );
+}
+
+function TenderContractAnalysisPage() {
+  const { workspaceId = "" } = useParams();
+  const analysis = useQuery({
+    queryKey: ["tender-contract-analysis", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/tender/contract-analysis",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    retry: false,
+  });
+  return (
+    <Page
+      title="Договорный анализ"
+      lead="Проверяемая проекция договорных оснований, рисков и подготовленных результатов Tender-процесса."
+    >
+      <QueryState query={analysis}>
+        {(value) => (
+          <TenderContractAnalysisBody value={value} workspaceId={workspaceId} />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function TenderContractAnalysisBody({
+  value,
+  workspaceId,
+}: {
+  value: TenderContractAnalysis;
+  workspaceId: string;
+}) {
+  const clauses = value.clauses as Array<Record<string, unknown>>;
+  const issues = value.issues as Array<Record<string, unknown>>;
+  const deliverables = value.deliverables as Array<Record<string, unknown>>;
+  if (value.status === "not_started") {
+    return (
+      <InfoNotice>
+        Договорный Tender-процесс ещё не был сформирован. Это не означает, что
+        договор проверен и риски отсутствуют. Для запуска нужны доступные
+        договорные исходные данные и установленный процесс Tender-службы.
+        <GapList gaps={value.gaps} />
+      </InfoNotice>
+    );
+  }
+  const assessment = (value.assessment ?? {}) as Record<string, unknown>;
+  return (
+    <>
+      <InfoNotice>
+        Это просмотр канонических записей Tender-процесса. Он не создаёт
+        юридическое заключение, не меняет исходный договор и не заменяет
+        квалифицированное рассмотрение.
+      </InfoNotice>
+      <section className="metrics" aria-label="Состояние договорного анализа">
+        <Metric label="Положений" value={clauses.length} />
+        <Metric label="Вопросов и рисков" value={issues.length} />
+        <Metric label="Результатов" value={deliverables.length} />
+      </section>
+      <section className="panel">
+        <h2>Состояние и исходные данные</h2>
+        <p>Статус: {humanizeStatus(value.status)}</p>
+        {value.assessment ? (
+          <dl>
+            <dt>Доступные классы источников</dt>
+            <dd>{displayValues(assessment.available_source_classes) || "—"}</dd>
+            <dt>Отсутствующие классы источников</dt>
+            <dd>{displayValues(assessment.missing_source_classes) || "—"}</dd>
+          </dl>
+        ) : null}
+        <GapList gaps={value.gaps} />
+      </section>
+      <section className="panel">
+        <h2>Положения с источниками</h2>
+        {clauses.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ключ</th>
+                  <th>Основание</th>
+                  <th>Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clauses.map((clause) => {
+                  const locator = displayValue(clause.source_locator_id, "");
+                  return (
+                    <tr key={String(clause.clause_id)}>
+                      <td>{displayValue(clause.clause_key, "—")}</td>
+                      <td>
+                        {displayValue(clause.authority_layer, "—")}
+                        <small>{displayValue(clause.locator_label, "")}</small>
+                      </td>
+                      <td>
+                        {locator ? (
+                          <Link
+                            to={workspaceRoute(
+                              "Tender",
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            Открыть фрагмент
+                          </Link>
+                        ) : (
+                          "Источник не привязан"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Положения договора ещё не извлечены в канонический процесс.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Вопросы, риски и необходимые действия</h2>
+        {issues.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Вид</th>
+                  <th>Предмет</th>
+                  <th>Применимость</th>
+                  <th>Рекомендация и последствие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {issues.map((issue) => (
+                  <tr key={String(issue.issue_id)}>
+                    <td>
+                      {humanizeStatus(displayValue(issue.issue_kind, "—"))}
+                    </td>
+                    <td>{displayValue(issue.subject, "—")}</td>
+                    <td>
+                      {humanizeStatus(displayValue(issue.applicability, "—"))}
+                    </td>
+                    <td>
+                      {displayValue(
+                        issue.recommendation_text,
+                        "Требуется уточнение",
+                      )}
+                      <small>{displayValue(issue.consequence_code, "")}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Канонические вопросы и риски ещё не зарегистрированы.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Подготовленные результаты</h2>
+        {deliverables.length ? (
+          <GapList
+            gaps={deliverables.map((item) =>
+              displayValue(item.deliverable_kind, "TENDER_DELIVERABLE"),
+            )}
+            good
+          />
+        ) : (
+          <p>Результаты Tender-процесса ещё не подготовлены.</p>
+        )}
+      </section>
+    </>
   );
 }
 
@@ -5717,6 +5905,12 @@ function displayValue(value: unknown, fallback = "") {
     return String(value);
   }
   return JSON.stringify(value);
+}
+
+function displayValues(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => displayValue(item)).join(", ")
+    : "";
 }
 
 function pilotItemStatus(item: Record<string, unknown>) {

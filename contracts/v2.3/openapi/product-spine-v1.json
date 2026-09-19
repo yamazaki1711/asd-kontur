@@ -3197,6 +3197,86 @@
         "title": "SupportProductionView",
         "type": "object"
       },
+      "TenderContractAnalysisView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment"
+          },
+          "authority_boundary": {
+            "title": "Authority Boundary",
+            "type": "string"
+          },
+          "clauses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Clauses",
+            "type": "array"
+          },
+          "deliverables": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Deliverables",
+            "type": "array"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "process": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "process",
+          "assessment",
+          "clauses",
+          "issues",
+          "deliverables",
+          "gaps",
+          "authority_boundary"
+        ],
+        "title": "TenderContractAnalysisView",
+        "type": "object"
+      },
       "TrialReadinessRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4809,6 +4889,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv": {
+      "get": {
+        "operationId": "audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Report Projection Export",
+        "tags": [
+          "audit-report"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_workspaces__workspace_id__documents_get",
@@ -6405,6 +6526,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-facility-work-observations.csv": {
+      "get": {
+        "operationId": "tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Facility Scope Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
       "get": {
         "operationId": "tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get",
@@ -6521,6 +6683,47 @@
           }
         },
         "summary": "Tender Scope Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-structure-identity-candidates.csv": {
+      "get": {
+        "operationId": "tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Structure Identity Schedule",
         "tags": [
           "project-understanding"
         ]
@@ -7229,6 +7432,49 @@
         "summary": "Support Production",
         "tags": [
           "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
+      "get": {
+        "operationId": "tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenderContractAnalysisView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Contract Analysis",
+        "tags": [
+          "tender"
         ]
       }
     }

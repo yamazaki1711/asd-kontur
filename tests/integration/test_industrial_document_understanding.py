@@ -84,15 +84,77 @@ def _vor_csv() -> bytes:
     ).encode()
 
 
-def _login(client: TestClient) -> dict[str, str]:
+def _login(
+    client: TestClient,
+    *,
+    username: str = "understanding-owner",
+    password: str = "Synthetic-Owner-Password-42!",
+) -> dict[str, str]:
     response = client.post(
         "/api/v1/session/login",
-        json={"username": "understanding-owner", "password": "Synthetic-Owner-Password-42!"},
+        json={"username": username, "password": password},
     )
     assert response.status_code == 200
     csrf = client.cookies.get("asd_csrf")
     assert csrf
     return {"X-CSRF-Token": csrf}
+
+
+def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The Tender surface must not fabricate a contract review or cross scopes."""
+
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-owner",
+        password="Synthetic-Contract-Owner-Password-42!",
+        display_name="Synthetic contract-analysis owner",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-other",
+        password="Synthetic-Contract-Other-Password-42!",
+        display_name="Synthetic contract-analysis other owner",
+    )
+    with TestClient(app) as owner, TestClient(app) as other:
+        owner_csrf = _login(
+            owner,
+            username="contract-analysis-owner",
+            password="Synthetic-Contract-Owner-Password-42!",
+        )
+        other_csrf = _login(
+            other,
+            username="contract-analysis-other",
+            password="Synthetic-Contract-Other-Password-42!",
+        )
+        workspace = owner.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Contract analysis scope"},
+            headers=owner_csrf,
+        )
+        assert workspace.status_code == 201, workspace.text
+        workspace_id = workspace.json()["workspace_id"]
+
+        response = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert response.status_code == 200, response.text
+        value = response.json()
+        assert value == {
+            "status": "not_started",
+            "process": None,
+            "assessment": None,
+            "clauses": [],
+            "issues": [],
+            "deliverables": [],
+            "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
+            "authority_boundary": "read_only_projection",
+        }
+
+        hidden = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert hidden.status_code == 404, hidden.text
+        assert hidden.json()["error"]["code"] == "workspace_not_found"
+        assert other_csrf["X-CSRF-Token"]
 
 
 def test_browser_to_evidence_project_understanding_is_workspace_scoped(

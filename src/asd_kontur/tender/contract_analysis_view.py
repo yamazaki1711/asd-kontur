@@ -11,6 +11,14 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 
+class TenderContractAnalysisError(RuntimeError):
+    """A scoped Tender projection could not be read."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
 class TenderContractAnalysisRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -107,7 +115,7 @@ class TenderContractAnalysisRepository:
                 {"owner": owner_identity_id, "workspace": workspace_id},
             )
         if value is None:
-            raise ValueError("workspace_not_found")
+            raise TenderContractAnalysisError("workspace_not_found")
         return UUID(str(value))
 
 

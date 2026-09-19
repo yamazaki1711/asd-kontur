@@ -433,6 +433,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Report Projection Export */
+        get: operations["audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents": {
         parameters: {
             query?: never;
@@ -826,6 +843,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-facility-work-observations.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Facility Scope Schedule */
+        get: operations["tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
         parameters: {
             query?: never;
@@ -869,6 +903,23 @@ export interface paths {
         };
         /** Tender Scope Schedule */
         get: operations["tender_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_scope_schedule_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-structure-identity-candidates.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Structure Identity Schedule */
+        get: operations["tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1073,6 +1124,23 @@ export interface paths {
         };
         /** Support Production */
         get: operations["support_production_api_v1_workspaces__workspace_id__support_id_production_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract Analysis */
+        get: operations["tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2363,6 +2431,35 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** TenderContractAnalysisView */
+        TenderContractAnalysisView: {
+            /** Assessment */
+            assessment: {
+                [key: string]: unknown;
+            } | null;
+            /** Authority Boundary */
+            authority_boundary: string;
+            /** Clauses */
+            clauses: {
+                [key: string]: unknown;
+            }[];
+            /** Deliverables */
+            deliverables: {
+                [key: string]: unknown;
+            }[];
+            /** Gaps */
+            gaps: string[];
+            /** Issues */
+            issues: {
+                [key: string]: unknown;
+            }[];
+            /** Process */
+            process: {
+                [key: string]: unknown;
+            } | null;
+            /** Status */
+            status: string;
+        };
         /** TrialReadinessRequest */
         TrialReadinessRequest: {
             /** Criteria */
@@ -3349,6 +3446,37 @@ export interface operations {
             };
         };
     };
+    audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_documents_api_v1_workspaces__workspace_id__documents_get: {
         parameters: {
             query?: {
@@ -4207,6 +4335,37 @@ export interface operations {
             };
         };
     };
+    tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get: {
         parameters: {
             query?: never;
@@ -4270,6 +4429,37 @@ export interface operations {
         };
     };
     tender_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_scope_schedule_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4691,6 +4881,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportProductionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenderContractAnalysisView"];
                 };
             };
             /** @description Validation Error */

@@ -55,6 +55,7 @@ from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewActi
 from asd_kontur.pilot.postgres import PilotResultError
 from asd_kontur.restoration import RestorationRecoveryError
 from asd_kontur.support.production_postgres import SupportProductionError
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -246,6 +247,13 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(SupportProductionError)
     async def support_production_error(
         request: Request, exc: SupportProductionError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(TenderContractAnalysisError)
+    async def tender_contract_analysis_error(
+        request: Request, exc: TenderContractAnalysisError
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)

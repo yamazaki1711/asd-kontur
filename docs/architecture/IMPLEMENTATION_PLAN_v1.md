@@ -107,6 +107,18 @@ This is an operational/authority dependency, not an OZERO-processing blocker.
   OZERO is not used. Browser E2E remains an explicit separate check because
   no authenticated browser binding is available in this session.
 
+* Tender now exposes a read-only Russian application view of the canonical
+  contract-analysis process: its corpus assessment, extracted clause records
+  with exact locator navigation, registered issues and typed deliverables.  An
+  absent process is presented as `not started`, not as a successful review or
+  a finding that no risks exist.  The view cannot write clauses, issues,
+  professional grants or legal conclusions; those remain in the separately
+  authorised Tender-service flow.  Disposable PostgreSQL application-boundary
+  acceptance proves the owner can read the honest empty state and another
+  owner receives no workspace data.  OZERO is not used: this capability is
+  exercised through controlled scoped data and can later project an authorised
+  OZERO Tender process without a project-specific branch.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,
