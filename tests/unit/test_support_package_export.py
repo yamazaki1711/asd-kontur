@@ -4,6 +4,7 @@ import csv
 import io
 import zipfile
 
+from asd_kontur.support.generation import validate_docx
 from asd_kontur.support.package_export import build_editable_id_package_archive
 
 
@@ -50,11 +51,19 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
 
     with zipfile.ZipFile(io.BytesIO(archive)) as exported:
         assert exported.namelist() == [
+            "01_register_candidate.docx",
             "01_register.csv",
-            "00_package_status.txt",
             "02_support.aosr_candidate.docx",
+            "98_package_status.txt",
             "99_missing_or_blocked_items.csv",
         ]
+        register = exported.read("01_register_candidate.docx")
+        with zipfile.ZipFile(io.BytesIO(register)) as document:
+            assert "word/document.xml" in document.namelist()
+            content = document.read("word/document.xml").decode("utf-8")
+        assert "Реестр исполнительной документации (кандидат)" in content
+        assert "support.aosr" in content
+        assert validate_docx(register, required_fields=()).valid
         rows = list(
             csv.DictReader(
                 io.StringIO(exported.read("99_missing_or_blocked_items.csv").decode("utf-8-sig"))

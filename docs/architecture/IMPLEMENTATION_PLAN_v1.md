@@ -45,6 +45,14 @@ the API/worker/assistant release `adfc495`:
   its register is the first entry, available generated/finalized documents are
   included, and missing/blocked positions are an explicit separate schedule.
 
+The next compatible Support delivery replaces the CSV-only first register
+projection with a Russian editable DOCX register candidate as the first archive
+document, retaining the CSV as a tabular projection and the missing-items
+schedule as a separate truthful boundary. It is tested from controlled package
+data with a valid OOXML structure and a persisted application export. It does
+not claim official register-template authority, completed field records, or
+visual renderer qualification; OZERO is not required for this change.
+
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,
 generated/missing documents, persistence, authorization scope, and ZIP

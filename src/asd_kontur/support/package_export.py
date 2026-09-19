@@ -1,3 +1,4 @@
+# ruff: noqa: E501, RUF001
 """Deterministic, editable export of a formed ID package.
 
 The archive is intentionally a delivery candidate: it contains the current
@@ -14,6 +15,7 @@ import re
 import zipfile
 from collections.abc import Callable, Iterable, Mapping
 from typing import Any
+from xml.sax.saxutils import escape
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
@@ -31,8 +33,12 @@ def build_editable_id_package_archive(
     members = sorted((dict(item) for item in memberships), key=lambda item: int(item["ordinal"]))
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
+        # The register is an editable document and intentionally occupies the
+        # first position in the archive.  The CSV is retained as a convenient
+        # tabular import/export projection; it is not the package register's
+        # only representation.
+        _write(archive, "01_register_candidate.docx", _register_docx(package, register_manifest))
         _write(archive, "01_register.csv", _register_csv(register_manifest))
-        _write(archive, "00_package_status.txt", _status_text(package, members))
         missing: list[dict[str, str]] = []
         for member in members:
             if str(member.get("role")) == "register":
@@ -54,6 +60,7 @@ def build_editable_id_package_archive(
             suffix = "finalized" if member.get("finalized_document_id") else "candidate"
             name = f"{int(member['ordinal']):02d}_{role}_{suffix}.{extension}"
             _write(archive, name, read_object(str(object_key)))
+        _write(archive, "98_package_status.txt", _status_text(package, members))
         _write(archive, "99_missing_or_blocked_items.csv", _missing_csv(missing))
     return output.getvalue()
 
@@ -77,6 +84,110 @@ def _register_csv(manifest: Mapping[str, Any]) -> bytes:
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
+def _register_docx(package: Mapping[str, Any], manifest: Mapping[str, Any]) -> bytes:
+    """Render the package register as an editable DOCX candidate.
+
+    It deliberately records only the package manifest: roles, states, copies,
+    and provenance references.  It does not manufacture dates, signatures, or
+    field measurements when the package is incomplete.
+    """
+
+    rows = [
+        ("№", "Документ", "Состояние", "Экземпляры", "Основание"),
+        *(
+            (
+                str(item.get("ordinal", "")),
+                str(item.get("role", "")),
+                str(item.get("state", "")),
+                str(item.get("copies", "")),
+                "; ".join(str(value) for value in item.get("evidence_refs", [])),
+            )
+            for item in manifest.get("documents", [])
+            if isinstance(item, Mapping)
+        ),
+    ]
+    table = "<w:tbl>" + "".join(_docx_row(row) for row in rows) + "</w:tbl>"
+    package_id = escape(str(package.get("id_package_id", "")))
+    package_version = escape(str(package.get("version", "")))
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>"
+        '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>'
+        "Реестр исполнительной документации (кандидат)</w:t></w:r></w:p>"
+        '<w:p><w:r><w:t xml:space="preserve">'
+        f"Комплект: {package_id}; версия: {package_version}</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>Этот редактируемый реестр является кандидатом, связанным с доказательствами. "
+        "Он не подтверждает выполнение работ, подписи или фактические измерения.</w:t></w:r></w:p>"
+        f"{table}"
+        '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+        '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>'
+        "</w:sectPr></w:body></w:document>"
+    ).encode()
+    styles = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        b'<w:style w:type="paragraph" w:default="1" w:styleId="Normal">'
+        b'<w:name w:val="Normal"/></w:style>'
+        b'<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/>'
+        b'<w:basedOn w:val="Normal"/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr>'
+        b"</w:style></w:styles>"
+    )
+    return _docx_package(document, styles)
+
+
+def _docx_row(values: tuple[str, str, str, str, str]) -> str:
+    cells = "".join(
+        '<w:tc><w:tcPr><w:tcW w:w="2000" w:type="dxa"/></w:tcPr>'
+        f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
+        for value in values
+    )
+    return f"<w:tr>{cells}</w:tr>"
+
+
+def _docx_package(document: bytes, styles: bytes) -> bytes:
+    content_types = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        b'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        b'<Default Extension="xml" ContentType="application/xml"/>'
+        b'<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        b'<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+        b'<Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>'
+        b"</Types>"
+    )
+    root_rels = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        b"</Relationships>"
+    )
+    document_rels = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>'
+        b"</Relationships>"
+    )
+    settings = (
+        b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        b'<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        b"<w:compat/></w:settings>"
+    )
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as archive:
+        for name, payload in (
+            ("[Content_Types].xml", content_types),
+            ("_rels/.rels", root_rels),
+            ("word/document.xml", document),
+            ("word/styles.xml", styles),
+            ("word/settings.xml", settings),
+            ("word/_rels/document.xml.rels", document_rels),
+        ):
+            _write(archive, name, payload)
+    return output.getvalue()
+
+
 def _missing_csv(rows: Iterable[Mapping[str, str]]) -> bytes:
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=("ordinal", "role", "state", "blockers"))
@@ -89,12 +200,12 @@ def _status_text(package: Mapping[str, Any], members: Iterable[Mapping[str, Any]
     finalized = sum(1 for item in members if item.get("finalized_document_id"))
     generated = sum(1 for item in members if item.get("generated_candidate_id"))
     lines = (
-        f"Package ID: {package.get('id_package_id', '')}",
-        f"Version: {package.get('version', '')}",
-        "Authority: current package is an evidence-bound delivery candidate.",
-        f"Generated candidates: {generated}",
-        f"Finalized documents: {finalized}",
-        "Missing or blocked requirements are listed in 99_missing_or_blocked_items.csv.",
+        f"Идентификатор комплекта: {package.get('id_package_id', '')}",
+        f"Версия: {package.get('version', '')}",
+        "Статус: текущий комплект является кандидатом, связанным с доказательствами.",
+        f"Подготовлено кандидатов: {generated}",
+        f"Финализировано документов: {finalized}",
+        "Отсутствующие и заблокированные позиции перечислены в 99_missing_or_blocked_items.csv.",
     )
     return ("\n".join(lines) + "\n").encode("utf-8")
 

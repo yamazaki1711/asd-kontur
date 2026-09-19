@@ -279,7 +279,11 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert package_export.status_code == 200, package_export.text
         assert package_export.headers["content-type"] == "application/zip"
         with zipfile.ZipFile(io.BytesIO(package_export.content)) as exported:
-            assert exported.namelist()[0] == "01_register.csv"
+            assert exported.namelist()[0] == "01_register_candidate.docx"
+            with zipfile.ZipFile(
+                io.BytesIO(exported.read("01_register_candidate.docx"))
+            ) as register:
+                assert "word/document.xml" in register.namelist()
             assert "99_missing_or_blocked_items.csv" in exported.namelist()
             assert any(name.endswith("_candidate.docx") for name in exported.namelist())
         content = client.get(
