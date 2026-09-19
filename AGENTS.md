@@ -6,6 +6,15 @@ and the current [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v1.m
 
 - Build the whole object-independent product: four modes and three permanent
   results. The Qwen domain/knowledge harness is necessary, not sufficient.
+- Treat any real workspace, including OZERO, as a validation corpus rather
+  than the product boundary. Prioritise reusable capabilities with a visible
+  application output; establish their behaviour first on controlled inputs,
+  then record exactly which subset a real corpus validates. A blocked corpus
+  check never blocks independently testable Tender, Support, Audit, or
+  Restoration work.
+- Analytical reports and editable ID packages are product outputs. Evidence,
+  provenance, processing receipts, and candidate status support those outputs;
+  they must not require routine manual confirmation of every observation.
 - UI, Application, Industrial Intake, Output, Field and Operations are
   first-class product planes. Foundation/tests are not capability readiness.
 - Do not propose a real OKS before an accepted `TrialReadinessDecision`.

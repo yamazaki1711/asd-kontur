@@ -437,6 +437,9 @@ class RestorationRecoveryPlanView(ApiModel):
     blocked_actions: list[dict[str, Any]]
     global_blockers: list[str]
     authority_boundary: str
+    snapshot: dict[str, Any] | None = None
+    snapshot_is_current: bool | None = None
+    snapshot_duplicate: bool | None = None
 
 
 class FormIdPackageRequest(ApiModel):

@@ -2867,6 +2867,40 @@
             "title": "Recoverable Actions",
             "type": "array"
           },
+          "snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "snapshot_duplicate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Duplicate"
+          },
+          "snapshot_is_current": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Is Current"
+          },
           "status": {
             "enum": [
               "partial",
@@ -6425,6 +6459,65 @@
           }
         },
         "summary": "Restoration Recovery Plan Export",
+        "tags": [
+          "restoration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans": {
+      "post": {
+        "operationId": "capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorationRecoveryPlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture Restoration Recovery Plan",
         "tags": [
           "restoration"
         ]

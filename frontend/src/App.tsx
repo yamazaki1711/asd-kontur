@@ -2484,6 +2484,7 @@ function AuditExpectedActualPreflightBody({
 
 function RestorationRecoveryPlanPage() {
   const { workspaceId = "" } = useParams();
+  const queryClient = useQueryClient();
   const plan = useQuery({
     queryKey: ["restoration-recovery-plan", workspaceId],
     queryFn: async () => {
@@ -2492,6 +2493,20 @@ function RestorationRecoveryPlanPage() {
         { params: { path: { workspace_id: workspaceId } } },
       );
       return requireData(data, error);
+    },
+  });
+  const capture = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["restoration-recovery-plan", workspaceId],
+      });
     },
   });
   return (
@@ -2504,6 +2519,9 @@ function RestorationRecoveryPlanPage() {
           <RestorationRecoveryPlanBody
             value={value}
             workspaceId={workspaceId}
+            capture={() => capture.mutate()}
+            capturePending={capture.isPending}
+            captureError={capture.error}
           />
         )}
       </QueryState>
@@ -2514,9 +2532,15 @@ function RestorationRecoveryPlanPage() {
 function RestorationRecoveryPlanBody({
   value,
   workspaceId,
+  capture,
+  capturePending,
+  captureError,
 }: {
   value: RestorationRecoveryPlan;
   workspaceId: string;
+  capture: () => void;
+  capturePending: boolean;
+  captureError: unknown;
 }) {
   const recoverable = value.recoverable_actions as unknown as Array<
     Record<string, unknown>
@@ -2541,6 +2565,31 @@ function RestorationRecoveryPlanBody({
       >
         Скачать редактируемый план восстановления
       </a>
+      <button
+        type="button"
+        className="button-link secondary"
+        onClick={capture}
+        disabled={capturePending}
+      >
+        {capturePending
+          ? "Фиксация плана…"
+          : "Зафиксировать план восстановления"}
+      </button>
+      {value.snapshot ? (
+        <InfoNotice>
+          Зафиксирована версия {String(value.snapshot.version)} плана.
+          {value.snapshot_is_current
+            ? " Она соответствует текущим основаниям."
+            : " Она относится к прежнему состоянию оснований; текущий план можно зафиксировать новой версией."}{" "}
+          Фиксация не изменяет исходные документы или факты.
+        </InfoNotice>
+      ) : (
+        <InfoNotice>
+          Текущий план ещё не зафиксирован. Фиксация создаёт воспроизводимую
+          версию оценки без создания недостающих документов.
+        </InfoNotice>
+      )}
+      {captureError ? <ErrorNotice error={captureError} /> : null}
       <RecoveryActionTable
         title="Действия с доступными основаниями"
         items={recoverable}

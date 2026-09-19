@@ -146,6 +146,20 @@ blockers, and marks every row as fabrication-prohibited. Controlled plan data
 and the authenticated PostgreSQL-backed Support/Audit/Restoration application
 flow verify the export; OZERO is not used.
 
+Restoration now also persists a **versioned recovery-assessment snapshot**.
+The user can explicitly fix the current expected-versus-package basis, ordered
+recoverable actions, blockers, evidence references and non-fabrication boundary
+through the application. The snapshot is append-only, RLS-scoped, idempotent
+for identical plan content, and shown as current or stale against the live
+preflight; it never changes an uploaded source, field fact, package membership,
+date, measurement, test record, or signature. A controlled PostgreSQL flow
+forms a scope-bound package, captures version 1, proves replay idempotency,
+then changes the supported package state and captures version 2. The UI/API
+and editable CSV expose the recovery plan; OZERO is not needed. This advances
+the reusable Restoration recovery process, but **does not yet regenerate a
+document**: the next ID-production dependency is a separately declared,
+qualified form whose every material field is evidence-bound.
+
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,
 generated/missing documents, persistence, authorization scope, and ZIP

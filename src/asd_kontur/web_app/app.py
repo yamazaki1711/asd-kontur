@@ -53,6 +53,7 @@ from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
 from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewAction
 from asd_kontur.pilot.postgres import PilotResultError
+from asd_kontur.restoration import RestorationRecoveryError
 from asd_kontur.support.production_postgres import SupportProductionError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
@@ -243,6 +244,13 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(SupportProductionError)
     async def support_production_error(
         request: Request, exc: SupportProductionError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(RestorationRecoveryError)
+    async def restoration_recovery_error(
+        request: Request, exc: RestorationRecoveryError
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
@@ -1127,6 +1135,23 @@ def _api_router() -> APIRouter:
         principal: Annotated[SessionPrincipal, Depends(_principal)],
     ) -> RestorationRecoveryPlanView:
         value = _container(request).service.restoration_recovery_plan(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return RestorationRecoveryPlanView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/restoration/recovery-plans",
+        response_model=RestorationRecoveryPlanView,
+        status_code=201,
+        tags=["restoration"],
+    )
+    def capture_restoration_recovery_plan(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> RestorationRecoveryPlanView:
+        value = _container(request).service.capture_restoration_recovery_plan(
             owner_identity_id=principal.owner_identity_id,
             workspace_id=workspace_id,
         )

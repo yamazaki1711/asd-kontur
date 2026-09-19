@@ -877,6 +877,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capture Restoration Recovery Plan */
+        post: operations["capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
         parameters: {
             query?: never;
@@ -2182,6 +2199,14 @@ export interface components {
             recoverable_actions: {
                 [key: string]: unknown;
             }[];
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Snapshot Duplicate */
+            snapshot_duplicate?: boolean | null;
+            /** Snapshot Is Current */
+            snapshot_is_current?: boolean | null;
             /**
              * Status
              * @enum {string}
@@ -4206,6 +4231,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorationRecoveryPlanView"];
                 };
             };
             /** @description Validation Error */

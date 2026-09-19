@@ -34,6 +34,7 @@ from asd_kontur.kernel import (
 )
 from asd_kontur.lifecycle import StorageAdapterDefinition
 from asd_kontur.lifecycle.postgres import PostgresWorkspaceStorageAdapter
+from asd_kontur.restoration import RestorationRecoveryError, RestorationRecoveryRepository
 from asd_kontur.support.production_postgres import (
     SupportProductionError,
     SupportProductionRepository,
@@ -296,6 +297,29 @@ def test_support_production_package_generation_and_workspace_isolation(
         plan = recovery_plan.json()
         assert plan["plan_kind"] == "id_package_recovery_plan"
         assert all(item["fabrication_prohibited"] for item in plan["blocked_actions"])
+        assert plan["snapshot"] is None
+        csrf = {"X-CSRF-Token": str(client.cookies.get("asd_csrf"))}
+        captured_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers=csrf,
+        )
+        assert captured_plan.status_code == 201, captured_plan.text
+        captured = captured_plan.json()
+        assert captured["snapshot"]["version"] == 1
+        assert captured["snapshot_is_current"] is True
+        assert captured["snapshot_duplicate"] is False
+        replayed_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers=csrf,
+        )
+        assert replayed_plan.status_code == 201, replayed_plan.text
+        assert replayed_plan.json()["snapshot"]["version"] == 1
+        assert replayed_plan.json()["snapshot_duplicate"] is True
+        current_plan = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan"
+        )
+        assert current_plan.status_code == 200, current_plan.text
+        assert current_plan.json()["snapshot_is_current"] is True
         recovery_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan.csv"
         )
@@ -465,6 +489,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert finalized_content.status_code == 206, finalized_content.json()
         assert finalized_content.headers["content-type"] == "application/pdf"
         assert finalized_content.content.startswith(b"%PDF")
+        updated_recovery_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers={"X-CSRF-Token": str(client.cookies.get("asd_csrf"))},
+        )
+        assert updated_recovery_plan.status_code == 201, updated_recovery_plan.text
+        assert updated_recovery_plan.json()["snapshot"]["version"] == 2
+        assert updated_recovery_plan.json()["snapshot_duplicate"] is False
 
     another = create_tenant(postgres_environment)
     try:
@@ -473,6 +504,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert exc.code == "workspace_not_found"
     else:
         raise AssertionError("cross-organization package access was not denied")
+    recovery = RestorationRecoveryRepository(postgres_environment.application_engine)
+    try:
+        recovery.latest(owner_identity_id=owner, workspace_id=another.workspace_id)
+    except RestorationRecoveryError as exc:
+        assert exc.code == "workspace_not_found"
+    else:
+        raise AssertionError("cross-organization recovery plan access was not denied")
 
     if os.environ.get("ASD_SUPPORT_PRODUCTION_PRESERVE_WORKSPACE") == "1":
         return

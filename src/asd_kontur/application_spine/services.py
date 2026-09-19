@@ -23,7 +23,11 @@ from asd_kontur.pilot import (
 )
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
-from asd_kontur.restoration import build_recovery_plan, render_recovery_plan_csv
+from asd_kontur.restoration import (
+    RestorationRecoveryRepository,
+    build_recovery_plan,
+    render_recovery_plan_csv,
+)
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
@@ -118,6 +122,7 @@ class ProductSpineService:
         self._object_store = object_store
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
+        self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
             repository,
             object_store,
@@ -774,7 +779,38 @@ class ProductSpineService:
         preflight = self.audit_expected_actual_preflight(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
-        return build_recovery_plan(preflight)
+        plan = build_recovery_plan(preflight)
+        snapshot = self._restoration_recovery.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return {
+            **plan,
+            "snapshot": snapshot,
+            "snapshot_is_current": (
+                None if snapshot is None else snapshot["plan_fingerprint"] == semantic_digest(plan)
+            ),
+        }
+
+    def capture_restoration_recovery_plan(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Persist the exact current recovery assessment without changing evidence."""
+
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        plan = build_recovery_plan(preflight)
+        snapshot = self._restoration_recovery.capture(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            plan=plan,
+        )
+        return {
+            **plan,
+            "snapshot": snapshot,
+            "snapshot_is_current": True,
+            "snapshot_duplicate": bool(snapshot["duplicate"]),
+        }
 
     def restoration_recovery_plan_export(
         self, *, owner_identity_id: str, workspace_id: UUID
