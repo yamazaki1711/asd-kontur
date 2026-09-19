@@ -3849,6 +3849,12 @@ function ProjectUnderstandingPage() {
               {section === "gaps" && (
                 <section className="panel">
                   <h2>Расхождения и пробелы</h2>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
+                  >
+                    Скачать редактируемый график наблюдений
+                  </a>
                   {value.defects.length ? (
                     <TenderFindingList
                       defects={value.defects}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, BinaryIO
@@ -21,6 +22,7 @@ from asd_kontur.pilot import (
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 
 from .config import SpineSettings
 from .models import (
@@ -544,6 +546,33 @@ class ProductSpineService:
         return self._repository.project_understanding_view(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+        )
+
+    def tender_findings_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate finding schedule for the current model."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_findings_csv(
+            view.get("defects", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-findings-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
         )
 
     def start_project_understanding(
