@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from asd_kontur.restoration import build_recovery_plan
+import csv
+from io import StringIO
+
+from asd_kontur.restoration import build_recovery_plan, render_recovery_plan_csv
 
 
 def test_recovery_plan_keeps_missing_evidence_blocked_and_candidates_reviewable() -> None:
@@ -41,3 +44,36 @@ def test_recovery_plan_keeps_missing_evidence_blocked_and_candidates_reviewable(
     assert plan["blocked_actions"][0]["action"] == "collect_missing_source_evidence"
     assert "actual document" in plan["blocked_actions"][0]["required_input"]
     assert plan["blocked_actions"][0]["fabrication_prohibited"] is True
+
+
+def test_recovery_plan_export_keeps_blocked_records_and_fabrication_boundary() -> None:
+    content = render_recovery_plan_csv(
+        {
+            "status": "partial",
+            "global_blockers": ["ID_PACKAGE_NOT_COMPLETE"],
+            "recoverable_actions": [
+                {
+                    "item_key": "candidate-a",
+                    "action": "review_candidate_against_available_evidence",
+                    "fabrication_prohibited": True,
+                }
+            ],
+            "blocked_actions": [
+                {
+                    "item_key": "missing-a",
+                    "action": "collect_missing_source_evidence",
+                    "required_input": "actual test record",
+                    "fabrication_prohibited": True,
+                }
+            ],
+        }
+    )
+
+    rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert [(row["disposition"], row["item_key"]) for row in rows] == [
+        ("recoverable", "candidate-a"),
+        ("blocked", "missing-a"),
+    ]
+    assert rows[1]["required_input"] == "actual test record"
+    assert rows[1]["fabrication_prohibited"] == "true"
+    assert rows[1]["global_blockers"] == "ID_PACKAGE_NOT_COMPLETE"

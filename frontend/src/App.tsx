@@ -2500,7 +2500,12 @@ function RestorationRecoveryPlanPage() {
       lead="Очередность действий по требованиям и имеющимся доказательствам без подстановки отсутствующих фактов."
     >
       <QueryState query={plan}>
-        {(value) => <RestorationRecoveryPlanBody value={value} />}
+        {(value) => (
+          <RestorationRecoveryPlanBody
+            value={value}
+            workspaceId={workspaceId}
+          />
+        )}
       </QueryState>
     </Page>
   );
@@ -2508,8 +2513,10 @@ function RestorationRecoveryPlanPage() {
 
 function RestorationRecoveryPlanBody({
   value,
+  workspaceId,
 }: {
   value: RestorationRecoveryPlan;
+  workspaceId: string;
 }) {
   const recoverable = value.recoverable_actions as unknown as Array<
     Record<string, unknown>
@@ -2528,6 +2535,12 @@ function RestorationRecoveryPlanBody({
         <Metric label="Можно продолжить" value={recoverable.length} />
         <Metric label="Требуют исходных данных" value={blocked.length} />
       </section>
+      <a
+        className="button-link secondary"
+        href={`/api/v1/workspaces/${workspaceId}/restoration/recovery-plan.csv`}
+      >
+        Скачать редактируемый план восстановления
+      </a>
       <RecoveryActionTable
         title="Действия с доступными основаниями"
         items={recoverable}

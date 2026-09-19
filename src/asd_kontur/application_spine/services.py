@@ -23,7 +23,7 @@ from asd_kontur.pilot import (
 )
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
-from asd_kontur.restoration import build_recovery_plan
+from asd_kontur.restoration import build_recovery_plan, render_recovery_plan_csv
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
@@ -775,6 +775,26 @@ class ProductSpineService:
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
         return build_recovery_plan(preflight)
+
+    def restoration_recovery_plan_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the current non-fabricating Restoration plan as editable CSV."""
+
+        plan = self.restoration_recovery_plan(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_recovery_plan_csv(plan)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"restoration-recovery-plan-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
 
     def form_support_id_package(
         self,

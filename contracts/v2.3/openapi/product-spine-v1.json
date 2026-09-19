@@ -6389,6 +6389,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan.csv": {
+      "get": {
+        "operationId": "restoration_recovery_plan_export_api_v1_workspaces__workspace_id__restoration_recovery_plan_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restoration Recovery Plan Export",
+        "tags": [
+          "restoration"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
       "get": {
         "operationId": "support_finalized_content_api_v1_workspaces__workspace_id__support_finalized_documents__finalized_id__content_get",

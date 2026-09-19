@@ -139,6 +139,13 @@ tests the non-fabrication boundary and application API; OZERO is not required.
 The next Restoration increment is durable recovery-process state plus
 evidence-bound document regeneration for a separately declared supported form.
 
+The current Restoration delivery adds an editable CSV handoff of that exact
+plan. It keeps recoverable candidates and blocked missing-evidence positions
+separate, includes their requirement/version/evidence references and global
+blockers, and marks every row as fabrication-prohibited. Controlled plan data
+and the authenticated PostgreSQL-backed Support/Audit/Restoration application
+flow verify the export; OZERO is not used.
+
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,
 generated/missing documents, persistence, authorization scope, and ZIP

@@ -296,6 +296,14 @@ def test_support_production_package_generation_and_workspace_isolation(
         plan = recovery_plan.json()
         assert plan["plan_kind"] == "id_package_recovery_plan"
         assert all(item["fabrication_prohibited"] for item in plan["blocked_actions"])
+        recovery_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan.csv"
+        )
+        assert recovery_export.status_code == 200, recovery_export.text
+        assert recovery_export.headers["content-type"] == "text/csv; charset=utf-8"
+        recovery_csv = recovery_export.content.decode("utf-8-sig")
+        assert "fabrication_prohibited" in recovery_csv
+        assert "collect_missing_source_evidence" in recovery_csv
         package_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
         )
