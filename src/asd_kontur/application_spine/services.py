@@ -21,6 +21,7 @@ from asd_kontur.pilot import (
 )
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
+from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 
@@ -629,6 +630,45 @@ class ProductSpineService:
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             work_package_id=work_package_id,
+        )
+
+    def support_id_package_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Deliver the exact formed ID package with an editable register first."""
+
+        view = self.support_production_view(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        package = view.get("package")
+        registers = view.get("registers", [])
+        if not isinstance(package, dict) or not registers:
+            raise ValueError("id_package_not_formed")
+        latest_register = registers[-1]
+        if not isinstance(latest_register, dict) or not isinstance(
+            latest_register.get("register_manifest"), dict
+        ):
+            raise ValueError("id_package_register_unavailable")
+
+        def read_object(object_key: str) -> bytes:
+            with self._object_store.open(object_key) as source:
+                return source.read()
+
+        data = build_editable_id_package_archive(
+            package=package,
+            register_manifest=latest_register["register_manifest"],
+            memberships=view.get("memberships", []),
+            read_object=read_object,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"id-package-{workspace_id}-v{package.get('version')}.zip",
+            0,
+            len(data),
+            (data,),
         )
 
     def start_support_generation(

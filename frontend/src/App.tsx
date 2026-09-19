@@ -2447,6 +2447,17 @@ function SupportProductionBody({
                 {displayValue(readiness?.status, "incomplete")}
               </StatusPill>
             </div>
+            <a
+              className="button-link secondary"
+              href={`/api/v1/workspaces/${workspaceId}/support/id-packages/export`}
+            >
+              Скачать редактируемый комплект
+            </a>
+            <p>
+              Реестр находится первым файлом архива. Подготовленные документы
+              сохранены как кандидаты, а отсутствующие и заблокированные позиции
+              перечислены отдельным графиком.
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>

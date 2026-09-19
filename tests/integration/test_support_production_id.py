@@ -273,6 +273,15 @@ def test_support_production_package_generation_and_workspace_isolation(
         api_view = client.get(f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production")
         assert api_view.status_code == 200
         assert api_view.json()["package"]["version"] == 2
+        package_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
+        )
+        assert package_export.status_code == 200, package_export.text
+        assert package_export.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(package_export.content)) as exported:
+            assert exported.namelist()[0] == "01_register.csv"
+            assert "99_missing_or_blocked_items.csv" in exported.namelist()
+            assert any(name.endswith("_candidate.docx") for name in exported.namelist())
         content = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/generated-candidates/"
             f"{generated['generated_candidate_id']}/content",
