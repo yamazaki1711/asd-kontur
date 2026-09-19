@@ -90,6 +90,49 @@ def test_pilot_result_is_deterministic_and_keeps_exact_locator() -> None:
     assert first["normative_notice"] == "Актуальность редакций нормативных документов не проверена"
 
 
+def test_tender_exposes_missing_contract_input_without_inventing_contract_review() -> None:
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=_project(),
+        documents=_documents(),
+        support={},
+    )
+
+    contract_item = next(
+        item for item in result["items"] if item["kind"] == "contract_input_unavailable"
+    )
+    assert contract_item["title"] == "Договор не предоставлен для договорного анализа"
+    assert "не сопоставлялись" in contract_item["description"]
+    assert contract_item["source_locator_ids"] == []
+    assert "Предоставить актуальную редакцию договора" in contract_item["recommended_action"]
+
+
+def test_tender_does_not_treat_contract_filename_as_clause_analysis() -> None:
+    documents = [
+        {
+            **_documents()[0],
+            "safe_display_name": "Проект договора строительного подряда.docx",
+            "relative_path": "Исходные данные/Проект договора строительного подряда.docx",
+        }
+    ]
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=_project(),
+        documents=documents,
+        support={},
+    )
+
+    contract_item = next(
+        item for item in result["items"] if item["kind"] == "contract_analysis_pending"
+    )
+    assert "ещё не извлечены" in contract_item["title"]
+    assert "не подтверждает проверку условий" in contract_item["description"]
+
+
 def test_mode_results_are_professionally_distinct() -> None:
     support = {
         "requirements": [

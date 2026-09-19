@@ -741,6 +741,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Findings Schedule */
+        get: operations["tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
         parameters: {
             query?: never;
@@ -854,6 +871,23 @@ export interface paths {
         put?: never;
         /** Record Support Package Backup Manifest */
         post: operations["record_support_package_backup_manifest_api_v1_workspaces__workspace_id__support_id_packages_backup_manifests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/id-packages/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Id Package Export */
+        get: operations["support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3750,6 +3784,37 @@ export interface operations {
             };
         };
     };
+    tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     support_finalized_content_api_v1_workspaces__workspace_id__support_finalized_documents__finalized_id__content_get: {
         parameters: {
             query?: never;
@@ -3984,6 +4049,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PackageBackupManifestView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

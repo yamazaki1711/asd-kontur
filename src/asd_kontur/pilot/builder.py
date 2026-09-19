@@ -102,18 +102,7 @@ def _mode_items(
 ) -> list[dict[str, Any]]:
     if mode is PilotMode.TENDER:
         items = [_defect_item(mode, item, evidence_index) for item in defects]
-        items.append(
-            _item(
-                mode,
-                "contract_review",
-                "Условия договора требуют профессиональной проверки",
-                "Положения об ответственности, сроках, приёмке и оплате остаются "
-                "проектом выводов до рассмотрения специалистом.",
-                "requires_clarification",
-                (),
-                "Проверить договор и включить подтверждённые замечания в протокол разногласий.",
-            )
-        )
+        items.append(_contract_input_item(mode, documents))
         return items
     if mode is PilotMode.SUPPORT:
         requirements = [dict(item) for item in support.get("requirements") or []]
@@ -180,6 +169,56 @@ def _package_items(mode: PilotMode, packages: list[dict[str, Any]]) -> list[dict
         )
         for item in packages
     ]
+
+
+def _contract_input_item(mode: PilotMode, documents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Expose the contract-analysis boundary without inventing contract findings.
+
+    A Tender result used to add a generic professional-review card regardless
+    of whether a contract was admitted.  Document inventory is enough to say
+    whether a contract source appears to be available, but it is not evidence
+    for a clause-level conclusion.  Keep that distinction visible to the user.
+    """
+
+    contract_sources = [document for document in documents if _looks_like_contract_source(document)]
+    if not contract_sources:
+        return _item(
+            mode,
+            "contract_input_unavailable",
+            "Договор не предоставлен для договорного анализа",
+            "В составе принятых исходных документов не обнаружен договор или его проект. "
+            "Анализ ПД и РД продолжается отдельно, но условия ответственности, сроков, "
+            "приёмки и оплаты не сопоставлялись.",
+            "requires_clarification",
+            (),
+            "Предоставить актуальную редакцию договора или проекта договора для отдельного "
+            "сравнения и подготовки предложений по условиям.",
+        )
+
+    names = ", ".join(
+        str(document.get("safe_display_name") or "документ") for document in contract_sources
+    )
+    return _item(
+        mode,
+        "contract_analysis_pending",
+        "Договор предоставлен, но договорные условия ещё не извлечены",
+        "В составе исходных документов обнаружены материалы, похожие на договор: "
+        f"{names}. Их наличие не подтверждает проверку условий ответственности, сроков, "
+        "приёмки и оплаты.",
+        "requires_clarification",
+        (),
+        "Выполнить отдельное извлечение условий договора и сопоставить их с подтверждёнными "
+        "проектными и сметными данными.",
+    )
+
+
+def _looks_like_contract_source(document: dict[str, Any]) -> bool:
+    """Use only supplied document metadata to route, never to infer clauses."""
+
+    reference = " ".join(
+        str(document.get(key) or "") for key in ("safe_display_name", "relative_path")
+    ).casefold()
+    return any(token in reference for token in ("договор", "контракт", "contract"))
 
 
 def _defect_item(
