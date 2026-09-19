@@ -220,6 +220,23 @@ def test_runtime_migration_supplies_the_required_explicit_database_url(
     }
 
 
+def test_runtime_migration_uses_separately_supplied_protected_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+    protected_url = "postgresql+psycopg://migration-role@localhost/asd"
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+    monkeypatch.setenv("ASD_MIGRATION_DATABASE_URL", protected_url)
+
+    assert _migrate(settings(tmp_path)) == 0
+    assert captured == {"revision": "head", "database_url": [f"database_url={protected_url}"]}
+
+
 @pytest.mark.parametrize(
     "value",
     ("../secret.pdf", "/absolute.pdf", "folder/../../secret.pdf", "\x00bad.pdf"),

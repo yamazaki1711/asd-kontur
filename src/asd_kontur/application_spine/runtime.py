@@ -173,13 +173,16 @@ def _database_preflight(settings: SpineSettings) -> int:
 
 def _migrate(settings: SpineSettings) -> int:
     repository = Path(__file__).resolve().parents[3]
+    migration_database_url = os.environ.get("ASD_MIGRATION_DATABASE_URL", settings.database_url)
+    if not migration_database_url.startswith(("postgresql+psycopg://", "postgresql://")):
+        raise ValueError("ASD_MIGRATION_DATABASE_URL must be an explicit PostgreSQL URL")
     configuration = Config(str(repository / "alembic.ini"))
-    configuration.set_main_option("sqlalchemy.url", settings.database_url)
+    configuration.set_main_option("sqlalchemy.url", migration_database_url)
     # ``migrations/env.py`` deliberately accepts the target connection only as
     # Alembic's explicit ``-x database_url=...`` argument.  The runtime command
     # must preserve that fail-closed contract instead of relying on the config
     # value, which the migration environment intentionally ignores.
-    configuration.cmd_opts = argparse.Namespace(x=[f"database_url={settings.database_url}"])
+    configuration.cmd_opts = argparse.Namespace(x=[f"database_url={migration_database_url}"])
     command.upgrade(configuration, "head")
     return 0
 
