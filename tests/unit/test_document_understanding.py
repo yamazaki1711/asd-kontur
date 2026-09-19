@@ -30,6 +30,7 @@ from asd_kontur.document_understanding.models import (
     PageHealthKind,
     QuantityCandidate,
     ReconciliationDefectKind,
+    StructureIdentityCandidate,
     WorkTypeCandidate,
 )
 from asd_kontur.document_understanding.native import (
@@ -1235,6 +1236,79 @@ def test_qwen_structure_identity_reconciliation_rejects_unknown_member() -> None
     with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
         with pytest.raises(QwenSemanticFailure, match="invalid_evidence"):
             adapter.reconcile_structure_identities(observations)
+
+
+def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
+    """An unrelated incomplete source must not starve an eligible identity group."""
+
+    organization_id = deterministic_uuid("partial-reconciliation-organization")
+    workspace_id = deterministic_uuid("partial-reconciliation-workspace")
+    left = deterministic_uuid("partial-reconciliation-left")
+    right = deterministic_uuid("partial-reconciliation-right")
+    left_locator = deterministic_uuid("partial-reconciliation-left-locator")
+    right_locator = deterministic_uuid("partial-reconciliation-right-locator")
+    persisted: list[StructureIdentityCandidate] = []
+
+    class Repository:
+        def workspace_engineering_semantic_coverage(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, int | bool]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return {"source_count": 3, "complete_source_count": 2, "complete": False}
+
+        def load_structure_identity_observation_groups(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> tuple[tuple[dict[str, object], ...], ...]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
+
+        def persist_structure_identity_candidates(
+            self, _claimed: ClaimedJob, values: tuple[StructureIdentityCandidate, ...]
+        ) -> None:
+            persisted.extend(values)
+
+        def assemble_workspace(self, _claimed: ClaimedJob) -> dict[str, object]:
+            return {"run_id": "synthetic-run"}
+
+    class Qwen:
+        def reconcile_structure_identities(
+            self, observations: tuple[dict[str, object], ...]
+        ) -> tuple[StructureIdentityCandidate, ...]:
+            assert {item["structure_node_id"] for item in observations} == {str(left), str(right)}
+            return (
+                StructureIdentityCandidate(
+                    deterministic_uuid("partial-reconciliation-candidate"),
+                    "facility",
+                    "Synthetic facility",
+                    (left, right),
+                    (left_locator, right_locator),
+                    Decimal("0.8"),
+                    "qwen-structure-identity-v1",
+                ),
+            )
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        organization_id,
+        workspace_id,
+        deterministic_uuid("partial-reconciliation-job"),
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        {},
+        "sha256:" + "a" * 64,
+        1,
+        1,
+        "not_requested",
+    )
+
+    result = pipeline._reconciliation(claimed, BytesIO())
+
+    assert persisted and persisted[0].member_structure_node_ids == (left, right)
+    assert result["structure_identity_candidate_count"] == 1
+    assert result["structure_identity_reconciliation"] == "partial_completed_source_groups"
 
 
 def test_qwen_engineering_recovers_partial_candidates_only_from_exact_batch_manifest() -> None:
