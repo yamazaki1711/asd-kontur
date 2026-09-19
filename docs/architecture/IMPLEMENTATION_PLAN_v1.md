@@ -99,6 +99,14 @@ The two initial increments are implemented on feature releases `98b7363` and
   fixtures prove both the exact-locator match and the no-resource boundary;
   this has no OZERO dependency and requires no schema migration.
 
+* When that exact material-resource link contains usable quantities and units
+  on both sides, Tender now emits a source-bound material quantity difference
+  or incompatible-unit observation.  If either source does not state a usable
+  value, the output names the missing comparison input instead.  Controlled
+  fixtures exercise both equal and different quantities; OZERO is not used.
+  Deployment to the document worker and a selected real-document regression
+  remain distinct acceptance steps.
+
 * The supported ID-package export now makes its first, editable register
   readable in Russian: qualified document roles and member states use display
   labels while their stable role IDs remain in parentheses.  The adjacent CSV
