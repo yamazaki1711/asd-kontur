@@ -54,6 +54,12 @@ The two initial increments are implemented on feature releases `98b7363` and
 * Support can export the exact formed package as a deterministic editable ZIP:
   its register is the first entry, available generated/finalized documents are
   included, and missing/blocked positions are an explicit separate schedule.
+  The archive also carries a deterministic field-evidence and missing-input
+  schedule.  It coalesces multiple evidence bindings for one field, retains
+  candidate/confirmed/missing state, and names the exact locator identifiers.
+  A generated candidate therefore cannot make a missing material input appear
+  completed.  This is independently covered by a disposable PostgreSQL
+  Support-package test; OZERO is not used for this acceptance.
 
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,

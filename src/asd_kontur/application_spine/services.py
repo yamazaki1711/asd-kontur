@@ -871,6 +871,7 @@ class ProductSpineService:
             package=package,
             register_manifest=latest_register["register_manifest"],
             memberships=view.get("memberships", []),
+            field_resolutions=view.get("field_resolutions", []),
             read_object=read_object,
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()

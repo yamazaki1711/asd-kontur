@@ -46,6 +46,44 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
                 "blocker_codes": ["GEOMETRY_UNCONFIRMED"],
             },
         ),
+        field_resolutions=(
+            {
+                "generation_run_id": "run-1",
+                "field_key": "work_description",
+                "state": "confirmed",
+                "material": True,
+                "normalized_value": "concrete_work",
+                "display_value": "Concrete work",
+                "fact_id": "fact-1",
+                "fact_version": 3,
+                "evidence_link_id": "evidence-2",
+                "source_locator_id": "locator-2",
+            },
+            {
+                "generation_run_id": "run-1",
+                "field_key": "work_description",
+                "state": "confirmed",
+                "material": True,
+                "normalized_value": "concrete_work",
+                "display_value": "Concrete work",
+                "fact_id": "fact-1",
+                "fact_version": 3,
+                "evidence_link_id": "evidence-1",
+                "source_locator_id": "locator-1",
+            },
+            {
+                "generation_run_id": "run-1",
+                "field_key": "as_built_level",
+                "state": "missing",
+                "material": True,
+                "normalized_value": None,
+                "display_value": None,
+                "fact_id": None,
+                "fact_version": None,
+                "evidence_link_id": None,
+                "source_locator_id": None,
+            },
+        ),
         read_object=lambda key: b"docx-bytes" if key.endswith("candidate-1.docx") else b"",
     )
 
@@ -54,6 +92,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             "01_register_candidate.docx",
             "01_register.csv",
             "02_support.aosr_candidate.docx",
+            "97_field_evidence_and_missing_inputs.csv",
             "98_package_status.txt",
             "99_missing_or_blocked_items.csv",
         ]
@@ -69,5 +108,17 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
                 io.StringIO(exported.read("99_missing_or_blocked_items.csv").decode("utf-8-sig"))
             )
         )
+        fields = list(
+            csv.DictReader(
+                io.StringIO(
+                    exported.read("97_field_evidence_and_missing_inputs.csv").decode("utf-8-sig")
+                )
+            )
+        )
     assert rows[0]["role"] == "support.executive-scheme"
     assert rows[0]["blockers"] == "GEOMETRY_UNCONFIRMED"
+    assert [field["field_key"] for field in fields] == ["as_built_level", "work_description"]
+    assert fields[0]["state"] == "missing"
+    assert fields[0]["display_value"] == ""
+    assert fields[1]["evidence_link_ids"] == "evidence-1;evidence-2"
+    assert fields[1]["source_locator_ids"] == "locator-1;locator-2"

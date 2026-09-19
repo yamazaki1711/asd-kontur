@@ -26,9 +26,15 @@ def build_editable_id_package_archive(
     package: Mapping[str, Any],
     register_manifest: Mapping[str, Any],
     memberships: Iterable[Mapping[str, Any]],
+    field_resolutions: Iterable[Mapping[str, Any]],
     read_object: Callable[[str], bytes],
 ) -> bytes:
-    """Build a register-first ZIP from the exact current package version."""
+    """Build a register-first ZIP from the exact current package version.
+
+    Field resolution is exported separately from document membership.  A
+    generated document candidate must not hide a material field which is
+    unavailable, conflicted, or only a candidate observation.
+    """
 
     members = sorted((dict(item) for item in memberships), key=lambda item: int(item["ordinal"]))
     output = io.BytesIO()
@@ -60,6 +66,11 @@ def build_editable_id_package_archive(
             suffix = "finalized" if member.get("finalized_document_id") else "candidate"
             name = f"{int(member['ordinal']):02d}_{role}_{suffix}.{extension}"
             _write(archive, name, read_object(str(object_key)))
+        _write(
+            archive,
+            "97_field_evidence_and_missing_inputs.csv",
+            _field_evidence_csv(field_resolutions),
+        )
         _write(archive, "98_package_status.txt", _status_text(package, members))
         _write(archive, "99_missing_or_blocked_items.csv", _missing_csv(missing))
     return output.getvalue()
@@ -196,6 +207,73 @@ def _missing_csv(rows: Iterable[Mapping[str, str]]) -> bytes:
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
+def _field_evidence_csv(rows: Iterable[Mapping[str, Any]]) -> bytes:
+    """Create an editable, deterministic field-readiness schedule.
+
+    The same field can have more than one evidence binding.  It remains one
+    field row with a semicolon-separated, stable set of evidence identifiers;
+    emitting one row per join result would make an operator mistake evidence
+    multiplicity for separate required inputs.
+    """
+
+    grouped: dict[tuple[str, str, str, str, str, str, str, str], set[tuple[str, str]]] = {}
+    for item in rows:
+        key = (
+            _as_text(item.get("generation_run_id")),
+            _as_text(item.get("field_key")),
+            _as_text(item.get("state")),
+            str(bool(item.get("material", False))).lower(),
+            _as_text(item.get("normalized_value")),
+            _as_text(item.get("display_value")),
+            _as_text(item.get("fact_id")),
+            _as_text(item.get("fact_version")),
+        )
+        grouped.setdefault(key, set()).add(
+            (
+                _as_text(item.get("evidence_link_id")),
+                _as_text(item.get("source_locator_id")),
+            )
+        )
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=(
+            "generation_run_id",
+            "field_key",
+            "state",
+            "material",
+            "normalized_value",
+            "display_value",
+            "fact_id",
+            "fact_version",
+            "evidence_link_ids",
+            "source_locator_ids",
+        ),
+    )
+    writer.writeheader()
+    for key in sorted(grouped):
+        evidence = sorted(grouped[key])
+        writer.writerow(
+            {
+                "generation_run_id": key[0],
+                "field_key": key[1],
+                "state": key[2],
+                "material": key[3],
+                "normalized_value": key[4],
+                "display_value": key[5],
+                "fact_id": key[6],
+                "fact_version": key[7],
+                "evidence_link_ids": ";".join(item[0] for item in evidence if item[0]),
+                "source_locator_ids": ";".join(item[1] for item in evidence if item[1]),
+            }
+        )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def _as_text(value: object | None) -> str:
+    return "" if value is None else str(value)
+
+
 def _status_text(package: Mapping[str, Any], members: Iterable[Mapping[str, Any]]) -> bytes:
     finalized = sum(1 for item in members if item.get("finalized_document_id"))
     generated = sum(1 for item in members if item.get("generated_candidate_id"))
@@ -205,6 +283,8 @@ def _status_text(package: Mapping[str, Any], members: Iterable[Mapping[str, Any]
         "Статус: текущий комплект является кандидатом, связанным с доказательствами.",
         f"Подготовлено кандидатов: {generated}",
         f"Финализировано документов: {finalized}",
+        "Готовность полей и отсутствующие входные данные перечислены в "
+        "97_field_evidence_and_missing_inputs.csv.",
         "Отсутствующие и заблокированные позиции перечислены в 99_missing_or_blocked_items.csv.",
     )
     return ("\n".join(lines) + "\n").encode("utf-8")

@@ -339,6 +339,7 @@ def test_support_production_package_generation_and_workspace_isolation(
                 io.BytesIO(exported.read("01_register_candidate.docx"))
             ) as register:
                 assert "word/document.xml" in register.namelist()
+            assert "97_field_evidence_and_missing_inputs.csv" in exported.namelist()
             assert "99_missing_or_blocked_items.csv" in exported.namelist()
             assert any(name.endswith("_candidate.docx") for name in exported.namelist())
         content = client.get(
