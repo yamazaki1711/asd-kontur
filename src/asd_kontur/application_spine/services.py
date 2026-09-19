@@ -26,6 +26,7 @@ from asd_kontur.pilot.service import PilotContent
 from asd_kontur.restoration import build_recovery_plan
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.analysis_package import build_tender_analysis_archive
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -635,6 +636,50 @@ class ProductSpineService:
             len(data),
             digest,
             f"tender-scope-schedule-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_analysis_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the current Tender report and schedules as one editable archive."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = dict(view.get("materialization") or {})
+        common = {
+            "materialization_state": str(materialization.get("state", "not_requested")),
+            "coverage_gaps": materialization.get("gaps", []),
+            "evidence_index": view.get("evidence_index", {}),
+        }
+        data = build_tender_analysis_archive(
+            findings_report=render_tender_findings_docx(
+                view.get("defects", []),
+                work_packages=view.get("work_packages", []),
+                **common,
+            ),
+            findings_schedule=render_tender_findings_csv(
+                view.get("defects", []),
+                work_packages=view.get("work_packages", []),
+                **common,
+            ),
+            scope_schedule=render_tender_scope_schedule_csv(
+                view.get("work_packages", []),
+                **common,
+            ),
+            materialization=materialization,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"tender-analysis-{workspace_id}.zip",
             0,
             len(data),
             (data,),

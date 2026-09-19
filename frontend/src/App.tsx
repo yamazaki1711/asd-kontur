@@ -4288,6 +4288,12 @@ function ProjectUnderstandingPage() {
                 <section className="panel">
                   <h2>Расхождения и пробелы</h2>
                   <a
+                    className="button-link"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-analysis.zip`}
+                  >
+                    Скачать Tender-пакет анализа
+                  </a>
+                  <a
                     className="button-link secondary"
                     href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
                   >

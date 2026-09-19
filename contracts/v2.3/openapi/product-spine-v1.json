@@ -6184,6 +6184,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-analysis.zip": {
+      "get": {
+        "operationId": "tender_analysis_export_api_v1_workspaces__workspace_id__project_understanding_tender_analysis_zip_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Analysis Export",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
       "get": {
         "operationId": "tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get",

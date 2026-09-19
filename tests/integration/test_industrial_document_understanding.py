@@ -210,6 +210,19 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "work_package_id" in scope_csv
         assert "Устройство монолитной плиты" in scope_csv
         assert "candidate" in scope_csv
+        tender_archive = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-analysis.zip"
+        )
+        assert tender_archive.status_code == 200, tender_archive.text
+        assert tender_archive.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(tender_archive.content)) as exported:
+            assert exported.namelist() == [
+                "01_tender_findings_report.docx",
+                "02_tender_findings_schedule.csv",
+                "03_tender_work_resource_schedule.csv",
+                "99_analysis_status.txt",
+            ]
         tender_report = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
             "tender-findings.docx"

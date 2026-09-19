@@ -10,6 +10,7 @@ from uuid import UUID
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.support.generation import validate_docx
+from asd_kontur.tender.analysis_package import build_tender_analysis_archive
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -174,6 +175,27 @@ def test_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
     assert rows[0]["quantity_observations"] == "12 м; normalized=12 m; locator=locator-a"
     assert rows[1]["material_observations"] == "Лоток Л1; 3 шт; locator=locator-b"
     assert rows[0]["source_references"] == "Plan A.pdf, version 1, page:2 (locator-a)"
+
+
+def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary() -> None:
+    archive = build_tender_analysis_archive(
+        findings_report=b"docx-payload",
+        findings_schedule=b"findings-csv",
+        scope_schedule=b"scope-csv",
+        materialization={"state": "partial", "gaps": ["SEMANTIC_COVERAGE_PARTIAL"]},
+    )
+
+    with zipfile.ZipFile(io.BytesIO(archive)) as exported:
+        assert exported.namelist() == [
+            "01_tender_findings_report.docx",
+            "02_tender_findings_schedule.csv",
+            "03_tender_work_resource_schedule.csv",
+            "99_analysis_status.txt",
+        ]
+        assert exported.read("01_tender_findings_report.docx") == b"docx-payload"
+        status = exported.read("99_analysis_status.txt").decode("utf-8")
+    assert "state: partial" in status
+    assert "SEMANTIC_COVERAGE_PARTIAL" in status
 
 
 def test_application_service_returns_editable_schedule_from_scoped_project_view() -> None:

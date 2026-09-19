@@ -86,6 +86,14 @@ test verifies the download and its candidate boundary. This is a usable Tender
 pricing/comparison input, not a confirmed quantity total. OZERO is not needed
 to establish the mechanism.
 
+The Tender application additionally exports those three candidate projections
+as one deterministic analysis ZIP: editable findings report first, then the
+findings and work/resource schedules, followed by an explicit coverage/status
+file. The archive does not claim a contract conclusion or a project-wide total.
+Its content order, partial-coverage notice, OOXML member and authenticated API
+delivery are verified on controlled PostgreSQL-backed project data; OZERO is
+not required for this output contract.
+
 The current reusable output is an **Audit expected-versus-package preflight**.
 It is a workspace-scoped application projection of exact
 requirement versions and ID-package memberships. It preserves repeated document
