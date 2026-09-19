@@ -4868,6 +4868,9 @@ function StructureCandidateList({
               const linked = Array.isArray(dossier.relationships)
                 ? dossier.relationships.length
                 : 0;
+              const linkedWorks = Array.isArray(dossier.linked_work_observations)
+                ? (dossier.linked_work_observations as Record<string, unknown>[])
+                : [];
               return (
                 <article
                   className="candidate-row"
@@ -4880,6 +4883,19 @@ function StructureCandidateList({
                   <small>
                     Кандидат; связей с тем же исходным фрагментом: {linked}
                   </small>
+                  {linkedWorks.length > 0 && (
+                    <p>
+                      <small>
+                        Наблюдения работ в том же исходном фрагменте: {" "}
+                        {linkedWorks
+                          .slice(0, 4)
+                          .map((work) => displayValue(work.work_name, "Работа"))
+                          .join("; ")}
+                        . Это связь по общему источнику, а не подтверждённое
+                        назначение работы сооружению.
+                      </small>
+                    </p>
+                  )}
                   {locator && (
                     <Link
                       to={workspaceRouteFromSlug(

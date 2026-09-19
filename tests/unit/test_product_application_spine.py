@@ -129,6 +129,44 @@ def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
     assert dossiers[1]["unresolved_relationship_count"] == 0
 
 
+def test_structure_dossiers_link_work_observations_only_by_exact_locator() -> None:
+    nodes = [
+        {
+            "structure_node_id": "facility-a",
+            "node_kind": "facility",
+            "raw_name": "Facility A",
+            "source_locator_id": "locator-a",
+        }
+    ]
+    work_packages = [
+        {
+            "work_package_id": "work-a",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-a",
+                "source_locator_ids": ["locator-a"],
+            },
+        },
+        {
+            "work_package_id": "work-b",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-b",
+                "source_locator_ids": ["locator-b"],
+            },
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows([], [], [])
+    assert dossiers == []
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, [], work_packages)
+
+    assert dossiers[0]["work_association_state"] == "exact_shared_source_locator_candidate"
+    assert dossiers[0]["linked_work_observations"] == [
+        {"work_observation_id": "work-a", "work_name": "Install pipe", "scope": "zone-a"}
+    ]
+
+
 def test_structure_components_require_exact_resolved_evidence() -> None:
     nodes = [
         {"structure_node_id": "facility", "source_locator_id": "locator-a"},

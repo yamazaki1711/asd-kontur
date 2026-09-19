@@ -204,6 +204,17 @@ archive and PostgreSQL-backed API tests verify member order and workspace scope;
 OZERO is not used. This is a packaging improvement, not canonical facility or
 work-package reconciliation.
 
+The project-structure view now carries the same bounded association into each
+source-scoped facility/area dossier: it lists work observations only when the
+work and the structure node share the exact persisted locator, and labels the
+link as a source-shared candidate rather than a confirmed assignment. This
+provides useful `facility → related work observations` navigation without
+merging same-named facilities or work across sources. Controlled unit data
+changes both scope and locator while PostgreSQL-backed project-understanding
+acceptance verifies the projection, evidence access, and workspace boundary;
+OZERO is not needed. A later canonical facility/work reconciliation remains a
+separate Support prerequisite.
+
 The project-understanding view now contains a reusable **Tender input
 assessment** derived only from active source versions and persisted document
 role decisions. It identifies design/working documentation, quantities or

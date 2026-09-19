@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -2854,7 +2855,9 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
             structure_dossiers = self._structure_dossier_rows(
-                structure_nodes, structure_relationships
+                structure_nodes,
+                structure_relationships,
+                [_jsonable_row(row) for row in packages],
             )
             structure_components = self._structure_component_rows(
                 structure_nodes, structure_relationships
@@ -3701,7 +3704,9 @@ class SpinePostgresRepository:
 
     @staticmethod
     def _structure_dossier_rows(
-        nodes: list[dict[str, Any]], relationships: list[dict[str, Any]]
+        nodes: list[dict[str, Any]],
+        relationships: list[dict[str, Any]],
+        work_packages: Iterable[Mapping[str, Any]] = (),
     ) -> list[dict[str, Any]]:
         """Expose source-scoped facility/area candidate dossiers without identity merging.
 
@@ -3710,6 +3715,23 @@ class SpinePostgresRepository:
         are included; same-name observations in other documents stay separate until a
         later reconciliation has adequate evidence.
         """
+        work_observations_by_locator: dict[str, list[dict[str, str]]] = defaultdict(list)
+        for item in work_packages:
+            row = dict(item)
+            package = row.get("package")
+            package = package if isinstance(package, Mapping) else {}
+            work_type = package.get("work_type")
+            work_type = work_type if isinstance(work_type, Mapping) else {}
+            observation = {
+                "work_observation_id": str(
+                    row.get("work_package_id") or package.get("work_package_id") or ""
+                ),
+                "work_name": str(work_type.get("raw") or work_type.get("normalized") or ""),
+                "scope": str(package.get("scope") or "scope_not_specified"),
+            }
+            for locator_id in package.get("source_locator_ids") or ():
+                work_observations_by_locator[str(locator_id)].append(observation)
+
         eligible_kinds = {"local_area", "facility", "excavation_pit", "structure", "zone"}
         rows: list[dict[str, Any]] = []
         for node in nodes:
@@ -3722,14 +3744,25 @@ class SpinePostgresRepository:
             ]
             if str(node.get("node_kind")) not in eligible_kinds:
                 continue
+            source_locator_id = str(node["source_locator_id"])
+            linked_work_observations = sorted(
+                work_observations_by_locator.get(source_locator_id, []),
+                key=lambda value: value["work_observation_id"],
+            )
             rows.append(
                 {
                     "candidate_state": "source_scoped_candidate",
                     "structure_node": node,
                     "relationships": linked,
+                    "linked_work_observations": linked_work_observations,
+                    "work_association_state": (
+                        "exact_shared_source_locator_candidate"
+                        if linked_work_observations
+                        else "no_work_observation_at_exact_locator"
+                    ),
                     "source_locator_ids": sorted(
                         {
-                            str(node["source_locator_id"]),
+                            source_locator_id,
                             *(
                                 str(item["source_locator_id"])
                                 for item in linked
