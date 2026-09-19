@@ -63,6 +63,15 @@ The two initial increments are implemented on feature releases `98b7363` and
   linked source locators in a deduplicated table rather than labelling the
   section as completed fields.  OZERO is not used for this acceptance.
 
+* Audit preflight now emits an editable, scope-and-version-bound correction
+  schedule.  For every required document it records the practical consequence
+  and the bounded next action (form a package, attach source-backed evidence,
+  resolve a conflict, or perform an independent audit).  It deliberately does
+  not classify any item as audit-satisfied: candidate presence and finalization
+  remain distinct from independent content audit.  Disposable PostgreSQL API
+  acceptance exercises generated and missing document cases; OZERO is not
+  needed.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

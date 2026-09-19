@@ -284,6 +284,10 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert preflight["package"]["version"] == 2
         assert all(item["preflight_state"] != "satisfied" for item in preflight["items"])
         assert any(item["preflight_state"] == "generated_candidate" for item in preflight["items"])
+        assert any(
+            item["required_correction"] == "perform_independent_audit_of_generated_candidate"
+            for item in preflight["items"]
+        )
         preflight_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight.csv"
         )

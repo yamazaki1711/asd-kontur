@@ -95,6 +95,8 @@ def build_expected_actual_preflight(
                 ),
                 "evidence_refs": _evidence_refs(requirement, linked),
                 "gaps": sorted(gaps),
+                "required_correction": _required_correction(state),
+                "practical_consequence": _practical_consequence(state),
                 "audit_boundary": "independent_audit_evidence_and_authority_required",
             }
         )
@@ -157,6 +159,36 @@ def _evidence_refs(
     refs = [str(value) for value in requirement.get("basis_refs", ())]
     refs.extend(str(value) for member in members for value in member.get("evidence_refs", ()))
     return list(dict.fromkeys(refs))
+
+
+def _required_correction(state: str) -> str:
+    """Return a bounded package-completeness action, never an Audit verdict."""
+
+    return {
+        "not_formed": "form_id_package_from_current_requirement_matrix",
+        "unresolved_requirement": "resolve_requirement_basis_before_package_formation",
+        "missing": "prepare_or_attach_required_document_with_source_evidence",
+        "blocked": "resolve_package_or_evidence_blocker",
+        "conflict": "reconcile_conflicting_package_membership_or_evidence",
+        "generated_candidate": "perform_independent_audit_of_generated_candidate",
+        "awaiting_audit": "perform_independent_audit_of_finalized_document",
+        "indeterminate": "reconcile_package_membership_and_evidence_lineage",
+    }.get(state, "investigate_preflight_state")
+
+
+def _practical_consequence(state: str) -> str:
+    return {
+        "not_formed": "required_completeness_cannot_be_compared_to_a_package",
+        "unresolved_requirement": (
+            "required_document_composition_is_not_authoritatively_established"
+        ),
+        "missing": "required_document_is_not_available_for_independent_audit",
+        "blocked": "package_position_cannot_be_relied_on_until_the_blocker_is_resolved",
+        "conflict": "conflicting_package_evidence_prevents_a_single_completeness_conclusion",
+        "generated_candidate": "candidate_presence_is_not_an_independent_content_audit",
+        "awaiting_audit": "finalization_is_not_an_independent_content_audit",
+        "indeterminate": "package_membership_does_not_yet_support_a_completeness_conclusion",
+    }.get(state, "preflight_state_requires_investigation")
 
 
 def _package_reference(package: Mapping[str, Any] | None) -> dict[str, Any] | None:

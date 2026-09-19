@@ -43,6 +43,8 @@ type AuditPreflightItem = {
   membership_states: string[];
   evidence_refs: string[];
   gaps: string[];
+  required_correction: string;
+  practical_consequence: string;
 };
 type RestorationRecoveryPlan =
   components["schemas"]["RestorationRecoveryPlanView"];
@@ -2423,7 +2425,7 @@ function AuditExpectedActualPreflightBody({
                   <th>Работа / документ</th>
                   <th>Состояние</th>
                   <th>Комплект</th>
-                  <th>Основания и ограничения</th>
+                  <th>Основания, последствия и необходимое действие</th>
                 </tr>
               </thead>
               <tbody>
@@ -2460,6 +2462,14 @@ function AuditExpectedActualPreflightBody({
                     </td>
                     <td>
                       <GapList gaps={[...item.evidence_refs, ...item.gaps]} />
+                      <p>
+                        Последствие:{" "}
+                        {humanizeAuditConsequence(item.practical_consequence)}.
+                      </p>
+                      <p>
+                        Действие:{" "}
+                        {humanizeAuditCorrection(item.required_correction)}.
+                      </p>
                     </td>
                   </tr>
                 ))}
@@ -5881,6 +5891,53 @@ function humanizeAuditPreflightState(value: string) {
     blocked: "Заблокировано",
     conflict: "Есть расхождение",
     indeterminate: "Недостаточно доказательств",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeAuditCorrection(value: string) {
+  const labels: Record<string, string> = {
+    form_id_package_from_current_requirement_matrix:
+      "Сформировать комплект по текущей матрице требований",
+    resolve_requirement_basis_before_package_formation:
+      "Уточнить основание требования до формирования комплекта",
+    prepare_or_attach_required_document_with_source_evidence:
+      "Подготовить или приложить документ с исходными доказательствами",
+    resolve_package_or_evidence_blocker:
+      "Устранить блокер комплекта или доказательств",
+    reconcile_conflicting_package_membership_or_evidence:
+      "Сверить конфликтующий состав комплекта или доказательства",
+    perform_independent_audit_of_generated_candidate:
+      "Провести независимый аудит подготовленного кандидата",
+    perform_independent_audit_of_finalized_document:
+      "Провести независимый аудит финализированного документа",
+    reconcile_package_membership_and_evidence_lineage:
+      "Сверить состав комплекта и происхождение доказательств",
+    investigate_preflight_state: "Исследовать состояние предварительной сверки",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeAuditConsequence(value: string) {
+  const labels: Record<string, string> = {
+    required_completeness_cannot_be_compared_to_a_package:
+      "комплектность нельзя сопоставить с комплектом",
+    required_document_composition_is_not_authoritatively_established:
+      "обязательный состав документов не установлен",
+    required_document_is_not_available_for_independent_audit:
+      "требуемый документ недоступен для независимого аудита",
+    package_position_cannot_be_relied_on_until_the_blocker_is_resolved:
+      "на позицию комплекта нельзя опираться до устранения блокера",
+    conflicting_package_evidence_prevents_a_single_completeness_conclusion:
+      "конфликтующие доказательства не позволяют сделать единый вывод о комплектности",
+    candidate_presence_is_not_an_independent_content_audit:
+      "наличие кандидата не является независимым аудитом содержания",
+    finalization_is_not_an_independent_content_audit:
+      "финализация не является независимым аудитом содержания",
+    package_membership_does_not_yet_support_a_completeness_conclusion:
+      "состав комплекта пока не подтверждает вывод о комплектности",
+    preflight_state_requires_investigation:
+      "состояние предварительной сверки требует исследования",
   };
   return labels[value] ?? humanizeStatus(value);
 }

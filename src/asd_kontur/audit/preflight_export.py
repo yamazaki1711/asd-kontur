@@ -35,6 +35,8 @@ def render_expected_actual_preflight_csv(preflight: Mapping[str, Any]) -> bytes:
             "membership_states",
             "evidence_refs",
             "gaps",
+            "required_correction",
+            "practical_consequence",
             "audit_boundary",
         ),
     )
@@ -58,6 +60,8 @@ def render_expected_actual_preflight_csv(preflight: Mapping[str, Any]) -> bytes:
                 ),
                 "evidence_refs": ";".join(str(value) for value in item.get("evidence_refs", ())),
                 "gaps": ";".join(str(value) for value in item.get("gaps", ())),
+                "required_correction": str(item.get("required_correction", "")),
+                "practical_consequence": str(item.get("practical_consequence", "")),
                 "audit_boundary": str(item.get("audit_boundary", "")),
             }
         )

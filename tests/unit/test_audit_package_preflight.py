@@ -58,7 +58,15 @@ def test_preflight_keeps_identically_named_requirements_in_their_scopes() -> Non
     ]
     assert value["items"][0]["membership_ids"] == ["membership-a"]
     assert value["items"][0]["generated_candidate_ids"] == ["candidate-a"]
+    assert (
+        value["items"][0]["required_correction"]
+        == "perform_independent_audit_of_generated_candidate"
+    )
     assert value["items"][1]["membership_ids"] == []
+    assert (
+        value["items"][1]["required_correction"]
+        == "prepare_or_attach_required_document_with_source_evidence"
+    )
     assert "GENERATED_CANDIDATE_REQUIRES_AUDIT" in value["items"][0]["gaps"]
     assert "REQUIRED_DOCUMENT_NOT_IN_PACKAGE" in value["items"][1]["gaps"]
 
@@ -118,3 +126,5 @@ def test_preflight_export_keeps_scope_specific_identity_and_authority_boundary()
     assert "scope-a:requirement-a:v1" in data
     assert "scope-b:requirement-b:v1" in data
     assert "independent_audit_evidence_and_authority_required" in data
+    assert "perform_independent_audit_of_generated_candidate" in data
+    assert "prepare_or_attach_required_document_with_source_evidence" in data
