@@ -23,6 +23,10 @@ import {
 import { api, requireData } from "./api/client";
 import type { components } from "./api/schema";
 import { StatusPill } from "./components/StatusPill";
+import {
+  constructionConsultantRequestId,
+  type PendingConstructionConsultantQuestion,
+} from "./constructionConsultantRetry";
 import { mergeFieldResolutionRows } from "./supportFieldRows";
 import { PdfEvidenceViewer } from "./viewer/PdfEvidenceViewer";
 
@@ -34,8 +38,7 @@ type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
 type AuditExpectedActualPreflight =
   components["schemas"]["AuditExpectedActualPreflightView"];
-type AuditReportProjection =
-  components["schemas"]["AuditReportProjectionView"];
+type AuditReportProjection = components["schemas"]["AuditReportProjectionView"];
 type AuditPreflightItem = {
   item_key: string;
   work_package_id: string;
@@ -1115,6 +1118,8 @@ function ConstructionConsultantPanel() {
     window.localStorage.getItem("asd-construction-consultant-conversation"),
   );
   const [question, setQuestion] = useState("");
+  const [pendingQuestion, setPendingQuestion] =
+    useState<PendingConstructionConsultantQuestion | null>(null);
   const conversations = useQuery({
     queryKey: ["construction-consultant-conversations"],
     queryFn: async () => {
@@ -1162,21 +1167,24 @@ function ConstructionConsultantPanel() {
     mutationFn: async ({
       identity,
       text,
+      requestId,
     }: {
       identity: string;
       text: string;
+      requestId: string;
     }) => {
       const { data, error } = await api.POST(
         "/api/v1/construction-consultant/conversations/{conversation_id}/questions",
         {
           params: { path: { conversation_id: identity } },
-          body: { request_id: crypto.randomUUID(), question: text },
+          body: { request_id: requestId, question: text },
         },
       );
       return requireData(data, error);
     },
     onSuccess: async () => {
       setQuestion("");
+      setPendingQuestion(null);
       await queryClient.invalidateQueries({
         queryKey: ["construction-consultant-messages", effectiveConversationId],
       });
@@ -1193,7 +1201,14 @@ function ConstructionConsultantPanel() {
       const created = await createConversation.mutateAsync(text.slice(0, 120));
       identity = created.conversation_id;
     }
-    ask.mutate({ identity, text });
+    const requestId = constructionConsultantRequestId(
+      pendingQuestion,
+      identity,
+      text,
+      () => crypto.randomUUID(),
+    );
+    setPendingQuestion({ conversationId: identity, question: text, requestId });
+    ask.mutate({ identity, text, requestId });
   };
   const values = (messages.data ?? []) as ConstructionConsultantMessage[];
   return (
@@ -1218,6 +1233,7 @@ function ConstructionConsultantPanel() {
             onChange={(event) => {
               const next = event.target.value || null;
               setConversationId(next);
+              setPendingQuestion(null);
               if (next) {
                 window.localStorage.setItem(
                   "asd-construction-consultant-conversation",
@@ -1327,6 +1343,7 @@ function ConstructionConsultantPanel() {
             type="button"
             onClick={() => {
               setConversationId(null);
+              setPendingQuestion(null);
               window.localStorage.removeItem(
                 "asd-construction-consultant-conversation",
               );
@@ -2404,7 +2421,9 @@ function AuditReportProjectionPage() {
       lead="Неизменяемый отчёт по точной версии состава документов, доказательствам и запросам на исправление."
     >
       <QueryState query={report}>
-        {(value) => <AuditReportProjectionBody value={value} workspaceId={workspaceId} />}
+        {(value) => (
+          <AuditReportProjectionBody value={value} workspaceId={workspaceId} />
+        )}
       </QueryState>
     </Page>
   );
@@ -2455,19 +2474,28 @@ function AuditReportProjectionBody({
         <Metric label="Версия отчёта" value={Number(report.version ?? 0)} />
         <Metric
           label="Нерешённых кодов"
-          value={Array.isArray(report.unresolved_codes) ? report.unresolved_codes.length : 0}
+          value={
+            Array.isArray(report.unresolved_codes)
+              ? report.unresolved_codes.length
+              : 0
+          }
         />
         <Metric label="Запросов на исправление" value={requests.length} />
       </section>
       <section className="panel">
         <h2>Основание и результат</h2>
         <p>
-          Статус: {humanizeStatus(
+          Статус:{" "}
+          {humanizeStatus(
             typeof report.outcome === "string" ? report.outcome : "unknown",
           )}
         </p>
         <GapList
-          gaps={Array.isArray(report.unresolved_codes) ? report.unresolved_codes.map(String) : []}
+          gaps={
+            Array.isArray(report.unresolved_codes)
+              ? report.unresolved_codes.map(String)
+              : []
+          }
         />
       </section>
       <section className="panel">
@@ -2475,7 +2503,11 @@ function AuditReportProjectionBody({
         <div className="table-wrap">
           <table>
             <thead>
-              <tr><th>Контур</th><th>Состояния</th><th>Нерешённые позиции</th></tr>
+              <tr>
+                <th>Контур</th>
+                <th>Состояния</th>
+                <th>Нерешённые позиции</th>
+              </tr>
             </thead>
             <tbody>
               {deltas.map((delta) => {
@@ -2484,14 +2516,27 @@ function AuditReportProjectionBody({
                   ? (delta.unresolved_items as Array<Record<string, unknown>>)
                   : [];
                 return (
-                  <tr key={`${String(delta.delta_id)}:${String(delta.version)}`}>
+                  <tr
+                    key={`${String(delta.delta_id)}:${String(delta.version)}`}
+                  >
                     <td>
                       {humanizeAuditDeltaKind(
                         typeof delta.kind === "string" ? delta.kind : "unknown",
                       )}
                     </td>
-                    <td>{Object.entries(counts).map(([key, count]) => `${humanizeStatus(key)}: ${String(count)}`).join(", ")}</td>
-                    <td>{unresolved.map((item) => String(item.item_key)).join(", ") || "—"}</td>
+                    <td>
+                      {Object.entries(counts)
+                        .map(
+                          ([key, count]) =>
+                            `${humanizeStatus(key)}: ${String(count)}`,
+                        )
+                        .join(", ")}
+                    </td>
+                    <td>
+                      {unresolved
+                        .map((item) => String(item.item_key))
+                        .join(", ") || "—"}
+                    </td>
                   </tr>
                 );
               })}
@@ -2502,10 +2547,44 @@ function AuditReportProjectionBody({
       <section className="panel">
         <h2>Запросы на исправление</h2>
         {requests.length ? (
-          <div className="table-wrap"><table><thead><tr><th>Действие</th><th>Объект</th><th>Состояние</th><th>Основание и последствия</th></tr></thead><tbody>
-            {requests.map((item) => <tr key={`${String(item.action_request_id)}:${String(item.version)}`}><td>{String(item.action_code)}</td><td>{String(item.affected_object_ref)}</td><td>{humanizeStatus(String(item.state))}</td><td><GapList gaps={[...((item.evidence_refs as string[] | undefined) ?? []), ...((item.blocking_impacts as string[] | undefined) ?? [])]} /></td></tr>)}
-          </tbody></table></div>
-        ) : <InfoNotice>В этот отчёт не включены запросы на исправление.</InfoNotice>}
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Действие</th>
+                  <th>Объект</th>
+                  <th>Состояние</th>
+                  <th>Основание и последствия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((item) => (
+                  <tr
+                    key={`${String(item.action_request_id)}:${String(item.version)}`}
+                  >
+                    <td>{String(item.action_code)}</td>
+                    <td>{String(item.affected_object_ref)}</td>
+                    <td>{humanizeStatus(String(item.state))}</td>
+                    <td>
+                      <GapList
+                        gaps={[
+                          ...((item.evidence_refs as string[] | undefined) ??
+                            []),
+                          ...((item.blocking_impacts as string[] | undefined) ??
+                            []),
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            В этот отчёт не включены запросы на исправление.
+          </InfoNotice>
+        )}
       </section>
       {gaps.length ? <GapList gaps={gaps} /> : null}
     </>
@@ -2941,7 +3020,8 @@ function SupportProductionBody({
             иметь закреплённого объёма работ, политики и версии правил.
           </InfoNotice>
         )}
-        {!value.package && supportProcess &&
+        {!value.package &&
+          supportProcess &&
           workPackages.map((identity) => (
             <button
               key={identity}
@@ -4679,7 +4759,8 @@ function TenderInputAssessmentTable({
   const stateLabels: Record<string, string> = {
     available: "Доступно для анализа",
     classification_incomplete: "Обработка классификации не завершена",
-    not_detected_in_classified_sources: "Не обнаружено среди классифицированных источников",
+    not_detected_in_classified_sources:
+      "Не обнаружено среди классифицированных источников",
   };
   return (
     <div className="table-wrap">
@@ -4710,14 +4791,19 @@ function TenderInputAssessmentTable({
                   </strong>
                 </td>
                 <td>
-                  <StatusPill tone={state === "available" ? "default" : "warning"}>
+                  <StatusPill
+                    tone={state === "available" ? "default" : "warning"}
+                  >
                     {stateLabels[state] ?? state}
                   </StatusPill>
                 </td>
                 <td>
                   {state === "available"
                     ? "Исходные данные можно использовать в указанной проверке."
-                    : displayValue(item.practical_limitation, "Ограничение не описано.")}
+                    : displayValue(
+                        item.practical_limitation,
+                        "Ограничение не описано.",
+                      )}
                 </td>
                 <td>
                   {sourceNames.length ? sourceNames.join(", ") : "—"}
@@ -4884,8 +4970,13 @@ function StructureCandidateList({
               const linked = Array.isArray(dossier.relationships)
                 ? dossier.relationships.length
                 : 0;
-              const linkedWorks = Array.isArray(dossier.linked_work_observations)
-                ? (dossier.linked_work_observations as Record<string, unknown>[])
+              const linkedWorks = Array.isArray(
+                dossier.linked_work_observations,
+              )
+                ? (dossier.linked_work_observations as Record<
+                    string,
+                    unknown
+                  >[])
                 : [];
               return (
                 <article
@@ -4902,7 +4993,7 @@ function StructureCandidateList({
                   {linkedWorks.length > 0 && (
                     <p>
                       <small>
-                        Наблюдения работ в том же исходном фрагменте: {" "}
+                        Наблюдения работ в том же исходном фрагменте:{" "}
                         {linkedWorks
                           .slice(0, 4)
                           .map((work) => displayValue(work.work_name, "Работа"))
@@ -5502,9 +5593,11 @@ function TenderFindingList({
               }; смета: ${estimateValue || "не указано"}${
                 sharedUnit ? ` ${sharedUnit}` : ""
               }${
-                difference ? `; разница (проект минус смета): ${difference}${
-                  sharedUnit ? ` ${sharedUnit}` : ""
-                }` : ""
+                difference
+                  ? `; разница (проект минус смета): ${difference}${
+                      sharedUnit ? ` ${sharedUnit}` : ""
+                    }`
+                  : ""
               }.`
             : projectUnit || estimateUnit
               ? `Единицы: проект — ${projectUnit || "не указано"}; смета — ${

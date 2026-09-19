@@ -98,6 +98,15 @@ This is an operational/authority dependency, not an OZERO-processing blocker.
   evidence-bound analytical consultation surface; it does not establish its
   full professional quality matrix, browser E2E, or a mode-ready decision.
 
+* The same consultant UI now retains one request identity for a retry of an
+  unchanged question in the same conversation. If a response is lost after
+  persistence, retrying uses the existing idempotency contract instead of
+  silently creating another pair of messages. Changing either the conversation
+  or question deliberately starts a new request. A compact frontend unit test,
+  lint, typecheck, and production build cover that reusable interaction;
+  OZERO is not used. Browser E2E remains an explicit separate check because
+  no authenticated browser binding is available in this session.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,
