@@ -73,6 +73,21 @@ OZERO is not needed for its acceptance. The next Audit increment is the
 separately scoped canonical Audit-process service and its immutable evidence
 ledger; this preflight must never be relabelled as that service's conclusion.
 
+Canonical Audit persistence now has the first reusable lifecycle and ledger
+implementation on feature releases `4100b4d`, `009972f`, and `dcf452f`:
+an Audit process is pinned to one exact corpus snapshot and rule-set version;
+its collection/reconciliation/snapshot/evaluation header states use optimistic
+concurrency; document, causal-readiness, and package/signing/handover deltas
+are committed atomically with their evaluation transition. Causal paths and
+package-to-delta membership are preserved as immutable payloads rather than
+being reduced to counters. A disposable PostgreSQL acceptance exercises
+scope/RLS, retry, stale-revision, snapshot binding, and all three delta kinds.
+This is an implementation foundation, not a public Audit conclusion: final
+Audit report/projection persistence and an authorised, separately configured
+Audit service still remain. The public application role must not be granted
+the audit-service role merely to expose this work. OZERO is not used for this
+acceptance.
+
 Restoration now has a reusable, read-only recovery-plan projection built from
 the same exact matrix/package preflight. It distinguishes reviewable generated
 candidates from positions that require a real source document, field fact,
