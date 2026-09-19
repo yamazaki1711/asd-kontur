@@ -3890,7 +3890,8 @@ class SpinePostgresRepository:
                 " COALESCE(u.unresolved_failed_fragment_count,0) AS unresolved_failed_fragment_count,"
                 " COALESCE(e.expected_fragment_count,0) AS expected_fragment_count,"
                 " v.document_id,v.version AS document_version,v.safe_display_name,"
-                " COALESCE(s.page_count,0) AS page_count "
+                " COALESCE(s.page_count,0) AS page_count,"
+                " s.admission_status,s.extraction_status "
                 " FROM active_documents v LEFT JOIN expected e ON e.source_version_id=v.source_version_id "
                 " LEFT JOIN latest_activity activity ON activity.source_version_id=v.source_version_id "
                 " LEFT JOIN accepted a ON a.source_version_id=v.source_version_id "
@@ -3899,7 +3900,8 @@ class SpinePostgresRepository:
                 " AND f.profile_version=activity.profile_version "
                 " LEFT JOIN unresolved_failed u ON u.source_version_id=v.source_version_id "
                 " AND u.profile_version=activity.profile_version "
-                " LEFT JOIN LATERAL (SELECT page_count FROM workspace.document_processing_states state "
+                " LEFT JOIN LATERAL (SELECT page_count,admission_status,extraction_status FROM "
+                " workspace.document_processing_states state "
                 " WHERE state.organization_id=v.organization_id AND state.workspace_id=v.workspace_id "
                 " AND state.document_id=v.document_id AND state.document_version=v.version "
                 " ORDER BY state.state_sequence DESC LIMIT 1) s ON TRUE "
@@ -3914,6 +3916,16 @@ class SpinePostgresRepository:
                 "document_version": int(row["document_version"]),
                 "safe_display_name": str(row["safe_display_name"]),
                 "page_count": int(row["page_count"]),
+                "admission_status": (
+                    str(row["admission_status"])
+                    if row["admission_status"] is not None
+                    else "not_admitted"
+                ),
+                "extraction_status": (
+                    str(row["extraction_status"])
+                    if row["extraction_status"] is not None
+                    else "not_started"
+                ),
                 "profile_version": str(row["profile_version"]),
                 "accepted_batch_count": int(row["accepted_batch_count"]),
                 "accepted_fragment_count": int(row["accepted_fragment_count"]),

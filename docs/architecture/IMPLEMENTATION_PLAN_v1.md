@@ -149,6 +149,18 @@ tests, and the PostgreSQL-backed project-understanding API suite. OZERO was not
 read or changed: it remains a later real-document validation of this reusable
 output, not its acceptance oracle.
 
+Tender delivery now also includes an editable **document-processing coverage
+schedule**.  It has one row per active source version and preserves admission,
+native-extraction, semantic-profile, expected/accepted/failed fragment, and
+unresolved-failure states separately.  The schedule is included in the
+deterministic Tender archive and can be downloaded directly from the Tender
+view.  Consequently a readable document or a completed OCR stage cannot be
+presented as completed engineering analysis.  Controlled PostgreSQL API
+acceptance covers active-source scope, the direct download, archive membership,
+and a native-complete/semantic-partial case.  OZERO is not used; a later
+real-document validation can only establish the status of the selected active
+OZERO sources, not universal package coverage.
+
 The same project-understanding surface also provides a separate editable
 work/quantity/material CSV schedule. It has one row per candidate work package,
 retains raw and normalized quantity observations, materials, exact locator

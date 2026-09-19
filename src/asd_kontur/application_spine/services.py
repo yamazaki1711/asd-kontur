@@ -31,6 +31,7 @@ from asd_kontur.restoration import (
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
+from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -646,6 +647,33 @@ class ProductSpineService:
             (data,),
         )
 
+    def tender_document_coverage_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable active-source coverage schedule for Tender users."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_document_coverage_csv(
+            view.get("semantic_coverage", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-document-coverage-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
     def tender_analysis_export(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> DocumentContent:
@@ -676,6 +704,11 @@ class ProductSpineService:
             scope_schedule=render_tender_scope_schedule_csv(
                 view.get("work_packages", []),
                 **common,
+            ),
+            document_coverage_schedule=render_tender_document_coverage_csv(
+                view.get("semantic_coverage", []),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
             ),
             materialization=materialization,
         )

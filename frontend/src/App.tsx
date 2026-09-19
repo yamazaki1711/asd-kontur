@@ -4484,6 +4484,12 @@ function ProjectUnderstandingPage() {
                   >
                     Скачать редактируемую ведомость работ и ресурсов
                   </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                  >
+                    Скачать покрытие документов
+                  </a>
                   {value.work_packages.length ? (
                     <div className="card-grid">
                       {value.work_packages.map((item) => (
@@ -4560,6 +4566,12 @@ function ProjectUnderstandingPage() {
                     href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.docx`}
                   >
                     Скачать редактируемый Tender-отчёт
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                  >
+                    Скачать покрытие документов
                   </a>
                   {value.defects.length ? (
                     <TenderFindingList

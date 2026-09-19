@@ -13,6 +13,7 @@ from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.support.generation import validate_docx
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
+from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -223,6 +224,7 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
         findings_report=b"docx-payload",
         findings_schedule=b"findings-csv",
         scope_schedule=b"scope-csv",
+        document_coverage_schedule=b"coverage-csv",
         materialization={"state": "partial", "gaps": ["SEMANTIC_COVERAGE_PARTIAL"]},
     )
 
@@ -231,11 +233,13 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
             "01_tender_findings_report.docx",
             "02_tender_findings_schedule.csv",
             "03_tender_work_resource_schedule.csv",
-            "04_delivery_manifest.json",
+            "04_document_processing_coverage.csv",
+            "05_delivery_manifest.json",
             "99_analysis_status.txt",
         ]
         assert exported.read("01_tender_findings_report.docx") == b"docx-payload"
-        manifest = json.loads(exported.read("04_delivery_manifest.json"))
+        assert exported.read("04_document_processing_coverage.csv") == b"coverage-csv"
+        manifest = json.loads(exported.read("05_delivery_manifest.json"))
         status = exported.read("99_analysis_status.txt").decode("utf-8")
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
@@ -243,6 +247,38 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
     assert (
         manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
     )
+
+
+def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None:
+    content = render_tender_document_coverage_csv(
+        (
+            {
+                "safe_display_name": "Site plan.pdf",
+                "document_version": 2,
+                "source_version_id": "source-a",
+                "admission_status": "accepted",
+                "extraction_status": "complete",
+                "page_count": 12,
+                "profile_version": "qwen-engineering-extraction-v16",
+                "expected_fragment_count": 20,
+                "accepted_batch_count": 3,
+                "accepted_fragment_count": 16,
+                "failed_batch_count": 1,
+                "failed_fragment_count": 4,
+                "recovered_failed_fragment_count": 0,
+                "unresolved_failed_fragment_count": 4,
+                "state": "partial",
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+    )
+
+    row = next(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert row["native_extraction_status"] == "complete"
+    assert row["semantic_coverage_state"] == "partial"
+    assert row["unresolved_failed_fragment_count"] == "4"
+    assert row["project_coverage_gaps"] == "SEMANTIC_COVERAGE_PARTIAL"
 
 
 def test_application_service_returns_editable_schedule_from_scoped_project_view() -> None:

@@ -210,6 +210,15 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "work_package_id" in scope_csv
         assert "Устройство монолитной плиты" in scope_csv
         assert "candidate" in scope_csv
+        tender_coverage = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-document-coverage.csv"
+        )
+        assert tender_coverage.status_code == 200, tender_coverage.text
+        assert tender_coverage.headers["content-type"] == "text/csv; charset=utf-8"
+        coverage_csv = tender_coverage.content.decode("utf-8-sig")
+        assert "native_extraction_status" in coverage_csv
+        assert "semantic_coverage_state" in coverage_csv
         tender_archive = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
             "tender-analysis.zip"
@@ -221,7 +230,8 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                 "01_tender_findings_report.docx",
                 "02_tender_findings_schedule.csv",
                 "03_tender_work_resource_schedule.csv",
-                "04_delivery_manifest.json",
+                "04_document_processing_coverage.csv",
+                "05_delivery_manifest.json",
                 "99_analysis_status.txt",
             ]
         tender_report = client.get(
