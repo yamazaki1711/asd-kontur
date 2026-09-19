@@ -16,6 +16,10 @@ from asd_kontur.audit import (
     AuditCommand,
     AuditCommandType,
     AuditScope,
+    DeltaDenominator,
+    DeltaState,
+    DocumentDelta,
+    EvidenceRatedItem,
     PostgresCorpusAuditStore,
     ProcessState,
 )
@@ -525,6 +529,88 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
     )
     assert not stale.accepted
     assert stale.outcome_code == "CONCURRENCY_CONFLICT"
+
+    document_delta = DocumentDelta(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-audit-scope",),
+            ("required-act",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            EvidenceRatedItem(
+                "required-act",
+                DeltaState.MISSING,
+                (),
+                (),
+                (),
+                (),
+                (),
+                ("ACT_NOT_COLLECTED",),
+                ("package_readiness",),
+            ),
+        ),
+    )
+    evaluated = store.evaluate_document_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+            scope.audit_process_id,
+            5,
+            f"audit-process:{scope.audit_process_id}:document-delta",
+            "service:synthetic-audit",
+            "audit.document.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        document_delta,
+    )
+    assert evaluated.accepted and evaluated.revision == 6
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 1
+        )
+        assert connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_items")) == 1
+        assert (
+            connection.scalar(
+                sa.text(
+                    "SELECT revision FROM workspace.audit_processes WHERE audit_process_id=:process"
+                ),
+                {"process": scope.audit_process_id},
+            )
+            == 6
+        )
+    repeated_evaluation = store.evaluate_document_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+            scope.audit_process_id,
+            5,
+            f"audit-process:{scope.audit_process_id}:document-delta-repeat",
+            "service:synthetic-audit",
+            "audit.document.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        document_delta,
+    )
+    assert not repeated_evaluation.accepted
+    assert repeated_evaluation.outcome_code == "CONCURRENCY_CONFLICT"
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 1
+        )
 
     other = create_tenant(postgres_environment, tenant.organization_id)
     activate(postgres_environment, other)

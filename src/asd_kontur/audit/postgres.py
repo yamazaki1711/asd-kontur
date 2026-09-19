@@ -23,7 +23,7 @@ from asd_kontur.harness.models import digest_of
 from asd_kontur.persistence.scope import WorkspaceContext
 
 from .models import AuditScope, DeltaState, DocumentDelta
-from .process import AuditCommand, AuditStateMachine, CommandOutcome, ProcessState
+from .process import AuditCommand, AuditCommandType, AuditStateMachine, CommandOutcome, ProcessState
 
 
 class PostgresCorpusAuditStore:
@@ -115,53 +115,43 @@ class PostgresCorpusAuditStore:
         with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
             with session.begin():
                 _set_scope(session, context)
-                row = (
-                    session.execute(
-                        sa.text(
-                            "SELECT state,revision FROM workspace.audit_processes WHERE "
-                            "organization_id=:organization AND workspace_id=:workspace "
-                            "AND audit_process_id=:process FOR UPDATE"
-                        ),
-                        {
-                            "organization": context.organization_id,
-                            "workspace": context.workspace_id,
-                            "process": command.aggregate_id,
-                        },
-                    )
-                    .mappings()
-                    .one_or_none()
+                return self._apply_command_in_session(session, context, command)
+
+    def evaluate_document_delta(
+        self,
+        context: WorkspaceContext,
+        command: AuditCommand,
+        value: DocumentDelta,
+    ) -> CommandOutcome:
+        """Persist one immutable document delta with its header transition.
+
+        A delta cannot be attached to a merely similarly named audit process:
+        the stored process must pin the same snapshot, version, and rule set.
+        Header advancement and immutable rows share one transaction, so a
+        failed persistence cannot make the Audit UI look as if evaluation ran.
+        """
+
+        if command.command_type is not AuditCommandType.EVALUATE_DOCUMENT_DELTA:
+            raise ValueError("Audit command must evaluate a document delta")
+        scope = value.audit_scope
+        self._require_scope(context, scope.organization_id, scope.workspace_id)
+        if command.aggregate_id != scope.audit_process_id:
+            raise ValueError("Audit command aggregate does not match the delta scope")
+        if value.denominator.rule_set_version_id != scope.rule_set_version_id:
+            raise ValueError("Document delta denominator must pin the Audit rule set version")
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                revision = self._require_exact_evaluating_scope(session, scope)
+                outcome = AuditStateMachine().apply(
+                    ProcessState.EVALUATING,
+                    revision,
+                    command,
                 )
-                if row is None:
-                    raise ValueError("Audit process is not visible in the transaction scope")
-                state = ProcessState(str(row["state"]))
-                outcome = AuditStateMachine().apply(state, int(row["revision"]), command)
                 if not outcome.accepted:
                     return outcome
-                session.execute(
-                    sa.select(
-                        sa.func.set_config("asd.audit_operation_id", str(command.command_id), True)
-                    )
-                ).one()
-                updated = session.scalar(
-                    sa.text(
-                        "UPDATE workspace.audit_processes SET state=:state,revision=:revision,"
-                        "current_fingerprint=:fingerprint,updated_at=CURRENT_TIMESTAMP WHERE "
-                        "organization_id=:organization AND workspace_id=:workspace "
-                        "AND audit_process_id=:process AND revision=:expected_revision "
-                        "RETURNING revision"
-                    ),
-                    {
-                        "state": outcome.state.value,
-                        "revision": outcome.revision,
-                        "fingerprint": command.semantic_digest,
-                        "organization": context.organization_id,
-                        "workspace": context.workspace_id,
-                        "process": command.aggregate_id,
-                        "expected_revision": command.expected_revision,
-                    },
-                )
-                if updated != outcome.revision:
-                    raise RuntimeError("Audit process revision changed during the transaction")
+                self._insert_document_delta(session, value)
+                self._advance_header(session, context, command, outcome)
                 return outcome
 
     def record_inspection(self, context: WorkspaceContext, value: PhysicalObjectInspection) -> None:
@@ -465,77 +455,202 @@ class PostgresCorpusAuditStore:
     def record_document_delta(self, context: WorkspaceContext, value: DocumentDelta) -> None:
         scope = value.audit_scope
         self._require_scope(context, scope.organization_id, scope.workspace_id)
+        if value.denominator.rule_set_version_id != scope.rule_set_version_id:
+            raise ValueError("Document delta denominator must pin the Audit rule set version")
         counts = {state: sum(item.state is state for item in value.items) for state in DeltaState}
         with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
             with session.begin():
                 _set_scope(session, context)
-                session.execute(
-                    sa.text(
-                        "INSERT INTO workspace.audit_denominator_versions "
-                        "(organization_id,workspace_id,denominator_id,version,audit_process_id,delta_kind,exact_scope,required_item_keys,rule_set_version_id,evidence_refs,fingerprint,created_at) "
-                        "VALUES (:o,:w,:denominator,:denominator_version,:process,'document',CAST(:scope AS jsonb),:keys,:ruleset,:evidence,:fingerprint,:at)"
-                    ),
-                    {
-                        "o": scope.organization_id,
-                        "w": scope.workspace_id,
-                        "denominator": value.denominator.denominator_id,
-                        "denominator_version": value.denominator.version,
-                        "process": scope.audit_process_id,
-                        "scope": json.dumps(value.denominator.exact_scope),
-                        "keys": list(value.denominator.required_item_keys),
-                        "ruleset": value.denominator.rule_set_version_id,
-                        "evidence": list(value.denominator.evidence_refs),
-                        "fingerprint": digest_of(value.denominator),
-                        "at": datetime.now(UTC),
-                    },
+                self._require_exact_evaluating_scope(session, scope)
+                self._insert_document_delta(session, value, counts=counts)
+
+    def _insert_document_delta(
+        self,
+        session: Session,
+        value: DocumentDelta,
+        *,
+        counts: dict[DeltaState, int] | None = None,
+    ) -> None:
+        scope = value.audit_scope
+        exact_counts = counts or {
+            state: sum(item.state is state for item in value.items) for state in DeltaState
+        }
+        existing = session.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.audit_delta_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND audit_delta_id=:delta AND version=:version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "delta": value.document_delta_id,
+                "version": value.version,
+            },
+        )
+        if existing is not None:
+            if str(existing) != value.fingerprint:
+                raise ValueError(
+                    "Audit document delta identity is already bound to different evidence"
                 )
-                by_value = {getattr(key, "value", str(key)): count for key, count in counts.items()}
-                session.execute(
-                    sa.text(
-                        "INSERT INTO workspace.audit_delta_versions "
-                        "(organization_id,workspace_id,audit_delta_id,version,audit_process_id,delta_kind,denominator_id,denominator_version,satisfied_count,missing_count,conflict_count,indeterminate_count,blocked_count,fingerprint,evaluated_at) "
-                        "VALUES (:o,:w,:delta,:version,:process,'document',:denominator,:denominator_version,:satisfied,:missing,:conflict,:indeterminate,:blocked,:fingerprint,:at)"
-                    ),
-                    {
-                        "o": scope.organization_id,
-                        "w": scope.workspace_id,
-                        "delta": value.document_delta_id,
-                        "version": value.version,
-                        "process": scope.audit_process_id,
-                        "denominator": value.denominator.denominator_id,
-                        "denominator_version": value.denominator.version,
-                        "satisfied": by_value.get("satisfied", 0),
-                        "missing": by_value.get("missing", 0),
-                        "conflict": by_value.get("conflict", 0),
-                        "indeterminate": by_value.get("indeterminate", 0),
-                        "blocked": by_value.get("blocked", 0),
-                        "fingerprint": value.fingerprint,
-                        "at": datetime.now(UTC),
-                    },
-                )
-                for item in value.items:
-                    session.execute(
-                        sa.text(
-                            "INSERT INTO workspace.audit_delta_items "
-                            "(organization_id,workspace_id,audit_delta_id,delta_version,item_key,state,source_version_ids,source_locator_ids,rule_trace_ids,authority_decision_refs,uncertainty_codes,blocker_codes,downstream_impacts) "
-                            "VALUES (:o,:w,:delta,:version,:key,:state,:sources,:locators,:traces,:authority,:uncertainty,:blockers,:impacts)"
-                        ),
-                        {
-                            "o": scope.organization_id,
-                            "w": scope.workspace_id,
-                            "delta": value.document_delta_id,
-                            "version": value.version,
-                            "key": item.item_key,
-                            "state": item.state.value,
-                            "sources": list(item.source_version_ids),
-                            "locators": list(item.source_locator_ids),
-                            "traces": list(item.rule_trace_ids),
-                            "authority": list(item.authority_decision_refs),
-                            "uncertainty": list(item.uncertainty_codes),
-                            "blockers": list(item.blocker_codes),
-                            "impacts": list(item.downstream_impacts),
-                        },
-                    )
+            return
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_denominator_versions "
+                "(organization_id,workspace_id,denominator_id,version,audit_process_id,delta_kind,exact_scope,required_item_keys,rule_set_version_id,evidence_refs,fingerprint,created_at) "
+                "VALUES (:o,:w,:denominator,:denominator_version,:process,'document',CAST(:scope AS jsonb),:keys,:ruleset,:evidence,:fingerprint,:at)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "denominator": value.denominator.denominator_id,
+                "denominator_version": value.denominator.version,
+                "process": scope.audit_process_id,
+                "scope": json.dumps(value.denominator.exact_scope),
+                "keys": list(value.denominator.required_item_keys),
+                "ruleset": value.denominator.rule_set_version_id,
+                "evidence": list(value.denominator.evidence_refs),
+                "fingerprint": digest_of(value.denominator),
+                "at": datetime.now(UTC),
+            },
+        )
+        by_value = {getattr(key, "value", str(key)): count for key, count in exact_counts.items()}
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_delta_versions "
+                "(organization_id,workspace_id,audit_delta_id,version,audit_process_id,delta_kind,denominator_id,denominator_version,satisfied_count,missing_count,conflict_count,indeterminate_count,blocked_count,fingerprint,evaluated_at) "
+                "VALUES (:o,:w,:delta,:version,:process,'document',:denominator,:denominator_version,:satisfied,:missing,:conflict,:indeterminate,:blocked,:fingerprint,:at)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "delta": value.document_delta_id,
+                "version": value.version,
+                "process": scope.audit_process_id,
+                "denominator": value.denominator.denominator_id,
+                "denominator_version": value.denominator.version,
+                "satisfied": by_value.get("satisfied", 0),
+                "missing": by_value.get("missing", 0),
+                "conflict": by_value.get("conflict", 0),
+                "indeterminate": by_value.get("indeterminate", 0),
+                "blocked": by_value.get("blocked", 0),
+                "fingerprint": value.fingerprint,
+                "at": datetime.now(UTC),
+            },
+        )
+        for item in value.items:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_delta_items "
+                    "(organization_id,workspace_id,audit_delta_id,delta_version,item_key,state,source_version_ids,source_locator_ids,rule_trace_ids,authority_decision_refs,uncertainty_codes,blocker_codes,downstream_impacts) "
+                    "VALUES (:o,:w,:delta,:version,:key,:state,:sources,:locators,:traces,:authority,:uncertainty,:blockers,:impacts)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "delta": value.document_delta_id,
+                    "version": value.version,
+                    "key": item.item_key,
+                    "state": item.state.value,
+                    "sources": list(item.source_version_ids),
+                    "locators": list(item.source_locator_ids),
+                    "traces": list(item.rule_trace_ids),
+                    "authority": list(item.authority_decision_refs),
+                    "uncertainty": list(item.uncertainty_codes),
+                    "blockers": list(item.blocker_codes),
+                    "impacts": list(item.downstream_impacts),
+                },
+            )
+
+    @staticmethod
+    def _require_exact_evaluating_scope(session: Session, scope: AuditScope) -> int:
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT state,revision,mode_execution_id,corpus_snapshot_id,corpus_snapshot_version,"
+                    "rule_set_version_id FROM workspace.audit_processes WHERE "
+                    "organization_id=:o AND workspace_id=:w AND audit_process_id=:process FOR UPDATE"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "process": scope.audit_process_id,
+                },
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise ValueError("Audit process is not visible in the transaction scope")
+        expected = {
+            "mode_execution_id": scope.mode_execution_id,
+            "corpus_snapshot_id": scope.corpus_snapshot_id,
+            "corpus_snapshot_version": scope.corpus_snapshot_version,
+            "rule_set_version_id": scope.rule_set_version_id,
+        }
+        if {key: row[key] for key in expected} != expected:
+            raise ValueError("Audit process is bound to a different immutable scope")
+        if ProcessState(str(row["state"])) is not ProcessState.EVALUATING:
+            raise ValueError("Document delta requires an evaluating Audit process")
+        return int(row["revision"])
+
+    @staticmethod
+    def _advance_header(
+        session: Session,
+        context: WorkspaceContext,
+        command: AuditCommand,
+        outcome: CommandOutcome,
+    ) -> None:
+        session.execute(
+            sa.select(sa.func.set_config("asd.audit_operation_id", str(command.command_id), True))
+        ).one()
+        updated = session.scalar(
+            sa.text(
+                "UPDATE workspace.audit_processes SET state=:state,revision=:revision,"
+                "current_fingerprint=:fingerprint,updated_at=CURRENT_TIMESTAMP WHERE "
+                "organization_id=:organization AND workspace_id=:workspace "
+                "AND audit_process_id=:process AND revision=:expected_revision "
+                "RETURNING revision"
+            ),
+            {
+                "state": outcome.state.value,
+                "revision": outcome.revision,
+                "fingerprint": command.semantic_digest,
+                "organization": context.organization_id,
+                "workspace": context.workspace_id,
+                "process": command.aggregate_id,
+                "expected_revision": command.expected_revision,
+            },
+        )
+        if updated != outcome.revision:
+            raise RuntimeError("Audit process revision changed during the transaction")
+
+    @staticmethod
+    def _apply_command_in_session(
+        session: Session, context: WorkspaceContext, command: AuditCommand
+    ) -> CommandOutcome:
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT state,revision FROM workspace.audit_processes WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace "
+                    "AND audit_process_id=:process FOR UPDATE"
+                ),
+                {
+                    "organization": context.organization_id,
+                    "workspace": context.workspace_id,
+                    "process": command.aggregate_id,
+                },
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            raise ValueError("Audit process is not visible in the transaction scope")
+        state = ProcessState(str(row["state"]))
+        outcome = AuditStateMachine().apply(state, int(row["revision"]), command)
+        if outcome.accepted:
+            PostgresCorpusAuditStore._advance_header(session, context, command, outcome)
+        return outcome
 
     @staticmethod
     def _require_scope(
