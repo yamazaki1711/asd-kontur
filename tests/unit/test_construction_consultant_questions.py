@@ -13,6 +13,7 @@ from asd_kontur.assistant.construction_consultant_postgres import (
 from asd_kontur.assistant.construction_consultant_questions import (
     ConstructionConsultantQuestionError,
     ConstructionConsultantQuestionService,
+    _prompt,
 )
 from asd_kontur.knowledge.gateway import (
     EvidenceItem,
@@ -205,3 +206,54 @@ def test_question_does_not_persist_messages_when_inference_fails() -> None:
 
     assert exc_info.value.code == "construction_consultant_inference_unavailable"
     assert repository.persisted == []
+
+
+def test_prompt_keeps_later_evidence_identity_after_long_tool_metadata() -> None:
+    def response(source_id: str, locator: str, fragment: str) -> GatewayResponse:
+        return GatewayResponse(
+            "consultant.search_ntd_content",
+            "2.9.0",
+            GatewayStatus.OK,
+            {
+                "outcome": "found",
+                "items": [{"text": fragment}],
+                "metadata": "x" * 50_000,
+                "sources": [
+                    {
+                        "source_version_id": source_id,
+                        "title": f"Source {source_id}",
+                        "href": f"source://{source_id}",
+                        "fragment": fragment,
+                    }
+                ],
+            },
+            EvidencePack(
+                (
+                    EvidenceItem(
+                        source_id,
+                        source_id,
+                        None,
+                        locator,
+                        "sha256:" + "a" * 64,
+                        f"source://{source_id}",
+                    ),
+                ),
+                (),
+                (),
+                (),
+                (),
+            ),
+        )
+
+    prompt = _prompt(
+        "Какие документы требуют проверки?",
+        (),
+        (response("source-1", "page:1", "first"), response("source-2", "page:77", "second")),
+    )
+
+    assert "source-1" in prompt
+    assert "source-2" in prompt
+    assert "page:77" in prompt
+    assert "source://source-2" in prompt
+    assert '"metadata"' not in prompt
+    assert '"truncated":true' not in prompt

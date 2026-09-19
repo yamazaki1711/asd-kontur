@@ -21,6 +21,10 @@ from asd_kontur.assistant.profiles import (
 )
 from asd_kontur.knowledge.gateway import GatewayResponse
 
+_MAX_PROMPT_EVIDENCE_SOURCES = 16
+_MAX_PROMPT_EVIDENCE_EXCERPT = 1_200
+_MAX_PROMPT_EVIDENCE_VALUE = 1_800
+
 
 class ConstructionConsultantQuestionError(RuntimeError):
     def __init__(self, code: str) -> None:
@@ -238,24 +242,7 @@ def _prompt(
     evidence: tuple[GatewayResponse, ...],
 ) -> str:
     recent_history = [{"role": item.role, "content": item.content[:1200]} for item in history[-10:]]
-    evidence_payload = [
-        {
-            "tool": response.tool,
-            "status": response.status.value,
-            "result": response.result,
-            "sources": [
-                {
-                    "source_version_id": item.source_version_id,
-                    "locator": item.structural_unit_locator,
-                    "access_reference": item.access_reference,
-                    "authority_layer": item.authority_layer,
-                }
-                for item in response.evidence_pack.evidence
-            ],
-        }
-        for response in evidence
-    ]
-    rendered = json.dumps(evidence_payload, ensure_ascii=False)[:24000]
+    rendered = json.dumps(_prompt_evidence(evidence), ensure_ascii=False, separators=(",", ":"))
     return (
         "Вы — Строительный консультант АСД-КОНТУР. Дайте прямой профессиональный ответ "
         "по-русски. Сначала ответ, затем только существенные условия и ограничение. "
@@ -265,3 +252,73 @@ def _prompt(
         f"Вопрос: {question}\nИстория: {json.dumps(recent_history, ensure_ascii=False)}\n"
         f"Проверяемые основания: {rendered}\nПрофиль: {CONSTRUCTION_CONSULTANT_PROFILE}"
     )
+
+
+def _prompt_evidence(evidence: tuple[GatewayResponse, ...]) -> list[dict[str, Any]]:
+    """Render bounded evidence without cutting a serialized JSON document.
+
+    The previous raw character limit could leave the model with invalid JSON or
+    with a fragment detached from its source identity.  This projection keeps
+    source identity, locator, authority and access reference as atomic fields,
+    then bounds only the optional human-readable excerpts.  It is deliberately
+    a prompt projection: the complete Gateway response and the persisted
+    message-source records remain the audit boundary.
+    """
+
+    remaining_sources = _MAX_PROMPT_EVIDENCE_SOURCES
+    rendered: list[dict[str, Any]] = []
+    for response in evidence:
+        source_views = {
+            str(source.get("source_version_id") or source.get("source_id")): source
+            for source in response.result.get("sources", [])
+            if isinstance(source, dict)
+        }
+        sources: list[dict[str, Any]] = []
+        for item in response.evidence_pack.evidence:
+            if remaining_sources == 0:
+                break
+            remaining_sources -= 1
+            source = source_views.get(item.source_version_id, {})
+            sources.append(
+                {
+                    "source_version_id": item.source_version_id,
+                    "locator": item.structural_unit_locator,
+                    "access_reference": item.access_reference,
+                    "authority_layer": item.authority_layer,
+                    "title": _bounded_text(source.get("title"), 240),
+                    "edition": _bounded_text(source.get("edition"), 120),
+                    "excerpt": _bounded_text(source.get("fragment"), _MAX_PROMPT_EVIDENCE_EXCERPT),
+                }
+            )
+        rendered.append(
+            {
+                "tool": response.tool,
+                "status": response.status.value,
+                "outcome": _bounded_text(response.result.get("outcome"), 80),
+                "gaps": _bounded_value(response.result.get("gaps", ()), 360),
+                "items": _bounded_value(
+                    response.result.get("items", ()), _MAX_PROMPT_EVIDENCE_VALUE
+                ),
+                "value": _bounded_value(response.result.get("value"), _MAX_PROMPT_EVIDENCE_VALUE),
+                "sources": sources,
+            }
+        )
+    return rendered
+
+
+def _bounded_text(value: object | None, limit: int) -> str | None:
+    if value is None:
+        return None
+    text = str(value)
+    return text if len(text) <= limit else text[:limit] + "…"
+
+
+def _bounded_value(value: object, limit: int) -> object:
+    """Keep a valid JSON value within a bounded, non-evidence prompt field."""
+
+    if value is None:
+        return None
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"), default=str)
+    if len(encoded) <= limit:
+        return value
+    return {"truncated": True, "excerpt": encoded[:limit] + "…"}

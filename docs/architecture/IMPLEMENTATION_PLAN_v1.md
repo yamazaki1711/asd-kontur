@@ -85,6 +85,19 @@ audited Support-command service and an authorised request flow that supplies
 the exact mode execution, rule-set, policy manifest, and deliverable scope.
 This is an operational/authority dependency, not an OZERO-processing blocker.
 
+* The platform construction consultant now projects Gateway evidence into a
+  bounded structural prompt before local-Qwen generation. Every selected
+  source retains its source-version identity, locator, authority layer, and
+  access reference; only optional excerpts and non-evidence result fields are
+  bounded. This prevents long metadata from removing later evidence or leaving
+  a malformed JSON fragment in the model context. The full Gateway receipt and
+  persisted message source records remain the audit boundary. A controlled
+  unit case exercises two sources separated by 50,000 characters of irrelevant
+  metadata, and a bounded loopback request confirms the configured local Qwen
+  generation contract. OZERO is not read or changed. This advances a reusable
+  evidence-bound analytical consultation surface; it does not establish its
+  full professional quality matrix, browser E2E, or a mode-ready decision.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,
