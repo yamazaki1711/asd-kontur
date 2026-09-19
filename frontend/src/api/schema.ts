@@ -2353,6 +2353,10 @@ export interface components {
             requirements: {
                 [key: string]: unknown;
             }[];
+            /** Support Process */
+            support_process?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Workspace Id
              * Format: uuid

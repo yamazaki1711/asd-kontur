@@ -2868,6 +2868,7 @@ function SupportProductionBody({
   const registerHistory = value.register_history ?? [];
   const fields = value.field_resolutions ?? [];
   const fieldRows = mergeFieldResolutionRows(fields);
+  const supportProcess = value.support_process;
   return (
     <>
       <section className="panel">
@@ -2933,7 +2934,14 @@ function SupportProductionBody({
             определены.
           </InfoNotice>
         )}
-        {!value.package &&
+        {!value.package && !supportProcess && (
+          <InfoNotice>
+            Перед формированием комплекта нужно настроить контур сопровождения
+            для этого ОКС с полномочием специалиста. Без него пакет не будет
+            иметь закреплённого объёма работ, политики и версии правил.
+          </InfoNotice>
+        )}
+        {!value.package && supportProcess &&
           workPackages.map((identity) => (
             <button
               key={identity}

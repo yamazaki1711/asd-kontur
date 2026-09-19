@@ -63,6 +63,18 @@ The two initial increments are implemented on feature releases `98b7363` and
   linked source locators in a deduplicated table rather than labelling the
   section as completed fields.  OZERO is not used for this acceptance.
 
+* Support package formation now requires an existing scoped Support process.
+  The Product Application exposes its immutable scope/process context and, if
+  it is absent, explains that an authorised professional must configure the
+  Support scope before an ID package can be formed. This prevents an apparent
+  package from being created against a raw Tender observation without a
+  declared deliverable scope, policy set, and rule-set version. It does not
+  promote Tender candidates, bypass a professional grant, or require routine
+  manual review of every observation. Controlled PostgreSQL acceptance proves
+  both the configured process success path and the no-process API rejection;
+  the generated OpenAPI client and Russian UI distinguish the two states.
+  OZERO is not used.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,

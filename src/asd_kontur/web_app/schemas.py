@@ -414,6 +414,7 @@ class SupportProductionView(ApiModel):
     registers: list[dict[str, Any]] = Field(default_factory=list)
     readiness: dict[str, Any] | None = None
     field_resolutions: list[dict[str, Any]] = Field(default_factory=list)
+    support_process: dict[str, Any] | None = None
     gaps: list[str]
     authority_layers: dict[str, str]
 

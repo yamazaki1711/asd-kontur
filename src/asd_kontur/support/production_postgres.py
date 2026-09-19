@@ -39,12 +39,40 @@ class SupportProductionRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
+    @staticmethod
+    def _latest_support_process(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any] | None:
+        """Return the configured professional Support boundary for this workspace."""
+
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT p.support_process_id,p.mode_execution_id,p.state,p.revision,"
+                    "p.process_definition_version,p.rule_set_version_id,p.authority_profile_version,"
+                    "s.scope_version,s.deliverable_scope,s.source_class_allowlist,s.policy_versions,"
+                    "s.classification,s.purpose,s.scope_digest,s.recorded_at FROM "
+                    "workspace.support_processes p JOIN workspace.support_scope_versions s ON "
+                    "s.organization_id=p.organization_id AND s.workspace_id=p.workspace_id AND "
+                    "s.support_process_id=p.support_process_id WHERE p.organization_id=:o AND "
+                    "p.workspace_id=:w ORDER BY p.updated_at DESC,s.scope_version DESC LIMIT 1"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        return None if row is None else dict(row)
+
     def view(self, *, owner_identity_id: str, workspace_id: UUID) -> dict[str, Any]:
         organization_id = self._resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
             matrix = self._latest_matrix(session, organization_id, workspace_id)
             requirements = [] if matrix is None else _matrix_requirements(matrix)
+            support_process = self._latest_support_process(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             package_row = (
                 session.execute(
                     sa.text(
@@ -69,8 +97,10 @@ class SupportProductionRepository:
                     "book_history": [],
                     "register_history": [],
                     "readiness_history": [],
+                    "support_process": support_process,
                     "gaps": [
                         *(("WORK_REQUIREMENT_MATRIX_UNAVAILABLE",) if matrix is None else ()),
+                        *(("SUPPORT_PROCESS_NOT_CONFIGURED",) if support_process is None else ()),
                         "ID_PACKAGE_NOT_FORMED",
                     ],
                     "authority_layers": _authority_layers(),
@@ -257,6 +287,7 @@ class SupportProductionRepository:
             "registers": [_jsonable(item) for item in registers],
             "readiness": _jsonable(readiness) if readiness is not None else None,
             "field_resolutions": [_jsonable(item) for item in fields],
+            "support_process": _jsonable(support_process) if support_process is not None else None,
             "gaps": sorted(
                 {
                     str(code)
@@ -307,6 +338,13 @@ class SupportProductionRepository:
         now = datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
+            if (
+                self._latest_support_process(
+                    session, organization_id=organization_id, workspace_id=workspace_id
+                )
+                is None
+            ):
+                raise SupportProductionError("support_process_not_configured")
             matrix = self._latest_matrix(session, organization_id, workspace_id)
             if matrix is None:
                 raise SupportProductionError("work_requirement_matrix_unavailable")

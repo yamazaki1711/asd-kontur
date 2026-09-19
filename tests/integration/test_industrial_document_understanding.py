@@ -189,6 +189,19 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE" in gap_codes
         assert view["authority_layers"]["normative_authority"] == "verified_subset_only"
         assert view["normative_profile"]["completeness_status"] == "blocked"
+        support_view = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-production"
+        )
+        assert support_view.status_code == 200, support_view.text
+        assert support_view.json()["support_process"] is None
+        assert "SUPPORT_PROCESS_NOT_CONFIGURED" in support_view.json()["gaps"]
+        unsafe_package = client.post(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-packages",
+            json={"work_package_id": view["work_packages"][0]["work_package_id"]},
+            headers=csrf,
+        )
+        assert unsafe_package.status_code == 409, unsafe_package.text
+        assert unsafe_package.json()["error"]["code"] == "support_process_not_configured"
         tender_inputs = {
             item["category"]: item for item in view["intake_summary"]["tender_input_assessment"]
         }

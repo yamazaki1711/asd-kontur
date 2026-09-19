@@ -3168,6 +3168,18 @@
             "title": "Requirements",
             "type": "array"
           },
+          "support_process": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Process"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
