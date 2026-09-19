@@ -117,6 +117,17 @@ The two initial increments are implemented on feature releases `98b7363` and
   it does not qualify an official form template or establish Support mode
   readiness.
 
+The same export now contains a deterministic delivery manifest after the
+register and generated documents. It records the exact package version,
+membership/version state, template qualification boundary, evidence references,
+blockers, and SHA-256 digest of each included document. Missing and blocked
+members are recorded without a fabricated file. This lets an editable package
+be checked after download or handoff without treating a generated candidate as
+a signed or executed document. A controlled archive test verifies ordering,
+digest binding, candidate/missing preservation, and the PostgreSQL Support
+workflow verifies the downloadable package. OZERO is not used; it has no
+field-execution authority or actual Support transition.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

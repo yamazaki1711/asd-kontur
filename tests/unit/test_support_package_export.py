@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import zipfile
 
 from asd_kontur.support.generation import validate_docx
@@ -92,6 +93,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             "01_register_candidate.docx",
             "01_register.csv",
             "02_support.aosr_candidate.docx",
+            "96_package_manifest.json",
             "97_field_evidence_and_missing_inputs.csv",
             "98_package_status.txt",
             "99_missing_or_blocked_items.csv",
@@ -118,6 +120,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
                 )
             )
         )
+        manifest = json.loads(exported.read("96_package_manifest.json"))
     assert rows[0]["role"] == "support.executive-scheme"
     assert rows[0]["blockers"] == "GEOMETRY_UNCONFIRMED"
     assert [field["field_key"] for field in fields] == ["as_built_level", "work_description"]
@@ -125,3 +128,13 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
     assert fields[0]["display_value"] == ""
     assert fields[1]["evidence_link_ids"] == "evidence-1;evidence-2"
     assert fields[1]["source_locator_ids"] == "locator-1;locator-2"
+    assert manifest["manifest_kind"] == "support_id_package_delivery_manifest"
+    assert [member["role"] for member in manifest["members"]] == [
+        "register",
+        "support.aosr",
+        "support.executive-scheme",
+    ]
+    generated = manifest["members"][1]
+    assert generated["archive_member"] == "02_support.aosr_candidate.docx"
+    assert generated["object_digest"].startswith("sha256:")
+    assert manifest["members"][2]["state"] == "missing"

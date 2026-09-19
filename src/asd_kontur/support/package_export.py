@@ -10,7 +10,9 @@ signature, field fact, or finalization state.
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import json
 import re
 import zipfile
 from collections.abc import Callable, Iterable, Mapping
@@ -60,8 +62,10 @@ def build_editable_id_package_archive(
         _write(archive, "01_register_candidate.docx", _register_docx(package, register_manifest))
         _write(archive, "01_register.csv", _register_csv(register_manifest))
         missing: list[dict[str, str]] = []
+        manifest_members: list[dict[str, object]] = []
         for member in members:
             if str(member.get("role")) == "register":
+                manifest_members.append(_manifest_member(member, state="register"))
                 continue
             object_key = member.get("object_reference")
             state = _membership_state(member)
@@ -74,12 +78,27 @@ def build_editable_id_package_archive(
                         "blockers": ";".join(str(item) for item in member.get("blocker_codes", [])),
                     }
                 )
+                manifest_members.append(_manifest_member(member, state=state))
                 continue
             extension = _extension(str(member.get("format", "")))
             role = _safe_component(str(member.get("role", "document")))
             suffix = "finalized" if member.get("finalized_document_id") else "candidate"
             name = f"{int(member['ordinal']):02d}_{role}_{suffix}.{extension}"
-            _write(archive, name, read_object(str(object_key)))
+            payload = read_object(str(object_key))
+            _write(archive, name, payload)
+            manifest_members.append(
+                _manifest_member(
+                    member,
+                    state=state,
+                    archive_member=name,
+                    object_digest="sha256:" + hashlib.sha256(payload).hexdigest(),
+                )
+            )
+        _write(
+            archive,
+            "96_package_manifest.json",
+            _package_manifest(package, register_manifest, manifest_members),
+        )
         _write(
             archive,
             "97_field_evidence_and_missing_inputs.csv",
@@ -311,6 +330,8 @@ def _status_text(package: Mapping[str, Any], members: Iterable[Mapping[str, Any]
         "Готовность полей и отсутствующие входные данные перечислены в "
         "97_field_evidence_and_missing_inputs.csv.",
         "Отсутствующие и заблокированные позиции перечислены в 99_missing_or_blocked_items.csv.",
+        "Состав архива, версии и контрольные суммы включённых файлов приведены в "
+        "96_package_manifest.json.",
     )
     return ("\n".join(lines) + "\n").encode("utf-8")
 
@@ -328,6 +349,69 @@ def _membership_state(member: Mapping[str, Any]) -> str:
     if member.get("generated_candidate_id"):
         return "generated_candidate"
     return str(member.get("state", "missing"))
+
+
+def _manifest_member(
+    member: Mapping[str, Any],
+    *,
+    state: str,
+    archive_member: str | None = None,
+    object_digest: str | None = None,
+) -> dict[str, object]:
+    """Describe one exact membership without treating it as a completed fact."""
+
+    return {
+        "ordinal": int(member.get("ordinal", 0)),
+        "membership_id": _as_text(member.get("membership_id")),
+        "membership_version": member.get("version"),
+        "role": _as_text(member.get("role")),
+        "state": state,
+        "format": _as_text(member.get("format")),
+        "archive_member": archive_member,
+        "object_digest": object_digest,
+        "generated_candidate_id": _as_text(member.get("generated_candidate_id")),
+        "finalized_document_id": _as_text(member.get("finalized_document_id")),
+        "template_id": _as_text(member.get("template_id")),
+        "template_version": _as_text(member.get("template_version")),
+        "template_qualification_state": _as_text(member.get("template_qualification_state")),
+        "template_official_status": _as_text(member.get("template_official_status")),
+        "evidence_refs": sorted(str(item) for item in member.get("evidence_refs", [])),
+        "blocker_codes": sorted(str(item) for item in member.get("blocker_codes", [])),
+    }
+
+
+def _package_manifest(
+    package: Mapping[str, Any],
+    register_manifest: Mapping[str, Any],
+    members: list[dict[str, object]],
+) -> bytes:
+    """Write an auditable, deterministic archive manifest after the register.
+
+    The manifest has no authority to finalise a document.  It merely lets a
+    recipient verify exactly which candidate/finalized member and field-status
+    schedules were delivered with this package version.
+    """
+
+    payload = {
+        "manifest_kind": "support_id_package_delivery_manifest",
+        "package": {
+            "id_package_id": _as_text(package.get("id_package_id")),
+            "version": package.get("version"),
+            "status": "candidate_or_finalized_members_only",
+        },
+        "register_manifest_digest": "sha256:"
+        + hashlib.sha256(
+            json.dumps(register_manifest, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "members": members,
+        "limitations": [
+            "A candidate document is not proof of executed work, signature, measurement, or test result.",
+            "A missing or blocked membership remains outside the delivered document set.",
+        ],
+    }
+    return (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
 
 
 def _extension(value: str) -> str:
