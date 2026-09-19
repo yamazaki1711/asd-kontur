@@ -72,6 +72,11 @@ The two initial increments are implemented on feature releases `98b7363` and
   acceptance exercises generated and missing document cases; OZERO is not
   needed.
 
+* Tender work/resource schedules retain a stated zero quantity as an
+  observation.  Zero is distinct from absent data and remains source-scoped;
+  no project total is inferred.  Controlled exporter and disposable
+  project-understanding API tests cover this behaviour without OZERO.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

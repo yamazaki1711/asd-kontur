@@ -98,8 +98,8 @@ def _scope_row(
 
 
 def _quantity_text(value: Mapping[str, Any]) -> str:
-    raw_value = str(value.get("raw_value") or "")
-    raw_unit = str(value.get("raw_unit") or "")
+    raw_value = _text(value.get("raw_value"))
+    raw_unit = _text(value.get("raw_unit"))
     normalized_value = value.get("normalized_value")
     normalized_unit = value.get("normalized_unit")
     locator = str(value.get("source_locator_id") or "")
@@ -112,8 +112,12 @@ def _quantity_text(value: Mapping[str, Any]) -> str:
 
 
 def _material_text(value: Mapping[str, Any]) -> str:
-    name = str(value.get("raw_name") or "")
-    quantity = str(value.get("raw_quantity") or "")
-    unit = str(value.get("raw_unit") or "")
-    locator = str(value.get("source_locator_id") or "")
+    name = _text(value.get("raw_name"))
+    quantity = _text(value.get("raw_quantity"))
+    unit = _text(value.get("raw_unit"))
+    locator = _text(value.get("source_locator_id"))
     return f"{name}; {quantity} {unit}; locator={locator}".strip()
+
+
+def _text(value: object | None) -> str:
+    return "" if value is None else str(value)

@@ -177,6 +177,45 @@ def test_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
     assert rows[0]["source_references"] == "Plan A.pdf, version 1, page:2 (locator-a)"
 
 
+def test_scope_schedule_preserves_zero_quantity_observations() -> None:
+    content = render_tender_scope_schedule_csv(
+        (
+            {
+                "work_package_id": "package-zero",
+                "package": {
+                    "work_type": {"raw": "Demolition", "normalized": "demolition"},
+                    "scope": "zone-a",
+                    "candidate_observation_count": 1,
+                    "quantities": [
+                        {
+                            "raw_value": 0,
+                            "raw_unit": "m3",
+                            "normalized_value": 0,
+                            "normalized_unit": "m3",
+                            "source_locator_id": "locator-quantity",
+                        }
+                    ],
+                    "materials": [
+                        {
+                            "raw_name": "Concrete",
+                            "raw_quantity": 0,
+                            "raw_unit": "m3",
+                            "source_locator_id": "locator-material",
+                        }
+                    ],
+                    "source_locator_ids": ["locator-quantity", "locator-material"],
+                },
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=(),
+    )
+
+    row = next(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert row["quantity_observations"] == "0 m3; normalized=0 m3; locator=locator-quantity"
+    assert row["material_observations"] == "Concrete; 0 m3; locator=locator-material"
+
+
 def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary() -> None:
     archive = build_tender_analysis_archive(
         findings_report=b"docx-payload",
