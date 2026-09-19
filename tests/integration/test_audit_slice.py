@@ -16,10 +16,14 @@ from asd_kontur.audit import (
     AuditCommand,
     AuditCommandType,
     AuditScope,
+    CausalImpactPath,
+    CausalReadinessDelta,
     DeltaDenominator,
     DeltaState,
     DocumentDelta,
     EvidenceRatedItem,
+    PackageAssessment,
+    PackageReadiness,
     PostgresCorpusAuditStore,
     ProcessState,
 )
@@ -610,6 +614,115 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
         set_scope(connection, tenant)
         assert (
             connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 1
+        )
+
+    causal_delta = CausalReadinessDelta(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-material-batch",),
+            ("synthetic-material-batch",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            CausalImpactPath(
+                uuid7(),
+                "material-batch:1",
+                None,
+                None,
+                "work:sheet-pile",
+                None,
+                None,
+                None,
+                None,
+                None,
+                DeltaState.BLOCKED,
+                (),
+                ("MATERIAL_CERTIFICATE_MISSING",),
+                ("id_package", "payment_readiness"),
+            ),
+        ),
+    )
+    causal = store.evaluate_causal_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_CAUSAL_DELTA,
+            scope.audit_process_id,
+            6,
+            f"audit-process:{scope.audit_process_id}:causal-delta",
+            "service:synthetic-audit",
+            "audit.causal.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        causal_delta,
+    )
+    assert causal.accepted and causal.revision == 7
+    package_delta = PackageReadiness(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-package",),
+            ("support.aosr",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            PackageAssessment(
+                uuid7(),
+                1,
+                None,
+                "synthetic-section",
+                (),
+                DeltaState.SATISFIED,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                ("SIGNATURES_AND_HANDOVER_UNAVAILABLE",),
+            ),
+        ),
+    )
+    packaged = store.evaluate_package_readiness(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_PACKAGE_READINESS,
+            scope.audit_process_id,
+            7,
+            f"audit-process:{scope.audit_process_id}:package-delta",
+            "service:synthetic-audit",
+            "audit.package.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        package_delta,
+    )
+    assert packaged.accepted and packaged.revision == 8
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 3
+        )
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_causal_path_versions"))
+            == 1
+        )
+        assert (
+            connection.scalar(
+                sa.text("SELECT count(*) FROM workspace.audit_package_delta_memberships")
+            )
+            == 1
         )
 
     other = create_tenant(postgres_environment, tenant.organization_id)

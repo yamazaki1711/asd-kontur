@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
@@ -22,7 +23,16 @@ from asd_kontur.corpus import (
 from asd_kontur.harness.models import digest_of
 from asd_kontur.persistence.scope import WorkspaceContext
 
-from .models import AuditScope, DeltaState, DocumentDelta
+from .evaluation import package_readiness_counts
+from .models import (
+    AuditScope,
+    CausalReadinessDelta,
+    DeltaDenominator,
+    DeltaState,
+    DocumentDelta,
+    PackageAssessment,
+    PackageReadiness,
+)
 from .process import AuditCommand, AuditCommandType, AuditStateMachine, CommandOutcome, ProcessState
 
 
@@ -153,6 +163,40 @@ class PostgresCorpusAuditStore:
                 self._insert_document_delta(session, value)
                 self._advance_header(session, context, command, outcome)
                 return outcome
+
+    def evaluate_causal_delta(
+        self,
+        context: WorkspaceContext,
+        command: AuditCommand,
+        value: CausalReadinessDelta,
+    ) -> CommandOutcome:
+        """Persist exact causal paths and advance one evaluation transition."""
+
+        return self._evaluate_delta(
+            context,
+            command,
+            scope=value.audit_scope,
+            denominator=value.denominator,
+            command_type=AuditCommandType.EVALUATE_CAUSAL_DELTA,
+            persist=lambda session: self._insert_causal_delta(session, value),
+        )
+
+    def evaluate_package_readiness(
+        self,
+        context: WorkspaceContext,
+        command: AuditCommand,
+        value: PackageReadiness,
+    ) -> CommandOutcome:
+        """Persist package/signing/handover states and their exact memberships."""
+
+        return self._evaluate_delta(
+            context,
+            command,
+            scope=value.audit_scope,
+            denominator=value.denominator,
+            command_type=AuditCommandType.EVALUATE_PACKAGE_READINESS,
+            persist=lambda session: self._insert_package_readiness(session, value),
+        )
 
     def record_inspection(self, context: WorkspaceContext, value: PhysicalObjectInspection) -> None:
         self._require_scope(context, value.scope.organization_id, value.scope.workspace_id)
@@ -561,6 +605,297 @@ class PostgresCorpusAuditStore:
                 },
             )
 
+    def _evaluate_delta(
+        self,
+        context: WorkspaceContext,
+        command: AuditCommand,
+        *,
+        scope: AuditScope,
+        denominator: DeltaDenominator,
+        command_type: AuditCommandType,
+        persist: Callable[[Session], None],
+    ) -> CommandOutcome:
+        if command.command_type is not command_type:
+            raise ValueError("Audit command does not match the immutable delta kind")
+        self._require_scope(context, scope.organization_id, scope.workspace_id)
+        if command.aggregate_id != scope.audit_process_id:
+            raise ValueError("Audit command aggregate does not match the delta scope")
+        if denominator.rule_set_version_id != scope.rule_set_version_id:
+            raise ValueError("Audit delta denominator must pin the Audit rule set version")
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                revision = self._require_exact_evaluating_scope(session, scope)
+                outcome = AuditStateMachine().apply(ProcessState.EVALUATING, revision, command)
+                if not outcome.accepted:
+                    return outcome
+                persist(session)
+                self._advance_header(session, context, command, outcome)
+                return outcome
+
+    def _insert_causal_delta(self, session: Session, value: CausalReadinessDelta) -> None:
+        scope = value.audit_scope
+        if self._existing_delta_matches(
+            session, scope, value.causal_delta_id, value.version, value.fingerprint
+        ):
+            return
+        counts = {state: sum(path.state is state for path in value.paths) for state in DeltaState}
+        self._insert_delta_header(
+            session,
+            scope=scope,
+            denominator=value.denominator,
+            delta_id=value.causal_delta_id,
+            delta_version=value.version,
+            delta_kind="causal_readiness",
+            counts=counts,
+            fingerprint=value.fingerprint,
+        )
+        for path in value.paths:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_delta_items "
+                    "(organization_id,workspace_id,audit_delta_id,delta_version,item_key,state,"
+                    "source_version_ids,source_locator_ids,rule_trace_ids,authority_decision_refs,"
+                    "uncertainty_codes,blocker_codes,downstream_impacts) VALUES "
+                    "(:o,:w,:delta,:version,:key,:state,ARRAY[]::uuid[],ARRAY[]::uuid[],"
+                    ":traces,ARRAY[]::text[],:gaps,:gaps,:impacts)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "delta": value.causal_delta_id,
+                    "version": value.version,
+                    "key": str(path.path_id),
+                    "state": path.state.value,
+                    "traces": list(path.rule_trace_ids),
+                    "gaps": list(path.gap_codes),
+                    "impacts": list(path.downstream_impacts),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_causal_path_versions "
+                    "(organization_id,workspace_id,causal_delta_id,delta_version,path_id,"
+                    "material_batch_ref,incoming_control_ref,admission_ref,work_ref,evidence_ref,"
+                    "id_package_ref,presented_volume_ref,ks_ref,payment_claim_ref,state,rule_trace_ids,"
+                    "gap_codes,downstream_impacts,fingerprint) VALUES "
+                    "(:o,:w,:delta,:version,:path,:batch,:control,:admission,:work,:evidence,"
+                    ":package,:volume,:ks,:payment,:state,:traces,:gaps,:impacts,:fingerprint)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "delta": value.causal_delta_id,
+                    "version": value.version,
+                    "path": path.path_id,
+                    "batch": path.material_batch_ref,
+                    "control": path.incoming_control_ref,
+                    "admission": path.admission_ref,
+                    "work": path.work_ref,
+                    "evidence": path.evidence_ref,
+                    "package": path.id_package_ref,
+                    "volume": path.presented_volume_ref,
+                    "ks": path.ks_ref,
+                    "payment": path.payment_claim_ref,
+                    "state": path.state.value,
+                    "traces": list(path.rule_trace_ids),
+                    "gaps": list(path.gap_codes),
+                    "impacts": list(path.downstream_impacts),
+                    "fingerprint": digest_of(path),
+                },
+            )
+
+    def _insert_package_readiness(self, session: Session, value: PackageReadiness) -> None:
+        scope = value.audit_scope
+        if self._existing_delta_matches(
+            session, scope, value.package_readiness_id, value.version, value.fingerprint
+        ):
+            return
+        counts = package_readiness_counts(value)
+        self._insert_delta_header(
+            session,
+            scope=scope,
+            denominator=value.denominator,
+            delta_id=value.package_readiness_id,
+            delta_version=value.version,
+            delta_kind="package_signing_handover",
+            counts=counts,
+            fingerprint=value.fingerprint,
+        )
+        for package in value.packages:
+            state = _package_state(package)
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_delta_items "
+                    "(organization_id,workspace_id,audit_delta_id,delta_version,item_key,state,"
+                    "source_version_ids,source_locator_ids,rule_trace_ids,authority_decision_refs,"
+                    "uncertainty_codes,blocker_codes,downstream_impacts) VALUES "
+                    "(:o,:w,:delta,:version,:key,:state,ARRAY[]::uuid[],ARRAY[]::uuid[],"
+                    "ARRAY[]::uuid[],ARRAY[]::text[],:blockers,:blockers,ARRAY[]::text[])"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "delta": value.package_readiness_id,
+                    "version": value.version,
+                    "key": str(package.package_id),
+                    "state": state.value,
+                    "blockers": list(package.blocker_codes),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_package_versions "
+                    "(organization_id,workspace_id,package_id,version,audit_process_id,volume_or_book_id,"
+                    "section_ref,professional_review_state,signer_authority_state,signature_state,"
+                    "handover_state,acceptance_state,blocker_codes,fingerprint,evaluated_at) VALUES "
+                    "(:o,:w,:package,:version,:process,:book,:section,:review,:signer,:signature,"
+                    ":handover,:acceptance,:blockers,:fingerprint,:at)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "package": package.package_id,
+                    "version": package.package_version,
+                    "process": scope.audit_process_id,
+                    "book": package.volume_or_book_id,
+                    "section": package.section_ref,
+                    "review": package.professional_review_state.value,
+                    "signer": package.signer_authority_state.value,
+                    "signature": package.signature_state.value,
+                    "handover": package.handover_state.value,
+                    "acceptance": package.acceptance_state.value,
+                    "blockers": list(package.blocker_codes),
+                    "fingerprint": digest_of(package),
+                    "at": datetime.now(UTC),
+                },
+            )
+            for membership in package.memberships:
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.audit_package_memberships "
+                        "(organization_id,workspace_id,package_id,package_version,logical_occurrence_id,"
+                        "ordinal,required_copies,actual_copies,register_level) VALUES "
+                        "(:o,:w,:package,:version,:occurrence,:ordinal,:required,:actual,:level)"
+                    ),
+                    {
+                        "o": scope.organization_id,
+                        "w": scope.workspace_id,
+                        "package": package.package_id,
+                        "version": package.package_version,
+                        "occurrence": membership.occurrence_id,
+                        "ordinal": membership.ordinal,
+                        "required": membership.required_copies,
+                        "actual": membership.actual_copies,
+                        "level": membership.register_level,
+                    },
+                )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_package_delta_memberships "
+                    "(organization_id,workspace_id,package_readiness_id,delta_version,package_id,package_version) "
+                    "VALUES (:o,:w,:delta,:version,:package,:package_version)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "delta": value.package_readiness_id,
+                    "version": value.version,
+                    "package": package.package_id,
+                    "package_version": package.package_version,
+                },
+            )
+
+    @staticmethod
+    def _existing_delta_matches(
+        session: Session,
+        scope: AuditScope,
+        delta_id: UUID,
+        version: int,
+        fingerprint: str,
+    ) -> bool:
+        existing = session.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.audit_delta_versions WHERE organization_id=:o "
+                "AND workspace_id=:w AND audit_delta_id=:delta AND version=:version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "delta": delta_id,
+                "version": version,
+            },
+        )
+        if existing is None:
+            return False
+        if str(existing) != fingerprint:
+            raise ValueError("Audit delta identity is already bound to different evidence")
+        return True
+
+    @staticmethod
+    def _insert_delta_header(
+        session: Session,
+        *,
+        scope: AuditScope,
+        denominator: DeltaDenominator,
+        delta_id: UUID,
+        delta_version: int,
+        delta_kind: str,
+        counts: dict[DeltaState, int],
+        fingerprint: str,
+    ) -> None:
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_denominator_versions "
+                "(organization_id,workspace_id,denominator_id,version,audit_process_id,delta_kind,"
+                "exact_scope,required_item_keys,rule_set_version_id,evidence_refs,fingerprint,created_at) "
+                "VALUES (:o,:w,:denominator,:denominator_version,:process,:kind,CAST(:scope AS jsonb),"
+                ":keys,:ruleset,:evidence,:fingerprint,:at)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "denominator": denominator.denominator_id,
+                "denominator_version": denominator.version,
+                "process": scope.audit_process_id,
+                "kind": delta_kind,
+                "scope": json.dumps(denominator.exact_scope),
+                "keys": list(denominator.required_item_keys),
+                "ruleset": denominator.rule_set_version_id,
+                "evidence": list(denominator.evidence_refs),
+                "fingerprint": digest_of(denominator),
+                "at": datetime.now(UTC),
+            },
+        )
+        by_value = {state.value: count for state, count in counts.items()}
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_delta_versions "
+                "(organization_id,workspace_id,audit_delta_id,version,audit_process_id,delta_kind,"
+                "denominator_id,denominator_version,satisfied_count,missing_count,conflict_count,"
+                "indeterminate_count,blocked_count,fingerprint,evaluated_at) VALUES "
+                "(:o,:w,:delta,:version,:process,:kind,:denominator,:denominator_version,:satisfied,"
+                ":missing,:conflict,:indeterminate,:blocked,:fingerprint,:at)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "delta": delta_id,
+                "version": delta_version,
+                "process": scope.audit_process_id,
+                "kind": delta_kind,
+                "denominator": denominator.denominator_id,
+                "denominator_version": denominator.version,
+                "satisfied": by_value.get(DeltaState.SATISFIED.value, 0),
+                "missing": by_value.get(DeltaState.MISSING.value, 0),
+                "conflict": by_value.get(DeltaState.CONFLICT.value, 0),
+                "indeterminate": by_value.get(DeltaState.INDETERMINATE.value, 0),
+                "blocked": by_value.get(DeltaState.BLOCKED.value, 0),
+                "fingerprint": fingerprint,
+                "at": datetime.now(UTC),
+            },
+        )
+
     @staticmethod
     def _require_exact_evaluating_scope(session: Session, scope: AuditScope) -> int:
         row = (
@@ -667,3 +1002,26 @@ def _set_scope(session: Session, context: WorkspaceContext) -> None:
             sa.func.set_config("asd.workspace_id", str(context.workspace_id), True),
         )
     ).one()
+
+
+def _package_state(package: PackageAssessment) -> DeltaState:
+    """Return the conservative package state without concealing a blocker."""
+
+    states = (
+        package.professional_review_state,
+        package.signer_authority_state,
+        package.signature_state,
+        package.handover_state,
+        package.acceptance_state,
+    )
+    for state in (
+        DeltaState.BLOCKED,
+        DeltaState.CONFLICT,
+        DeltaState.MISSING,
+        DeltaState.INDETERMINATE,
+    ):
+        if state in states:
+            return state
+    if all(state is DeltaState.NOT_APPLICABLE for state in states):
+        return DeltaState.NOT_APPLICABLE
+    return DeltaState.SATISFIED
