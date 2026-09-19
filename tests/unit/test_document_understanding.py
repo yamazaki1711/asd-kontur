@@ -26,6 +26,7 @@ from asd_kontur.document_understanding.models import (
     LayoutElement,
     OcrRoute,
     PageHealthKind,
+    ReconciliationDefectKind,
 )
 from asd_kontur.document_understanding.native import (
     NativeExtractionFailure,
@@ -50,6 +51,7 @@ from asd_kontur.document_understanding.semantic import (
     classify_pages,
     extract_structured_candidates,
     parse_exact_decimal,
+    reconcile_sources,
 )
 from asd_kontur.document_understanding.work_packages import consolidate_work_package_candidates
 from asd_kontur.domain import deterministic_uuid
@@ -216,6 +218,26 @@ def test_materialization_digest_changes_when_accepted_candidate_changes() -> Non
 
     assert empty != one
     assert reordered == reversed_rows
+
+
+def test_reconciliation_does_not_claim_each_project_work_is_missing_without_estimate_input() -> (
+    None
+):
+    document = _extract_csv(
+        "Ведомость объёмов работ;;;;;\n"
+        "Вид работ;Объём;Ед. изм.;Материал;Количество материала;Ед. изм. материала\n"
+        "Устройство котлована;12;м³;Бетон В25;12;м³\n"
+        "Устройство основания;5;м³;Щебень;5;м³\n"
+    )
+    classified = classify_pages(document.pages[0].elements)
+    extracted = extract_structured_candidates(document.pages[0].elements, classified.decisions)
+    defects = reconcile_sources(extracted.works, extracted.quantities, extracted.materials, ())
+
+    assert len(defects) == 1
+    assert defects[0].kind is ReconciliationDefectKind.ESTIMATE_COMPARISON_INPUT_UNAVAILABLE
+    assert (
+        defects[0].parameters["missing_input"] == "parsed_estimate_or_bill_of_quantities_positions"
+    )
 
 
 @pytest.mark.parametrize(

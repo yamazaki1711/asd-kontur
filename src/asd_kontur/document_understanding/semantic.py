@@ -422,16 +422,35 @@ def reconcile_sources(
             DocumentRole.CONSOLIDATED_ESTIMATE,
         }
     ]
-    estimate_by_name = {item.normalized_description: item for item in estimates}
-    quantity_by_work = {item.work_candidate_id: item for item in quantities}
+    estimates_by_name: dict[str, list[EstimatePositionCandidate]] = defaultdict(list)
+    for estimate in estimates:
+        estimates_by_name[estimate.normalized_description].append(estimate)
+    quantities_by_work: dict[UUID, list[QuantityCandidate]] = defaultdict(list)
+    for quantity_candidate in quantities:
+        quantities_by_work[quantity_candidate.work_candidate_id].append(quantity_candidate)
     materials_by_work: dict[UUID, list[MaterialCandidate]] = defaultdict(list)
     for item in materials:
         materials_by_work[item.work_candidate_id].append(item)
     defects: list[ReconciliationDefect] = []
     matched_estimates: set[UUID] = set()
+    if project_works and not estimates:
+        first = min(project_works, key=lambda item: str(item.candidate_id))
+        defects.append(
+            _defect(
+                ReconciliationDefectKind.ESTIMATE_COMPARISON_INPUT_UNAVAILABLE,
+                "project_estimate_comparison",
+                None,
+                (first.locator,),
+                {
+                    "missing_input": "parsed_estimate_or_bill_of_quantities_positions",
+                    "consequence": "project_work_omissions_and_quantity_deltas_not_evaluated",
+                },
+            )
+        )
+        return tuple(defects)
     for work in project_works:
-        estimate = estimate_by_name.get(work.normalized_name)
-        if estimate is None:
+        matched = estimates_by_name.get(work.normalized_name, [])
+        if not matched:
             defects.append(
                 _defect(
                     ReconciliationDefectKind.PROJECT_WORK_MISSING_IN_ESTIMATE,
@@ -442,8 +461,39 @@ def reconcile_sources(
                 )
             )
             continue
+        if len(matched) > 1:
+            defects.append(
+                _defect(
+                    ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                    str(work.candidate_id),
+                    None,
+                    (work.locator, *(item.locator for item in matched)),
+                    {
+                        "code": "multiple_estimate_positions_with_same_normalized_description",
+                        "work": work.raw_name,
+                    },
+                )
+            )
+            continue
+        estimate = matched[0]
         matched_estimates.add(estimate.candidate_id)
-        quantity = quantity_by_work.get(work.candidate_id)
+        work_quantities = quantities_by_work.get(work.candidate_id, [])
+        quantity: QuantityCandidate | None = (
+            work_quantities[0] if len(work_quantities) == 1 else None
+        )
+        if len(work_quantities) > 1:
+            defects.append(
+                _defect(
+                    ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                    str(work.candidate_id),
+                    str(estimate.candidate_id),
+                    (work.locator, *(item.locator for item in work_quantities), estimate.locator),
+                    {
+                        "code": "multiple_quantity_observations_for_work",
+                        "work": work.raw_name,
+                    },
+                )
+            )
         if quantity and quantity.parsed_value is not None and estimate.parsed_quantity is not None:
             estimate_unit = UNIT_ALIASES.get((estimate.raw_unit or "").casefold())
             if quantity.normalized_unit != estimate_unit:

@@ -88,6 +88,7 @@ class ReconciliationDefectKind(StrEnum):
     DRAWING_INTELLIGENCE_REQUIRED = "drawing_intelligence_required"
     NORMATIVE_AUTHORITY_UNAVAILABLE = "normative_authority_unavailable"
     RULE_COVERAGE_UNAVAILABLE = "rule_coverage_unavailable"
+    ESTIMATE_COMPARISON_INPUT_UNAVAILABLE = "estimate_comparison_input_unavailable"
 
 
 @dataclass(frozen=True, slots=True)

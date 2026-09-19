@@ -4576,6 +4576,8 @@ function TenderFindingList({
       "Нормативное основание для проверки недоступно",
     rule_coverage_unavailable:
       "Детерминированное правило для проверки недоступно",
+    estimate_comparison_input_unavailable:
+      "Сопоставление с ведомостью объёмов или сметой ещё не выполнено",
   };
   return (
     <div className="candidate-list">
@@ -4591,6 +4593,12 @@ function TenderFindingList({
           : [];
         const subject = displayValue(defect.subject_identity, "Не указан");
         const related = displayValue(defect.related_identity, "");
+        const parameters =
+          defect.parameters && typeof defect.parameters === "object"
+            ? (defect.parameters as Record<string, unknown>)
+            : {};
+        const missingInput = displayValue(parameters.missing_input, "");
+        const consequence = displayValue(parameters.consequence, "");
         return (
           <article className="candidate-row" key={id}>
             <div>
@@ -4602,6 +4610,8 @@ function TenderFindingList({
               <small>
                 {humanizeStatus(displayValue(defect.status, "open"))}
               </small>
+              {missingInput ? <p>Нужные данные: {missingInput}.</p> : null}
+              {consequence ? <p>Последствие: {consequence}.</p> : null}
               {locators.length > 0 && (
                 <p>
                   Источники:{" "}
