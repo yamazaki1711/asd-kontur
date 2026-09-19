@@ -226,15 +226,13 @@ def _defect_item(
 ) -> dict[str, Any]:
     kind = str(defect.get("defect_kind") or "discrepancy")
     locators = tuple(str(value) for value in defect.get("source_locator_ids") or [])
-    source_labels = [
-        str(evidence_index[value].get("safe_display_name") or value)
-        for value in locators
-        if value in evidence_index
+    source_references = [
+        _evidence_reference(value, evidence_index.get(value)) for value in locators
     ]
     description = _defect_description(kind)
-    if source_labels:
-        description += " Источники: " + ", ".join(source_labels) + "."
-    return _item(
+    if source_references:
+        description += " Источники: " + ", ".join(source_references) + "."
+    item = _item(
         mode,
         f"defect:{defect.get('defect_id')}:{defect.get('version', 1)}",
         _defect_title(kind),
@@ -243,6 +241,22 @@ def _defect_item(
         locators,
         _defect_action(kind),
     )
+    item["source_references"] = source_references
+    return item
+
+
+def _evidence_reference(locator_id: str, evidence: dict[str, Any] | None) -> str:
+    """Render locator provenance for a user-facing result without losing identity."""
+
+    if evidence is None:
+        return f"неразрешённый фрагмент ({locator_id})"
+    document = str(evidence.get("safe_display_name") or "исходный документ")
+    version = evidence.get("document_version")
+    location = str(
+        evidence.get("locator_value") or evidence.get("locator_kind") or "место не указано"
+    )
+    suffix = f", версия {version}" if version is not None else ""
+    return f"{document}{suffix}, {location}"
 
 
 def _item(

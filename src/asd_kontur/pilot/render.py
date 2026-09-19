@@ -117,9 +117,12 @@ def _document_lines(result: dict[str, Any], title: str) -> list[str]:
                 str(item.get("effective_description") or item.get("description") or ""),
                 f"Последствия: {item.get('consequence') or 'Требуется проверка.'}",
                 f"Действие: {item.get('recommended_action') or 'Рассмотреть специалисту.'}",
-                "",
             ]
         )
+        source_references = [str(value) for value in item.get("source_references") or []]
+        if source_references:
+            lines.append("Источники вывода: " + "; ".join(source_references))
+        lines.append("")
     lines.extend(["Использованные источники"])
     for source in result.get("source_manifest") or []:
         lines.append(

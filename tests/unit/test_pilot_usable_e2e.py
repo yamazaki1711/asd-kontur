@@ -267,3 +267,31 @@ def test_user_excluded_item_is_not_emitted_as_an_exported_finding() -> None:
     with zipfile.ZipFile(io.BytesIO(docx)) as archive:
         document_xml = archive.read("word/document.xml").decode()
     assert "Расхождение объёма между ВОР и сметой" not in document_xml
+
+
+def test_tender_report_keeps_readable_source_reference_for_each_finding() -> None:
+    project = _project()
+    project["evidence_index"] = {
+        "f8d343e5-d518-46d0-8d0b-b5a85aa5643e": {
+            "safe_display_name": "ВОР.xlsx",
+            "document_version": 2,
+            "locator_value": "sheet:Сводная!B17",
+        }
+    }
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+    docx = render_export(
+        result=result,
+        kind=PilotExportKind.DISAGREEMENT_PROTOCOL,
+        output_format=PilotExportFormat.DOCX,
+    )
+
+    with zipfile.ZipFile(io.BytesIO(docx)) as archive:
+        document_xml = archive.read("word/document.xml").decode()
+    assert "ВОР.xlsx, версия 2, sheet:Сводная!B17" in document_xml
