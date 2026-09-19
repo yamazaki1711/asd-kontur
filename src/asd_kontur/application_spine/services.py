@@ -11,6 +11,7 @@ from uuid import UUID
 import sqlalchemy as sa
 
 from asd_kontur.audit.package_preflight import build_expected_actual_preflight
+from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
 from asd_kontur.pilot import (
@@ -668,6 +669,24 @@ class ProductSpineService:
             matrix=support.get("matrix"),
             package=support.get("package"),
             memberships=support.get("memberships", ()),
+        )
+
+    def audit_expected_actual_preflight_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_expected_actual_preflight_csv(preflight)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-expected-actual-preflight-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
         )
 
     def form_support_id_package(

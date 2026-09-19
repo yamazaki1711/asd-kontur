@@ -60,16 +60,18 @@ Controlled project-model data tests its candidate boundary and document
 validity; an OZERO check is limited to rendering its already-persisted findings
 and never implies full-corpus Tender acceptance.
 
-The next active reusable output is an **Audit expected-versus-package
-preflight**. It is a workspace-scoped application projection of exact
+The current reusable output is an **Audit expected-versus-package preflight**.
+It is a workspace-scoped application projection of exact
 requirement versions and ID-package memberships. It preserves repeated document
 names in distinct work scopes, reports missing/generated/finalized-but-not-yet-
 audited positions, and never promotes a package member to an independently
 audited conclusion. It is intentionally not the immutable canonical Audit
 ledger: that ledger remains owned by the separately scoped `asd_audit_service`
 role. Controlled support-package data verifies identity/version matching,
-candidate boundaries, API authorization, and UI rendering; OZERO is not needed
-for its acceptance.
+candidate boundaries, API authorization, UI rendering, and editable CSV export;
+OZERO is not needed for its acceptance. The next Audit increment is the
+separately scoped canonical Audit-process service and its immutable evidence
+ledger; this preflight must never be relabelled as that service's conclusion.
 
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,

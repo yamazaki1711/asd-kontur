@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from asd_kontur.audit.package_preflight import build_expected_actual_preflight
+from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
 
 
 def _requirement(
@@ -95,3 +96,23 @@ def test_preflight_exposes_unformed_and_unresolved_boundaries() -> None:
         "unresolved_requirement",
     ]
     assert {"ID_PACKAGE_NOT_FORMED", "REQUIREMENT_AUTHORITY_UNRESOLVED"} <= set(value["gaps"])
+
+
+def test_preflight_export_keeps_scope_specific_identity_and_authority_boundary() -> None:
+    preflight = build_expected_actual_preflight(
+        (
+            _requirement("requirement-a", work_package_id="scope-a"),
+            _requirement("requirement-b", work_package_id="scope-b"),
+        ),
+        matrix={"matrix_id": "matrix", "version": 1},
+        package={"id_package_id": "package", "version": 1, "status": "incomplete"},
+        memberships=(
+            _membership("requirement-a", "generated_candidate", membership_id="membership-a"),
+        ),
+    )
+
+    data = render_expected_actual_preflight_csv(preflight).decode("utf-8-sig")
+
+    assert "scope-a:requirement-a:v1" in data
+    assert "scope-b:requirement-b:v1" in data
+    assert "independent_audit_evidence_and_authority_required" in data

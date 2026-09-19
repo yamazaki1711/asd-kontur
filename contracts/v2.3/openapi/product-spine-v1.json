@@ -4560,6 +4560,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight.csv": {
+      "get": {
+        "operationId": "audit_expected_actual_preflight_export_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Expected Actual Preflight Export",
+        "tags": [
+          "audit-preflight"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_workspaces__workspace_id__documents_get",

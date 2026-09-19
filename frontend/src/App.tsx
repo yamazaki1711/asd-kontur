@@ -2336,7 +2336,12 @@ function AuditExpectedActualPreflightPage() {
       lead="Сопоставление требований матрицы с составом сформированного комплекта. Это не заменяет независимый аудит документов."
     >
       <QueryState query={preflight}>
-        {(value) => <AuditExpectedActualPreflightBody value={value} />}
+        {(value) => (
+          <AuditExpectedActualPreflightBody
+            value={value}
+            workspaceId={workspaceId}
+          />
+        )}
       </QueryState>
     </Page>
   );
@@ -2344,8 +2349,10 @@ function AuditExpectedActualPreflightPage() {
 
 function AuditExpectedActualPreflightBody({
   value,
+  workspaceId,
 }: {
   value: AuditExpectedActualPreflight;
+  workspaceId: string;
 }) {
   const counts = value.counts;
   const items = value.items as unknown as AuditPreflightItem[];
@@ -2369,11 +2376,19 @@ function AuditExpectedActualPreflightBody({
       <section className="panel">
         <div className="entity-heading">
           <h2>Требования и фактический состав</h2>
-          <StatusPill tone="warning">
-            {value.status === "not_started"
-              ? "Требования ещё не сформированы"
-              : "Предварительный результат"}
-          </StatusPill>
+          <div className="inline-actions">
+            <StatusPill tone="warning">
+              {value.status === "not_started"
+                ? "Требования ещё не сформированы"
+                : "Предварительный результат"}
+            </StatusPill>
+            <a
+              className="button-link secondary"
+              href={`/api/v1/workspaces/${workspaceId}/audit/expected-actual-preflight.csv`}
+            >
+              Скачать таблицу
+            </a>
+          </div>
         </div>
         {items.length ? (
           <div className="table-wrap">

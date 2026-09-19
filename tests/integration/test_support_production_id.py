@@ -283,6 +283,12 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert preflight["package"]["version"] == 2
         assert all(item["preflight_state"] != "satisfied" for item in preflight["items"])
         assert any(item["preflight_state"] == "generated_candidate" for item in preflight["items"])
+        preflight_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight.csv"
+        )
+        assert preflight_export.status_code == 200, preflight_export.text
+        assert preflight_export.headers["content-type"].startswith("text/csv")
+        assert "audit_boundary" in preflight_export.content.decode("utf-8-sig")
         package_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
         )
