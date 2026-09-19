@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import io
+import json
 from pathlib import Path
 from typing import Any, cast
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -10,7 +12,7 @@ from fastapi.testclient import TestClient
 from pypdf import PdfWriter
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import JobState
+from asd_kontur.application_spine.models import ClaimedJob, JobKind, JobState, semantic_digest
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
@@ -105,11 +107,48 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         )
         assert upload.status_code == 202, upload.text
         assert len(upload.json()["accepted_document_ids"]) == 1
+        # A higher-priority job from another workspace must remain invisible to
+        # a worker configured with the requested workspace scope.  The durable
+        # claim function is SECURITY DEFINER, so this proves the explicit scope
+        # predicate rather than relying on ordinary RLS filtering.
+        with postgres_environment.owner_engine.begin() as connection:
+            owner = connection.scalar(
+                sa.text(
+                    "SELECT created_by_identity_id FROM workspace.workspaces "
+                    "WHERE workspace_id=:workspace"
+                ),
+                {"workspace": workspace_b["workspace_id"]},
+            )
+            foreign_manifest = {"synthetic": "foreign-workspace-job"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,job_kind,input_manifest,input_digest,"
+                    "idempotency_key,state,priority,max_attempts,"
+                    "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,'PROJECT_DEFINITION_EXTRACTION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',999,1,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": workspace_b["organization_id"],
+                    "workspace": workspace_b["workspace_id"],
+                    "job": uuid4(),
+                    "manifest": json.dumps(foreign_manifest),
+                    "digest": semantic_digest(foreign_manifest),
+                    "key": "synthetic-foreign-workspace-job",
+                    "provenance": json.dumps({"contract": "synthetic"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
 
         worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
         interrupted = worker_repository.claim_next_job(
             worker_identity="synthetic-interrupted-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
         )
         assert interrupted is not None
         worker_repository.mark_job_running(
@@ -133,6 +172,8 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             ),
             worker_identity="synthetic-restarted-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
         )
         recovered = restarted_worker.run_once()
         assert recovered is not None
@@ -157,6 +198,7 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert outcomes[-1].outcome_code in {
             "classification_evidence_unavailable",
             "pdf_renderer_unavailable",
+            "ocr_adapters_exhausted:none_available",
         }
         duplicate = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/documents",
@@ -166,13 +208,18 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert duplicate.status_code == 202
         assert duplicate.json() == upload.json()
         jobs = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/jobs").json()
-        assert len(jobs) == 17
+        # The upload schedules the complete current industrial-understanding
+        # graph, including the work/quantity/material extraction stage.  Keep
+        # this explicit rather than treating the historical 17-job topology as
+        # a browser contract.
+        assert len(jobs) == 18
         succeeded_count = len(outcomes) - 1
         assert sum(value["state"] == "succeeded" for value in jobs) == succeeded_count
         assert sum(value["state"] == "failed" for value in jobs) == 1
-        assert sum(value["state"] == "reconciliation_required" for value in jobs) == (
-            16 - succeeded_count
-        )
+        # The failed classification stage remains distinguishable from the
+        # independently queued downstream work; a page failure must not be
+        # reported as a completed project analysis.
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 0
         failed_job = next(value for value in jobs if value["state"] == "failed")
         assert failed_job["typed_failure_code"] == outcomes[-1].outcome_code
         job_states = {value["job_kind"]: value["state"] for value in jobs}
@@ -390,6 +437,8 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
         running = worker_repository.claim_next_job(
             worker_identity="synthetic-cancellation-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
         )
         assert running is not None
         assert str(running.job_id) == second["job_ids"][0]
@@ -441,6 +490,8 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
             app.state.container.object_store,
             worker_identity="synthetic-retry-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
         )
         retry_outcome = worker.run_once()
         assert retry_outcome is not None
@@ -455,3 +506,842 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
         assert by_id[str(running.job_id)]["terminal_receipt_id"] is not None
         assert by_id[retry_job]["state"] == "reconciliation_required"
         assert by_id[retry_job]["terminal_receipt_id"] is not None
+
+
+def test_dependency_terminal_stage_recovers_only_from_matching_successor(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="dependency-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Dependency owner",
+    )
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    application_repository = SpinePostgresRepository(postgres_environment.application_engine)
+    worker = "dependency-recovery-worker"
+    with TestClient(app) as client:
+        _login(client, "dependency-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Dependency recovery"},
+            headers=csrf,
+        ).json()
+        workspace_id = workspace["workspace_id"]
+        client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("recovery.pdf", _pdf(), "application/pdf"))],
+            headers=csrf,
+        ).raise_for_status()
+
+        scope = {
+            "organization_id": UUID(workspace["organization_id"]),
+            "workspace_id": UUID(workspace_id),
+        }
+        admission = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
+        assert admission is not None
+        repository.mark_job_running(admission, worker_identity=worker)
+        repository.finish_job(
+            admission,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_admission_complete",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+        original_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
+        assert original_hash is not None
+        assert original_hash.job_kind.value == "DOCUMENT_HASH"
+        repository.mark_job_running(original_hash, worker_identity=worker)
+        repository.finish_job(
+            original_hash,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_hash_failure",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+        assert repository.reconcile_unclaimable_jobs() >= 1
+
+        with postgres_environment.owner_engine.connect() as connection:
+            owner = str(
+                connection.scalar(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.workspaces "
+                        "WHERE workspace_id=:workspace"
+                    ),
+                    {"workspace": workspace_id},
+                )
+            )
+        retry = application_repository.manually_retry_job(
+            owner_identity_id=owner,
+            workspace_id=UUID(workspace_id),
+            job_id=original_hash.job_id,
+        )
+        recovered_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
+        assert recovered_hash is not None
+        assert recovered_hash.job_id == retry.job_id
+        repository.mark_job_running(recovered_hash, worker_identity=worker)
+        repository.finish_job(
+            recovered_hash,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_hash_recovered",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+
+        # Restart recovery discovers accepted replacements from the successor
+        # lineage. It must queue the blocked dependent exactly once rather than
+        # scanning historical terminal jobs until the worker cannot claim work.
+        assert repository.recover_dependency_terminal_failures() == 1
+        assert repository.recover_dependency_terminal_failures() == 0
+        recovered_inventory = repository.claim_next_job(
+            worker_identity=worker, lease_seconds=5, **scope
+        )
+        assert recovered_inventory is not None
+        assert recovered_inventory.job_kind.value == "PDF_INVENTORY"
+        repository.mark_job_running(recovered_inventory, worker_identity=worker)
+        repository.finish_job(
+            recovered_inventory,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_inventory_recovered",
+            result_manifest={"synthetic": True},
+            worker_identity=worker,
+        )
+
+        with postgres_environment.owner_engine.connect() as connection:
+            provenance = connection.scalar(
+                sa.text("SELECT provenance FROM workspace.durable_jobs WHERE job_id=:job"),
+                {"job": recovered_inventory.job_id},
+            )
+        assert provenance["dependency_recovery_of"]
+        assert provenance["dependency_recovery_replacement"] == str(recovered_hash.job_id)
+
+
+def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The jobs page must not hide a replacement behind old immutable attempts."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="effective-jobs-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Effective jobs owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "effective-jobs-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Effective jobs workspace"},
+            headers=_csrf(client),
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        organization_id = UUID(workspace["organization_id"])
+        with postgres_environment.owner_engine.begin() as connection:
+            owner = str(
+                connection.scalar(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.workspaces "
+                        "WHERE workspace_id=:workspace"
+                    ),
+                    {"workspace": workspace_id},
+                )
+            )
+            connection.execute(
+                sa.select(
+                    sa.func.set_config("asd.organization_id", str(organization_id), True),
+                    sa.func.set_config("asd.workspace_id", str(workspace_id), True),
+                )
+            )
+            for ordinal in range(205):
+                manifest = {"synthetic": ordinal}
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                        "max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                        "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                        "'queued',1,1,'synthetic',CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": uuid4(),
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
+                        "key": f"synthetic-history-{ordinal}",
+                        "provenance": json.dumps({"contract": "synthetic"}),
+                        "correlation": uuid4(),
+                        "owner": owner,
+                    },
+                )
+            failed_job = uuid4()
+            stale_lease_job = uuid4()
+            shared = {"synthetic": "retry-lineage"}
+            for job_id, priority, manifest in (
+                (failed_job, 99, shared),
+                (stale_lease_job, 98, {"synthetic": "expired-lease"}),
+            ):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                        "max_attempts,retry_policy_version,provenance,correlation_id,"
+                        "created_by_identity_id) VALUES "
+                        "(:organization,:workspace,:job,"
+                        "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                        "'queued',:priority,3,'synthetic',CAST(:provenance AS jsonb),:correlation,"
+                        ":owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": job_id,
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
+                        "key": f"synthetic-retry-{job_id}",
+                        "priority": priority,
+                        "provenance": json.dumps({"contract": "synthetic"}),
+                        "correlation": uuid4(),
+                        "owner": owner,
+                    },
+                )
+        worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        failed_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert failed_claim is not None
+        assert failed_claim.job_id == failed_job
+        worker_repository.mark_job_running(failed_claim, worker_identity="synthetic-retry-worker")
+        worker_repository.finish_job(
+            failed_claim,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_terminal_failure",
+            result_manifest={"semantic_effect": False},
+            worker_identity="synthetic-retry-worker",
+        )
+        application_repository = SpinePostgresRepository(postgres_environment.application_engine)
+        replacement = application_repository.manually_retry_job(
+            owner_identity_id=owner, workspace_id=workspace_id, job_id=failed_job
+        )
+        replacement_job = replacement.job_id
+        replacement_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert replacement_claim is not None
+        assert replacement_claim.job_id == replacement_job
+        worker_repository.mark_job_running(
+            replacement_claim, worker_identity="synthetic-retry-worker"
+        )
+        worker_repository.report_progress(
+            replacement_claim,
+            current=7,
+            total=10,
+            safe_message_code="engineering_semantic_batch_accepted",
+        )
+        stale_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert stale_claim is not None
+        assert stale_claim.job_id == stale_lease_job
+        worker_repository.mark_job_running(stale_claim, worker_identity="synthetic-retry-worker")
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET lease_expires_at=CURRENT_TIMESTAMP - "
+                    "interval '1 minute' WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": stale_lease_job,
+                },
+            )
+        response = client.get(f"/api/v1/workspaces/{workspace_id}/jobs?effective_only=true")
+        assert response.status_code == 200, response.text
+        jobs = response.json()
+        job_ids = {item["job_id"] for item in jobs}
+        assert str(replacement_job) in job_ids
+        assert str(failed_job) not in job_ids
+        replacement = next(item for item in jobs if item["job_id"] == str(replacement_job))
+        assert replacement["state"] == "running"
+        assert replacement["progress_current"] == 7
+        assert replacement["progress_total"] == 10
+        assert replacement["progress_message_code"] == "engineering_semantic_batch_accepted"
+        assert replacement["lease_expired"] is False
+        stale = next(item for item in jobs if item["job_id"] == str(stale_lease_job))
+        assert stale["state"] == "running"
+        assert stale["lease_expired"] is True
+
+
+def test_start_project_understanding_queues_native_semantic_recovery_once(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """A failed OCR/classification chain cannot hide usable native project text."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="semantic-recovery-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Semantic recovery owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "semantic-recovery-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Native semantic recovery"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[
+                (
+                    "files",
+                    (
+                        "project.txt",
+                        b"\xd0\x9a\xd0\xbe\xd1\x82\xd0\xbb\xd0\xbe\xd0\xb2\xd0\xb0\xd0\xbd 1",
+                        "text/plain",
+                    ),
+                )
+            ],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id "
+                        "FROM workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,"
+                    "locator_kind,locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region','synthetic',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"synthetic": "native-layout"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.native_layout_element_versions "
+                    "(organization_id,workspace_id,element_id,version,document_id,document_version,"
+                    "source_version_id,source_locator_id,page_number,element_kind,raw_text,"
+                    "normalized_text,reading_order,region,cell_locator,row_index,column_index,"
+                    "evidence_digest,extraction_method,profile_version,semantic_digest) VALUES "
+                    "(:organization,:workspace,:element,1,:document,:version,:source,:locator,1,"
+                    "'paragraph','Котлован 1','котлован 1',1,CAST(:region AS jsonb),NULL,NULL,NULL,"
+                    ":evidence,'native_layout','native-layout-v0.1',:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "element": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "locator": locator_id,
+                    "region": json.dumps([0, 0, 1, 1]),
+                    "evidence": semantic_digest({"synthetic": "native-layout"}),
+                    "digest": semantic_digest({"synthetic": "native-layout-element"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.document_role_decisions "
+                    "(organization_id,workspace_id,decision_id,decision_version,document_id,"
+                    "document_version,scope,selected_roles,candidate_ids,decision_code,"
+                    "validator_version,source_locator_ids,decision_digest) VALUES "
+                    "(:organization,:workspace,:decision,1,:document,:version,'page:1',"
+                    "CAST(:roles AS text[]),CAST(:candidates AS uuid[]),'synthetic_role',"
+                    "'synthetic-role-v1',ARRAY[:locator]::uuid[],:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "decision": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "roles": ["drawing_or_scheme"],
+                    "candidates": [],
+                    "locator": locator_id,
+                    "digest": semantic_digest({"synthetic": "drawing-role"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='paused' "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_kind='PROJECT_DEFINITION_EXTRACTION'"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            )
+
+        endpoint = f"/api/v1/workspaces/{workspace_id}/project-understanding/runs"
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        with postgres_environment.owner_engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,priority,provenance FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace "
+                        "AND job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
+                        "provenance->>'engineering_semantic_profile'='qwen-engineering-extraction-v15'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert len(rows) == 1
+        assert rows[0]["priority"] == 170
+        assert rows[0]["provenance"]["semantic_recovery_of"] is None
+        assert (
+            rows[0]["provenance"]["candidate_persistence_profile"]
+            == "qwen-engineering-extraction-v15"
+        )
+
+        # A later reconciliation receipt may refer to the same source, but it
+        # is not itself a semantic extraction attempt.  Recovery must continue
+        # from the failed semantic input rather than recursively treating that
+        # receipt as the source predecessor.
+        failed_semantic_job = UUID(str(rows[0]["job_id"]))
+        descendant_job = uuid4()
+        semantic_manifest = {
+            "document_id": str(source["document_id"]),
+            "document_version": int(source["version"]),
+            "source_version_id": str(source["source_version_id"]),
+        }
+        repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        claimed = repository.claim_next_job(
+            worker_identity="semantic-recovery-test-worker",
+            lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=workspace_id,
+        )
+        assert claimed is not None
+        assert claimed.job_id == failed_semantic_job
+        repository.mark_job_running(claimed, worker_identity="semantic-recovery-test-worker")
+        repository.finish_job(
+            claimed,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_semantic_failure",
+            result_manifest={"semantic_effect": False},
+            worker_identity="semantic-recovery-test-worker",
+        )
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,attempt_count,max_attempts,retry_policy_version,lease_owner,"
+                    "lease_generation,lease_expires_at,provenance,correlation_id,"
+                    "causation_id,created_by_identity_id) "
+                    "VALUES (:organization,:workspace,:job,:document,"
+                    "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
+                    "'leased',120,1,3,'synthetic-v1','semantic-recovery-test-worker',1,"
+                    "CURRENT_TIMESTAMP + interval '1 minute',CAST(:provenance AS jsonb),"
+                    ":correlation,:causation,'semantic-recovery-owner')"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": descendant_job,
+                    "document": source["document_id"],
+                    "manifest": json.dumps(semantic_manifest),
+                    "digest": semantic_digest({"kind": "synthetic", "manifest": semantic_manifest}),
+                    "key": f"synthetic-reconciliation:{descendant_job}",
+                    "provenance": json.dumps({"contract": "synthetic.reconciliation@1.0.0"}),
+                    "correlation": uuid4(),
+                    "causation": failed_semantic_job,
+                },
+            )
+
+        repository.finish_job(
+            ClaimedJob(
+                UUID(workspace["organization_id"]),
+                workspace_id,
+                descendant_job,
+                JobKind.PROJECT_DEFINITION_EXTRACTION,
+                semantic_manifest,
+                semantic_digest({"kind": "synthetic", "manifest": semantic_manifest}),
+                1,
+                1,
+                "none",
+            ),
+            terminal_state=JobState.RECONCILIATION_REQUIRED,
+            outcome_code="synthetic_reconciliation_required",
+            result_manifest={"semantic_effect": False},
+            worker_identity="semantic-recovery-test-worker",
+        )
+
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        with postgres_environment.owner_engine.connect() as connection:
+            semantic_rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,causation_id,provenance FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
+                        "provenance->>'engineering_semantic_profile'="
+                        "'qwen-engineering-extraction-v15' "
+                        "ORDER BY created_at,job_id"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert len(semantic_rows) == 2
+        successor = semantic_rows[-1]
+        assert UUID(str(successor["causation_id"])) == failed_semantic_job
+        assert successor["provenance"]["semantic_recovery_of"] == str(failed_semantic_job)
+        assert successor["provenance"]["semantic_recovery_reason"] == "incomplete_semantic_coverage"
+
+
+def test_project_view_selects_only_the_latest_source_semantic_profile(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """Legacy generic observations cannot mix with a completed Qwen semantic pass."""
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="profile-scope-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Profile scope owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "profile-scope-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Profile-scoped candidates"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("project.txt", b"native project text", "text/plain"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id FROM "
+                        "workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            job_id = connection.execute(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
+                    "ORDER BY created_at,job_id LIMIT 1"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            ).scalar_one()
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,locator_kind,"
+                    "locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region','profile-test',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"test": "profile-locator"}),
+                },
+            )
+            for candidate_id, value, profile in (
+                (uuid4(), "legacy observation", "project-definition-extraction-v0.1"),
+                (uuid4(), "current observation", "qwen-engineering-extraction-v15"),
+            ):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_field_candidates "
+                        "(organization_id,workspace_id,candidate_id,version,field_key,raw_value,"
+                        "normalized_value,value_type,source_version_id,source_locator_id,"
+                        "extraction_method,confidence,uncertainty_codes,conflicts,status,"
+                        "extraction_profile_version,candidate_digest) VALUES "
+                        "(:organization,:workspace,:candidate,1,'purpose',:value,"
+                        "CAST(:normalized AS jsonb),'text',:source,:locator,'synthetic',1,"
+                        "'{}','{}',"
+                        "'candidate',:profile,:digest)"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "candidate": candidate_id,
+                        "value": value,
+                        "normalized": json.dumps(value),
+                        "source": source["source_version_id"],
+                        "locator": locator_id,
+                        "profile": profile,
+                        "digest": semantic_digest({"candidate": str(candidate_id)}),
+                    },
+                )
+            stage_id = uuid4()
+            output = {"profile_scope": "qwen-engineering-extraction-v15"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_understanding_stage_results "
+                    "(organization_id,workspace_id,stage_result_id,job_id,document_id,document_version,"
+                    "source_version_id,stage_kind,profile_version,input_digest,output_manifest,"
+                    "output_digest,terminal_status) VALUES "
+                    "(:organization,:workspace,:result,:job,:document,:version,:source,"
+                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v15',:input,"
+                    "CAST(:output AS jsonb),:digest,'complete')"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "result": stage_id,
+                    "job": job_id,
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "input": semantic_digest({"test": "profile-input"}),
+                    "output": json.dumps(output),
+                    "digest": semantic_digest(output),
+                },
+            )
+        response = client.get(f"/api/v1/workspaces/{workspace_id}/project-understanding")
+        assert response.status_code == 200, response.text
+        values = response.json()["candidates"]["project_fields"]
+        assert [item["value"] for item in values] == ["current observation"]
+        assert values[0]["extraction_profile_version"] == "qwen-engineering-extraction-v15"
+
+
+def test_completed_semantic_source_queues_one_incremental_model_refresh(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """Partial candidate evidence becomes materializable before the corpus drains."""
+
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="incremental-refresh-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Incremental refresh owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "incremental-refresh-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Incremental semantic refresh"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        assert (
+            client.post(
+                f"/api/v1/workspaces/{workspace_id}/documents",
+                files=[("files", ("project.txt", b"native project text", "text/plain"))],
+                headers=csrf,
+            ).status_code
+            == 202
+        )
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id FROM "
+                        "workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            row = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,subject_document_id,input_manifest,input_digest,"
+                        "correlation_id,created_by_identity_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
+                        "ORDER BY created_at,job_id LIMIT 1"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            semantic_job_id = uuid4()
+            semantic_provenance = {
+                "contract": "synthetic.incremental-semantic@1.0.0",
+                "engineering_semantic_profile": "qwen-engineering-extraction-v15",
+            }
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_DEFINITION_EXTRACTION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',999,3,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": semantic_job_id,
+                    "document": row["subject_document_id"],
+                    "manifest": json.dumps(dict(row["input_manifest"])),
+                    "digest": str(row["input_digest"]),
+                    "key": f"synthetic-incremental-semantic-{semantic_job_id}",
+                    "provenance": json.dumps(semantic_provenance),
+                    "correlation": row["correlation_id"],
+                    "owner": row["created_by_identity_id"],
+                },
+            )
+        worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        claimed = worker_repository.claim_next_job(
+            worker_identity="synthetic-semantic-worker",
+            lease_seconds=600,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=workspace_id,
+        )
+        assert claimed is not None
+        assert claimed.job_id == semantic_job_id
+        worker_repository.mark_job_running(claimed, worker_identity="synthetic-semantic-worker")
+        worker_repository.finish_job(
+            claimed,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_semantic_accepted",
+            result_manifest={"semantic": "accepted"},
+            worker_identity="synthetic-semantic-worker",
+        )
+        with postgres_environment.owner_engine.begin() as connection:
+            stage_output = {"semantic": "accepted"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_understanding_stage_results "
+                    "(organization_id,workspace_id,stage_result_id,job_id,document_id,document_version,"
+                    "source_version_id,stage_kind,profile_version,input_digest,output_manifest,"
+                    "output_digest,terminal_status) VALUES "
+                    "(:organization,:workspace,:result,:job,:document,:version,:source,"
+                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v15',:input,"
+                    "CAST(:output AS jsonb),:digest,'complete')"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "result": uuid4(),
+                    "job": semantic_job_id,
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "input": semantic_digest({"test": "incremental-input"}),
+                    "output": json.dumps(stage_output),
+                    "digest": semantic_digest(stage_output),
+                },
+            )
+        repository = SpinePostgresRepository(postgres_environment.application_engine)
+        first = repository.schedule_incremental_project_reconciliation(claimed)
+        second = repository.schedule_incremental_project_reconciliation(claimed)
+        assert first is not None and first == second
+        with postgres_environment.owner_engine.connect() as connection:
+            refresh = (
+                connection.execute(
+                    sa.text(
+                        "SELECT priority,causation_id,provenance->>'contract' AS contract FROM "
+                        "workspace.durable_jobs WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace "
+                        "AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "job": first,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+        assert refresh["priority"] == 165
+        assert refresh["causation_id"] == semantic_job_id
+        assert refresh["contract"] == "project-understanding.incremental-reconciliation@1.0.0"
+        with postgres_environment.owner_engine.connect() as connection:
+            claim_definition = connection.scalar(
+                sa.text(
+                    "SELECT pg_get_functiondef("
+                    "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                )
+            )
+        assert "incremental_source_job_id" in str(claim_definition)

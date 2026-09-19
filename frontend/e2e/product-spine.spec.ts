@@ -509,6 +509,19 @@ function knowledge() {
       "VERIFIED_NTD_UNAVAILABLE",
       "ACTIVE_RULE_VERSION_UNAVAILABLE",
     ],
+    ntd_inventory: {
+      total_documents: 100,
+      official_documents: 50,
+      reference_documents: 50,
+      searchable: 40,
+      partially_searchable: 10,
+      bytes_present: 1024,
+      structured_editions: 20,
+      verified_provisions: 30,
+      documents_without_text: 5,
+      absent_identities: 2,
+      edition_currency_unchecked: 15,
+    },
   };
 }
 

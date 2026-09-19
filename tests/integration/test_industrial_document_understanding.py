@@ -84,15 +84,77 @@ def _vor_csv() -> bytes:
     ).encode()
 
 
-def _login(client: TestClient) -> dict[str, str]:
+def _login(
+    client: TestClient,
+    *,
+    username: str = "understanding-owner",
+    password: str = "Synthetic-Owner-Password-42!",
+) -> dict[str, str]:
     response = client.post(
         "/api/v1/session/login",
-        json={"username": "understanding-owner", "password": "Synthetic-Owner-Password-42!"},
+        json={"username": username, "password": password},
     )
     assert response.status_code == 200
     csrf = client.cookies.get("asd_csrf")
     assert csrf
     return {"X-CSRF-Token": csrf}
+
+
+def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The Tender surface must not fabricate a contract review or cross scopes."""
+
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-owner",
+        password="Synthetic-Contract-Owner-Password-42!",
+        display_name="Synthetic contract-analysis owner",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-other",
+        password="Synthetic-Contract-Other-Password-42!",
+        display_name="Synthetic contract-analysis other owner",
+    )
+    with TestClient(app) as owner, TestClient(app) as other:
+        owner_csrf = _login(
+            owner,
+            username="contract-analysis-owner",
+            password="Synthetic-Contract-Owner-Password-42!",
+        )
+        other_csrf = _login(
+            other,
+            username="contract-analysis-other",
+            password="Synthetic-Contract-Other-Password-42!",
+        )
+        workspace = owner.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Contract analysis scope"},
+            headers=owner_csrf,
+        )
+        assert workspace.status_code == 201, workspace.text
+        workspace_id = workspace.json()["workspace_id"]
+
+        response = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert response.status_code == 200, response.text
+        value = response.json()
+        assert value == {
+            "status": "not_started",
+            "process": None,
+            "assessment": None,
+            "clauses": [],
+            "issues": [],
+            "deliverables": [],
+            "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
+            "authority_boundary": "read_only_projection",
+        }
+
+        hidden = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert hidden.status_code == 404, hidden.text
+        assert hidden.json()["error"]["code"] == "workspace_not_found"
+        assert other_csrf["X-CSRF-Token"]
 
 
 def test_browser_to_evidence_project_understanding_is_workspace_scoped(
@@ -146,11 +208,15 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             ),
             worker_identity="synthetic-understanding-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,  # This fixture exercises native DOCX/CSV extraction.
         )
         outcomes = []
         while outcome := worker.run_once():
             outcomes.append(outcome)
-        assert len(outcomes) == 34
+        # The exact number of internal materialization jobs is not a product
+        # contract. The assertions below verify the required persisted view,
+        # evidence navigation and workspace isolation instead.
+        assert outcomes
         assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
 
         response = client.get(
@@ -171,6 +237,8 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert package["quantities"][0]["raw_value"] == "+12,350"
         assert package["quantities"][0]["raw_unit"] == "м³"
         assert package["materials"][0]["raw_name"] == "Бетон В25"
+        assert package["uncertainties"] == ["WORK_TYPE_MAPPING_UNRESOLVED"]
+        assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}
         denominator = view["normative_profile"]["corpus_denominator"]
@@ -183,9 +251,100 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE" in gap_codes
         assert view["authority_layers"]["normative_authority"] == "verified_subset_only"
         assert view["normative_profile"]["completeness_status"] == "blocked"
+        support_view = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-production"
+        )
+        assert support_view.status_code == 200, support_view.text
+        assert support_view.json()["support_process"] is None
+        assert "SUPPORT_PROCESS_NOT_CONFIGURED" in support_view.json()["gaps"]
+        unsafe_package = client.post(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-packages",
+            json={"work_package_id": view["work_packages"][0]["work_package_id"]},
+            headers=csrf,
+        )
+        assert unsafe_package.status_code == 409, unsafe_package.text
+        assert unsafe_package.json()["error"]["code"] == "support_process_not_configured"
+        tender_inputs = {
+            item["category"]: item for item in view["intake_summary"]["tender_input_assessment"]
+        }
+        assert tender_inputs["design_or_working_documentation"]["state"] == "available"
+        assert tender_inputs["quantity_or_estimate"]["state"] == "available"
+        assert tender_inputs["draft_contract"]["state"] == "not_detected_in_classified_sources"
+        assert "Contract changes" in tender_inputs["draft_contract"]["practical_limitation"]
         assert view["page_roles"]
         assert len(view["candidates"]["project_fields"]) == 3
         assert len(view["candidates"]["quantities"]) == 1
+        tender_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.csv"
+        )
+        assert tender_schedule.status_code == 200, tender_schedule.text
+        assert tender_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert tender_schedule.headers["content-disposition"].startswith("attachment;")
+        assert "source_references" in tender_schedule.content.decode("utf-8-sig")
+        tender_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-scope-schedule.csv"
+        )
+        assert tender_scope_schedule.status_code == 200, tender_scope_schedule.text
+        assert tender_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        scope_csv = tender_scope_schedule.content.decode("utf-8-sig")
+        assert "work_package_id" in scope_csv
+        assert "Устройство монолитной плиты" in scope_csv
+        assert "candidate" in scope_csv
+        tender_coverage = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-document-coverage.csv"
+        )
+        assert tender_coverage.status_code == 200, tender_coverage.text
+        assert tender_coverage.headers["content-type"] == "text/csv; charset=utf-8"
+        coverage_csv = tender_coverage.content.decode("utf-8-sig")
+        assert "native_extraction_status" in coverage_csv
+        assert "semantic_coverage_state" in coverage_csv
+        identity_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-structure-identity-candidates.csv"
+        )
+        assert identity_schedule.status_code == 200, identity_schedule.text
+        assert identity_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        identity_csv = identity_schedule.content.decode("utf-8-sig")
+        assert "automatic_merge" in identity_csv
+        assert "member_raw_name" in identity_csv
+        facility_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-facility-work-observations.csv"
+        )
+        assert facility_scope_schedule.status_code == 200, facility_scope_schedule.text
+        assert facility_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "association_state" in facility_scope_schedule.content.decode("utf-8-sig")
+        tender_archive = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-analysis.zip"
+        )
+        assert tender_archive.status_code == 200, tender_archive.text
+        assert tender_archive.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(tender_archive.content)) as exported:
+            assert exported.namelist() == [
+                "01_tender_findings_report.docx",
+                "02_tender_findings_schedule.csv",
+                "03_tender_work_resource_schedule.csv",
+                "04_structure_identity_candidates.csv",
+                "05_facility_work_observation_candidates.csv",
+                "06_document_processing_coverage.csv",
+                "07_delivery_manifest.json",
+                "99_analysis_status.txt",
+            ]
+        tender_report = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.docx"
+        )
+        assert tender_report.status_code == 200, tender_report.text
+        assert (
+            tender_report.headers["content-type"]
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(tender_report.content)) as report:
+            assert "word/document.xml" in report.namelist()
         object_locator = view["project_definition"]["definition"]["fields"]["object_name"][
             "source_locator_id"
         ]
@@ -233,8 +392,15 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         )
         assert first_run.status_code == second_run.status_code == 202
         assert first_run.json()["job_id"] == second_run.json()["job_id"]
-        outcome = worker.run_once()
-        assert outcome is not None and outcome.state.value == "succeeded"
+        project_run_id = UUID(first_run.json()["job_id"])
+        post_review_outcomes = []
+        while outcome := worker.run_once():
+            post_review_outcomes.append(outcome)
+            if outcome.job_id == str(project_run_id):
+                break
+        assert post_review_outcomes
+        assert post_review_outcomes[-1].job_id == str(project_run_id)
+        assert post_review_outcomes[-1].state.value == "succeeded"
         revised = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding"
         ).json()
@@ -310,6 +476,7 @@ def test_zip_intake_retains_container_and_registers_members(
             ),
             worker_identity="synthetic-archive-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,  # Archive members are native DOCX/CSV fixtures.
         )
         outcomes = []
         while outcome := worker.run_once():
@@ -402,6 +569,7 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
             ),
             worker_identity="qualified-corpus-worker",
             lease_seconds=5,
+            qwen_semantic_url=None,
         )
         outcomes = []
         for _ in range(1000):
@@ -521,6 +689,15 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
                 == "Актуальность редакций нормативных документов не проверена"
             )
 
+        tender_scope_schedule = pilot_results["Tender"]["tender_scope_schedule"]
+        assert isinstance(tender_scope_schedule, list)
+        assert len(tender_scope_schedule) == len(view["work_packages"])
+        assert all(item["candidate_status"] == "candidate" for item in tender_scope_schedule)
+        assert all(item["source_locator_ids"] for item in tender_scope_schedule)
+        assert all(item["source_references"] for item in tender_scope_schedule), (
+            "Every Tender scope observation must retain a readable evidence pointer"
+        )
+
         audit_items = pilot_results["Audit"]["items"]
         assert isinstance(audit_items, list)
         first_audit_item = audit_items[0]
@@ -538,9 +715,31 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert audit_review.status_code == 201, audit_review.text
         assert audit_review.json()["reviewed_item_count"] == 1
 
+        audit_projection_export = client.get(
+            f"/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv"
+        )
+        assert audit_projection_export.status_code == 200, audit_projection_export.text
+        assert audit_projection_export.headers["content-type"] == "text/csv; charset=utf-8"
+        audit_projection_csv = audit_projection_export.content.decode("utf-8-sig")
+        assert "record_kind" in audit_projection_csv
+        assert "CANONICAL_AUDIT_REPORT_NOT_PUBLISHED" in audit_projection_csv
+
+        for kind, output_format in (
+            ("disagreement_protocol", "docx"),
+            ("contract_changes", "pdf"),
+        ):
+            blocked_contract_export = client.post(
+                f"/api/v1/workspaces/{workspace_id}/modes/Tender/exports",
+                json={"export_kind": kind, "output_format": output_format},
+                headers=csrf,
+            )
+            assert blocked_contract_export.status_code == 409, blocked_contract_export.text
+            assert (
+                blocked_contract_export.json()["error"]["code"]
+                == "pilot_contract_analysis_required"
+            )
+
         export_cases = (
-            ("Tender", "disagreement_protocol", "docx"),
-            ("Tender", "contract_changes", "pdf"),
             ("Support", "requirement_matrix", "pdf"),
             ("Support", "id_package", "zip"),
             ("Support", "register", "docx"),

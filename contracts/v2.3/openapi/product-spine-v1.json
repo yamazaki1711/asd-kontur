@@ -304,6 +304,139 @@
         "title": "AssistantTurnView",
         "type": "object"
       },
+      "AuditExpectedActualPreflightView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment_kind": {
+            "const": "expected_vs_package_preflight",
+            "title": "Assessment Kind",
+            "type": "string"
+          },
+          "authority_layers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Authority Layers",
+            "type": "object"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "matrix": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matrix"
+          },
+          "package": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assessment_kind",
+          "status",
+          "matrix",
+          "package",
+          "items",
+          "counts",
+          "gaps",
+          "authority_layers"
+        ],
+        "title": "AuditExpectedActualPreflightView",
+        "type": "object"
+      },
+      "AuditReportProjectionView": {
+        "additionalProperties": false,
+        "properties": {
+          "customer": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Customer"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "pto": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pto"
+          },
+          "status": {
+            "enum": [
+              "not_published",
+              "partial",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "AuditReportProjectionView",
+        "type": "object"
+      },
       "Body_upload_documents_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "files": {
@@ -342,12 +475,20 @@
             "title": "Blockers",
             "type": "array"
           },
+          "construction_consultant_quality_ready": {
+            "title": "Construction Consultant Quality Ready",
+            "type": "boolean"
+          },
           "contract_version": {
             "title": "Contract Version",
             "type": "string"
           },
           "deployment": {
             "$ref": "#/components/schemas/DeploymentStatusView"
+          },
+          "domain_harness_ready": {
+            "title": "Domain Harness Ready",
+            "type": "boolean"
           },
           "implemented": {
             "items": {
@@ -379,11 +520,203 @@
           "implemented",
           "blockers",
           "trial_ready",
+          "construction_consultant_quality_ready",
+          "domain_harness_ready",
           "oks_ready",
           "product_ready",
           "deployment"
         ],
         "title": "CapabilityStatusView",
+        "type": "object"
+      },
+      "ConstructionConsultantAnswerView": {
+        "additionalProperties": false,
+        "properties": {
+          "assistant_message": {
+            "$ref": "#/components/schemas/ConstructionConsultantMessageView"
+          },
+          "evidence_statuses": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence Statuses",
+            "type": "array"
+          },
+          "user_message": {
+            "$ref": "#/components/schemas/ConstructionConsultantMessageView"
+          }
+        },
+        "required": [
+          "user_message",
+          "assistant_message",
+          "evidence_statuses"
+        ],
+        "title": "ConstructionConsultantAnswerView",
+        "type": "object"
+      },
+      "ConstructionConsultantConversationCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ConstructionConsultantConversationCreate",
+        "type": "object"
+      },
+      "ConstructionConsultantConversationView": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_count": {
+            "title": "Message Count",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conversation_id",
+          "title",
+          "created_at",
+          "message_count"
+        ],
+        "title": "ConstructionConsultantConversationView",
+        "type": "object"
+      },
+      "ConstructionConsultantMessageView": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "conversation_id": {
+            "format": "uuid",
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "message_id": {
+            "format": "uuid",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "model_identity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Identity"
+          },
+          "model_profile_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Profile Version"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message_id",
+          "conversation_id",
+          "request_id",
+          "ordinal",
+          "role",
+          "content",
+          "sources",
+          "model_identity",
+          "model_profile_version",
+          "created_at"
+        ],
+        "title": "ConstructionConsultantMessageView",
+        "type": "object"
+      },
+      "ConstructionConsultantQuestionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "question": {
+            "maxLength": 8000,
+            "minLength": 2,
+            "title": "Question",
+            "type": "string"
+          },
+          "request_id": {
+            "format": "uuid",
+            "title": "Request Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "request_id",
+          "question"
+        ],
+        "title": "ConstructionConsultantQuestionRequest",
         "type": "object"
       },
       "DeploymentStatusView": {
@@ -929,6 +1262,22 @@
             "title": "Job Kind",
             "type": "string"
           },
+          "lease_expired": {
+            "title": "Lease Expired",
+            "type": "boolean"
+          },
+          "lease_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lease Expires At"
+          },
           "max_attempts": {
             "title": "Max Attempts",
             "type": "integer"
@@ -941,6 +1290,51 @@
           "priority": {
             "title": "Priority",
             "type": "integer"
+          },
+          "progress_current": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Current"
+          },
+          "progress_message_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Message Code"
+          },
+          "progress_recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Recorded At"
+          },
+          "progress_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Total"
           },
           "started_at": {
             "anyOf": [
@@ -1002,7 +1396,13 @@
           "created_at",
           "started_at",
           "heartbeat_at",
-          "completed_at"
+          "completed_at",
+          "lease_expires_at",
+          "lease_expired",
+          "progress_current",
+          "progress_total",
+          "progress_message_code",
+          "progress_recorded_at"
         ],
         "title": "JobView",
         "type": "object"
@@ -1061,6 +1461,11 @@
             "title": "Normative Identity Count",
             "type": "integer"
           },
+          "ntd_inventory": {
+            "additionalProperties": true,
+            "title": "Ntd Inventory",
+            "type": "object"
+          },
           "practice_edition_count": {
             "title": "Practice Edition Count",
             "type": "integer"
@@ -1114,6 +1519,7 @@
           "verified_normative_edition_count",
           "verified_normative_provision_count",
           "rule_version_count",
+          "ntd_inventory",
           "projection_states",
           "last_verified_backup_at",
           "semantic_fingerprints",
@@ -2028,6 +2434,14 @@
             "title": "Summary",
             "type": "object"
           },
+          "tender_scope_schedule": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tender Scope Schedule",
+            "type": "array"
+          },
           "unresolved_questions": {
             "items": {
               "type": "string"
@@ -2203,6 +2617,11 @@
             "title": "Intake Summary",
             "type": "object"
           },
+          "materialization": {
+            "additionalProperties": true,
+            "title": "Materialization",
+            "type": "object"
+          },
           "matrix": {
             "additionalProperties": true,
             "title": "Matrix",
@@ -2244,6 +2663,54 @@
               "type": "object"
             },
             "title": "Review Decisions",
+            "type": "array"
+          },
+          "semantic_coverage": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Semantic Coverage",
+            "type": "array"
+          },
+          "structure_components": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Components",
+            "type": "array"
+          },
+          "structure_dossiers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Dossiers",
+            "type": "array"
+          },
+          "structure_identity_candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Identity Candidates",
+            "type": "array"
+          },
+          "structure_nodes": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Nodes",
+            "type": "array"
+          },
+          "structure_relationships": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Structure Relationships",
             "type": "array"
           },
           "work_packages": {
@@ -2408,6 +2875,101 @@
           "completed_at"
         ],
         "title": "ResetReceiptView",
+        "type": "object"
+      },
+      "RestorationRecoveryPlanView": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_boundary": {
+            "title": "Authority Boundary",
+            "type": "string"
+          },
+          "basis": {
+            "additionalProperties": true,
+            "title": "Basis",
+            "type": "object"
+          },
+          "blocked_actions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Blocked Actions",
+            "type": "array"
+          },
+          "global_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Global Blockers",
+            "type": "array"
+          },
+          "plan_kind": {
+            "const": "id_package_recovery_plan",
+            "title": "Plan Kind",
+            "type": "string"
+          },
+          "recoverable_actions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Recoverable Actions",
+            "type": "array"
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot"
+          },
+          "snapshot_duplicate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Duplicate"
+          },
+          "snapshot_is_current": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Is Current"
+          },
+          "status": {
+            "enum": [
+              "partial",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "plan_kind",
+          "status",
+          "basis",
+          "recoverable_actions",
+          "blocked_actions",
+          "global_blockers",
+          "authority_boundary"
+        ],
+        "title": "RestorationRecoveryPlanView",
         "type": "object"
       },
       "ReviewGeneratedCandidateRequest": {
@@ -2606,6 +3168,18 @@
             "title": "Requirements",
             "type": "array"
           },
+          "support_process": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support Process"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
@@ -2621,6 +3195,86 @@
           "authority_layers"
         ],
         "title": "SupportProductionView",
+        "type": "object"
+      },
+      "TenderContractAnalysisView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment"
+          },
+          "authority_boundary": {
+            "title": "Authority Boundary",
+            "type": "string"
+          },
+          "clauses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Clauses",
+            "type": "array"
+          },
+          "deliverables": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Deliverables",
+            "type": "array"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "process": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Process"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "process",
+          "assessment",
+          "clauses",
+          "issues",
+          "deliverables",
+          "gaps",
+          "authority_boundary"
+        ],
+        "title": "TenderContractAnalysisView",
         "type": "object"
       },
       "TrialReadinessRequest": {
@@ -3025,6 +3679,204 @@
         "summary": "Capabilities",
         "tags": [
           "platform"
+        ]
+      }
+    },
+    "/api/v1/construction-consultant/conversations": {
+      "get": {
+        "operationId": "list_conversations_api_v1_construction_consultant_conversations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConstructionConsultantConversationView"
+                  },
+                  "title": "Response List Conversations Api V1 Construction Consultant Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Conversations",
+        "tags": [
+          "construction-consultant"
+        ]
+      },
+      "post": {
+        "operationId": "create_construction_consultant_conversation_api_v1_construction_consultant_conversations_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstructionConsultantConversationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstructionConsultantConversationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Construction Consultant Conversation",
+        "tags": [
+          "construction-consultant"
+        ]
+      }
+    },
+    "/api/v1/construction-consultant/conversations/{conversation_id}/messages": {
+      "get": {
+        "operationId": "get_conversation_messages_api_v1_construction_consultant_conversations__conversation_id__messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConstructionConsultantMessageView"
+                  },
+                  "title": "Response Get Conversation Messages Api V1 Construction Consultant Conversations  Conversation Id  Messages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation Messages",
+        "tags": [
+          "construction-consultant"
+        ]
+      }
+    },
+    "/api/v1/construction-consultant/conversations/{conversation_id}/questions": {
+      "post": {
+        "operationId": "ask_construction_consultant_api_v1_construction_consultant_conversations__conversation_id__questions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstructionConsultantQuestionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConstructionConsultantAnswerView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ask Construction Consultant",
+        "tags": [
+          "construction-consultant"
         ]
       }
     },
@@ -3910,6 +4762,174 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight": {
+      "get": {
+        "operationId": "audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExpectedActualPreflightView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Expected Actual Preflight",
+        "tags": [
+          "audit-preflight"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight.csv": {
+      "get": {
+        "operationId": "audit_expected_actual_preflight_export_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Expected Actual Preflight Export",
+        "tags": [
+          "audit-preflight"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest": {
+      "get": {
+        "operationId": "latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditReportProjectionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Audit Report Projection",
+        "tags": [
+          "audit-report"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv": {
+      "get": {
+        "operationId": "audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Report Projection Export",
+        "tags": [
+          "audit-report"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/documents": {
       "get": {
         "operationId": "list_documents_api_v1_workspaces__workspace_id__documents_get",
@@ -4339,6 +5359,16 @@
               "format": "uuid",
               "title": "Workspace Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "effective_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Effective Only",
+              "type": "boolean"
             }
           }
         ],
@@ -5414,6 +6444,434 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-analysis.zip": {
+      "get": {
+        "operationId": "tender_analysis_export_api_v1_workspaces__workspace_id__project_understanding_tender_analysis_zip_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Analysis Export",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-document-coverage.csv": {
+      "get": {
+        "operationId": "tender_document_coverage_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_document_coverage_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Document Coverage Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-facility-work-observations.csv": {
+      "get": {
+        "operationId": "tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Facility Scope Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
+      "get": {
+        "operationId": "tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Findings Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.docx": {
+      "get": {
+        "operationId": "tender_findings_report_api_v1_workspaces__workspace_id__project_understanding_tender_findings_docx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Findings Report",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-scope-schedule.csv": {
+      "get": {
+        "operationId": "tender_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_scope_schedule_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Scope Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-structure-identity-candidates.csv": {
+      "get": {
+        "operationId": "tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Structure Identity Schedule",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan": {
+      "get": {
+        "operationId": "restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorationRecoveryPlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restoration Recovery Plan",
+        "tags": [
+          "restoration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan.csv": {
+      "get": {
+        "operationId": "restoration_recovery_plan_export_api_v1_workspaces__workspace_id__restoration_recovery_plan_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restoration Recovery Plan Export",
+        "tags": [
+          "restoration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans": {
+      "post": {
+        "operationId": "capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RestorationRecoveryPlanView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capture Restoration Recovery Plan",
+        "tags": [
+          "restoration"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
       "get": {
         "operationId": "support_finalized_content_api_v1_workspaces__workspace_id__support_finalized_documents__finalized_id__content_get",
@@ -5893,6 +7351,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/support/id-packages/export": {
+      "get": {
+        "operationId": "support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Support Id Package Export",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/id-production": {
       "get": {
         "operationId": "support_production_api_v1_workspaces__workspace_id__support_id_production_get",
@@ -5933,6 +7432,49 @@
         "summary": "Support Production",
         "tags": [
           "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
+      "get": {
+        "operationId": "tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenderContractAnalysisView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Contract Analysis",
+        "tags": [
+          "tender"
         ]
       }
     }

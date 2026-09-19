@@ -32,6 +32,19 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy import Engine
 
+from asd_kontur.assistant.construction_consultant_evidence import (
+    ConstructionConsultantEvidenceCollector,
+)
+from asd_kontur.assistant.construction_consultant_postgres import (
+    ConstructionConsultantPersistenceError,
+    ConstructionConsultantRepository,
+)
+from asd_kontur.assistant.construction_consultant_questions import (
+    ConstructionConsultantQuestionError,
+    ConstructionConsultantQuestionService,
+    LocalQwenConstructionConsultantModel,
+)
+from asd_kontur.assistant.construction_consultant_service import ConstructionConsultantService
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.models import AssistantMode
 from asd_kontur.assistant.postgres import AssistantPersistenceError, AssistantRepository
@@ -40,7 +53,9 @@ from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
 from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewAction
 from asd_kontur.pilot.postgres import PilotResultError
+from asd_kontur.restoration import RestorationRecoveryError
 from asd_kontur.support.production_postgres import SupportProductionError
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -56,7 +71,14 @@ from .schemas import (
     AssistantMessageView,
     AssistantQuestionRequest,
     AssistantTurnView,
+    AuditExpectedActualPreflightView,
+    AuditReportProjectionView,
     CapabilityStatusView,
+    ConstructionConsultantAnswerView,
+    ConstructionConsultantConversationCreate,
+    ConstructionConsultantConversationView,
+    ConstructionConsultantMessageView,
+    ConstructionConsultantQuestionRequest,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
@@ -82,10 +104,12 @@ from .schemas import (
     ResetExecuteRequest,
     ResetPrepareRequest,
     ResetReceiptView,
+    RestorationRecoveryPlanView,
     ReviewGeneratedCandidateRequest,
     SessionView,
     StartGenerationRequest,
     SupportProductionView,
+    TenderContractAnalysisView,
     TrialReadinessRequest,
     TrialReadinessView,
     UploadBatchView,
@@ -127,7 +151,24 @@ class ApplicationContainer:
         self.assistant = ProfessionalAssistantService(
             self.repository,
             assistant_repository,
-            ProfessionalAssistantKnowledgeQuery(engine),
+            ProfessionalAssistantKnowledgeQuery(
+                engine,
+                production_embedding_endpoint=settings.ntd_embedding_endpoint,
+            ),
+        )
+        construction_repository = ConstructionConsultantRepository(engine)
+        self.construction_consultant = ConstructionConsultantService(construction_repository)
+        construction_knowledge = ProfessionalAssistantKnowledgeQuery(
+            engine,
+            production_embedding_endpoint=settings.ntd_embedding_endpoint,
+        )
+        self.construction_consultant_questions = ConstructionConsultantQuestionService(
+            self.construction_consultant,
+            construction_repository,
+            ConstructionConsultantEvidenceCollector(construction_knowledge),
+            LocalQwenConstructionConsultantModel(
+                f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate"
+            ),
         )
         self.reset_service = WorkspaceResetService(
             repository=self.repository,
@@ -210,6 +251,20 @@ def _install_middleware(app: FastAPI) -> None:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
 
+    @app.exception_handler(TenderContractAnalysisError)
+    async def tender_contract_analysis_error(
+        request: Request, exc: TenderContractAnalysisError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(RestorationRecoveryError)
+    async def restoration_recovery_error(
+        request: Request, exc: RestorationRecoveryError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
     @app.exception_handler(PilotResultError)
     async def pilot_result_error(request: Request, exc: PilotResultError) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
@@ -218,6 +273,20 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(AssistantPersistenceError)
     async def assistant_error(request: Request, exc: AssistantPersistenceError) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(ConstructionConsultantPersistenceError)
+    async def construction_consultant_error(
+        request: Request, exc: ConstructionConsultantPersistenceError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(ConstructionConsultantQuestionError)
+    async def construction_consultant_question_error(
+        request: Request, exc: ConstructionConsultantQuestionError
+    ) -> JSONResponse:
+        status_code = 503 if "inference" in exc.code else 409
         return _error(request, exc.code, status_code)
 
     @app.exception_handler(ValueError)
@@ -532,12 +601,14 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        effective_only: bool = False,
     ) -> list[JobView]:
         return [
             JobView(**jsonable_encoder(asdict(value)))
             for value in _container(request).service.list_jobs(
                 owner_identity_id=principal.owner_identity_id,
                 workspace_id=workspace_id,
+                effective_only=effective_only,
             )
         ]
 
@@ -861,6 +932,197 @@ def _api_router() -> APIRouter:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")
         return ProjectUnderstandingView(**jsonable_encoder(value))
 
+    @router.get(
+        "/workspaces/{workspace_id}/tender/contract-analysis",
+        response_model=TenderContractAnalysisView,
+        tags=["tender"],
+    )
+    def tender_contract_analysis(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> TenderContractAnalysisView:
+        value = _container(request).service.tender_contract_analysis(
+            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+        )
+        return TenderContractAnalysisView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-findings.csv",
+        tags=["project-understanding"],
+    )
+    def tender_findings_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_findings_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-findings.docx",
+        tags=["project-understanding"],
+        response_class=Response,
+        responses={
+            200: {
+                "content": {
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {}
+                }
+            }
+        },
+    )
+    def tender_findings_report(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_findings_report(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-structure-identity-candidates.csv",
+        tags=["project-understanding"],
+    )
+    def tender_structure_identity_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_structure_identity_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-facility-work-observations.csv",
+        tags=["project-understanding"],
+    )
+    def tender_facility_scope_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_facility_scope_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-scope-schedule.csv",
+        tags=["project-understanding"],
+    )
+    def tender_scope_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_scope_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-document-coverage.csv",
+        tags=["project-understanding"],
+    )
+    def tender_document_coverage_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_document_coverage_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-analysis.zip",
+        tags=["project-understanding"],
+    )
+    def tender_analysis_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_analysis_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
     @router.post(
         "/workspaces/{workspace_id}/project-understanding/runs",
         response_model=JobView,
@@ -919,6 +1181,143 @@ def _api_router() -> APIRouter:
         )
         return SupportProductionView(**jsonable_encoder(value))
 
+    @router.get(
+        "/workspaces/{workspace_id}/audit/expected-actual-preflight",
+        response_model=AuditExpectedActualPreflightView,
+        tags=["audit-preflight"],
+    )
+    def audit_expected_actual_preflight(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AuditExpectedActualPreflightView:
+        value = _container(request).service.audit_expected_actual_preflight(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return AuditExpectedActualPreflightView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/expected-actual-preflight.csv",
+        tags=["audit-preflight"],
+    )
+    def audit_expected_actual_preflight_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.audit_expected_actual_preflight_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/reports/latest",
+        response_model=AuditReportProjectionView,
+        tags=["audit-report"],
+    )
+    def latest_audit_report_projection(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AuditReportProjectionView:
+        value = _container(request).service.latest_audit_report_projection(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return AuditReportProjectionView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/reports/latest.csv",
+        tags=["audit-report"],
+    )
+    def audit_report_projection_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.audit_report_projection_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
+        "/workspaces/{workspace_id}/restoration/recovery-plan",
+        response_model=RestorationRecoveryPlanView,
+        tags=["restoration"],
+    )
+    def restoration_recovery_plan(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> RestorationRecoveryPlanView:
+        value = _container(request).service.restoration_recovery_plan(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return RestorationRecoveryPlanView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/restoration/recovery-plans",
+        response_model=RestorationRecoveryPlanView,
+        status_code=201,
+        tags=["restoration"],
+    )
+    def capture_restoration_recovery_plan(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> RestorationRecoveryPlanView:
+        value = _container(request).service.capture_restoration_recovery_plan(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return RestorationRecoveryPlanView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/restoration/recovery-plan.csv",
+        tags=["restoration"],
+    )
+    def restoration_recovery_plan_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.restoration_recovery_plan_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
     @router.post(
         "/workspaces/{workspace_id}/support/id-packages",
         response_model=SupportProductionView,
@@ -937,6 +1336,30 @@ def _api_router() -> APIRouter:
             work_package_id=payload.work_package_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/id-packages/export",
+        tags=["support-production"],
+    )
+    def support_id_package_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.support_id_package_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
 
     @router.post(
         "/workspaces/{workspace_id}/support/generation-runs",
@@ -1098,6 +1521,84 @@ def _api_router() -> APIRouter:
     ) -> KnowledgeStatusView:
         value = _container(request).service.knowledge_status()
         return KnowledgeStatusView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/construction-consultant/conversations",
+        response_model=ConstructionConsultantConversationView,
+        status_code=201,
+        tags=["construction-consultant"],
+    )
+    def create_construction_consultant_conversation(
+        request: Request,
+        body: ConstructionConsultantConversationCreate,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ConstructionConsultantConversationView:
+        item = _container(request).construction_consultant.create_conversation(
+            owner_identity_id=principal.owner_identity_id,
+            title=body.title,
+        )
+        return ConstructionConsultantConversationView(**jsonable_encoder(asdict(item)))
+
+    @router.get(
+        "/construction-consultant/conversations",
+        response_model=list[ConstructionConsultantConversationView],
+        tags=["construction-consultant"],
+    )
+    def list_conversations(
+        request: Request,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[ConstructionConsultantConversationView]:
+        return [
+            ConstructionConsultantConversationView(**jsonable_encoder(asdict(item)))
+            for item in _container(request).construction_consultant.list_conversations(
+                owner_identity_id=principal.owner_identity_id
+            )
+        ]
+
+    @router.get(
+        "/construction-consultant/conversations/{conversation_id}/messages",
+        response_model=list[ConstructionConsultantMessageView],
+        tags=["construction-consultant"],
+    )
+    def get_conversation_messages(
+        request: Request,
+        conversation_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> list[ConstructionConsultantMessageView]:
+        items = _container(request).construction_consultant.messages(
+            owner_identity_id=principal.owner_identity_id,
+            conversation_id=conversation_id,
+        )
+        return [
+            ConstructionConsultantMessageView(**jsonable_encoder(asdict(item))) for item in items
+        ]
+
+    @router.post(
+        "/construction-consultant/conversations/{conversation_id}/questions",
+        response_model=ConstructionConsultantAnswerView,
+        tags=["construction-consultant"],
+    )
+    def ask_construction_consultant(
+        request: Request,
+        conversation_id: UUID,
+        body: ConstructionConsultantQuestionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> ConstructionConsultantAnswerView:
+        answer = _container(request).construction_consultant_questions.ask(
+            owner_identity_id=principal.owner_identity_id,
+            conversation_id=conversation_id,
+            request_id=body.request_id,
+            question=body.question,
+        )
+        return ConstructionConsultantAnswerView(
+            user_message=ConstructionConsultantMessageView(
+                **jsonable_encoder(asdict(answer.user_message))
+            ),
+            assistant_message=ConstructionConsultantMessageView(
+                **jsonable_encoder(asdict(answer.assistant_message))
+            ),
+            evidence_statuses=list(answer.evidence_statuses),
+        )
 
     @router.post(
         "/workspaces/{workspace_id}/assistant/conversations",

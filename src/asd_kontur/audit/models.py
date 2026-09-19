@@ -223,6 +223,18 @@ class ActionRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ActionRequestReference:
+    """Exact immutable ActionRequest version included in an Audit report."""
+
+    action_request_id: UUID
+    version: int
+
+    def __post_init__(self) -> None:
+        if self.version < 1:
+            raise ValueError("ActionRequest reference version must be positive")
+
+
+@dataclass(frozen=True, slots=True)
 class ClassificationVersion:
     classification_id: UUID
     version: int
@@ -251,7 +263,7 @@ class AuditReport:
     causal_delta_fingerprint: str
     package_readiness_id: UUID
     package_readiness_fingerprint: str
-    action_request_ids: tuple[UUID, ...]
+    action_request_refs: tuple[ActionRequestReference, ...]
     outcome: AuditTerminalOutcome
     unresolved_codes: tuple[str, ...]
     created_at: datetime

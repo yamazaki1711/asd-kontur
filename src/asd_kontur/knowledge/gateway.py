@@ -19,8 +19,8 @@ PD_RD_NTD_CONTRACT_VERSION = "2.3.0"
 PD_RD_NTD_SCHEMA_ID = "urn:asd-kontur:contracts:v2.3:schema:pd-rd-normative-profile"
 HARNESS_CONTRACT_VERSION = "1.8.0"
 HARNESS_SCHEMA_ID = "urn:asd-kontur:contracts:v1.8:schema:construction-harness"
-ASSISTANT_CONTRACT_VERSION = "2.7.0"
-ASSISTANT_SCHEMA_ID = "urn:asd-kontur:contracts:v2.7:schema:professional-assistant-context"
+ASSISTANT_CONTRACT_VERSION = "2.9.0"
+ASSISTANT_SCHEMA_ID = "urn:asd-kontur:contracts:v2.9:schema:professional-assistant-tool"
 BASE_TOOLS = frozenset(
     {
         "knowledge.search",
@@ -70,7 +70,34 @@ HARNESS_TOOLS = frozenset(
         "knowledge.trace_work_requirement",
     }
 )
-ASSISTANT_TOOLS = frozenset({"knowledge.get_professional_assistant_context"})
+ASSISTANT_TOOLS = frozenset(
+    {
+        "knowledge.get_professional_assistant_context",
+        "consultant.search_practice",
+        "consultant.get_practice_fragment",
+        "consultant.get_ntd_inventory",
+        "consultant.resolve_ntd_designation",
+        "consultant.search_ntd_documents",
+        "consultant.search_ntd_content",
+        "consultant.get_ntd_page",
+        "consultant.get_verified_provisions",
+        "consultant.get_ntd_processing_status",
+        "consultant.find_applicability_candidates",
+        "consultant.search_ntd",
+        "consultant.get_ntd_provision",
+        "consultant.get_ntd_section_context",
+        "consultant.get_workspace_overview",
+        "consultant.search_workspace_documents",
+        "consultant.get_workspace_fragment",
+        "consultant.get_work_packages",
+        "consultant.get_requirement_matrix",
+        "consultant.get_discrepancies",
+        "consultant.get_id_package",
+        "consultant.get_mode_result",
+        "consultant.get_information_gaps",
+        "consultant.estimate_concrete_early_strength",
+    }
+)
 TOOLS = BASE_TOOLS | GUIDANCE_TOOLS | NTD_TOOLS | PD_RD_NTD_TOOLS | HARNESS_TOOLS | ASSISTANT_TOOLS
 
 

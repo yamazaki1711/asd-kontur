@@ -23,6 +23,11 @@ import {
 import { api, requireData } from "./api/client";
 import type { components } from "./api/schema";
 import { StatusPill } from "./components/StatusPill";
+import {
+  constructionConsultantRequestId,
+  type PendingConstructionConsultantQuestion,
+} from "./constructionConsultantRetry";
+import { mergeFieldResolutionRows } from "./supportFieldRows";
 import { PdfEvidenceViewer } from "./viewer/PdfEvidenceViewer";
 
 type Workspace = components["schemas"]["WorkspaceView"];
@@ -31,9 +36,32 @@ type Job = components["schemas"]["JobView"];
 type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
 type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
+type AuditExpectedActualPreflight =
+  components["schemas"]["AuditExpectedActualPreflightView"];
+type AuditReportProjection = components["schemas"]["AuditReportProjectionView"];
+type TenderContractAnalysis =
+  components["schemas"]["TenderContractAnalysisView"];
+type AuditPreflightItem = {
+  item_key: string;
+  work_package_id: string;
+  document_type: string;
+  preflight_state: string;
+  membership_count: number;
+  membership_states: string[];
+  evidence_refs: string[];
+  gaps: string[];
+  required_correction: string;
+  practical_consequence: string;
+};
+type RestorationRecoveryPlan =
+  components["schemas"]["RestorationRecoveryPlanView"];
 type PilotResult = components["schemas"]["PilotResultView"];
 type AssistantConversation = components["schemas"]["AssistantConversationView"];
 type AssistantMessage = components["schemas"]["AssistantMessageView"];
+type ConstructionConsultantConversation =
+  components["schemas"]["ConstructionConsultantConversationView"];
+type ConstructionConsultantMessage =
+  components["schemas"]["ConstructionConsultantMessageView"];
 
 const MODES = ["Tender", "Support", "Audit", "Restoration"] as const;
 type ModeName = (typeof MODES)[number];
@@ -139,6 +167,18 @@ function workspaceRouteFromSlug(
     : `/workspaces/${workspaceId}${suffix}`;
 }
 
+function primaryModeOutputRoute(mode: ModeName, workspaceId: string) {
+  const suffix =
+    mode === "Support"
+      ? "/support-id"
+      : mode === "Audit"
+        ? "/audit-preflight"
+        : mode === "Restoration"
+          ? "/recovery-plan"
+          : "/project-understanding";
+  return workspaceRoute(mode, workspaceId, suffix);
+}
+
 function displayWorkspaceName(value: string) {
   return /synthetic/i.test(value) ? "Демонстрационный объект" : value;
 }
@@ -185,8 +225,24 @@ export function App() {
             element={<ProjectUnderstandingPage />}
           />
           <Route
+            path="/modes/:mode/workspaces/:workspaceId/tender-contract-analysis"
+            element={<TenderContractAnalysisPage />}
+          />
+          <Route
             path="/modes/:mode/workspaces/:workspaceId/support-id"
             element={<SupportProductionPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/audit-preflight"
+            element={<AuditExpectedActualPreflightPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/audit-report"
+            element={<AuditReportProjectionPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/recovery-plan"
+            element={<RestorationRecoveryPlanPage />}
           />
           <Route
             path="/modes/:mode/workspaces/:workspaceId/result"
@@ -413,10 +469,34 @@ function ApplicationShell() {
             label="Работы и требования"
           />
           <NavItem to={`${workspaceBase}/result`} label="Результат режима" />
+          {mode === "Tender" && (
+            <NavItem
+              to={`${workspaceBase}/tender-contract-analysis`}
+              label="Договорный анализ"
+            />
+          )}
           {mode === "Support" && (
             <NavItem
               to={`${workspaceBase}/support-id`}
               label="Исполнительная документация"
+            />
+          )}
+          {mode === "Audit" && (
+            <>
+              <NavItem
+                to={`${workspaceBase}/audit-preflight`}
+                label="Предварительная сверка"
+              />
+              <NavItem
+                to={`${workspaceBase}/audit-report`}
+                label="Отчёт независимого аудита"
+              />
+            </>
+          )}
+          {mode === "Restoration" && (
+            <NavItem
+              to={`${workspaceBase}/recovery-plan`}
+              label="План восстановления"
             />
           )}
           <NavItem to={`${workspaceBase}/evidence`} label="Источники" />
@@ -1039,7 +1119,253 @@ function ModeSelectionPage() {
           );
         })}
       </div>
+      <ConstructionConsultantPanel />
     </Page>
+  );
+}
+
+function ConstructionConsultantPanel() {
+  const queryClient = useQueryClient();
+  const [conversationId, setConversationId] = useState<string | null>(() =>
+    window.localStorage.getItem("asd-construction-consultant-conversation"),
+  );
+  const [question, setQuestion] = useState("");
+  const [pendingQuestion, setPendingQuestion] =
+    useState<PendingConstructionConsultantQuestion | null>(null);
+  const conversations = useQuery({
+    queryKey: ["construction-consultant-conversations"],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/construction-consultant/conversations",
+      );
+      return requireData(data, error);
+    },
+  });
+  const effectiveConversationId =
+    conversationId ?? conversations.data?.[0]?.conversation_id ?? null;
+  const messages = useQuery({
+    queryKey: ["construction-consultant-messages", effectiveConversationId],
+    enabled: Boolean(effectiveConversationId),
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/construction-consultant/conversations/{conversation_id}/messages",
+        {
+          params: { path: { conversation_id: effectiveConversationId ?? "" } },
+        },
+      );
+      return requireData(data, error);
+    },
+  });
+  const createConversation = useMutation({
+    mutationFn: async (title: string) => {
+      const { data, error } = await api.POST(
+        "/api/v1/construction-consultant/conversations",
+        { body: { title } },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async (value) => {
+      setConversationId(value.conversation_id);
+      window.localStorage.setItem(
+        "asd-construction-consultant-conversation",
+        value.conversation_id,
+      );
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-conversations"],
+      });
+    },
+  });
+  const ask = useMutation({
+    mutationFn: async ({
+      identity,
+      text,
+      requestId,
+    }: {
+      identity: string;
+      text: string;
+      requestId: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/construction-consultant/conversations/{conversation_id}/questions",
+        {
+          params: { path: { conversation_id: identity } },
+          body: { request_id: requestId, question: text },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      setQuestion("");
+      setPendingQuestion(null);
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-messages", effectiveConversationId],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["construction-consultant-conversations"],
+      });
+    },
+  });
+  const submit = async () => {
+    const text = question.trim();
+    if (!text || ask.isPending) return;
+    let identity = effectiveConversationId;
+    if (!identity) {
+      const created = await createConversation.mutateAsync(text.slice(0, 120));
+      identity = created.conversation_id;
+    }
+    const requestId = constructionConsultantRequestId(
+      pendingQuestion,
+      identity,
+      text,
+      () => crypto.randomUUID(),
+    );
+    setPendingQuestion({ conversationId: identity, question: text, requestId });
+    ask.mutate({ identity, text, requestId });
+  };
+  const values = (messages.data ?? []) as ConstructionConsultantMessage[];
+  return (
+    <section
+      className="construction-consultant"
+      aria-labelledby="construction-consultant-title"
+    >
+      <div className="construction-consultant-heading">
+        <div>
+          <p className="eyebrow">Общие профессиональные знания</p>
+          <h2 id="construction-consultant-title">Строительный консультант</h2>
+          <p>
+            Вопрос не привязан к объекту. Ответ опирается на методические и
+            нормативные материалы; инженерная оценка всегда обозначается
+            отдельно от подтверждённого факта.
+          </p>
+        </div>
+        <label>
+          Диалог
+          <select
+            value={effectiveConversationId ?? ""}
+            onChange={(event) => {
+              const next = event.target.value || null;
+              setConversationId(next);
+              setPendingQuestion(null);
+              if (next) {
+                window.localStorage.setItem(
+                  "asd-construction-consultant-conversation",
+                  next,
+                );
+              }
+            }}
+          >
+            <option value="">Новый диалог</option>
+            {(conversations.data ?? []).map(
+              (item: ConstructionConsultantConversation) => (
+                <option key={item.conversation_id} value={item.conversation_id}>
+                  {item.title}
+                </option>
+              ),
+            )}
+          </select>
+        </label>
+      </div>
+      <div className="construction-consultant-history" aria-live="polite">
+        {values.length === 0 ? (
+          <p className="construction-consultant-empty">
+            Например: «Как организовать входной контроль материалов?»
+          </p>
+        ) : (
+          values.map((message) => (
+            <article
+              className={`construction-consultant-message construction-consultant-message-${message.role}`}
+              key={message.message_id}
+            >
+              <strong>{message.role === "user" ? "Вы" : "Ответ"}</strong>
+              <div>{message.content}</div>
+              {message.sources.length > 0 ? (
+                <details className="construction-consultant-sources">
+                  <summary>Основания ответа ({message.sources.length})</summary>
+                  <ol>
+                    {message.sources.map((source, index) => {
+                      const href = displayValue(source.href, "");
+                      const title = displayValue(source.title, "Источник");
+                      return (
+                        <li
+                          key={`${displayValue(source.source_id)}-${String(index)}`}
+                        >
+                          {href ? (
+                            <a href={href} target="_blank" rel="noreferrer">
+                              {title}
+                            </a>
+                          ) : (
+                            <span>{title}</span>
+                          )}
+                          <small>
+                            {displayValue(source.locator, "Локатор не указан")}
+                          </small>
+                          {source.fragment ? (
+                            <blockquote>
+                              {displayValue(source.fragment)}
+                            </blockquote>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </details>
+              ) : null}
+            </article>
+          ))
+        )}
+        {ask.isPending ? (
+          <p className="construction-consultant-pending">Формирую ответ…</p>
+        ) : null}
+        {ask.isError ? (
+          <p className="notice error-notice">
+            {ask.error instanceof Error
+              ? ask.error.message
+              : "Консультант временно недоступен."}
+          </p>
+        ) : null}
+      </div>
+      <div className="construction-consultant-composer">
+        <label htmlFor="construction-consultant-question">Ваш вопрос</label>
+        <textarea
+          id="construction-consultant-question"
+          rows={3}
+          value={question}
+          placeholder="Задайте общий вопрос по строительным работам, контролю или исполнительной документации"
+          onChange={(event) => setQuestion(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              void submit();
+            }
+          }}
+          disabled={ask.isPending || createConversation.isPending}
+        />
+        <div>
+          <button
+            type="button"
+            onClick={() => void submit()}
+            disabled={
+              !question.trim() || ask.isPending || createConversation.isPending
+            }
+          >
+            Отправить вопрос
+          </button>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => {
+              setConversationId(null);
+              setPendingQuestion(null);
+              window.localStorage.removeItem(
+                "asd-construction-consultant-conversation",
+              );
+            }}
+          >
+            Новый диалог
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -1627,7 +1953,12 @@ function JobsPage() {
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/jobs",
-        { params: { path: { workspace_id: workspaceId } } },
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: { effective_only: true },
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -1647,7 +1978,7 @@ function JobsPage() {
   return (
     <Page
       title="Обработка документов"
-      lead="Текущие и завершённые задания обработки загруженных материалов."
+      lead="Текущие эффективные задания обработки. Исторические попытки сохраняются отдельно и не заменяют актуальный статус."
     >
       <QueryState query={jobs} empty="Заданий обработки пока нет.">
         {(items) => <JobTable jobs={items} workspaceId={workspaceId} />}
@@ -1710,6 +2041,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
           <tr>
             <th>Вид обработки</th>
             <th>Состояние</th>
+            <th>Семантические пакеты</th>
             <th>Попытки</th>
             <th>Причина ошибки</th>
             <th>Результат</th>
@@ -1723,14 +2055,25 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
               <td>
                 <StatusPill
                   tone={
+                    job.lease_expired ||
                     job.state === "failed" ||
                     job.state === "reconciliation_required"
                       ? "danger"
                       : "default"
                   }
                 >
-                  {humanizeStatus(job.state)}
+                  {job.lease_expired
+                    ? "Исполнитель недоступен; восстановление ожидается"
+                    : humanizeStatus(job.state)}
                 </StatusPill>
+              </td>
+              <td>
+                {job.progress_message_code ===
+                  "engineering_semantic_batch_accepted" &&
+                Number.isInteger(job.progress_current) &&
+                Number.isInteger(job.progress_total)
+                  ? `${String(job.progress_current)} / ${String(job.progress_total)}`
+                  : "—"}
               </td>
               <td>
                 {job.attempt_count} / {job.max_attempts}
@@ -2043,6 +2386,718 @@ function SupportProductionPage() {
   );
 }
 
+function AuditExpectedActualPreflightPage() {
+  const { workspaceId = "" } = useParams();
+  const preflight = useQuery({
+    queryKey: ["audit-expected-actual-preflight", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="Предварительная сверка комплекта"
+      lead="Сопоставление требований матрицы с составом сформированного комплекта. Это не заменяет независимый аудит документов."
+    >
+      <QueryState query={preflight}>
+        {(value) => (
+          <AuditExpectedActualPreflightBody
+            value={value}
+            workspaceId={workspaceId}
+          />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function AuditReportProjectionPage() {
+  const { workspaceId = "" } = useParams();
+  const report = useQuery({
+    queryKey: ["audit-report-projection", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/audit/reports/latest",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="Отчёт независимого аудита"
+      lead="Неизменяемый отчёт по точной версии состава документов, доказательствам и запросам на исправление."
+    >
+      <QueryState query={report}>
+        {(value) => (
+          <AuditReportProjectionBody value={value} workspaceId={workspaceId} />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function TenderContractAnalysisPage() {
+  const { workspaceId = "" } = useParams();
+  const analysis = useQuery({
+    queryKey: ["tender-contract-analysis", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/tender/contract-analysis",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    retry: false,
+  });
+  return (
+    <Page
+      title="Договорный анализ"
+      lead="Проверяемая проекция договорных оснований, рисков и подготовленных результатов Tender-процесса."
+    >
+      <QueryState query={analysis}>
+        {(value) => (
+          <TenderContractAnalysisBody value={value} workspaceId={workspaceId} />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function TenderContractAnalysisBody({
+  value,
+  workspaceId,
+}: {
+  value: TenderContractAnalysis;
+  workspaceId: string;
+}) {
+  const clauses = value.clauses as Array<Record<string, unknown>>;
+  const issues = value.issues as Array<Record<string, unknown>>;
+  const deliverables = value.deliverables as Array<Record<string, unknown>>;
+  if (value.status === "not_started") {
+    return (
+      <InfoNotice>
+        Договорный Tender-процесс ещё не был сформирован. Это не означает, что
+        договор проверен и риски отсутствуют. Для запуска нужны доступные
+        договорные исходные данные и установленный процесс Tender-службы.
+        <GapList gaps={value.gaps} />
+      </InfoNotice>
+    );
+  }
+  const assessment = (value.assessment ?? {}) as Record<string, unknown>;
+  return (
+    <>
+      <InfoNotice>
+        Это просмотр канонических записей Tender-процесса. Он не создаёт
+        юридическое заключение, не меняет исходный договор и не заменяет
+        квалифицированное рассмотрение.
+      </InfoNotice>
+      <section className="metrics" aria-label="Состояние договорного анализа">
+        <Metric label="Положений" value={clauses.length} />
+        <Metric label="Вопросов и рисков" value={issues.length} />
+        <Metric label="Результатов" value={deliverables.length} />
+      </section>
+      <section className="panel">
+        <h2>Состояние и исходные данные</h2>
+        <p>Статус: {humanizeStatus(value.status)}</p>
+        {value.assessment ? (
+          <dl>
+            <dt>Доступные классы источников</dt>
+            <dd>{displayValues(assessment.available_source_classes) || "—"}</dd>
+            <dt>Отсутствующие классы источников</dt>
+            <dd>{displayValues(assessment.missing_source_classes) || "—"}</dd>
+          </dl>
+        ) : null}
+        <GapList gaps={value.gaps} />
+      </section>
+      <section className="panel">
+        <h2>Положения с источниками</h2>
+        {clauses.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Ключ</th>
+                  <th>Основание</th>
+                  <th>Источник</th>
+                </tr>
+              </thead>
+              <tbody>
+                {clauses.map((clause) => {
+                  const locator = displayValue(clause.source_locator_id, "");
+                  return (
+                    <tr key={String(clause.clause_id)}>
+                      <td>{displayValue(clause.clause_key, "—")}</td>
+                      <td>
+                        {displayValue(clause.authority_layer, "—")}
+                        <small>{displayValue(clause.locator_label, "")}</small>
+                      </td>
+                      <td>
+                        {locator ? (
+                          <Link
+                            to={workspaceRoute(
+                              "Tender",
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            Открыть фрагмент
+                          </Link>
+                        ) : (
+                          "Источник не привязан"
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Положения договора ещё не извлечены в канонический процесс.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Вопросы, риски и необходимые действия</h2>
+        {issues.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Вид</th>
+                  <th>Предмет</th>
+                  <th>Применимость</th>
+                  <th>Рекомендация и последствие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {issues.map((issue) => (
+                  <tr key={String(issue.issue_id)}>
+                    <td>
+                      {humanizeStatus(displayValue(issue.issue_kind, "—"))}
+                    </td>
+                    <td>{displayValue(issue.subject, "—")}</td>
+                    <td>
+                      {humanizeStatus(displayValue(issue.applicability, "—"))}
+                    </td>
+                    <td>
+                      {displayValue(
+                        issue.recommendation_text,
+                        "Требуется уточнение",
+                      )}
+                      <small>{displayValue(issue.consequence_code, "")}</small>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Канонические вопросы и риски ещё не зарегистрированы.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Подготовленные результаты</h2>
+        {deliverables.length ? (
+          <GapList
+            gaps={deliverables.map((item) =>
+              displayValue(item.deliverable_kind, "TENDER_DELIVERABLE"),
+            )}
+            good
+          />
+        ) : (
+          <p>Результаты Tender-процесса ещё не подготовлены.</p>
+        )}
+      </section>
+    </>
+  );
+}
+
+function AuditReportProjectionBody({
+  value,
+  workspaceId,
+}: {
+  value: AuditReportProjection;
+  workspaceId: string;
+}) {
+  const gaps = value.gaps ?? [];
+  if (value.status === "not_published") {
+    return (
+      <InfoNotice>
+        Независимый отчёт ещё не опубликован. Предварительная сверка не заменяет
+        аудит содержания, подписей и приложений.
+        <GapList gaps={gaps} />
+      </InfoNotice>
+    );
+  }
+  const ptoPayload = (value.pto?.projection_payload ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const report = (ptoPayload.report ?? {}) as Record<string, unknown>;
+  const deltas = Array.isArray(ptoPayload.deltas)
+    ? (ptoPayload.deltas as Array<Record<string, unknown>>)
+    : [];
+  const requests = Array.isArray(ptoPayload.action_requests)
+    ? (ptoPayload.action_requests as Array<Record<string, unknown>>)
+    : [];
+  return (
+    <>
+      <InfoNotice>
+        Это опубликованная проекция канонического отчёта. Она не изменяет
+        исходные записи аудита и не подтверждает устранение замечаний без
+        отдельного доказательства.
+      </InfoNotice>
+      <a
+        className="button-link secondary"
+        href={`/api/v1/workspaces/${workspaceId}/audit/reports/latest.csv`}
+      >
+        Скачать таблицу отчёта
+      </a>
+      <section className="metrics" aria-label="Состояние независимого аудита">
+        <Metric label="Версия отчёта" value={Number(report.version ?? 0)} />
+        <Metric
+          label="Нерешённых кодов"
+          value={
+            Array.isArray(report.unresolved_codes)
+              ? report.unresolved_codes.length
+              : 0
+          }
+        />
+        <Metric label="Запросов на исправление" value={requests.length} />
+      </section>
+      <section className="panel">
+        <h2>Основание и результат</h2>
+        <p>
+          Статус:{" "}
+          {humanizeStatus(
+            typeof report.outcome === "string" ? report.outcome : "unknown",
+          )}
+        </p>
+        <GapList
+          gaps={
+            Array.isArray(report.unresolved_codes)
+              ? report.unresolved_codes.map(String)
+              : []
+          }
+        />
+      </section>
+      <section className="panel">
+        <h2>Состояние проверок</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Контур</th>
+                <th>Состояния</th>
+                <th>Нерешённые позиции</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deltas.map((delta) => {
+                const counts = (delta.counts ?? {}) as Record<string, unknown>;
+                const unresolved = Array.isArray(delta.unresolved_items)
+                  ? (delta.unresolved_items as Array<Record<string, unknown>>)
+                  : [];
+                return (
+                  <tr
+                    key={`${String(delta.delta_id)}:${String(delta.version)}`}
+                  >
+                    <td>
+                      {humanizeAuditDeltaKind(
+                        typeof delta.kind === "string" ? delta.kind : "unknown",
+                      )}
+                    </td>
+                    <td>
+                      {Object.entries(counts)
+                        .map(
+                          ([key, count]) =>
+                            `${humanizeStatus(key)}: ${String(count)}`,
+                        )
+                        .join(", ")}
+                    </td>
+                    <td>
+                      {unresolved
+                        .map((item) => String(item.item_key))
+                        .join(", ") || "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section className="panel">
+        <h2>Запросы на исправление</h2>
+        {requests.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Действие</th>
+                  <th>Объект</th>
+                  <th>Состояние</th>
+                  <th>Основание и последствия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.map((item) => (
+                  <tr
+                    key={`${String(item.action_request_id)}:${String(item.version)}`}
+                  >
+                    <td>{String(item.action_code)}</td>
+                    <td>{String(item.affected_object_ref)}</td>
+                    <td>{humanizeStatus(String(item.state))}</td>
+                    <td>
+                      <GapList
+                        gaps={[
+                          ...((item.evidence_refs as string[] | undefined) ??
+                            []),
+                          ...((item.blocking_impacts as string[] | undefined) ??
+                            []),
+                        ]}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            В этот отчёт не включены запросы на исправление.
+          </InfoNotice>
+        )}
+      </section>
+      {gaps.length ? <GapList gaps={gaps} /> : null}
+    </>
+  );
+}
+
+function AuditExpectedActualPreflightBody({
+  value,
+  workspaceId,
+}: {
+  value: AuditExpectedActualPreflight;
+  workspaceId: string;
+}) {
+  const counts = value.counts;
+  const items = value.items as unknown as AuditPreflightItem[];
+  return (
+    <>
+      <InfoNotice>
+        Здесь показан состав подготовленного комплекта относительно версии
+        матрицы требований. Наличие кандидата или финализированного документа не
+        означает, что его содержание, подписи и приложения прошли независимый
+        аудит.
+      </InfoNotice>
+      <section
+        className="metrics"
+        aria-label="Состояние предварительной сверки"
+      >
+        <Metric label="Требований" value={items.length} />
+        <Metric label="Отсутствует" value={counts.missing ?? 0} />
+        <Metric label="Подготовлено" value={counts.generated_candidate ?? 0} />
+        <Metric label="Ожидает аудита" value={counts.awaiting_audit ?? 0} />
+      </section>
+      <section className="panel">
+        <div className="entity-heading">
+          <h2>Требования и фактический состав</h2>
+          <div className="inline-actions">
+            <StatusPill tone="warning">
+              {value.status === "not_started"
+                ? "Требования ещё не сформированы"
+                : "Предварительный результат"}
+            </StatusPill>
+            <a
+              className="button-link secondary"
+              href={`/api/v1/workspaces/${workspaceId}/audit/expected-actual-preflight.csv`}
+            >
+              Скачать таблицу
+            </a>
+          </div>
+        </div>
+        {items.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Работа / документ</th>
+                  <th>Состояние</th>
+                  <th>Комплект</th>
+                  <th>Основания, последствия и необходимое действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.item_key}>
+                    <td>
+                      <strong>
+                        {humanizeDocumentRole(item.document_type)}
+                      </strong>
+                      <small className="mono">{item.work_package_id}</small>
+                    </td>
+                    <td>
+                      <StatusPill
+                        tone={
+                          item.preflight_state === "missing"
+                            ? "warning"
+                            : "default"
+                        }
+                      >
+                        {humanizeAuditPreflightState(item.preflight_state)}
+                      </StatusPill>
+                    </td>
+                    <td>
+                      <small>Позиций: {item.membership_count}</small>
+                      {item.membership_states.length ? (
+                        <small>
+                          {item.membership_states
+                            .map(humanizeStatus)
+                            .join(", ")}
+                        </small>
+                      ) : (
+                        <small>Позиция не сформирована</small>
+                      )}
+                    </td>
+                    <td>
+                      <GapList gaps={[...item.evidence_refs, ...item.gaps]} />
+                      <p>
+                        Последствие:{" "}
+                        {humanizeAuditConsequence(item.practical_consequence)}.
+                      </p>
+                      <p>
+                        Действие:{" "}
+                        {humanizeAuditCorrection(item.required_correction)}.
+                      </p>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            Матрица требований ещё не содержит позиций для предварительной
+            сверки.
+          </InfoNotice>
+        )}
+      </section>
+      {value.gaps.length ? (
+        <section className="panel">
+          <h2>Что препятствует независимому аудиту</h2>
+          <GapList gaps={value.gaps} />
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function RestorationRecoveryPlanPage() {
+  const { workspaceId = "" } = useParams();
+  const queryClient = useQueryClient();
+  const plan = useQuery({
+    queryKey: ["restoration-recovery-plan", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const capture = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["restoration-recovery-plan", workspaceId],
+      });
+    },
+  });
+  return (
+    <Page
+      title="План восстановления комплекта"
+      lead="Очередность действий по требованиям и имеющимся доказательствам без подстановки отсутствующих фактов."
+    >
+      <QueryState query={plan}>
+        {(value) => (
+          <RestorationRecoveryPlanBody
+            value={value}
+            workspaceId={workspaceId}
+            capture={() => capture.mutate()}
+            capturePending={capture.isPending}
+            captureError={capture.error}
+          />
+        )}
+      </QueryState>
+    </Page>
+  );
+}
+
+function RestorationRecoveryPlanBody({
+  value,
+  workspaceId,
+  capture,
+  capturePending,
+  captureError,
+}: {
+  value: RestorationRecoveryPlan;
+  workspaceId: string;
+  capture: () => void;
+  capturePending: boolean;
+  captureError: unknown;
+}) {
+  const recoverable = value.recoverable_actions as unknown as Array<
+    Record<string, unknown>
+  >;
+  const blocked = value.blocked_actions as unknown as Array<
+    Record<string, unknown>
+  >;
+  return (
+    <>
+      <InfoNotice>
+        План не подтверждает выполнение работ и не создаёт даты, подписи,
+        измерения или результаты испытаний. Для отсутствующих исходных данных
+        указано, что именно необходимо получить.
+      </InfoNotice>
+      <section className="metrics" aria-label="Состояние восстановления">
+        <Metric label="Можно продолжить" value={recoverable.length} />
+        <Metric label="Требуют исходных данных" value={blocked.length} />
+      </section>
+      <a
+        className="button-link secondary"
+        href={`/api/v1/workspaces/${workspaceId}/restoration/recovery-plan.csv`}
+      >
+        Скачать редактируемый план восстановления
+      </a>
+      <button
+        type="button"
+        className="button-link secondary"
+        onClick={capture}
+        disabled={capturePending}
+      >
+        {capturePending
+          ? "Фиксация плана…"
+          : "Зафиксировать план восстановления"}
+      </button>
+      {value.snapshot ? (
+        <InfoNotice>
+          Зафиксирована версия {String(value.snapshot.version)} плана.
+          {value.snapshot_is_current
+            ? " Она соответствует текущим основаниям."
+            : " Она относится к прежнему состоянию оснований; текущий план можно зафиксировать новой версией."}{" "}
+          Фиксация не изменяет исходные документы или факты.
+        </InfoNotice>
+      ) : (
+        <InfoNotice>
+          Текущий план ещё не зафиксирован. Фиксация создаёт воспроизводимую
+          версию оценки без создания недостающих документов.
+        </InfoNotice>
+      )}
+      {captureError ? <ErrorNotice error={captureError} /> : null}
+      <RecoveryActionTable
+        title="Действия с доступными основаниями"
+        items={recoverable}
+        workspaceId={workspaceId}
+      />
+      <RecoveryActionTable
+        title="Блокирующие отсутствующие сведения"
+        items={blocked}
+        workspaceId={workspaceId}
+      />
+      {value.global_blockers.length ? (
+        <section className="panel">
+          <h2>Общие ограничения</h2>
+          <GapList gaps={value.global_blockers} />
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+function RecoveryActionTable({
+  title,
+  items,
+  workspaceId,
+}: {
+  title: string;
+  items: Array<Record<string, unknown>>;
+  workspaceId: string;
+}) {
+  return (
+    <section className="panel">
+      <h2>{title}</h2>
+      {items.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Документ</th>
+                <th>Действие</th>
+                <th>Необходимые данные</th>
+                <th>Основания</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={String(item.item_key)}>
+                  <td>
+                    <strong>
+                      {humanizeDocumentRole(String(item.document_type))}
+                    </strong>
+                    <small className="mono">
+                      {String(item.work_package_id)}
+                    </small>
+                  </td>
+                  <td>{humanizeRecoveryAction(String(item.action))}</td>
+                  <td>
+                    {String(item.required_input)}
+                    {Array.isArray(item.generated_candidate_ids) &&
+                    item.generated_candidate_ids.length > 0 ? (
+                      <small>
+                        <Link
+                          to={workspaceRouteFromSlug(
+                            "support",
+                            workspaceId,
+                            "/id-production",
+                          )}
+                        >
+                          Открыть подготовленный кандидат в комплекте ИД
+                        </Link>
+                      </small>
+                    ) : null}
+                  </td>
+                  <td>
+                    <GapList
+                      gaps={[
+                        ...((item.evidence_refs as string[] | undefined) ?? []),
+                        ...((item.blocker_codes as string[] | undefined) ?? []),
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <InfoNotice>Позиции этого типа не зарегистрированы.</InfoNotice>
+      )}
+    </section>
+  );
+}
+
 function SupportProductionBody({
   value,
   workspaceId,
@@ -2079,6 +3134,8 @@ function SupportProductionBody({
   const packageHistory = value.package_history ?? [];
   const registerHistory = value.register_history ?? [];
   const fields = value.field_resolutions ?? [];
+  const fieldRows = mergeFieldResolutionRows(fields);
+  const supportProcess = value.support_process;
   return (
     <>
       <section className="panel">
@@ -2144,7 +3201,15 @@ function SupportProductionBody({
             определены.
           </InfoNotice>
         )}
+        {!value.package && !supportProcess && (
+          <InfoNotice>
+            Перед формированием комплекта нужно настроить контур сопровождения
+            для этого ОКС с полномочием специалиста. Без него пакет не будет
+            иметь закреплённого объёма работ, политики и версии правил.
+          </InfoNotice>
+        )}
         {!value.package &&
+          supportProcess &&
           workPackages.map((identity) => (
             <button
               key={identity}
@@ -2194,6 +3259,17 @@ function SupportProductionBody({
                 {displayValue(readiness?.status, "incomplete")}
               </StatusPill>
             </div>
+            <a
+              className="button-link secondary"
+              href={`/api/v1/workspaces/${workspaceId}/support/id-packages/export`}
+            >
+              Скачать редактируемый комплект
+            </a>
+            <p>
+              Реестр находится первым файлом архива. Подготовленные документы
+              сохранены как кандидаты, а отсутствующие и заблокированные позиции
+              перечислены отдельным графиком.
+            </p>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -2412,31 +3488,63 @@ function SupportProductionBody({
             </article>
           </section>
           <section className="panel">
-            <h2>Заполненные поля документа</h2>
-            {fields.length ? (
-              <dl>
-                {fields.map((field) => (
-                  <div
-                    key={`${String(field.generation_run_id)}:${String(field.field_key)}`}
-                  >
-                    <dt>{humanizeFieldKey(String(field.field_key))}</dt>
-                    <dd>
-                      {String(field.display_value ?? field.state)}
-                      {Boolean(field.source_locator_id) && (
-                        <Link
-                          to={workspaceRouteFromSlug(
-                            modeSlug,
-                            workspaceId,
-                            `/evidence/locators/${String(field.source_locator_id)}`,
+            <h2>Поля, доказательства и недостающие входные данные</h2>
+            {fieldRows.length ? (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Поле</th>
+                      <th>Значение</th>
+                      <th>Состояние</th>
+                      <th>Источники</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fieldRows.map(({ field, locatorIds }) => (
+                      <tr
+                        key={`${String(field.generation_run_id)}:${String(field.field_key)}:${String(field.state)}`}
+                      >
+                        <td>{humanizeFieldKey(String(field.field_key))}</td>
+                        <td>
+                          {displayValue(field.display_value, "Не установлено")}
+                        </td>
+                        <td>
+                          <StatusPill
+                            tone={
+                              String(field.state) === "confirmed"
+                                ? "default"
+                                : "warning"
+                            }
+                          >
+                            {humanizeStatus(String(field.state))}
+                          </StatusPill>
+                        </td>
+                        <td>
+                          {locatorIds.length ? (
+                            locatorIds.map((locatorId, index) => (
+                              <span key={locatorId}>
+                                {index > 0 ? ", " : ""}
+                                <Link
+                                  to={workspaceRouteFromSlug(
+                                    modeSlug,
+                                    workspaceId,
+                                    `/evidence/locators/${locatorId}`,
+                                  )}
+                                >
+                                  открыть источник
+                                </Link>
+                              </span>
+                            ))
+                          ) : (
+                            <small>Источник ещё не установлен</small>
                           )}
-                        >
-                          открыть источник
-                        </Link>
-                      )}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <p>Поля документа ещё не подготовлены.</p>
             )}
@@ -2488,9 +3596,15 @@ function ModePage() {
               {value.matrix_version_id ? (
                 <Link
                   className="button-link"
-                  to={workspaceRoute(normalized, workspaceId, "/result")}
+                  to={primaryModeOutputRoute(normalized, workspaceId)}
                 >
-                  Перейти к результату
+                  {normalized === "Tender"
+                    ? "Открыть анализ проекта"
+                    : normalized === "Support"
+                      ? "Открыть комплект ИД"
+                      : normalized === "Audit"
+                        ? "Открыть предварительную сверку"
+                        : "Открыть план восстановления"}
                 </Link>
               ) : (
                 <Link
@@ -2735,6 +3849,9 @@ function PilotResultBody({
       haystack.includes(resultSearch.trim().toLocaleLowerCase("ru-RU"))
     );
   });
+  const tenderScopeSchedule = Array.isArray(value.tender_scope_schedule)
+    ? (value.tender_scope_schedule as Record<string, unknown>[])
+    : [];
   return (
     <>
       <section className="metrics" aria-label="Сводка результата">
@@ -2745,8 +3862,12 @@ function PilotResultBody({
         />
         <Metric label="Рассмотрено" value={value.reviewed_item_count} />
         <Metric
-          label="Пакетов работ"
-          value={Number(value.summary.work_packages ?? 0)}
+          label="Наблюдений работ"
+          value={Number(
+            value.summary.candidate_work_observation_groups ??
+              value.summary.work_packages ??
+              0,
+          )}
         />
       </section>
       <InfoNotice>{value.normative_notice}.</InfoNotice>
@@ -2775,6 +3896,114 @@ function PilotResultBody({
           </select>
         </label>
       </section>
+      {mode === "Tender" && tenderScopeSchedule.length > 0 && (
+        <section className="panel">
+          <div className="entity-heading">
+            <div>
+              <h2>Состав работ и ресурсов из модели объекта</h2>
+              <p>
+                Наблюдения сохраняют область и источники. Одинаковые названия из
+                разных областей не объединяются в общий объём.
+              </p>
+            </div>
+            <StatusPill tone="warning">Кандидаты</StatusPill>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Работа и область</th>
+                  <th>Количество по источнику</th>
+                  <th>Материалы</th>
+                  <th>Источники и ограничения</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenderScopeSchedule.map((row) => {
+                  const quantities = Array.isArray(row.quantities)
+                    ? (row.quantities as Record<string, unknown>[])
+                    : [];
+                  const materials = Array.isArray(row.materials)
+                    ? (row.materials as Record<string, unknown>[])
+                    : [];
+                  const locators = Array.isArray(row.source_locator_ids)
+                    ? row.source_locator_ids.map(String)
+                    : [];
+                  const uncertainties = Array.isArray(row.uncertainties)
+                    ? row.uncertainties.map(String)
+                    : [];
+                  return (
+                    <tr key={String(row.work_package_id)}>
+                      <td>
+                        <strong>{displayValue(row.work_name)}</strong>
+                        <br />
+                        <span>
+                          {displayValue(row.scope, "Область не указана")}
+                        </span>
+                      </td>
+                      <td>
+                        {quantities.length
+                          ? quantities
+                              .map((value) =>
+                                [value.raw_value, value.raw_unit]
+                                  .filter(
+                                    (item) =>
+                                      item !== null &&
+                                      item !== undefined &&
+                                      item !== "",
+                                  )
+                                  .map(String)
+                                  .join(" "),
+                              )
+                              .join("; ")
+                          : "Не указано в извлечённом наблюдении"}
+                      </td>
+                      <td>
+                        {materials.length
+                          ? materials
+                              .map((value) => {
+                                const amount = [
+                                  value.raw_quantity,
+                                  value.raw_unit,
+                                ]
+                                  .filter(
+                                    (item) =>
+                                      item !== null &&
+                                      item !== undefined &&
+                                      item !== "",
+                                  )
+                                  .map(String)
+                                  .join(" ");
+                                return `${displayValue(value.raw_name, "Материал не указан")}${amount ? ` — ${amount}` : ""}`;
+                              })
+                              .join("; ")
+                          : "Не указаны в извлечённом наблюдении"}
+                      </td>
+                      <td>
+                        {locators.map((locator, index) => (
+                          <Link
+                            key={locator}
+                            to={workspaceRouteFromSlug(
+                              modeSlug,
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            Исходный фрагмент {index + 1}
+                          </Link>
+                        ))}
+                        {uncertainties.length > 0 && (
+                          <GapList gaps={uncertainties.map(humanizeGap)} />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <section className="panel">
         <div className="entity-heading">
           <div>
@@ -3291,6 +4520,23 @@ function ProjectUnderstandingPage() {
             string,
             Record<string, unknown>[]
           >;
+          const structureNodes = (value.structure_nodes ?? []) as Record<
+            string,
+            unknown
+          >[];
+          const structureRelationships = (value.structure_relationships ??
+            []) as Record<string, unknown>[];
+          const structureDossiers = (value.structure_dossiers ?? []) as Record<
+            string,
+            unknown
+          >[];
+          const structureComponents = (value.structure_components ??
+            []) as Record<string, unknown>[];
+          const structureIdentityCandidates =
+            (value.structure_identity_candidates ?? []) as Record<
+              string,
+              unknown
+            >[];
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -3302,33 +4548,146 @@ function ProjectUnderstandingPage() {
           const matrixRows = Array.isArray(matrixValue.rows)
             ? (matrixValue.rows as Record<string, unknown>[])
             : [];
-          const reconciliation = value.reconciliation as Record<
+          const materialization = value.materialization as Record<
             string,
             unknown
           >;
+          const materializationState =
+            typeof materialization.state === "string"
+              ? materialization.state
+              : "not_requested";
+          const semanticCoverage = Array.isArray(value.semantic_coverage)
+            ? (value.semantic_coverage as Record<string, unknown>[])
+            : [];
+          const tenderInputAssessment = Array.isArray(
+            (value.intake_summary as Record<string, unknown> | undefined)
+              ?.tender_input_assessment,
+          )
+            ? ((value.intake_summary as Record<string, unknown>)
+                .tender_input_assessment as Record<string, unknown>[])
+            : [];
+          const projectFieldCandidates = candidates.project_fields ?? [];
+          const workCandidates = candidates.work_types ?? [];
+          const quantityCandidates = candidates.quantities ?? [];
+          const materialCandidates = candidates.materials ?? [];
+          const materializationMessages: Record<string, string> = {
+            not_requested:
+              "Модель объекта ещё не запускалась. Загруженные документы сохранены отдельно от модели.",
+            queued:
+              "Формирование модели ожидает выполнения зависимых задач обработки.",
+            running:
+              "Формирование модели объекта выполняется; промежуточные сведения сохраняются с источниками.",
+            blocked:
+              "Формирование модели заблокировано внутренней зависимостью обработки. Это не означает отсутствие замечаний или сведений в документах.",
+            partial:
+              "Модель сформирована частично: используйте сведения и источники с учётом указанных пробелов.",
+          };
           return (
             <>
               <div className="metrics">
                 <Metric
-                  label="Сведений"
-                  value={Object.keys(definition.fields ?? {}).length}
+                  label="Сведений-кандидатов"
+                  value={projectFieldCandidates.length}
                 />
                 <Metric
-                  label="Разобрано страниц"
+                  label="Структур-кандидатов"
+                  value={structureNodes.length}
+                />
+                <Metric
+                  label="Связей-кандидатов"
+                  value={structureRelationships.length}
+                />
+                <Metric
+                  label="Междокументных групп-кандидатов"
+                  value={structureIdentityCandidates.length}
+                />
+                <Metric
+                  label="Работ-кандидатов"
+                  value={workCandidates.length}
+                />
+                <Metric
+                  label="Количеств-кандидатов"
+                  value={quantityCandidates.length}
+                />
+                <Metric
+                  label="Материалов-кандидатов"
+                  value={materialCandidates.length}
+                />
+                <Metric
+                  label="Классифицировано страниц"
                   value={value.page_roles.length}
                 />
-                <Metric
-                  label="Пакетов работ"
-                  value={value.work_packages.length}
-                />
-                <Metric label="Замечаний" value={value.defects.length} />
               </div>
-              {Object.keys(reconciliation).length === 0 && (
+              {materializationState !== "complete" && (
                 <InfoNotice>
-                  Документы можно загружать и обрабатывать независимо. Когда
-                  исходные данные готовы, запустите формирование общей модели
-                  объекта.
+                  {materializationMessages[materializationState] ??
+                    "Состояние формирования модели требует проверки."}
+                  {typeof materialization.failure_code === "string" &&
+                    ` Причина: ${materialization.failure_code}.`}
                 </InfoNotice>
+              )}
+              {semanticCoverage.length > 0 && (
+                <InfoNotice>
+                  Семантическая обработка сохраняет результаты по фрагментам:{" "}
+                  {semanticCoverage
+                    .map((item) => {
+                      const accepted = Number(
+                        item.accepted_fragment_count ?? 0,
+                      );
+                      const expected = Number(
+                        item.expected_fragment_count ?? 0,
+                      );
+                      const failed = Number(item.failed_fragment_count ?? 0);
+                      const unresolved = Number(
+                        item.unresolved_failed_fragment_count ?? 0,
+                      );
+                      const recovered = Number(
+                        item.recovered_failed_fragment_count ?? 0,
+                      );
+                      const profile = displayValue(
+                        item.profile_version,
+                        "профиль",
+                      );
+                      const documentName = displayValue(
+                        item.safe_display_name,
+                        "документ",
+                      );
+                      const pages = Number(item.page_count ?? 0);
+                      const pageLabel =
+                        pages > 0 ? `, ${pages.toString()} стр.` : "";
+                      const unresolvedLabel =
+                        unresolved > 0
+                          ? `, требуется восстановление: ${unresolved.toString()} фрагм.`
+                          : "";
+                      const recoveredLabel =
+                        recovered > 0
+                          ? `, восстановленные исторические попытки: ${recovered.toString()} фрагм.`
+                          : "";
+                      const legacyFailureLabel =
+                        failed > 0 && unresolved === 0 && recovered === 0
+                          ? `, неуспешные попытки: ${failed.toString()} фрагм.`
+                          : "";
+                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel} (${profile})`;
+                    })
+                    .join("; ")}
+                  . Это покрытие извлечения-кандидата, а не подтверждённые
+                  факты.
+                </InfoNotice>
+              )}
+              {section === "general" && tenderInputAssessment.length > 0 && (
+                <section className="panel">
+                  <h2>Исходные данные для Tender-анализа</h2>
+                  <p>
+                    Оценка описывает доступность исходных документов для
+                    отдельных проверок. Отсутствие договора не отменяет анализ
+                    проектных решений, но ограничивает договорные выводы.
+                  </p>
+                  <TenderInputAssessmentTable
+                    items={tenderInputAssessment}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                  />
+                </section>
               )}
               {section === "general" && (
                 <div className="split">
@@ -3370,11 +4729,20 @@ function ProjectUnderstandingPage() {
                     только при наличии точного исходного фрагмента.
                     Неразрешённые пространственные сведения остаются пробелом.
                   </p>
-                  <EvidenceObject
-                    value={definition.fields ?? {}}
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-structure-identity-candidates.csv`}
+                  >
+                    Скачать ведомость междокументных групп-кандидатов
+                  </a>
+                  <StructureCandidateList
+                    nodes={structureNodes}
+                    relationships={structureRelationships}
+                    dossiers={structureDossiers}
+                    components={structureComponents}
+                    identityCandidates={structureIdentityCandidates}
                     workspaceId={workspaceId}
                     modeSlug={mode}
-                    evidenceIndex={evidenceIndex}
                   />
                   <h3>Классифицированные страницы</h3>
                   <EvidenceObject value={{ pages: value.page_roles }} />
@@ -3419,7 +4787,31 @@ function ProjectUnderstandingPage() {
               )}
               {section === "packages" && (
                 <section className="panel">
-                  <h2>Пакеты работ</h2>
+                  <h2>Исходные наблюдения по работам</h2>
+                  <p>
+                    Повторные наблюдения объединяются только в пределах одного
+                    источника и явно указанной области. Одинаковые названия в
+                    разных областях не суммируются и остаются отдельными до
+                    инженерской сверки.
+                  </p>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-scope-schedule.csv`}
+                  >
+                    Скачать редактируемую ведомость работ и ресурсов
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                  >
+                    Скачать покрытие документов
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-facility-work-observations.csv`}
+                  >
+                    Скачать связь наблюдений работ с группами объектов
+                  </a>
                   {value.work_packages.length ? (
                     <div className="card-grid">
                       {value.work_packages.map((item) => (
@@ -3434,7 +4826,7 @@ function ProjectUnderstandingPage() {
                     </div>
                   ) : (
                     <p className="empty-state">
-                      Пакеты работ ещё не определены.
+                      Наблюдения по работам ещё не извлечены.
                     </p>
                   )}
                 </section>
@@ -3479,10 +4871,46 @@ function ProjectUnderstandingPage() {
               {section === "gaps" && (
                 <section className="panel">
                   <h2>Расхождения и пробелы</h2>
+                  <a
+                    className="button-link"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-analysis.zip`}
+                  >
+                    Скачать Tender-пакет анализа
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
+                  >
+                    Скачать редактируемый график наблюдений
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.docx`}
+                  >
+                    Скачать редактируемый Tender-отчёт
+                  </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                  >
+                    Скачать покрытие документов
+                  </a>
                   {value.defects.length ? (
-                    <EvidenceObject value={{ differences: value.defects }} />
+                    <TenderFindingList
+                      defects={value.defects}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                    />
+                  ) : materializationState === "complete" ? (
+                    <p>
+                      По сформированной модели открытые расхождения не
+                      зарегистрированы.
+                    </p>
                   ) : (
-                    <p>Расхождения ВОР и сметы пока не обнаружены.</p>
+                    <p>
+                      Анализ расхождений ещё не завершён; отсутствие записей не
+                      означает, что документы не содержат расхождений.
+                    </p>
                   )}
                   <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
                   <GapList
@@ -3497,6 +4925,468 @@ function ProjectUnderstandingPage() {
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function TenderInputAssessmentTable({
+  items,
+  workspaceId,
+  modeSlug,
+}: {
+  items: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const categoryLabels: Record<string, string> = {
+    design_or_working_documentation: "Проектная и рабочая документация",
+    quantity_or_estimate: "Ведомость объёмов или смета",
+    draft_contract: "Проект договора",
+    customer_regulation: "Регламент заказчика",
+    specifications: "Спецификации материалов и оборудования",
+  };
+  const stateLabels: Record<string, string> = {
+    available: "Доступно для анализа",
+    classification_incomplete: "Обработка классификации не завершена",
+    not_detected_in_classified_sources:
+      "Не обнаружено среди классифицированных источников",
+  };
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Входные данные</th>
+            <th>Статус</th>
+            <th>Использование и ограничение</th>
+            <th>Источники</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const locators = Array.isArray(item.source_locator_ids)
+              ? item.source_locator_ids.map(String)
+              : [];
+            const sourceNames = Array.isArray(item.source_names)
+              ? item.source_names.map(String)
+              : [];
+            const state = displayValue(item.state, "classification_incomplete");
+            return (
+              <tr key={displayValue(item.category, "tender-input")}>
+                <td>
+                  <strong>
+                    {categoryLabels[displayValue(item.category)] ??
+                      displayValue(item.category)}
+                  </strong>
+                </td>
+                <td>
+                  <StatusPill
+                    tone={state === "available" ? "default" : "warning"}
+                  >
+                    {stateLabels[state] ?? state}
+                  </StatusPill>
+                </td>
+                <td>
+                  {state === "available"
+                    ? "Исходные данные можно использовать в указанной проверке."
+                    : displayValue(
+                        item.practical_limitation,
+                        "Ограничение не описано.",
+                      )}
+                </td>
+                <td>
+                  {sourceNames.length ? sourceNames.join(", ") : "—"}
+                  {locators.length > 0 && (
+                    <p>
+                      {locators.map((locator, index) => (
+                        <span key={locator}>
+                          {index > 0 ? ", " : ""}
+                          <Link
+                            to={workspaceRouteFromSlug(
+                              modeSlug,
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            открыть фрагмент
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StructureCandidateList({
+  nodes,
+  relationships,
+  dossiers,
+  components,
+  identityCandidates,
+  workspaceId,
+  modeSlug,
+}: {
+  nodes: Record<string, unknown>[];
+  relationships: Record<string, unknown>[];
+  dossiers: Record<string, unknown>[];
+  components: Record<string, unknown>[];
+  identityCandidates: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const [filter, setFilter] = useState("");
+  const [visibleNodeCount, setVisibleNodeCount] = useState(200);
+  const [visibleRelationshipCount, setVisibleRelationshipCount] = useState(200);
+  const kindLabels: Record<string, string> = {
+    local_area: "Локальная площадка или участок",
+    facility: "Объект или сооружение",
+    excavation_pit: "Котлован",
+    structure: "Сооружение или конструкция",
+    zone: "Зона или участок",
+  };
+  const relationshipLabels: Record<string, string> = {
+    contains: "содержит",
+    located_in: "расположен в",
+    serves: "обслуживает",
+    connects_to: "соединён с",
+    depends_on: "зависит от",
+  };
+  if (!nodes.length && !relationships.length && !identityCandidates.length)
+    return (
+      <p className="empty-state">Структурные кандидаты ещё не извлечены.</p>
+    );
+  const normalizedFilter = filter.trim().toLocaleLowerCase("ru-RU");
+  const matchesFilter = (values: unknown[]) =>
+    !normalizedFilter ||
+    values.some((value) =>
+      displayValue(value, "")
+        .toLocaleLowerCase("ru-RU")
+        .includes(normalizedFilter),
+    );
+  const filteredNodes = nodes.filter((node) =>
+    matchesFilter([node.raw_name, node.normalized_name, node.node_kind]),
+  );
+  const filteredRelationships = relationships.filter((relationship) =>
+    matchesFilter([
+      relationship.subject_raw_name,
+      relationship.object_raw_name,
+      relationship.relationship_kind,
+    ]),
+  );
+  const visibleNodes = filteredNodes.slice(0, visibleNodeCount);
+  const visibleRelationships = filteredRelationships.slice(
+    0,
+    visibleRelationshipCount,
+  );
+  return (
+    <div className="candidate-list">
+      {identityCandidates.length > 0 && (
+        <>
+          <h3>Междокументные группы-кандидаты</h3>
+          <p>
+            Эти группы предложены по исходным фрагментам разных документов. Они
+            не являются подтверждёнными фактами и не объединяют одноимённые
+            элементы автоматически.
+          </p>
+          <div className="card-grid">
+            {identityCandidates.slice(0, visibleNodeCount).map((candidate) => {
+              const locators = Array.isArray(candidate.source_locator_ids)
+                ? candidate.source_locator_ids.map(String)
+                : [];
+              return (
+                <article
+                  className="candidate-row"
+                  key={`identity:${displayValue(candidate.identity_candidate_id)}`}
+                >
+                  <strong>
+                    {kindLabels[displayValue(candidate.identity_kind)] ??
+                      "Структурная группа"}
+                  </strong>
+                  <p>
+                    {displayValue(
+                      candidate.canonical_label,
+                      "Наименование не извлечено",
+                    )}
+                  </p>
+                  <small>
+                    Кандидат; наблюдений:{" "}
+                    {Array.isArray(candidate.member_structure_node_ids)
+                      ? candidate.member_structure_node_ids.length
+                      : 0}
+                    ; уверенность:{" "}
+                    {displayValue(candidate.confidence, "не указана")}
+                  </small>
+                  {locators.slice(0, 4).map((locator) => (
+                    <Link
+                      key={locator}
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  ))}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {dossiers.length > 0 && (
+        <>
+          <h3>Карточки площадок и сооружений</h3>
+          <p>
+            Каждая карточка — отдельное исходно-связанное наблюдение. Совпадения
+            наименований в других документах пока не объединяются автоматически.
+          </p>
+          <div className="card-grid">
+            {dossiers.slice(0, visibleNodeCount).map((dossier) => {
+              const node = (dossier.structure_node ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const locator = displayValue(node.source_locator_id, "");
+              const kind = displayValue(node.node_kind, "structure");
+              const linked = Array.isArray(dossier.relationships)
+                ? dossier.relationships.length
+                : 0;
+              const linkedWorks = Array.isArray(
+                dossier.linked_work_observations,
+              )
+                ? (dossier.linked_work_observations as Record<
+                    string,
+                    unknown
+                  >[])
+                : [];
+              return (
+                <article
+                  className="candidate-row"
+                  key={`dossier:${displayValue(node.structure_node_id)}`}
+                >
+                  <strong>{kindLabels[kind] ?? "Структурный элемент"}</strong>
+                  <p>
+                    {displayValue(node.raw_name, "Наименование не извлечено")}
+                  </p>
+                  <small>
+                    Кандидат; связей с тем же исходным фрагментом: {linked}
+                  </small>
+                  {linkedWorks.length > 0 && (
+                    <p>
+                      <small>
+                        Наблюдения работ в том же исходном фрагменте:{" "}
+                        {linkedWorks
+                          .slice(0, 4)
+                          .map((work) => displayValue(work.work_name, "Работа"))
+                          .join("; ")}
+                        . Это связь по общему источнику, а не подтверждённое
+                        назначение работы сооружению.
+                      </small>
+                    </p>
+                  )}
+                  {locator && (
+                    <Link
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {components.length > 0 && (
+        <>
+          <h3>Связанные исходные наблюдения</h3>
+          <p>
+            Эти группы построены только по связям, чьи оба конца извлечены из
+            одного исходного фрагмента. Это кандидаты, а не объединённые объекты
+            проекта.
+          </p>
+          <div className="card-grid">
+            {components.slice(0, visibleNodeCount).map((component) => {
+              const nodes = Array.isArray(component.nodes)
+                ? (component.nodes as Record<string, unknown>[])
+                : [];
+              const relationships = Array.isArray(component.relationships)
+                ? component.relationships
+                : [];
+              const locatorIds = Array.isArray(component.source_locator_ids)
+                ? component.source_locator_ids.map((item) =>
+                    displayValue(item, ""),
+                  )
+                : [];
+              return (
+                <article
+                  className="candidate-row"
+                  key={displayValue(component.component_key)}
+                >
+                  <strong>Исходно-связанная группа</strong>
+                  <p>
+                    {nodes
+                      .map((node) =>
+                        displayValue(node.raw_name, "Без наименования"),
+                      )
+                      .join(" → ")}
+                  </p>
+                  <small>
+                    Кандидат; элементов: {nodes.length}, связей:{" "}
+                    {relationships.length}
+                  </small>
+                  {locatorIds.length > 0 && (
+                    <p>
+                      {locatorIds.map((locatorId) => (
+                        <Link
+                          key={locatorId}
+                          to={workspaceRouteFromSlug(
+                            modeSlug,
+                            workspaceId,
+                            `/evidence/locators/${locatorId}`,
+                          )}
+                        >
+                          Открыть исходный фрагмент
+                        </Link>
+                      ))}
+                    </p>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        </>
+      )}
+      <h3>Структурные кандидаты</h3>
+      <p>
+        Это сведения, извлечённые из исходных документов. Они не являются
+        подтверждёнными фактами до reconciliation; одинаковые упоминания в
+        разных разделах могут относиться к одному объекту.
+      </p>
+      <label className="field-label">
+        Поиск по наименованию или виду
+        <input
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setVisibleNodeCount(200);
+            setVisibleRelationshipCount(200);
+          }}
+          placeholder="Например: КНС, ЛОС или котлован"
+        />
+      </label>
+      <p className="candidate-list-summary">
+        Показано структур: {visibleNodes.length} из {filteredNodes.length}.
+      </p>
+      {visibleNodes.map((node) => {
+        const identity = displayValue(node.structure_node_id);
+        const locator = displayValue(node.source_locator_id, "");
+        const kind = displayValue(node.node_kind, "structure");
+        return (
+          <article
+            className="candidate-row"
+            key={`${identity}:${displayValue(node.version)}`}
+          >
+            <div>
+              <strong>{kindLabels[kind] ?? "Структурный элемент"}</strong>
+              <p>{displayValue(node.raw_name, "Наименование не извлечено")}</p>
+              <small>
+                {humanizeStatus(displayValue(node.status, "candidate"))}
+              </small>
+              {locator && (
+                <Link
+                  to={workspaceRouteFromSlug(
+                    modeSlug,
+                    workspaceId,
+                    `/evidence/locators/${locator}`,
+                  )}
+                >
+                  Открыть исходный фрагмент
+                </Link>
+              )}
+            </div>
+          </article>
+        );
+      })}
+      {visibleNodes.length < filteredNodes.length && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setVisibleNodeCount((count) => count + 200)}
+        >
+          Показать ещё структуры
+        </button>
+      )}
+      {relationships.length > 0 && (
+        <>
+          <h3>Связи между структурными кандидатами</h3>
+          <p>
+            Связи показаны как извлечённые наблюдения. Имена ещё не объединяются
+            автоматически с одноимёнными объектами из других документов.
+          </p>
+          <p className="candidate-list-summary">
+            Показано связей: {visibleRelationships.length} из{" "}
+            {filteredRelationships.length}.
+          </p>
+          {visibleRelationships.map((relationship) => {
+            const identity = displayValue(
+              relationship.relationship_candidate_id,
+            );
+            const locator = displayValue(relationship.source_locator_id, "");
+            const kind = displayValue(relationship.relationship_kind, "");
+            return (
+              <article className="candidate-row" key={identity}>
+                <div>
+                  <strong>
+                    {displayValue(relationship.subject_raw_name)}{" "}
+                    {relationshipLabels[kind] ?? "связан с"}{" "}
+                    {displayValue(relationship.object_raw_name)}
+                  </strong>
+                  <small>
+                    {humanizeStatus(
+                      displayValue(relationship.status, "candidate"),
+                    )}
+                  </small>
+                  {locator && (
+                    <Link
+                      to={workspaceRouteFromSlug(
+                        modeSlug,
+                        workspaceId,
+                        `/evidence/locators/${locator}`,
+                      )}
+                    >
+                      Открыть исходный фрагмент
+                    </Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+          {visibleRelationships.length < filteredRelationships.length && (
+            <button
+              type="button"
+              className="ghost"
+              onClick={() =>
+                setVisibleRelationshipCount((count) => count + 200)
+              }
+            >
+              Показать ещё связи
+            </button>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -3524,6 +5414,8 @@ function CandidateReviewTable({
   }) => void;
   pending: boolean;
 }) {
+  const [filter, setFilter] = useState("");
+  const [visibleCount, setVisibleCount] = useState(100);
   const titles = {
     project_field: "Общие сведения",
     work_type: "Виды работ",
@@ -3532,10 +5424,34 @@ function CandidateReviewTable({
   };
   if (!candidates.length)
     return <p className="empty-state">{titles[kind]} ещё не извлечены.</p>;
+  const normalizedFilter = filter.trim().toLocaleLowerCase("ru-RU");
+  const filteredCandidates = candidates.filter((candidate) =>
+    !normalizedFilter
+      ? true
+      : [candidate.label, candidate.value, candidate.normalized_value]
+          .map((value) => displayValue(value, "").toLocaleLowerCase("ru-RU"))
+          .some((value) => value.includes(normalizedFilter)),
+  );
+  const visibleCandidates = filteredCandidates.slice(0, visibleCount);
   return (
     <div className="candidate-list">
       <h3>{titles[kind]}</h3>
-      {candidates.slice(0, 100).map((candidate) => {
+      <p>
+        Это исходно связанные кандидаты, а не подтверждённые факты. Показано:{" "}
+        {visibleCandidates.length} из {filteredCandidates.length}.
+      </p>
+      <label className="field-label">
+        Поиск по наименованию или значению
+        <input
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setVisibleCount(100);
+          }}
+          placeholder="Например: котлован, шпунт или м³"
+        />
+      </label>
+      {visibleCandidates.map((candidate) => {
         const identity = String(candidate.candidate_id);
         const decision = decisions.find(
           (item) => String(item.candidate_id) === identity,
@@ -3553,6 +5469,15 @@ function CandidateReviewTable({
           />
         );
       })}
+      {visibleCandidates.length < filteredCandidates.length && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setVisibleCount((count) => count + 100)}
+        >
+          Показать ещё
+        </button>
+      )}
     </div>
   );
 }
@@ -3743,9 +5668,24 @@ function WorkPackageCard({
   const locators = Array.isArray(packageValue.source_locator_ids)
     ? packageValue.source_locator_ids
     : [];
+  const observations = Number(packageValue.candidate_observation_count ?? 1);
+  const quantities = Array.isArray(packageValue.quantities)
+    ? packageValue.quantities.length
+    : 0;
+  const materials = Array.isArray(packageValue.materials)
+    ? packageValue.materials.length
+    : 0;
+  const uncertainties = Array.isArray(packageValue.uncertainties)
+    ? packageValue.uncertainties.map(String)
+    : [];
   return (
     <article className="entity-card">
       <h3>{displayValue(workType.normalized, "Не определён")}</h3>
+      <p>
+        Наблюдений: {observations.toString()}; объёмов: {quantities.toString()};
+        материалов: {materials.toString()}.
+      </p>
+      {uncertainties.length > 0 && <GapList gaps={uncertainties} />}
       <p>
         Источники:{" "}
         {locators.length
@@ -3770,6 +5710,128 @@ function WorkPackageCard({
           : "не указаны"}
       </p>
     </article>
+  );
+}
+
+function TenderFindingList({
+  defects,
+  workspaceId,
+  modeSlug,
+}: {
+  defects: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const labels: Record<string, string> = {
+    project_work_missing_in_estimate:
+      "Проектная работа требует сопоставления со сметой",
+    quantity_mismatch: "Требуется сверка объёма по источникам",
+    project_material_missing_in_estimate:
+      "Материал требует сопоставления со сметой",
+    estimate_material_comparison_input_unavailable:
+      "Сопоставление материалов со сметой ещё не выполнено",
+    material_quantity_comparison_input_unavailable:
+      "Недостаточно данных для сверки количества материала",
+    material_quantity_mismatch:
+      "Требуется сверка количества материала по источникам",
+    estimate_position_unsupported_by_project:
+      "Сметная позиция не подтверждена проектным источником",
+    incompatible_units: "Единицы измерения требуют проверки",
+    ambiguous_source_match: "Связь между исходными сведениями неоднозначна",
+    drawing_intelligence_required:
+      "Для вывода требуется разбор чертежа или схемы",
+    normative_authority_unavailable:
+      "Нормативное основание для проверки недоступно",
+    rule_coverage_unavailable:
+      "Детерминированное правило для проверки недоступно",
+    estimate_comparison_input_unavailable:
+      "Сопоставление с ведомостью объёмов или сметой ещё не выполнено",
+  };
+  return (
+    <div className="candidate-list">
+      <p>
+        Это предварительные Tender-наблюдения по источникам. Они не означают
+        подтверждённое нарушение, пропуск в смете или окончательное решение.
+      </p>
+      {defects.map((defect) => {
+        const id = displayValue(defect.defect_id, "наблюдение");
+        const kind = displayValue(defect.defect_kind, "");
+        const locators = Array.isArray(defect.source_locator_ids)
+          ? defect.source_locator_ids.map(String)
+          : [];
+        const subject = displayValue(defect.subject_identity, "Не указан");
+        const related = displayValue(defect.related_identity, "");
+        const parameters =
+          defect.parameters && typeof defect.parameters === "object"
+            ? (defect.parameters as Record<string, unknown>)
+            : {};
+        const missingInput = displayValue(parameters.missing_input, "");
+        const consequence = displayValue(parameters.consequence, "");
+        const projectValue = displayValue(parameters.project, "");
+        const estimateValue = displayValue(parameters.estimate, "");
+        const sharedUnit = displayValue(parameters.unit, "");
+        const projectUnit = displayValue(parameters.project_unit, "");
+        const estimateUnit = displayValue(parameters.estimate_unit, "");
+        const difference = displayValue(parameters.difference, "");
+        const comparisonCode = displayValue(parameters.code, "");
+        const comparisonDetails =
+          projectValue || estimateValue
+            ? `Проект: ${projectValue || "не указано"}${
+                sharedUnit ? ` ${sharedUnit}` : ""
+              }; смета: ${estimateValue || "не указано"}${
+                sharedUnit ? ` ${sharedUnit}` : ""
+              }${
+                difference
+                  ? `; разница (проект минус смета): ${difference}${
+                      sharedUnit ? ` ${sharedUnit}` : ""
+                    }`
+                  : ""
+              }.`
+            : projectUnit || estimateUnit
+              ? `Единицы: проект — ${projectUnit || "не указано"}; смета — ${
+                  estimateUnit || "не указано"
+                }.`
+              : comparisonCode
+                ? `Сопоставление не разрешено: ${comparisonCode}.`
+                : "";
+        return (
+          <article className="candidate-row" key={id}>
+            <div>
+              <strong>{labels[kind] ?? "Требуется инженерская сверка"}</strong>
+              <p>
+                Объект: {subject}
+                {related ? `; связано с: ${related}` : ""}.
+              </p>
+              <small>
+                {humanizeStatus(displayValue(defect.status, "open"))}
+              </small>
+              {missingInput ? <p>Нужные данные: {missingInput}.</p> : null}
+              {consequence ? <p>Последствие: {consequence}.</p> : null}
+              {comparisonDetails ? <p>{comparisonDetails}</p> : null}
+              {locators.length > 0 && (
+                <p>
+                  Источники:{" "}
+                  {locators.map((locator, index) => (
+                    <span key={locator}>
+                      {index > 0 ? ", " : ""}
+                      <Link
+                        to={workspaceRouteFromSlug(
+                          modeSlug,
+                          workspaceId,
+                          `/evidence/locators/${locator}`,
+                        )}
+                      >
+                        открыть фрагмент
+                      </Link>
+                    </span>
+                  ))}
+                </p>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -3845,6 +5907,12 @@ function displayValue(value: unknown, fallback = "") {
   return JSON.stringify(value);
 }
 
+function displayValues(value: unknown) {
+  return Array.isArray(value)
+    ? value.map((item) => displayValue(item)).join(", ")
+    : "";
+}
+
 function pilotItemStatus(item: Record<string, unknown>) {
   const resolution = displayValue(item.effective_resolution_status);
   if (["accepted", "excluded"].includes(resolution)) return resolution;
@@ -3904,6 +5972,58 @@ function KnowledgePage() {
                 {value.knowledge_ready
                   ? "Нормативная база готова к использованию."
                   : "Часть нормативных источников и методик ещё требует подготовки."}
+              </p>
+              <div className="metrics">
+                <Metric
+                  label="Нормативных документов"
+                  value={Number(value.ntd_inventory.total_documents ?? 0)}
+                />
+                <Metric
+                  label="Официальных источников"
+                  value={Number(value.ntd_inventory.official_documents ?? 0)}
+                />
+                <Metric
+                  label="Справочных источников"
+                  value={Number(value.ntd_inventory.reference_documents ?? 0)}
+                />
+                <Metric
+                  label="Доступны для поиска"
+                  value={
+                    Number(value.ntd_inventory.searchable ?? 0) +
+                    Number(value.ntd_inventory.partially_searchable ?? 0)
+                  }
+                />
+                <Metric
+                  label="Bytes присутствуют"
+                  value={Number(value.ntd_inventory.bytes_present ?? 0)}
+                />
+                <Metric
+                  label="Структурированных редакций"
+                  value={Number(value.ntd_inventory.structured_editions ?? 0)}
+                />
+                <Metric
+                  label="Проверенных положений"
+                  value={Number(value.ntd_inventory.verified_provisions ?? 0)}
+                />
+                <Metric
+                  label="Без пригодного текста"
+                  value={Number(
+                    value.ntd_inventory.documents_without_text ?? 0,
+                  )}
+                />
+                <Metric
+                  label="Отсутствующих identities"
+                  value={Number(value.ntd_inventory.absent_identities ?? 0)}
+                />
+              </div>
+              <p>
+                Полностью доступны для поиска:{" "}
+                {Number(value.ntd_inventory.searchable ?? 0)}; частично
+                доступны:{" "}
+                {Number(value.ntd_inventory.partially_searchable ?? 0)}.
+                Актуальность редакции не проверена для{" "}
+                {Number(value.ntd_inventory.edition_currency_unchecked ?? 0)}{" "}
+                документов.
               </p>
             </section>
             <details className="panel technical-details">
@@ -4381,6 +6501,89 @@ function humanizeStatus(value: string) {
   return labels[value] ?? value.replaceAll("_", " ").toLowerCase();
 }
 
+function humanizeAuditPreflightState(value: string) {
+  const labels: Record<string, string> = {
+    not_formed: "Комплект не сформирован",
+    missing: "Отсутствует в комплекте",
+    generated_candidate: "Подготовлен кандидат",
+    awaiting_audit: "Ожидает независимого аудита",
+    unresolved_requirement: "Требование не определено",
+    blocked: "Заблокировано",
+    conflict: "Есть расхождение",
+    indeterminate: "Недостаточно доказательств",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeAuditDeltaKind(value: string) {
+  const labels: Record<string, string> = {
+    document: "Состав и содержание документов",
+    causal_readiness: "Готовность причин и доказательств",
+    package_signing_handover: "Комплект, подписание и передача",
+  };
+  return labels[value] ?? value;
+}
+
+function humanizeAuditCorrection(value: string) {
+  const labels: Record<string, string> = {
+    form_id_package_from_current_requirement_matrix:
+      "Сформировать комплект по текущей матрице требований",
+    resolve_requirement_basis_before_package_formation:
+      "Уточнить основание требования до формирования комплекта",
+    prepare_or_attach_required_document_with_source_evidence:
+      "Подготовить или приложить документ с исходными доказательствами",
+    resolve_package_or_evidence_blocker:
+      "Устранить блокер комплекта или доказательств",
+    reconcile_conflicting_package_membership_or_evidence:
+      "Сверить конфликтующий состав комплекта или доказательства",
+    perform_independent_audit_of_generated_candidate:
+      "Провести независимый аудит подготовленного кандидата",
+    perform_independent_audit_of_finalized_document:
+      "Провести независимый аудит финализированного документа",
+    reconcile_package_membership_and_evidence_lineage:
+      "Сверить состав комплекта и происхождение доказательств",
+    investigate_preflight_state: "Исследовать состояние предварительной сверки",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeAuditConsequence(value: string) {
+  const labels: Record<string, string> = {
+    required_completeness_cannot_be_compared_to_a_package:
+      "комплектность нельзя сопоставить с комплектом",
+    required_document_composition_is_not_authoritatively_established:
+      "обязательный состав документов не установлен",
+    required_document_is_not_available_for_independent_audit:
+      "требуемый документ недоступен для независимого аудита",
+    package_position_cannot_be_relied_on_until_the_blocker_is_resolved:
+      "на позицию комплекта нельзя опираться до устранения блокера",
+    conflicting_package_evidence_prevents_a_single_completeness_conclusion:
+      "конфликтующие доказательства не позволяют сделать единый вывод о комплектности",
+    candidate_presence_is_not_an_independent_content_audit:
+      "наличие кандидата не является независимым аудитом содержания",
+    finalization_is_not_an_independent_content_audit:
+      "финализация не является независимым аудитом содержания",
+    package_membership_does_not_yet_support_a_completeness_conclusion:
+      "состав комплекта пока не подтверждает вывод о комплектности",
+    preflight_state_requires_investigation:
+      "состояние предварительной сверки требует исследования",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
+function humanizeRecoveryAction(value: string) {
+  const labels: Record<string, string> = {
+    review_candidate_against_available_evidence:
+      "Проверить подготовленный кандидат по доступным основаниям",
+    start_independent_document_audit: "Провести независимую проверку документа",
+    collect_missing_source_evidence: "Получить отсутствующие исходные сведения",
+    resolve_requirement_authority: "Установить применимое основание требования",
+    resolve_evidence_or_relationship:
+      "Уточнить доказательства и связь с работой",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
 function humanizeExportKind(value: string) {
   const labels: Record<string, string> = {
     disagreement_protocol: "Протокол разногласий",
@@ -4470,10 +6673,28 @@ function humanizeGap(value: string) {
     VERIFIED_NTD_SUBSET: "Не все нормативные основания проверены.",
     TEMPLATE_NOT_PRODUCTION_QUALIFIED:
       "Форма документа ещё не квалифицирована для выпуска.",
+    ID_PACKAGE_NOT_FORMED:
+      "Комплект исполнительной документации ещё не сформирован.",
+    REQUIRED_DOCUMENT_NOT_IN_PACKAGE:
+      "Требуемый документ ещё не включён в комплект.",
+    GENERATED_CANDIDATE_REQUIRES_AUDIT:
+      "Подготовленный кандидат должен пройти независимую проверку.",
+    FINALIZED_DOCUMENT_REQUIRES_AUDIT:
+      "Финализированный документ ещё не проверен независимым аудитом.",
+    REQUIREMENT_AUTHORITY_UNRESOLVED:
+      "Полномочие и основание требования ещё не установлены.",
+    PACKAGE_MEMBERSHIP_EVIDENCE_INDETERMINATE:
+      "Состав комплекта недостаточен для вывода о документе.",
     EXECUTIVE_SCHEME_OUTPUT_BLOCKED:
       "Исполнительная схема не может быть подготовлена без подтверждённой геометрии.",
     QUALITY_DOCUMENTS_MISSING: "Документы о качестве материалов отсутствуют.",
     OCR_REQUIRED: "Для части страниц требуется распознавание.",
+    WORK_TYPE_MAPPING_UNRESOLVED:
+      "Вид работы ещё не сопоставлен с утверждённым каталогом.",
+    WORK_TYPE_MAPPING_AMBIGUOUS:
+      "Для вида работы требуется разрешить неоднозначное сопоставление.",
+    STRUCTURE_CANDIDATE_RECONCILIATION_PENDING:
+      "Структурные кандидаты извлечены, но междокументные связи и идентичности ещё не сверены.",
   };
   return (
     labels[value] ?? "Требуется дополнительная проверка или исходные данные."

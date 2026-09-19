@@ -15,7 +15,7 @@ from uuid import UUID
 
 from asd_kontur.harness.models import digest_of
 
-UNDERSTANDING_PROFILE_VERSION = "industrial-document-understanding-v0.1"
+UNDERSTANDING_PROFILE_VERSION = "industrial-document-understanding-v0.2"
 PAGE_HEALTH_PROFILE_VERSION = "page-health-v0.1"
 NATIVE_LAYOUT_PROFILE_VERSION = "native-layout-v0.1"
 OCR_ROUTING_PROFILE_VERSION = "ocr-routing-v0.1"
@@ -39,6 +39,7 @@ class PageHealthKind(StrEnum):
 
 class OcrRoute(StrEnum):
     NOT_REQUIRED = "not_required"
+    QWEN_VISION = "qwen3_8_vision"
     APPLE_VISION = "apple_vision_accurate"
     TESSERACT = "tesseract_rus_eng"
     VLM_REQUIRED = "vlm_required"
@@ -83,10 +84,18 @@ class ReconciliationDefectKind(StrEnum):
     PROJECT_MATERIAL_MISSING_IN_ESTIMATE = "project_material_missing_in_estimate"
     ESTIMATE_POSITION_UNSUPPORTED_BY_PROJECT = "estimate_position_unsupported_by_project"
     INCOMPATIBLE_UNITS = "incompatible_units"
+    ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE = (
+        "estimate_material_comparison_input_unavailable"
+    )
+    MATERIAL_QUANTITY_COMPARISON_INPUT_UNAVAILABLE = (
+        "material_quantity_comparison_input_unavailable"
+    )
+    MATERIAL_QUANTITY_MISMATCH = "material_quantity_mismatch"
     AMBIGUOUS_SOURCE_MATCH = "ambiguous_source_match"
     DRAWING_INTELLIGENCE_REQUIRED = "drawing_intelligence_required"
     NORMATIVE_AUTHORITY_UNAVAILABLE = "normative_authority_unavailable"
     RULE_COVERAGE_UNAVAILABLE = "rule_coverage_unavailable"
+    ESTIMATE_COMPARISON_INPUT_UNAVAILABLE = "estimate_comparison_input_unavailable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +213,56 @@ class ProjectFieldCandidate:
     extraction_method: str
     uncertainty_codes: tuple[str, ...]
     status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
+
+
+@dataclass(frozen=True, slots=True)
+class StructureNodeCandidate:
+    structure_node_id: UUID
+    node_kind: str
+    raw_name: str
+    normalized_name: str
+    locator: ExactLocator
+    status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
+
+
+@dataclass(frozen=True, slots=True)
+class StructureRelationshipCandidate:
+    """A source-backed relationship observation between named project structures.
+
+    The endpoints intentionally remain evidence-bound names at extraction time.  A
+    later reconciliation can resolve them to canonical nodes only when scope and
+    provenance make that safe; extraction must not join same-named facilities.
+    """
+
+    relationship_candidate_id: UUID
+    relationship_kind: str
+    subject_raw_name: str
+    subject_normalized_name: str
+    object_raw_name: str
+    object_normalized_name: str
+    locator: ExactLocator
+    status: CandidateDecision = CandidateDecision.CANDIDATE
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
+
+
+@dataclass(frozen=True, slots=True)
+class StructureIdentityCandidate:
+    """A Qwen-proposed, evidence-bound cross-source identity observation.
+
+    This remains a candidate: consumers must not turn it into a confirmed facility
+    or pit without the project reconciliation/review boundary.
+    """
+
+    identity_candidate_id: UUID
+    identity_kind: str
+    canonical_label: str
+    member_structure_node_ids: tuple[UUID, ...]
+    source_locator_ids: tuple[UUID, ...]
+    confidence: Decimal
+    reconciliation_profile_version: str
+    status: CandidateDecision = CandidateDecision.CANDIDATE
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +275,7 @@ class WorkTypeCandidate:
     source_role: DocumentRole
     canonical_mapping_status: MappingStatus = MappingStatus.UNRESOLVED
     canonical_work_type_id: UUID | None = None
+    extraction_profile_version: str = WORK_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)
@@ -267,6 +327,7 @@ class ReconciliationDefect:
     evidence_locators: tuple[ExactLocator, ...]
     parameters: dict[str, Any]
     blocking: bool
+    extraction_profile_version: str = PROJECT_EXTRACTION_PROFILE_VERSION
 
 
 @dataclass(frozen=True, slots=True)

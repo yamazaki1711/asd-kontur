@@ -6,6 +6,7 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from uuid import UUID
 
 
 class SessionProfile(StrEnum):
@@ -43,11 +44,14 @@ class SpineSettings:
     deployed_at: str | None = None
     frontend_build_digest: str | None = None
     openapi_digest: str | None = None
-    expected_migration_head: str = "0030_professional_assistant"
+    expected_migration_head: str = "0033_ntd_memory"
     qwen_runtime_python: Path = Path("/Users/oleg/mlx/runtime/.venv/bin/python")
     qwen_model_path: Path = Path("/Users/oleg/mlx/models/Qwen3.8-27B-MLX-8bit")
     qwen_bind_host: str = "127.0.0.1"
     qwen_bind_port: int = 8790
+    ntd_embedding_endpoint: str | None = None
+    document_worker_organization_id: UUID | None = None
+    document_worker_workspace_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if not self.database_url.startswith(("postgresql+psycopg://", "postgresql://")):
@@ -83,6 +87,10 @@ class SpineSettings:
             raise ValueError("invalid batch limits")
         if self.qwen_bind_host not in {"127.0.0.1", "::1", "localhost"}:
             raise ValueError("local Qwen must bind to loopback")
+        if (self.document_worker_organization_id is None) != (
+            self.document_worker_workspace_id is None
+        ):
+            raise ValueError("document_worker_scope_incomplete")
 
     @property
     def secure_cookie(self) -> bool:
@@ -114,7 +122,7 @@ class SpineSettings:
             frontend_build_digest=os.environ.get("ASD_FRONTEND_BUILD_DIGEST"),
             openapi_digest=os.environ.get("ASD_OPENAPI_DIGEST"),
             expected_migration_head=os.environ.get(
-                "ASD_EXPECTED_MIGRATION_HEAD", "0030_professional_assistant"
+                "ASD_EXPECTED_MIGRATION_HEAD", "0033_ntd_memory"
             ),
             qwen_runtime_python=Path(
                 os.environ.get(
@@ -126,6 +134,9 @@ class SpineSettings:
             ),
             qwen_bind_host=os.environ.get("ASD_QWEN_BIND_HOST", "127.0.0.1"),
             qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
+            ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
+            document_worker_organization_id=_optional_uuid("ASD_DOCUMENT_WORKER_ORGANIZATION_ID"),
+            document_worker_workspace_id=_optional_uuid("ASD_DOCUMENT_WORKER_WORKSPACE_ID"),
         )
 
 
@@ -134,3 +145,8 @@ def _required(name: str) -> str:
     if not value:
         raise ValueError(f"{name} is required")
     return value
+
+
+def _optional_uuid(name: str) -> UUID | None:
+    value = os.environ.get(name)
+    return UUID(value) if value else None

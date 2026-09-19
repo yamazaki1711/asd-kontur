@@ -24,6 +24,7 @@ from .models import (
     TurnEvent,
     TurnState,
 )
+from .profiles import CONSTRUCTION_CONSULTANT_MODEL_PROFILE, CONSTRUCTION_CONSULTANT_PROFILE
 
 
 class AssistantPersistenceError(RuntimeError):
@@ -184,7 +185,7 @@ class AssistantRepository:
                     if project_ref
                     else None,
                     "platform_memory": platform_memory_fingerprint,
-                    "profile": "professional-assistant@1.0.0",
+                    "profile": CONSTRUCTION_CONSULTANT_PROFILE,
                 }
             )
             session.execute(
@@ -194,7 +195,7 @@ class AssistantRepository:
                     "project_definition_id,project_definition_version,platform_memory_fingerprint,"
                     "assistant_profile_version,model_profile_version,state,request_digest) VALUES "
                     "(:o,:w,:turn,:conversation,:ordinal,:mode,:question,:owner,:project,:project_version,"
-                    ":memory,'professional-assistant@1.0.0','qwen3.8-27b-mlx-8bit@1.0.0','queued',:digest)"
+                    ":memory,:assistant_profile,:model_profile,'queued',:digest)"
                 ),
                 {
                     "o": organization_id,
@@ -208,6 +209,8 @@ class AssistantRepository:
                     "project": project_ref[0] if project_ref else None,
                     "project_version": project_ref[1] if project_ref else None,
                     "memory": platform_memory_fingerprint,
+                    "assistant_profile": CONSTRUCTION_CONSULTANT_PROFILE,
+                    "model_profile": CONSTRUCTION_CONSULTANT_MODEL_PROFILE,
                     "digest": request_digest,
                 },
             )
@@ -410,6 +413,9 @@ class AssistantRepository:
         context_digest: str,
         sources: tuple[dict[str, Any], ...],
         action_proposals: tuple[dict[str, Any], ...],
+        tool_receipts: tuple[dict[str, Any], ...] = (),
+        quality_receipt: dict[str, Any] | None = None,
+        dialogue_state: dict[str, Any] | None = None,
     ) -> None:
         with Session(self._engine) as session, session.begin():
             _scope(session, claimed.organization_id, claimed.workspace_id)
@@ -445,6 +451,12 @@ class AssistantRepository:
                 "Qwen3.8-27B",
                 "qwen3.8-27b-mlx-8bit@1.0.0",
             )
+            for receipt in tool_receipts:
+                self._insert_tool_receipt(session, claimed, receipt)
+            if quality_receipt is not None:
+                self._insert_quality_receipt(session, claimed, quality_receipt)
+            if dialogue_state is not None:
+                self._insert_dialogue_state(session, claimed, dialogue_state)
             for source in sources:
                 self._append_event(
                     session,
@@ -497,7 +509,7 @@ class AssistantRepository:
             )
 
     def history_for_prompt(
-        self, claimed: ClaimedTurn, limit: int = 6
+        self, claimed: ClaimedTurn, limit: int = 8
     ) -> tuple[dict[str, str], ...]:
         messages = self.messages(
             claimed.organization_id,
@@ -508,6 +520,27 @@ class AssistantRepository:
         return tuple(
             {"role": item.role, "content": item.content[:1200]} for item in messages[-limit:-1]
         )
+
+    def dialogue_state(self, claimed: ClaimedTurn) -> dict[str, Any] | None:
+        with Session(self._engine) as session, session.begin():
+            _scope(session, claimed.organization_id, claimed.workspace_id)
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT version,summary,active_subjects,state_fingerprint FROM "
+                        "workspace.assistant_dialogue_state_versions WHERE organization_id=:o AND "
+                        "workspace_id=:w AND conversation_id=:c ORDER BY version DESC LIMIT 1"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "c": claimed.conversation_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+        return dict(row) if row is not None else None
 
     def _state_update(self, claimed: ClaimedTurn, state: str, code: str | None) -> None:
         with Session(self._engine) as session, session.begin():
@@ -631,6 +664,123 @@ class AssistantRepository:
                 "model": model_identity,
                 "profile": model_profile,
                 "digest": digest,
+            },
+        )
+
+    @staticmethod
+    def _insert_tool_receipt(
+        session: Session, claimed: ClaimedTurn, receipt: dict[str, Any]
+    ) -> None:
+        response = receipt.get("response", {})
+        response_digest = semantic_digest(response)
+        source_ids = tuple(
+            str(item.get("source_id"))
+            for item in response.get("sources", [])
+            if item.get("source_id")
+        )
+        raw_outcome = str(response.get("outcome", "blocked"))
+        if raw_outcome in ("found", "not_found", "blocked"):
+            terminal_outcome = raw_outcome
+        elif raw_outcome == "document_not_present":
+            terminal_outcome = "not_found"
+        elif response.get("sources") or response.get("items"):
+            terminal_outcome = "found"
+        else:
+            terminal_outcome = "blocked"
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.assistant_tool_receipts (organization_id,workspace_id,turn_id,"
+                "step_sequence,tool_name,request_payload,planning_reason,terminal_outcome,response_digest,"
+                "source_ids) VALUES (:o,:w,:turn,:step,:tool,CAST(:request AS jsonb),:reason,:outcome,"
+                ":digest,CAST(:sources AS jsonb))"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "turn": claimed.turn_id,
+                "step": int(receipt["step_sequence"]),
+                "tool": str(receipt["tool"]),
+                "request": json.dumps(receipt["arguments"], ensure_ascii=False),
+                "reason": str(receipt["reason"]),
+                "outcome": terminal_outcome,
+                "digest": response_digest,
+                "sources": json.dumps(source_ids, ensure_ascii=False),
+            },
+        )
+
+    @staticmethod
+    def _insert_quality_receipt(
+        session: Session, claimed: ClaimedTurn, receipt: dict[str, Any]
+    ) -> None:
+        fingerprint = semantic_digest(receipt)
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.assistant_quality_receipts (organization_id,workspace_id,turn_id,"
+                "logical_profile,model_profile,planning_profile,synthesis_profile,validation_profile,"
+                "intent,answer_type,"
+                "deterministic_checks,model_checks,passed,receipt_fingerprint) VALUES "
+                "(:o,:w,:turn,:logical,:model_profile,:planning,:synthesis,:validation,:intent,:answer_type,"
+                "CAST(:deterministic AS jsonb),CAST(:model AS jsonb),:passed,:fingerprint)"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "turn": claimed.turn_id,
+                "logical": str(receipt["logical_profile"]),
+                "model_profile": str(receipt["model_profile"]),
+                "planning": str(receipt["planning_profile"]),
+                "synthesis": str(receipt["synthesis_profile"]),
+                "validation": str(receipt["validation_profile"]),
+                "intent": str(receipt["intent"]),
+                "answer_type": str(receipt["answer_type"]),
+                "deterministic": json.dumps(receipt["deterministic_checks"], ensure_ascii=False),
+                "model": json.dumps(receipt["model_checks"], ensure_ascii=False),
+                "passed": bool(receipt["passed"]),
+                "fingerprint": fingerprint,
+            },
+        )
+
+    @staticmethod
+    def _insert_dialogue_state(
+        session: Session, claimed: ClaimedTurn, state: dict[str, Any]
+    ) -> None:
+        version = int(
+            session.scalar(
+                sa.text(
+                    "SELECT coalesce(max(version),0)+1 FROM "
+                    "workspace.assistant_dialogue_state_versions WHERE organization_id=:o AND "
+                    "workspace_id=:w AND conversation_id=:c"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "c": claimed.conversation_id,
+                },
+            )
+            or 1
+        )
+        payload = {
+            "conversation_id": str(claimed.conversation_id),
+            "version": version,
+            "source_turn_id": str(claimed.turn_id),
+            "summary": state["summary"],
+            "active_subjects": state["active_subjects"],
+        }
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.assistant_dialogue_state_versions (organization_id,workspace_id,"
+                "conversation_id,version,source_turn_id,summary,active_subjects,state_fingerprint) VALUES "
+                "(:o,:w,:conversation,:version,:turn,:summary,CAST(:subjects AS jsonb),:fingerprint)"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "conversation": claimed.conversation_id,
+                "version": version,
+                "turn": claimed.turn_id,
+                "summary": str(state["summary"]),
+                "subjects": json.dumps(state["active_subjects"], ensure_ascii=False),
+                "fingerprint": semantic_digest(payload),
             },
         )
 

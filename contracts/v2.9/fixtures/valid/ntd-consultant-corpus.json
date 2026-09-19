@@ -1,0 +1,16 @@
+{
+  "profile": "ntd-consultant-search-index@1.0.0",
+  "official_denominator": 15,
+  "reference_denominator": 104,
+  "document_count": 119,
+  "page_count": 9500,
+  "searchable_page_count": 8389,
+  "verified_provision_count": 1294,
+  "sp70": {
+    "designation": "СП 70.13330.2012",
+    "inventory_outcome": "document_present_searchable",
+    "verified_provisions": 0,
+    "edition_currency": "not_checked"
+  },
+  "construction_consultant_quality_ready": false
+}

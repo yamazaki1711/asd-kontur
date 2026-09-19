@@ -1,0 +1,56 @@
+{
+  "recorded_at": "2026-09-12T01:06:20+12:00",
+  "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+  "release": {
+    "api_live": "6194eb31fd82630b136dd0f404252b532a8cae44",
+    "document_worker_and_assistant_live": "9394b466a222d915d77f12b9577afd815a8476ba",
+    "database_migration": "0048_incremental_reconciliation_claim_priority",
+    "frontend_build_digest": "sha256:e97ded3a614e01641278bb70013f231b6963c93875684cdecf0dc8b34ace7b87",
+    "worker_transition": "deferred_until_current_Qwen_job_terminal",
+    "worker_recovery_candidate": "4f41617eb2c27784bd969f76de3b49a69f60547b",
+    "worker_recovery_candidate_state": "tested_not_deployed"
+  },
+  "corpus": {
+    "active_source_versions": 22,
+    "page_denominator": 2529,
+    "semantic_coverage": {
+      "complete_sources": 7,
+      "partial_sources": 3,
+      "not_started_sources": 12,
+      "meaning": "Coverage states describe exact accepted semantic input fragments, not confirmed engineering analysis or Tender acceptance."
+    }
+  },
+  "active_job": {
+    "job_id": "01a08f4e-3b5e-798c-9d5b-b3acd1724683",
+    "kind": "PROJECT_DEFINITION_EXTRACTION",
+    "state": "running",
+    "source_version_id": "01a088ac-7fdb-7b12-be33-e3a325af8edf",
+    "safe_display_name": "Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf",
+    "accepted_batch_progress": {"current": 162, "total": 1074},
+    "ledger_at_observation": {
+      "accepted_receipts": 183,
+      "accepted_input_fragments": 1800,
+      "failed_receipts": 25,
+      "failed_input_fragments": 240
+    },
+    "progress_observed_at": "2026-09-12T01:06:03+12:00"
+  },
+  "candidate_projection": {
+    "project_fields": 1869,
+    "works": 1256,
+    "quantities": 377,
+    "materials": 160,
+    "structure_observations": 1308,
+    "relationship_observations": 417,
+    "authority": "candidate_only",
+    "pit_count": null,
+    "facility_inventory_reconciled": false
+  },
+  "acceptance": {
+    "complete_package_tender_accepted": false,
+    "cross_document_facility_reconciliation": "open",
+    "project_specific_ntd_checks": "open",
+    "consultant_source_answer_acceptance": "open",
+    "browser_source_navigation": "unverified"
+  }
+}

@@ -98,6 +98,7 @@ def _schema_fingerprint(engine: sa.Engine) -> str:
 
 def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
     repository_root: Path,
+    migration_head: str,
 ) -> None:
     explicit_url = os.environ.get("ASD_TEST_DATABASE_URL")
     if not explicit_url:
@@ -115,6 +116,52 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
         prior = os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE")
         os.environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = "1"
         try:
+            # Reproduce an existing pre-0046 installation with Alembic's original
+            # varchar(32), then verify that upgrading preserves the published ID.
+            run_migration(str(repository_root), database_url, "0045_bounded_dep_recovery")
+            with database_engine.begin() as connection:
+                connection.execute(
+                    sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(32)")
+                )
+            run_migration(str(repository_root), database_url, "head")
+            with database_engine.connect() as connection:
+                assert (
+                    connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+                    == migration_head
+                )
+
+            # 0045 must restore the 0044 wrapper AND retain its v1 implementation.
+            run_migration(str(repository_root), database_url, "0044_dep_recovery_idempotency")
+            with database_engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        sa.text("SELECT workspace.recover_dependency_terminal_failures_v1()")
+                    )
+                    == 0
+                )
+                assert (
+                    connection.scalar(
+                        sa.text("SELECT workspace.recover_dependency_terminal_failures()")
+                    )
+                    == 0
+                )
+            run_migration(str(repository_root), database_url, "0041_engineering_v4_manifest")
+            with database_engine.connect() as connection:
+                definition = connection.scalar(
+                    sa.text(
+                        "SELECT pg_get_functiondef("
+                        "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                    )
+                )
+                assert "dependency_success_satisfied" not in str(definition)
+                assert (
+                    connection.execute(
+                        sa.text(
+                            "SELECT * FROM workspace.claim_next_durable_job('migration-test', 5)"
+                        )
+                    ).all()
+                    == []
+                )
             run_migration(str(repository_root), database_url, "0018_product_spine")
         finally:
             if prior is None:

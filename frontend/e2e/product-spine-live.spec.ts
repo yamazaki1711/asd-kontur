@@ -6,6 +6,64 @@ import { resolve } from "node:path";
 const repository = resolve(import.meta.dirname, "../..");
 const statePath = process.env.ASD_E2E_STATE_PATH;
 
+test("platform consultant API persists a model answer and restores a durable dialog", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
+  const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+    synthetic_qwen_answer?: string | null;
+  };
+  await page.goto("/login");
+  await page.getByLabel("Пользователь").fill("synthetic-live-owner");
+  await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Выберите режим работы" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Строительный консультант" }),
+  ).toBeVisible();
+  const question =
+    process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1"
+      ? "Какие требования к уходу за бетоном?"
+      : "Что проверяют при входном контроле строительных материалов?";
+  await page.getByLabel("Ваш вопрос").fill(question);
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/construction-consultant/conversations/") &&
+      response.url().endsWith("/questions"),
+    { timeout: 120_000 },
+  );
+  await page.getByRole("button", { name: "Отправить вопрос" }).click();
+  const response = await responsePromise;
+  expect(response.ok(), await response.text()).toBe(true);
+  const answer = page.locator(".construction-consultant-message-assistant");
+  await expect(answer).toBeVisible({ timeout: 120_000 });
+  await expect(answer).not.toHaveText("");
+  if (state.synthetic_qwen_answer) {
+    await expect(answer.locator(":scope > div")).toHaveText(
+      state.synthetic_qwen_answer,
+    );
+  }
+  if (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1") {
+    const sources = answer.locator(".construction-consultant-sources");
+    await expect(sources).toBeVisible();
+    await sources.locator("summary").click();
+    await expect(sources.getByRole("link").first()).toBeVisible();
+  }
+  await page.reload();
+  await expect(
+    page
+      .locator(".construction-consultant-message-user")
+      .getByText(question, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".construction-consultant-message-assistant"),
+  ).toHaveCount(1);
+});
+
 test("live Support ID package exposes finalized AOSR, register, and provenance", async ({
   page,
 }) => {

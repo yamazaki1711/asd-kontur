@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import csv
 import hashlib
 import io
@@ -9,6 +10,8 @@ import json
 import shutil
 import subprocess
 import tempfile
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, cast
@@ -18,6 +21,15 @@ from asd_kontur.domain import deterministic_uuid
 
 from .models import ExactLocator, LayoutElement, OcrRoute
 from .native import normalize_text
+
+_PDFTOPPM_FALLBACKS = (
+    Path("/opt/homebrew/bin/pdftoppm"),
+    Path("/usr/local/bin/pdftoppm"),
+)
+_TESSERACT_FALLBACKS = (
+    Path("/opt/homebrew/bin/tesseract"),
+    Path("/usr/local/bin/tesseract"),
+)
 
 
 class OcrFailure(RuntimeError):
@@ -51,6 +63,186 @@ class OcrAdapter(Protocol):
         source_version_id: UUID,
         page_number: int,
     ) -> OcrAdapterResult: ...
+
+
+class QwenVisionOcrAdapter:
+    """Loopback Qwen vision OCR with image bytes and validated layout evidence."""
+
+    adapter_key = "qwen3.8-27b-local-vision"
+    adapter_version = "qwen-vision-ocr-v3"
+
+    def __init__(self, endpoint: str, *, timeout_seconds: float = 600.0) -> None:
+        self._endpoint = endpoint
+        self._timeout_seconds = timeout_seconds
+
+    def available(self) -> bool:
+        health = self._endpoint.removesuffix("/vision") + "/health"
+        try:
+            with urllib.request.urlopen(health, timeout=2) as response:
+                payload = json.loads(response.read(4096))
+        except (OSError, urllib.error.URLError, json.JSONDecodeError):
+            return False
+        return bool(
+            response.status == 200
+            and isinstance(payload, dict)
+            and payload.get("status") == "ready"
+        )
+
+    def extract(
+        self,
+        image_path: Path,
+        *,
+        document_id: UUID,
+        document_version: int,
+        source_version_id: UUID,
+        page_number: int,
+    ) -> OcrAdapterResult:
+        image_bytes = image_path.read_bytes()
+        if not image_bytes or len(image_bytes) > 12 * 1024 * 1024:
+            raise OcrFailure("qwen_vision_image_size_invalid")
+        request_body = json.dumps(
+            {
+                "image_base64": base64.b64encode(image_bytes).decode("ascii"),
+                "prompt": (
+                    "Распознай текст строительного документа на изображении. Верни только JSON "
+                    '{"observations":[{"text":"точный текст","region":[x0,y0,x1,y1]}]}. '
+                    "Координаты нормированы от 0 до 1; не выдумывай неразборчивый текст."
+                ),
+                "max_tokens": 800,
+                "temperature": 0.0,
+            },
+            ensure_ascii=False,
+        ).encode("utf-8")
+        request = urllib.request.Request(
+            self._endpoint,
+            data=request_body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=self._timeout_seconds) as response:
+                payload = json.loads(response.read(4 * 1024 * 1024))
+        except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            raise OcrFailure("qwen_vision_runtime_unavailable") from exc
+        if (
+            response.status != 200
+            or not isinstance(payload, dict)
+            or not isinstance(payload.get("text"), str)
+        ):
+            raise OcrFailure("qwen_vision_response_invalid")
+        return self._parse_result(
+            payload["text"],
+            image_path,
+            document_id=document_id,
+            document_version=document_version,
+            source_version_id=source_version_id,
+            page_number=page_number,
+        )
+
+    def _parse_result(
+        self,
+        text: str,
+        image_path: Path,
+        *,
+        document_id: UUID,
+        document_version: int,
+        source_version_id: UUID,
+        page_number: int,
+    ) -> OcrAdapterResult:
+        candidate = text.strip()
+        if candidate.startswith("```"):
+            candidate = candidate.split("\n", 1)[1] if "\n" in candidate else ""
+            candidate = candidate.rsplit("```", 1)[0].strip()
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError as exc:
+            payload = _embedded_json_object(candidate)
+            if payload is None:
+                raise OcrFailure("qwen_vision_result_malformed") from exc
+        if not isinstance(payload, dict):
+            raise OcrFailure("qwen_vision_result_schema_invalid")
+        raw_observations = payload.get("observations")
+        observations: list[object]
+        if isinstance(raw_observations, list):
+            observations = raw_observations
+        else:
+            root_text = payload.get("text")
+            if not isinstance(root_text, str):
+                raise OcrFailure("qwen_vision_result_schema_invalid")
+            observations = [root_text]
+        elements: list[LayoutElement] = []
+        for order, item in enumerate(observations, start=1):
+            if isinstance(item, str):
+                raw_text = item
+                raw_region: object | None = None
+            elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                raw_text = item["text"]
+                raw_region = item.get("region", item.get("bbox"))
+            else:
+                raise OcrFailure("qwen_vision_result_schema_invalid")
+            region = _normalise_model_region(
+                raw_region,
+                image_path=image_path,
+            )
+            elements.append(
+                _ocr_element(
+                    document_id,
+                    document_version,
+                    source_version_id,
+                    page_number,
+                    region,
+                    order,
+                    raw_text,
+                    self.adapter_key,
+                )
+            )
+        return _result(self.adapter_key, self.adapter_version, "ru-RU+en-US", image_path, elements)
+
+
+def _embedded_json_object(value: str) -> object | None:
+    """Return one complete JSON object embedded in an otherwise textual model response."""
+
+    decoder = json.JSONDecoder()
+    for start, character in enumerate(value):
+        if character != "{":
+            continue
+        try:
+            payload, _end = decoder.raw_decode(value[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _normalise_model_region(
+    raw: object | None,
+    *,
+    image_path: Path,
+) -> tuple[float, float, float, float]:
+    """Validate normalized or pixel model coordinates; use page scope only when absent."""
+
+    if raw is None:
+        return (0.0, 0.0, 1.0, 1.0)
+    if not isinstance(raw, list) or len(raw) != 4 or any(isinstance(value, bool) for value in raw):
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    try:
+        coordinates = tuple(float(value) for value in raw)
+    except (TypeError, ValueError) as exc:
+        raise OcrFailure("qwen_vision_result_schema_invalid") from exc
+    if _valid_region(list(coordinates)):
+        return (coordinates[0], coordinates[1], coordinates[2], coordinates[3])
+    from PIL import Image
+
+    with Image.open(image_path) as image:
+        width, height = image.size
+    if width <= 0 or height <= 0:
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    x0, y0, x1, y1 = coordinates
+    normalized = (x0 / width, y0 / height, x1 / width, y1 / height)
+    if not _valid_region(list(normalized)):
+        raise OcrFailure("qwen_vision_result_schema_invalid")
+    return normalized
 
 
 class AppleVisionOcrAdapter:
@@ -125,7 +317,7 @@ class TesseractOcrAdapter:
         self._executable = executable
 
     def available(self) -> bool:
-        return shutil.which(self._executable) is not None
+        return self._resolved_executable() is not None
 
     def extract(
         self,
@@ -136,11 +328,12 @@ class TesseractOcrAdapter:
         source_version_id: UUID,
         page_number: int,
     ) -> OcrAdapterResult:
-        if not self.available():
+        executable = self._resolved_executable()
+        if executable is None:
             raise OcrFailure("tesseract_unavailable")
         completed = subprocess.run(
             [
-                self._executable,
+                executable,
                 str(image_path),
                 "stdout",
                 "-l",
@@ -195,24 +388,38 @@ class TesseractOcrAdapter:
             )
         return _result(self.adapter_key, self.adapter_version, "rus+eng", image_path, elements)
 
+    def _resolved_executable(self) -> str | None:
+        if executable := shutil.which(self._executable):
+            return executable
+        if self._executable == "tesseract":
+            for candidate in _TESSERACT_FALLBACKS:
+                if candidate.is_file() and candidate.stat().st_mode & 0o111:
+                    return str(candidate)
+        return None
+
 
 def select_adapters(
     route: OcrRoute,
     *,
-    apple: AppleVisionOcrAdapter,
-    tesseract: TesseractOcrAdapter,
+    qwen: QwenVisionOcrAdapter,
 ) -> tuple[OcrAdapter, ...]:
     if route is OcrRoute.NOT_REQUIRED:
         return ()
-    if route is OcrRoute.APPLE_VISION:
-        return tuple(adapter for adapter in (apple, tesseract) if adapter.available())
-    if route is OcrRoute.TESSERACT:
-        return tuple(adapter for adapter in (tesseract, apple) if adapter.available())
+    if route is OcrRoute.BLOCKED:
+        return ()
+    qwen_routes = {
+        OcrRoute.QWEN_VISION,
+        OcrRoute.APPLE_VISION,
+        OcrRoute.TESSERACT,
+        OcrRoute.VLM_REQUIRED,
+    }
+    if route in qwen_routes:
+        return (qwen,) if qwen.available() else ()
     return ()
 
 
 def render_pdf_page(content: bytes, page_number: int, target: Path, *, dpi: int = 300) -> str:
-    executable = shutil.which("pdftoppm")
+    executable = _pdf_renderer()
     if executable is None:
         raise OcrFailure("pdf_renderer_unavailable")
     if page_number < 1 or dpi < 72 or dpi > 600:
@@ -245,6 +452,17 @@ def render_pdf_page(content: bytes, page_number: int, target: Path, *, dpi: int 
     if generated != target:
         generated.replace(target)
     return "sha256:" + hashlib.sha256(target.read_bytes()).hexdigest()
+
+
+def _pdf_renderer() -> str | None:
+    """Find the locally installed Poppler renderer under launchd's restricted PATH."""
+
+    if executable := shutil.which("pdftoppm"):
+        return executable
+    for candidate in _PDFTOPPM_FALLBACKS:
+        if candidate.is_file() and candidate.stat().st_mode & 0o111:
+            return str(candidate)
+    return None
 
 
 def _ocr_element(

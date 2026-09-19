@@ -31,6 +31,7 @@ class JobKind(StrEnum):
     WORK_PACKAGE_ASSEMBLY = "WORK_PACKAGE_ASSEMBLY"
     REQUIREMENT_MATRIX_ASSEMBLY = "REQUIREMENT_MATRIX_ASSEMBLY"
     PROJECT_UNDERSTANDING_RECONCILIATION = "PROJECT_UNDERSTANDING_RECONCILIATION"
+    PROJECT_STRUCTURE_RECONCILIATION = "PROJECT_STRUCTURE_RECONCILIATION"
     ID_DOCUMENT_GENERATION = "ID_DOCUMENT_GENERATION"
     EVIDENCE_INDEX_UPDATE = "EVIDENCE_INDEX_UPDATE"
     WORKSPACE_RESET_RECONCILIATION = "WORKSPACE_RESET_RECONCILIATION"
@@ -133,6 +134,12 @@ class JobSummary:
     started_at: datetime | None
     heartbeat_at: datetime | None
     completed_at: datetime | None
+    lease_expires_at: datetime | None
+    lease_expired: bool
+    progress_current: int | None
+    progress_total: int | None
+    progress_message_code: str | None
+    progress_recorded_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +224,7 @@ class KnowledgeStatus:
     verified_normative_edition_count: int
     verified_normative_provision_count: int
     rule_version_count: int
+    ntd_inventory: JsonValue
     projection_states: JsonValue
     last_verified_backup_at: datetime | None
     semantic_fingerprints: JsonValue

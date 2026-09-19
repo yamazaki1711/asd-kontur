@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.9:schema:professional-assistant-tool",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tool", "mode", "arguments"],
+  "properties": {
+    "tool": {
+      "enum": [
+        "consultant.search_practice",
+        "consultant.get_practice_fragment",
+        "consultant.get_ntd_inventory",
+        "consultant.resolve_ntd_designation",
+        "consultant.search_ntd_documents",
+        "consultant.search_ntd_content",
+        "consultant.get_ntd_page",
+        "consultant.get_ntd_section_context",
+        "consultant.get_verified_provisions",
+        "consultant.get_ntd_processing_status",
+        "consultant.find_applicability_candidates",
+        "consultant.search_ntd",
+        "consultant.get_ntd_provision",
+        "consultant.get_workspace_overview",
+        "consultant.search_workspace_documents",
+        "consultant.get_workspace_fragment",
+        "consultant.get_work_packages",
+        "consultant.get_requirement_matrix",
+        "consultant.get_discrepancies",
+        "consultant.get_id_package",
+        "consultant.get_mode_result",
+        "consultant.get_information_gaps",
+        "consultant.estimate_concrete_early_strength"
+      ]
+    },
+    "mode": {"enum": ["Tender", "Support", "Audit", "Restoration"]},
+    "arguments": {"type": "object", "maxProperties": 4}
+  }
+}

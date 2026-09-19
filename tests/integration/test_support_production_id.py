@@ -34,6 +34,7 @@ from asd_kontur.kernel import (
 )
 from asd_kontur.lifecycle import StorageAdapterDefinition
 from asd_kontur.lifecycle.postgres import PostgresWorkspaceStorageAdapter
+from asd_kontur.restoration import RestorationRecoveryError, RestorationRecoveryRepository
 from asd_kontur.support.production_postgres import (
     SupportProductionError,
     SupportProductionRepository,
@@ -224,9 +225,16 @@ def test_support_production_package_generation_and_workspace_isolation(
 
     worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
     interrupted = worker_repository.claim_next_job(
-        worker_identity="synthetic-interrupted-generation-worker", lease_seconds=5
+        worker_identity="synthetic-interrupted-generation-worker",
+        lease_seconds=5,
+        organization_id=tenant.organization_id,
+        workspace_id=tenant.workspace_id,
     )
-    assert interrupted is not None and str(interrupted.job_id) == started["job_id"]
+    assert interrupted is not None and str(interrupted.job_id) == started["job_id"], (
+        interrupted.job_id if interrupted else None,
+        interrupted.job_kind if interrupted else None,
+        started["job_id"],
+    )
     worker_repository.mark_job_running(
         interrupted, worker_identity="synthetic-interrupted-generation-worker"
     )
@@ -247,6 +255,8 @@ def test_support_production_package_generation_and_workspace_isolation(
         store,
         worker_identity="synthetic-support-production-worker",
         lease_seconds=30,
+        organization_id=tenant.organization_id,
+        workspace_id=tenant.workspace_id,
     )
     outcome = worker.run_once()
     assert outcome is not None and outcome.state.value == "succeeded"
@@ -273,6 +283,78 @@ def test_support_production_package_generation_and_workspace_isolation(
         api_view = client.get(f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production")
         assert api_view.status_code == 200
         assert api_view.json()["package"]["version"] == 2
+        audit_preflight = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight"
+        )
+        assert audit_preflight.status_code == 200, audit_preflight.text
+        preflight = audit_preflight.json()
+        assert preflight["assessment_kind"] == "expected_vs_package_preflight"
+        assert preflight["status"] == "partial"
+        assert preflight["package"]["version"] == 2
+        assert all(item["preflight_state"] != "satisfied" for item in preflight["items"])
+        assert any(item["preflight_state"] == "generated_candidate" for item in preflight["items"])
+        assert any(
+            item["required_correction"] == "perform_independent_audit_of_generated_candidate"
+            for item in preflight["items"]
+        )
+        preflight_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight.csv"
+        )
+        assert preflight_export.status_code == 200, preflight_export.text
+        assert preflight_export.headers["content-type"].startswith("text/csv")
+        assert "audit_boundary" in preflight_export.content.decode("utf-8-sig")
+        recovery_plan = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan"
+        )
+        assert recovery_plan.status_code == 200, recovery_plan.text
+        plan = recovery_plan.json()
+        assert plan["plan_kind"] == "id_package_recovery_plan"
+        assert all(item["fabrication_prohibited"] for item in plan["blocked_actions"])
+        assert plan["snapshot"] is None
+        csrf = {"X-CSRF-Token": str(client.cookies.get("asd_csrf"))}
+        captured_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers=csrf,
+        )
+        assert captured_plan.status_code == 201, captured_plan.text
+        captured = captured_plan.json()
+        assert captured["snapshot"]["version"] == 1
+        assert captured["snapshot_is_current"] is True
+        assert captured["snapshot_duplicate"] is False
+        replayed_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers=csrf,
+        )
+        assert replayed_plan.status_code == 201, replayed_plan.text
+        assert replayed_plan.json()["snapshot"]["version"] == 1
+        assert replayed_plan.json()["snapshot_duplicate"] is True
+        current_plan = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan"
+        )
+        assert current_plan.status_code == 200, current_plan.text
+        assert current_plan.json()["snapshot_is_current"] is True
+        recovery_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plan.csv"
+        )
+        assert recovery_export.status_code == 200, recovery_export.text
+        assert recovery_export.headers["content-type"] == "text/csv; charset=utf-8"
+        recovery_csv = recovery_export.content.decode("utf-8-sig")
+        assert "fabrication_prohibited" in recovery_csv
+        assert "collect_missing_source_evidence" in recovery_csv
+        package_export = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
+        )
+        assert package_export.status_code == 200, package_export.text
+        assert package_export.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(package_export.content)) as exported:
+            assert exported.namelist()[0] == "01_register_candidate.docx"
+            with zipfile.ZipFile(
+                io.BytesIO(exported.read("01_register_candidate.docx"))
+            ) as register:
+                assert "word/document.xml" in register.namelist()
+            assert "97_field_evidence_and_missing_inputs.csv" in exported.namelist()
+            assert "99_missing_or_blocked_items.csv" in exported.namelist()
+            assert any(name.endswith("_candidate.docx") for name in exported.namelist())
         content = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/generated-candidates/"
             f"{generated['generated_candidate_id']}/content",
@@ -421,6 +503,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert finalized_content.status_code == 206, finalized_content.json()
         assert finalized_content.headers["content-type"] == "application/pdf"
         assert finalized_content.content.startswith(b"%PDF")
+        updated_recovery_plan = client.post(
+            f"/api/v1/workspaces/{tenant.workspace_id}/restoration/recovery-plans",
+            headers={"X-CSRF-Token": str(client.cookies.get("asd_csrf"))},
+        )
+        assert updated_recovery_plan.status_code == 201, updated_recovery_plan.text
+        assert updated_recovery_plan.json()["snapshot"]["version"] == 2
+        assert updated_recovery_plan.json()["snapshot_duplicate"] is False
 
     another = create_tenant(postgres_environment)
     try:
@@ -429,6 +518,13 @@ def test_support_production_package_generation_and_workspace_isolation(
         assert exc.code == "workspace_not_found"
     else:
         raise AssertionError("cross-organization package access was not denied")
+    recovery = RestorationRecoveryRepository(postgres_environment.application_engine)
+    try:
+        recovery.latest(owner_identity_id=owner, workspace_id=another.workspace_id)
+    except RestorationRecoveryError as exc:
+        assert exc.code == "workspace_not_found"
+    else:
+        raise AssertionError("cross-organization recovery plan access was not denied")
 
     if os.environ.get("ASD_SUPPORT_PRODUCTION_PRESERVE_WORKSPACE") == "1":
         return

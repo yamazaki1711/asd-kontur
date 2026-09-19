@@ -101,6 +101,10 @@ def main(argv: list[str] | None = None) -> int:
             store,
             worker_identity=args.identity,
             lease_seconds=settings.job_lease_seconds,
+            qwen_vision_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/vision",
+            qwen_semantic_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
+            organization_id=settings.document_worker_organization_id,
+            workspace_id=settings.document_worker_workspace_id,
         )
         try:
             worker_instance.run_forever()
@@ -112,7 +116,10 @@ def main(argv: list[str] | None = None) -> int:
         knowledge_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         instance = AssistantWorker(
             AssistantRepository(engine),
-            ProfessionalAssistantKnowledgeQuery(knowledge_engine),
+            ProfessionalAssistantKnowledgeQuery(
+                knowledge_engine,
+                production_embedding_endpoint=settings.ntd_embedding_endpoint,
+            ),
             identity=args.identity,
             qwen_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
         )
@@ -166,8 +173,16 @@ def _database_preflight(settings: SpineSettings) -> int:
 
 def _migrate(settings: SpineSettings) -> int:
     repository = Path(__file__).resolve().parents[3]
+    migration_database_url = os.environ.get("ASD_MIGRATION_DATABASE_URL", settings.database_url)
+    if not migration_database_url.startswith(("postgresql+psycopg://", "postgresql://")):
+        raise ValueError("ASD_MIGRATION_DATABASE_URL must be an explicit PostgreSQL URL")
     configuration = Config(str(repository / "alembic.ini"))
-    configuration.set_main_option("sqlalchemy.url", settings.database_url)
+    configuration.set_main_option("sqlalchemy.url", migration_database_url)
+    # ``migrations/env.py`` deliberately accepts the target connection only as
+    # Alembic's explicit ``-x database_url=...`` argument.  The runtime command
+    # must preserve that fail-closed contract instead of relying on the config
+    # value, which the migration environment intentionally ignores.
+    configuration.cmd_opts = argparse.Namespace(x=[f"database_url={migration_database_url}"])
     command.upgrade(configuration, "head")
     return 0
 

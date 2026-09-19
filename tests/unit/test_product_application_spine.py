@@ -5,12 +5,13 @@ import plistlib
 import sys
 import zipfile
 from pathlib import Path
+from threading import Event
 from uuid import UUID
 
 import pytest
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import semantic_digest
+from asd_kontur.application_spine.models import ClaimedJob, JobKind, semantic_digest
 from asd_kontur.application_spine.object_store import (
     IntakeError,
     WorkspaceObjectStore,
@@ -18,12 +19,185 @@ from asd_kontur.application_spine.object_store import (
     sanitize_display_name,
     sanitize_relative_path,
 )
-from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
-from asd_kontur.application_spine.worker import verify_bytes_digest
+from asd_kontur.application_spine.postgres import (
+    SpinePostgresRepository,
+    _semantic_extraction_priority,
+)
+from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
+from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
+from asd_kontur.document_understanding.postgres import _identity_observation_group_key
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
+    """A one-slot worker reaches source-backed structural evidence before estimates."""
+
+    assert _semantic_extraction_priority(("local_estimate",)) == 150
+    assert _semantic_extraction_priority(("project_documentation",)) == 170
+    assert _semantic_extraction_priority(("local_estimate", "drawing_or_scheme")) == 170
+    assert _semantic_extraction_priority(()) == 130
+
+
+def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures() -> None:
+    state = SpinePostgresRepository._semantic_coverage_state
+
+    assert (
+        state(
+            accepted_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=2,
+        )
+        == "failed"
+    )
+    assert (
+        state(
+            accepted_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "not_started"
+    )
+    assert (
+        state(
+            accepted_fragment_count=7,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=1,
+        )
+        == "partial"
+    )
+    assert (
+        state(
+            accepted_fragment_count=8,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "complete"
+    )
+
+
+def test_structure_identity_group_key_admits_typographic_aliases_without_merging() -> None:
+    key = _identity_observation_group_key
+    assert key("\u041a\u041d\u0421-4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421 4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421-4") != key("\u041a\u041d\u0421-5")
+
+
+def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
+    nodes = [
+        {
+            "structure_node_id": "node-a",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-a",
+        },
+        {
+            "structure_node_id": "node-b",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-b",
+        },
+    ]
+    relationships = [
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "node-a",
+            "object_structure_node_id": None,
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": None,
+            "object_structure_node_id": "node-b",
+            "resolution_state": "resolved_same_evidence",
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, relationships)
+
+    assert [item["structure_node"]["structure_node_id"] for item in dossiers] == [
+        "node-a",
+        "node-b",
+    ]
+    assert dossiers[0]["relationships"] == [relationships[0]]
+    assert dossiers[0]["unresolved_relationship_count"] == 1
+    assert dossiers[1]["relationships"] == [relationships[1]]
+    assert dossiers[1]["unresolved_relationship_count"] == 0
+
+
+def test_structure_dossiers_link_work_observations_only_by_exact_locator() -> None:
+    nodes = [
+        {
+            "structure_node_id": "facility-a",
+            "node_kind": "facility",
+            "raw_name": "Facility A",
+            "source_locator_id": "locator-a",
+        }
+    ]
+    work_packages = [
+        {
+            "work_package_id": "work-a",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-a",
+                "source_locator_ids": ["locator-a"],
+            },
+        },
+        {
+            "work_package_id": "work-b",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-b",
+                "source_locator_ids": ["locator-b"],
+            },
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows([], [], [])
+    assert dossiers == []
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, [], work_packages)
+
+    assert dossiers[0]["work_association_state"] == "exact_shared_source_locator_candidate"
+    assert dossiers[0]["linked_work_observations"] == [
+        {"work_observation_id": "work-a", "work_name": "Install pipe", "scope": "zone-a"}
+    ]
+
+
+def test_structure_components_require_exact_resolved_evidence() -> None:
+    nodes = [
+        {"structure_node_id": "facility", "source_locator_id": "locator-a"},
+        {"structure_node_id": "pit", "source_locator_id": "locator-a"},
+        {"structure_node_id": "same-name-other-source", "source_locator_id": "locator-b"},
+    ]
+    relationships = [
+        {
+            "relationship_candidate_id": "relation-a",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "facility",
+            "object_structure_node_id": "pit",
+            "resolution_state": "resolved_same_evidence",
+        },
+        {
+            "relationship_candidate_id": "relation-b",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": "pit",
+            "object_structure_node_id": "same-name-other-source",
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+    ]
+
+    components = SpinePostgresRepository._structure_component_rows(nodes, relationships)
+
+    assert len(components) == 1
+    assert [item["structure_node_id"] for item in components[0]["nodes"]] == [
+        "facility",
+        "pit",
+    ]
+    assert components[0]["relationships"] == [relationships[0]]
 
 
 def settings(root: Path, **overrides: object) -> SpineSettings:
@@ -71,6 +245,42 @@ def test_release_identity_is_explicit_and_version_pinned(tmp_path: Path) -> None
     assert configured.frontend_build_digest == "sha256:frontend"
     assert configured.openapi_digest == "sha256:openapi"
     assert configured.expected_migration_head == "0027_public_deployment"
+
+
+def test_runtime_migration_supplies_the_required_explicit_database_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+
+    configured = settings(tmp_path)
+    assert _migrate(configured) == 0
+    assert captured == {
+        "revision": "head",
+        "database_url": [f"database_url={configured.database_url}"],
+    }
+
+
+def test_runtime_migration_uses_separately_supplied_protected_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+    protected_url = "postgresql+psycopg://migration-role@localhost/asd"
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+    monkeypatch.setenv("ASD_MIGRATION_DATABASE_URL", protected_url)
+
+    assert _migrate(settings(tmp_path)) == 0
+    assert captured == {"revision": "head", "database_url": [f"database_url={protected_url}"]}
 
 
 @pytest.mark.parametrize(
@@ -172,6 +382,39 @@ def test_semantic_digest_ignores_mapping_order_but_not_typed_payload() -> None:
     assert semantic_digest({"value": "1"}) != semantic_digest({"value": 1})
 
 
+def test_lease_keepalive_extends_a_long_running_job_lease() -> None:
+    class RecordingRepository:
+        def __init__(self) -> None:
+            self.called = Event()
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            self.called.set()
+
+    repository = RecordingRepository()
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001803"),
+        JobKind.OCR_EXTRACTION,
+        {},
+        "sha256:" + "0" * 64,
+        1,
+        1,
+        "none",
+    )
+    keepalive = _LeaseKeepalive(  # type: ignore[arg-type]
+        repository,
+        claimed,
+        worker_identity="synthetic-worker",
+        lease_seconds=1,
+    )
+
+    keepalive.start()
+    assert repository.called.wait(timeout=1)
+    keepalive.stop()
+    keepalive.raise_if_lost()
+
+
 def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     log_root = tmp_path / "logs"
     log_root.mkdir()
@@ -189,9 +432,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["Label"] == "ru.asd-kontur.spine.api"
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
-    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0030_professional_assistant"
-    )
+    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == ("0033_ntd_memory")
     assistant_plist = plistlib.loads(
         (output / "ru.asd-kontur.spine.assistant-worker.plist").read_bytes()
     )

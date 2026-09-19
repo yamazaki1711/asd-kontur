@@ -10,7 +10,7 @@ import signal
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from pathlib import Path
+from threading import Event, Thread
 from typing import BinaryIO
 from uuid import UUID
 
@@ -21,17 +21,14 @@ from sqlalchemy import exc as sa_exc
 from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.native import NativeExtractionFailure
-from asd_kontur.document_understanding.ocr import (
-    AppleVisionOcrAdapter,
-    OcrFailure,
-    TesseractOcrAdapter,
-)
+from asd_kontur.document_understanding.ocr import OcrFailure, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.pipeline import (
     IndustrialDocumentUnderstandingPipeline,
     UnderstandingStageFailure,
     translate_stage_error,
 )
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.qwen_semantic import QwenDocumentSemanticAdapter
 from asd_kontur.domain import deterministic_uuid, uuid7
 from asd_kontur.support.models import FieldResolution, ResolutionState
 from asd_kontur.support.production import TemplateBackedDocxRenderer
@@ -68,6 +65,51 @@ class WorkerOutcome:
     outcome_code: str
 
 
+class _LeaseKeepalive:
+    """Extend a durable-job lease while one bounded handler is executing."""
+
+    def __init__(
+        self,
+        repository: SpinePostgresRepository,
+        claimed: ClaimedJob,
+        *,
+        worker_identity: str,
+        lease_seconds: int,
+    ) -> None:
+        self._repository = repository
+        self._claimed = claimed
+        self._worker_identity = worker_identity
+        self._lease_seconds = lease_seconds
+        self._interval_seconds = max(0.1, min(10.0, lease_seconds / 3))
+        self._stopped = Event()
+        self._failure: SpinePersistenceError | None = None
+        self._thread = Thread(target=self._run, name="asd-document-job-lease", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stopped.set()
+        self._thread.join(timeout=self._interval_seconds + 1)
+
+    def raise_if_lost(self) -> None:
+        if self._failure is not None:
+            raise self._failure
+
+    def _run(self) -> None:
+        while not self._stopped.wait(self._interval_seconds):
+            try:
+                self._repository.heartbeat_job(
+                    self._claimed,
+                    worker_identity=self._worker_identity,
+                    lease_seconds=self._lease_seconds,
+                )
+            except SpinePersistenceError as exc:
+                self._failure = exc
+                self._stopped.set()
+                return
+
+
 class DocumentWorker:
     """One-process worker; PostgreSQL leases and fences are the source of truth."""
 
@@ -78,20 +120,30 @@ class DocumentWorker:
         *,
         worker_identity: str,
         lease_seconds: int,
+        qwen_vision_url: str = "http://127.0.0.1:8790/vision",
+        qwen_semantic_url: str | None = "http://127.0.0.1:8790/generate",
+        organization_id: UUID | None = None,
+        workspace_id: UUID | None = None,
     ) -> None:
         if len(worker_identity) < 3:
             raise ValueError("worker identity is required")
+        if (organization_id is None) != (workspace_id is None):
+            raise ValueError("document_worker_scope_incomplete")
         self._repository = repository
         self._object_store = object_store
         self._worker_identity = worker_identity
         self._lease_seconds = lease_seconds
+        self._organization_id = organization_id
+        self._workspace_id = workspace_id
         self._stopping = False
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
-            apple_vision=AppleVisionOcrAdapter(
-                Path(__file__).resolve().parents[3] / "tools/ocr/apple_vision_ocr.swift"
+            qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
+            qwen_semantic=(
+                QwenDocumentSemanticAdapter(qwen_semantic_url)
+                if qwen_semantic_url is not None
+                else None
             ),
-            tesseract=TesseractOcrAdapter(),
         )
 
     def request_stop(self) -> None:
@@ -102,15 +154,23 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
-        for _ in range(1024):
-            if self._repository.reconcile_unclaimable_jobs() == 0:
-                break
-        else:
-            raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
+            organization_id=self._organization_id,
+            workspace_id=self._workspace_id,
         )
+        if claimed is None:
+            # A newly accepted successor reconnects terminal dependents in
+            # ``_execute``. Historical backfill is intentionally a separately
+            # scheduled, bounded maintenance operation: it must never make an
+            # otherwise idle product worker unavailable to claim new work.
+            claimed = self._repository.claim_next_job(
+                worker_identity=self._worker_identity,
+                lease_seconds=self._lease_seconds,
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
+            )
         if claimed is None:
             return None
         self._repository.mark_job_running(claimed, worker_identity=self._worker_identity)
@@ -121,8 +181,16 @@ class DocumentWorker:
                 "job_cancelled_before_effect",
                 {"semantic_effect": False},
             )
+        keepalive = _LeaseKeepalive(
+            self._repository,
+            claimed,
+            worker_identity=self._worker_identity,
+            lease_seconds=self._lease_seconds,
+        )
+        keepalive.start()
         try:
             result = self._execute(claimed)
+            keepalive.raise_if_lost()
         except RetryableJobFailure as exc:
             scheduled = self._repository.retry_job(
                 claimed,
@@ -190,7 +258,16 @@ class DocumentWorker:
                 str(code),
                 {"exception_type": type(exc).__name__},
             )
-        return self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        finally:
+            keepalive.stop()
+        outcome = self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        self._repository.recover_dependents_from_success(claimed)
+        if claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION:
+            # A workspace-wide reconciliation is a materialized view.  Refresh it
+            # after a durable source result becomes effective instead of leaving
+            # partial, useful evidence invisible until the complete corpus drains.
+            self._repository.schedule_incremental_project_reconciliation(claimed)
+        return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
         self.install_signal_handlers()
@@ -221,6 +298,7 @@ class DocumentWorker:
             JobKind.WORK_PACKAGE_ASSEMBLY,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
         }:
             try:
                 with self._open_source(claimed) as source:
