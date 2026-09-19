@@ -450,6 +450,9 @@ def _defect_title(kind: str) -> str:
         "quantity_mismatch": "Расхождение объёма между ВОР и сметой",
         "project_work_missing_in_estimate": "Работа проекта не учтена в смете",
         "project_material_missing_in_estimate": "Материал проекта не учтён в смете",
+        "estimate_material_comparison_input_unavailable": (
+            "Ресурсная часть сметы для сопоставления материалов не извлечена"
+        ),
         "estimate_position_unsupported_by_project": "Позиция сметы не подтверждена проектом",
         "incompatible_units": "Несовместимые единицы измерения",
         "ambiguous_source_match": "Неоднозначное сопоставление источников",
@@ -462,6 +465,11 @@ def _defect_title(kind: str) -> str:
 def _defect_description(kind: str) -> str:
     if kind == "quantity_mismatch":
         return "Для одной работы в исходных документах указаны разные объёмы."
+    if kind == "estimate_material_comparison_input_unavailable":
+        return (
+            "В проекте указан материал, но в доступной позиции сметы нет "
+            "извлечённой ресурсной части для проверяемого сопоставления."
+        )
     if "missing" in kind:
         return "Состав работ или материалов различается между исходными документами."
     return "Сведение нельзя принять без отдельного сопоставления исходных фрагментов."
@@ -471,6 +479,11 @@ def _defect_action(kind: str) -> str:
     if kind == "quantity_mismatch":
         return (
             "Сверить ВОР, смету и проект; зафиксировать согласованный объём новой версией сведения."
+        )
+    if kind == "estimate_material_comparison_input_unavailable":
+        return (
+            "Получить или извлечь ресурсную часть сметной позиции; не считать "
+            "материал пропущенным до сопоставления."
         )
     return "Открыть исходные фрагменты и принять решение специалиста."
 

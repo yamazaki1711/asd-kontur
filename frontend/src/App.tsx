@@ -5148,6 +5148,8 @@ function TenderFindingList({
     quantity_mismatch: "Требуется сверка объёма по источникам",
     project_material_missing_in_estimate:
       "Материал требует сопоставления со сметой",
+    estimate_material_comparison_input_unavailable:
+      "Сопоставление материалов со сметой ещё не выполнено",
     estimate_position_unsupported_by_project:
       "Сметная позиция не подтверждена проектным источником",
     incompatible_units: "Единицы измерения требуют проверки",

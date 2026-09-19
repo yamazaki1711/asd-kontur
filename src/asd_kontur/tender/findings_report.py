@@ -23,6 +23,9 @@ _RUSSIAN_TITLES = {
     "project_work_missing_in_estimate": "Проектная работа требует сопоставления со сметой",
     "quantity_mismatch": "Требуется сверка объёма по источникам",
     "project_material_missing_in_estimate": "Материал требует сопоставления со сметой",
+    "estimate_material_comparison_input_unavailable": (
+        "Сопоставление материалов со сметой ещё не выполнено"
+    ),
     "estimate_position_unsupported_by_project": "Сметная позиция не подтверждена проектом",
     "incompatible_units": "Единицы измерения требуют проверки",
     "ambiguous_source_match": "Связь исходных сведений неоднозначна",

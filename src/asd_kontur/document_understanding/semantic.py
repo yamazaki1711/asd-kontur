@@ -422,6 +422,9 @@ def reconcile_sources(
             DocumentRole.CONSOLIDATED_ESTIMATE,
         }
     ]
+    project_works_by_name: dict[str, list[WorkTypeCandidate]] = defaultdict(list)
+    for work in project_works:
+        project_works_by_name[work.normalized_name].append(work)
     estimates_by_name: dict[str, list[EstimatePositionCandidate]] = defaultdict(list)
     for estimate in estimates:
         estimates_by_name[estimate.normalized_description].append(estimate)
@@ -433,6 +436,7 @@ def reconcile_sources(
         materials_by_work[item.work_candidate_id].append(item)
     defects: list[ReconciliationDefect] = []
     matched_estimates: set[UUID] = set()
+    ambiguous_estimates: set[UUID] = set()
     if project_works and not estimates:
         first = min(project_works, key=lambda item: str(item.candidate_id))
         defects.append(
@@ -448,33 +452,48 @@ def reconcile_sources(
             )
         )
         return tuple(defects)
-    for work in project_works:
-        matched = estimates_by_name.get(work.normalized_name, [])
+    for normalized_name, works_with_name in sorted(project_works_by_name.items()):
+        matched = estimates_by_name.get(normalized_name, [])
         if not matched:
-            defects.append(
-                _defect(
-                    ReconciliationDefectKind.PROJECT_WORK_MISSING_IN_ESTIMATE,
-                    str(work.candidate_id),
-                    None,
-                    (work.locator,),
-                    {"work": work.raw_name},
+            for work in works_with_name:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.PROJECT_WORK_MISSING_IN_ESTIMATE,
+                        str(work.candidate_id),
+                        None,
+                        (work.locator,),
+                        {"work": work.raw_name},
+                    )
                 )
-            )
             continue
-        if len(matched) > 1:
-            defects.append(
-                _defect(
-                    ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
-                    str(work.candidate_id),
-                    None,
-                    (work.locator, *(item.locator for item in matched)),
-                    {
-                        "code": "multiple_estimate_positions_with_same_normalized_description",
-                        "work": work.raw_name,
-                    },
+
+        # A label is not an identity.  A one-to-one normalized-name match is
+        # usable only when each side has exactly one observation.  In
+        # particular, two same-named works in different local scopes must not
+        # both inherit the quantity or material basis of one estimate row.
+        if len(works_with_name) != 1 or len(matched) != 1:
+            ambiguous_estimates.update(item.candidate_id for item in matched)
+            code = (
+                "multiple_project_work_observations_with_same_normalized_name"
+                if len(works_with_name) != 1
+                else "multiple_estimate_positions_with_same_normalized_description"
+            )
+            for work in works_with_name:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                        str(work.candidate_id),
+                        str(matched[0].candidate_id) if len(matched) == 1 else None,
+                        (
+                            *(item.locator for item in works_with_name),
+                            *(item.locator for item in matched),
+                        ),
+                        {"code": code, "work": work.raw_name},
+                    )
                 )
-            )
             continue
+
+        work = works_with_name[0]
         estimate = matched[0]
         matched_estimates.add(estimate.candidate_id)
         work_quantities = quantities_by_work.get(work.candidate_id, [])
@@ -524,17 +543,27 @@ def reconcile_sources(
                     )
                 )
         for material in materials_by_work.get(work.candidate_id, []):
+            # Estimate positions retain only their work/quantity/unit evidence.
+            # Until the pipeline persists estimate resource/material rows, the
+            # comparison cannot substantiate that a project material is absent.
             defects.append(
                 _defect(
-                    ReconciliationDefectKind.PROJECT_MATERIAL_MISSING_IN_ESTIMATE,
+                    ReconciliationDefectKind.ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE,
                     str(material.candidate_id),
                     str(estimate.candidate_id),
                     (material.locator, estimate.locator),
-                    {"material": material.raw_name},
+                    {
+                        "material": material.raw_name,
+                        "missing_input": "parsed_estimate_material_or_resource_positions",
+                        "consequence": "project_material_scope_not_evaluated_against_estimate",
+                    },
                 )
             )
     for estimate in estimates:
-        if estimate.candidate_id not in matched_estimates:
+        if (
+            estimate.candidate_id not in matched_estimates
+            and estimate.candidate_id not in ambiguous_estimates
+        ):
             defects.append(
                 _defect(
                     ReconciliationDefectKind.ESTIMATE_POSITION_UNSUPPORTED_BY_PROJECT,

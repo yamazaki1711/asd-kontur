@@ -84,6 +84,9 @@ class ReconciliationDefectKind(StrEnum):
     PROJECT_MATERIAL_MISSING_IN_ESTIMATE = "project_material_missing_in_estimate"
     ESTIMATE_POSITION_UNSUPPORTED_BY_PROJECT = "estimate_position_unsupported_by_project"
     INCOMPATIBLE_UNITS = "incompatible_units"
+    ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE = (
+        "estimate_material_comparison_input_unavailable"
+    )
     AMBIGUOUS_SOURCE_MATCH = "ambiguous_source_match"
     DRAWING_INTELLIGENCE_REQUIRED = "drawing_intelligence_required"
     NORMATIVE_AUTHORITY_UNAVAILABLE = "normative_authority_unavailable"

@@ -22,11 +22,15 @@ from asd_kontur.document_understanding import ocr
 from asd_kontur.document_understanding.models import (
     CandidateDecision,
     DocumentRole,
+    EstimatePositionCandidate,
     ExactLocator,
     LayoutElement,
+    MaterialCandidate,
     OcrRoute,
     PageHealthKind,
+    QuantityCandidate,
     ReconciliationDefectKind,
+    WorkTypeCandidate,
 )
 from asd_kontur.document_understanding.native import (
     NativeExtractionFailure,
@@ -67,6 +71,18 @@ def _extract_csv(value: str):
         document_id=DOCUMENT_ID,
         document_version=1,
         source_version_id=SOURCE_VERSION_ID,
+    )
+
+
+def _locator(*, page_number: int) -> ExactLocator:
+    return ExactLocator(
+        SOURCE_VERSION_ID,
+        deterministic_uuid(f"test-locator:{page_number}"),
+        DOCUMENT_ID,
+        1,
+        page_number,
+        (0.0, 0.0, 1.0, 1.0),
+        "sha256:" + "e" * 64,
     )
 
 
@@ -237,6 +253,110 @@ def test_reconciliation_does_not_claim_each_project_work_is_missing_without_esti
     assert defects[0].kind is ReconciliationDefectKind.ESTIMATE_COMPARISON_INPUT_UNAVAILABLE
     assert (
         defects[0].parameters["missing_input"] == "parsed_estimate_or_bill_of_quantities_positions"
+    )
+
+
+def test_reconciliation_requires_unique_work_and_estimate_identity_before_matching() -> None:
+    locator = _locator(page_number=1)
+    estimate_locator = _locator(page_number=2)
+    works = (
+        WorkTypeCandidate(
+            deterministic_uuid("work:los"),
+            "Устройство котлована",
+            "устройство котлована",
+            "facility:los-1",
+            locator,
+            DocumentRole.PROJECT_DOCUMENTATION,
+        ),
+        WorkTypeCandidate(
+            deterministic_uuid("work:kns"),
+            "Устройство котлована",
+            "устройство котлована",
+            "facility:kns-1",
+            _locator(page_number=3),
+            DocumentRole.PROJECT_DOCUMENTATION,
+        ),
+    )
+    estimate = EstimatePositionCandidate(
+        deterministic_uuid("estimate:pit"),
+        "1",
+        "устройство котлована",
+        "12",
+        Decimal("12"),
+        "м3",
+        estimate_locator,
+    )
+
+    defects = reconcile_sources(works, (), (), (estimate,))
+
+    assert [item.kind for item in defects] == [
+        ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+        ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+    ]
+    assert all(
+        item.parameters["code"] == "multiple_project_work_observations_with_same_normalized_name"
+        for item in defects
+    )
+    assert all(estimate.candidate_id.hex not in item.subject_identity for item in defects)
+
+
+def test_reconciliation_does_not_claim_material_absent_without_estimate_resource_evidence() -> None:
+    work = WorkTypeCandidate(
+        deterministic_uuid("work:concrete"),
+        "Устройство плиты",
+        "устройство плиты",
+        "facility:los-1",
+        _locator(page_number=1),
+        DocumentRole.PROJECT_DOCUMENTATION,
+    )
+    quantity = QuantityCandidate(
+        deterministic_uuid("quantity:concrete"),
+        work.candidate_id,
+        "12",
+        Decimal("12"),
+        "м3",
+        Decimal("12"),
+        "m3",
+        "unit-aliases@1",
+        work.scope_key,
+        _locator(page_number=1),
+        CandidateDecision.VERIFIED,
+    )
+    material = MaterialCandidate(
+        deterministic_uuid("material:concrete"),
+        work.candidate_id,
+        "Бетон В25",
+        "бетон в25",
+        "12",
+        Decimal("12"),
+        "м3",
+        "m3",
+        _locator(page_number=1),
+        CandidateDecision.CANDIDATE,
+    )
+    estimate = EstimatePositionCandidate(
+        deterministic_uuid("estimate:concrete"),
+        "1",
+        "устройство плиты",
+        "13",
+        Decimal("13"),
+        "м3",
+        _locator(page_number=2),
+    )
+
+    defects = reconcile_sources((work,), (quantity,), (material,), (estimate,))
+
+    assert {item.kind for item in defects} == {
+        ReconciliationDefectKind.QUANTITY_MISMATCH,
+        ReconciliationDefectKind.ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE,
+    }
+    material_gap = next(
+        item
+        for item in defects
+        if item.kind is ReconciliationDefectKind.ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE
+    )
+    assert (
+        material_gap.parameters["missing_input"] == "parsed_estimate_material_or_resource_positions"
     )
 
 

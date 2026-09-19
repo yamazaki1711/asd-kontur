@@ -77,6 +77,19 @@ The two initial increments are implemented on feature releases `98b7363` and
   no project total is inferred.  Controlled exporter and disposable
   project-understanding API tests cover this behaviour without OZERO.
 
+* Tender reconciliation now performs an automatic quantity comparison only
+  for one exact normalized work observation and one estimate-position
+  observation.  Repeated work names in different scopes or repeated estimate
+  positions remain an evidence-backed ambiguous match; neither side is
+  silently attached to the other or reported as unsupported.  Because the
+  current estimate input contract contains no material/resource positions, a
+  project material produces an explicit missing-comparison-input observation
+  rather than the unsupported conclusion that it is absent from the estimate.
+  Controlled fixtures cover same-named LOS/KNS work, a one-to-one quantity
+  delta, and a material row; OZERO is not used.  The next extension for an
+  actual material-omission comparison is a versioned estimate-resource input,
+  not a looser name match.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

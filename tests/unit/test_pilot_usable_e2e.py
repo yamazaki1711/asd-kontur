@@ -129,6 +129,31 @@ def test_tender_exposes_missing_contract_input_without_inventing_contract_review
     assert "Предоставить актуальную редакцию договора" in contract_item["recommended_action"]
 
 
+def test_tender_material_gap_does_not_claim_an_unparsed_estimate_omission() -> None:
+    project = _project()
+    project["defects"] = [
+        {
+            "defect_id": "material-comparison-input",
+            "version": 1,
+            "defect_kind": "estimate_material_comparison_input_unavailable",
+            "source_locator_ids": ["f8d343e5-d518-46d0-8d0b-b5a85aa5643e"],
+        }
+    ]
+
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+
+    item = next(entry for entry in result["items"] if entry["kind"] == "defect")
+    assert item["title"] == "Ресурсная часть сметы для сопоставления материалов не извлечена"
+    assert "не считать материал пропущенным" in item["recommended_action"]
+
+
 def test_tender_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
     project = _project()
     packages = project["work_packages"]

@@ -29,6 +29,11 @@ _PRESENTATION: dict[str, tuple[str, str, str]] = {
         "engineering comparison of project material and estimate position",
         "material scope or pricing clarification is required",
     ),
+    "estimate_material_comparison_input_unavailable": (
+        "comparison_not_performed",
+        "parsed estimate material or resource positions",
+        "project material scope cannot be evaluated against the estimate",
+    ),
     "estimate_position_unsupported_by_project": (
         "candidate_difference",
         "project source supporting the estimate position",
