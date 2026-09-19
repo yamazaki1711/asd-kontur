@@ -157,6 +157,18 @@ function workspaceRouteFromSlug(
     : `/workspaces/${workspaceId}${suffix}`;
 }
 
+function primaryModeOutputRoute(mode: ModeName, workspaceId: string) {
+  const suffix =
+    mode === "Support"
+      ? "/support-id"
+      : mode === "Audit"
+        ? "/audit-preflight"
+        : mode === "Restoration"
+          ? "/recovery-plan"
+          : "/project-understanding";
+  return workspaceRoute(mode, workspaceId, suffix);
+}
+
 function displayWorkspaceName(value: string) {
   return /synthetic/i.test(value) ? "Демонстрационный объект" : value;
 }
@@ -3044,9 +3056,15 @@ function ModePage() {
               {value.matrix_version_id ? (
                 <Link
                   className="button-link"
-                  to={workspaceRoute(normalized, workspaceId, "/result")}
+                  to={primaryModeOutputRoute(normalized, workspaceId)}
                 >
-                  Перейти к результату
+                  {normalized === "Tender"
+                    ? "Открыть анализ проекта"
+                    : normalized === "Support"
+                      ? "Открыть комплект ИД"
+                      : normalized === "Audit"
+                        ? "Открыть предварительную сверку"
+                        : "Открыть план восстановления"}
                 </Link>
               ) : (
                 <Link
