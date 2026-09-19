@@ -3866,6 +3866,12 @@ function ProjectUnderstandingPage() {
                   >
                     Скачать редактируемый график наблюдений
                   </a>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.docx`}
+                  >
+                    Скачать редактируемый Tender-отчёт
+                  </a>
                   {value.defects.length ? (
                     <TenderFindingList
                       defects={value.defects}

@@ -23,6 +23,7 @@ from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 
 from .config import SpineSettings
@@ -572,6 +573,34 @@ class ProductSpineService:
             len(data),
             digest,
             f"tender-findings-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_findings_report(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate report for the current Tender findings."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_findings_docx(
+            view.get("defects", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            len(data),
+            digest,
+            f"tender-findings-{workspace_id}.docx",
             0,
             len(data),
             (data,),

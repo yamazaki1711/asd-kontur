@@ -82,14 +82,7 @@ def render_tender_findings_csv(
     gap_value = ";".join(sorted(str(item) for item in coverage_gaps))
     for defect in sorted(defects, key=lambda item: (str(item.get("defect_id", "")), str(item))):
         kind = str(defect.get("defect_kind", "unknown"))
-        state, required_input, consequence = _PRESENTATION.get(
-            kind,
-            (
-                "candidate_requires_engineering_review",
-                "engineering review of the exact source evidence",
-                "the observation is not a confirmed Tender conclusion",
-            ),
-        )
+        state, required_input, consequence = finding_presentation(kind)
         parameters = defect.get("parameters")
         if isinstance(parameters, Mapping):
             required_input = str(parameters.get("missing_input") or required_input)
@@ -108,7 +101,7 @@ def render_tender_findings_csv(
                 "required_input": required_input,
                 "practical_consequence": consequence,
                 "source_references": ";".join(
-                    _source_reference(locator_id, resolved_evidence.get(locator_id))
+                    source_reference(locator_id, resolved_evidence.get(locator_id))
                     for locator_id in locator_ids
                 ),
                 "source_locator_ids": ";".join(locator_ids),
@@ -120,7 +113,20 @@ def render_tender_findings_csv(
     return ("\ufeff" + output.getvalue()).encode("utf-8")
 
 
-def _source_reference(locator_id: str, evidence: Mapping[str, Any] | None) -> str:
+def finding_presentation(kind: str) -> tuple[str, str, str]:
+    """Return a stable candidate-state explanation for a finding kind."""
+
+    return _PRESENTATION.get(
+        kind,
+        (
+            "candidate_requires_engineering_review",
+            "engineering review of the exact source evidence",
+            "the observation is not a confirmed Tender conclusion",
+        ),
+    )
+
+
+def source_reference(locator_id: str, evidence: Mapping[str, Any] | None) -> str:
     """Provide a human-readable evidence pointer without replacing its identity.
 
     CSV consumers need a document/revision/page reference.  The stable locator

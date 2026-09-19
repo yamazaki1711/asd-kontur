@@ -200,6 +200,17 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert tender_schedule.headers["content-type"] == "text/csv; charset=utf-8"
         assert tender_schedule.headers["content-disposition"].startswith("attachment;")
         assert "source_references" in tender_schedule.content.decode("utf-8-sig")
+        tender_report = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.docx"
+        )
+        assert tender_report.status_code == 200, tender_report.text
+        assert (
+            tender_report.headers["content-type"]
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(tender_report.content)) as report:
+            assert "word/document.xml" in report.namelist()
         object_locator = view["project_definition"]["definition"]["fields"]["object_name"][
             "source_locator_id"
         ]
@@ -561,9 +572,22 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert audit_review.status_code == 201, audit_review.text
         assert audit_review.json()["reviewed_item_count"] == 1
 
+        for kind, output_format in (
+            ("disagreement_protocol", "docx"),
+            ("contract_changes", "pdf"),
+        ):
+            blocked_contract_export = client.post(
+                f"/api/v1/workspaces/{workspace_id}/modes/Tender/exports",
+                json={"export_kind": kind, "output_format": output_format},
+                headers=csrf,
+            )
+            assert blocked_contract_export.status_code == 409, blocked_contract_export.text
+            assert (
+                blocked_contract_export.json()["error"]["code"]
+                == "pilot_contract_analysis_required"
+            )
+
         export_cases = (
-            ("Tender", "disagreement_protocol", "docx"),
-            ("Tender", "contract_changes", "pdf"),
             ("Support", "requirement_matrix", "pdf"),
             ("Support", "id_package", "zip"),
             ("Support", "register", "docx"),

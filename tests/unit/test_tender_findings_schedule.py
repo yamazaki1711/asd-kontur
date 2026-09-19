@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import csv
+import io
+import zipfile
 from io import StringIO
 from typing import cast
 from uuid import UUID
 
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.services import ProductSpineService
+from asd_kontur.support.generation import validate_docx
+from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 
 
@@ -72,3 +76,34 @@ def test_application_service_returns_editable_schedule_from_scoped_project_view(
     assert result.safe_display_name == f"tender-findings-{expected_workspace_id}.csv"
     assert result.media_type == "text/csv; charset=utf-8"
     assert b"coverage_gaps" in b"".join(result.chunks)
+
+
+def test_report_preserves_candidate_boundary_and_source_references() -> None:
+    content = render_tender_findings_docx(
+        (
+            {
+                "defect_id": "finding-1",
+                "defect_kind": "estimate_comparison_input_unavailable",
+                "subject_identity": "project_estimate_comparison",
+                "source_locator_ids": ["locator-1"],
+                "parameters": {"missing_input": "estimate positions"},
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+        evidence_index={
+            "locator-1": {
+                "safe_display_name": "Structural plan.pdf",
+                "document_version": 3,
+                "locator_value": "page:17",
+            }
+        },
+    )
+
+    validation = validate_docx(content, required_fields=())
+    assert validation.valid
+    with zipfile.ZipFile(io.BytesIO(content)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Предварительный Tender-отчёт" in xml
+    assert "Structural plan.pdf, version 3, page:17 (locator-1)" in xml
+    assert "estimate positions" in xml
