@@ -24,6 +24,11 @@ and the current [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v1.m
   NTD Authority still requires an exact official SourceVersion.
 - Work on one active delivery slice. Every PASS states an exact denominator and
   evidence. `ProductReady=false` until the formal terminal condition.
+- Treat any real workspace, including OZERO, as a validation corpus rather
+  than the product boundary: implement reusable four-mode capabilities against
+  controlled inputs first, then state precisely what a selected real-document
+  check proves. A blocked corpus job never blocks independently testable
+  product work.
 - Use mac_asd through **selective engineering reuse**: preserve proven best
   ideas, algorithms, assets and tests; improve and integrate them into the
   modern architecture. Mechanical copy-paste or automatic adoption of its

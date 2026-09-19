@@ -273,6 +273,16 @@ def test_support_production_package_generation_and_workspace_isolation(
         api_view = client.get(f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production")
         assert api_view.status_code == 200
         assert api_view.json()["package"]["version"] == 2
+        audit_preflight = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight"
+        )
+        assert audit_preflight.status_code == 200, audit_preflight.text
+        preflight = audit_preflight.json()
+        assert preflight["assessment_kind"] == "expected_vs_package_preflight"
+        assert preflight["status"] == "partial"
+        assert preflight["package"]["version"] == 2
+        assert all(item["preflight_state"] != "satisfied" for item in preflight["items"])
+        assert any(item["preflight_state"] == "generated_candidate" for item in preflight["items"])
         package_export = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
         )

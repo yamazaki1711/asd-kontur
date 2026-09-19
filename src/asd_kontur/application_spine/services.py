@@ -10,6 +10,7 @@ from uuid import UUID
 
 import sqlalchemy as sa
 
+from asd_kontur.audit.package_preflight import build_expected_actual_preflight
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
 from asd_kontur.pilot import (
@@ -647,6 +648,26 @@ class ProductSpineService:
     ) -> dict[str, Any]:
         return self._support_production.view(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def audit_expected_actual_preflight(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Expose the package-composition preflight without impersonating Audit.
+
+        Canonical Audit records have their own service role and immutable
+        lifecycle.  This workspace-owner read model is intentionally limited to
+        the same matrix and package data the owner can already inspect.
+        """
+
+        support = self.support_production_view(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return build_expected_actual_preflight(
+            support.get("requirements", ()),
+            matrix=support.get("matrix"),
+            package=support.get("package"),
+            memberships=support.get("memberships", ()),
         )
 
     def form_support_id_package(

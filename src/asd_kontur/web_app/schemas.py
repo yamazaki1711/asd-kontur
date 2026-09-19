@@ -417,6 +417,17 @@ class SupportProductionView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class AuditExpectedActualPreflightView(ApiModel):
+    assessment_kind: Literal["expected_vs_package_preflight"]
+    status: Literal["not_started", "partial"]
+    matrix: dict[str, Any] | None
+    package: dict[str, Any] | None
+    items: list[dict[str, Any]]
+    counts: dict[str, int]
+    gaps: list[str]
+    authority_layers: dict[str, str]
+
+
 class FormIdPackageRequest(ApiModel):
     work_package_id: UUID
 

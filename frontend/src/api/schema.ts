@@ -382,6 +382,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Expected Actual Preflight */
+        get: operations["audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents": {
         parameters: {
             query?: never;
@@ -1057,6 +1074,41 @@ export interface components {
              * Format: uuid
              */
             turn_id: string;
+        };
+        /** AuditExpectedActualPreflightView */
+        AuditExpectedActualPreflightView: {
+            /**
+             * Assessment Kind
+             * @constant
+             */
+            assessment_kind: "expected_vs_package_preflight";
+            /** Authority Layers */
+            authority_layers: {
+                [key: string]: string;
+            };
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Gaps */
+            gaps: string[];
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Matrix */
+            matrix: {
+                [key: string]: unknown;
+            } | null;
+            /** Package */
+            package: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_started" | "partial";
         };
         /** Body_upload_documents_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_documents_api_v1_workspaces__workspace_id__documents_post: {
@@ -2992,6 +3044,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExpectedActualPreflightView"];
                 };
             };
             /** @description Validation Error */

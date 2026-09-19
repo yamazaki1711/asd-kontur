@@ -31,6 +31,18 @@ type Job = components["schemas"]["JobView"];
 type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
 type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
+type AuditExpectedActualPreflight =
+  components["schemas"]["AuditExpectedActualPreflightView"];
+type AuditPreflightItem = {
+  item_key: string;
+  work_package_id: string;
+  document_type: string;
+  preflight_state: string;
+  membership_count: number;
+  membership_states: string[];
+  evidence_refs: string[];
+  gaps: string[];
+};
 type PilotResult = components["schemas"]["PilotResultView"];
 type AssistantConversation = components["schemas"]["AssistantConversationView"];
 type AssistantMessage = components["schemas"]["AssistantMessageView"];
@@ -191,6 +203,10 @@ export function App() {
           <Route
             path="/modes/:mode/workspaces/:workspaceId/support-id"
             element={<SupportProductionPage />}
+          />
+          <Route
+            path="/modes/:mode/workspaces/:workspaceId/audit-preflight"
+            element={<AuditExpectedActualPreflightPage />}
           />
           <Route
             path="/modes/:mode/workspaces/:workspaceId/result"
@@ -421,6 +437,12 @@ function ApplicationShell() {
             <NavItem
               to={`${workspaceBase}/support-id`}
               label="Исполнительная документация"
+            />
+          )}
+          {mode === "Audit" && (
+            <NavItem
+              to={`${workspaceBase}/audit-preflight`}
+              label="Предварительная сверка"
             />
           )}
           <NavItem to={`${workspaceBase}/evidence`} label="Источники" />
@@ -2293,6 +2315,131 @@ function SupportProductionPage() {
         )}
       </QueryState>
     </Page>
+  );
+}
+
+function AuditExpectedActualPreflightPage() {
+  const { workspaceId = "" } = useParams();
+  const preflight = useQuery({
+    queryKey: ["audit-expected-actual-preflight", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  return (
+    <Page
+      title="Предварительная сверка комплекта"
+      lead="Сопоставление требований матрицы с составом сформированного комплекта. Это не заменяет независимый аудит документов."
+    >
+      <QueryState query={preflight}>
+        {(value) => <AuditExpectedActualPreflightBody value={value} />}
+      </QueryState>
+    </Page>
+  );
+}
+
+function AuditExpectedActualPreflightBody({
+  value,
+}: {
+  value: AuditExpectedActualPreflight;
+}) {
+  const counts = value.counts;
+  const items = value.items as unknown as AuditPreflightItem[];
+  return (
+    <>
+      <InfoNotice>
+        Здесь показан состав подготовленного комплекта относительно версии
+        матрицы требований. Наличие кандидата или финализированного документа не
+        означает, что его содержание, подписи и приложения прошли независимый
+        аудит.
+      </InfoNotice>
+      <section
+        className="metrics"
+        aria-label="Состояние предварительной сверки"
+      >
+        <Metric label="Требований" value={items.length} />
+        <Metric label="Отсутствует" value={counts.missing ?? 0} />
+        <Metric label="Подготовлено" value={counts.generated_candidate ?? 0} />
+        <Metric label="Ожидает аудита" value={counts.awaiting_audit ?? 0} />
+      </section>
+      <section className="panel">
+        <div className="entity-heading">
+          <h2>Требования и фактический состав</h2>
+          <StatusPill tone="warning">
+            {value.status === "not_started"
+              ? "Требования ещё не сформированы"
+              : "Предварительный результат"}
+          </StatusPill>
+        </div>
+        {items.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Работа / документ</th>
+                  <th>Состояние</th>
+                  <th>Комплект</th>
+                  <th>Основания и ограничения</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.item_key}>
+                    <td>
+                      <strong>
+                        {humanizeDocumentRole(item.document_type)}
+                      </strong>
+                      <small className="mono">{item.work_package_id}</small>
+                    </td>
+                    <td>
+                      <StatusPill
+                        tone={
+                          item.preflight_state === "missing"
+                            ? "warning"
+                            : "default"
+                        }
+                      >
+                        {humanizeAuditPreflightState(item.preflight_state)}
+                      </StatusPill>
+                    </td>
+                    <td>
+                      <small>Позиций: {item.membership_count}</small>
+                      {item.membership_states.length ? (
+                        <small>
+                          {item.membership_states
+                            .map(humanizeStatus)
+                            .join(", ")}
+                        </small>
+                      ) : (
+                        <small>Позиция не сформирована</small>
+                      )}
+                    </td>
+                    <td>
+                      <GapList gaps={[...item.evidence_refs, ...item.gaps]} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <InfoNotice>
+            Матрица требований ещё не содержит позиций для предварительной
+            сверки.
+          </InfoNotice>
+        )}
+      </section>
+      {value.gaps.length ? (
+        <section className="panel">
+          <h2>Что препятствует независимому аудиту</h2>
+          <GapList gaps={value.gaps} />
+        </section>
+      ) : null}
+    </>
   );
 }
 
@@ -5322,6 +5469,20 @@ function humanizeStatus(value: string) {
   return labels[value] ?? value.replaceAll("_", " ").toLowerCase();
 }
 
+function humanizeAuditPreflightState(value: string) {
+  const labels: Record<string, string> = {
+    not_formed: "Комплект не сформирован",
+    missing: "Отсутствует в комплекте",
+    generated_candidate: "Подготовлен кандидат",
+    awaiting_audit: "Ожидает независимого аудита",
+    unresolved_requirement: "Требование не определено",
+    blocked: "Заблокировано",
+    conflict: "Есть расхождение",
+    indeterminate: "Недостаточно доказательств",
+  };
+  return labels[value] ?? humanizeStatus(value);
+}
+
 function humanizeExportKind(value: string) {
   const labels: Record<string, string> = {
     disagreement_protocol: "Протокол разногласий",
@@ -5411,6 +5572,18 @@ function humanizeGap(value: string) {
     VERIFIED_NTD_SUBSET: "Не все нормативные основания проверены.",
     TEMPLATE_NOT_PRODUCTION_QUALIFIED:
       "Форма документа ещё не квалифицирована для выпуска.",
+    ID_PACKAGE_NOT_FORMED:
+      "Комплект исполнительной документации ещё не сформирован.",
+    REQUIRED_DOCUMENT_NOT_IN_PACKAGE:
+      "Требуемый документ ещё не включён в комплект.",
+    GENERATED_CANDIDATE_REQUIRES_AUDIT:
+      "Подготовленный кандидат должен пройти независимую проверку.",
+    FINALIZED_DOCUMENT_REQUIRES_AUDIT:
+      "Финализированный документ ещё не проверен независимым аудитом.",
+    REQUIREMENT_AUTHORITY_UNRESOLVED:
+      "Полномочие и основание требования ещё не установлены.",
+    PACKAGE_MEMBERSHIP_EVIDENCE_INDETERMINATE:
+      "Состав комплекта недостаточен для вывода о документе.",
     EXECUTIVE_SCHEME_OUTPUT_BLOCKED:
       "Исполнительная схема не может быть подготовлена без подтверждённой геометрии.",
     QUALITY_DOCUMENTS_MISSING: "Документы о качестве материалов отсутствуют.",

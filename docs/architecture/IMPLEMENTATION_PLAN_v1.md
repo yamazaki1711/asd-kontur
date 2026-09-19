@@ -33,8 +33,8 @@ The current product path is deliberately two connected increments:
 
 ### Product-led delivery evidence — 2026-09-19
 
-The two current increments are implemented on feature release `145c819` and
-the API/worker/assistant release `adfc495`:
+The two initial increments are implemented on feature releases `98b7363` and
+`fca2198` (the controlled API release set must still be verified per runtime):
 
 * Tender now consolidates work observations only within an explicit source and
   scope, retains conflicting quantities rather than summing them, exposes a
@@ -53,13 +53,23 @@ valid OOXML structure and a persisted application export. It does not claim
 official register-template authority, completed field records, or visual
 renderer qualification; OZERO is not required for this change.
 
-The next Tender increment adds an editable Russian report to the existing
-source-backed findings schedule. It must expose the current materialization
-state, coverage gaps, candidate finding, practical consequence, exact missing
-input, and source/revision/locator reference. Controlled project-model data
-tests its candidate boundary and document validity; an OZERO check is limited
-to rendering its already-persisted findings and never implies full-corpus
-Tender acceptance.
+Tender now also has the editable Russian report described above. It exposes the
+current materialization state, coverage gaps, candidate finding, practical
+consequence, exact missing input, and source/revision/locator reference.
+Controlled project-model data tests its candidate boundary and document
+validity; an OZERO check is limited to rendering its already-persisted findings
+and never implies full-corpus Tender acceptance.
+
+The next active reusable output is an **Audit expected-versus-package
+preflight**. It is a workspace-scoped application projection of exact
+requirement versions and ID-package memberships. It preserves repeated document
+names in distinct work scopes, reports missing/generated/finalized-but-not-yet-
+audited positions, and never promotes a package member to an independently
+audited conclusion. It is intentionally not the immutable canonical Audit
+ledger: that ledger remains owned by the separately scoped `asd_audit_service`
+role. Controlled support-package data verifies identity/version matching,
+candidate boundaries, API authorization, and UI rendering; OZERO is not needed
+for its acceptance.
 
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,

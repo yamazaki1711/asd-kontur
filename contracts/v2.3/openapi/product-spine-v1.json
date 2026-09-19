@@ -304,6 +304,89 @@
         "title": "AssistantTurnView",
         "type": "object"
       },
+      "AuditExpectedActualPreflightView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment_kind": {
+            "const": "expected_vs_package_preflight",
+            "title": "Assessment Kind",
+            "type": "string"
+          },
+          "authority_layers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Authority Layers",
+            "type": "object"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "matrix": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matrix"
+          },
+          "package": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package"
+          },
+          "status": {
+            "enum": [
+              "not_started",
+              "partial"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assessment_kind",
+          "status",
+          "matrix",
+          "package",
+          "items",
+          "counts",
+          "gaps",
+          "authority_layers"
+        ],
+        "title": "AuditExpectedActualPreflightView",
+        "type": "object"
+      },
       "Body_upload_documents_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "files": {
@@ -4431,6 +4514,49 @@
         "summary": "Assistant Turn Events",
         "tags": [
           "assistant"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight": {
+      "get": {
+        "operationId": "audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExpectedActualPreflightView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Expected Actual Preflight",
+        "tags": [
+          "audit-preflight"
         ]
       }
     },

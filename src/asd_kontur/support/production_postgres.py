@@ -1779,6 +1779,12 @@ def _matrix_requirements(matrix: Any) -> list[dict[str, Any]]:
             result.append(
                 {
                     **document,
+                    # The current matrix contract publishes immutable
+                    # requirement identities; Support package formation binds
+                    # each first materialization to document-requirement v1.
+                    # Expose that exact binding to downstream preflight rather
+                    # than letting it silently assume a version.
+                    "document_requirement_version": 1,
                     "work_package_id": str(row["work_package_id"]),
                     "requirement_state": (
                         "required"

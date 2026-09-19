@@ -69,6 +69,7 @@ from .schemas import (
     AssistantMessageView,
     AssistantQuestionRequest,
     AssistantTurnView,
+    AuditExpectedActualPreflightView,
     CapabilityStatusView,
     ConstructionConsultantAnswerView,
     ConstructionConsultantConversationCreate,
@@ -1025,6 +1026,22 @@ def _api_router() -> APIRouter:
             workspace_id=workspace_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/expected-actual-preflight",
+        response_model=AuditExpectedActualPreflightView,
+        tags=["audit-preflight"],
+    )
+    def audit_expected_actual_preflight(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AuditExpectedActualPreflightView:
+        value = _container(request).service.audit_expected_actual_preflight(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return AuditExpectedActualPreflightView(**jsonable_encoder(value))
 
     @router.post(
         "/workspaces/{workspace_id}/support/id-packages",
