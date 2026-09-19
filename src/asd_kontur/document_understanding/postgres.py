@@ -759,6 +759,12 @@ class IndustrialUnderstandingRepository:
             rows = (
                 session.execute(
                     sa.text(
+                        "WITH completed_sources AS (SELECT DISTINCT result.source_version_id FROM "
+                        "workspace.project_understanding_stage_results result JOIN workspace.durable_jobs job ON "
+                        "job.organization_id=result.organization_id AND job.workspace_id=result.workspace_id "
+                        "AND job.job_id=result.job_id WHERE result.organization_id=:o AND result.workspace_id=:w "
+                        "AND result.stage_kind='PROJECT_DEFINITION_EXTRACTION' AND result.terminal_status='complete' "
+                        "AND COALESCE(job.provenance->>'engineering_semantic_profile',result.profile_version)=:profile) "
                         "SELECT n.structure_node_id,n.node_kind,n.raw_name,n.normalized_name,"
                         "n.source_locator_id,locator.source_version_id,"
                         "COALESCE(locator.locator_value->>'page','') AS page,"
@@ -766,6 +772,7 @@ class IndustrialUnderstandingRepository:
                         "FROM workspace.project_structure_node_versions n "
                         "JOIN workspace.source_locators locator ON locator.organization_id=n.organization_id "
                         "AND locator.workspace_id=n.workspace_id AND locator.source_locator_id=n.source_locator_id "
+                        "JOIN completed_sources completed ON completed.source_version_id=locator.source_version_id "
                         "JOIN workspace.document_versions document ON document.organization_id=locator.organization_id "
                         "AND document.workspace_id=locator.workspace_id AND document.source_version_id=locator.source_version_id "
                         "LEFT JOIN LATERAL (SELECT left(element.normalized_text,700) AS normalized_text "

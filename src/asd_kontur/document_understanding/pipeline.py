@@ -455,14 +455,10 @@ class IndustrialDocumentUnderstandingPipeline:
         coverage = self._repository.workspace_engineering_semantic_coverage(
             claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
         )
-        if not coverage["complete"]:
-            result = self._repository.assemble_workspace(claimed)
-            result["structure_identity_reconciliation"] = "pending_semantic_coverage"
-            result["workspace_semantic_coverage"] = coverage
-            return result
         if self._qwen_semantic is None:
             result = self._repository.assemble_workspace(claimed)
             result["structure_identity_reconciliation"] = "qwen_runtime_unavailable"
+            result["workspace_semantic_coverage"] = coverage
             return result
         groups = self._repository.load_structure_identity_observation_groups(
             claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
@@ -474,7 +470,10 @@ class IndustrialDocumentUnderstandingPipeline:
             identity_count += len(candidates)
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
-        result["structure_identity_reconciliation"] = "completed"
+        result["structure_identity_reconciliation"] = (
+            "completed" if coverage["complete"] else "partial_completed_source_groups"
+        )
+        result["workspace_semantic_coverage"] = coverage
         return result
 
 
