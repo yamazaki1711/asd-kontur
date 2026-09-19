@@ -90,6 +90,15 @@ The two initial increments are implemented on feature releases `98b7363` and
   actual material-omission comparison is a versioned estimate-resource input,
   not a looser name match.
 
+* The existing material-candidate contract now also supports a bounded,
+  evidence-safe material comparison: an estimate resource is eligible only
+  when its parent estimate work has the same exact source locator and
+  normalized work description as the estimate position.  With such a resource
+  row, a missing project material is a candidate Tender difference; without
+  one, the output remains an explicit missing comparison input.  Controlled
+  fixtures prove both the exact-locator match and the no-resource boundary;
+  this has no OZERO dependency and requires no schema migration.
+
 * The supported ID-package export now makes its first, editable register
   readable in Russian: qualified document roles and member states use display
   labels while their stable role IDs remain in parentheses.  The adjacent CSV
