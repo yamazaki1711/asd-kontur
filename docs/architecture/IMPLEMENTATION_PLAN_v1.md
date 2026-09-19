@@ -160,6 +160,14 @@ the reusable Restoration recovery process, but **does not yet regenerate a
 document**: the next ID-production dependency is a separately declared,
 qualified form whose every material field is evidence-bound.
 
+The compatible controlled API/frontend release is pinned at
+`d0696f066848361b76e9a015b8f1709f0448edea` with database migration
+`0056_restoration_recovery_plan_versions`; its sanitized local receipt is
+`/Users/oleg/.asd-kontur/public-demo/launchd-backups/20260919T041301Z-d0696f0/release-receipt.json`.
+The document worker, assistant worker, and local Qwen runtime were deliberately
+not restarted. Live browser authentication and a qualified regeneration form
+remain unverified, so this is not a Restoration mode acceptance.
+
 Controlled checks cover repeated names in different scopes, contradictory
 quantities, missing estimate input, contract-input state, register ordering,
 generated/missing documents, persistence, authorization scope, and ZIP
