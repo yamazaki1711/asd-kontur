@@ -123,6 +123,36 @@ def _document_lines(result: dict[str, Any], title: str) -> list[str]:
         if source_references:
             lines.append("Источники вывода: " + "; ".join(source_references))
         lines.append("")
+    schedule = [dict(value) for value in result.get("tender_scope_schedule") or []]
+    if schedule:
+        lines.extend(["Состав работ и ресурсов из модели объекта"])
+        for ordinal, row in enumerate(schedule, start=1):
+            lines.append(
+                f"{ordinal}. {row.get('work_name') or 'Работа не определена'} "
+                f"(область: {row.get('scope') or 'не указана'})"
+            )
+            quantities = [
+                _quantity_text(dict(value))
+                for value in row.get("quantities") or []
+                if isinstance(value, dict)
+            ]
+            materials = [
+                _material_text(dict(value))
+                for value in row.get("materials") or []
+                if isinstance(value, dict)
+            ]
+            if quantities:
+                lines.append("Количество по наблюдениям: " + "; ".join(quantities))
+            if materials:
+                lines.append("Материалы по наблюдениям: " + "; ".join(materials))
+            sources = [str(value) for value in row.get("source_references") or []]
+            if sources:
+                lines.append("Источники: " + "; ".join(sources))
+            uncertainties = [str(value) for value in row.get("uncertainties") or []]
+            if uncertainties:
+                lines.append("Ограничения сопоставления: " + "; ".join(uncertainties))
+            lines.append("Статус: извлечённый кандидат; не является итоговым объёмом по объекту.")
+            lines.append("")
     lines.extend(["Использованные источники"])
     for source in result.get("source_manifest") or []:
         lines.append(
@@ -137,6 +167,25 @@ def _document_lines(result: dict[str, Any], title: str) -> list[str]:
     if notice:
         lines.extend(["", str(notice)])
     return lines
+
+
+def _quantity_text(value: dict[str, Any]) -> str:
+    raw_value = value.get("raw_value")
+    raw_unit = value.get("raw_unit")
+    return (
+        " ".join(str(part) for part in (raw_value, raw_unit) if part not in (None, ""))
+        or "значение не указано"
+    )
+
+
+def _material_text(value: dict[str, Any]) -> str:
+    name = value.get("raw_name") or "Материал не указан"
+    quantity = " ".join(
+        str(part)
+        for part in (value.get("raw_quantity"), value.get("raw_unit"))
+        if part not in (None, "")
+    )
+    return f"{name}: {quantity}" if quantity else str(name)
 
 
 def _render_pdf(title: str, lines: list[str]) -> bytes:

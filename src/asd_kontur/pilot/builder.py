@@ -36,6 +36,9 @@ def build_pilot_result(
     document_rows = [dict(item) for item in documents]
     source_manifest = _source_manifest(document_rows)
     items = _mode_items(mode, packages, defects, document_rows, support, evidence_index)
+    tender_scope_schedule = (
+        _tender_scope_schedule(packages, evidence_index) if mode is PilotMode.TENDER else []
+    )
     unresolved = sorted(
         {
             str(item["status"])
@@ -66,6 +69,7 @@ def build_pilot_result(
         "project_fields": fields,
         "summary": _summary(mode, items, packages, support),
         "items": items,
+        "tender_scope_schedule": tender_scope_schedule,
         "source_manifest": source_manifest,
         "unresolved_questions": unresolved,
         "available_exports": [item.value for item in MODE_EXPORTS[mode]],
@@ -90,6 +94,75 @@ def _source_manifest(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
         }
         for item in sorted(documents, key=lambda value: str(value["document_id"]))
     ]
+
+
+def _tender_scope_schedule(
+    packages: list[dict[str, Any]], evidence_index: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Expose source-scoped work observations without inventing a total.
+
+    The project-understanding layer intentionally keeps same-named work in
+    separate source/scope packages until facility reconciliation supports a
+    merge.  Tender needs that useful schedule for pricing and clarification,
+    but must not turn candidate observations into a project-wide quantity.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for item in packages:
+        package = dict(item.get("package") or {})
+        work_type = dict(package.get("work_type") or {})
+        locator_ids = tuple(str(value) for value in package.get("source_locator_ids") or ())
+        quantities = [
+            {
+                "raw_value": value.get("raw_value"),
+                "raw_unit": value.get("raw_unit"),
+                "normalized_value": value.get("normalized_value"),
+                "normalized_unit": value.get("normalized_unit"),
+                "source_locator_id": value.get("source_locator_id"),
+            }
+            for value in package.get("quantities") or ()
+            if isinstance(value, dict)
+        ]
+        materials = [
+            {
+                "raw_name": value.get("raw_name"),
+                "raw_quantity": value.get("raw_quantity"),
+                "raw_unit": value.get("raw_unit"),
+                "source_locator_id": value.get("source_locator_id"),
+            }
+            for value in package.get("materials") or ()
+            if isinstance(value, dict)
+        ]
+        rows.append(
+            {
+                "work_package_id": str(
+                    item.get("work_package_id") or package.get("work_package_id") or ""
+                ),
+                "work_name": str(
+                    work_type.get("raw") or work_type.get("normalized") or "Работа не определена"
+                ),
+                "normalized_work_name": str(work_type.get("normalized") or ""),
+                "scope": str(package.get("scope") or "scope_not_specified"),
+                "candidate_observation_count": int(package.get("candidate_observation_count") or 0),
+                "quantities": quantities,
+                "materials": materials,
+                "source_locator_ids": list(locator_ids),
+                "source_references": [
+                    _evidence_reference(locator_id, evidence_index.get(locator_id))
+                    for locator_id in locator_ids
+                ],
+                "uncertainties": sorted(str(value) for value in package.get("uncertainties") or ()),
+                "candidate_status": "candidate",
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["normalized_work_name"],
+            row["scope"],
+            row["work_package_id"],
+        ),
+    )
 
 
 def _mode_items(

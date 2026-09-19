@@ -36,7 +36,27 @@ def _project() -> dict[str, object]:
             {
                 "work_package_id": "2a6d844d-e79c-4511-9633-b1106a583ec8",
                 "package": {
-                    "work_type": {"normalized": "устройство монолитной плиты"},
+                    "work_type": {
+                        "raw": "Устройство монолитной плиты",
+                        "normalized": "устройство монолитной плиты",
+                    },
+                    "scope": "zone:A",
+                    "candidate_observation_count": 1,
+                    "quantities": [
+                        {
+                            "raw_value": "12,350",
+                            "raw_unit": "м³",
+                            "source_locator_id": locator,
+                        }
+                    ],
+                    "materials": [
+                        {
+                            "raw_name": "Бетон B25",
+                            "raw_quantity": "12,350",
+                            "raw_unit": "м³",
+                            "source_locator_id": locator,
+                        }
+                    ],
                     "source_locator_ids": [locator],
                 },
             }
@@ -107,6 +127,54 @@ def test_tender_exposes_missing_contract_input_without_inventing_contract_review
     assert "не сопоставлялись" in contract_item["description"]
     assert contract_item["source_locator_ids"] == []
     assert "Предоставить актуальную редакцию договора" in contract_item["recommended_action"]
+
+
+def test_tender_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
+    project = _project()
+    packages = project["work_packages"]
+    assert isinstance(packages, list)
+    second = {
+        **packages[0],
+        "work_package_id": "8a6d844d-e79c-4511-9633-b1106a583ec8",
+        "package": {
+            **packages[0]["package"],
+            "scope": "zone:B",
+            "quantities": [
+                {
+                    "raw_value": "8,000",
+                    "raw_unit": "м³",
+                    "source_locator_id": "second-locator",
+                }
+            ],
+            "source_locator_ids": ["second-locator"],
+            "uncertainties": ["SAME_WORK_NAME_DIFFERENT_SCOPE"],
+        },
+    }
+    packages.append(second)
+    project["evidence_index"] = {
+        **project["evidence_index"],
+        "second-locator": {
+            "safe_display_name": "ВОР второй зоны.xlsx",
+            "document_version": 2,
+            "locator_value": "sheet:Зона B!C7",
+        },
+    }
+
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+
+    schedule = result["tender_scope_schedule"]
+    assert len(schedule) == 2
+    assert [item["scope"] for item in schedule] == ["zone:A", "zone:B"]
+    assert [item["quantities"][0]["raw_value"] for item in schedule] == ["12,350", "8,000"]
+    assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in schedule[1]["uncertainties"]
+    assert schedule[1]["source_references"] == ["ВОР второй зоны.xlsx, версия 2, sheet:Зона B!C7"]
 
 
 def test_tender_does_not_treat_contract_filename_as_clause_analysis() -> None:

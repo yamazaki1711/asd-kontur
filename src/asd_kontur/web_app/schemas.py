@@ -282,6 +282,7 @@ class PilotResultView(ApiModel):
     project_fields: dict[str, Any]
     summary: dict[str, Any]
     items: list[dict[str, Any]]
+    tender_scope_schedule: list[dict[str, Any]] = Field(default_factory=list)
     source_manifest: list[dict[str, Any]]
     unresolved_questions: list[str]
     available_exports: list[str]

@@ -40,7 +40,11 @@ The two initial increments are implemented on feature releases `98b7363` and
   scope, retains conflicting quantities rather than summing them, exposes a
   source-backed editable findings schedule, and states when estimate or
   contract input is unavailable instead of emitting an unsupported omission or
-  generic contract-review conclusion.
+  generic contract-review conclusion. The Tender result now also publishes the
+  same source-scoped work/quantity/material schedule to its application view
+  and exports: same-named work in different scopes remains separate, values
+  are observations rather than a project total, and each row retains locator
+  references and reconciliation limits.
 * Support can export the exact formed package as a deterministic editable ZIP:
   its register is the first entry, available generated/finalized documents are
   included, and missing/blocked positions are an explicit separate schedule.

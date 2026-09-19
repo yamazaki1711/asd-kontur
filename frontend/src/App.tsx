@@ -3309,6 +3309,9 @@ function PilotResultBody({
       haystack.includes(resultSearch.trim().toLocaleLowerCase("ru-RU"))
     );
   });
+  const tenderScopeSchedule = Array.isArray(value.tender_scope_schedule)
+    ? (value.tender_scope_schedule as Record<string, unknown>[])
+    : [];
   return (
     <>
       <section className="metrics" aria-label="Сводка результата">
@@ -3349,6 +3352,114 @@ function PilotResultBody({
           </select>
         </label>
       </section>
+      {mode === "Tender" && tenderScopeSchedule.length > 0 && (
+        <section className="panel">
+          <div className="entity-heading">
+            <div>
+              <h2>Состав работ и ресурсов из модели объекта</h2>
+              <p>
+                Наблюдения сохраняют область и источники. Одинаковые названия из
+                разных областей не объединяются в общий объём.
+              </p>
+            </div>
+            <StatusPill tone="warning">Кандидаты</StatusPill>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Работа и область</th>
+                  <th>Количество по источнику</th>
+                  <th>Материалы</th>
+                  <th>Источники и ограничения</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenderScopeSchedule.map((row) => {
+                  const quantities = Array.isArray(row.quantities)
+                    ? (row.quantities as Record<string, unknown>[])
+                    : [];
+                  const materials = Array.isArray(row.materials)
+                    ? (row.materials as Record<string, unknown>[])
+                    : [];
+                  const locators = Array.isArray(row.source_locator_ids)
+                    ? row.source_locator_ids.map(String)
+                    : [];
+                  const uncertainties = Array.isArray(row.uncertainties)
+                    ? row.uncertainties.map(String)
+                    : [];
+                  return (
+                    <tr key={String(row.work_package_id)}>
+                      <td>
+                        <strong>{displayValue(row.work_name)}</strong>
+                        <br />
+                        <span>
+                          {displayValue(row.scope, "Область не указана")}
+                        </span>
+                      </td>
+                      <td>
+                        {quantities.length
+                          ? quantities
+                              .map((value) =>
+                                [value.raw_value, value.raw_unit]
+                                  .filter(
+                                    (item) =>
+                                      item !== null &&
+                                      item !== undefined &&
+                                      item !== "",
+                                  )
+                                  .map(String)
+                                  .join(" "),
+                              )
+                              .join("; ")
+                          : "Не указано в извлечённом наблюдении"}
+                      </td>
+                      <td>
+                        {materials.length
+                          ? materials
+                              .map((value) => {
+                                const amount = [
+                                  value.raw_quantity,
+                                  value.raw_unit,
+                                ]
+                                  .filter(
+                                    (item) =>
+                                      item !== null &&
+                                      item !== undefined &&
+                                      item !== "",
+                                  )
+                                  .map(String)
+                                  .join(" ");
+                                return `${displayValue(value.raw_name, "Материал не указан")}${amount ? ` — ${amount}` : ""}`;
+                              })
+                              .join("; ")
+                          : "Не указаны в извлечённом наблюдении"}
+                      </td>
+                      <td>
+                        {locators.map((locator, index) => (
+                          <Link
+                            key={locator}
+                            to={workspaceRouteFromSlug(
+                              modeSlug,
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            Исходный фрагмент {index + 1}
+                          </Link>
+                        ))}
+                        {uncertainties.length > 0 && (
+                          <GapList gaps={uncertainties.map(humanizeGap)} />
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <section className="panel">
         <div className="entity-heading">
           <div>

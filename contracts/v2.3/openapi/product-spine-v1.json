@@ -2384,6 +2384,14 @@
             "title": "Summary",
             "type": "object"
           },
+          "tender_scope_schedule": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Tender Scope Schedule",
+            "type": "array"
+          },
           "unresolved_questions": {
             "items": {
               "type": "string"

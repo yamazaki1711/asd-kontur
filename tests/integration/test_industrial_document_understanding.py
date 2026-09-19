@@ -555,6 +555,15 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
                 == "Актуальность редакций нормативных документов не проверена"
             )
 
+        tender_scope_schedule = pilot_results["Tender"]["tender_scope_schedule"]
+        assert isinstance(tender_scope_schedule, list)
+        assert len(tender_scope_schedule) == len(view["work_packages"])
+        assert all(item["candidate_status"] == "candidate" for item in tender_scope_schedule)
+        assert all(item["source_locator_ids"] for item in tender_scope_schedule)
+        assert all(item["source_references"] for item in tender_scope_schedule), (
+            "Every Tender scope observation must retain a readable evidence pointer"
+        )
+
         audit_items = pilot_results["Audit"]["items"]
         assert isinstance(audit_items, list)
         first_audit_item = audit_items[0]

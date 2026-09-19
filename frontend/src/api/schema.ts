@@ -1893,6 +1893,10 @@ export interface components {
             summary: {
                 [key: string]: unknown;
             };
+            /** Tender Scope Schedule */
+            tender_scope_schedule?: {
+                [key: string]: unknown;
+            }[];
             /** Unresolved Questions */
             unresolved_questions: string[];
             /** Version */
