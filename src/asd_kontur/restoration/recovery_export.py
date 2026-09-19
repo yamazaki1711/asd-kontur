@@ -25,6 +25,8 @@ def render_recovery_plan_csv(plan: Mapping[str, Any]) -> bytes:
             "action",
             "required_input",
             "evidence_refs",
+            "generated_candidate_ids",
+            "finalized_document_ids",
             "blocker_codes",
             "fabrication_prohibited",
             "plan_status",
@@ -51,6 +53,12 @@ def render_recovery_plan_csv(plan: Mapping[str, Any]) -> bytes:
                     "required_input": item.get("required_input", ""),
                     "evidence_refs": ";".join(
                         str(value) for value in item.get("evidence_refs") or ()
+                    ),
+                    "generated_candidate_ids": ";".join(
+                        str(value) for value in item.get("generated_candidate_ids") or ()
+                    ),
+                    "finalized_document_ids": ";".join(
+                        str(value) for value in item.get("finalized_document_ids") or ()
                     ),
                     "blocker_codes": ";".join(
                         str(value) for value in item.get("blocker_codes") or ()

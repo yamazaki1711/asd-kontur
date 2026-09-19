@@ -22,6 +22,7 @@ def test_recovery_plan_keeps_missing_evidence_blocked_and_candidates_reviewable(
                     "document_type": "support.aosr",
                     "preflight_state": "generated_candidate",
                     "evidence_refs": ["project:source-a"],
+                    "generated_candidate_ids": ["candidate-a"],
                     "gaps": ["GENERATED_CANDIDATE_REQUIRES_AUDIT"],
                 },
                 {
@@ -40,6 +41,7 @@ def test_recovery_plan_keeps_missing_evidence_blocked_and_candidates_reviewable(
 
     assert plan["status"] == "partial"
     assert plan["recoverable_actions"][0]["action"] == "review_candidate_against_available_evidence"
+    assert plan["recoverable_actions"][0]["generated_candidate_ids"] == ["candidate-a"]
     assert plan["recoverable_actions"][0]["fabrication_prohibited"] is True
     assert plan["blocked_actions"][0]["action"] == "collect_missing_source_evidence"
     assert "actual document" in plan["blocked_actions"][0]["required_input"]
@@ -55,6 +57,7 @@ def test_recovery_plan_export_keeps_blocked_records_and_fabrication_boundary() -
                 {
                     "item_key": "candidate-a",
                     "action": "review_candidate_against_available_evidence",
+                    "generated_candidate_ids": ["candidate-a"],
                     "fabrication_prohibited": True,
                 }
             ],
@@ -77,3 +80,4 @@ def test_recovery_plan_export_keeps_blocked_records_and_fabrication_boundary() -
     assert rows[1]["required_input"] == "actual test record"
     assert rows[1]["fabrication_prohibited"] == "true"
     assert rows[1]["global_blockers"] == "ID_PACKAGE_NOT_COMPLETE"
+    assert rows[0]["generated_candidate_ids"] == "candidate-a"

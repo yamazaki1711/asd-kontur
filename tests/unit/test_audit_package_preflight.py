@@ -30,6 +30,7 @@ def _membership(requirement_id: str, state: str, *, membership_id: str) -> dict[
         "ordinal": 2,
         "evidence_refs": [f"package:{membership_id}"],
         "blocker_codes": [],
+        "generated_candidate_id": "candidate-a" if state == "generated_candidate" else None,
     }
 
 
@@ -56,6 +57,7 @@ def test_preflight_keeps_identically_named_requirements_in_their_scopes() -> Non
         "missing",
     ]
     assert value["items"][0]["membership_ids"] == ["membership-a"]
+    assert value["items"][0]["generated_candidate_ids"] == ["candidate-a"]
     assert value["items"][1]["membership_ids"] == []
     assert "GENERATED_CANDIDATE_REQUIRES_AUDIT" in value["items"][0]["gaps"]
     assert "REQUIRED_DOCUMENT_NOT_IN_PACKAGE" in value["items"][1]["gaps"]

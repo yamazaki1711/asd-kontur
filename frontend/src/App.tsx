@@ -2593,10 +2593,12 @@ function RestorationRecoveryPlanBody({
       <RecoveryActionTable
         title="Действия с доступными основаниями"
         items={recoverable}
+        workspaceId={workspaceId}
       />
       <RecoveryActionTable
         title="Блокирующие отсутствующие сведения"
         items={blocked}
+        workspaceId={workspaceId}
       />
       {value.global_blockers.length ? (
         <section className="panel">
@@ -2611,9 +2613,11 @@ function RestorationRecoveryPlanBody({
 function RecoveryActionTable({
   title,
   items,
+  workspaceId,
 }: {
   title: string;
   items: Array<Record<string, unknown>>;
+  workspaceId: string;
 }) {
   return (
     <section className="panel">
@@ -2641,7 +2645,23 @@ function RecoveryActionTable({
                     </small>
                   </td>
                   <td>{humanizeRecoveryAction(String(item.action))}</td>
-                  <td>{String(item.required_input)}</td>
+                  <td>
+                    {String(item.required_input)}
+                    {Array.isArray(item.generated_candidate_ids) &&
+                    item.generated_candidate_ids.length > 0 ? (
+                      <small>
+                        <Link
+                          to={workspaceRouteFromSlug(
+                            "support",
+                            workspaceId,
+                            "/id-production",
+                          )}
+                        >
+                          Открыть подготовленный кандидат в комплекте ИД
+                        </Link>
+                      </small>
+                    ) : null}
+                  </td>
                   <td>
                     <GapList
                       gaps={[

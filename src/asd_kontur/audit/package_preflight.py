@@ -83,6 +83,16 @@ def build_expected_actual_preflight(
                 "membership_count": len(linked),
                 "membership_states": sorted({str(member.get("state", "")) for member in linked}),
                 "membership_ids": [str(member.get("membership_id", "")) for member in linked],
+                "generated_candidate_ids": sorted(
+                    str(member["generated_candidate_id"])
+                    for member in linked
+                    if member.get("generated_candidate_id") is not None
+                ),
+                "finalized_document_ids": sorted(
+                    str(member["finalized_document_id"])
+                    for member in linked
+                    if member.get("finalized_document_id") is not None
+                ),
                 "evidence_refs": _evidence_refs(requirement, linked),
                 "gaps": sorted(gaps),
                 "audit_boundary": "independent_audit_evidence_and_authority_required",

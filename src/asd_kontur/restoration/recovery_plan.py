@@ -30,6 +30,12 @@ def build_recovery_plan(preflight: Mapping[str, Any]) -> dict[str, Any]:
             "action": action[0],
             "required_input": action[1],
             "evidence_refs": [str(value) for value in item.get("evidence_refs", ())],
+            "generated_candidate_ids": [
+                str(value) for value in item.get("generated_candidate_ids", ())
+            ],
+            "finalized_document_ids": [
+                str(value) for value in item.get("finalized_document_ids", ())
+            ],
             "blocker_codes": [str(value) for value in item.get("gaps", ())],
             "fabrication_prohibited": True,
         }
