@@ -25,6 +25,7 @@ from asd_kontur.persistence.scope import WorkspaceContext
 
 from .evaluation import package_readiness_counts
 from .models import (
+    ActionRequest,
     AuditReport,
     AuditScope,
     CausalReadinessDelta,
@@ -198,6 +199,33 @@ class PostgresCorpusAuditStore:
             command_type=AuditCommandType.EVALUATE_PACKAGE_READINESS,
             persist=lambda session: self._insert_package_readiness(session, value),
         )
+
+    def issue_action_request(
+        self, context: WorkspaceContext, command: AuditCommand, value: ActionRequest
+    ) -> CommandOutcome:
+        """Persist one immutable, evidence-bound correction request.
+
+        The request is owned by the canonical Audit service and advances the
+        exact Audit process into ``blocked``.  A request never fabricates a
+        document or treats its own issue as proof that a correction occurred.
+        """
+
+        if command.command_type is not AuditCommandType.ISSUE_ACTION_REQUEST:
+            raise ValueError("Audit command must issue an action request")
+        scope = value.audit_scope
+        self._require_scope(context, scope.organization_id, scope.workspace_id)
+        if command.aggregate_id != scope.audit_process_id:
+            raise ValueError("Audit command aggregate does not match the action-request scope")
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                revision = self._require_exact_evaluating_scope(session, scope)
+                outcome = AuditStateMachine().apply(ProcessState.EVALUATING, revision, command)
+                if not outcome.accepted:
+                    return outcome
+                self._insert_action_request(session, value)
+                self._advance_header(session, context, command, outcome)
+                return outcome
 
     def finalize_report(
         self, context: WorkspaceContext, command: AuditCommand, value: AuditReport
@@ -927,6 +955,76 @@ class PostgresCorpusAuditStore:
         )
 
     @staticmethod
+    def _insert_action_request(session: Session, value: ActionRequest) -> None:
+        scope = value.audit_scope
+        existing = (
+            session.execute(
+                sa.text(
+                    "SELECT audit_process_id,action_code,addressee_identity_id,affected_object_ref,"
+                    "evidence_refs,deadline,blocking_impacts,initiator_identity_id,"
+                    "verifier_identity_id,executor_identity_id,state,supersedes_version FROM "
+                    "workspace.audit_action_request_versions WHERE organization_id=:o AND "
+                    "workspace_id=:w AND action_request_id=:request AND version=:version"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "request": value.action_request_id,
+                    "version": value.version,
+                },
+            )
+            .mappings()
+            .one_or_none()
+        )
+        expected = {
+            "audit_process_id": scope.audit_process_id,
+            "action_code": value.action_code,
+            "addressee_identity_id": value.addressee_identity_id,
+            "affected_object_ref": value.affected_object_ref,
+            "evidence_refs": list(value.evidence_refs),
+            "deadline": value.deadline,
+            "blocking_impacts": list(value.blocking_impacts),
+            "initiator_identity_id": value.initiator_identity_id,
+            "verifier_identity_id": value.verifier_identity_id,
+            "executor_identity_id": value.executor_identity_id,
+            "state": value.state.value,
+            "supersedes_version": value.supersedes_version,
+        }
+        if existing is not None:
+            if dict(existing) != expected:
+                raise ValueError("Action-request identity is already bound to different evidence")
+            return
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_action_request_versions "
+                "(organization_id,workspace_id,action_request_id,version,audit_process_id,action_code,"
+                "addressee_identity_id,affected_object_ref,evidence_refs,deadline,blocking_impacts,"
+                "initiator_identity_id,verifier_identity_id,executor_identity_id,state,"
+                "supersedes_version,created_at) VALUES "
+                "(:o,:w,:request,:version,:process,:action,:addressee,:affected,:evidence,:deadline,"
+                ":impacts,:initiator,:verifier,:executor,:state,:supersedes,CURRENT_TIMESTAMP)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "request": value.action_request_id,
+                "version": value.version,
+                "process": scope.audit_process_id,
+                "action": value.action_code,
+                "addressee": value.addressee_identity_id,
+                "affected": value.affected_object_ref,
+                "evidence": list(value.evidence_refs),
+                "deadline": value.deadline,
+                "impacts": list(value.blocking_impacts),
+                "initiator": value.initiator_identity_id,
+                "verifier": value.verifier_identity_id,
+                "executor": value.executor_identity_id,
+                "state": value.state.value,
+                "supersedes": value.supersedes_version,
+            },
+        )
+
+    @staticmethod
     def _insert_report(session: Session, value: AuditReport) -> None:
         """Persist a final report only when every evidence reference is exact.
 
@@ -1095,7 +1193,7 @@ class PostgresCorpusAuditStore:
         if {key: row[key] for key in expected} != expected:
             raise ValueError("Audit process is bound to a different immutable scope")
         if ProcessState(str(row["state"])) is not ProcessState.EVALUATING:
-            raise ValueError("Document delta requires an evaluating Audit process")
+            raise ValueError("Audit mutation requires an evaluating Audit process")
         return int(row["revision"])
 
     @staticmethod

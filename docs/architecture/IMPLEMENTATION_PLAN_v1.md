@@ -129,6 +129,15 @@ OZERO is not needed for its acceptance. The next Audit increment is the
 separately scoped canonical Audit-process service and its immutable evidence
 ledger; this preflight must never be relabelled as that service's conclusion.
 
+The canonical Audit service can now issue an immutable, evidence-bound
+correction request for one exact snapshot-bound Audit process. Issuing it
+transitions that process to `blocked`; it does not manufacture remediation or
+grant the Product Application role the Audit-writer role. Disposable
+PostgreSQL acceptance verifies request persistence, exact process revision,
+and the append-only write fence. The next canonical dependency is versioned
+request membership in a final Audit report, followed by a separately scoped
+owner-readable projection. OZERO is not needed for this acceptance.
+
 Canonical Audit persistence now has the first reusable lifecycle and ledger
 implementation on feature releases `4100b4d`, `009972f`, and `dcf452f`:
 an Audit process is pinned to one exact corpus snapshot and rule-set version;

@@ -13,6 +13,8 @@ import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
 
 from asd_kontur.audit import (
+    ActionRequest,
+    ActionRequestState,
     AuditCommand,
     AuditCommandType,
     AuditReport,
@@ -859,6 +861,105 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
                 DIGEST,
             ),
         )
+
+
+def test_audit_action_request_is_immutable_and_blocks_the_exact_process(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    tenant = create_tenant(postgres_environment)
+    activate(postgres_environment, tenant)
+    scope = _complete_snapshot_scope(postgres_environment, tenant)
+    context = audit_context(tenant)
+    store = PostgresCorpusAuditStore(postgres_environment.audit_engine)
+    store.start_audit_process(context, scope)
+    revision = 1
+    for command_type in (
+        AuditCommandType.START_COLLECTION,
+        AuditCommandType.RECONCILE_CORPUS,
+        AuditCommandType.PUBLISH_CORPUS_SNAPSHOT,
+        AuditCommandType.START_AUDIT,
+    ):
+        outcome = store.apply_command(
+            context,
+            AuditCommand(
+                uuid7(),
+                command_type,
+                scope.audit_process_id,
+                revision,
+                f"audit-process:{scope.audit_process_id}:transition:{revision}",
+                "service:synthetic-audit",
+                "audit.process.transition",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+        )
+        assert outcome.accepted
+        revision = outcome.revision
+
+    request = ActionRequest(
+        uuid7(),
+        1,
+        scope,
+        "collect_missing_material_certificate",
+        "role:site-quality",
+        "work-package:synthetic-a",
+        ("locator:synthetic-material",),
+        None,
+        ("ID_READINESS_UNPROVEN",),
+        "service:synthetic-audit",
+        "role:independent-auditor",
+        ActionRequestState.OPEN,
+    )
+    issued = store.issue_action_request(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.ISSUE_ACTION_REQUEST,
+            scope.audit_process_id,
+            revision,
+            f"audit-process:{scope.audit_process_id}:issue-action-request",
+            "service:synthetic-audit",
+            "audit.action.issue",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        request,
+    )
+    assert issued.accepted
+    assert issued.state is ProcessState.BLOCKED
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        row = connection.execute(
+            sa.text(
+                "SELECT action_code,evidence_refs,blocking_impacts,state FROM "
+                "workspace.audit_action_request_versions WHERE action_request_id=:request "
+                "AND version=1"
+            ),
+            {"request": request.action_request_id},
+        ).one()
+        process = connection.execute(
+            sa.text(
+                "SELECT state,revision FROM workspace.audit_processes WHERE audit_process_id=:process"
+            ),
+            {"process": scope.audit_process_id},
+        ).one()
+        with pytest.raises(DBAPIError):
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.audit_action_request_versions SET action_code='changed' "
+                    "WHERE action_request_id=:request AND version=1"
+                ),
+                {"request": request.action_request_id},
+            )
+    assert row == (
+        "collect_missing_material_certificate",
+        ["locator:synthetic-material"],
+        ["ID_READINESS_UNPROVEN"],
+        ActionRequestState.OPEN.value,
+    )
+    assert process == (ProcessState.BLOCKED.value, revision + 1)
 
 
 def test_storage_inventory_and_exact_reset_preserve_workspace_b_and_platform(
