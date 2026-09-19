@@ -22,7 +22,8 @@ from asd_kontur.corpus import (
 from asd_kontur.harness.models import digest_of
 from asd_kontur.persistence.scope import WorkspaceContext
 
-from .models import DeltaState, DocumentDelta
+from .models import AuditScope, DeltaState, DocumentDelta
+from .process import AuditCommand, AuditStateMachine, CommandOutcome, ProcessState
 
 
 class PostgresCorpusAuditStore:
@@ -30,6 +31,138 @@ class PostgresCorpusAuditStore:
 
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
+
+    def start_audit_process(self, context: WorkspaceContext, scope: AuditScope) -> None:
+        """Create the immutable-snapshot Audit aggregate in its own service scope.
+
+        The database enforces that ``mode_execution_id`` is an Audit execution
+        and that the precise corpus snapshot/rule-set version already exists.
+        This method deliberately does not create either prerequisite and cannot
+        substitute a latest version.
+        """
+
+        self._require_scope(context, scope.organization_id, scope.workspace_id)
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                inserted = session.scalar(
+                    sa.text(
+                        "INSERT INTO workspace.audit_processes "
+                        "(organization_id,workspace_id,audit_process_id,mode_execution_id,"
+                        "corpus_snapshot_id,corpus_snapshot_version,state,revision,"
+                        "current_fingerprint,rule_set_version_id,conflict_policy_version,"
+                        "authority_profile_version,contract_registry_version,correlation_id,"
+                        "created_at,updated_at) VALUES "
+                        "(:organization,:workspace,:process,:mode,:snapshot,:snapshot_version,"
+                        "'requested',1,:fingerprint,:ruleset,:conflict_policy,:authority_profile,"
+                        ":contract_registry,:correlation,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) "
+                        "ON CONFLICT (organization_id,workspace_id,audit_process_id) DO NOTHING "
+                        "RETURNING audit_process_id"
+                    ),
+                    {
+                        "organization": scope.organization_id,
+                        "workspace": scope.workspace_id,
+                        "process": scope.audit_process_id,
+                        "mode": scope.mode_execution_id,
+                        "snapshot": scope.corpus_snapshot_id,
+                        "snapshot_version": scope.corpus_snapshot_version,
+                        "fingerprint": digest_of(scope),
+                        "ruleset": scope.rule_set_version_id,
+                        "conflict_policy": scope.conflict_policy_version,
+                        "authority_profile": scope.authority_profile_version,
+                        "contract_registry": scope.contract_registry_version,
+                        "correlation": context.correlation_id,
+                    },
+                )
+                if inserted is not None:
+                    return
+                existing = (
+                    session.execute(
+                        sa.text(
+                            "SELECT mode_execution_id,corpus_snapshot_id,corpus_snapshot_version,"
+                            "rule_set_version_id,conflict_policy_version,authority_profile_version,"
+                            "contract_registry_version,current_fingerprint FROM workspace.audit_processes "
+                            "WHERE organization_id=:organization AND workspace_id=:workspace "
+                            "AND audit_process_id=:process FOR UPDATE"
+                        ),
+                        {
+                            "organization": scope.organization_id,
+                            "workspace": scope.workspace_id,
+                            "process": scope.audit_process_id,
+                        },
+                    )
+                    .mappings()
+                    .one()
+                )
+                expected = {
+                    "mode_execution_id": scope.mode_execution_id,
+                    "corpus_snapshot_id": scope.corpus_snapshot_id,
+                    "corpus_snapshot_version": scope.corpus_snapshot_version,
+                    "rule_set_version_id": scope.rule_set_version_id,
+                    "conflict_policy_version": scope.conflict_policy_version,
+                    "authority_profile_version": scope.authority_profile_version,
+                    "contract_registry_version": scope.contract_registry_version,
+                    "current_fingerprint": digest_of(scope),
+                }
+                if dict(existing) != expected:
+                    raise ValueError(
+                        "Audit process id is already bound to a different immutable scope"
+                    )
+
+    def apply_command(self, context: WorkspaceContext, command: AuditCommand) -> CommandOutcome:
+        """Advance the header only through the declared Audit state machine."""
+
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                row = (
+                    session.execute(
+                        sa.text(
+                            "SELECT state,revision FROM workspace.audit_processes WHERE "
+                            "organization_id=:organization AND workspace_id=:workspace "
+                            "AND audit_process_id=:process FOR UPDATE"
+                        ),
+                        {
+                            "organization": context.organization_id,
+                            "workspace": context.workspace_id,
+                            "process": command.aggregate_id,
+                        },
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                if row is None:
+                    raise ValueError("Audit process is not visible in the transaction scope")
+                state = ProcessState(str(row["state"]))
+                outcome = AuditStateMachine().apply(state, int(row["revision"]), command)
+                if not outcome.accepted:
+                    return outcome
+                session.execute(
+                    sa.select(
+                        sa.func.set_config("asd.audit_operation_id", str(command.command_id), True)
+                    )
+                ).one()
+                updated = session.scalar(
+                    sa.text(
+                        "UPDATE workspace.audit_processes SET state=:state,revision=:revision,"
+                        "current_fingerprint=:fingerprint,updated_at=CURRENT_TIMESTAMP WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace "
+                        "AND audit_process_id=:process AND revision=:expected_revision "
+                        "RETURNING revision"
+                    ),
+                    {
+                        "state": outcome.state.value,
+                        "revision": outcome.revision,
+                        "fingerprint": command.semantic_digest,
+                        "organization": context.organization_id,
+                        "workspace": context.workspace_id,
+                        "process": command.aggregate_id,
+                        "expected_revision": command.expected_revision,
+                    },
+                )
+                if updated != outcome.revision:
+                    raise RuntimeError("Audit process revision changed during the transaction")
+                return outcome
 
     def record_inspection(self, context: WorkspaceContext, value: PhysicalObjectInspection) -> None:
         self._require_scope(context, value.scope.organization_id, value.scope.workspace_id)
