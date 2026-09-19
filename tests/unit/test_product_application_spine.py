@@ -25,6 +25,7 @@ from asd_kontur.application_spine.postgres import (
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
+from asd_kontur.document_understanding.postgres import _identity_observation_group_key
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
@@ -75,6 +76,13 @@ def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures
         )
         == "complete"
     )
+
+
+def test_structure_identity_group_key_admits_typographic_aliases_without_merging() -> None:
+    key = _identity_observation_group_key
+    assert key("\u041a\u041d\u0421-4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421 4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421-4") != key("\u041a\u041d\u0421-5")
 
 
 def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:

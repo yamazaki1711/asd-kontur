@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, is_dataclass
@@ -49,6 +50,18 @@ from .native import NativeDocument
 from .ocr import OcrAdapterResult
 from .semantic import StructuredCandidates
 from .work_packages import consolidate_work_package_candidates
+
+
+def _identity_observation_group_key(normalized_name: str) -> str:
+    """Return a Qwen-comparison key without deciding entity identity.
+
+    Document conventions commonly vary only by spacing, punctuation or a
+    hyphen in the same facility label.  Those aliases need to reach the Qwen
+    reconciliation prompt together, but this key is never persisted as a
+    canonical name and never merges nodes on its own.
+    """
+
+    return re.sub(r"[^\w]+", "", normalized_name.casefold(), flags=re.UNICODE)
 
 
 class UnderstandingPersistenceError(RuntimeError):
@@ -774,9 +787,13 @@ class IndustrialUnderstandingRepository:
         grouped: dict[tuple[str, str], list[dict[str, object]]] = {}
         for row in rows:
             value = dict(row)
-            grouped.setdefault((str(value["node_kind"]), str(value["normalized_name"])), []).append(
-                value
-            )
+            grouped.setdefault(
+                (
+                    str(value["node_kind"]),
+                    _identity_observation_group_key(str(value["normalized_name"])),
+                ),
+                [],
+            ).append(value)
         result: list[tuple[dict[str, object], ...]] = []
         for values in grouped.values():
             if len({str(item["source_version_id"]) for item in values}) < 2:
