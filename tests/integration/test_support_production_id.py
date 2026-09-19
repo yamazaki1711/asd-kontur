@@ -225,9 +225,16 @@ def test_support_production_package_generation_and_workspace_isolation(
 
     worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
     interrupted = worker_repository.claim_next_job(
-        worker_identity="synthetic-interrupted-generation-worker", lease_seconds=5
+        worker_identity="synthetic-interrupted-generation-worker",
+        lease_seconds=5,
+        organization_id=tenant.organization_id,
+        workspace_id=tenant.workspace_id,
     )
-    assert interrupted is not None and str(interrupted.job_id) == started["job_id"]
+    assert interrupted is not None and str(interrupted.job_id) == started["job_id"], (
+        interrupted.job_id if interrupted else None,
+        interrupted.job_kind if interrupted else None,
+        started["job_id"],
+    )
     worker_repository.mark_job_running(
         interrupted, worker_identity="synthetic-interrupted-generation-worker"
     )
@@ -248,6 +255,8 @@ def test_support_production_package_generation_and_workspace_isolation(
         store,
         worker_identity="synthetic-support-production-worker",
         lease_seconds=30,
+        organization_id=tenant.organization_id,
+        workspace_id=tenant.workspace_id,
     )
     outcome = worker.run_once()
     assert outcome is not None and outcome.state.value == "succeeded"

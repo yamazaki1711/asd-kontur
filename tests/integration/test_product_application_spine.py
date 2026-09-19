@@ -107,11 +107,48 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         )
         assert upload.status_code == 202, upload.text
         assert len(upload.json()["accepted_document_ids"]) == 1
+        # A higher-priority job from another workspace must remain invisible to
+        # a worker configured with the requested workspace scope.  The durable
+        # claim function is SECURITY DEFINER, so this proves the explicit scope
+        # predicate rather than relying on ordinary RLS filtering.
+        with postgres_environment.owner_engine.begin() as connection:
+            owner = connection.scalar(
+                sa.text(
+                    "SELECT created_by_identity_id FROM workspace.workspaces "
+                    "WHERE workspace_id=:workspace"
+                ),
+                {"workspace": workspace_b["workspace_id"]},
+            )
+            foreign_manifest = {"synthetic": "foreign-workspace-job"}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,job_kind,input_manifest,input_digest,"
+                    "idempotency_key,state,priority,max_attempts,"
+                    "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,'PROJECT_DEFINITION_EXTRACTION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',999,1,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": workspace_b["organization_id"],
+                    "workspace": workspace_b["workspace_id"],
+                    "job": uuid4(),
+                    "manifest": json.dumps(foreign_manifest),
+                    "digest": semantic_digest(foreign_manifest),
+                    "key": "synthetic-foreign-workspace-job",
+                    "provenance": json.dumps({"contract": "synthetic"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
 
         worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
         interrupted = worker_repository.claim_next_job(
             worker_identity="synthetic-interrupted-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
         )
         assert interrupted is not None
         worker_repository.mark_job_running(
@@ -135,6 +172,8 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             ),
             worker_identity="synthetic-restarted-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
         )
         recovered = restarted_worker.run_once()
         assert recovered is not None
@@ -169,14 +208,18 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert duplicate.status_code == 202
         assert duplicate.json() == upload.json()
         jobs = client.get(f"/api/v1/workspaces/{workspace_a['workspace_id']}/jobs").json()
-        assert len(jobs) == 17
+        # The upload schedules the complete current industrial-understanding
+        # graph, including the work/quantity/material extraction stage.  Keep
+        # this explicit rather than treating the historical 17-job topology as
+        # a browser contract.
+        assert len(jobs) == 18
         succeeded_count = len(outcomes) - 1
         assert sum(value["state"] == "succeeded" for value in jobs) == succeeded_count
         assert sum(value["state"] == "failed" for value in jobs) == 1
-        # A terminal page-classification failure remains visible, but its
-        # descendants are now recovered from the accepted replacement lineage
-        # rather than leaving every dependent stage permanently blocked.
-        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 1
+        # The failed classification stage remains distinguishable from the
+        # independently queued downstream work; a page failure must not be
+        # reported as a completed project analysis.
+        assert sum(value["state"] == "reconciliation_required" for value in jobs) == 0
         failed_job = next(value for value in jobs if value["state"] == "failed")
         assert failed_job["typed_failure_code"] == outcomes[-1].outcome_code
         job_states = {value["job_kind"]: value["state"] for value in jobs}
@@ -394,6 +437,8 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
         running = worker_repository.claim_next_job(
             worker_identity="synthetic-cancellation-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
         )
         assert running is not None
         assert str(running.job_id) == second["job_ids"][0]
@@ -445,6 +490,8 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
             app.state.container.object_store,
             worker_identity="synthetic-retry-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
         )
         retry_outcome = worker.run_once()
         assert retry_outcome is not None
@@ -490,7 +537,11 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             headers=csrf,
         ).raise_for_status()
 
-        admission = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        scope = {
+            "organization_id": UUID(workspace["organization_id"]),
+            "workspace_id": UUID(workspace_id),
+        }
+        admission = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
         assert admission is not None
         repository.mark_job_running(admission, worker_identity=worker)
         repository.finish_job(
@@ -500,7 +551,7 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             result_manifest={"synthetic": True},
             worker_identity=worker,
         )
-        original_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        original_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
         assert original_hash is not None
         assert original_hash.job_kind.value == "DOCUMENT_HASH"
         repository.mark_job_running(original_hash, worker_identity=worker)
@@ -528,7 +579,7 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             workspace_id=UUID(workspace_id),
             job_id=original_hash.job_id,
         )
-        recovered_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        recovered_hash = repository.claim_next_job(worker_identity=worker, lease_seconds=5, **scope)
         assert recovered_hash is not None
         assert recovered_hash.job_id == retry.job_id
         repository.mark_job_running(recovered_hash, worker_identity=worker)
@@ -545,7 +596,9 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
         # scanning historical terminal jobs until the worker cannot claim work.
         assert repository.recover_dependency_terminal_failures() == 1
         assert repository.recover_dependency_terminal_failures() == 0
-        recovered_inventory = repository.claim_next_job(worker_identity=worker, lease_seconds=5)
+        recovered_inventory = repository.claim_next_job(
+            worker_identity=worker, lease_seconds=5, **scope
+        )
         assert recovered_inventory is not None
         assert recovered_inventory.job_kind.value == "PDF_INVENTORY"
         repository.mark_job_running(recovered_inventory, worker_identity=worker)
@@ -627,90 +680,95 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
                     },
                 )
             failed_job = uuid4()
-            replacement_job = uuid4()
             stale_lease_job = uuid4()
             shared = {"synthetic": "retry-lineage"}
-            for job_id, state, provenance in (
-                (failed_job, "queued", {"contract": "synthetic"}),
-                (
-                    replacement_job,
-                    "running",
-                    {"contract": "synthetic", "manual_retry_of": str(failed_job)},
-                ),
+            for job_id, priority, manifest in (
+                (failed_job, 99, shared),
+                (stale_lease_job, 98, {"synthetic": "expired-lease"}),
             ):
                 connection.execute(
                     sa.text(
                         "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
                         "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
                         "max_attempts,retry_policy_version,provenance,correlation_id,"
-                        "created_by_identity_id,started_at,lease_expires_at) VALUES "
+                        "created_by_identity_id) VALUES "
                         "(:organization,:workspace,:job,"
                         "'PROJECT_DEFINITION_EXTRACTION',CAST(:manifest AS jsonb),:digest,:key,"
-                        ":state,99,3,'synthetic',CAST(:provenance AS jsonb),:correlation,:owner,"
-                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP ELSE NULL END,"
-                        "CASE WHEN :state='running' THEN CURRENT_TIMESTAMP + interval '10 minutes' "
-                        "ELSE NULL END)"
+                        "'queued',:priority,3,'synthetic',CAST(:provenance AS jsonb),:correlation,"
+                        ":owner)"
                     ),
                     {
                         "organization": organization_id,
                         "workspace": workspace_id,
                         "job": job_id,
-                        "manifest": json.dumps(shared),
-                        "digest": semantic_digest(shared),
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
                         "key": f"synthetic-retry-{job_id}",
-                        "state": state,
-                        "provenance": json.dumps(provenance),
+                        "priority": priority,
+                        "provenance": json.dumps({"contract": "synthetic"}),
                         "correlation": uuid4(),
                         "owner": owner,
                     },
                 )
-            stale_manifest = {"synthetic": "expired-lease"}
+        worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        failed_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert failed_claim is not None
+        assert failed_claim.job_id == failed_job
+        worker_repository.mark_job_running(failed_claim, worker_identity="synthetic-retry-worker")
+        worker_repository.finish_job(
+            failed_claim,
+            terminal_state=JobState.FAILED,
+            outcome_code="synthetic_terminal_failure",
+            result_manifest={"semantic_effect": False},
+            worker_identity="synthetic-retry-worker",
+        )
+        application_repository = SpinePostgresRepository(postgres_environment.application_engine)
+        replacement = application_repository.manually_retry_job(
+            owner_identity_id=owner, workspace_id=workspace_id, job_id=failed_job
+        )
+        replacement_job = replacement.job_id
+        replacement_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert replacement_claim is not None
+        assert replacement_claim.job_id == replacement_job
+        worker_repository.mark_job_running(
+            replacement_claim, worker_identity="synthetic-retry-worker"
+        )
+        worker_repository.report_progress(
+            replacement_claim,
+            current=7,
+            total=10,
+            safe_message_code="engineering_semantic_batch_accepted",
+        )
+        stale_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-retry-worker",
+            lease_seconds=600,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        assert stale_claim is not None
+        assert stale_claim.job_id == stale_lease_job
+        worker_repository.mark_job_running(stale_claim, worker_identity="synthetic-retry-worker")
+        with postgres_environment.owner_engine.begin() as connection:
             connection.execute(
                 sa.text(
-                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
-                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
-                    "max_attempts,retry_policy_version,provenance,correlation_id,"
-                    "created_by_identity_id,started_at,lease_expires_at) VALUES "
-                    "(:organization,:workspace,:job,'PROJECT_DEFINITION_EXTRACTION',"
-                    "CAST(:manifest AS jsonb),:digest,:key,'running',98,3,'synthetic',"
-                    "CAST(:provenance AS jsonb),:correlation,:owner,CURRENT_TIMESTAMP,"
-                    "CURRENT_TIMESTAMP - interval '1 minute')"
+                    "UPDATE workspace.durable_jobs SET lease_expires_at=CURRENT_TIMESTAMP - "
+                    "interval '1 minute' WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_id=:job"
                 ),
                 {
                     "organization": organization_id,
                     "workspace": workspace_id,
                     "job": stale_lease_job,
-                    "manifest": json.dumps(stale_manifest),
-                    "digest": semantic_digest(stale_manifest),
-                    "key": f"synthetic-expired-{stale_lease_job}",
-                    "provenance": json.dumps({"contract": "synthetic"}),
-                    "correlation": uuid4(),
-                    "owner": owner,
-                },
-            )
-            connection.execute(
-                sa.text(
-                    "INSERT INTO workspace.job_progress_events "
-                    "(organization_id,workspace_id,job_id,event_sequence,event_type,progress_current,"
-                    "progress_total,safe_message_code,terminal,recorded_at,"
-                    "retention_until,event_digest) "
-                    "VALUES (:organization,:workspace,:job,1,"
-                    "'engineering.semantic_batch_progress',7,10,"
-                    "'engineering_semantic_batch_accepted',false,CURRENT_TIMESTAMP,"
-                    "CURRENT_TIMESTAMP + interval '1 day',:digest)"
-                ),
-                {
-                    "organization": organization_id,
-                    "workspace": workspace_id,
-                    "job": replacement_job,
-                    "digest": semantic_digest(
-                        {
-                            "job_id": replacement_job,
-                            "event_type": "engineering.semantic_batch_progress",
-                            "current": 7,
-                            "total": 10,
-                        }
-                    ),
                 },
             )
         response = client.get(f"/api/v1/workspaces/{workspace_id}/jobs?effective_only=true")
@@ -902,6 +960,8 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         claimed = repository.claim_next_job(
             worker_identity="semantic-recovery-test-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=workspace_id,
         )
         assert claimed is not None
         assert claimed.job_id == failed_semantic_job
@@ -1168,8 +1228,8 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
             row = (
                 connection.execute(
                     sa.text(
-                        "SELECT job_id,input_manifest,input_digest,attempt_count,lease_generation,"
-                        "cancellation_state FROM workspace.durable_jobs WHERE "
+                        "SELECT job_id,subject_document_id,input_manifest,input_digest,"
+                        "correlation_id,created_by_identity_id FROM workspace.durable_jobs WHERE "
                         "organization_id=:organization "
                         "AND workspace_id=:workspace AND job_kind='PROJECT_DEFINITION_EXTRACTION' "
                         "ORDER BY created_at,job_id LIMIT 1"
@@ -1182,20 +1242,52 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                 .mappings()
                 .one()
             )
+            semantic_job_id = uuid4()
+            semantic_provenance = {
+                "contract": "synthetic.incremental-semantic@1.0.0",
+                "engineering_semantic_profile": "qwen-engineering-extraction-v15",
+            }
             connection.execute(
                 sa.text(
-                    "UPDATE workspace.durable_jobs SET state='succeeded',"
-                    "provenance=jsonb_set(provenance,'{engineering_semantic_profile}',"
-                    "'\"qwen-engineering-extraction-v15\"'::jsonb) WHERE "
-                    "organization_id=:organization "
-                    "AND workspace_id=:workspace AND job_id=:job"
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_DEFINITION_EXTRACTION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',999,3,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:owner)"
                 ),
                 {
                     "organization": workspace["organization_id"],
                     "workspace": workspace["workspace_id"],
-                    "job": row["job_id"],
+                    "job": semantic_job_id,
+                    "document": row["subject_document_id"],
+                    "manifest": json.dumps(dict(row["input_manifest"])),
+                    "digest": str(row["input_digest"]),
+                    "key": f"synthetic-incremental-semantic-{semantic_job_id}",
+                    "provenance": json.dumps(semantic_provenance),
+                    "correlation": row["correlation_id"],
+                    "owner": row["created_by_identity_id"],
                 },
             )
+        worker_repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        claimed = worker_repository.claim_next_job(
+            worker_identity="synthetic-semantic-worker",
+            lease_seconds=600,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=workspace_id,
+        )
+        assert claimed is not None
+        assert claimed.job_id == semantic_job_id
+        worker_repository.mark_job_running(claimed, worker_identity="synthetic-semantic-worker")
+        worker_repository.finish_job(
+            claimed,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_semantic_accepted",
+            result_manifest={"semantic": "accepted"},
+            worker_identity="synthetic-semantic-worker",
+        )
+        with postgres_environment.owner_engine.begin() as connection:
             stage_output = {"semantic": "accepted"}
             connection.execute(
                 sa.text(
@@ -1211,7 +1303,7 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                     "organization": workspace["organization_id"],
                     "workspace": workspace["workspace_id"],
                     "result": uuid4(),
-                    "job": row["job_id"],
+                    "job": semantic_job_id,
                     "document": source["document_id"],
                     "version": source["version"],
                     "source": source["source_version_id"],
@@ -1220,17 +1312,6 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                     "digest": semantic_digest(stage_output),
                 },
             )
-        claimed = ClaimedJob(
-            UUID(workspace["organization_id"]),
-            workspace_id,
-            UUID(str(row["job_id"])),
-            JobKind.PROJECT_DEFINITION_EXTRACTION,
-            dict(row["input_manifest"]),
-            str(row["input_digest"]),
-            int(row["attempt_count"]),
-            int(row["lease_generation"]),
-            str(row["cancellation_state"]),
-        )
         repository = SpinePostgresRepository(postgres_environment.application_engine)
         first = repository.schedule_incremental_project_reconciliation(claimed)
         second = repository.schedule_incremental_project_reconciliation(claimed)
@@ -1254,7 +1335,7 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                 .one()
             )
         assert refresh["priority"] == 165
-        assert refresh["causation_id"] == row["job_id"]
+        assert refresh["causation_id"] == semantic_job_id
         assert refresh["contract"] == "project-understanding.incremental-reconciliation@1.0.0"
         with postgres_environment.owner_engine.connect() as connection:
             claim_definition = connection.scalar(

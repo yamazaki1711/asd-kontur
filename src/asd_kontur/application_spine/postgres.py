@@ -2121,8 +2121,8 @@ class SpinePostgresRepository:
                         "AND event.workspace_id=ranked.workspace_id AND event.job_id=ranked.job_id "
                         "ORDER BY event.event_sequence DESC LIMIT 1) progress ON true WHERE effective_rank=1 "
                         "ORDER BY CASE WHEN state IN ('running','leased') AND NOT lease_expired "
-                        "THEN 0 WHEN state IN ('queued','paused') THEN 1 WHEN state IN "
-                        "('running','leased') THEN 2 ELSE 3 END,created_at DESC,job_id DESC LIMIT :limit"
+                        "THEN 0 WHEN state IN ('running','leased') THEN 1 WHEN state IN "
+                        "('queued','paused') THEN 2 ELSE 3 END,created_at DESC,job_id DESC LIMIT :limit"
                     ),
                     {
                         "organization": organization_id,
