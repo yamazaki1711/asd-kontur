@@ -1,5 +1,16 @@
 # OZERO Comprehensive Tender Goal
 
+> **Superseded delivery priority — 2026-09-19:** this document remains the
+> durable evidence and acceptance contract for OZERO-specific Tender
+> validation. It no longer defines the programme's exclusive active delivery
+> slice. ASD-KONTUR is a reusable four-mode product; OZERO is one validation
+> corpus, not a prerequisite for independently testable Tender, Support, ID,
+> Audit or Restoration capabilities. The current product-led increments and
+> their independent acceptance are recorded in
+> `docs/architecture/IMPLEMENTATION_PLAN_v1.md`. Preserve every OZERO
+> acceptance requirement before claiming **comprehensive OZERO Tender**, but
+> do not delay reusable product work on full-corpus processing.
+
 ## Objective
 
 Deliver comprehensive, persistent, evidence-backed PD understanding and usable Tender analysis for

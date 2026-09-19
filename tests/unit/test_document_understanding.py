@@ -51,6 +51,7 @@ from asd_kontur.document_understanding.semantic import (
     extract_structured_candidates,
     parse_exact_decimal,
 )
+from asd_kontur.document_understanding.work_packages import consolidate_work_package_candidates
 from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -113,6 +114,108 @@ def test_content_not_filename_drives_role_and_unknown_is_explicit() -> None:
     assert len(classification.decisions) == 1
     assert classification.decisions[0].selected_roles == (DocumentRole.UNKNOWN,)
     assert classification.candidates[0].signal_codes == ("content:no_content_role_signal",)
+
+
+def test_work_package_consolidation_preserves_scope_and_does_not_sum_conflicts() -> None:
+    source_a = "20000000-0000-4000-8000-000000000001"
+    source_b = "20000000-0000-4000-8000-000000000002"
+    works = (
+        {
+            "candidate_id": "work-a-1",
+            "source_role": "project_documentation",
+            "source_version_id": source_a,
+            "source_locator_id": "locator-a-1",
+            "scope_key": "facility:los-1",
+            "normalized_name": "устройство котлована",
+            "raw_name": "Устройство котлована",
+            "canonical_mapping_status": "unresolved",
+            "canonical_work_type_id": None,
+        },
+        {
+            "candidate_id": "work-a-2",
+            "source_role": "project_documentation",
+            "source_version_id": source_a,
+            "source_locator_id": "locator-a-2",
+            "scope_key": "facility:los-1",
+            "normalized_name": "устройство котлована",
+            "raw_name": "Устройство котлована",
+            "canonical_mapping_status": "unresolved",
+            "canonical_work_type_id": None,
+        },
+        {
+            "candidate_id": "work-b-1",
+            "source_role": "project_documentation",
+            "source_version_id": source_b,
+            "source_locator_id": "locator-b-1",
+            "scope_key": "facility:kns-1",
+            "normalized_name": "устройство котлована",
+            "raw_name": "Устройство котлована",
+            "canonical_mapping_status": "unresolved",
+            "canonical_work_type_id": None,
+        },
+    )
+    quantities = (
+        {"work_candidate_id": "work-a-1", "normalized_value": "12", "normalized_unit": "m3"},
+        {"work_candidate_id": "work-a-2", "normalized_value": "15", "normalized_unit": "m3"},
+    )
+    packages = consolidate_work_package_candidates(works, quantities, ())
+
+    assert len(packages) == 2
+    los = next(item for item in packages if item["scope_key"] == "facility:los-1")
+    assert len(los["observations"]) == 2
+    assert len(los["quantities"]) == 2
+    assert "QUANTITY_OBSERVATIONS_CONFLICT" in los["uncertainties"]
+    assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in los["uncertainties"]
+    kns = next(item for item in packages if item["scope_key"] == "facility:kns-1")
+    assert len(kns["observations"]) == 1
+
+
+def test_materialization_digest_changes_when_accepted_candidate_changes() -> None:
+    empty = IndustrialUnderstandingRepository._materialization_input_digest(
+        fields=[],
+        works=[],
+        quantities=[],
+        materials=[],
+        structures=[],
+        relationships=[],
+        defects=[],
+    )
+    one = IndustrialUnderstandingRepository._materialization_input_digest(
+        fields=[{"candidate_id": "field-1", "version": 1, "candidate_digest": "sha256:one"}],
+        works=[],
+        quantities=[],
+        materials=[],
+        structures=[],
+        relationships=[],
+        defects=[],
+    )
+    reordered = IndustrialUnderstandingRepository._materialization_input_digest(
+        fields=[
+            {"candidate_id": "field-2", "version": 1, "candidate_digest": "sha256:two"},
+            {"candidate_id": "field-1", "version": 1, "candidate_digest": "sha256:one"},
+        ],
+        works=[],
+        quantities=[],
+        materials=[],
+        structures=[],
+        relationships=[],
+        defects=[],
+    )
+    reversed_rows = IndustrialUnderstandingRepository._materialization_input_digest(
+        fields=[
+            {"candidate_id": "field-1", "version": 1, "candidate_digest": "sha256:one"},
+            {"candidate_id": "field-2", "version": 1, "candidate_digest": "sha256:two"},
+        ],
+        works=[],
+        quantities=[],
+        materials=[],
+        structures=[],
+        relationships=[],
+        defects=[],
+    )
+
+    assert empty != one
+    assert reordered == reversed_rows
 
 
 @pytest.mark.parametrize(

@@ -7,6 +7,35 @@ Infrastructure micro-gates cannot displace the product path. Every capability
 stream ends in a visible professional result with source/evidence, blockers,
 recovery and export—not a test-count claim.
 
+## Active product-led delivery policy — 2026-09-19
+
+**Programme objective:** production-quality ASD-KONTUR for Tender, Support,
+Audit and Restoration, including evidence-backed analysis and complete,
+editable executive-documentation (ID) packages. The 143-capability registry
+remains the readiness denominator.
+
+**Delivery unit:** one reusable product capability with a visible application
+output. A source receipt, page counter, candidate store, or test suite is
+supporting evidence, never the output by itself.
+
+**OZERO:** the preserved OZERO workspace is one real validation corpus. It is
+not the product boundary, a required fact source for all development, or a
+reason to postpone an independently testable capability. OZERO checks are
+recorded with the precise subset they exercise; controlled inputs with known
+outcomes establish reusable behaviour first.
+
+The current product path is deliberately two connected increments:
+
+| Capability | Modes | User-visible output | Implementation gap | Acceptance | OZERO role |
+| --- | --- | --- | --- | --- | --- |
+| Evidence-bound Tender comparison and findings schedule | Tender | Editable schedule of source-backed quantity/material comparisons, risks, consequences and exact missing inputs | Work packages currently mirror raw observations and generic reconciliation cards cannot distinguish a real comparison from unavailable comparison input | Controlled revisions, repeated names, distinct scopes, quantity discrepancy and missing-input cases; persistence, evidence navigation and isolation | Validate a selected available design/estimate subset only; no project-wide claim until coverage supports it |
+| Supported ID package formation and export | Support; reusable data prepared in Tender | Register-first editable ID package, generated supported forms, attachments/missing-field manifest and export | Existing package formation needs a scope-aware, deduplicated work package and a production-facing completeness/report boundary | Controlled known work type with composition, missing fields, revisions, export/render/edit/reload/isolation | Optional regression check only; OZERO does not supply execution dates, measurements, signatures or a Support transition |
+
+Blocked live processing and the local Qwen slot never block implementation,
+controlled verification, or outputs that do not require that live runtime.
+No capability is promoted to `CAPABILITY_READY` without its declared
+professional output and E2E evidence.
+
 ## Completed prerequisite
 
 `MEMORY-INTEGRITY-FIX-01` resolved the two canonical memory defects and passed

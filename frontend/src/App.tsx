@@ -3783,7 +3783,13 @@ function ProjectUnderstandingPage() {
               )}
               {section === "packages" && (
                 <section className="panel">
-                  <h2>Пакеты работ</h2>
+                  <h2>Пакеты работ-кандидаты</h2>
+                  <p>
+                    Повторные наблюдения объединяются только в пределах одного
+                    источника и явно указанной области. Одинаковые названия в
+                    разных областях не суммируются и остаются отдельными до
+                    инженерской сверки.
+                  </p>
                   {value.work_packages.length ? (
                     <div className="card-grid">
                       {value.work_packages.map((item) => (
@@ -4500,9 +4506,24 @@ function WorkPackageCard({
   const locators = Array.isArray(packageValue.source_locator_ids)
     ? packageValue.source_locator_ids
     : [];
+  const observations = Number(packageValue.candidate_observation_count ?? 1);
+  const quantities = Array.isArray(packageValue.quantities)
+    ? packageValue.quantities.length
+    : 0;
+  const materials = Array.isArray(packageValue.materials)
+    ? packageValue.materials.length
+    : 0;
+  const uncertainties = Array.isArray(packageValue.uncertainties)
+    ? packageValue.uncertainties.map(String)
+    : [];
   return (
     <article className="entity-card">
       <h3>{displayValue(workType.normalized, "Не определён")}</h3>
+      <p>
+        Наблюдений: {observations.toString()}; объёмов: {quantities.toString()};
+        материалов: {materials.toString()}.
+      </p>
+      {uncertainties.length > 0 && <GapList gaps={uncertainties} />}
       <p>
         Источники:{" "}
         {locators.length

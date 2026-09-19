@@ -48,6 +48,7 @@ from .models import (
 from .native import NativeDocument
 from .ocr import OcrAdapterResult
 from .semantic import StructuredCandidates
+from .work_packages import consolidate_work_package_candidates
 
 
 class UnderstandingPersistenceError(RuntimeError):
@@ -833,6 +834,15 @@ class IndustrialUnderstandingRepository:
             source_ids = self._active_source_ids(session, claimed)
             if not source_ids:
                 raise UnderstandingPersistenceError("project_sources_unavailable")
+            fields = self._current_rows(session, claimed, "project_field_candidates", source_ids)
+            works = self._current_rows(session, claimed, "work_type_candidates", source_ids)
+            quantities = self._work_child_rows(session, claimed, "quantity_candidates", source_ids)
+            materials = self._work_child_rows(session, claimed, "material_candidates", source_ids)
+            structures = self._current_structure_rows(session, claimed, source_ids)
+            structure_relationships = self._current_structure_relationship_rows(
+                session, claimed, source_ids
+            )
+            defects = self._current_defects(session, claimed, source_ids)
             review_digests = session.scalars(
                 sa.text(
                     "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
@@ -844,6 +854,15 @@ class IndustrialUnderstandingRepository:
                 {
                     "source_version_ids": [str(item) for item in source_ids],
                     "review_decisions": list(review_digests),
+                    "candidate_inputs": self._materialization_input_digest(
+                        fields=fields,
+                        works=works,
+                        quantities=quantities,
+                        materials=materials,
+                        structures=structures,
+                        relationships=structure_relationships,
+                        defects=defects,
+                    ),
                 }
             )
             run_id = deterministic_uuid(
@@ -867,15 +886,6 @@ class IndustrialUnderstandingRepository:
                     "gaps": ["VERIFIED_NTD_UNAVAILABLE", "ACTIVE_RULE_VERSION_UNAVAILABLE"],
                 },
             )
-            fields = self._current_rows(session, claimed, "project_field_candidates", source_ids)
-            works = self._current_rows(session, claimed, "work_type_candidates", source_ids)
-            quantities = self._work_child_rows(session, claimed, "quantity_candidates", source_ids)
-            materials = self._work_child_rows(session, claimed, "material_candidates", source_ids)
-            structures = self._current_structure_rows(session, claimed, source_ids)
-            structure_relationships = self._current_structure_relationship_rows(
-                session, claimed, source_ids
-            )
-            defects = self._current_defects(session, claimed, source_ids)
             project_id, project_fingerprint, field_gaps, project_dimensions = (
                 self._assemble_project_definition(
                     session, claimed, source_ids, fields, corpus_digest
@@ -1759,6 +1769,46 @@ class IndustrialUnderstandingRepository:
         return [dict(row) for row in rows]
 
     @staticmethod
+    def _materialization_input_digest(
+        *,
+        fields: list[dict[str, Any]],
+        works: list[dict[str, Any]],
+        quantities: list[dict[str, Any]],
+        materials: list[dict[str, Any]],
+        structures: list[dict[str, Any]],
+        relationships: list[dict[str, Any]],
+        defects: list[dict[str, Any]],
+    ) -> str:
+        """Fingerprint selected candidates, not only the source manifest.
+
+        A source can receive an accepted replacement batch after an earlier
+        assembly.  The immutable run identity must then change so API/UI output
+        cannot retain a stale candidate projection.
+        """
+
+        def receipts(values: list[dict[str, Any]]) -> list[str]:
+            return sorted(
+                str(
+                    value.get("candidate_digest")
+                    or value.get("fingerprint")
+                    or f"{value.get('candidate_id', value.get('structure_node_id', value.get('relationship_candidate_id', value.get('defect_id'))))}:{value.get('version')}"
+                )
+                for value in values
+            )
+
+        return semantic_digest(
+            {
+                "fields": receipts(fields),
+                "works": receipts(works),
+                "quantities": receipts(quantities),
+                "materials": receipts(materials),
+                "structures": receipts(structures),
+                "relationships": receipts(relationships),
+                "defects": receipts(defects),
+            }
+        )
+
+    @staticmethod
     def _apply_reviews(
         session: Session,
         claimed: ClaimedJob,
@@ -1972,29 +2022,14 @@ class IndustrialUnderstandingRepository:
         quantities: list[dict[str, Any]],
         materials: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        quantity_by_work: dict[str, list[dict[str, Any]]] = {}
-        material_by_work: dict[str, list[dict[str, Any]]] = {}
-        for value in quantities:
-            quantity_by_work.setdefault(str(value["work_candidate_id"]), []).append(value)
-        for value in materials:
-            material_by_work.setdefault(str(value["work_candidate_id"]), []).append(value)
         packages: list[dict[str, Any]] = []
-        estimate_roles = {
-            DocumentRole.LOCAL_ESTIMATE.value,
-            DocumentRole.OBJECT_ESTIMATE.value,
-            DocumentRole.CONSOLIDATED_ESTIMATE.value,
-        }
-        for work in works:
-            if str(work["source_role"]) in estimate_roles:
-                continue
+        for consolidated in consolidate_work_package_candidates(works, quantities, materials):
+            observations = list(consolidated["observations"])
+            work = observations[0]
             work_id = str(work["candidate_id"])
             package_id = deterministic_uuid(f"construction-work-package:{project_id}:{work_id}")
             mapping_status = str(work["canonical_mapping_status"])
-            uncertainties = (
-                []
-                if mapping_status == "resolved"
-                else [f"WORK_TYPE_MAPPING_{mapping_status.upper()}"]
-            )
+            uncertainties = list(consolidated["uncertainties"])
             package = {
                 "work_package_id": str(package_id),
                 "version": 1,
@@ -2004,12 +2039,14 @@ class IndustrialUnderstandingRepository:
                     "normalized": work["normalized_name"],
                     "mapping_status": mapping_status,
                 },
-                "scope": work["scope_key"],
-                "quantities": [_plain(item) for item in quantity_by_work.get(work_id, [])],
-                "materials": [_plain(item) for item in material_by_work.get(work_id, [])],
-                "source_locator_ids": [str(work["source_locator_id"])],
+                "scope": consolidated["scope_key"],
+                "candidate_observation_ids": [str(item["candidate_id"]) for item in observations],
+                "candidate_observation_count": len(observations),
+                "quantities": [_plain(item) for item in consolidated["quantities"]],
+                "materials": [_plain(item) for item in consolidated["materials"]],
+                "source_locator_ids": list(consolidated["source_locator_ids"]),
                 "uncertainties": uncertainties,
-                "complete": not uncertainties,
+                "complete": mapping_status == "resolved" and not uncertainties,
             }
             fingerprint = semantic_digest(package)
             session.execute(
