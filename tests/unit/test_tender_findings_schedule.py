@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
+import json
 import zipfile
 from io import StringIO
 from typing import cast
@@ -229,12 +231,18 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
             "01_tender_findings_report.docx",
             "02_tender_findings_schedule.csv",
             "03_tender_work_resource_schedule.csv",
+            "04_delivery_manifest.json",
             "99_analysis_status.txt",
         ]
         assert exported.read("01_tender_findings_report.docx") == b"docx-payload"
+        manifest = json.loads(exported.read("04_delivery_manifest.json"))
         status = exported.read("99_analysis_status.txt").decode("utf-8")
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
+    assert manifest["candidate_boundary"] is True
+    assert (
+        manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
+    )
 
 
 def test_application_service_returns_editable_schedule_from_scoped_project_view() -> None:
