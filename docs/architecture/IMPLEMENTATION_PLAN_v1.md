@@ -90,6 +90,16 @@ The two initial increments are implemented on feature releases `98b7363` and
   actual material-omission comparison is a versioned estimate-resource input,
   not a looser name match.
 
+* The supported ID-package export now makes its first, editable register
+  readable in Russian: qualified document roles and member states use display
+  labels while their stable role IDs remain in parentheses.  The adjacent CSV
+  remains the machine-friendly projection.  A controlled archive check opens
+  the OOXML register and the disposable PostgreSQL Support workflow verifies
+  the same export after forming a package and generating its supported
+  candidate.  OZERO is not used.  This improves one reusable package surface;
+  it does not qualify an official form template or establish Support mode
+  readiness.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

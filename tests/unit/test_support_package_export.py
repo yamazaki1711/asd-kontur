@@ -101,7 +101,10 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             assert "word/document.xml" in document.namelist()
             content = document.read("word/document.xml").decode("utf-8")
         assert "Реестр исполнительной документации (кандидат)" in content
-        assert "support.aosr" in content
+        assert "Акт освидетельствования скрытых работ (support.aosr)" in content
+        assert "Подготовлен кандидат" in content
+        assert "Исполнительная схема (support.executive-scheme)" in content
+        assert "Отсутствует" in content
         assert validate_docx(register, required_fields=()).valid
         rows = list(
             csv.DictReader(

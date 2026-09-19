@@ -20,6 +20,20 @@ from xml.sax.saxutils import escape
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 _SAFE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
+_REGISTER_ROLE_LABELS = {
+    "support.aosr": "Акт освидетельствования скрытых работ",
+    "support.executive-scheme": "Исполнительная схема",
+    "support.material-quality": "Документ о качестве материалов",
+    "support.control-attachment": "Приложение контрольных материалов",
+}
+
+_REGISTER_STATE_LABELS = {
+    "missing": "Отсутствует",
+    "blocked": "Заблокирован",
+    "generated_candidate": "Подготовлен кандидат",
+    "finalized": "Финализирован",
+}
+
 
 def build_editable_id_package_archive(
     *,
@@ -108,8 +122,8 @@ def _register_docx(package: Mapping[str, Any], manifest: Mapping[str, Any]) -> b
         *(
             (
                 str(item.get("ordinal", "")),
-                str(item.get("role", "")),
-                str(item.get("state", "")),
+                _register_role_label(str(item.get("role", ""))),
+                _register_state_label(str(item.get("state", ""))),
                 str(item.get("copies", "")),
                 "; ".join(str(value) for value in item.get("evidence_refs", [])),
             )
@@ -145,6 +159,17 @@ def _register_docx(package: Mapping[str, Any], manifest: Mapping[str, Any]) -> b
         b"</w:style></w:styles>"
     )
     return _docx_package(document, styles)
+
+
+def _register_role_label(role: str) -> str:
+    """Keep a Russian editable register readable without hiding stable role IDs."""
+
+    label = _REGISTER_ROLE_LABELS.get(role)
+    return f"{label} ({role})" if label else role
+
+
+def _register_state_label(state: str) -> str:
+    return _REGISTER_STATE_LABELS.get(state, state)
 
 
 def _docx_row(values: tuple[str, str, str, str, str]) -> str:
