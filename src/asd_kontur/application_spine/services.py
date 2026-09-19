@@ -12,6 +12,7 @@ import sqlalchemy as sa
 
 from asd_kontur.audit.package_preflight import build_expected_actual_preflight
 from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
+from asd_kontur.audit.report_export import render_audit_report_projection_csv
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
 from asd_kontur.pilot import (
@@ -883,6 +884,26 @@ class ProductSpineService:
 
         return self._repository.latest_audit_report_projection(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def audit_report_projection_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the immutable Audit read projection without changing the report."""
+
+        projection = self.latest_audit_report_projection(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_audit_report_projection_csv(projection)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-report-projection-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
         )
 
     def restoration_recovery_plan(

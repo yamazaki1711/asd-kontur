@@ -640,6 +640,15 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert audit_review.status_code == 201, audit_review.text
         assert audit_review.json()["reviewed_item_count"] == 1
 
+        audit_projection_export = client.get(
+            f"/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv"
+        )
+        assert audit_projection_export.status_code == 200, audit_projection_export.text
+        assert audit_projection_export.headers["content-type"] == "text/csv; charset=utf-8"
+        audit_projection_csv = audit_projection_export.content.decode("utf-8-sig")
+        assert "record_kind" in audit_projection_csv
+        assert "CANONICAL_AUDIT_REPORT_NOT_PUBLISHED" in audit_projection_csv
+
         for kind, output_format in (
             ("disagreement_protocol", "docx"),
             ("contract_changes", "pdf"),

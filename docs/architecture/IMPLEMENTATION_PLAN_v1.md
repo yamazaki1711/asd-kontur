@@ -295,6 +295,17 @@ surface. OZERO is not used. Deployment remains a separate operation because
 the live OZERO-compatible database is at an earlier migration head and has no
 configured canonical Audit-service runtime.
 
+The owner-readable Audit projection now has an editable CSV export. It retains
+the exact report/version, projection fingerprint, delta versions and unresolved
+item keys, plus each immutable correction-request version with its evidence and
+blocking impacts. A not-published report exports an explicit absence row rather
+than a clean conclusion. The Product Application still reads only the immutable
+projection boundary and cannot create an Audit decision or remediate an item.
+Controlled projection payload tests and PostgreSQL-backed application routing
+verify the content, RLS-scoped download, and the not-published boundary; OZERO
+is not needed. A qualified canonical Audit-service deployment and a complete
+professional Audit workflow remain separate acceptance requirements.
+
 Final Audit reports now bind exact immutable ActionRequest versions through a
 separate membership table. Unknown, cross-process, or duplicate request
 versions are rejected before finalisation; reclassification is required after

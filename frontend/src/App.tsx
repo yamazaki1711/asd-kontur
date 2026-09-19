@@ -2404,7 +2404,7 @@ function AuditReportProjectionPage() {
       lead="Неизменяемый отчёт по точной версии состава документов, доказательствам и запросам на исправление."
     >
       <QueryState query={report}>
-        {(value) => <AuditReportProjectionBody value={value} />}
+        {(value) => <AuditReportProjectionBody value={value} workspaceId={workspaceId} />}
       </QueryState>
     </Page>
   );
@@ -2412,8 +2412,10 @@ function AuditReportProjectionPage() {
 
 function AuditReportProjectionBody({
   value,
+  workspaceId,
 }: {
   value: AuditReportProjection;
+  workspaceId: string;
 }) {
   const gaps = value.gaps ?? [];
   if (value.status === "not_published") {
@@ -2443,6 +2445,12 @@ function AuditReportProjectionBody({
         исходные записи аудита и не подтверждает устранение замечаний без
         отдельного доказательства.
       </InfoNotice>
+      <a
+        className="button-link secondary"
+        href={`/api/v1/workspaces/${workspaceId}/audit/reports/latest.csv`}
+      >
+        Скачать таблицу отчёта
+      </a>
       <section className="metrics" aria-label="Состояние независимого аудита">
         <Metric label="Версия отчёта" value={Number(report.version ?? 0)} />
         <Metric

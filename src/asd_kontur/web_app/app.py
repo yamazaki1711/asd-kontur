@@ -1214,6 +1214,30 @@ def _api_router() -> APIRouter:
         return AuditReportProjectionView(**jsonable_encoder(value))
 
     @router.get(
+        "/workspaces/{workspace_id}/audit/reports/latest.csv",
+        tags=["audit-report"],
+    )
+    def audit_report_projection_export(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.audit_report_projection_export(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
+    @router.get(
         "/workspaces/{workspace_id}/restoration/recovery-plan",
         response_model=RestorationRecoveryPlanView,
         tags=["restoration"],
