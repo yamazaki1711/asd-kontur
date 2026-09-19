@@ -189,6 +189,13 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE" in gap_codes
         assert view["authority_layers"]["normative_authority"] == "verified_subset_only"
         assert view["normative_profile"]["completeness_status"] == "blocked"
+        tender_inputs = {
+            item["category"]: item for item in view["intake_summary"]["tender_input_assessment"]
+        }
+        assert tender_inputs["design_or_working_documentation"]["state"] == "available"
+        assert tender_inputs["quantity_or_estimate"]["state"] == "available"
+        assert tender_inputs["draft_contract"]["state"] == "not_detected_in_classified_sources"
+        assert "Contract changes" in tender_inputs["draft_contract"]["practical_limitation"]
         assert view["page_roles"]
         assert len(view["candidates"]["project_fields"]) == 3
         assert len(view["candidates"]["quantities"]) == 1

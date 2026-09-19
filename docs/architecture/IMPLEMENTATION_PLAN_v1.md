@@ -183,6 +183,18 @@ understanding flow verify all rows, source links, ZIP order, and workspace
 scope. OZERO is not needed; it may later validate only the identity candidates
 its processed sources actually produced.
 
+The project-understanding view now contains a reusable **Tender input
+assessment** derived only from active source versions and persisted document
+role decisions. It identifies design/working documentation, quantities or
+estimates, a draft contract, customer regulation, and specifications as
+available, classification-incomplete, or not detected in fully classified
+sources. Each unavailable category states the specific limited analysis: for
+example, an absent contract limits contract review but does not block design
+analysis. Controlled DOCX/CSV workspace acceptance covers availability,
+absence, source locators, persistence, and RLS scope; OZERO is not required.
+This assessment reports input availability, not the legal sufficiency or
+professional completeness of a Tender submission.
+
 The same project-understanding surface also provides a separate editable
 work/quantity/material CSV schedule. It has one row per candidate work package,
 retains raw and normalized quantity observations, materials, exact locator

@@ -2868,6 +2868,10 @@ class SpinePostgresRepository:
             intake_summary = self._intake_summary(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            tender_input_assessment = self._tender_input_assessment(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            intake_summary["tender_input_assessment"] = tender_input_assessment
             semantic_coverage = self._semantic_extraction_coverage(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -2887,6 +2891,7 @@ class SpinePostgresRepository:
                     structure_relationships,
                     structure_components,
                     structure_identity_candidates,
+                    tender_input_assessment,
                 ),
             )
         return {
@@ -3487,6 +3492,118 @@ class SpinePostgresRepository:
         }
 
     @staticmethod
+    def _tender_input_assessment(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        """Assess usable Tender input classes from active classified sources.
+
+        A missing contract cannot invalidate design analysis.  Conversely, an
+        unclassified active source prevents the application from claiming that
+        a source class is absent.  This is an operational assessment of
+        supplied inputs, not a contractual or professional conclusion.
+        """
+
+        rows = (
+            session.execute(
+                sa.text(
+                    "WITH active_versions AS (SELECT DISTINCT ON (v.document_id) "
+                    "v.document_id,v.version,v.source_version_id,v.safe_display_name FROM "
+                    "workspace.document_versions v JOIN workspace.document_version_activation_decisions a "
+                    "ON a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id "
+                    "AND a.document_id=v.document_id AND a.selected_document_version=v.version "
+                    "WHERE v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+                    "workspace.document_version_activation_decisions newer WHERE "
+                    "newer.organization_id=a.organization_id AND newer.workspace_id=a.workspace_id "
+                    "AND newer.document_id=a.document_id AND newer.decision_version>a.decision_version) "
+                    "ORDER BY v.document_id,a.decision_version DESC), roles AS (SELECT d.document_id,"
+                    "d.document_version,array_agg(DISTINCT role.value ORDER BY role.value) AS roles,"
+                    "array_agg(DISTINCT locator ORDER BY locator) FILTER (WHERE locator IS NOT NULL) AS locator_ids "
+                    "FROM workspace.document_role_decisions d CROSS JOIN LATERAL unnest(d.selected_roles) AS role(value) "
+                    "LEFT JOIN LATERAL unnest(d.source_locator_ids) AS locator ON true "
+                    "WHERE d.organization_id=:o AND d.workspace_id=:w GROUP BY d.document_id,d.document_version) "
+                    "SELECT active.source_version_id,active.safe_display_name,COALESCE(roles.roles,ARRAY[]::text[]) AS roles,"
+                    "COALESCE(roles.locator_ids,ARRAY[]::uuid[]) AS locator_ids FROM active_versions active "
+                    "LEFT JOIN roles ON roles.document_id=active.document_id AND roles.document_version=active.version "
+                    "ORDER BY active.safe_display_name,active.source_version_id"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+            .mappings()
+            .all()
+        )
+        categories = (
+            (
+                "design_or_working_documentation",
+                {
+                    "project_documentation",
+                    "working_documentation",
+                    "explanatory_note",
+                    "drawing_or_scheme",
+                },
+                "design_analysis",
+                "Design and working documentation are required to assess design scope and constructability.",
+            ),
+            (
+                "quantity_or_estimate",
+                {
+                    "bill_of_quantities",
+                    "local_estimate",
+                    "object_estimate",
+                    "consolidated_estimate",
+                },
+                "quantity_comparison",
+                "Quantity and cost comparison remains limited without a bill of quantities or estimate.",
+            ),
+            (
+                "draft_contract",
+                {"contract"},
+                "contract_analysis",
+                "Contract changes and contractual risk review remain limited without a draft contract.",
+            ),
+            (
+                "customer_regulation",
+                {"customer_regulation"},
+                "customer_requirements",
+                "Customer-specific submission and documentation requirements remain limited without a regulation.",
+            ),
+            (
+                "specifications",
+                {"specification"},
+                "materials_comparison",
+                "Material and equipment comparison remains limited without specifications.",
+            ),
+        )
+        classified_count = sum(1 for row in rows if row["roles"])
+        result: list[dict[str, Any]] = []
+        for category, accepted_roles, analysis, limitation in categories:
+            matched = [row for row in rows if set(row["roles"]) & accepted_roles]
+            if matched:
+                state = "available"
+            elif classified_count < len(rows):
+                state = "classification_incomplete"
+            else:
+                state = "not_detected_in_classified_sources"
+            result.append(
+                {
+                    "category": category,
+                    "analysis": analysis,
+                    "state": state,
+                    "practical_limitation": "" if state == "available" else limitation,
+                    "active_source_count": len(matched),
+                    "source_versions": [str(row["source_version_id"]) for row in matched],
+                    "source_names": [str(row["safe_display_name"]) for row in matched],
+                    "source_locator_ids": sorted(
+                        {str(locator) for row in matched for locator in row["locator_ids"]}
+                    ),
+                    "classification_coverage": {
+                        "active_source_count": len(rows),
+                        "classified_source_count": classified_count,
+                    },
+                }
+            )
+        return result
+
+    @staticmethod
     def _project_candidate_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> dict[str, list[dict[str, Any]]]:
@@ -3742,6 +3859,13 @@ class SpinePostgresRepository:
     def _empty_project_understanding_view(
         cls, session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> dict[str, Any]:
+        intake_summary = cls._intake_summary(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
+        tender_input_assessment = cls._tender_input_assessment(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
+        intake_summary["tender_input_assessment"] = tender_input_assessment
         candidates = cls._project_candidate_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
@@ -3779,6 +3903,7 @@ class SpinePostgresRepository:
                     structure_relationships,
                     structure_components,
                     structure_identity_candidates,
+                    tender_input_assessment,
                 ),
             ),
             "candidates": candidates,
@@ -3790,9 +3915,7 @@ class SpinePostgresRepository:
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
-            "intake_summary": cls._intake_summary(
-                session, organization_id=organization_id, workspace_id=workspace_id
-            ),
+            "intake_summary": intake_summary,
             "semantic_coverage": cls._semantic_extraction_coverage(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),

@@ -4275,6 +4275,13 @@ function ProjectUnderstandingPage() {
           const semanticCoverage = Array.isArray(value.semantic_coverage)
             ? (value.semantic_coverage as Record<string, unknown>[])
             : [];
+          const tenderInputAssessment = Array.isArray(
+            (value.intake_summary as Record<string, unknown> | undefined)
+              ?.tender_input_assessment,
+          )
+            ? ((value.intake_summary as Record<string, unknown>)
+                .tender_input_assessment as Record<string, unknown>[])
+            : [];
           const projectFieldCandidates = candidates.project_fields ?? [];
           const workCandidates = candidates.work_types ?? [];
           const quantityCandidates = candidates.quantities ?? [];
@@ -4382,6 +4389,21 @@ function ProjectUnderstandingPage() {
                   . Это покрытие извлечения-кандидата, а не подтверждённые
                   факты.
                 </InfoNotice>
+              )}
+              {section === "general" && tenderInputAssessment.length > 0 && (
+                <section className="panel">
+                  <h2>Исходные данные для Tender-анализа</h2>
+                  <p>
+                    Оценка описывает доступность исходных документов для
+                    отдельных проверок. Отсутствие договора не отменяет анализ
+                    проектных решений, но ограничивает договорные выводы.
+                  </p>
+                  <TenderInputAssessmentTable
+                    items={tenderInputAssessment}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                  />
+                </section>
               )}
               {section === "general" && (
                 <div className="split">
@@ -4613,6 +4635,95 @@ function ProjectUnderstandingPage() {
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function TenderInputAssessmentTable({
+  items,
+  workspaceId,
+  modeSlug,
+}: {
+  items: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const categoryLabels: Record<string, string> = {
+    design_or_working_documentation: "Проектная и рабочая документация",
+    quantity_or_estimate: "Ведомость объёмов или смета",
+    draft_contract: "Проект договора",
+    customer_regulation: "Регламент заказчика",
+    specifications: "Спецификации материалов и оборудования",
+  };
+  const stateLabels: Record<string, string> = {
+    available: "Доступно для анализа",
+    classification_incomplete: "Обработка классификации не завершена",
+    not_detected_in_classified_sources: "Не обнаружено среди классифицированных источников",
+  };
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Входные данные</th>
+            <th>Статус</th>
+            <th>Использование и ограничение</th>
+            <th>Источники</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const locators = Array.isArray(item.source_locator_ids)
+              ? item.source_locator_ids.map(String)
+              : [];
+            const sourceNames = Array.isArray(item.source_names)
+              ? item.source_names.map(String)
+              : [];
+            const state = displayValue(item.state, "classification_incomplete");
+            return (
+              <tr key={displayValue(item.category, "tender-input")}>
+                <td>
+                  <strong>
+                    {categoryLabels[displayValue(item.category)] ??
+                      displayValue(item.category)}
+                  </strong>
+                </td>
+                <td>
+                  <StatusPill tone={state === "available" ? "default" : "warning"}>
+                    {stateLabels[state] ?? state}
+                  </StatusPill>
+                </td>
+                <td>
+                  {state === "available"
+                    ? "Исходные данные можно использовать в указанной проверке."
+                    : displayValue(item.practical_limitation, "Ограничение не описано.")}
+                </td>
+                <td>
+                  {sourceNames.length ? sourceNames.join(", ") : "—"}
+                  {locators.length > 0 && (
+                    <p>
+                      {locators.map((locator, index) => (
+                        <span key={locator}>
+                          {index > 0 ? ", " : ""}
+                          <Link
+                            to={workspaceRouteFromSlug(
+                              modeSlug,
+                              workspaceId,
+                              `/evidence/locators/${locator}`,
+                            )}
+                          >
+                            открыть фрагмент
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
