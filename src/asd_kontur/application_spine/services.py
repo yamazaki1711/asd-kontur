@@ -32,6 +32,7 @@ from asd_kontur.restoration import (
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
 from asd_kontur.tender.findings_report import render_tender_findings_docx
@@ -128,6 +129,7 @@ class ProductSpineService:
         self._object_store = object_store
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
+        self._tender_contract_analysis = TenderContractAnalysisRepository(repository.engine)
         self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
             repository,
@@ -556,6 +558,13 @@ class ProductSpineService:
             offset,
             length,
             chunks(),
+        )
+
+    def tender_contract_analysis(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        return self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
 
     def project_understanding(

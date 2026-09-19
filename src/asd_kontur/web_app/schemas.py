@@ -430,6 +430,17 @@ class AuditExpectedActualPreflightView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class TenderContractAnalysisView(ApiModel):
+    status: str
+    process: dict[str, Any] | None
+    assessment: dict[str, Any] | None
+    clauses: list[dict[str, Any]]
+    issues: list[dict[str, Any]]
+    deliverables: list[dict[str, Any]]
+    gaps: list[str]
+    authority_boundary: str
+
+
 class AuditReportProjectionView(ApiModel):
     status: Literal["not_published", "partial", "published"]
     customer: dict[str, Any] | None = None

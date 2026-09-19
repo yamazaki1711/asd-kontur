@@ -108,6 +108,7 @@ from .schemas import (
     SessionView,
     StartGenerationRequest,
     SupportProductionView,
+    TenderContractAnalysisView,
     TrialReadinessRequest,
     TrialReadinessView,
     UploadBatchView,
@@ -922,6 +923,21 @@ def _api_router() -> APIRouter:
         if value is None:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")
         return ProjectUnderstandingView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/tender/contract-analysis",
+        response_model=TenderContractAnalysisView,
+        tags=["tender"],
+    )
+    def tender_contract_analysis(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> TenderContractAnalysisView:
+        value = _container(request).service.tender_contract_analysis(
+            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+        )
+        return TenderContractAnalysisView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/project-understanding/tender-findings.csv",
