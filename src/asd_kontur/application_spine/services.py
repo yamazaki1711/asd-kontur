@@ -564,6 +564,7 @@ class ProductSpineService:
             view.get("defects", []),
             materialization_state=str(materialization.get("state", "not_requested")),
             coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(

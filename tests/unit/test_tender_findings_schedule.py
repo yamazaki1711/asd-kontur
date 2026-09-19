@@ -27,6 +27,13 @@ def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> No
         ),
         materialization_state="partial",
         coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+        evidence_index={
+            "locator-1": {
+                "safe_display_name": "Structural plan.pdf",
+                "document_version": 3,
+                "locator_value": "page:17",
+            }
+        },
     )
 
     rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
@@ -35,6 +42,7 @@ def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> No
     assert row["finding_id"] == "finding-1"
     assert row["assessment_state"] == "comparison_not_performed"
     assert row["source_locator_ids"] == "locator-1"
+    assert row["source_references"] == "Structural plan.pdf, version 3, page:17 (locator-1)"
     assert row["materialization_state"] == "partial"
     assert row["coverage_gaps"] == "SEMANTIC_COVERAGE_PARTIAL"
     assert row["required_input"] == "parsed_estimate_or_bill_of_quantities_positions"
@@ -52,6 +60,7 @@ def test_application_service_returns_editable_schedule_from_scoped_project_view(
             return {
                 "materialization": {"state": "partial", "gaps": ["SEMANTIC_COVERAGE_PARTIAL"]},
                 "defects": [],
+                "evidence_index": {},
             }
 
     service = object.__new__(ProductSpineService)

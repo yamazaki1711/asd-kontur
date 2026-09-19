@@ -52,6 +52,7 @@ def render_tender_findings_csv(
     *,
     materialization_state: str,
     coverage_gaps: Iterable[str],
+    evidence_index: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> bytes:
     """Render a UTF-8 BOM CSV intended for editing in ordinary office tools.
 
@@ -70,6 +71,7 @@ def render_tender_findings_csv(
             "related_identity",
             "required_input",
             "practical_consequence",
+            "source_references",
             "source_locator_ids",
             "parameters_json",
             "materialization_state",
@@ -94,6 +96,8 @@ def render_tender_findings_csv(
             consequence = str(parameters.get("consequence") or consequence)
         else:
             parameters = {}
+        locator_ids = tuple(str(item) for item in defect.get("source_locator_ids", []))
+        resolved_evidence = evidence_index or {}
         writer.writerow(
             {
                 "finding_id": str(defect.get("defect_id", "")),
@@ -103,12 +107,31 @@ def render_tender_findings_csv(
                 "related_identity": str(defect.get("related_identity") or ""),
                 "required_input": required_input,
                 "practical_consequence": consequence,
-                "source_locator_ids": ";".join(
-                    str(item) for item in defect.get("source_locator_ids", [])
+                "source_references": ";".join(
+                    _source_reference(locator_id, resolved_evidence.get(locator_id))
+                    for locator_id in locator_ids
                 ),
+                "source_locator_ids": ";".join(locator_ids),
                 "parameters_json": json.dumps(parameters, ensure_ascii=False, sort_keys=True),
                 "materialization_state": materialization_state,
                 "coverage_gaps": gap_value,
             }
         )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def _source_reference(locator_id: str, evidence: Mapping[str, Any] | None) -> str:
+    """Provide a human-readable evidence pointer without replacing its identity.
+
+    CSV consumers need a document/revision/page reference.  The stable locator
+    ID remains in the adjacent audit column, so this presentation projection
+    cannot silently redirect a finding to another source.
+    """
+
+    if evidence is None:
+        return f"unresolved locator ({locator_id})"
+    document = str(evidence.get("safe_display_name") or "source document")
+    version = evidence.get("document_version")
+    locator = str(evidence.get("locator_value") or evidence.get("locator_kind") or "location")
+    version_suffix = f", version {version}" if version is not None else ""
+    return f"{document}{version_suffix}, {locator} ({locator_id})"
