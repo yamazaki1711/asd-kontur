@@ -189,6 +189,14 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert view["page_roles"]
         assert len(view["candidates"]["project_fields"]) == 3
         assert len(view["candidates"]["quantities"]) == 1
+        tender_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.csv"
+        )
+        assert tender_schedule.status_code == 200, tender_schedule.text
+        assert tender_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert tender_schedule.headers["content-disposition"].startswith("attachment;")
+        assert "source_references" in tender_schedule.content.decode("utf-8-sig")
         object_locator = view["project_definition"]["definition"]["fields"]["object_name"][
             "source_locator_id"
         ]
