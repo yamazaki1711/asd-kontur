@@ -15,7 +15,9 @@ from sqlalchemy.exc import DBAPIError
 from asd_kontur.audit import (
     AuditCommand,
     AuditCommandType,
+    AuditReport,
     AuditScope,
+    AuditTerminalOutcome,
     CausalImpactPath,
     CausalReadinessDelta,
     DeltaDenominator,
@@ -723,6 +725,120 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
                 sa.text("SELECT count(*) FROM workspace.audit_package_delta_memberships")
             )
             == 1
+        )
+
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        snapshot_fingerprint = connection.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.corpus_snapshot_versions WHERE "
+                "corpus_snapshot_id=:snapshot AND version=:version"
+            ),
+            {"snapshot": scope.corpus_snapshot_id, "version": scope.corpus_snapshot_version},
+        )
+    assert snapshot_fingerprint is not None
+    report = AuditReport(
+        uuid7(),
+        1,
+        scope,
+        str(snapshot_fingerprint),
+        document_delta.document_delta_id,
+        document_delta.fingerprint,
+        causal_delta.causal_delta_id,
+        causal_delta.fingerprint,
+        package_delta.package_readiness_id,
+        package_delta.fingerprint,
+        (),
+        AuditTerminalOutcome.BLOCKED,
+        (
+            "ACT_NOT_COLLECTED",
+            "MATERIAL_CERTIFICATE_MISSING",
+            "SIGNATURES_AND_HANDOVER_UNAVAILABLE",
+        ),
+        datetime.now(UTC),
+    )
+    with pytest.raises(ValueError, match="exactly one persisted evidence version"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                8,
+                f"audit-process:{scope.audit_process_id}:invalid-final-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(report, document_delta_fingerprint=DIGEST),
+        )
+    finalized = store.finalize_report(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.FINALIZE_AUDIT_REPORT,
+            scope.audit_process_id,
+            8,
+            f"audit-process:{scope.audit_process_id}:final-report",
+            "service:synthetic-audit",
+            "audit.report.finalize",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        report,
+    )
+    assert finalized.accepted and finalized.revision == 9
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        row = connection.execute(
+            sa.text(
+                "SELECT p.state,p.revision,r.corpus_snapshot_id,r.corpus_snapshot_version,"
+                "r.document_delta_id,r.document_delta_version,r.causal_delta_id,"
+                "r.causal_delta_version,r.package_delta_id,r.package_delta_version,r.outcome,"
+                "r.unresolved_codes,r.product_ready FROM "
+                "workspace.audit_processes p JOIN workspace.audit_report_versions r USING "
+                "(organization_id,workspace_id,audit_process_id) WHERE r.audit_report_id=:report"
+            ),
+            {"report": report.audit_report_id},
+        ).one()
+    assert row == (
+        ProcessState.COMPLETED.value,
+        9,
+        scope.corpus_snapshot_id,
+        scope.corpus_snapshot_version,
+        document_delta.document_delta_id,
+        1,
+        causal_delta.causal_delta_id,
+        1,
+        package_delta.package_readiness_id,
+        1,
+        AuditTerminalOutcome.BLOCKED.value,
+        [
+            "ACT_NOT_COLLECTED",
+            "MATERIAL_CERTIFICATE_MISSING",
+            "SIGNATURES_AND_HANDOVER_UNAVAILABLE",
+        ],
+        False,
+    )
+    with pytest.raises(ValueError, match="action-request version references"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                9,
+                f"audit-process:{scope.audit_process_id}:unsupported-action-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(report, audit_report_id=uuid7(), action_request_ids=(uuid7(),)),
         )
 
     other = create_tenant(postgres_environment, tenant.organization_id)

@@ -25,6 +25,7 @@ from asd_kontur.persistence.scope import WorkspaceContext
 
 from .evaluation import package_readiness_counts
 from .models import (
+    AuditReport,
     AuditScope,
     CausalReadinessDelta,
     DeltaDenominator,
@@ -197,6 +198,35 @@ class PostgresCorpusAuditStore:
             command_type=AuditCommandType.EVALUATE_PACKAGE_READINESS,
             persist=lambda session: self._insert_package_readiness(session, value),
         )
+
+    def finalize_report(
+        self, context: WorkspaceContext, command: AuditCommand, value: AuditReport
+    ) -> CommandOutcome:
+        """Publish a report only from the exact persisted snapshot and deltas.
+
+        Action requests are intentionally rejected until their versioned
+        membership contract is persisted as well.  Silently retaining only an
+        ID would make the report depend on an arbitrary later action version.
+        """
+
+        if command.command_type is not AuditCommandType.FINALIZE_AUDIT_REPORT:
+            raise ValueError("Audit command must finalize an Audit report")
+        if value.action_request_ids:
+            raise ValueError("Audit report action-request version references are not yet supported")
+        scope = value.audit_scope
+        self._require_scope(context, scope.organization_id, scope.workspace_id)
+        if command.aggregate_id != scope.audit_process_id:
+            raise ValueError("Audit command aggregate does not match the report scope")
+        with Session(self._engine, autoflush=False, expire_on_commit=False) as session:
+            with session.begin():
+                _set_scope(session, context)
+                revision = self._require_exact_evaluating_scope(session, scope)
+                outcome = AuditStateMachine().apply(ProcessState.EVALUATING, revision, command)
+                if not outcome.accepted:
+                    return outcome
+                self._insert_report(session, value)
+                self._advance_header(session, context, command, outcome)
+                return outcome
 
     def record_inspection(self, context: WorkspaceContext, value: PhysicalObjectInspection) -> None:
         self._require_scope(context, value.scope.organization_id, value.scope.workspace_id)
@@ -895,6 +925,146 @@ class PostgresCorpusAuditStore:
                 "at": datetime.now(UTC),
             },
         )
+
+    @staticmethod
+    def _insert_report(session: Session, value: AuditReport) -> None:
+        """Persist a final report only when every evidence reference is exact.
+
+        ``AuditReport`` carries fingerprints for the snapshot and three delta
+        kinds, rather than a mutable "latest" projection.  A fingerprint must
+        resolve to exactly one persisted version in this Audit process; a
+        duplicate match is ambiguity, not a reason to select an arbitrary
+        version.  Action-request membership is intentionally not represented
+        until its versioned contract exists, and is rejected by the public
+        method before this helper is reached.
+        """
+
+        scope = value.audit_scope
+        snapshot_fingerprint = session.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.corpus_snapshot_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND corpus_snapshot_id=:snapshot "
+                "AND version=:version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "snapshot": scope.corpus_snapshot_id,
+                "version": scope.corpus_snapshot_version,
+            },
+        )
+        if (
+            snapshot_fingerprint is None
+            or str(snapshot_fingerprint) != value.corpus_snapshot_fingerprint
+        ):
+            raise ValueError("Audit report must reference the exact persisted corpus snapshot")
+
+        document_version = PostgresCorpusAuditStore._resolve_report_delta_version(
+            session,
+            scope,
+            value.document_delta_id,
+            value.document_delta_fingerprint,
+            "document",
+        )
+        causal_version = PostgresCorpusAuditStore._resolve_report_delta_version(
+            session,
+            scope,
+            value.causal_delta_id,
+            value.causal_delta_fingerprint,
+            "causal_readiness",
+        )
+        package_version = PostgresCorpusAuditStore._resolve_report_delta_version(
+            session,
+            scope,
+            value.package_readiness_id,
+            value.package_readiness_fingerprint,
+            "package_signing_handover",
+        )
+        if value.outcome.value == "complete" and value.unresolved_codes:
+            raise ValueError("A complete Audit report cannot retain unresolved codes")
+
+        existing = session.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.audit_report_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND audit_report_id=:report "
+                "AND version=:version"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "report": value.audit_report_id,
+                "version": value.version,
+            },
+        )
+        if existing is not None:
+            if str(existing) != value.fingerprint:
+                raise ValueError("Audit report identity is already bound to different evidence")
+            return
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.audit_report_versions "
+                "(organization_id,workspace_id,audit_report_id,version,audit_process_id,"
+                "corpus_snapshot_id,corpus_snapshot_version,document_delta_id,document_delta_version,"
+                "causal_delta_id,causal_delta_version,package_delta_id,package_delta_version,outcome,"
+                "unresolved_codes,product_ready,fingerprint,created_at) VALUES "
+                "(:o,:w,:report,:version,:process,:snapshot,:snapshot_version,:document,"
+                ":document_version,:causal,:causal_version,:package,:package_version,:outcome,"
+                ":unresolved,false,:fingerprint,:created_at)"
+            ),
+            {
+                "o": scope.organization_id,
+                "w": scope.workspace_id,
+                "report": value.audit_report_id,
+                "version": value.version,
+                "process": scope.audit_process_id,
+                "snapshot": scope.corpus_snapshot_id,
+                "snapshot_version": scope.corpus_snapshot_version,
+                "document": value.document_delta_id,
+                "document_version": document_version,
+                "causal": value.causal_delta_id,
+                "causal_version": causal_version,
+                "package": value.package_readiness_id,
+                "package_version": package_version,
+                "outcome": value.outcome.value,
+                "unresolved": list(value.unresolved_codes),
+                "fingerprint": value.fingerprint,
+                "created_at": value.created_at,
+            },
+        )
+
+    @staticmethod
+    def _resolve_report_delta_version(
+        session: Session,
+        scope: AuditScope,
+        delta_id: UUID,
+        fingerprint: str,
+        delta_kind: str,
+    ) -> int:
+        rows = (
+            session.execute(
+                sa.text(
+                    "SELECT version FROM workspace.audit_delta_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND audit_process_id=:process "
+                    "AND audit_delta_id=:delta AND delta_kind=:kind AND fingerprint=:fingerprint "
+                    "ORDER BY version"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "process": scope.audit_process_id,
+                    "delta": delta_id,
+                    "kind": delta_kind,
+                    "fingerprint": fingerprint,
+                },
+            )
+            .scalars()
+            .all()
+        )
+        if len(rows) != 1:
+            raise ValueError(
+                "Audit report delta reference must resolve to exactly one persisted evidence version"
+            )
+        return int(rows[0])
 
     @staticmethod
     def _require_exact_evaluating_scope(session: Session, scope: AuditScope) -> int:

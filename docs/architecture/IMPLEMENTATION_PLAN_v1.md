@@ -82,10 +82,18 @@ are committed atomically with their evaluation transition. Causal paths and
 package-to-delta membership are preserved as immutable payloads rather than
 being reduced to counters. A disposable PostgreSQL acceptance exercises
 scope/RLS, retry, stale-revision, snapshot binding, and all three delta kinds.
-This is an implementation foundation, not a public Audit conclusion: final
-Audit report/projection persistence and an authorised, separately configured
-Audit service still remain. The public application role must not be granted
-the audit-service role merely to expose this work. OZERO is not used for this
+This is an implementation foundation, not a public Audit conclusion. The next
+feature release persists a final Audit report only when its pinned corpus
+snapshot plus the document, causal-readiness, and package/signing/handover
+deltas each resolve to one exact immutable evidence version; it finalizes the
+process atomically and keeps `product_ready=false`. The PostgreSQL acceptance
+covers the success path, an altered delta fingerprint, and action-request
+rejection. Versioned ActionRequest persistence and report membership remain an
+explicit next dependency: a report carrying bare action-request IDs is rejected
+rather than silently binding an arbitrary later action version. User-facing
+Audit report/projection output and an authorised, separately configured Audit
+service still remain. The public application role must not be granted the
+audit-service role merely to expose this work. OZERO is not used for this
 acceptance.
 
 Restoration now has a reusable, read-only recovery-plan projection built from
