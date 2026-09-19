@@ -76,6 +76,16 @@ tests, and the PostgreSQL-backed project-understanding API suite. OZERO was not
 read or changed: it remains a later real-document validation of this reusable
 output, not its acceptance oracle.
 
+The same project-understanding surface also provides a separate editable
+work/quantity/material CSV schedule. It has one row per candidate work package,
+retains raw and normalized quantity observations, materials, exact locator
+references, scope and unresolved conditions, and intentionally does not sum
+identical names across locations. Controlled input changes identifiers and
+values across two same-named scopes; the authenticated PostgreSQL-backed API
+test verifies the download and its candidate boundary. This is a usable Tender
+pricing/comparison input, not a confirmed quantity total. OZERO is not needed
+to establish the mechanism.
+
 The current reusable output is an **Audit expected-versus-package preflight**.
 It is a workspace-scoped application projection of exact
 requirement versions and ID-package memberships. It preserves repeated document

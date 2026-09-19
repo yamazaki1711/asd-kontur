@@ -200,6 +200,16 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert tender_schedule.headers["content-type"] == "text/csv; charset=utf-8"
         assert tender_schedule.headers["content-disposition"].startswith("attachment;")
         assert "source_references" in tender_schedule.content.decode("utf-8-sig")
+        tender_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-scope-schedule.csv"
+        )
+        assert tender_scope_schedule.status_code == 200, tender_scope_schedule.text
+        assert tender_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        scope_csv = tender_scope_schedule.content.decode("utf-8-sig")
+        assert "work_package_id" in scope_csv
+        assert "Устройство монолитной плиты" in scope_csv
+        assert "candidate" in scope_csv
         tender_report = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
             "tender-findings.docx"

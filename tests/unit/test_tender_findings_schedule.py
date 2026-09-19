@@ -12,6 +12,7 @@ from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.support.generation import validate_docx
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
+from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
 
 
 def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> None:
@@ -104,6 +105,75 @@ def test_exports_resolve_work_context_only_by_exact_observation_membership() -> 
         xml = document.read("word/document.xml").decode("utf-8")
     assert "Монтаж лотков; область: zone-a" in xml
     assert "zone-b" not in xml
+
+
+def test_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
+    content = render_tender_scope_schedule_csv(
+        (
+            {
+                "work_package_id": "package-a",
+                "package": {
+                    "work_type": {"raw": "Монтаж лотков", "normalized": "монтаж лотков"},
+                    "scope": "zone-a",
+                    "candidate_observation_count": 1,
+                    "quantities": [
+                        {
+                            "raw_value": "12",
+                            "raw_unit": "м",
+                            "normalized_value": "12",
+                            "normalized_unit": "m",
+                            "source_locator_id": "locator-a",
+                        }
+                    ],
+                    "materials": [],
+                    "source_locator_ids": ["locator-a"],
+                    "uncertainties": ["SAME_WORK_NAME_DIFFERENT_SCOPE"],
+                },
+            },
+            {
+                "work_package_id": "package-b",
+                "package": {
+                    "work_type": {"raw": "Монтаж лотков", "normalized": "монтаж лотков"},
+                    "scope": "zone-b",
+                    "candidate_observation_count": 1,
+                    "quantities": [],
+                    "materials": [
+                        {
+                            "raw_name": "Лоток Л1",
+                            "raw_quantity": "3",
+                            "raw_unit": "шт",
+                            "source_locator_id": "locator-b",
+                        }
+                    ],
+                    "source_locator_ids": ["locator-b"],
+                    "uncertainties": ["SAME_WORK_NAME_DIFFERENT_SCOPE"],
+                },
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+        evidence_index={
+            "locator-a": {
+                "safe_display_name": "Plan A.pdf",
+                "document_version": 1,
+                "locator_value": "page:2",
+            },
+            "locator-b": {
+                "safe_display_name": "Plan B.pdf",
+                "document_version": 1,
+                "locator_value": "page:4",
+            },
+        },
+    )
+
+    rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert [(row["work_package_id"], row["scope"]) for row in rows] == [
+        ("package-a", "zone-a"),
+        ("package-b", "zone-b"),
+    ]
+    assert rows[0]["quantity_observations"] == "12 м; normalized=12 m; locator=locator-a"
+    assert rows[1]["material_observations"] == "Лоток Л1; 3 шт; locator=locator-b"
+    assert rows[0]["source_references"] == "Plan A.pdf, version 1, page:2 (locator-a)"
 
 
 def test_application_service_returns_editable_schedule_from_scoped_project_view() -> None:

@@ -4222,6 +4222,12 @@ function ProjectUnderstandingPage() {
                     разных областях не суммируются и остаются отдельными до
                     инженерской сверки.
                   </p>
+                  <a
+                    className="button-link secondary"
+                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-scope-schedule.csv`}
+                  >
+                    Скачать редактируемую ведомость работ и ресурсов
+                  </a>
                   {value.work_packages.length ? (
                     <div className="card-grid">
                       {value.work_packages.map((item) => (

@@ -970,6 +970,30 @@ def _api_router() -> APIRouter:
             },
         )
 
+    @router.get(
+        "/workspaces/{workspace_id}/project-understanding/tender-scope-schedule.csv",
+        tags=["project-understanding"],
+    )
+    def tender_scope_schedule(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        value = _container(request).service.tender_scope_schedule(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=b"".join(value.chunks),
+            media_type=value.media_type,
+            headers={
+                "Content-Disposition": (
+                    f"attachment; filename*=UTF-8''{_header_filename(value.safe_display_name)}"
+                ),
+                "ETag": f'"{value.content_digest[7:]}"',
+            },
+        )
+
     @router.post(
         "/workspaces/{workspace_id}/project-understanding/runs",
         response_model=JobView,
