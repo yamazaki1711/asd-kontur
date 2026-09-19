@@ -239,8 +239,6 @@ class PostgresCorpusAuditStore:
 
         if command.command_type is not AuditCommandType.FINALIZE_AUDIT_REPORT:
             raise ValueError("Audit command must finalize an Audit report")
-        if value.action_request_ids:
-            raise ValueError("Audit report action-request version references are not yet supported")
         scope = value.audit_scope
         self._require_scope(context, scope.organization_id, scope.workspace_id)
         if command.aggregate_id != scope.audit_process_id:
@@ -1032,9 +1030,8 @@ class PostgresCorpusAuditStore:
         kinds, rather than a mutable "latest" projection.  A fingerprint must
         resolve to exactly one persisted version in this Audit process; a
         duplicate match is ambiguity, not a reason to select an arbitrary
-        version.  Action-request membership is intentionally not represented
-        until its versioned contract exists, and is rejected by the public
-        method before this helper is reached.
+        version.  Action-request membership resolves each exact immutable
+        request version before the report record is inserted.
         """
 
         scope = value.audit_scope
@@ -1077,6 +1074,9 @@ class PostgresCorpusAuditStore:
             value.package_readiness_id,
             value.package_readiness_fingerprint,
             "package_signing_handover",
+        )
+        action_request_refs = PostgresCorpusAuditStore._resolve_action_request_refs(
+            session, scope, value
         )
         if value.outcome.value == "complete" and value.unresolved_codes:
             raise ValueError("A complete Audit report cannot retain unresolved codes")
@@ -1129,6 +1129,51 @@ class PostgresCorpusAuditStore:
                 "created_at": value.created_at,
             },
         )
+        for action_request_id, version in action_request_refs:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_report_action_request_memberships "
+                    "(organization_id,workspace_id,audit_report_id,audit_report_version,"
+                    "action_request_id,action_request_version) VALUES "
+                    "(:o,:w,:report,:report_version,:request,:request_version)"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "report": value.audit_report_id,
+                    "report_version": value.version,
+                    "request": action_request_id,
+                    "request_version": version,
+                },
+            )
+
+    @staticmethod
+    def _resolve_action_request_refs(
+        session: Session, scope: AuditScope, value: AuditReport
+    ) -> tuple[tuple[UUID, int], ...]:
+        refs = tuple((item.action_request_id, item.version) for item in value.action_request_refs)
+        if len(set(refs)) != len(refs):
+            raise ValueError("Audit report cannot contain duplicate action-request versions")
+        for action_request_id, version in refs:
+            found = session.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.audit_action_request_versions WHERE "
+                    "organization_id=:o AND workspace_id=:w AND audit_process_id=:process "
+                    "AND action_request_id=:request AND version=:version"
+                ),
+                {
+                    "o": scope.organization_id,
+                    "w": scope.workspace_id,
+                    "process": scope.audit_process_id,
+                    "request": action_request_id,
+                    "version": version,
+                },
+            )
+            if found != 1:
+                raise ValueError(
+                    "Audit report action-request reference must resolve to one persisted version"
+                )
+        return refs
 
     @staticmethod
     def _resolve_report_delta_version(

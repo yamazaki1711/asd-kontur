@@ -138,6 +138,14 @@ and the append-only write fence. The next canonical dependency is versioned
 request membership in a final Audit report, followed by a separately scoped
 owner-readable projection. OZERO is not needed for this acceptance.
 
+Final Audit reports now bind exact immutable ActionRequest versions through a
+separate membership table. Unknown, cross-process, or duplicate request
+versions are rejected before finalisation; reclassification is required after
+an issued action moves the process to `blocked`. The report remains an Audit
+service-owned record and does not yet have an owner-readable application
+projection. Controlled Audit tests cover report/request linkage and immutable
+membership; OZERO is not used.
+
 Canonical Audit persistence now has the first reusable lifecycle and ledger
 implementation on feature releases `4100b4d`, `009972f`, and `dcf452f`:
 an Audit process is pinned to one exact corpus snapshot and rule-set version;

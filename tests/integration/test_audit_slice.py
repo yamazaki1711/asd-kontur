@@ -14,6 +14,7 @@ from sqlalchemy.exc import DBAPIError
 
 from asd_kontur.audit import (
     ActionRequest,
+    ActionRequestReference,
     ActionRequestState,
     AuditCommand,
     AuditCommandType,
@@ -739,6 +740,53 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
             {"snapshot": scope.corpus_snapshot_id, "version": scope.corpus_snapshot_version},
         )
     assert snapshot_fingerprint is not None
+    action_request = ActionRequest(
+        uuid7(),
+        1,
+        scope,
+        "collect_missing_material_certificate",
+        "role:site-quality",
+        "work-package:synthetic-a",
+        ("locator:synthetic-material",),
+        None,
+        ("ID_READINESS_UNPROVEN",),
+        "service:synthetic-audit",
+        "role:independent-auditor",
+        ActionRequestState.OPEN,
+    )
+    issued = store.issue_action_request(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.ISSUE_ACTION_REQUEST,
+            scope.audit_process_id,
+            8,
+            f"audit-process:{scope.audit_process_id}:issue-report-action-request",
+            "service:synthetic-audit",
+            "audit.action.issue",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        action_request,
+    )
+    assert issued.accepted and issued.revision == 9
+    reopened = store.apply_command(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.RECLASSIFY_DOCUMENT,
+            scope.audit_process_id,
+            9,
+            f"audit-process:{scope.audit_process_id}:reopen-after-action-request",
+            "service:synthetic-audit",
+            "audit.document.reclassify",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+    )
+    assert reopened.accepted and reopened.revision == 10
     report = AuditReport(
         uuid7(),
         1,
@@ -750,7 +798,7 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
         causal_delta.fingerprint,
         package_delta.package_readiness_id,
         package_delta.fingerprint,
-        (),
+        (ActionRequestReference(action_request.action_request_id, 1),),
         AuditTerminalOutcome.BLOCKED,
         (
             "ACT_NOT_COLLECTED",
@@ -766,7 +814,7 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
                 uuid7(),
                 AuditCommandType.FINALIZE_AUDIT_REPORT,
                 scope.audit_process_id,
-                8,
+                10,
                 f"audit-process:{scope.audit_process_id}:invalid-final-report",
                 "service:synthetic-audit",
                 "audit.report.finalize",
@@ -776,13 +824,34 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
             ),
             replace(report, document_delta_fingerprint=DIGEST),
         )
+    with pytest.raises(ValueError, match="action-request reference must resolve"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                10,
+                f"audit-process:{scope.audit_process_id}:invalid-action-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(
+                report,
+                audit_report_id=uuid7(),
+                action_request_refs=(ActionRequestReference(uuid7(), 1),),
+            ),
+        )
     finalized = store.finalize_report(
         context,
         AuditCommand(
             uuid7(),
             AuditCommandType.FINALIZE_AUDIT_REPORT,
             scope.audit_process_id,
-            8,
+            10,
             f"audit-process:{scope.audit_process_id}:final-report",
             "service:synthetic-audit",
             "audit.report.finalize",
@@ -792,7 +861,7 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
         ),
         report,
     )
-    assert finalized.accepted and finalized.revision == 9
+    assert finalized.accepted and finalized.revision == 11
     with postgres_environment.audit_engine.begin() as connection:
         set_scope(connection, tenant)
         row = connection.execute(
@@ -806,9 +875,17 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
             ),
             {"report": report.audit_report_id},
         ).one()
+        action_memberships = connection.execute(
+            sa.text(
+                "SELECT action_request_id,action_request_version FROM "
+                "workspace.audit_report_action_request_memberships WHERE audit_report_id=:report "
+                "AND audit_report_version=1"
+            ),
+            {"report": report.audit_report_id},
+        ).all()
     assert row == (
         ProcessState.COMPLETED.value,
-        9,
+        11,
         scope.corpus_snapshot_id,
         scope.corpus_snapshot_version,
         document_delta.document_delta_id,
@@ -825,23 +902,7 @@ def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
         ],
         False,
     )
-    with pytest.raises(ValueError, match="action-request version references"):
-        store.finalize_report(
-            context,
-            AuditCommand(
-                uuid7(),
-                AuditCommandType.FINALIZE_AUDIT_REPORT,
-                scope.audit_process_id,
-                9,
-                f"audit-process:{scope.audit_process_id}:unsupported-action-report",
-                "service:synthetic-audit",
-                "audit.report.finalize",
-                uuid7(),
-                uuid7(),
-                DIGEST,
-            ),
-            replace(report, audit_report_id=uuid7(), action_request_ids=(uuid7(),)),
-        )
+    assert action_memberships == [(action_request.action_request_id, 1)]
 
     other = create_tenant(postgres_environment, tenant.organization_id)
     activate(postgres_environment, other)
