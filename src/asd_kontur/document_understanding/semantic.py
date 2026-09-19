@@ -612,6 +612,68 @@ def reconcile_sources(
                     )
                 )
                 continue
+            estimate_resource = matching_resources[0]
+            project_has_quantity = material.raw_quantity is not None
+            estimate_has_quantity = estimate_resource.raw_quantity is not None
+            if project_has_quantity != estimate_has_quantity or (
+                project_has_quantity
+                and estimate_has_quantity
+                and (
+                    material.parsed_quantity is None
+                    or estimate_resource.parsed_quantity is None
+                    or material.normalized_unit is None
+                    or estimate_resource.normalized_unit is None
+                )
+            ):
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.MATERIAL_QUANTITY_COMPARISON_INPUT_UNAVAILABLE,
+                        str(material.candidate_id),
+                        str(estimate_resource.candidate_id),
+                        (material.locator, estimate_resource.locator),
+                        {
+                            "material": material.raw_name,
+                            "missing_input": (
+                                "usable_project_and_estimate_material_quantities_with_units"
+                            ),
+                            "consequence": "material_quantity_delta_not_evaluated",
+                        },
+                    )
+                )
+                continue
+            if not project_has_quantity:
+                continue
+            if material.normalized_unit != estimate_resource.normalized_unit:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.INCOMPATIBLE_UNITS,
+                        str(material.candidate_id),
+                        str(estimate_resource.candidate_id),
+                        (material.locator, estimate_resource.locator),
+                        {
+                            "comparison_subject": "material",
+                            "material": material.raw_name,
+                            "project_unit": material.raw_unit or "",
+                            "estimate_unit": estimate_resource.raw_unit or "",
+                        },
+                    )
+                )
+                continue
+            if material.parsed_quantity != estimate_resource.parsed_quantity:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.MATERIAL_QUANTITY_MISMATCH,
+                        str(material.candidate_id),
+                        str(estimate_resource.candidate_id),
+                        (material.locator, estimate_resource.locator),
+                        {
+                            "material": material.raw_name,
+                            "project": str(material.parsed_quantity),
+                            "estimate": str(estimate_resource.parsed_quantity),
+                            "unit": material.normalized_unit or "",
+                        },
+                    )
+                )
     for estimate in estimates:
         if (
             estimate.candidate_id not in matched_estimates

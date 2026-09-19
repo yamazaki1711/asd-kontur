@@ -34,6 +34,16 @@ _PRESENTATION: dict[str, tuple[str, str, str]] = {
         "parsed estimate material or resource positions",
         "project material scope cannot be evaluated against the estimate",
     ),
+    "material_quantity_comparison_input_unavailable": (
+        "comparison_not_performed",
+        "usable project and estimate material quantities with units",
+        "material quantity delta cannot be evaluated",
+    ),
+    "material_quantity_mismatch": (
+        "candidate_difference",
+        "reconciled project and estimate material quantities",
+        "material quantity basis requires clarification before pricing",
+    ),
     "estimate_position_unsupported_by_project": (
         "candidate_difference",
         "project source supporting the estimate position",

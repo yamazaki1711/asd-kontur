@@ -420,6 +420,72 @@ def test_reconciliation_uses_exact_estimate_work_locator_for_material_comparison
     )
 
 
+def test_reconciliation_reports_material_quantity_delta_only_after_exact_resource_match() -> None:
+    project_work = WorkTypeCandidate(
+        deterministic_uuid("work:project:steel"),
+        "Монтаж каркаса",
+        "монтаж каркаса",
+        "facility:los-1",
+        _locator(page_number=4),
+        DocumentRole.PROJECT_DOCUMENTATION,
+    )
+    estimate_locator = _locator(page_number=5)
+    estimate_work = WorkTypeCandidate(
+        deterministic_uuid("work:estimate:steel"),
+        "Монтаж каркаса",
+        "монтаж каркаса",
+        "estimate:2",
+        estimate_locator,
+        DocumentRole.LOCAL_ESTIMATE,
+    )
+    project_material = MaterialCandidate(
+        deterministic_uuid("material:project:steel"),
+        project_work.candidate_id,
+        "Сталь С245",
+        "сталь с245",
+        "12",
+        Decimal("12"),
+        "т",
+        "t",
+        _locator(page_number=4),
+        CandidateDecision.VERIFIED,
+    )
+    estimate_resource = MaterialCandidate(
+        deterministic_uuid("material:estimate:steel"),
+        estimate_work.candidate_id,
+        "Сталь С245",
+        "сталь с245",
+        "10",
+        Decimal("10"),
+        "т",
+        "t",
+        estimate_locator,
+        CandidateDecision.VERIFIED,
+    )
+    estimate = EstimatePositionCandidate(
+        deterministic_uuid("estimate:steel:position"),
+        "2",
+        "монтаж каркаса",
+        None,
+        None,
+        None,
+        estimate_locator,
+    )
+
+    defects = reconcile_sources(
+        (project_work, estimate_work), (), (project_material, estimate_resource), (estimate,)
+    )
+
+    assert len(defects) == 1
+    assert defects[0].kind is ReconciliationDefectKind.MATERIAL_QUANTITY_MISMATCH
+    assert defects[0].parameters == {
+        "material": "Сталь С245",
+        "project": "12",
+        "estimate": "10",
+        "unit": "t",
+    }
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [

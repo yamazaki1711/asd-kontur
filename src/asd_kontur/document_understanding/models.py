@@ -87,6 +87,10 @@ class ReconciliationDefectKind(StrEnum):
     ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE = (
         "estimate_material_comparison_input_unavailable"
     )
+    MATERIAL_QUANTITY_COMPARISON_INPUT_UNAVAILABLE = (
+        "material_quantity_comparison_input_unavailable"
+    )
+    MATERIAL_QUANTITY_MISMATCH = "material_quantity_mismatch"
     AMBIGUOUS_SOURCE_MATCH = "ambiguous_source_match"
     DRAWING_INTELLIGENCE_REQUIRED = "drawing_intelligence_required"
     NORMATIVE_AUTHORITY_UNAVAILABLE = "normative_authority_unavailable"

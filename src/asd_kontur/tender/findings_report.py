@@ -26,6 +26,10 @@ _RUSSIAN_TITLES = {
     "estimate_material_comparison_input_unavailable": (
         "Сопоставление материалов со сметой ещё не выполнено"
     ),
+    "material_quantity_comparison_input_unavailable": (
+        "Недостаточно данных для сверки количества материала"
+    ),
+    "material_quantity_mismatch": "Требуется сверка количества материала по источникам",
     "estimate_position_unsupported_by_project": "Сметная позиция не подтверждена проектом",
     "incompatible_units": "Единицы измерения требуют проверки",
     "ambiguous_source_match": "Связь исходных сведений неоднозначна",
