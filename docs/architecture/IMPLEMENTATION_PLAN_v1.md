@@ -75,6 +75,16 @@ The two initial increments are implemented on feature releases `98b7363` and
   the generated OpenAPI client and Russian UI distinguish the two states.
   OZERO is not used.
 
+The next Support configuration capability is intentionally separate from this
+application gate. `PostgresSupportProcess` is owned by the `asd_support_service`
+database role and needs an active human `support.scope.configure` grant; the
+current Product Application runtime has no configured connection for that role.
+The application must therefore not synthesize grants or call the Support writer
+through its own role. A production delivery needs a separately deployed,
+audited Support-command service and an authorised request flow that supplies
+the exact mode execution, rule-set, policy manifest, and deliverable scope.
+This is an operational/authority dependency, not an OZERO-processing blocker.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,
