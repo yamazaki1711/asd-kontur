@@ -434,6 +434,17 @@ def reconcile_sources(
     materials_by_work: dict[UUID, list[MaterialCandidate]] = defaultdict(list)
     for item in materials:
         materials_by_work[item.work_candidate_id].append(item)
+    estimate_roles = {
+        DocumentRole.LOCAL_ESTIMATE,
+        DocumentRole.OBJECT_ESTIMATE,
+        DocumentRole.CONSOLIDATED_ESTIMATE,
+    }
+    estimate_work_by_locator: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
+    for work in works:
+        if work.source_role in estimate_roles:
+            estimate_work_by_locator[(work.locator.source_locator_id, work.normalized_name)].append(
+                work
+            )
     defects: list[ReconciliationDefect] = []
     matched_estimates: set[UUID] = set()
     ambiguous_estimates: set[UUID] = set()
@@ -543,22 +554,64 @@ def reconcile_sources(
                     )
                 )
         for material in materials_by_work.get(work.candidate_id, []):
-            # Estimate positions retain only their work/quantity/unit evidence.
-            # Until the pipeline persists estimate resource/material rows, the
-            # comparison cannot substantiate that a project material is absent.
-            defects.append(
-                _defect(
-                    ReconciliationDefectKind.ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE,
-                    str(material.candidate_id),
-                    str(estimate.candidate_id),
-                    (material.locator, estimate.locator),
-                    {
-                        "material": material.raw_name,
-                        "missing_input": "parsed_estimate_material_or_resource_positions",
-                        "consequence": "project_material_scope_not_evaluated_against_estimate",
-                    },
-                )
+            estimate_work_candidates = estimate_work_by_locator.get(
+                (estimate.locator.source_locator_id, estimate.normalized_description), []
             )
+            estimate_resources = (
+                materials_by_work.get(estimate_work_candidates[0].candidate_id, [])
+                if len(estimate_work_candidates) == 1
+                else []
+            )
+            if not estimate_resources:
+                # A work/quantity estimate row alone is not evidence about its
+                # resources.  Keep this explicit rather than inventing a
+                # material omission from the absence of a parsed resource row.
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.ESTIMATE_MATERIAL_COMPARISON_INPUT_UNAVAILABLE,
+                        str(material.candidate_id),
+                        str(estimate.candidate_id),
+                        (material.locator, estimate.locator),
+                        {
+                            "material": material.raw_name,
+                            "missing_input": "parsed_estimate_material_or_resource_positions",
+                            "consequence": "project_material_scope_not_evaluated_against_estimate",
+                        },
+                    )
+                )
+                continue
+            matching_resources = [
+                resource
+                for resource in estimate_resources
+                if resource.normalized_name == material.normalized_name
+            ]
+            if not matching_resources:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.PROJECT_MATERIAL_MISSING_IN_ESTIMATE,
+                        str(material.candidate_id),
+                        str(estimate.candidate_id),
+                        (material.locator, *(item.locator for item in estimate_resources)),
+                        {"material": material.raw_name},
+                    )
+                )
+                continue
+            if len(matching_resources) > 1:
+                defects.append(
+                    _defect(
+                        ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                        str(material.candidate_id),
+                        str(estimate.candidate_id),
+                        (material.locator, *(item.locator for item in matching_resources)),
+                        {
+                            "code": (
+                                "multiple_estimate_material_resources_with_same_normalized_name"
+                            ),
+                            "material": material.raw_name,
+                        },
+                    )
+                )
+                continue
     for estimate in estimates:
         if (
             estimate.candidate_id not in matched_estimates

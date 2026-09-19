@@ -360,6 +360,66 @@ def test_reconciliation_does_not_claim_material_absent_without_estimate_resource
     )
 
 
+def test_reconciliation_uses_exact_estimate_work_locator_for_material_comparison() -> None:
+    project_work = WorkTypeCandidate(
+        deterministic_uuid("work:project:concrete"),
+        "Устройство плиты",
+        "устройство плиты",
+        "facility:los-1",
+        _locator(page_number=1),
+        DocumentRole.PROJECT_DOCUMENTATION,
+    )
+    estimate_locator = _locator(page_number=2)
+    estimate_work = WorkTypeCandidate(
+        deterministic_uuid("work:estimate:concrete"),
+        "Устройство плиты",
+        "устройство плиты",
+        "estimate:1",
+        estimate_locator,
+        DocumentRole.LOCAL_ESTIMATE,
+    )
+    project_material = MaterialCandidate(
+        deterministic_uuid("material:project:concrete"),
+        project_work.candidate_id,
+        "Бетон В25",
+        "бетон в25",
+        None,
+        None,
+        None,
+        None,
+        _locator(page_number=1),
+        CandidateDecision.CANDIDATE,
+    )
+    estimate_resource = MaterialCandidate(
+        deterministic_uuid("material:estimate:concrete"),
+        estimate_work.candidate_id,
+        "Бетон В25",
+        "бетон в25",
+        None,
+        None,
+        None,
+        None,
+        estimate_locator,
+        CandidateDecision.CANDIDATE,
+    )
+    estimate = EstimatePositionCandidate(
+        deterministic_uuid("estimate:concrete:position"),
+        "1",
+        "устройство плиты",
+        None,
+        None,
+        None,
+        estimate_locator,
+    )
+
+    assert (
+        reconcile_sources(
+            (project_work, estimate_work), (), (project_material, estimate_resource), (estimate,)
+        )
+        == ()
+    )
+
+
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
