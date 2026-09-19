@@ -9,7 +9,12 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 from xml.sax.saxutils import escape
 
-from .findings_schedule import finding_presentation, source_reference
+from .findings_schedule import (
+    _work_packages_by_observation,
+    finding_presentation,
+    finding_work_context,
+    source_reference,
+)
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
 
@@ -30,6 +35,7 @@ def render_tender_findings_docx(
     materialization_state: str,
     coverage_gaps: Iterable[str],
     evidence_index: Mapping[str, Mapping[str, Any]] | None = None,
+    work_packages: Iterable[Mapping[str, Any]] = (),
 ) -> bytes:
     """Render an editable Russian report without promoting candidate findings.
 
@@ -43,6 +49,7 @@ def render_tender_findings_docx(
         key=lambda item: (str(item.get("defect_id", "")), str(item)),
     )
     gaps = tuple(sorted(str(item) for item in coverage_gaps))
+    packages_by_observation = _work_packages_by_observation(work_packages)
     rows = [("№", "Наблюдение", "Объект", "Нужные данные", "Последствие", "Источники")]
     for ordinal, defect in enumerate(normalized, start=1):
         kind = str(defect.get("defect_kind", "unknown"))
@@ -57,7 +64,7 @@ def render_tender_findings_docx(
             (
                 str(ordinal),
                 _RUSSIAN_TITLES.get(kind, "Требуется инженерская сверка"),
-                _subject(defect),
+                _subject(defect, finding_work_context(defect, packages_by_observation)),
                 required_input,
                 consequence,
                 "; ".join(
@@ -76,7 +83,11 @@ def render_tender_findings_docx(
     return _docx_package(content)
 
 
-def _subject(defect: Mapping[str, Any]) -> str:
+def _subject(defect: Mapping[str, Any], work_context: Mapping[str, str]) -> str:
+    work_name = work_context.get("work_name")
+    scope = work_context.get("scope")
+    if work_name:
+        return f"{work_name}; область: {scope or 'не указана'}"
     subject = str(defect.get("subject_identity") or "Не указан")
     related = defect.get("related_identity")
     return subject if related is None else f"{subject}; связано с: {related}"

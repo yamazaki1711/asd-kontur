@@ -45,6 +45,12 @@ The two initial increments are implemented on feature releases `98b7363` and
   and exports: same-named work in different scopes remains separate, values
   are observations rather than a project total, and each row retains locator
   references and reconciliation limits.
+  The editable CSV and DOCX finding exports now resolve a finding to a work
+  package only through exact candidate-observation membership. They show the
+  source-scoped work name and scope where that membership exists; a matching
+  label in another scope cannot be selected. This makes a discrepancy usable
+  for bid preparation without promoting it to a confirmed omission or
+  collapsing repeated work names.
 * Support can export the exact formed package as a deterministic editable ZIP:
   its register is the first entry, available generated/finalized documents are
   included, and missing/blocked positions are an explicit separate schedule.
@@ -63,6 +69,12 @@ consequence, exact missing input, and source/revision/locator reference.
 Controlled project-model data tests its candidate boundary and document
 validity; an OZERO check is limited to rendering its already-persisted findings
 and never implies full-corpus Tender acceptance.
+
+The exact-membership context change is covered by controlled same-name/different-
+scope fixtures, CSV/DOCX structural output checks, scoped application-service
+tests, and the PostgreSQL-backed project-understanding API suite. OZERO was not
+read or changed: it remains a later real-document validation of this reusable
+output, not its acceptance oracle.
 
 The current reusable output is an **Audit expected-versus-package preflight**.
 It is a workspace-scoped application projection of exact

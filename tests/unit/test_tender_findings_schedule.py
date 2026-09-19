@@ -52,6 +52,60 @@ def test_schedule_marks_missing_estimate_input_without_claiming_omission() -> No
     assert row["required_input"] == "parsed_estimate_or_bill_of_quantities_positions"
 
 
+def test_exports_resolve_work_context_only_by_exact_observation_membership() -> None:
+    work_packages = (
+        {
+            "work_package_id": "package-a",
+            "package": {
+                "work_package_id": "package-a",
+                "work_type": {"raw": "Монтаж лотков", "normalized": "монтаж лотков"},
+                "scope": "zone-a",
+                "candidate_observation_ids": ["work-a"],
+            },
+        },
+        {
+            "work_package_id": "package-b",
+            "package": {
+                "work_package_id": "package-b",
+                "work_type": {"raw": "Монтаж лотков", "normalized": "монтаж лотков"},
+                "scope": "zone-b",
+                "candidate_observation_ids": ["work-b"],
+            },
+        },
+    )
+    defect = {
+        "defect_id": "finding-scope-a",
+        "defect_kind": "project_work_missing_in_estimate",
+        "subject_identity": "work-a",
+        "related_identity": None,
+        "source_locator_ids": [],
+        "parameters": {},
+    }
+
+    csv_payload = render_tender_findings_csv(
+        (defect,),
+        materialization_state="partial",
+        coverage_gaps=(),
+        work_packages=work_packages,
+    )
+    row = next(csv.DictReader(StringIO(csv_payload.decode("utf-8-sig"))))
+    assert row["work_package_id"] == "package-a"
+    assert row["work_name"] == "Монтаж лотков"
+    assert row["scope"] == "zone-a"
+    assert row["work_relation"] == "subject"
+
+    report = render_tender_findings_docx(
+        (defect,),
+        materialization_state="partial",
+        coverage_gaps=(),
+        work_packages=work_packages,
+    )
+    with zipfile.ZipFile(io.BytesIO(report)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Монтаж лотков; область: zone-a" in xml
+    assert "zone-b" not in xml
+
+
 def test_application_service_returns_editable_schedule_from_scoped_project_view() -> None:
     expected_workspace_id = UUID("10000000-0000-4000-8000-000000000001")
 

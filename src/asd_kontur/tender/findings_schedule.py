@@ -53,6 +53,7 @@ def render_tender_findings_csv(
     materialization_state: str,
     coverage_gaps: Iterable[str],
     evidence_index: Mapping[str, Mapping[str, Any]] | None = None,
+    work_packages: Iterable[Mapping[str, Any]] = (),
 ) -> bytes:
     """Render a UTF-8 BOM CSV intended for editing in ordinary office tools.
 
@@ -69,6 +70,10 @@ def render_tender_findings_csv(
             "assessment_state",
             "subject_identity",
             "related_identity",
+            "work_package_id",
+            "work_name",
+            "scope",
+            "work_relation",
             "required_input",
             "practical_consequence",
             "source_references",
@@ -80,6 +85,7 @@ def render_tender_findings_csv(
     )
     writer.writeheader()
     gap_value = ";".join(sorted(str(item) for item in coverage_gaps))
+    packages_by_observation = _work_packages_by_observation(work_packages)
     for defect in sorted(defects, key=lambda item: (str(item.get("defect_id", "")), str(item))):
         kind = str(defect.get("defect_kind", "unknown"))
         state, required_input, consequence = finding_presentation(kind)
@@ -90,6 +96,7 @@ def render_tender_findings_csv(
         else:
             parameters = {}
         locator_ids = tuple(str(item) for item in defect.get("source_locator_ids", []))
+        work_context = finding_work_context(defect, packages_by_observation)
         resolved_evidence = evidence_index or {}
         writer.writerow(
             {
@@ -98,6 +105,10 @@ def render_tender_findings_csv(
                 "assessment_state": state,
                 "subject_identity": str(defect.get("subject_identity", "")),
                 "related_identity": str(defect.get("related_identity") or ""),
+                "work_package_id": work_context["work_package_id"],
+                "work_name": work_context["work_name"],
+                "scope": work_context["scope"],
+                "work_relation": work_context["work_relation"],
                 "required_input": required_input,
                 "practical_consequence": consequence,
                 "source_references": ";".join(
@@ -111,6 +122,60 @@ def render_tender_findings_csv(
             }
         )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def finding_work_context(
+    defect: Mapping[str, Any],
+    packages_by_observation: Mapping[str, Mapping[str, str]],
+) -> dict[str, str]:
+    """Resolve a finding to a source-scoped work package by exact candidate ID.
+
+    A finding can point to a work candidate or to a related estimate/quantity.
+    Only an exact candidate-observation membership is sufficient to present a
+    work context; labels must never merge identical work names across scopes.
+    """
+
+    for relation, identity in (
+        ("subject", defect.get("subject_identity")),
+        ("related", defect.get("related_identity")),
+    ):
+        candidate = packages_by_observation.get(str(identity or ""))
+        if candidate is not None:
+            return {**candidate, "work_relation": relation}
+    return {
+        "work_package_id": "",
+        "work_name": "",
+        "scope": "",
+        "work_relation": "not_resolved",
+    }
+
+
+def _work_packages_by_observation(
+    work_packages: Iterable[Mapping[str, Any]],
+) -> dict[str, dict[str, str]]:
+    """Build only unambiguous exact memberships for user-facing exports."""
+
+    matches: dict[str, list[dict[str, str]]] = {}
+    for item in work_packages:
+        package = item.get("package")
+        if not isinstance(package, Mapping):
+            continue
+        work_type = package.get("work_type")
+        work_type = work_type if isinstance(work_type, Mapping) else {}
+        context = {
+            "work_package_id": str(
+                item.get("work_package_id") or package.get("work_package_id") or ""
+            ),
+            "work_name": str(work_type.get("raw") or work_type.get("normalized") or ""),
+            "scope": str(package.get("scope") or "scope_not_specified"),
+        }
+        for observation_id in package.get("candidate_observation_ids") or ():
+            matches.setdefault(str(observation_id), []).append(context)
+    return {
+        observation_id: contexts[0]
+        for observation_id, contexts in matches.items()
+        if len(contexts) == 1
+    }
 
 
 def finding_presentation(kind: str) -> tuple[str, str, str]:
