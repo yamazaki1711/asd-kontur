@@ -359,6 +359,13 @@ def test_reconciliation_does_not_claim_material_absent_without_estimate_resource
     assert (
         material_gap.parameters["missing_input"] == "parsed_estimate_material_or_resource_positions"
     )
+    quantity_difference = next(
+        item for item in defects if item.kind is ReconciliationDefectKind.QUANTITY_MISMATCH
+    )
+    assert quantity_difference.parameters["difference"] == "-1"
+    assert quantity_difference.parameters["difference_method"] == (
+        "project_minus_estimate_exact_decimal"
+    )
 
 
 def test_reconciliation_uses_exact_estimate_work_locator_for_material_comparison() -> None:
@@ -484,6 +491,8 @@ def test_reconciliation_reports_material_quantity_delta_only_after_exact_resourc
         "project": "12",
         "estimate": "10",
         "unit": "t",
+        "difference": "2",
+        "difference_method": "project_minus_estimate_exact_decimal",
     }
 
 

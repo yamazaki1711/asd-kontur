@@ -5338,6 +5338,7 @@ function TenderFindingList({
         const sharedUnit = displayValue(parameters.unit, "");
         const projectUnit = displayValue(parameters.project_unit, "");
         const estimateUnit = displayValue(parameters.estimate_unit, "");
+        const difference = displayValue(parameters.difference, "");
         const comparisonCode = displayValue(parameters.code, "");
         const comparisonDetails =
           projectValue || estimateValue
@@ -5345,6 +5346,10 @@ function TenderFindingList({
                 sharedUnit ? ` ${sharedUnit}` : ""
               }; смета: ${estimateValue || "не указано"}${
                 sharedUnit ? ` ${sharedUnit}` : ""
+              }${
+                difference ? `; разница (проект минус смета): ${difference}${
+                  sharedUnit ? ` ${sharedUnit}` : ""
+                }` : ""
               }.`
             : projectUnit || estimateUnit
               ? `Единицы: проект — ${projectUnit || "не указано"}; смета — ${

@@ -158,7 +158,11 @@ def comparison_details(parameters: Mapping[str, Any]) -> str:
         project_value = str(project) if project is not None else "не указано"
         estimate_value = str(estimate) if estimate is not None else "не указано"
         suffix = f" {unit}" if unit else ""
-        return f"Проект: {project_value}{suffix}; смета: {estimate_value}{suffix}"
+        difference = parameters.get("difference")
+        difference_text = ""
+        if difference is not None:
+            difference_text = f"; разница (проект минус смета): {difference}{suffix}"
+        return f"Проект: {project_value}{suffix}; смета: {estimate_value}{suffix}{difference_text}"
 
     project_unit = str(parameters.get("project_unit") or "").strip()
     estimate_unit = str(parameters.get("estimate_unit") or "").strip()

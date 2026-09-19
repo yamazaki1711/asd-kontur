@@ -550,6 +550,8 @@ def reconcile_sources(
                             "project": str(quantity.parsed_value),
                             "estimate": str(estimate.parsed_quantity),
                             "unit": quantity.normalized_unit or "",
+                            "difference": str(quantity.parsed_value - estimate.parsed_quantity),
+                            "difference_method": "project_minus_estimate_exact_decimal",
                         },
                     )
                 )
@@ -643,6 +645,13 @@ def reconcile_sources(
                 continue
             if not project_has_quantity:
                 continue
+            project_quantity = material.parsed_quantity
+            estimate_quantity = estimate_resource.parsed_quantity
+            if project_quantity is None or estimate_quantity is None:
+                # The missing-input branch above records this state.  Keep the
+                # arithmetic fail-closed if a future candidate contract reaches
+                # this point without an exact decimal value.
+                continue
             if material.normalized_unit != estimate_resource.normalized_unit:
                 defects.append(
                     _defect(
@@ -659,7 +668,7 @@ def reconcile_sources(
                     )
                 )
                 continue
-            if material.parsed_quantity != estimate_resource.parsed_quantity:
+            if project_quantity != estimate_quantity:
                 defects.append(
                     _defect(
                         ReconciliationDefectKind.MATERIAL_QUANTITY_MISMATCH,
@@ -668,9 +677,11 @@ def reconcile_sources(
                         (material.locator, estimate_resource.locator),
                         {
                             "material": material.raw_name,
-                            "project": str(material.parsed_quantity),
-                            "estimate": str(estimate_resource.parsed_quantity),
+                            "project": str(project_quantity),
+                            "estimate": str(estimate_quantity),
                             "unit": material.normalized_unit or "",
+                            "difference": str(project_quantity - estimate_quantity),
+                            "difference_method": "project_minus_estimate_exact_decimal",
                         },
                     )
                 )
