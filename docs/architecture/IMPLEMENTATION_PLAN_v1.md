@@ -161,6 +161,16 @@ and a native-complete/semantic-partial case.  OZERO is not used; a later
 real-document validation can only establish the status of the selected active
 OZERO sources, not universal package coverage.
 
+The Tender result labels the persisted source-and-scope groups as **work
+observations**, not work packages.  The current persistence boundary safely
+retains raw candidate observations but does not yet establish cross-document
+facility identity or an awarded commercial scope.  Reusing its raw count as a
+work-package total would therefore inflate the user-visible result.  Controlled
+same-name/different-scope fixtures verify the changed label and count; OZERO
+is not needed.  A future reusable facility/scope reconciliation capability is
+required before these observations can become a deduplicated package basis for
+Support.
+
 The same project-understanding surface also provides a separate editable
 work/quantity/material CSV schedule. It has one row per candidate work package,
 retains raw and normalized quantity observations, materials, exact locator

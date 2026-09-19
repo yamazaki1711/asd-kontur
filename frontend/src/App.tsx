@@ -3578,8 +3578,12 @@ function PilotResultBody({
         />
         <Metric label="Рассмотрено" value={value.reviewed_item_count} />
         <Metric
-          label="Пакетов работ"
-          value={Number(value.summary.work_packages ?? 0)}
+          label="Наблюдений работ"
+          value={Number(
+            value.summary.candidate_work_observation_groups ??
+              value.summary.work_packages ??
+              0,
+          )}
         />
       </section>
       <InfoNotice>{value.normative_notice}.</InfoNotice>
@@ -4471,7 +4475,7 @@ function ProjectUnderstandingPage() {
               )}
               {section === "packages" && (
                 <section className="panel">
-                  <h2>Пакеты работ-кандидаты</h2>
+                  <h2>Исходные наблюдения по работам</h2>
                   <p>
                     Повторные наблюдения объединяются только в пределах одного
                     источника и явно указанной области. Одинаковые названия в
@@ -4504,7 +4508,7 @@ function ProjectUnderstandingPage() {
                     </div>
                   ) : (
                     <p className="empty-state">
-                      Пакеты работ ещё не определены.
+                      Наблюдения по работам ещё не извлечены.
                     </p>
                   )}
                 </section>

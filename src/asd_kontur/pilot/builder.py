@@ -388,7 +388,16 @@ def _summary(
     support: dict[str, Any],
 ) -> dict[str, Any]:
     open_count = sum(item["resolution_status"] == "open" for item in items)
-    common = {"items": len(items), "open_questions": open_count, "work_packages": len(packages)}
+    # Project understanding persists source- and scope-bounded *candidate
+    # observation groups*.  They are deliberately not canonical construction
+    # work packages until facility/scope reconciliation has sufficient evidence.
+    # Calling the count a package count inflated the Tender summary and invited
+    # users to read repeated document observations as commercial scope.
+    common = {
+        "items": len(items),
+        "open_questions": open_count,
+        "candidate_work_observation_groups": len(packages),
+    }
     if mode is PilotMode.SUPPORT:
         readiness = dict(support.get("readiness") or {})
         common.update(

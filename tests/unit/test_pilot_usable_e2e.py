@@ -196,6 +196,8 @@ def test_tender_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -
 
     schedule = result["tender_scope_schedule"]
     assert len(schedule) == 2
+    assert result["summary"]["candidate_work_observation_groups"] == 2
+    assert "work_packages" not in result["summary"]
     assert [item["scope"] for item in schedule] == ["zone:A", "zone:B"]
     assert [item["quantities"][0]["raw_value"] for item in schedule] == ["12,350", "8,000"]
     assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in schedule[1]["uncertainties"]
