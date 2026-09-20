@@ -1113,3 +1113,12 @@ plan and release commit. Next executable action: qualify and deploy that exact
 release with a database backup, allow the worker to fence the expired job, create
 one supported retry, and verify the new reconciliation through API/consultant
 before scheduling further semantic work.
+
+The supported successor `01a0c136-8dfe-75e3-ae1e-2277942c20d7` started on the
+new release and immediately demonstrated a reusable query defect before its
+first Qwen call: evidence hydration had no scoped source-locator index and the
+planner repeated a workspace-wide native-layout scan per structure observation.
+Migration `0061_native_layout_locator_index` is the next active correction. The
+successor remains the sole current attempt; preserve its lineage and do not
+create another retry until that index is active and its current outcome is
+known.

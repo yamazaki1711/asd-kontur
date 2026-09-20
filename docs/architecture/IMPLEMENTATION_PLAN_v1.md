@@ -572,6 +572,14 @@ the current project/API/consultant package set is membership-bound, verified
 catalog population beyond the synthetic work type, and professional Tender and
 Support acceptance. This capability alone does not make either mode ready.
 
+The first live successor also demonstrated a missing evidence-hydration index:
+cross-document identity preparation performed a scoped native-layout scan per
+structure observation before Qwen could run. Migration
+`0061_native_layout_locator_index` adds the exact immutable-evidence lookup path;
+its acceptance is a changed PostgreSQL plan plus completion of the supported
+successor. A listening Qwen endpoint is not counted as processing while this
+database prerequisite is active.
+
 ## Completed prerequisite
 
 `MEMORY-INTEGRITY-FIX-01` resolved the two canonical memory defects and passed
