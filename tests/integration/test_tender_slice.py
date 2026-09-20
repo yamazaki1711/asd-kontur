@@ -48,6 +48,7 @@ from asd_kontur.tender import (
     TypedTenderDeliverable,
     assess_corpus,
 )
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 
 from .conftest import PostgreSQLEnvironment, create_database, drop_database, run_migration
 from .test_common_domain_kernel import (
@@ -580,6 +581,43 @@ def test_at_pe_41_tender_end_to_end_lineage_authority_archive_and_reset(
     assert versions == 5
     assert candidate_fact == 1
     assert product_ready is False
+
+    owner_identity_id = "owner:synthetic-tender-projection"
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO application.owner_identities "
+                "(owner_identity_id,normalized_username,display_name,password_hash,status,auth_version) "
+                "VALUES (:owner,'synthetic-tender-projection','Synthetic Tender projection owner',"
+                "'not-a-login-secret','active',1)"
+            ),
+            {"owner": owner_identity_id},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO application.owner_organization_grants "
+                "(owner_identity_id,organization_id,capability_set,grant_version) "
+                "VALUES (:owner,:organization,ARRAY['workspace.read'],1)"
+            ),
+            {"owner": owner_identity_id, "organization": tenant.organization_id},
+        )
+    projection = TenderContractAnalysisRepository(postgres_environment.application_engine).latest(
+        owner_identity_id=owner_identity_id,
+        workspace_id=tenant.workspace_id,
+    )
+    assert projection["status"] == TenderState.FINALIZED.value
+    assert projection["process"]["tender_process_id"] == str(process_id)
+    assert projection["assessment"]["missing_source_classes"] == []
+    assert {item["clause_key"] for item in projection["clauses"]} == {"payment.synthetic"}
+    assert {item["issue_kind"] for item in projection["issues"]} == {
+        "contract_risk",
+        "gap",
+        "missing_work",
+    }
+    assert {item["deliverable_kind"] for item in projection["deliverables"]} == {
+        item.value for item in TenderDeliverableKind
+    }
+    assert projection["gaps"] == []
 
     archive_service = PortableArchiveService()
     tender_manifest = json.dumps(
