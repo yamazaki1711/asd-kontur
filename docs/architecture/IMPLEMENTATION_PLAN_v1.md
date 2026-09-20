@@ -145,6 +145,19 @@ operational/authority dependency, not an OZERO-processing blocker.
   exercised through controlled scoped data and can later project an authorised
   OZERO Tender process without a project-specific branch.
 
+* The same owner-scoped Tender projection now includes the exact current
+  disagreement-protocol items and revised-contract clauses already written by
+  the separately authorised Tender service. The Russian UI links each proposed
+  revision back to its source clause locator, and an editable CSV retains the
+  clause, source-version, locator, evidence, consequence, proposal, revised
+  wording, uncertainty, and deliverable state. A missing process exports an
+  explicit `not started` row instead of an empty risk schedule. Controlled
+  PostgreSQL 17 acceptance proves canonical lineage and cross-owner default
+  deny; a separate changed-identifier fixture proves the export is reusable and
+  neutralizes spreadsheet formulas. OZERO is not used. This advances the
+  contractor-protective R1 output but does not create legal findings, qualify a
+  reviewer, deploy the release, or establish Tender mode readiness.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,

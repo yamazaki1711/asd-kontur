@@ -2519,6 +2519,12 @@ function TenderContractAnalysisBody({
 }) {
   const clauses = value.clauses as Array<Record<string, unknown>>;
   const issues = value.issues as Array<Record<string, unknown>>;
+  const disagreementItems = value.disagreement_items as Array<
+    Record<string, unknown>
+  >;
+  const revisedClauses = value.revised_clauses as Array<
+    Record<string, unknown>
+  >;
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
   if (value.status === "not_started") {
     return (
@@ -2538,10 +2544,91 @@ function TenderContractAnalysisBody({
         юридическое заключение, не меняет исходный договор и не заменяет
         квалифицированное рассмотрение.
       </InfoNotice>
+      <a
+        className="button-link secondary"
+        href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.csv`}
+      >
+        Скачать договорный анализ и предложения
+      </a>
       <section className="metrics" aria-label="Состояние договорного анализа">
         <Metric label="Положений" value={clauses.length} />
         <Metric label="Вопросов и рисков" value={issues.length} />
         <Metric label="Результатов" value={deliverables.length} />
+        <Metric
+          label="Предложений разногласий"
+          value={disagreementItems.length}
+        />
+        <Metric
+          label="Переработанных положений"
+          value={revisedClauses.length}
+        />
+      </section>
+      <section className="panel">
+        <h2>Протокол разногласий и переработанные положения</h2>
+        {disagreementItems.length || revisedClauses.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Исходное положение</th>
+                  <th>Предлагаемая редакция</th>
+                  <th>Практическое последствие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {disagreementItems.map((item) => {
+                  const revised = revisedClauses.find(
+                    (candidate) =>
+                      String(candidate.disagreement_item_id) ===
+                      String(item.item_id),
+                  );
+                  const sourceClause = clauses.find(
+                    (candidate) =>
+                      String(candidate.clause_id) === String(item.clause_id) &&
+                      String(candidate.clause_version) ===
+                        String(item.clause_version),
+                  );
+                  const locator = displayValue(
+                    sourceClause?.source_locator_id,
+                    "",
+                  );
+                  return (
+                    <tr key={String(item.item_id)}>
+                      <td>
+                        {displayValue(sourceClause?.clause_key, "—")}
+                        {locator ? (
+                          <small>
+                            <Link
+                              to={workspaceRoute(
+                                "Tender",
+                                workspaceId,
+                                `/evidence/locators/${locator}`,
+                              )}
+                            >
+                              Открыть исходный фрагмент
+                            </Link>
+                          </small>
+                        ) : null}
+                      </td>
+                      <td>
+                        {displayValue(
+                          revised?.revised_text ?? item.proposed_clause_text,
+                          "—",
+                        )}
+                      </td>
+                      <td>{displayValue(item.consequence_code, "—")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>
+            Подтверждённые предложения для протокола разногласий и
+            переработанного договора ещё не подготовлены.
+          </p>
+        )}
       </section>
       <section className="panel">
         <h2>Состояние и исходные данные</h2>

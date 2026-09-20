@@ -3421,6 +3421,14 @@
             "title": "Deliverables",
             "type": "array"
           },
+          "disagreement_items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Disagreement Items",
+            "type": "array"
+          },
           "gaps": {
             "items": {
               "type": "string"
@@ -3448,6 +3456,30 @@
             ],
             "title": "Process"
           },
+          "protocols": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Protocols",
+            "type": "array"
+          },
+          "revised_clauses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Revised Clauses",
+            "type": "array"
+          },
+          "revised_contracts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Revised Contracts",
+            "type": "array"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -3459,6 +3491,10 @@
           "assessment",
           "clauses",
           "issues",
+          "protocols",
+          "disagreement_items",
+          "revised_contracts",
+          "revised_clauses",
           "deliverables",
           "gaps",
           "authority_boundary"
@@ -7774,6 +7810,47 @@
           }
         },
         "summary": "Tender Contract Analysis",
+        "tags": [
+          "tender"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv": {
+      "get": {
+        "operationId": "tender_contract_analysis_export_api_v1_workspaces__workspace_id__tender_contract_analysis_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Contract Analysis Export",
         "tags": [
           "tender"
         ]

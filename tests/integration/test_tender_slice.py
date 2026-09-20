@@ -48,6 +48,7 @@ from asd_kontur.tender import (
     TypedTenderDeliverable,
     assess_corpus,
 )
+from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 
 from .conftest import PostgreSQLEnvironment, create_database, drop_database, run_migration
@@ -617,7 +618,24 @@ def test_at_pe_41_tender_end_to_end_lineage_authority_archive_and_reset(
     assert {item["deliverable_kind"] for item in projection["deliverables"]} == {
         item.value for item in TenderDeliverableKind
     }
+    assert len(projection["protocols"]) == 1
+    assert len(projection["disagreement_items"]) == 1
+    assert projection["disagreement_items"][0]["proposed_clause_text"] == (
+        "Synthetic revised payment condition."
+    )
+    assert len(projection["revised_contracts"]) == 1
+    assert len(projection["revised_clauses"]) == 1
+    assert projection["revised_clauses"][0]["revised_text"] == (
+        "Synthetic revised payment condition."
+    )
     assert projection["gaps"] == []
+
+    exported_contract = render_tender_contract_analysis_csv(projection).decode("utf-8-sig")
+    assert "disagreement_item" in exported_contract
+    assert "revised_clause" in exported_contract
+    assert "Synthetic revised payment condition." in exported_contract
+    assert str(locator) in exported_contract
+    assert str(evidence) in exported_contract
 
     archive_service = PortableArchiveService()
     tender_manifest = json.dumps(

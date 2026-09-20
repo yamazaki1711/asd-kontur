@@ -468,6 +468,10 @@ class TenderContractAnalysisView(ApiModel):
     assessment: dict[str, Any] | None
     clauses: list[dict[str, Any]]
     issues: list[dict[str, Any]]
+    protocols: list[dict[str, Any]]
+    disagreement_items: list[dict[str, Any]]
+    revised_contracts: list[dict[str, Any]]
+    revised_clauses: list[dict[str, Any]]
     deliverables: list[dict[str, Any]]
     gaps: list[str]
     authority_boundary: str

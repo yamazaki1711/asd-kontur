@@ -1183,6 +1183,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract Analysis Export */
+        get: operations["tender_contract_analysis_export_api_v1_workspaces__workspace_id__tender_contract_analysis_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2550,6 +2567,10 @@ export interface components {
             deliverables: {
                 [key: string]: unknown;
             }[];
+            /** Disagreement Items */
+            disagreement_items: {
+                [key: string]: unknown;
+            }[];
             /** Gaps */
             gaps: string[];
             /** Issues */
@@ -2560,6 +2581,18 @@ export interface components {
             process: {
                 [key: string]: unknown;
             } | null;
+            /** Protocols */
+            protocols: {
+                [key: string]: unknown;
+            }[];
+            /** Revised Clauses */
+            revised_clauses: {
+                [key: string]: unknown;
+            }[];
+            /** Revised Contracts */
+            revised_contracts: {
+                [key: string]: unknown;
+            }[];
             /** Status */
             status: string;
         };
@@ -5083,6 +5116,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenderContractAnalysisView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_analysis_export_api_v1_workspaces__workspace_id__tender_contract_analysis_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

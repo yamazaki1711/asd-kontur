@@ -156,6 +156,10 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             "assessment": None,
             "clauses": [],
             "issues": [],
+            "protocols": [],
+            "disagreement_items": [],
+            "revised_contracts": [],
+            "revised_clauses": [],
             "deliverables": [],
             "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
             "authority_boundary": "read_only_projection",
@@ -164,6 +168,12 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         hidden = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
         assert hidden.status_code == 404, hidden.text
         assert hidden.json()["error"]["code"] == "workspace_not_found"
+        exported = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
+        assert exported.status_code == 200, exported.text
+        assert exported.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in exported.content.decode("utf-8-sig")
+        hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
+        assert hidden_export.status_code == 404, hidden_export.text
         assert other_csrf["X-CSRF-Token"]
 
 

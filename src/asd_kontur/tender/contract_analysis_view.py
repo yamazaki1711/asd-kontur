@@ -44,6 +44,10 @@ class TenderContractAnalysisRepository:
                     "assessment": None,
                     "clauses": [],
                     "issues": [],
+                    "protocols": [],
+                    "disagreement_items": [],
+                    "revised_contracts": [],
+                    "revised_clauses": [],
                     "deliverables": [],
                     "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
                     "authority_boundary": "read_only_projection",
@@ -75,6 +79,72 @@ class TenderContractAnalysisRepository:
                     {"o": organization_id, "w": workspace_id, "p": process_id},
                 ).mappings()
             )
+            protocols = list(
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (protocol_id) protocol_id,protocol_version,state,"
+                        "source_manifest_digest,evidence_manifest_digest,rule_set_version_id,"
+                        "blocker_issue_ids,uncertainty_issue_ids,recorded_at "
+                        "FROM workspace.tender_disagreement_protocol_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w AND tender_process_id=:p "
+                        "ORDER BY protocol_id,protocol_version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": process_id},
+                ).mappings()
+            )
+            disagreement_items = list(
+                session.execute(
+                    sa.text(
+                        "WITH latest_protocols AS ("
+                        "SELECT DISTINCT ON (protocol_id) protocol_id,protocol_version "
+                        "FROM workspace.tender_disagreement_protocol_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w AND tender_process_id=:p "
+                        "ORDER BY protocol_id,protocol_version DESC) "
+                        "SELECT i.protocol_id,i.protocol_version,i.item_id,i.ordinal,i.clause_id,"
+                        "i.clause_version,i.issue_id,i.issue_version,i.proposed_clause_text,"
+                        "i.consequence_code,i.rule_trace_id,i.evidence_link_ids,"
+                        "i.uncertainty_issue_ids,i.finding_decision_id "
+                        "FROM workspace.tender_disagreement_items i JOIN latest_protocols p "
+                        "ON p.protocol_id=i.protocol_id AND p.protocol_version=i.protocol_version "
+                        "WHERE i.organization_id=:o AND i.workspace_id=:w "
+                        "ORDER BY i.protocol_id,i.ordinal"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": process_id},
+                ).mappings()
+            )
+            revised_contracts = list(
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (revised_contract_id) revised_contract_id,"
+                        "revised_contract_version,protocol_id,protocol_version,"
+                        "source_contract_version_id,state,source_manifest_digest,recorded_at "
+                        "FROM workspace.tender_revised_contract_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w AND tender_process_id=:p "
+                        "ORDER BY revised_contract_id,revised_contract_version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": process_id},
+                ).mappings()
+            )
+            revised_clauses = list(
+                session.execute(
+                    sa.text(
+                        "WITH latest_contracts AS ("
+                        "SELECT DISTINCT ON (revised_contract_id) revised_contract_id,"
+                        "revised_contract_version FROM workspace.tender_revised_contract_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w AND tender_process_id=:p "
+                        "ORDER BY revised_contract_id,revised_contract_version DESC) "
+                        "SELECT c.revised_contract_id,c.revised_contract_version,c.revised_clause_id,"
+                        "c.ordinal,c.source_clause_id,c.source_clause_version,c.issue_id,"
+                        "c.issue_version,c.disagreement_item_id,c.decision_id,c.revised_text,"
+                        "c.revised_text_digest FROM workspace.tender_revised_clause_versions c "
+                        "JOIN latest_contracts r ON r.revised_contract_id=c.revised_contract_id "
+                        "AND r.revised_contract_version=c.revised_contract_version "
+                        "WHERE c.organization_id=:o AND c.workspace_id=:w "
+                        "ORDER BY c.revised_contract_id,c.ordinal"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "p": process_id},
+                ).mappings()
+            )
             deliverables = list(
                 session.execute(
                     sa.text(
@@ -91,6 +161,11 @@ class TenderContractAnalysisRepository:
             gaps.append("TENDER_CONTRACT_CLAUSES_NOT_EXTRACTED")
         if clauses and not issues:
             gaps.append("TENDER_CONTRACT_ISSUES_NOT_RECORDED")
+        deliverable_kinds = {str(item["deliverable_kind"]) for item in deliverables}
+        if "disagreement_protocol" in deliverable_kinds and not disagreement_items:
+            gaps.append("TENDER_DISAGREEMENT_ITEMS_UNAVAILABLE")
+        if "revised_contract" in deliverable_kinds and not revised_clauses:
+            gaps.append("TENDER_REVISED_CLAUSES_UNAVAILABLE")
         return {
             "status": "contract_input_unavailable"
             if "draft_contract" in missing
@@ -103,6 +178,10 @@ class TenderContractAnalysisRepository:
             "assessment": _row(assessment) if assessment else None,
             "clauses": [_row(x) for x in clauses],
             "issues": [_row(x) for x in issues],
+            "protocols": [_row(x) for x in protocols],
+            "disagreement_items": [_row(x) for x in disagreement_items],
+            "revised_contracts": [_row(x) for x in revised_contracts],
+            "revised_clauses": [_row(x) for x in revised_clauses],
             "deliverables": [_row(x) for x in deliverables],
             "gaps": gaps,
             "authority_boundary": "read_only_projection; Tender-service and qualified reviewer retain legal-writing authority",

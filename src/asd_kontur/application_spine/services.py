@@ -32,6 +32,7 @@ from asd_kontur.restoration import (
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
+from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
@@ -565,6 +566,26 @@ class ProductSpineService:
     ) -> dict[str, Any]:
         return self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def tender_contract_analysis_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the owner-scoped canonical Tender contract projection."""
+
+        view = self.tender_contract_analysis(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_tender_contract_analysis_csv(view)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-contract-analysis-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
         )
 
     def project_understanding(
