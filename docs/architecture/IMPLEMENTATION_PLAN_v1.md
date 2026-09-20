@@ -75,15 +75,26 @@ The two initial increments are implemented on feature releases `98b7363` and
   the generated OpenAPI client and Russian UI distinguish the two states.
   OZERO is not used.
 
-The next Support configuration capability is intentionally separate from this
-application gate. `PostgresSupportProcess` is owned by the `asd_support_service`
-database role and needs an active human `support.scope.configure` grant; the
-current Product Application runtime has no configured connection for that role.
-The application must therefore not synthesize grants or call the Support writer
-through its own role. A production delivery needs a separately deployed,
-audited Support-command service and an authorised request flow that supplies
-the exact mode execution, rule-set, policy manifest, and deliverable scope.
-This is an operational/authority dependency, not an OZERO-processing blocker.
+The reusable Support configuration command is now implemented behind an
+explicit role-separated connection.  The owner-scoped Product Application
+connection resolves workspace access and verifies the exact Support mode plus
+an admitted intake manifest; only a configured `asd_support_service` connection
+can append the Support process and scope versions.  The existing Support writer
+then re-verifies the active human `support.scope.configure` grant in the same
+transaction as the append-only process records.  Semantic idempotency excludes
+newly allocated command/process IDs, so a retry returns the original process
+while a changed request under the same key is rejected.  Disposable PostgreSQL
+acceptance proves the successful path, replay, semantic conflict, invalid
+manifest rejection, cross-owner default deny, and visibility through the
+existing ID-production projection. OZERO is not used.
+
+The live Product Application runtime still has no
+`ASD_SUPPORT_COMMAND_DATABASE_URL`, so this writer capability remains disabled
+there and no privileged connection was added to the running process. Production
+acceptance still requires an approved Support-service credential assignment,
+an actual professional grant, deployment/recovery evidence, and an authorised
+UI workflow through package formation and export. This is an
+operational/authority dependency, not an OZERO-processing blocker.
 
 * The platform construction consultant now projects Gateway evidence into a
   bounded structural prompt before local-Qwen generation. Every selected

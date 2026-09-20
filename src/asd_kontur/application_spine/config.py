@@ -50,6 +50,7 @@ class SpineSettings:
     qwen_bind_host: str = "127.0.0.1"
     qwen_bind_port: int = 8790
     ntd_embedding_endpoint: str | None = None
+    support_command_database_url: str | None = None
     document_worker_organization_id: UUID | None = None
     document_worker_workspace_id: UUID | None = None
 
@@ -62,6 +63,13 @@ class SpineSettings:
             raise ValueError("ASD_WORKER_DATABASE_URL must be an explicit PostgreSQL URL")
         if not self.destruction_database_url.startswith(("postgresql+psycopg://", "postgresql://")):
             raise ValueError("ASD_DESTRUCTION_DATABASE_URL must be an explicit PostgreSQL URL")
+        if (
+            self.support_command_database_url is not None
+            and not self.support_command_database_url.startswith(
+                ("postgresql+psycopg://", "postgresql://")
+            )
+        ):
+            raise ValueError("ASD_SUPPORT_COMMAND_DATABASE_URL must be an explicit PostgreSQL URL")
         if not self.object_store_root.is_absolute():
             raise ValueError("ASD_OBJECT_STORE_ROOT must be absolute")
         if not self.archive_store_root.is_absolute():
@@ -135,6 +143,7 @@ class SpineSettings:
             qwen_bind_host=os.environ.get("ASD_QWEN_BIND_HOST", "127.0.0.1"),
             qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
             ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
+            support_command_database_url=os.environ.get("ASD_SUPPORT_COMMAND_DATABASE_URL") or None,
             document_worker_organization_id=_optional_uuid("ASD_DOCUMENT_WORKER_ORGANIZATION_ID"),
             document_worker_workspace_id=_optional_uuid("ASD_DOCUMENT_WORKER_WORKSPACE_ID"),
         )

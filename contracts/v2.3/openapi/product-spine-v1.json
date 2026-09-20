@@ -3197,6 +3197,159 @@
         "title": "SupportProductionView",
         "type": "object"
       },
+      "SupportScopeConfigurationView": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "support_process_id": {
+            "format": "uuid",
+            "title": "Support Process Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "support_process_id",
+          "revision",
+          "state",
+          "outcome",
+          "reason_code"
+        ],
+        "title": "SupportScopeConfigurationView",
+        "type": "object"
+      },
+      "SupportScopeConfigureRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_profile_version": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Authority Profile Version",
+            "type": "string"
+          },
+          "classification": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Classification",
+            "type": "string"
+          },
+          "contract_registry_version": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Contract Registry Version",
+            "type": "string"
+          },
+          "deliverable_scope": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Deliverable Scope",
+            "type": "array"
+          },
+          "idempotency_key": {
+            "maxLength": 200,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "input_manifest_digest": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "title": "Input Manifest Digest",
+            "type": "string"
+          },
+          "mode_execution_id": {
+            "format": "uuid",
+            "title": "Mode Execution Id",
+            "type": "string"
+          },
+          "policy_versions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Policy Versions",
+            "type": "array"
+          },
+          "process_definition_version": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Process Definition Version",
+            "type": "string"
+          },
+          "professional_grant_id": {
+            "format": "uuid",
+            "title": "Professional Grant Id",
+            "type": "string"
+          },
+          "professional_grant_version": {
+            "minimum": 1.0,
+            "title": "Professional Grant Version",
+            "type": "integer"
+          },
+          "professional_qualification_ref": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Professional Qualification Ref",
+            "type": "string"
+          },
+          "purpose": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Purpose",
+            "type": "string"
+          },
+          "rule_set_version_id": {
+            "format": "uuid",
+            "title": "Rule Set Version Id",
+            "type": "string"
+          },
+          "source_class_allowlist": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Source Class Allowlist",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mode_execution_id",
+          "rule_set_version_id",
+          "process_definition_version",
+          "authority_profile_version",
+          "contract_registry_version",
+          "policy_versions",
+          "deliverable_scope",
+          "classification",
+          "purpose",
+          "source_class_allowlist",
+          "input_manifest_digest",
+          "professional_grant_id",
+          "professional_grant_version",
+          "professional_qualification_ref",
+          "idempotency_key"
+        ],
+        "title": "SupportScopeConfigureRequest",
+        "type": "object"
+      },
       "TenderContractAnalysisView": {
         "additionalProperties": false,
         "properties": {
@@ -7430,6 +7583,75 @@
           }
         },
         "summary": "Support Production",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/processes": {
+      "post": {
+        "operationId": "configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportScopeConfigureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportScopeConfigurationView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Configure Support Scope",
         "tags": [
           "support-production"
         ]

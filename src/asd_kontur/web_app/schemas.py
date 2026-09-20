@@ -419,6 +419,32 @@ class SupportProductionView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class SupportScopeConfigureRequest(ApiModel):
+    mode_execution_id: UUID
+    rule_set_version_id: UUID
+    process_definition_version: str = Field(min_length=1, max_length=128)
+    authority_profile_version: str = Field(min_length=1, max_length=128)
+    contract_registry_version: str = Field(min_length=1, max_length=128)
+    policy_versions: list[str] = Field(min_length=1, max_length=64)
+    deliverable_scope: list[str] = Field(min_length=1, max_length=64)
+    classification: str = Field(min_length=1, max_length=128)
+    purpose: str = Field(min_length=1, max_length=512)
+    source_class_allowlist: list[str] = Field(min_length=1, max_length=64)
+    input_manifest_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    professional_grant_id: UUID
+    professional_grant_version: int = Field(ge=1)
+    professional_qualification_ref: str = Field(min_length=1, max_length=512)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class SupportScopeConfigurationView(ApiModel):
+    support_process_id: UUID
+    revision: int
+    state: str
+    outcome: str
+    reason_code: str
+
+
 class AuditExpectedActualPreflightView(ApiModel):
     assessment_kind: Literal["expected_vs_package_preflight"]
     status: Literal["not_started", "partial"]

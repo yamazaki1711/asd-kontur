@@ -1132,6 +1132,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/processes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Configure Support Scope */
+        post: operations["configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
         parameters: {
             query?: never;
@@ -2430,6 +2447,64 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** SupportScopeConfigurationView */
+        SupportScopeConfigurationView: {
+            /** Outcome */
+            outcome: string;
+            /** Reason Code */
+            reason_code: string;
+            /** Revision */
+            revision: number;
+            /** State */
+            state: string;
+            /**
+             * Support Process Id
+             * Format: uuid
+             */
+            support_process_id: string;
+        };
+        /** SupportScopeConfigureRequest */
+        SupportScopeConfigureRequest: {
+            /** Authority Profile Version */
+            authority_profile_version: string;
+            /** Classification */
+            classification: string;
+            /** Contract Registry Version */
+            contract_registry_version: string;
+            /** Deliverable Scope */
+            deliverable_scope: string[];
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Input Manifest Digest */
+            input_manifest_digest: string;
+            /**
+             * Mode Execution Id
+             * Format: uuid
+             */
+            mode_execution_id: string;
+            /** Policy Versions */
+            policy_versions: string[];
+            /** Process Definition Version */
+            process_definition_version: string;
+            /**
+             * Professional Grant Id
+             * Format: uuid
+             */
+            professional_grant_id: string;
+            /** Professional Grant Version */
+            professional_grant_version: number;
+            /** Professional Qualification Ref */
+            professional_qualification_ref: string;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Rule Set Version Id
+             * Format: uuid
+             */
+            rule_set_version_id: string;
+            /** Source Class Allowlist */
+            source_class_allowlist: string[];
         };
         /** TenderContractAnalysisView */
         TenderContractAnalysisView: {
@@ -4881,6 +4956,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportProductionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportScopeConfigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportScopeConfigurationView"];
                 };
             };
             /** @description Validation Error */

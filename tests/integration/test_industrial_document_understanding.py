@@ -7,6 +7,7 @@ import json
 import os
 import runpy
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
@@ -19,9 +20,18 @@ from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.worker import DocumentWorker
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.domain import uuid7
+from asd_kontur.persistence import WorkspaceContext, WorkspaceUnitOfWork
+from asd_kontur.support.scope_commands import (
+    SupportScopeCommandError,
+    SupportScopeCommandService,
+    SupportScopeConfiguration,
+)
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
+from .test_common_domain_kernel import _seed_rule
+from .test_workspace_lifecycle import Tenant
 
 pytestmark = pytest.mark.postgres
 
@@ -155,6 +165,203 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         assert hidden.status_code == 404, hidden.text
         assert hidden.json()["error"]["code"] == "workspace_not_found"
         assert other_csrf["X-CSRF-Token"]
+
+
+def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """A configured professional scope unlocks the existing ID-package path."""
+
+    settings = replace(
+        _settings(postgres_environment, tmp_path),
+        support_command_database_url=_database_url(postgres_environment.support_engine),
+    )
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    owner_identity_id = app.state.container.auth.bootstrap_owner(
+        username="support-scope-owner",
+        password="Synthetic-Support-Scope-Owner-Password-42!",
+        display_name="Synthetic Support scope owner",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="support-scope-other",
+        password="Synthetic-Support-Scope-Other-Password-42!",
+        display_name="Synthetic Support scope other owner",
+    )
+    with TestClient(app) as client, TestClient(app) as other:
+        csrf = _login(
+            client,
+            username="support-scope-owner",
+            password="Synthetic-Support-Scope-Owner-Password-42!",
+        )
+        workspace_response = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Support scope command"},
+            headers=csrf,
+        )
+        assert workspace_response.status_code == 201, workspace_response.text
+        workspace = workspace_response.json()
+        organization_id = UUID(workspace["organization_id"])
+        workspace_id = UUID(workspace["workspace_id"])
+        tenant = Tenant(
+            organization_id,
+            UUID(workspace["construction_object_id"]),
+            workspace_id,
+        )
+        mode_execution_id = uuid7()
+        with WorkspaceUnitOfWork(
+            postgres_environment.application_engine,
+            WorkspaceContext(
+                organization_id,
+                workspace_id,
+                owner_identity_id,
+                "service.synthetic-support-scope-test",
+                uuid7(),
+            ),
+        ) as unit:
+            assert unit.workspaces is not None
+            unit.workspaces.create_mode_execution(
+                mode_execution_id=mode_execution_id,
+                mode="Support",
+                purpose="purpose.synthetic.support-scope",
+                input_manifest_ref="manifest.synthetic.support-scope",
+                policy_assignment_key="policy.synthetic",
+                policy_assignment_version="0.1.0",
+                rule_set_key="rules.synthetic",
+                rule_set_version="0.1.0",
+            )
+        rule_set_version_id, _, _, _ = _seed_rule(postgres_environment, tenant)
+        grant_id = uuid7()
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.support_professional_grants "
+                    "(organization_id,workspace_id,grant_id,grant_version,human_identity_id,"
+                    "capability,professional_qualification_ref,authority_reference,status,"
+                    "effective_from,integrity_digest) "
+                    "VALUES (:o,:w,:grant,1,:owner,"
+                    "'support.scope.configure','qualification:synthetic-support@1',"
+                    "'authority:synthetic-support@1','active',CURRENT_TIMESTAMP,:digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "grant": grant_id,
+                    "owner": owner_identity_id,
+                    "digest": "sha256:" + "b" * 64,
+                },
+            )
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("scope-source.docx", _docx(), "application/octet-stream"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+        with postgres_environment.owner_engine.connect() as connection:
+            manifest_digest = connection.scalar(
+                sa.text(
+                    "SELECT manifest_digest FROM workspace.intake_manifests "
+                    "WHERE organization_id=:o "
+                    "AND workspace_id=:w ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+        assert isinstance(manifest_digest, str)
+        payload = {
+            "mode_execution_id": str(mode_execution_id),
+            "rule_set_version_id": str(rule_set_version_id),
+            "process_definition_version": "support.process@1.0.0",
+            "authority_profile_version": "authority.synthetic@1.0.0",
+            "contract_registry_version": "1.3.0",
+            "policy_versions": ["retention.synthetic@0.1.0"],
+            "deliverable_scope": ["id_package"],
+            "classification": "synthetic_non_confidential",
+            "purpose": "controlled ID-package acceptance",
+            "source_class_allowlist": ["pd_rd", "field_evidence"],
+            "input_manifest_digest": manifest_digest,
+            "professional_grant_id": str(grant_id),
+            "professional_grant_version": 1,
+            "professional_qualification_ref": "qualification:synthetic-support@1",
+            "idempotency_key": "support-scope-configuration-synthetic-01",
+        }
+        first = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=csrf,
+        )
+        second = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=csrf,
+        )
+        assert first.status_code == second.status_code == 201
+        assert first.json()["outcome"] == "accepted_completed"
+        assert second.json()["outcome"] == "duplicate_completed"
+        assert first.json()["support_process_id"] == second.json()["support_process_id"]
+        assert first.json()["revision"] == second.json()["revision"] == 1
+        assert first.json()["state"] == "scope_configured"
+        conflicting = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={**payload, "purpose": "changed semantic Support scope"},
+            headers=csrf,
+        )
+        assert conflicting.status_code == 409, conflicting.text
+        assert conflicting.json()["error"]["code"] == "SUPPORT_IDEMPOTENCY_CONFLICT"
+        missing_manifest = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={
+                **payload,
+                "input_manifest_digest": "sha256:" + "f" * 64,
+                "idempotency_key": "support-scope-configuration-missing-manifest-01",
+            },
+            headers=csrf,
+        )
+        assert missing_manifest.status_code == 404, missing_manifest.text
+        assert missing_manifest.json()["error"]["code"] == "support_input_manifest_not_found"
+        with pytest.raises(SupportScopeCommandError, match="support_command_role_invalid"):
+            SupportScopeCommandService(
+                postgres_environment.application_engine,
+                postgres_environment.application_engine,
+            ).configure(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                correlation_id=uuid7(),
+                configuration=SupportScopeConfiguration(
+                    mode_execution_id=mode_execution_id,
+                    rule_set_version_id=rule_set_version_id,
+                    process_definition_version="support.process@1.0.0",
+                    authority_profile_version="authority.synthetic@1.0.0",
+                    contract_registry_version="1.3.0",
+                    policy_versions=("retention.synthetic@0.1.0",),
+                    deliverable_scope=("id_package",),
+                    classification="synthetic_non_confidential",
+                    purpose="wrong writer role must fail closed",
+                    source_class_allowlist=("pd_rd", "field_evidence"),
+                    input_manifest_digest=manifest_digest,
+                    professional_grant_id=grant_id,
+                    professional_grant_version=1,
+                    professional_qualification_ref="qualification:synthetic-support@1",
+                    idempotency_key="support-scope-configuration-wrong-role-01",
+                ),
+            )
+        production = client.get(f"/api/v1/workspaces/{workspace_id}/support/id-production")
+        assert production.status_code == 200, production.text
+        assert (
+            production.json()["support_process"]["support_process_id"]
+            == first.json()["support_process_id"]
+        )
+        other_csrf = _login(
+            other,
+            username="support-scope-other",
+            password="Synthetic-Support-Scope-Other-Password-42!",
+        )
+        hidden = other.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=other_csrf,
+        )
+        assert hidden.status_code == 404, hidden.text
+        assert hidden.json()["error"]["code"] == "workspace_not_found"
 
 
 def test_browser_to_evidence_project_understanding_is_workspace_scoped(

@@ -54,7 +54,13 @@ from asd_kontur.lifecycle import LifecycleError, PostgresLifecycleRepository
 from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewAction
 from asd_kontur.pilot.postgres import PilotResultError
 from asd_kontur.restoration import RestorationRecoveryError
+from asd_kontur.support import SupportError
 from asd_kontur.support.production_postgres import SupportProductionError
+from asd_kontur.support.scope_commands import (
+    SupportScopeCommandError,
+    SupportScopeCommandService,
+    SupportScopeConfiguration,
+)
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
@@ -109,6 +115,8 @@ from .schemas import (
     SessionView,
     StartGenerationRequest,
     SupportProductionView,
+    SupportScopeConfigurationView,
+    SupportScopeConfigureRequest,
     TenderContractAnalysisView,
     TrialReadinessRequest,
     TrialReadinessView,
@@ -130,6 +138,11 @@ class ApplicationContainer:
         self.destruction_engine = sa.create_engine(
             settings.destruction_database_url, pool_pre_ping=True
         )
+        self.support_command_engine = (
+            sa.create_engine(settings.support_command_database_url, pool_pre_ping=True)
+            if settings.support_command_database_url is not None
+            else None
+        )
         self.settings = settings
         self.repository = SpinePostgresRepository(
             engine,
@@ -146,6 +159,11 @@ class ApplicationContainer:
             PostgresLifecycleRepository(self.lifecycle_engine),
             self.object_store,
             settings,
+        )
+        self.support_scope_commands = (
+            SupportScopeCommandService(engine, self.support_command_engine)
+            if self.support_command_engine is not None
+            else None
         )
         assistant_repository = AssistantRepository(engine)
         self.assistant = ProfessionalAssistantService(
@@ -189,6 +207,8 @@ def create_app(*, engine: Engine, settings: SpineSettings) -> FastAPI:
         engine.dispose()
         container.lifecycle_engine.dispose()
         container.destruction_engine.dispose()
+        if container.support_command_engine is not None:
+            container.support_command_engine.dispose()
 
     app = FastAPI(
         title="ASD-KONTUR Product Application Spine API",
@@ -250,6 +270,17 @@ def _install_middleware(app: FastAPI) -> None:
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
+
+    @app.exception_handler(SupportScopeCommandError)
+    async def support_scope_command_error(
+        request: Request, exc: SupportScopeCommandError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(SupportError)
+    async def support_error(request: Request, exc: SupportError) -> JSONResponse:
+        return _error(request, exc.code.value, 409)
 
     @app.exception_handler(TenderContractAnalysisError)
     async def tender_contract_analysis_error(
@@ -1180,6 +1211,45 @@ def _api_router() -> APIRouter:
             workspace_id=workspace_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/processes",
+        response_model=SupportScopeConfigurationView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def configure_support_scope(
+        request: Request,
+        workspace_id: UUID,
+        payload: SupportScopeConfigureRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportScopeConfigurationView:
+        commands = _container(request).support_scope_commands
+        if commands is None:
+            raise HTTPException(status_code=503, detail="support_scope_command_service_unavailable")
+        value = commands.configure(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=request.state.correlation_id,
+            configuration=SupportScopeConfiguration(
+                mode_execution_id=payload.mode_execution_id,
+                rule_set_version_id=payload.rule_set_version_id,
+                process_definition_version=payload.process_definition_version,
+                authority_profile_version=payload.authority_profile_version,
+                contract_registry_version=payload.contract_registry_version,
+                policy_versions=tuple(payload.policy_versions),
+                deliverable_scope=tuple(payload.deliverable_scope),
+                classification=payload.classification,
+                purpose=payload.purpose,
+                source_class_allowlist=tuple(payload.source_class_allowlist),
+                input_manifest_digest=payload.input_manifest_digest,
+                professional_grant_id=payload.professional_grant_id,
+                professional_grant_version=payload.professional_grant_version,
+                professional_qualification_ref=payload.professional_qualification_ref,
+                idempotency_key=payload.idempotency_key,
+            ),
+        )
+        return SupportScopeConfigurationView(**jsonable_encoder(asdict(value)))
 
     @router.get(
         "/workspaces/{workspace_id}/audit/expected-actual-preflight",
