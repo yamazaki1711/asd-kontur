@@ -1149,6 +1149,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/scope-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Scope Readiness */
+        get: operations["support_scope_readiness_api_v1_workspaces__workspace_id__support_scope_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
         parameters: {
             query?: never;
@@ -2505,6 +2522,17 @@ export interface components {
             rule_set_version_id: string;
             /** Source Class Allowlist */
             source_class_allowlist: string[];
+        };
+        /** SupportScopeReadinessView */
+        SupportScopeReadinessView: {
+            configuration?: components["schemas"]["SupportScopeConfigureRequest"] | null;
+            /** Gaps */
+            gaps?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "blocked" | "configured";
         };
         /** TenderContractAnalysisView */
         TenderContractAnalysisView: {
@@ -4993,6 +5021,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupportScopeConfigurationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    support_scope_readiness_api_v1_workspaces__workspace_id__support_scope_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportScopeReadinessView"];
                 };
             };
             /** @description Validation Error */

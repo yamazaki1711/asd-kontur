@@ -267,23 +267,27 @@ def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
                 {"o": organization_id, "w": workspace_id},
             )
         assert isinstance(manifest_digest, str)
-        payload = {
-            "mode_execution_id": str(mode_execution_id),
-            "rule_set_version_id": str(rule_set_version_id),
-            "process_definition_version": "support.process@1.0.0",
-            "authority_profile_version": "authority.synthetic@1.0.0",
-            "contract_registry_version": "1.3.0",
-            "policy_versions": ["retention.synthetic@0.1.0"],
-            "deliverable_scope": ["id_package"],
-            "classification": "synthetic_non_confidential",
-            "purpose": "controlled ID-package acceptance",
-            "source_class_allowlist": ["pd_rd", "field_evidence"],
-            "input_manifest_digest": manifest_digest,
-            "professional_grant_id": str(grant_id),
-            "professional_grant_version": 1,
-            "professional_qualification_ref": "qualification:synthetic-support@1",
-            "idempotency_key": "support-scope-configuration-synthetic-01",
-        }
+        readiness = client.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert readiness.status_code == 200, readiness.text
+        assert readiness.json()["status"] == "ready"
+        assert readiness.json()["gaps"] == []
+        payload = readiness.json()["configuration"]
+        assert payload["mode_execution_id"] == str(mode_execution_id)
+        assert payload["rule_set_version_id"] == str(rule_set_version_id)
+        assert payload["input_manifest_digest"] == manifest_digest
+        assert payload["professional_grant_id"] == str(grant_id)
+        assert payload["professional_qualification_ref"] == ("qualification:synthetic-support@1")
+        tampered_contract = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={
+                **payload,
+                "rule_set_version_id": str(uuid7()),
+                "idempotency_key": "support-scope-tampered-contract-01",
+            },
+            headers=csrf,
+        )
+        assert tampered_contract.status_code == 409, tampered_contract.text
+        assert tampered_contract.json()["error"]["code"] == ("support_scope_contract_mismatch")
         first = client.post(
             f"/api/v1/workspaces/{workspace_id}/support/processes",
             json=payload,
@@ -300,6 +304,13 @@ def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
         assert first.json()["support_process_id"] == second.json()["support_process_id"]
         assert first.json()["revision"] == second.json()["revision"] == 1
         assert first.json()["state"] == "scope_configured"
+        configured = client.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert configured.status_code == 200, configured.text
+        assert configured.json() == {
+            "status": "configured",
+            "gaps": [],
+            "configuration": None,
+        }
         conflicting = client.post(
             f"/api/v1/workspaces/{workspace_id}/support/processes",
             json={**payload, "purpose": "changed semantic Support scope"},
@@ -327,20 +338,20 @@ def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
                 workspace_id=workspace_id,
                 correlation_id=uuid7(),
                 configuration=SupportScopeConfiguration(
-                    mode_execution_id=mode_execution_id,
-                    rule_set_version_id=rule_set_version_id,
-                    process_definition_version="support.process@1.0.0",
-                    authority_profile_version="authority.synthetic@1.0.0",
-                    contract_registry_version="1.3.0",
-                    policy_versions=("retention.synthetic@0.1.0",),
-                    deliverable_scope=("id_package",),
-                    classification="synthetic_non_confidential",
+                    mode_execution_id=UUID(payload["mode_execution_id"]),
+                    rule_set_version_id=UUID(payload["rule_set_version_id"]),
+                    process_definition_version=payload["process_definition_version"],
+                    authority_profile_version=payload["authority_profile_version"],
+                    contract_registry_version=payload["contract_registry_version"],
+                    policy_versions=tuple(payload["policy_versions"]),
+                    deliverable_scope=tuple(payload["deliverable_scope"]),
+                    classification=payload["classification"],
                     purpose="wrong writer role must fail closed",
-                    source_class_allowlist=("pd_rd", "field_evidence"),
-                    input_manifest_digest=manifest_digest,
-                    professional_grant_id=grant_id,
-                    professional_grant_version=1,
-                    professional_qualification_ref="qualification:synthetic-support@1",
+                    source_class_allowlist=tuple(payload["source_class_allowlist"]),
+                    input_manifest_digest=payload["input_manifest_digest"],
+                    professional_grant_id=UUID(payload["professional_grant_id"]),
+                    professional_grant_version=payload["professional_grant_version"],
+                    professional_qualification_ref=payload["professional_qualification_ref"],
                     idempotency_key="support-scope-configuration-wrong-role-01",
                 ),
             )
@@ -362,6 +373,9 @@ def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
         )
         assert hidden.status_code == 404, hidden.text
         assert hidden.json()["error"]["code"] == "workspace_not_found"
+        hidden_readiness = other.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert hidden_readiness.status_code == 404, hidden_readiness.text
+        assert hidden_readiness.json()["error"]["code"] == "workspace_not_found"
 
 
 def test_browser_to_evidence_project_understanding_is_workspace_scoped(

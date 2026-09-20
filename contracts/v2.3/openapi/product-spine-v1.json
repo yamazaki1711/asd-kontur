@@ -3350,6 +3350,42 @@
         "title": "SupportScopeConfigureRequest",
         "type": "object"
       },
+      "SupportScopeReadinessView": {
+        "additionalProperties": false,
+        "properties": {
+          "configuration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupportScopeConfigureRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gaps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Gaps",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "blocked",
+              "configured"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SupportScopeReadinessView",
+        "type": "object"
+      },
       "TenderContractAnalysisView": {
         "additionalProperties": false,
         "properties": {
@@ -7652,6 +7688,49 @@
           }
         },
         "summary": "Configure Support Scope",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/scope-readiness": {
+      "get": {
+        "operationId": "support_scope_readiness_api_v1_workspaces__workspace_id__support_scope_readiness_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportScopeReadinessView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Support Scope Readiness",
         "tags": [
           "support-production"
         ]

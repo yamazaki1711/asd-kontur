@@ -445,6 +445,12 @@ class SupportScopeConfigurationView(ApiModel):
     reason_code: str
 
 
+class SupportScopeReadinessView(ApiModel):
+    status: Literal["ready", "blocked", "configured"]
+    gaps: list[str] = Field(default_factory=list)
+    configuration: SupportScopeConfigureRequest | None = None
+
+
 class AuditExpectedActualPreflightView(ApiModel):
     assessment_kind: Literal["expected_vs_package_preflight"]
     status: Literal["not_started", "partial"]

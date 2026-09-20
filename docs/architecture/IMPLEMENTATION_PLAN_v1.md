@@ -88,12 +88,27 @@ acceptance proves the successful path, replay, semantic conflict, invalid
 manifest rejection, cross-owner default deny, and visibility through the
 existing ID-production projection. OZERO is not used.
 
+The Support ID screen now also discovers that command's prerequisites through
+an owner-scoped readiness projection instead of asking a user to copy opaque
+database identifiers. It derives the active Support execution, exact active
+rule set, workspace contract registry, admitted intake manifest, policy and
+authority profile versions, and the authenticated owner's unexpired
+`support.scope.configure` grant. The UI offers one bounded action for the
+currently supported `id_package` scope only when every prerequisite and the
+dedicated writer service are available; otherwise it names the exact missing
+prerequisite in Russian. The command independently revalidates the entire
+derived contract and rejects client tampering before the role-separated write.
+Controlled PostgreSQL acceptance proves discovery, tamper rejection,
+idempotent configuration, cross-owner default deny, and continuity into the
+existing register-first package generator. OZERO is not used.
+
 The live Product Application runtime still has no
 `ASD_SUPPORT_COMMAND_DATABASE_URL`, so this writer capability remains disabled
 there and no privileged connection was added to the running process. Production
 acceptance still requires an approved Support-service credential assignment,
 an actual professional grant, deployment/recovery evidence, and an authorised
-UI workflow through package formation and export. This is an
+live UI run through scope configuration, package formation, generation and
+export. This is an
 operational/authority dependency, not an OZERO-processing blocker.
 
 * The platform construction consultant now projects Gateway evidence into a

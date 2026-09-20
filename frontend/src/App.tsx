@@ -36,6 +36,7 @@ type Job = components["schemas"]["JobView"];
 type NtdSeedStatus = components["schemas"]["NtdSeedStatusView"];
 type NtdSeedIdentity = components["schemas"]["NtdSeedIdentityView"];
 type SupportProduction = components["schemas"]["SupportProductionView"];
+type SupportScopeReadiness = components["schemas"]["SupportScopeReadinessView"];
 type AuditExpectedActualPreflight =
   components["schemas"]["AuditExpectedActualPreflightView"];
 type AuditReportProjection = components["schemas"]["AuditReportProjectionView"];
@@ -2275,6 +2276,40 @@ function SupportProductionPage() {
       return requireData(data, error);
     },
   });
+  const scopeReadiness = useQuery({
+    queryKey: ["support-scope-readiness", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/scope-readiness",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const configureScope = useMutation({
+    mutationFn: async (
+      configuration: components["schemas"]["SupportScopeConfigureRequest"],
+    ) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/processes",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: configuration,
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["support-id-production", workspaceId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["support-scope-readiness", workspaceId],
+        }),
+      ]);
+    },
+  });
   const formPackage = useMutation({
     mutationFn: async (workPackageId: string) => {
       const { data, error } = await api.POST(
@@ -2365,6 +2400,11 @@ function SupportProductionPage() {
             value={value}
             workspaceId={workspaceId}
             modeSlug={mode}
+            scopeReadiness={scopeReadiness.data}
+            configureScope={(configuration) =>
+              configureScope.mutate(configuration)
+            }
+            scopePending={configureScope.isPending}
             formPackage={(identity) => formPackage.mutate(identity)}
             packagePending={formPackage.isPending}
             generation={(membership) => startGeneration.mutate(membership)}
@@ -2375,6 +2415,8 @@ function SupportProductionPage() {
             finalizationPending={finalizeCandidate.isPending}
             commandError={
               formPackage.error ??
+              scopeReadiness.error ??
+              configureScope.error ??
               startGeneration.error ??
               reviewCandidate.error ??
               finalizeCandidate.error
@@ -3102,6 +3144,9 @@ function SupportProductionBody({
   value,
   workspaceId,
   modeSlug,
+  scopeReadiness,
+  configureScope,
+  scopePending,
   formPackage,
   packagePending,
   generation,
@@ -3115,6 +3160,11 @@ function SupportProductionBody({
   value: SupportProduction;
   workspaceId: string;
   modeSlug?: string | undefined;
+  scopeReadiness?: SupportScopeReadiness | undefined;
+  configureScope: (
+    configuration: components["schemas"]["SupportScopeConfigureRequest"],
+  ) => void;
+  scopePending: boolean;
   formPackage: (identity: string) => void;
   packagePending: boolean;
   generation: (membership: Record<string, unknown>) => void;
@@ -3202,11 +3252,30 @@ function SupportProductionBody({
           </InfoNotice>
         )}
         {!value.package && !supportProcess && (
-          <InfoNotice>
-            Перед формированием комплекта нужно настроить контур сопровождения
-            для этого ОКС с полномочием специалиста. Без него пакет не будет
-            иметь закреплённого объёма работ, политики и версии правил.
-          </InfoNotice>
+          <>
+            <InfoNotice>
+              Перед формированием комплекта нужно настроить контур сопровождения
+              для этого ОКС с полномочием специалиста. Без него пакет не будет
+              иметь закреплённого объёма работ, политики и версии правил.
+            </InfoNotice>
+            {scopeReadiness?.status === "ready" &&
+              scopeReadiness.configuration && (
+                <button
+                  onClick={() => {
+                    const configuration = scopeReadiness.configuration;
+                    if (configuration) configureScope(configuration);
+                  }}
+                  disabled={scopePending}
+                >
+                  {scopePending
+                    ? "Настраиваем сопровождение…"
+                    : "Настроить сопровождение для комплекта ИД"}
+                </button>
+              )}
+            {scopeReadiness?.status === "blocked" && (
+              <GapList gaps={(scopeReadiness.gaps ?? []).map(humanizeGap)} />
+            )}
+          </>
         )}
         {!value.package &&
           supportProcess &&
@@ -6695,6 +6764,16 @@ function humanizeGap(value: string) {
       "Для вида работы требуется разрешить неоднозначное сопоставление.",
     STRUCTURE_CANDIDATE_RECONCILIATION_PENDING:
       "Структурные кандидаты извлечены, но междокументные связи и идентичности ещё не сверены.",
+    SUPPORT_COMMAND_SERVICE_UNAVAILABLE:
+      "Сервис записи сопровождения не настроен в этой среде.",
+    SUPPORT_MODE_EXECUTION_UNAVAILABLE:
+      "Для ОКС ещё не создано активное выполнение режима «Сопровождение».",
+    SUPPORT_RULE_SET_UNAVAILABLE:
+      "Закреплённая версия правил сопровождения недоступна.",
+    SUPPORT_INPUT_MANIFEST_UNAVAILABLE:
+      "Нет принятого состава исходных документов для сопровождения.",
+    SUPPORT_SCOPE_AUTHORITY_UNAVAILABLE:
+      "У текущего специалиста нет действующего полномочия на настройку сопровождения.",
   };
   return (
     labels[value] ?? "Требуется дополнительная проверка или исходные данные."

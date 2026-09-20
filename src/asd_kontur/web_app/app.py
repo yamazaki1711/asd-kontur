@@ -60,6 +60,7 @@ from asd_kontur.support.scope_commands import (
     SupportScopeCommandError,
     SupportScopeCommandService,
     SupportScopeConfiguration,
+    SupportScopeReadinessService,
 )
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 
@@ -117,6 +118,7 @@ from .schemas import (
     SupportProductionView,
     SupportScopeConfigurationView,
     SupportScopeConfigureRequest,
+    SupportScopeReadinessView,
     TenderContractAnalysisView,
     TrialReadinessRequest,
     TrialReadinessView,
@@ -165,6 +167,7 @@ class ApplicationContainer:
             if self.support_command_engine is not None
             else None
         )
+        self.support_scope_readiness = SupportScopeReadinessService(engine)
         assistant_repository = AssistantRepository(engine)
         self.assistant = ProfessionalAssistantService(
             self.repository,
@@ -1250,6 +1253,23 @@ def _api_router() -> APIRouter:
             ),
         )
         return SupportScopeConfigurationView(**jsonable_encoder(asdict(value)))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/scope-readiness",
+        response_model=SupportScopeReadinessView,
+        tags=["support-production"],
+    )
+    def support_scope_readiness(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> SupportScopeReadinessView:
+        value = _container(request).support_scope_readiness.inspect(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            command_service_configured=(_container(request).support_scope_commands is not None),
+        )
+        return SupportScopeReadinessView(**jsonable_encoder(asdict(value)))
 
     @router.get(
         "/workspaces/{workspace_id}/audit/expected-actual-preflight",
