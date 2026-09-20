@@ -184,7 +184,11 @@ operational/authority dependency, not an OZERO-processing blocker.
   text and source references.  OZERO is not used because this is reusable
   contract-output behavior and its workspace has no authorized contract-
   analysis process.  Professional approval and a real contract corpus remain
-  separate production-acceptance gates.
+  separate production-acceptance gates.  Exact API/frontend release
+  `8e3091660ab3d684d8cb578f44977e3c5cad6b12` is active on the public contour
+  at migration `0059_scoped_worker_job_claims`; its isolated canary, public
+  OpenAPI route, exact frontend asset and TLS ingress passed.  Document and
+  assistant workers and local Qwen were not restarted.
 
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
