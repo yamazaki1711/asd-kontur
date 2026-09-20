@@ -797,6 +797,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.pilot_mode_result_versions",
         "projection.project_understanding_entries",
         "workspace.project_candidate_review_decisions",
+        "workspace.project_reconciliation_work_package_memberships",
         "workspace.project_understanding_reconciliations",
         "workspace.project_reconciliation_defects",
         "workspace.source_cross_references",

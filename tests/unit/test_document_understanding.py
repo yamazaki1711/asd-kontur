@@ -59,6 +59,7 @@ from asd_kontur.document_understanding.semantic import (
     reconcile_sources,
 )
 from asd_kontur.document_understanding.work_packages import consolidate_work_package_candidates
+from asd_kontur.document_understanding.work_type_catalog import resolve_work_type_candidates
 from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
@@ -187,6 +188,77 @@ def test_work_package_consolidation_preserves_scope_and_does_not_sum_conflicts()
     assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in los["uncertainties"]
     kns = next(item for item in packages if item["scope_key"] == "facility:kns-1")
     assert len(kns["observations"]) == 1
+
+
+def test_verified_work_type_catalog_resolution_is_exact_and_keeps_all_bindings() -> None:
+    candidate = {
+        "candidate_id": "work-1",
+        "normalized_name": "  Монтаж   опалубки ",
+        "canonical_mapping_status": "unresolved",
+        "canonical_work_type_id": None,
+    }
+    entries = tuple(
+        {
+            "catalog_id": f"catalog-{number}",
+            "catalog_version": number,
+            "catalog_fingerprint": "sha256:" + str(number) * 64,
+            "work_type_id": "type-41",
+            "work_type_version": "3.2.0",
+            "work_type_key": "formwork.install",
+            "printed_name": "Установка опалубки",
+            "normalized_name": "установка опалубки",
+            "aliases": ["Монтаж опалубки"],
+        }
+        for number in (1, 2)
+    )
+
+    resolved = resolve_work_type_candidates((candidate,), entries)[0]
+
+    assert resolved["canonical_mapping_status"] == "resolved"
+    assert resolved["canonical_work_type_id"] == "type-41"
+    assert resolved["canonical_work_type_version"] == "3.2.0"
+    assert resolved["canonical_work_type_key"] == "formwork.install"
+    assert len(resolved["work_type_catalog_bindings"]) == 2
+
+
+def test_work_type_catalog_near_match_is_unresolved_and_collision_is_ambiguous() -> None:
+    base = {
+        "candidate_id": "work-9",
+        "source_role": "project_documentation",
+        "source_version_id": "source-9",
+        "source_locator_id": "locator-9",
+        "scope_key": "zone:9",
+        "raw_name": "Монтаж конструкций",
+        "normalized_name": "монтаж конструкций",
+        "canonical_mapping_status": "unresolved",
+        "canonical_work_type_id": None,
+    }
+    entries = tuple(
+        {
+            "catalog_id": f"catalog-{number}",
+            "catalog_version": number,
+            "catalog_fingerprint": "sha256:" + str(number) * 64,
+            "work_type_id": f"type-{number}",
+            "work_type_version": f"{number}.0.0",
+            "work_type_key": f"structures.install.{number}",
+            "printed_name": "Монтаж конструкций",
+            "normalized_name": "монтаж конструкций",
+            "aliases": [],
+        }
+        for number in (1, 2)
+    )
+
+    ambiguous = resolve_work_type_candidates((base,), entries)[0]
+    near = resolve_work_type_candidates(
+        ({**base, "normalized_name": "монтаж металлических конструкций"},), entries
+    )[0]
+    packages = consolidate_work_package_candidates((ambiguous,), (), ())
+
+    assert ambiguous["canonical_mapping_status"] == "ambiguous"
+    assert ambiguous["canonical_work_type_id"] is None
+    assert len(ambiguous["work_type_catalog_matches"]) == 2
+    assert packages[0]["uncertainties"] == ["WORK_TYPE_MAPPING_AMBIGUOUS"]
+    assert near["canonical_mapping_status"] == "unresolved"
 
 
 def test_materialization_digest_changes_when_accepted_candidate_changes() -> None:
@@ -1162,22 +1234,22 @@ def test_qwen_structure_identity_reconciliation_requires_exact_cross_source_memb
     right_locator = deterministic_uuid("identity-right-locator")
     observations = (
         {
-            "structure_node_id": str(left),
+            "structure_node_id": left,
             "node_kind": "facility",
             "raw_name": "КНС-4",
             "normalized_name": "кнс-4",
-            "source_locator_id": str(left_locator),
-            "source_version_id": "20000000-0000-4000-8000-000000000001",
+            "source_locator_id": left_locator,
+            "source_version_id": UUID("20000000-0000-4000-8000-000000000001"),
             "page": "4",
             "safe_display_name": "ПЗУ",
         },
         {
-            "structure_node_id": str(right),
+            "structure_node_id": right,
             "node_kind": "facility",
             "raw_name": "КНС 4",
             "normalized_name": "кнс 4",
-            "source_locator_id": str(right_locator),
-            "source_version_id": "20000000-0000-4000-8000-000000000002",
+            "source_locator_id": right_locator,
+            "source_version_id": UUID("20000000-0000-4000-8000-000000000002"),
             "page": "7",
             "safe_display_name": "КР",
         },
@@ -1195,12 +1267,17 @@ def test_qwen_structure_identity_reconciliation_requires_exact_cross_source_memb
         }
     )
 
-    with patch("asd_kontur.document_understanding.qwen_semantic._complete", return_value=response):
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete", return_value=response
+    ) as complete:
         result = adapter.reconcile_structure_identities(observations)
 
     assert len(result) == 1
     assert result[0].member_structure_node_ids == (left, right)
     assert result[0].source_locator_ids == (left_locator, right_locator)
+    prompt = str(complete.call_args.args[1])
+    assert str(left) in prompt
+    assert str(left_locator) in prompt
 
 
 def test_qwen_structure_identity_reconciliation_rejects_unknown_member() -> None:

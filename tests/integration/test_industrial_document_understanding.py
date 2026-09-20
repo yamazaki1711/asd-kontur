@@ -110,6 +110,66 @@ def _login(
     return {"X-CSRF-Token": csrf}
 
 
+def _seed_verified_work_type_catalog(environment: PostgreSQLEnvironment) -> tuple[UUID, UUID]:
+    work_type_id = UUID("71000000-0000-4000-8000-000000000001")
+    catalog_id = UUID("72000000-0000-4000-8000-000000000001")
+    with environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_types (work_type_id,work_type_key,"
+                "identity_namespace_version,created_by_identity_id) VALUES "
+                "(:work,'concrete.slab.install','synthetic-catalog-v1','test:catalog-owner')"
+            ),
+            {"work": work_type_id},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_versions (work_type_id,version,taxonomy_version,"
+                "title,status,evidence_manifest_digest,integrity_digest) VALUES "
+                "(:work,'1.0.0','synthetic-taxonomy-v1','Устройство монолитной плиты','active',"
+                ":evidence,:integrity)"
+            ),
+            {
+                "work": work_type_id,
+                "evidence": "sha256:" + "7" * 64,
+                "integrity": "sha256:" + "8" * 64,
+            },
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_catalog_versions "
+                "(catalog_id,version,source_identity,source_version,source_digest,provenance,status,"
+                "catalog_fingerprint) VALUES (:catalog,1,'synthetic-known-catalog','1.0.0',:source,"
+                "CAST(:provenance AS jsonb),'verified',:fingerprint)"
+            ),
+            {
+                "catalog": catalog_id,
+                "source": "sha256:" + "9" * 64,
+                "provenance": json.dumps({"fixture": "known-work-type"}),
+                "fingerprint": "sha256:" + "a" * 64,
+            },
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_catalog_entries "
+                "(catalog_id,catalog_version,work_type_id,stable_key,printed_name,normalized_name,"
+                "aliases,parent_work_type_id,applicability,state,provenance,semantic_digest) "
+                "VALUES "
+                "(:catalog,1,:work,'concrete.slab.install','Устройство монолитной плиты',"
+                "'устройство монолитной плиты',ARRAY[]::text[],NULL,CAST('{}' AS jsonb),"
+                "'effective',"
+                "CAST(:provenance AS jsonb),:digest)"
+            ),
+            {
+                "catalog": catalog_id,
+                "work": work_type_id,
+                "provenance": json.dumps({"fixture": "known-work-type"}),
+                "digest": "sha256:" + "b" * 64,
+            },
+        )
+    return work_type_id, catalog_id
+
+
 def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
@@ -405,6 +465,7 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
 ) -> None:
+    work_type_id, catalog_id = _seed_verified_work_type_catalog(postgres_environment)
     settings = _settings(postgres_environment, tmp_path)
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
     app.state.container.auth.bootstrap_owner(
@@ -463,6 +524,128 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert outcomes
         assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
 
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            current = (
+                connection.execute(
+                    sa.text(
+                        "SELECT reconciliation_id,version,project_definition_id FROM "
+                        "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                        "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC "
+                        "LIMIT 1"
+                    ),
+                    {"o": workspace_a["organization_id"], "w": workspace_a["workspace_id"]},
+                )
+                .mappings()
+                .one()
+            )
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM "
+                        "workspace.project_reconciliation_work_package_memberships "
+                        "WHERE organization_id=:o AND workspace_id=:w AND reconciliation_id=:r "
+                        "AND reconciliation_version=:v"
+                    ),
+                    {
+                        "o": workspace_a["organization_id"],
+                        "w": workspace_a["workspace_id"],
+                        "r": current["reconciliation_id"],
+                        "v": current["version"],
+                    },
+                )
+                == 1
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.construction_work_package_versions "
+                    "(organization_id,workspace_id,work_package_id,version,project_definition_id,"
+                    "project_definition_version,work_type_key,work_type_version,package,fingerprint,"
+                    "created_at) VALUES (:o,:w,:package,1,:project,1,'historical.unbound','1.0.0',"
+                    "CAST(:document AS jsonb),:fingerprint,CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "package": UUID("73000000-0000-4000-8000-000000000001"),
+                    "project": current["project_definition_id"],
+                    "document": json.dumps({"label": "historical unbound package"}),
+                    "fingerprint": "sha256:" + "c" * 64,
+                },
+            )
+
+        expired_job_id = uuid7()
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,created_at,eligible_at,started_at,heartbeat_at,attempt_count,max_attempts,"
+                    "retry_policy_version,lease_owner,lease_generation,lease_expires_at,"
+                    "cancellation_state,provenance,correlation_id,created_by_identity_id) SELECT "
+                    "organization_id,workspace_id,:job,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,:idempotency,'running',priority,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,"
+                    "CURRENT_TIMESTAMP,CURRENT_TIMESTAMP-interval '2 minutes',1,1,"
+                    "retry_policy_version,'synthetic-crashed-worker',1,"
+                    "CURRENT_TIMESTAMP-interval '1 minute','none',provenance,:correlation,"
+                    "created_by_identity_id FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "AND workspace_id=:w ORDER BY created_at,job_id LIMIT 1"
+                ),
+                {
+                    "job": expired_job_id,
+                    "idempotency": f"synthetic-expired:{expired_job_id}",
+                    "correlation": uuid7(),
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                },
+            )
+        repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        assert (
+            repository.reconcile_expired_exhausted_jobs(
+                organization_id=UUID(str(workspace_a["organization_id"])),
+                workspace_id=UUID(str(workspace_a["workspace_id"])),
+            )
+            == 1
+        )
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            exhausted = connection.execute(
+                sa.text(
+                    "SELECT state,typed_failure_code,result_receipt_id FROM workspace.durable_jobs "
+                    "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "job": expired_job_id,
+                },
+            ).one()
+            assert exhausted.state == "reconciliation_required"
+            assert exhausted.typed_failure_code == "worker_lease_expired_after_attempt_exhaustion"
+            assert exhausted.result_receipt_id is not None
+
         response = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding"
         )
@@ -478,10 +661,20 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert len(view["work_packages"]) == 1
         package = view["work_packages"][0]["package"]
         assert package["work_type"]["raw"] == "Устройство монолитной плиты"
+        assert package["work_type"]["mapping_status"] == "resolved"
+        assert package["work_type"]["canonical_work_type_id"] == str(work_type_id)
+        assert package["work_type"]["canonical_work_type_key"] == "concrete.slab.install"
+        assert package["work_type"]["catalog_bindings"] == [
+            {
+                "catalog_id": str(catalog_id),
+                "catalog_version": 1,
+                "catalog_fingerprint": "sha256:" + "a" * 64,
+            }
+        ]
         assert package["quantities"][0]["raw_value"] == "+12,350"
         assert package["quantities"][0]["raw_unit"] == "м³"
         assert package["materials"][0]["raw_name"] == "Бетон В25"
-        assert package["uncertainties"] == ["WORK_TYPE_MAPPING_UNRESOLVED"]
+        assert package["uncertainties"] == []
         assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}

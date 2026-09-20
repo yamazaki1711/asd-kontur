@@ -50,6 +50,7 @@ from .native import NativeDocument
 from .ocr import OcrAdapterResult
 from .semantic import StructuredCandidates
 from .work_packages import consolidate_work_package_candidates
+from .work_type_catalog import resolve_work_type_candidates
 
 
 def _identity_observation_group_key(normalized_name: str) -> str:
@@ -860,6 +861,9 @@ class IndustrialUnderstandingRepository:
                 raise UnderstandingPersistenceError("project_sources_unavailable")
             fields = self._current_rows(session, claimed, "project_field_candidates", source_ids)
             works = self._current_rows(session, claimed, "work_type_candidates", source_ids)
+            works = resolve_work_type_candidates(
+                works, self._verified_work_type_catalog_entries(session)
+            )
             quantities = self._work_child_rows(session, claimed, "quantity_candidates", source_ids)
             materials = self._work_child_rows(session, claimed, "material_candidates", source_ids)
             structures = self._current_structure_rows(session, claimed, source_ids)
@@ -1016,12 +1020,21 @@ class IndustrialUnderstandingRepository:
                     "status": terminal_status,
                 },
             )
+            self._record_work_package_memberships(
+                session,
+                claimed=claimed,
+                reconciliation_id=reconciliation_id,
+                reconciliation_version=1,
+                packages=package_rows,
+            )
             self._rebuild_projection_in_session(
                 session,
                 organization_id=claimed.organization_id,
                 workspace_id=claimed.workspace_id,
                 run_id=run_id,
                 run_version=1,
+                reconciliation_id=reconciliation_id,
+                reconciliation_version=1,
                 project_definition_id=project_id,
                 matrix_id=matrix_id,
             )
@@ -1047,7 +1060,8 @@ class IndustrialUnderstandingRepository:
             selected = (
                 session.execute(
                     sa.text(
-                        "SELECT run_id,run_version,project_definition_id,matrix_id FROM "
+                        "SELECT reconciliation_id,version,run_id,run_version,"
+                        "project_definition_id,matrix_id FROM "
                         "workspace.project_understanding_reconciliations WHERE organization_id=:o "
                         "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1"
                     ),
@@ -1066,6 +1080,8 @@ class IndustrialUnderstandingRepository:
                 workspace_id=workspace_id,
                 run_id=UUID(str(selected["run_id"])),
                 run_version=int(selected["run_version"]),
+                reconciliation_id=UUID(str(selected["reconciliation_id"])),
+                reconciliation_version=int(selected["version"]),
                 project_definition_id=UUID(str(selected["project_definition_id"])),
                 matrix_id=UUID(str(selected["matrix_id"])),
             )
@@ -1079,6 +1095,8 @@ class IndustrialUnderstandingRepository:
         workspace_id: UUID,
         run_id: UUID,
         run_version: int,
+        reconciliation_id: UUID,
+        reconciliation_version: int,
         project_definition_id: UUID,
         matrix_id: UUID,
     ) -> tuple[str, ...]:
@@ -1103,11 +1121,22 @@ class IndustrialUnderstandingRepository:
         )
         packages = session.execute(
             sa.text(
-                "SELECT work_package_id,package,fingerprint FROM "
-                "workspace.construction_work_package_versions WHERE organization_id=:o AND "
-                "workspace_id=:w AND project_definition_id=:project ORDER BY work_package_id"
+                "SELECT package.work_package_id,package.version,package.package,package.fingerprint FROM "
+                "workspace.project_reconciliation_work_package_memberships member JOIN "
+                "workspace.construction_work_package_versions package ON "
+                "package.organization_id=member.organization_id AND "
+                "package.workspace_id=member.workspace_id AND "
+                "package.work_package_id=member.work_package_id AND "
+                "package.version=member.work_package_version WHERE member.organization_id=:o AND "
+                "member.workspace_id=:w AND member.reconciliation_id=:reconciliation AND "
+                "member.reconciliation_version=:reconciliation_version ORDER BY member.member_sequence"
             ),
-            {"o": organization_id, "w": workspace_id, "project": project_definition_id},
+            {
+                "o": organization_id,
+                "w": workspace_id,
+                "reconciliation": reconciliation_id,
+                "reconciliation_version": reconciliation_version,
+            },
         ).mappings()
         matrix = (
             session.execute(
@@ -1270,10 +1299,26 @@ class IndustrialUnderstandingRepository:
             packages = (
                 session.execute(
                     sa.text(
-                        "SELECT work_package_id,version,package,fingerprint FROM workspace.construction_work_package_versions "
-                        "WHERE organization_id=:o AND workspace_id=:w ORDER BY created_at,work_package_id"
+                        "SELECT package.work_package_id,package.version,package.package,package.fingerprint FROM "
+                        "workspace.project_reconciliation_work_package_memberships member JOIN "
+                        "workspace.construction_work_package_versions package ON "
+                        "package.organization_id=member.organization_id AND "
+                        "package.workspace_id=member.workspace_id AND "
+                        "package.work_package_id=member.work_package_id AND "
+                        "package.version=member.work_package_version WHERE member.organization_id=:o AND "
+                        "member.workspace_id=:w AND member.reconciliation_id=:reconciliation AND "
+                        "member.reconciliation_version=:reconciliation_version ORDER BY member.member_sequence"
                     ),
-                    {"o": organization_id, "w": workspace_id},
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "reconciliation": (
+                            reconciliation["reconciliation_id"] if reconciliation else None
+                        ),
+                        "reconciliation_version": (
+                            reconciliation["version"] if reconciliation else None
+                        ),
+                    },
                 )
                 .mappings()
                 .all()
@@ -2051,17 +2096,25 @@ class IndustrialUnderstandingRepository:
             observations = list(consolidated["observations"])
             work = observations[0]
             work_id = str(work["candidate_id"])
-            package_id = deterministic_uuid(f"construction-work-package:{project_id}:{work_id}")
+            package_id = deterministic_uuid(
+                "construction-work-package:"
+                f"{claimed.organization_id}:{claimed.workspace_id}:"
+                f"{consolidated['source_version_id']}:"
+                f"{consolidated['scope_key']}:{consolidated['normalized_name']}"
+            )
             mapping_status = str(work["canonical_mapping_status"])
             uncertainties = list(consolidated["uncertainties"])
             package = {
                 "work_package_id": str(package_id),
-                "version": 1,
                 "work_candidate_id": work_id,
                 "work_type": {
                     "raw": work["raw_name"],
                     "normalized": work["normalized_name"],
                     "mapping_status": mapping_status,
+                    "canonical_work_type_id": work.get("canonical_work_type_id"),
+                    "canonical_work_type_version": work.get("canonical_work_type_version"),
+                    "canonical_work_type_key": work.get("canonical_work_type_key"),
+                    "catalog_bindings": list(work.get("work_type_catalog_bindings", ())),
                 },
                 "scope": consolidated["scope_key"],
                 "candidate_observation_ids": [str(item["candidate_id"]) for item in observations],
@@ -2072,27 +2125,127 @@ class IndustrialUnderstandingRepository:
                 "uncertainties": uncertainties,
                 "complete": mapping_status == "resolved" and not uncertainties,
             }
-            fingerprint = semantic_digest(package)
-            session.execute(
-                sa.text(
-                    "INSERT INTO workspace.construction_work_package_versions "
-                    "(organization_id,workspace_id,work_package_id,version,project_definition_id,"
-                    "project_definition_version,work_type_key,work_type_version,package,fingerprint,created_at) "
-                    "VALUES (:o,:w,:package,1,:project,1,:work_type,'unresolved-catalog@0',CAST(:document AS jsonb),"
-                    ":fingerprint,CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"
-                ),
+            fingerprint = semantic_digest(
+                {
+                    "work_package_id": str(package_id),
+                    "project_definition_id": str(project_id),
+                    "package": package,
+                }
+            )
+            latest = (
+                session.execute(
+                    sa.text(
+                        "SELECT version,fingerprint,package FROM "
+                        "workspace.construction_work_package_versions WHERE organization_id=:o AND "
+                        "workspace_id=:w AND work_package_id=:package ORDER BY version DESC LIMIT 1"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "package": package_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if latest is not None and str(latest["fingerprint"]) == fingerprint:
+                version = int(latest["version"])
+                stored_package = dict(latest["package"])
+            else:
+                version = 1 if latest is None else int(latest["version"]) + 1
+                stored_package = {**package, "version": version}
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.construction_work_package_versions "
+                        "(organization_id,workspace_id,work_package_id,version,project_definition_id,"
+                        "project_definition_version,work_type_key,work_type_version,package,fingerprint,created_at) "
+                        "VALUES (:o,:w,:package,:version,:project,1,:work_type,:work_type_version,"
+                        "CAST(:document AS jsonb),:fingerprint,CURRENT_TIMESTAMP)"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "package": package_id,
+                        "version": version,
+                        "project": project_id,
+                        "work_type": str(
+                            work.get("canonical_work_type_key") or work["normalized_name"]
+                        ),
+                        "work_type_version": str(
+                            work.get("canonical_work_type_version") or "unresolved-catalog@0"
+                        ),
+                        "document": _json(stored_package),
+                        "fingerprint": fingerprint,
+                    },
+                )
+            packages.append({**stored_package, "version": version, "fingerprint": fingerprint})
+        return packages
+
+    @staticmethod
+    def _record_work_package_memberships(
+        session: Session,
+        *,
+        claimed: ClaimedJob,
+        reconciliation_id: UUID,
+        reconciliation_version: int,
+        packages: list[dict[str, Any]],
+    ) -> None:
+        rows: list[dict[str, Any]] = []
+        for sequence, package in enumerate(packages, start=1):
+            membership_fingerprint = semantic_digest(
+                {
+                    "reconciliation_id": str(reconciliation_id),
+                    "reconciliation_version": reconciliation_version,
+                    "member_sequence": sequence,
+                    "work_package_id": str(package["work_package_id"]),
+                    "work_package_version": int(package["version"]),
+                }
+            )
+            rows.append(
                 {
                     "o": claimed.organization_id,
                     "w": claimed.workspace_id,
-                    "package": package_id,
-                    "project": project_id,
-                    "work_type": str(work["normalized_name"]),
-                    "document": _json(package),
-                    "fingerprint": fingerprint,
-                },
+                    "reconciliation": reconciliation_id,
+                    "reconciliation_version": reconciliation_version,
+                    "sequence": sequence,
+                    "package": UUID(str(package["work_package_id"])),
+                    "package_version": int(package["version"]),
+                    "fingerprint": membership_fingerprint,
+                }
             )
-            packages.append({**package, "fingerprint": fingerprint})
-        return packages
+        if rows:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_reconciliation_work_package_memberships "
+                    "(organization_id,workspace_id,reconciliation_id,reconciliation_version,"
+                    "member_sequence,work_package_id,work_package_version,membership_fingerprint) "
+                    "VALUES (:o,:w,:reconciliation,:reconciliation_version,:sequence,:package,"
+                    ":package_version,:fingerprint) ON CONFLICT DO NOTHING"
+                ),
+                rows,
+            )
+
+    @staticmethod
+    def _verified_work_type_catalog_entries(session: Session) -> list[dict[str, Any]]:
+        return [
+            dict(row)
+            for row in session.execute(
+                sa.text(
+                    "WITH selected_catalogs AS (SELECT DISTINCT ON (catalog_id) "
+                    "catalog_id,version,catalog_fingerprint FROM platform.work_type_catalog_versions "
+                    "WHERE status='verified' ORDER BY catalog_id,version DESC) SELECT "
+                    "entry.catalog_id,entry.catalog_version,entry.work_type_id,work.work_type_key,"
+                    "entry.printed_name,entry.normalized_name,entry.aliases,catalog.catalog_fingerprint,"
+                    "version.version AS work_type_version FROM selected_catalogs catalog JOIN "
+                    "platform.work_type_catalog_entries entry ON entry.catalog_id=catalog.catalog_id "
+                    "AND entry.catalog_version=catalog.version JOIN platform.work_types work ON "
+                    "work.work_type_id=entry.work_type_id JOIN platform.work_type_versions version ON "
+                    "version.work_type_id=entry.work_type_id AND version.status='active' WHERE "
+                    "entry.state='effective' ORDER BY entry.catalog_id,entry.catalog_version,"
+                    "work.work_type_key,version.version"
+                )
+            ).mappings()
+        ]
 
     @staticmethod
     def _assemble_pd_rd_profile(
@@ -2214,7 +2367,22 @@ class IndustrialUnderstandingRepository:
         corpus_digest: str,
         normative_profile: dict[str, Any],
     ) -> tuple[UUID, str]:
-        matrix_id = deterministic_uuid(f"work-requirement-matrix:{project_id}:{corpus_digest}")
+        matrix_input_digest = semantic_digest(
+            {
+                "packages": [
+                    {
+                        "work_package_id": package["work_package_id"],
+                        "version": package["version"],
+                        "fingerprint": package["fingerprint"],
+                    }
+                    for package in packages
+                ],
+                "normative_profile": normative_profile["semantic_fingerprint"],
+            }
+        )
+        matrix_id = deterministic_uuid(
+            f"work-requirement-matrix:{project_id}:{corpus_digest}:{matrix_input_digest}"
+        )
         rows = [
             {
                 "work_package_id": package["work_package_id"],

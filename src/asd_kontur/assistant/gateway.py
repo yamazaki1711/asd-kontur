@@ -379,9 +379,21 @@ class ProfessionalAssistantKnowledgeQuery:
             packages = list(
                 session.execute(
                     sa.text(
-                        "SELECT work_package_id,version,work_type_key,package FROM "
-                        "workspace.construction_work_package_versions WHERE organization_id=:o "
-                        "AND workspace_id=:w ORDER BY created_at DESC,work_package_id LIMIT 20"
+                        "WITH current_reconciliation AS (SELECT reconciliation_id,version FROM "
+                        "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                        "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1) "
+                        "SELECT package.work_package_id,package.version,package.work_type_key,"
+                        "package.package FROM current_reconciliation current JOIN "
+                        "workspace.project_reconciliation_work_package_memberships member ON "
+                        "member.organization_id=:o AND member.workspace_id=:w AND "
+                        "member.reconciliation_id=current.reconciliation_id AND "
+                        "member.reconciliation_version=current.version JOIN "
+                        "workspace.construction_work_package_versions package ON "
+                        "package.organization_id=member.organization_id AND "
+                        "package.workspace_id=member.workspace_id AND "
+                        "package.work_package_id=member.work_package_id AND "
+                        "package.version=member.work_package_version ORDER BY "
+                        "member.member_sequence LIMIT 20"
                     ),
                     {"o": organization_id, "w": workspace_id},
                 ).mappings()

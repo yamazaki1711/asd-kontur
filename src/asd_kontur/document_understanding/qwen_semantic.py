@@ -125,6 +125,14 @@ class QwenEngineeringBatch:
         return manifest
 
 
+def _prompt_json_scalar(value: object) -> str:
+    """Serialize only known scalar database types in bounded Qwen prompts."""
+
+    if isinstance(value, (UUID, Decimal)):
+        return str(value)
+    raise TypeError(f"unsupported Qwen prompt value: {type(value).__name__}")
+
+
 class QwenDocumentSemanticAdapter:
     """Call loopback Qwen with bounded extracted text and exact locators only."""
 
@@ -238,7 +246,13 @@ class QwenDocumentSemanticAdapter:
             '"confidence":0.0}]}. Включай группу только с минимум двумя ID из входа и '
             "только при подтверждении идентичности обозначением, назначением и/или местом. "
             "Не создавай новые ID, не объединяй типовые элементы и не выводи одиночные наблюдения.\n"
-            "НАБЛЮДЕНИЯ:\n" + json.dumps(rows, ensure_ascii=False, separators=(",", ":"))
+            "НАБЛЮДЕНИЯ:\n"
+            + json.dumps(
+                rows,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                default=_prompt_json_scalar,
+            )
         )
         try:
             value = _json_object(

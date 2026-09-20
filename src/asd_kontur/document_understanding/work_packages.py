@@ -70,7 +70,12 @@ def consolidate_work_package_candidates(
             for item in material_by_work[str(observation["candidate_id"])]
         ]
         uncertainties: set[str] = set()
-        if not canonical_work_type_id:
+        mapping_states = {
+            str(item.get("canonical_mapping_status", "unresolved")) for item in observations
+        }
+        if "ambiguous" in mapping_states:
+            uncertainties.add("WORK_TYPE_MAPPING_AMBIGUOUS")
+        elif not canonical_work_type_id:
             uncertainties.add("WORK_TYPE_MAPPING_UNRESOLVED")
         if len(name_scopes[normalized_name]) > 1:
             uncertainties.add("SAME_WORK_NAME_DIFFERENT_SCOPE")

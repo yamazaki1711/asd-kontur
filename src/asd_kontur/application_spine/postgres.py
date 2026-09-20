@@ -1186,6 +1186,95 @@ class SpinePostgresRepository:
             str(row.cancellation_state),
         )
 
+    def reconcile_expired_exhausted_jobs(
+        self, *, organization_id: UUID, workspace_id: UUID, limit: int = 8
+    ) -> int:
+        """Fence crashed jobs whose lease and retry budget are both exhausted."""
+
+        if not 1 <= limit <= 64:
+            raise ValueError("expired job reconciliation limit is invalid")
+        reconciled = 0
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            rows = session.execute(
+                sa.text(
+                    "SELECT job_id,lease_generation FROM workspace.durable_jobs WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "state IN ('leased','running') AND lease_expires_at<CURRENT_TIMESTAMP AND "
+                    "attempt_count>=max_attempts ORDER BY lease_expires_at,job_id "
+                    "FOR UPDATE SKIP LOCKED LIMIT :limit"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "limit": limit,
+                },
+            ).all()
+            for row in rows:
+                job_id = UUID(str(row.job_id))
+                generation = int(row.lease_generation)
+                receipt_id = uuid7()
+                result = {
+                    "semantic_effect": "unknown",
+                    "reason": "lease_expired_after_attempt_exhaustion",
+                }
+                result_digest = semantic_digest(
+                    {
+                        "job_id": job_id,
+                        "lease_generation": generation,
+                        "terminal_state": JobState.RECONCILIATION_REQUIRED.value,
+                        "outcome_code": "worker_lease_expired_after_attempt_exhaustion",
+                        "result": result,
+                    }
+                )
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.job_terminal_receipts "
+                        "(organization_id,workspace_id,terminal_receipt_id,job_id,lease_generation,"
+                        "terminal_state,typed_outcome_code,result_manifest,result_digest) VALUES "
+                        "(:organization,:workspace,:receipt,:job,:generation,"
+                        "'reconciliation_required','worker_lease_expired_after_attempt_exhaustion',"
+                        "CAST(:result AS jsonb),:digest)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "receipt": receipt_id,
+                        "job": job_id,
+                        "generation": generation,
+                        "result": _json(result),
+                        "digest": result_digest,
+                    },
+                )
+                session.execute(
+                    sa.text(
+                        "UPDATE workspace.durable_jobs SET state='reconciliation_required',"
+                        "completed_at=CURRENT_TIMESTAMP,typed_failure_code="
+                        "'worker_lease_expired_after_attempt_exhaustion',result_receipt_id=:receipt,"
+                        "lease_owner=NULL,lease_expires_at=NULL WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": job_id,
+                        "receipt": receipt_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.reconciliation_required",
+                    safe_message_code="worker_lease_expired_after_attempt_exhaustion",
+                    current=1,
+                    total=1,
+                    terminal=True,
+                )
+                reconciled += 1
+        return reconciled
+
     def mark_job_running(self, claimed: ClaimedJob, *, worker_identity: str) -> None:
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
@@ -2761,15 +2850,24 @@ class SpinePostgresRepository:
             packages = (
                 session.execute(
                     sa.text(
-                        "SELECT work_package_id,version,package,fingerprint FROM "
-                        "workspace.construction_work_package_versions WHERE "
-                        "organization_id=:organization AND workspace_id=:workspace AND "
-                        "project_definition_id=:project ORDER BY work_package_id,version"
+                        "SELECT package.work_package_id,package.version,package.package,"
+                        "package.fingerprint FROM "
+                        "workspace.project_reconciliation_work_package_memberships member JOIN "
+                        "workspace.construction_work_package_versions package ON "
+                        "package.organization_id=member.organization_id AND "
+                        "package.workspace_id=member.workspace_id AND "
+                        "package.work_package_id=member.work_package_id AND "
+                        "package.version=member.work_package_version WHERE "
+                        "member.organization_id=:organization AND member.workspace_id=:workspace AND "
+                        "member.reconciliation_id=:reconciliation AND "
+                        "member.reconciliation_version=:reconciliation_version "
+                        "ORDER BY member.member_sequence"
                     ),
                     {
                         "organization": organization_id,
                         "workspace": workspace_id,
-                        "project": reconciliation["project_definition_id"],
+                        "reconciliation": reconciliation["reconciliation_id"],
+                        "reconciliation_version": reconciliation["version"],
                     },
                 )
                 .mappings()

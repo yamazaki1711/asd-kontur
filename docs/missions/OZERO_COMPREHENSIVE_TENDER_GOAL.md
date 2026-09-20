@@ -1084,3 +1084,32 @@ the still-live database revision `0048`: semantic recovery does not query the ne
 identity table until a future workspace-wide complete-coverage reconciliation.
 After TX drains, first validate its terminal receipt and the next worker's import
 path/release before interpreting IOS3 recovery or any candidate materialization.
+
+### Continuation checkpoint — 2026-09-21 11:40 UTC+12
+
+The public database is at `0059_scoped_worker_job_claims`. OZERO still has 22
+active documents / 2,529 pages; the last scoped observation reported 18 complete
+and four partial semantic sources. The previously paused POS v15 job
+`01a0b2b2-cab6-7106-956c-f70fc9cd49e4` was resumed through supported job control
+and completed without duplication. Its terminal stage receipt records
+5,252/5,252 accepted fragments and persisted 299 field, 494 structure, 478 work,
+96 quantity and 45 material candidates. These are candidate observations, not
+confirmed project totals.
+
+The incremental reconciliation descendant
+`01a0c122-3066-78c1-918e-e66490094f1f` then crashed on all three leases because
+UUID values from repository structure rows reached `json.dumps` unchanged in
+the bounded Qwen identity prompt. The job is currently an expired `running`
+lease and has not materialized the POS contribution. The supervised worker was
+automatically restarted and is idle; local Qwen remains healthy. Do not create
+or mutate a replacement until the compatible recovery release is deployed.
+
+The pending release implements three reusable corrections: typed prompt-scalar
+serialization; terminal fencing of expired retry-exhausted jobs so a supported
+manual successor can be created; and verified-catalog/current-membership work
+package reconciliation. Migration `0060_current_package_memberships` is required.
+Controlled tests and exact release identity are recorded in the implementation
+plan and release commit. Next executable action: qualify and deploy that exact
+release with a database backup, allow the worker to fence the expired job, create
+one supported retry, and verify the new reconciliation through API/consultant
+before scheduling further semantic work.

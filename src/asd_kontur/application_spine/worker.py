@@ -154,6 +154,11 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
+        if self._organization_id is not None and self._workspace_id is not None:
+            self._repository.reconcile_expired_exhausted_jobs(
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
+            )
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
@@ -256,6 +261,13 @@ class DocumentWorker:
                 claimed,
                 JobState.RECONCILIATION_REQUIRED,
                 str(code),
+                {"exception_type": type(exc).__name__},
+            )
+        except Exception as exc:
+            return self._terminal(
+                claimed,
+                JobState.RECONCILIATION_REQUIRED,
+                "worker_unexpected_handler_error",
                 {"exception_type": type(exc).__name__},
             )
         finally:

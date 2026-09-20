@@ -538,6 +538,40 @@ controlled verification, or outputs that do not require that live runtime.
 No capability is promoted to `CAPABILITY_READY` without its declared
 professional output and E2E evidence.
 
+### Active delivery: canonical work-package reconciliation — 2026-09-21
+
+**Reusable capability:** bind extracted work observations to an exact verified
+platform work-type identity, retain every catalog provenance binding, version a
+stable source/scope work package, and bind each project reconciliation to the
+exact package versions that form its current result. Fuzzy matches remain
+unresolved and collisions remain ambiguous.
+
+**User-visible output:** Tender schedules, the project model, Support package
+selection, projection entries and consultant context consume the current
+reconciliation membership instead of every historical package ever assembled
+for the workspace. Historical versions remain immutable and inspectable.
+
+**Independent acceptance:** controlled catalog fixtures cover exact aliases,
+near matches, ambiguous identities and the same identity in multiple verified
+catalogs. Disposable PostgreSQL acceptance proves RLS-scoped membership,
+worker catalog access, exclusion of an unbound historical package from the API,
+and migration downgrade/upgrade reproducibility. This does not qualify the
+currently empty production work-type catalog.
+
+**OZERO role:** OZERO exposed 6,855 accumulated package rows and validates that
+a fresh reconciliation publishes only its explicit membership. Its POS source
+semantic pass completed with persisted engineering candidates, but the first
+incremental reconciliation crashed because UUID database values were not JSON
+serializable in the bounded Qwen identity prompt. The same delivery adds typed
+UUID serialization and terminal fencing for an expired, retry-exhausted worker
+lease. OZERO facts are not used as controlled expected values.
+
+**Remaining production acceptance:** release qualification and controlled
+migration, one supported retry of the failed OZERO reconciliation, proof that
+the current project/API/consultant package set is membership-bound, verified
+catalog population beyond the synthetic work type, and professional Tender and
+Support acceptance. This capability alone does not make either mode ready.
+
 ## Completed prerequisite
 
 `MEMORY-INTEGRITY-FIX-01` resolved the two canonical memory defects and passed

@@ -11,7 +11,7 @@ from uuid import UUID
 import pytest
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import ClaimedJob, JobKind, semantic_digest
+from asd_kontur.application_spine.models import ClaimedJob, JobKind, JobState, semantic_digest
 from asd_kontur.application_spine.object_store import (
     IntakeError,
     WorkspaceObjectStore,
@@ -24,12 +24,75 @@ from asd_kontur.application_spine.postgres import (
     _semantic_extraction_priority,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
-from asd_kontur.application_spine.worker import _LeaseKeepalive, verify_bytes_digest
+from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.document_understanding.postgres import _identity_observation_group_key
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001803"),
+        JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+        {},
+        "sha256:" + "1" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claimed = False
+            self.finished: dict[str, object] | None = None
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            if self.claimed:
+                return None
+            self.claimed = True
+            return claimed
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return False
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def finish_job(self, *_args: object, **kwargs: object) -> None:
+            self.finished = kwargs
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+
+    def fail(_claimed: ClaimedJob) -> dict[str, object]:
+        raise TypeError("synthetic programming defect")
+
+    worker._execute = fail  # type: ignore[method-assign]
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.RECONCILIATION_REQUIRED
+    assert outcome.outcome_code == "worker_unexpected_handler_error"
+    assert repository.finished is not None
+    assert repository.finished["terminal_state"] is JobState.RECONCILIATION_REQUIRED
+    assert repository.finished["result_manifest"] == {"exception_type": "TypeError"}
 
 
 def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
