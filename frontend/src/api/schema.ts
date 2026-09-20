@@ -2447,6 +2447,10 @@ export interface components {
             books?: {
                 [key: string]: unknown;
             }[];
+            /** Consistency */
+            consistency: {
+                [key: string]: unknown;
+            };
             /** Field Resolutions */
             field_resolutions?: {
                 [key: string]: unknown;

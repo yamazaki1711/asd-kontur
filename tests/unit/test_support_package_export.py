@@ -85,6 +85,11 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
                 "source_locator_id": None,
             },
         ),
+        consistency={
+            "contract": "support.id-package-consistency@1.0.0",
+            "status": "incomplete",
+            "gaps": ["ID_MEMBER_MISSING:support.executive-scheme"],
+        },
         read_object=lambda key: b"docx-bytes" if key.endswith("candidate-1.docx") else b"",
     )
 
@@ -93,6 +98,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             "01_register_candidate.docx",
             "01_register.csv",
             "02_support.aosr_candidate.docx",
+            "95_package_consistency.json",
             "96_package_manifest.json",
             "97_field_evidence_and_missing_inputs.csv",
             "98_package_status.txt",
@@ -121,6 +127,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             )
         )
         manifest = json.loads(exported.read("96_package_manifest.json"))
+        consistency = json.loads(exported.read("95_package_consistency.json"))
     assert rows[0]["role"] == "support.executive-scheme"
     assert rows[0]["blockers"] == "GEOMETRY_UNCONFIRMED"
     assert [field["field_key"] for field in fields] == ["as_built_level", "work_description"]
@@ -138,3 +145,4 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
     assert generated["archive_member"] == "02_support.aosr_candidate.docx"
     assert generated["object_digest"].startswith("sha256:")
     assert manifest["members"][2]["state"] == "missing"
+    assert consistency["status"] == "incomplete"

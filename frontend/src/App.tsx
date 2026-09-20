@@ -3274,6 +3274,7 @@ function SupportProductionBody({
     new Set(value.requirements.map((item) => String(item.work_package_id))),
   );
   const readiness = value.readiness as Record<string, unknown> | null;
+  const consistency = value.consistency as Record<string, unknown>;
   const memberships = value.memberships ?? [];
   const registers = value.registers ?? [];
   const packageHistory = value.package_history ?? [];
@@ -3434,6 +3435,22 @@ function SupportProductionBody({
               сохранены как кандидаты, а отсутствующие и заблокированные позиции
               перечислены отдельным графиком.
             </p>
+            <InfoNotice>
+              Проверка согласованности комплекта:{" "}
+              <strong>{humanizeStatus(String(consistency.status))}</strong>. Она
+              сверяет текущую версию реестра, состав, подготовленные и
+              финализированные файлы, квалификацию шаблонов и доказательства
+              материальных полей. Кандидат документа не считается подписанным
+              или финализированным.
+              <GapList
+                gaps={((consistency.gaps as string[] | undefined) ?? []).map(
+                  humanizeGap,
+                )}
+                good={
+                  !((consistency.gaps as unknown[] | undefined)?.length ?? 0)
+                }
+              />
+            </InfoNotice>
             <div className="table-wrap">
               <table>
                 <thead>
@@ -6615,6 +6632,10 @@ function humanizeStatus(value: string) {
     ACTIVE: "В работе",
     active: "Действует",
     complete: "Обработан",
+    incomplete: "Не завершено",
+    inconsistent: "Обнаружено несоответствие",
+    review_required: "Требуется профессиональная проверка",
+    not_formed: "Комплект не сформирован",
     partial_with_capability_gap: "Требует дополнения",
     failed: "Ошибка",
     queued: "В очереди",

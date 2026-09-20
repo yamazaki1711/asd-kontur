@@ -283,6 +283,14 @@ def test_support_production_package_generation_and_workspace_isolation(
         api_view = client.get(f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production")
         assert api_view.status_code == 200
         assert api_view.json()["package"]["version"] == 2
+        consistency = api_view.json()["consistency"]
+        assert consistency["status"] == "inconsistent"
+        assert set(consistency["gaps"]) == {
+            "ID_MEMBER_BLOCKED:support.control-attachment",
+            "ID_MEMBER_MISSING:support.executive-scheme",
+            "ID_MEMBER_MISSING:support.material-quality",
+            "ID_TEMPLATE_NOT_PRODUCTION_QUALIFIED:support.aosr",
+        }
         audit_preflight = client.get(
             f"/api/v1/workspaces/{tenant.workspace_id}/audit/expected-actual-preflight"
         )
@@ -353,6 +361,9 @@ def test_support_production_package_generation_and_workspace_isolation(
             ) as register:
                 assert "word/document.xml" in register.namelist()
             assert "97_field_evidence_and_missing_inputs.csv" in exported.namelist()
+            assert "95_package_consistency.json" in exported.namelist()
+            exported_consistency = json.loads(exported.read("95_package_consistency.json"))
+            assert exported_consistency["status"] == "inconsistent"
             assert "99_missing_or_blocked_items.csv" in exported.namelist()
             assert any(name.endswith("_candidate.docx") for name in exported.namelist())
         content = client.get(

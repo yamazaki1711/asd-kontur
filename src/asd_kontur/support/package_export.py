@@ -44,6 +44,7 @@ def build_editable_id_package_archive(
     memberships: Iterable[Mapping[str, Any]],
     field_resolutions: Iterable[Mapping[str, Any]],
     read_object: Callable[[str], bytes],
+    consistency: Mapping[str, Any] | None = None,
 ) -> bytes:
     """Build a register-first ZIP from the exact current package version.
 
@@ -93,6 +94,14 @@ def build_editable_id_package_archive(
                     archive_member=name,
                     object_digest="sha256:" + hashlib.sha256(payload).hexdigest(),
                 )
+            )
+        if consistency is not None:
+            _write(
+                archive,
+                "95_package_consistency.json",
+                (
+                    json.dumps(consistency, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                ).encode("utf-8"),
             )
         _write(
             archive,
@@ -332,6 +341,8 @@ def _status_text(package: Mapping[str, Any], members: Iterable[Mapping[str, Any]
         "Отсутствующие и заблокированные позиции перечислены в 99_missing_or_blocked_items.csv.",
         "Состав архива, версии и контрольные суммы включённых файлов приведены в "
         "96_package_manifest.json.",
+        "Независимая сверка реестра, состава, файлов, шаблонов и полей приведена в "
+        "95_package_consistency.json, если она была выполнена для этой версии.",
     )
     return ("\n".join(lines) + "\n").encode("utf-8")
 

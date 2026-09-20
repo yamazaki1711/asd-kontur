@@ -3069,6 +3069,11 @@
             "title": "Books",
             "type": "array"
           },
+          "consistency": {
+            "additionalProperties": true,
+            "title": "Consistency",
+            "type": "object"
+          },
           "field_resolutions": {
             "items": {
               "additionalProperties": true,
@@ -3191,6 +3196,7 @@
           "matrix",
           "requirements",
           "package",
+          "consistency",
           "gaps",
           "authority_layers"
         ],

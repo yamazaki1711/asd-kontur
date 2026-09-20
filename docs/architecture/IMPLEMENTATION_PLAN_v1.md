@@ -255,6 +255,25 @@ digest binding, candidate/missing preservation, and the PostgreSQL Support
 workflow verifies the downloadable package. OZERO is not used; it has no
 field-execution authority or actual Support transition.
 
+The current ID-package view and editable archive now also carry one reusable
+**package-consistency assessment**. It reconciles the current register against
+the exact membership version, requires unambiguous register-first ordering,
+checks that generated/finalized membership states have their persisted
+artifacts, verifies production template qualification, and requires exact
+evidence and source locators for material generation fields. Missing and
+blocked members remain explicit and a generated candidate is reported as
+`review_required`, never as final. The assessment is visible in the Russian
+Support UI and is saved as `95_package_consistency.json` in the same package
+export. Controlled fixtures cover a consistent candidate, register mismatch,
+missing material evidence and the unformed state. The disposable PostgreSQL
+Support workflow proves the real repository query, incomplete members,
+template-assurance failure, API projection, archive inclusion and workspace
+isolation. OZERO is not used because it has no Support transition, execution
+facts or professional authority. Remaining production gates include a live
+authorized Support process, official qualified templates for every supported
+document role, actual field evidence, human review/finalization, browser E2E,
+and further work-type coverage.
+
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
 retaining the CSV as a tabular projection and the missing-items schedule as a

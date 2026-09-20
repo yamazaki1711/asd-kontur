@@ -170,7 +170,8 @@ class SupportProductionRepository:
                 dict(item)
                 for item in session.execute(
                     sa.text(
-                        "SELECT m.*,g.job_id,g.job_state,g.typed_failure_code,g.generated_candidate_id,"
+                        "SELECT m.*,g.job_id,g.job_state,g.typed_failure_code,g.generation_run_id,"
+                        "g.generated_candidate_id,"
                         "g.object_reference,g.bytes_digest,g.format,g.candidate_fingerprint,"
                         "pv.print_validation_id,pv.result print_validation_result,pv.assurance_class "
                         "print_assurance_class,pv.check_codes print_check_codes,pv.blocker_codes "
@@ -183,7 +184,8 @@ class SupportProductionRepository:
                         "fd.qualification_level finalization_qualification_level,fd.document_digest "
                         "finalized_document_digest "
                         "FROM workspace.id_package_document_membership_versions m LEFT JOIN LATERAL ("
-                        "SELECT b.template_id,b.template_version,b.job_id,j.state job_state,"
+                        "SELECT b.template_id,b.template_version,b.job_id,b.generation_run_id,"
+                        "j.state job_state,"
                         "j.typed_failure_code,c.generated_candidate_id,c.object_reference,c.bytes_digest,"
                         "c.format,c.semantic_fingerprint candidate_fingerprint FROM "
                         "workspace.support_generation_job_bindings b JOIN workspace.durable_jobs j ON "

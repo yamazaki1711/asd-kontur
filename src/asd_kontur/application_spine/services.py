@@ -29,6 +29,7 @@ from asd_kontur.restoration import (
     build_recovery_plan,
     render_recovery_plan_csv,
 )
+from asd_kontur.support.package_consistency import assess_id_package_consistency
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
 from asd_kontur.tender.analysis_package import build_tender_analysis_archive
@@ -886,9 +887,10 @@ class ProductSpineService:
     def support_production_view(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> dict[str, Any]:
-        return self._support_production.view(
+        view = self._support_production.view(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        return {**view, "consistency": assess_id_package_consistency(view)}
 
     def audit_expected_actual_preflight(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -1058,6 +1060,7 @@ class ProductSpineService:
             register_manifest=latest_register["register_manifest"],
             memberships=view.get("memberships", []),
             field_resolutions=view.get("field_resolutions", []),
+            consistency=view.get("consistency"),
             read_object=read_object,
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
