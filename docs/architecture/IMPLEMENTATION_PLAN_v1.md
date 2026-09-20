@@ -272,7 +272,11 @@ isolation. OZERO is not used because it has no Support transition, execution
 facts or professional authority. Remaining production gates include a live
 authorized Support process, official qualified templates for every supported
 document role, actual field evidence, human review/finalization, browser E2E,
-and further work-type coverage.
+and further work-type coverage. Exact API/frontend release
+`02066ab7b7d1e54c91cadd6a09697aa268c1d06d` is active on the public contour
+at migration `0059_scoped_worker_job_claims`; its canary, required OpenAPI
+field, exact frontend asset, public readiness and TLS ingress passed. The
+document and assistant workers and local Qwen were not restarted.
 
 Release `98b7363` replaces the CSV-only first register projection with a
 Russian editable DOCX register candidate as the first archive document,
