@@ -158,6 +158,34 @@ operational/authority dependency, not an OZERO-processing blocker.
   contractor-protective R1 output but does not create legal findings, qualify a
   reviewer, deploy the release, or establish Tender mode readiness.
 
+  Exact release `0250683c12c6992d0444339c62d05e1e2a9d7fb1` is now active for
+  the public API/frontend against migration `0059_scoped_worker_job_claims`.
+  Readiness, the versioned OpenAPI route, the exact built frontend asset, and
+  the public TLS ingress were verified after activation; document and assistant
+  workers and local Qwen were not restarted.  The reusable behavior is proven
+  independently of OZERO by PostgreSQL 17 application-boundary tests with
+  canonical lineage and cross-owner default deny, plus a changed-identifier
+  export fixture.  OZERO was not used because no authorized contract-analysis
+  process has been established for that validation corpus.  An authenticated
+  browser run remains unverified because no browser binding or external-E2E
+  credential set was available in the execution session.  Tender mode still
+  requires an authorized legal-analysis flow, professional review authority,
+  real-corpus validation where applicable, and its remaining mode gates.
+
+  The same canonical projection now renders an editable Russian Word report
+  for contractor review.  It pairs each disagreement item with the exact
+  revised clause where available, retains source-version, locator and evidence
+  identities, lists risks and deliverable blockers, and states that the file is
+  not a legal opinion, approval or signed contract.  A controlled changed-ID
+  fixture proves the report is not project-specific; the full PostgreSQL
+  Tender flow proves canonical content and exact source lineage; the owner API
+  test proves honest `not started` output and cross-owner default deny.
+  `textutil` successfully re-opened the generated OOXML and retained Russian
+  text and source references.  OZERO is not used because this is reusable
+  contract-output behavior and its workspace has no authorized contract-
+  analysis process.  Professional approval and a real contract corpus remain
+  separate production-acceptance gates.
+
 * Audit preflight now emits an editable, scope-and-version-bound correction
   schedule.  For every required document it records the practical consequence
   and the bounded next action (form a package, attach source-backed evidence,

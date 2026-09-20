@@ -7855,6 +7855,45 @@
           "tender"
         ]
       }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx": {
+      "get": {
+        "operationId": "tender_contract_analysis_report_api_v1_workspaces__workspace_id__tender_contract_analysis_docx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Contract Analysis Report",
+        "tags": [
+          "tender"
+        ]
+      }
     }
   }
 }

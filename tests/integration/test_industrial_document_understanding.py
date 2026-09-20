@@ -172,8 +172,21 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         assert exported.status_code == 200, exported.text
         assert exported.headers["content-type"] == "text/csv; charset=utf-8"
         assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in exported.content.decode("utf-8-sig")
+        report = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx")
+        assert report.status_code == 200, report.text
+        assert report.headers["content-type"] == (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(report.content)) as package:
+            report_xml = package.read("word/document.xml").decode("utf-8")
+        assert "Договорный Tender-процесс не сформирован" in report_xml
+        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in report_xml
         hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
         assert hidden_export.status_code == 404, hidden_export.text
+        hidden_report = other.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx"
+        )
+        assert hidden_report.status_code == 404, hidden_report.text
         assert other_csrf["X-CSRF-Token"]
 
 

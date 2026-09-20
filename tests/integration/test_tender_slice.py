@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import io
 import json
+import zipfile
 from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
@@ -49,6 +51,7 @@ from asd_kontur.tender import (
     assess_corpus,
 )
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
+from asd_kontur.tender.contract_analysis_report import render_tender_contract_analysis_docx
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 
 from .conftest import PostgreSQLEnvironment, create_database, drop_database, run_migration
@@ -636,6 +639,12 @@ def test_at_pe_41_tender_end_to_end_lineage_authority_archive_and_reset(
     assert "Synthetic revised payment condition." in exported_contract
     assert str(locator) in exported_contract
     assert str(evidence) in exported_contract
+    rendered_contract = render_tender_contract_analysis_docx(projection)
+    with zipfile.ZipFile(io.BytesIO(rendered_contract)) as report:
+        contract_xml = report.read("word/document.xml").decode("utf-8")
+    assert "Synthetic revised payment condition." in contract_xml
+    assert str(locator) in contract_xml
+    assert str(evidence) in contract_xml
 
     archive_service = PortableArchiveService()
     tender_manifest = json.dumps(

@@ -2544,12 +2544,20 @@ function TenderContractAnalysisBody({
         юридическое заключение, не меняет исходный договор и не заменяет
         квалифицированное рассмотрение.
       </InfoNotice>
-      <a
-        className="button-link secondary"
-        href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.csv`}
-      >
-        Скачать договорный анализ и предложения
-      </a>
+      <div className="candidate-actions">
+        <a
+          className="button-link secondary"
+          href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.docx`}
+        >
+          Скачать протокол и предложения (Word)
+        </a>
+        <a
+          className="button-link secondary"
+          href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.csv`}
+        >
+          Скачать договорный анализ (CSV)
+        </a>
+      </div>
       <section className="metrics" aria-label="Состояние договорного анализа">
         <Metric label="Положений" value={clauses.length} />
         <Metric label="Вопросов и рисков" value={issues.length} />
