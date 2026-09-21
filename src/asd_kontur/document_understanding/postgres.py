@@ -19,7 +19,11 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from asd_kontur.application_spine.models import ClaimedJob, semantic_digest
+from asd_kontur.application_spine.models import (
+    STRUCTURE_IDENTITY_GROUP_MAX_SIZE,
+    ClaimedJob,
+    semantic_digest,
+)
 from asd_kontur.domain import deterministic_uuid
 from asd_kontur.ntd.pd_rd import (
     PdRdProfileContext,
@@ -66,7 +70,7 @@ def _identity_observation_group_key(normalized_name: str) -> str:
 
 
 def _bounded_cross_source_identity_groups(
-    values: list[dict[str, object]], *, max_group_size: int = 16
+    values: list[dict[str, object]], *, max_group_size: int = STRUCTURE_IDENTITY_GROUP_MAX_SIZE
 ) -> tuple[tuple[dict[str, object], ...], ...]:
     """Partition one alias set without losing dominant-source observations.
 

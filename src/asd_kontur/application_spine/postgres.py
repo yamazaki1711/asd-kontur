@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from asd_kontur.domain import uuid7
 
 from .models import (
+    STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
     BatchRegistration,
     ClaimedJob,
     DocumentSummary,
@@ -3499,7 +3500,10 @@ class SpinePostgresRepository:
         consumes the published source-scoped observations and may fail partially
         without suppressing the already useful project view.
         """
-        idempotency_key = f"project-structure-reconciliation:{semantic_input}"
+        idempotency_key = (
+            "project-structure-reconciliation:"
+            f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:{semantic_input}"
+        )
         existing = session.scalar(
             sa.text(
                 "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -3524,6 +3528,7 @@ class SpinePostgresRepository:
             "content_digest": str(document["content_digest"]),
             "corpus_semantic_input": semantic_input,
             "project_reconciliation_job_id": str(project_job_id),
+            "structure_identity_grouping_policy": (STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION),
         }
         session.execute(
             sa.text(
@@ -3547,6 +3552,7 @@ class SpinePostgresRepository:
                     {
                         "contract": "project-structure-reconciliation.command@1.0.0",
                         "input": semantic_input,
+                        "grouping_policy": STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
                     }
                 ),
                 "correlation": correlation_id,
