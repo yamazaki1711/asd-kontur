@@ -1310,7 +1310,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         assert successor["provenance"]["semantic_recovery_reason"] == "incomplete_semantic_coverage"
         assert (
             successor["provenance"]["semantic_coverage_recovery_contract"]
-            == "engineering-leaf-recovery-v5"
+            == "engineering-leaf-recovery-v6"
         )
 
 

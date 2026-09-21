@@ -26,6 +26,7 @@ from asd_kontur.tender.structure_identity_dossier import (
 )
 
 from .models import (
+    ENGINEERING_SEMANTIC_RECOVERY_CONTRACT,
     STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
     STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
     BatchRegistration,
@@ -49,7 +50,6 @@ from .object_store import StagedObject, WorkspaceObjectStore
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
 ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
-ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v5"
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,

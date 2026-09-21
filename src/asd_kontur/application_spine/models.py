@@ -16,6 +16,11 @@ JsonValue = dict[str, Any]
 STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION = "source-balanced-v1"
 STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION = "current-membership-v1"
 STRUCTURE_IDENTITY_GROUP_MAX_SIZE = 16
+# A semantic-recovery job is executable only by a worker that implements this
+# exact bounded leaf-recovery contract.  Keeping the value in the shared job
+# model lets both the scheduler and worker reject a release mismatch instead of
+# silently consuming the one permitted recovery attempt with older code.
+ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v6"
 
 
 class JobKind(StrEnum):

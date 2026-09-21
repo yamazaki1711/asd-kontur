@@ -8,6 +8,7 @@ from typing import BinaryIO
 from uuid import UUID
 
 from asd_kontur.application_spine.models import (
+    ENGINEERING_SEMANTIC_RECOVERY_CONTRACT,
     STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
     ClaimedJob,
     JobKind,
@@ -413,6 +414,12 @@ class IndustrialDocumentUnderstandingPipeline:
     def _engineering_semantic(self, claimed: ClaimedJob) -> StructuredCandidates | None:
         if self._qwen_semantic is None:
             return None
+        recovery_contract = claimed.input_manifest.get("semantic_coverage_recovery_contract")
+        if (
+            recovery_contract is not None
+            and recovery_contract != ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
+        ):
+            raise UnderstandingStageFailure("engineering_semantic_recovery_contract_unsupported")
         try:
             elements = self._repository.load_elements(claimed)
             accepted_batches = self._repository.load_accepted_engineering_batches(

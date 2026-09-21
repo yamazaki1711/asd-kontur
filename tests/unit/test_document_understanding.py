@@ -41,7 +41,10 @@ from asd_kontur.document_understanding.native import (
     inspect_and_extract,
 )
 from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOcrAdapter
-from asd_kontur.document_understanding.pipeline import IndustrialDocumentUnderstandingPipeline
+from asd_kontur.document_understanding.pipeline import (
+    IndustrialDocumentUnderstandingPipeline,
+    UnderstandingStageFailure,
+)
 from asd_kontur.document_understanding.postgres import (
     IndustrialUnderstandingRepository,
     _bounded_cross_source_identity_groups,
@@ -2672,6 +2675,40 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
     assert len(bundle.works) == 1
     assert len(bundle.quantities) == 1
     assert len(bundle.materials) == 1
+
+
+def test_semantic_recovery_rejects_worker_contract_mismatch_before_reading_source() -> None:
+    class Repository:
+        def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:
+            raise AssertionError("mismatched recovery must not read source evidence")
+
+    claimed = ClaimedJob(
+        UUID("30000000-0000-4000-8000-000000000012"),
+        UUID("40000000-0000-4000-8000-000000000012"),
+        UUID("50000000-0000-4000-8000-000000000012"),
+        JobKind.PROJECT_DEFINITION_EXTRACTION,
+        {
+            "document_id": str(DOCUMENT_ID),
+            "document_version": 1,
+            "source_version_id": str(SOURCE_VERSION_ID),
+            "semantic_coverage_recovery_contract": "engineering-leaf-recovery-v5",
+        },
+        "sha256:" + "c" * 64,
+        1,
+        1,
+        "none",
+    )
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate"),
+    )
+
+    with pytest.raises(
+        UnderstandingStageFailure,
+        match="engineering_semantic_recovery_contract_unsupported",
+    ):
+        pipeline._engineering_semantic(claimed)
 
 
 def test_project_field_stage_marks_unresolved_semantic_coverage_partial() -> None:
