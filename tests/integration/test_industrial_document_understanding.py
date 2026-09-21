@@ -698,6 +698,17 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             "Выпуск строительных материалов"
         )
         assert len(view["work_packages"]) == 1
+        assert view["facility_work_projection"]["candidate_groups"] == []
+        assert view["facility_work_projection"]["coverage"] == {
+            "total_work_package_count": 1,
+            "exact_identity_package_count": 0,
+            "ambiguous_identity_package_count": 0,
+            "unassociated_package_count": 1,
+            "consolidated_candidate_group_count": 0,
+            "complete": False,
+            "candidate_authority": "candidate_only",
+            "association_rule": "exact_shared_source_locator",
+        }
         package = view["work_packages"][0]["package"]
         assert package["work_type"]["raw"] == "Устройство монолитной плиты"
         assert package["work_type"]["mapping_status"] == "resolved"

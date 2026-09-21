@@ -2225,6 +2225,10 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
+            /** Facility Work Projection */
+            facility_work_projection?: {
+                [key: string]: unknown;
+            };
             /** Intake Summary */
             intake_summary?: {
                 [key: string]: unknown;

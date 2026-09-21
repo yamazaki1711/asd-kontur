@@ -2612,6 +2612,11 @@
             "title": "Evidence Index",
             "type": "object"
           },
+          "facility_work_projection": {
+            "additionalProperties": true,
+            "title": "Facility Work Projection",
+            "type": "object"
+          },
           "intake_summary": {
             "additionalProperties": true,
             "title": "Intake Summary",

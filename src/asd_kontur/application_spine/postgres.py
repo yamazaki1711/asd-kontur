@@ -14,6 +14,9 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from asd_kontur.domain import uuid7
+from asd_kontur.tender.facility_work_projection import (
+    build_facility_work_candidate_projection,
+)
 
 from .models import (
     STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
@@ -2999,6 +3002,9 @@ class SpinePostgresRepository:
             structure_identity_candidates = self._structure_identity_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            facility_work_projection = build_facility_work_candidate_projection(
+                [_jsonable_row(row) for row in packages], structure_identity_candidates
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -3059,6 +3065,10 @@ class SpinePostgresRepository:
             "structure_components": structure_components,
             "structure_identity_candidates": structure_identity_candidates,
             "structure_identity_reconciliation": structure_identity_reconciliation,
+            "facility_work_projection": {
+                "candidate_groups": facility_work_projection["candidate_groups"],
+                "coverage": facility_work_projection["coverage"],
+            },
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -4220,6 +4230,19 @@ class SpinePostgresRepository:
             "structure_identity_reconciliation": cls._structure_identity_reconciliation_status(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
+            "facility_work_projection": {
+                "candidate_groups": [],
+                "coverage": {
+                    "total_work_package_count": 0,
+                    "exact_identity_package_count": 0,
+                    "ambiguous_identity_package_count": 0,
+                    "unassociated_package_count": 0,
+                    "consolidated_candidate_group_count": 0,
+                    "complete": False,
+                    "candidate_authority": "candidate_only",
+                    "association_rule": "exact_shared_source_locator",
+                },
+            },
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),

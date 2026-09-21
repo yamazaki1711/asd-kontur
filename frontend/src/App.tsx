@@ -4725,6 +4725,18 @@ function ProjectUnderstandingPage() {
               string,
               unknown
             >;
+          const facilityWorkProjection = (value.facility_work_projection ??
+            {}) as Record<string, unknown>;
+          const facilityWorkCandidateGroups = Array.isArray(
+            facilityWorkProjection.candidate_groups,
+          )
+            ? (facilityWorkProjection.candidate_groups as Record<
+                string,
+                unknown
+              >[])
+            : [];
+          const facilityWorkCoverage = (facilityWorkProjection.coverage ??
+            {}) as Record<string, unknown>;
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -4792,6 +4804,12 @@ function ProjectUnderstandingPage() {
                 <Metric
                   label="Работ-кандидатов"
                   value={workCandidates.length}
+                />
+                <Metric
+                  label="Работ с точной группой объекта"
+                  value={Number(
+                    facilityWorkCoverage.exact_identity_package_count ?? 0,
+                  )}
                 />
                 <Metric
                   label="Количеств-кандидатов"
@@ -5019,6 +5037,33 @@ function ProjectUnderstandingPage() {
                   >
                     Скачать связь наблюдений работ с группами объектов
                   </a>
+                  <InfoNotice>
+                    По точному общему исходному фрагменту связано с одной
+                    группой объекта:{" "}
+                    {Number(
+                      facilityWorkCoverage.exact_identity_package_count ?? 0,
+                    ).toString()}{" "}
+                    из{" "}
+                    {Number(
+                      facilityWorkCoverage.total_work_package_count ?? 0,
+                    ).toString()}{" "}
+                    наблюдений; неоднозначных:{" "}
+                    {Number(
+                      facilityWorkCoverage.ambiguous_identity_package_count ??
+                        0,
+                    ).toString()}
+                    ; без доказанной связи:{" "}
+                    {Number(
+                      facilityWorkCoverage.unassociated_package_count ?? 0,
+                    ).toString()}
+                    . Это кандидаты связи, а не подтверждённые назначения работ
+                    объектам.
+                  </InfoNotice>
+                  <FacilityWorkCandidateList
+                    items={facilityWorkCandidateGroups}
+                    workspaceId={workspaceId}
+                    modeSlug={mode}
+                  />
                   {value.work_packages.length ? (
                     <WorkPackageList
                       items={value.work_packages}
@@ -5127,6 +5172,80 @@ function ProjectUnderstandingPage() {
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function FacilityWorkCandidateList({
+  items,
+  workspaceId,
+  modeSlug,
+}: {
+  items: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  if (!items.length) {
+    return (
+      <p className="empty-state">
+        Точные связи наблюдений работ с группами объектов пока не установлены.
+      </p>
+    );
+  }
+  return (
+    <>
+      <h3>Работы, связанные с группами объектов по источнику</h3>
+      <div className="card-grid">
+        {items.map((item) => {
+          const workType = (item.work_type ?? {}) as Record<string, unknown>;
+          const quantities = Array.isArray(item.quantities)
+            ? item.quantities
+            : [];
+          const materials = Array.isArray(item.materials) ? item.materials : [];
+          const uncertainties = Array.isArray(item.uncertainties)
+            ? item.uncertainties.map((value) => humanizeGap(String(value)))
+            : [];
+          const locators = Array.isArray(item.shared_source_locator_ids)
+            ? item.shared_source_locator_ids.map(String)
+            : [];
+          return (
+            <article
+              className="candidate-row"
+              key={displayValue(item.facility_work_candidate_id)}
+            >
+              <strong>
+                {displayValue(
+                  item.identity_label,
+                  "Группа объекта без наименования",
+                )}
+              </strong>
+              <p>{displayValue(workType.raw, "Работа без наименования")}</p>
+              <small>
+                Неподтверждённый кандидат; наблюдений:{" "}
+                {Number(item.candidate_observation_count ?? 0).toString()};
+                количеств: {quantities.length}; материалов: {materials.length}.
+              </small>
+              {uncertainties.length > 0 && (
+                <p>
+                  <small>Ограничения: {uncertainties.join("; ")}</small>
+                </p>
+              )}
+              {locators.slice(0, 4).map((locator) => (
+                <Link
+                  key={locator}
+                  to={workspaceRouteFromSlug(
+                    modeSlug,
+                    workspaceId,
+                    `/evidence/locators/${locator}`,
+                  )}
+                >
+                  Открыть исходный фрагмент
+                </Link>
+              ))}
+            </article>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
