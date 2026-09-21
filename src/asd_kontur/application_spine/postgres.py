@@ -3163,7 +3163,11 @@ class SpinePostgresRepository:
             result["structure_identity_components"] = []
             result["structure_identity_dossiers"] = []
             result["excavation_pit_inventory"] = {}
-        if section not in {"works", "materials", "packages"}:
+        # Facility/work associations are part of a structure dossier as well as
+        # the dedicated work/package views.  Keeping this bounded projection in
+        # the structure section lets the consultant answer facility-scoped work
+        # questions without loading the canonical raw candidate corpus.
+        if section not in {"structure", "works", "materials", "packages"}:
             result["facility_work_projection"] = {}
         if section != "matrix":
             result["matrix"] = {"matrix": {"rows": []}}

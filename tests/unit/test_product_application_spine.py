@@ -74,7 +74,7 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     ]
     assert structure["structure_nodes"] == []
     assert structure["work_packages"] == []
-    assert structure["facility_work_projection"] == {}
+    assert structure["facility_work_projection"] == view["facility_work_projection"]
     assert structure["matrix"] == {"matrix": {"rows": []}}
     assert "tender_input_assessment" not in structure["intake_summary"]
 

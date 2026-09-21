@@ -61,7 +61,9 @@ class ProfessionalAssistantService:
     ) -> Turn:
         organization_id = self._spine.resolve_scope(owner_identity_id, workspace_id)
         project = self._spine.project_understanding_view(
-            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            section="general",
         )
         project_row = dict((project or {}).get("project_definition") or {})
         project_ref = (

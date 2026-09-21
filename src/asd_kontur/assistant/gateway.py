@@ -595,7 +595,9 @@ class ProfessionalAssistantKnowledgeQuery:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
 
             model_view = SpinePostgresRepository(self._engine).project_understanding_view(
-                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                section="structure",
             )
             overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
             overview_identities = list((model_view or {}).get("structure_identity_components", []))[
@@ -1601,7 +1603,9 @@ class ProfessionalAssistantKnowledgeQuery:
 
         view = (
             SpinePostgresRepository(self._engine).project_understanding_view(
-                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                section="structure",
             )
             or {}
         )
