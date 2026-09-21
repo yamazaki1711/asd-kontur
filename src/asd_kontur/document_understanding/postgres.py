@@ -148,6 +148,27 @@ class IndustrialUnderstandingRepository:
                 if isinstance(row["output_manifest"], dict)
             }
 
+    def load_failed_engineering_batch_digests(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> frozenset[str]:
+        """Return immutable failed identities so retries never collide with them."""
+
+        with self._session(claimed) as session:
+            rows = session.scalars(
+                sa.text(
+                    "SELECT batch_digest FROM workspace.engineering_extraction_batches "
+                    "WHERE organization_id=:o AND workspace_id=:w AND source_version_id=:source "
+                    "AND profile_version=:profile AND terminal_status='failed'"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "source": self._source_version_id(claimed),
+                    "profile": profile_version,
+                },
+            ).all()
+        return frozenset(str(value) for value in rows)
+
     def engineering_semantic_coverage(
         self, claimed: ClaimedJob, *, profile_version: str
     ) -> dict[str, int | bool]:

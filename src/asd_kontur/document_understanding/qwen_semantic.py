@@ -51,6 +51,7 @@ _LEGACY_ENGINEERING_BATCH_FRAGMENTS = 12
 _DENSE_ENGINEERING_BATCH_FRAGMENTS = 48
 _MAX_ENGINEERING_BATCH_CHARS = 9_000
 _DENSE_ENGINEERING_BATCHING_POLICY = "dense-fragments-v1"
+_FAILED_BATCH_RECOVERY_STRATEGY = "failed_batch_recovery-v1"
 _SINGLE_FRAGMENT_RECOVERY_STRATEGY = "single_fragment_repair-v2"
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
@@ -321,6 +322,7 @@ class QwenDocumentSemanticAdapter:
         elements: Iterable[LayoutElement],
         *,
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        failed_batch_digests: frozenset[str] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
         batching_policy_version: str | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
@@ -330,6 +332,7 @@ class QwenDocumentSemanticAdapter:
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
         accepted = accepted_batches or {}
+        failed = failed_batch_digests or frozenset()
         compatible = compatible_accepted_batches or {}
         # Existing accepted v15 batches predate the dense packing policy. Resume
         # them with byte-identical manifests so their evidence can be reused.
@@ -347,6 +350,7 @@ class QwenDocumentSemanticAdapter:
                 self._extract_engineering_batch(
                     batch,
                     accepted=accepted,
+                    failed=failed,
                     on_accepted_batch=on_accepted_batch,
                     on_failed_batch=on_failed_batch,
                     compatible_accepted_batches=compatible,
@@ -729,6 +733,7 @@ class QwenDocumentSemanticAdapter:
         batch: QwenEngineeringBatch,
         *,
         accepted: Mapping[str, dict[str, object]],
+        failed: frozenset[str],
         compatible_accepted_batches: Mapping[str, dict[str, object]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
         on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None] | None,
@@ -765,12 +770,27 @@ class QwenDocumentSemanticAdapter:
                     self._extract_engineering_batch(
                         child,
                         accepted=accepted,
+                        failed=failed,
                         compatible_accepted_batches=compatible_accepted_batches,
                         on_accepted_batch=on_accepted_batch,
                         on_failed_batch=on_failed_batch,
                     )
                 )
             return tuple(recovered_values)
+        if batch.prompt_strategy == "standard" and batch.digest in failed:
+            return self._extract_engineering_batch(
+                _engineering_batch(
+                    batch.ordinal,
+                    batch.fragments,
+                    prompt_strategy=_FAILED_BATCH_RECOVERY_STRATEGY,
+                    batching_policy_version=batch.batching_policy_version,
+                ),
+                accepted=accepted,
+                failed=failed,
+                compatible_accepted_batches=compatible_accepted_batches,
+                on_accepted_batch=on_accepted_batch,
+                on_failed_batch=on_failed_batch,
+            )
         payload = ""
         try:
             payload = _complete(
@@ -782,7 +802,7 @@ class QwenDocumentSemanticAdapter:
             parsed = _parse_engineering(payload, allowed)
         except QwenSemanticFailure as exc:
             if (
-                batch.prompt_strategy == "standard"
+                batch.prompt_strategy in {"standard", _FAILED_BATCH_RECOVERY_STRATEGY}
                 and exc.code in _RECOVERABLE_ENGINEERING_BATCH_FAILURES
             ):
                 try:
@@ -814,7 +834,7 @@ class QwenDocumentSemanticAdapter:
             if failure.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
                 raise failure from None
             if len(batch.fragments) == 1:
-                if batch.prompt_strategy != "standard":
+                if batch.prompt_strategy not in {"standard", _FAILED_BATCH_RECOVERY_STRATEGY}:
                     # This is the bounded terminal recovery attempt for one exact
                     # source fragment.  Its failed receipt is already durable via
                     # ``on_failed_batch``.  Do not let one malformed model output
@@ -831,6 +851,7 @@ class QwenDocumentSemanticAdapter:
                         batching_policy_version=batch.batching_policy_version,
                     ),
                     accepted=accepted,
+                    failed=failed,
                     compatible_accepted_batches=compatible_accepted_batches,
                     on_accepted_batch=on_accepted_batch,
                     on_failed_batch=on_failed_batch,
@@ -841,6 +862,7 @@ class QwenDocumentSemanticAdapter:
                     self._extract_engineering_batch(
                         child,
                         accepted=accepted,
+                        failed=failed,
                         on_accepted_batch=on_accepted_batch,
                         on_failed_batch=on_failed_batch,
                         compatible_accepted_batches=compatible_accepted_batches,

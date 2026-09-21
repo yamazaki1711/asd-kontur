@@ -734,3 +734,14 @@ terminal budget, and single-successor scheduling. OZERO supplies four observed
 partial-source leaves for later runtime validation; it is not the mechanism's
 acceptance oracle. Deployment and real-Qwen worker acceptance remain open at this
 checkpoint.
+
+The first live recovery successor then exposed an immutable-ledger identity
+collision: a historically failed standard batch could later parse successfully
+in memory, but its accepted insert reused the failed digest and was correctly
+ignored by the append-only primary key. The reusable correction now loads exact
+failed batch digests and derives `failed_batch_recovery-v1` only for those
+attempts. Accepted evidence and untouched inputs retain their original digest;
+the new recovery result cannot overwrite or masquerade as the historical
+failure. A controlled adapter regression proves the retry digest differs and
+persists a valid full-schema result. Existing live successors continue on the
+prior release and must drain before this correction is activated.

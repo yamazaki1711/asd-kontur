@@ -1994,6 +1994,39 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert complete.call_args_list[-1].kwargs["max_tokens"] == 1_200
 
 
+def test_qwen_engineering_retry_uses_new_identity_after_immutable_failure() -> None:
+    document = _extract_csv("A\n")
+    original = _engineering_batches(document.pages[0].elements)[0]
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: list[tuple[object, dict[str, object]]] = []
+    valid_empty = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+    )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=valid_empty,
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            failed_batch_digests=frozenset({original.digest}),
+            on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
+        )
+
+    complete.assert_called_once()
+    assert result == StructuredCandidates((), (), (), (), (), ())
+    recovered, _manifest = accepted[0]
+    assert recovered.prompt_strategy == "failed_batch_recovery-v1"
+    assert recovered.digest != original.digest
+
+
 def test_qwen_engineering_extraction_preserves_unrepaired_leaf_as_partial_coverage() -> None:
     document = _extract_csv("A\n")
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")

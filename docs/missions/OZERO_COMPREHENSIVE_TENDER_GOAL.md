@@ -1155,3 +1155,13 @@ validation and disposable PostgreSQL scheduling acceptance pass. The next execut
 action is to checkpoint and deploy that exact worker-compatible change, invoke the
 existing project-understanding command once, and verify the four source leaves through
 real worker-to-Qwen receipts before refreshing the current reconciliation.
+
+The first such live successor completed but remained partial. Its repaired
+material observation was accepted in memory; the immutable batch insert reused
+the historical failed digest, so `ON CONFLICT DO NOTHING` preserved the failure
+and no false accepted receipt was written. A pending correction derives a new
+recovery digest only when that exact digest already has a failed receipt. The
+remaining three successors continue safely on the prior release; do not restart
+their worker. After they terminate, deploy the pending retry-identity correction
+and schedule one bounded successor per still-partial source under the next
+recovery-contract version.
