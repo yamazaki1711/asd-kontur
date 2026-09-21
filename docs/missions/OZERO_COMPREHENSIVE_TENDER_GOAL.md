@@ -1368,3 +1368,39 @@ terminal receipt, inspect its exact accepted/empty/failed denominators, deploy
 the compatible worker release at that safe boundary, and materialize the
 independently versioned project model before exercising grounded consultant
 answers.
+
+### Continuation checkpoint — 2026-09-21 19:10 UTC+12
+
+The active structure-identity job
+`01a0c26a-1981-76ce-8900-d31e153f2eaf` remains healthy on the preserved
+document-worker release `97c0494`; it passed 664/722 current bounded groups with
+a fresh lease and heartbeat. API/frontend and assistant release `74b8e78` is
+deployed at migration `0063_structure_group_receipts`, its local readiness route
+and public HTTPS root return HTTP 200, and no assistant turn was active during
+the transition. The document worker and loaded Qwen process were not restarted.
+
+Three reusable materialization corrections are accepted and pushed. `1ad1461`
+removes an immutable historical unresolved relationship from a new project view
+only when one exact persisted quantity/material candidate matches the same
+locator, payload, and scoped work; name-only and ambiguous matches remain open.
+`cfe02d2` replaces the unconditional
+`STRUCTURE_CANDIDATE_RECONCILIATION_PENDING` placeholder with the exact
+successful structure-result digest and reports source-coverage or group-failure
+gaps separately. `74b8e78` versions structure inference as
+`qwen-structure-identity-v2`, records that profile in scheduling and results,
+uses a bounded 1,200-token response contract, reuses only accepted or
+accepted-empty v1 receipts, and never converts a failed v1 receipt into v2
+acceptance. Historical failed v1 receipts are all from obsolete oversized
+22–48-observation groups; the current grouping contract is bounded to sixteen,
+so they are history rather than the current 722-group denominator.
+
+Independent verification at this checkpoint: 732 unit tests, strict mypy and
+Ruff, the PostgreSQL restart-safe receipt compatibility test, the
+post-structure scheduling/materialization-lineage test, and exact release build
+`74b8e78f63842467c42b1f7a086f998de705a81d`. The worker plist for that release
+is staged but not activated. Next executable action: wait only for the current
+lease to produce its terminal receipt, record the current result denominator,
+activate the staged exact worker release, invoke the supported project command
+once to create the v2 idempotency identity, and verify the automatically queued
+post-structure `project-understanding-reconciliation-v0.3` view before testing
+the Russian project consultant.
