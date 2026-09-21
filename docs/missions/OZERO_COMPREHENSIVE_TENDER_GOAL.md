@@ -1336,3 +1336,35 @@ pinned worker and run exactly one manifest-bearing final structure refresh if
 the old process consumed the queued one. Verify 22/22 current semantic coverage,
 current-only identity projection, and grounded inventory behavior before
 accepting the refreshed Tender view.
+
+### Continuation checkpoint — 2026-09-21 18:25 UTC+12
+
+Semantic extraction is complete for all 22 active OZERO source versions:
+2,529 pages and 133,407/133,407 current semantic fragments have accepted
+coverage. The source-balanced structure-identity job
+`01a0c26a-1981-76ce-8900-d31e153f2eaf` remains active on the preserved
+document-worker release `97c0494`; it reached 310/722 groups with a current
+heartbeat and no job-level failure before this checkpoint. Neither that worker
+nor the loaded local Qwen runtime was restarted.
+
+API/frontend and assistant-worker release `7bf704b` is deployed at migration
+`0063_structure_group_receipts`. The API returns ready, serves frontend asset
+`index-B09fbfuy.js`, and exposes section-bounded project-model responses instead
+of sending the multi-megabyte raw candidate graph on every UI refresh. The
+consultant's workspace overview and structured entity-inventory tools now use
+the same bounded structure projection, while retaining the bounded
+facility/work association projection. A scoped real OZERO inventory invocation
+returned a 2.6 KB evidence package with four explicit pit candidates and four
+source links, while correctly retaining `exact_total_supported=false` during
+reconciliation. This is useful candidate evidence, not an accepted pit count.
+
+Independent validation: 729 unit tests, strict mypy, Ruff/format, frontend
+typecheck/lint/build, the focused disposable-PostgreSQL scheduling test, and a
+real scoped read passed. A broader native DOCX/CSV integration test remains
+open because its worker outcomes now include a retry-queued internal stage in
+addition to succeeded stages; its existing all-succeeded assertion was not
+weakened. Next executable action: allow the active 722-group job to reach a
+terminal receipt, inspect its exact accepted/empty/failed denominators, deploy
+the compatible worker release at that safe boundary, and materialize the
+independently versioned project model before exercising grounded consultant
+answers.
