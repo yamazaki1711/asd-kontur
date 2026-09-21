@@ -420,6 +420,88 @@ class IndustrialUnderstandingRepository:
                 },
             )
 
+    def record_structure_identity_progress(
+        self,
+        claimed: ClaimedJob,
+        *,
+        completed_groups: int,
+        total_groups: int,
+    ) -> None:
+        """Append a deduplicated progress event for cross-document identity groups."""
+        if total_groups < 1 or not 0 <= completed_groups <= total_groups:
+            raise ValueError("structure_identity_progress_invalid")
+        event_type = "engineering.structure_identity_progress"
+        with self._session(claimed) as session:
+            session.execute(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "AND workspace_id=:w AND job_id=:job FOR UPDATE"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+            ).one()
+            existing = session.scalar(
+                sa.text(
+                    "SELECT EXISTS (SELECT 1 FROM workspace.job_progress_events WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job AND "
+                    "event_type=:event AND progress_current=:current AND progress_total=:total)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "event": event_type,
+                    "current": completed_groups,
+                    "total": total_groups,
+                },
+            )
+            if existing:
+                return
+            sequence = int(
+                session.scalar(
+                    sa.text(
+                        "SELECT COALESCE(max(event_sequence),0)+1 FROM "
+                        "workspace.job_progress_events WHERE organization_id=:o AND "
+                        "workspace_id=:w AND job_id=:job"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
+                )
+            )
+            recorded_at = datetime.now(UTC)
+            event_digest = semantic_digest(
+                {
+                    "job_id": claimed.job_id,
+                    "sequence": sequence,
+                    "event_type": event_type,
+                    "current": completed_groups,
+                    "total": total_groups,
+                }
+            )
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_progress_events "
+                    "(organization_id,workspace_id,job_id,event_sequence,event_type,progress_current,"
+                    "progress_total,safe_message_code,terminal,recorded_at,retention_until,event_digest) "
+                    "VALUES (:o,:w,:job,:sequence,:event,:current,:total,"
+                    "'structure_identity_group_processed',false,:recorded,:retention,:digest)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "sequence": sequence,
+                    "event": event_type,
+                    "current": completed_groups,
+                    "total": total_groups,
+                    "recorded": recorded_at,
+                    "retention": recorded_at + timedelta(days=1),
+                    "digest": event_digest,
+                },
+            )
+
     def persist_native_document(self, claimed: ClaimedJob, document: NativeDocument) -> None:
         inventory_id = deterministic_uuid(
             f"format-inventory:{self._source_version_id(claimed)}:{document.fingerprint}"

@@ -1399,6 +1399,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     third = deterministic_uuid("identity-failure-third")
     fourth = deterministic_uuid("identity-failure-fourth")
     persisted: list[StructureIdentityCandidate] = []
+    progress: list[tuple[int, int]] = []
 
     class Repository:
         def workspace_engineering_semantic_coverage(
@@ -1420,6 +1421,15 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
             self, _claimed: ClaimedJob, values: tuple[StructureIdentityCandidate, ...]
         ) -> None:
             persisted.extend(values)
+
+        def record_structure_identity_progress(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            completed_groups: int,
+            total_groups: int,
+        ) -> None:
+            progress.append((completed_groups, total_groups))
 
         def assemble_workspace(self, _claimed: ClaimedJob) -> dict[str, object]:
             return {"run_id": "identity-partial-run"}
@@ -1471,6 +1481,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     assert result["structure_identity_group_count"] == 2
     assert result["structure_identity_failed_group_count"] == 1
     assert result["structure_identity_reconciliation"] == "partial_group_failures"
+    assert progress == [(0, 2), (1, 2), (2, 2)]
     assert result["structure_identity_failures"] == [
         {
             "group_fingerprint": semantic_digest(sorted((str(first), str(second)))),

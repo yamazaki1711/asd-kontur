@@ -367,6 +367,18 @@ class IndustrialDocumentUnderstandingPipeline:
                 total_batches=total_batches,
             )
 
+    def _record_structure_identity_progress(
+        self, claimed: ClaimedJob, *, completed_groups: int, total_groups: int
+    ) -> None:
+        """Publish content-free cross-document reconciliation progress."""
+        recorder = getattr(self._repository, "record_structure_identity_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=total_groups,
+            )
+
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         semantic = self._engineering_semantic(claimed)
         bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
@@ -508,7 +520,11 @@ class IndustrialDocumentUnderstandingPipeline:
             return result
         identity_count = 0
         failures: list[dict[str, object]] = []
-        for group in groups:
+        if groups:
+            self._record_structure_identity_progress(
+                claimed, completed_groups=0, total_groups=len(groups)
+            )
+        for completed_groups, group in enumerate(groups, start=1):
             try:
                 candidates = self._qwen_semantic.reconcile_structure_identities(group)
             except QwenSemanticFailure as exc:
@@ -520,9 +536,14 @@ class IndustrialDocumentUnderstandingPipeline:
                         "failure_code": exc.code,
                     }
                 )
-                continue
-            self._repository.persist_structure_identity_candidates(claimed, candidates)
-            identity_count += len(candidates)
+            else:
+                self._repository.persist_structure_identity_candidates(claimed, candidates)
+                identity_count += len(candidates)
+            self._record_structure_identity_progress(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=len(groups),
+            )
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
         result["structure_identity_group_count"] = len(groups)

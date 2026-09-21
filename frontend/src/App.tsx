@@ -2069,8 +2069,10 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 </StatusPill>
               </td>
               <td>
-                {job.progress_message_code ===
-                  "engineering_semantic_batch_accepted" &&
+                {[
+                  "engineering_semantic_batch_accepted",
+                  "structure_identity_group_processed",
+                ].includes(job.progress_message_code ?? "") &&
                 Number.isInteger(job.progress_current) &&
                 Number.isInteger(job.progress_total)
                   ? `${String(job.progress_current)} / ${String(job.progress_total)}`
