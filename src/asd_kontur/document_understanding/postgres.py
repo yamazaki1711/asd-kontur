@@ -283,12 +283,20 @@ class IndustrialUnderstandingRepository:
             row = (
                 session.execute(
                     sa.text(
-                        "WITH latest_elements AS (SELECT DISTINCT ON (source_locator_id) normalized_text "
+                        "WITH latest_elements AS (SELECT DISTINCT ON (source_locator_id) "
+                        "source_locator_id,evidence_digest,normalized_text "
                         "FROM workspace.native_layout_element_versions WHERE organization_id=:o AND "
                         "workspace_id=:w AND source_version_id=:source ORDER BY source_locator_id,version DESC), "
-                        "expected AS (SELECT COALESCE(SUM(CEIL(length(normalized_text)::numeric/2400)),0)::bigint "
-                        "AS fragment_count FROM latest_elements WHERE normalized_text<>''), "
-                        "accepted AS (SELECT DISTINCT fragment->>'fragment_id' AS fragment_id FROM "
+                        "expected_fragments AS (SELECT source_locator_id::text source_locator_id,"
+                        "evidence_digest,offset_value character_start,LEAST(offset_value+2400,"
+                        "length(normalized_text)) character_end FROM latest_elements CROSS JOIN LATERAL "
+                        "generate_series(0,length(normalized_text)-1,2400) offset_value WHERE normalized_text<>''), "
+                        "expected AS (SELECT COUNT(*)::bigint AS fragment_count FROM expected_fragments), "
+                        "accepted AS (SELECT DISTINCT fragment->>'fragment_id' AS fragment_id,"
+                        "COALESCE(fragment->>'source_locator_id',fragment->>'locator_id') source_locator_id,"
+                        "fragment->>'evidence_digest' evidence_digest,"
+                        "(fragment->>'character_start')::int character_start,"
+                        "(fragment->>'character_end')::int character_end FROM "
                         "workspace.engineering_extraction_batches batch CROSS JOIN LATERAL "
                         "jsonb_array_elements(CASE WHEN jsonb_typeof(batch.input_manifest)='array' "
                         "THEN batch.input_manifest ELSE COALESCE(batch.input_manifest->'fragments','[]'::jsonb) END) "
@@ -301,11 +309,17 @@ class IndustrialUnderstandingRepository:
                         "AS fragment WHERE batch.organization_id=:o AND batch.workspace_id=:w AND "
                         "batch.source_version_id=:source AND batch.profile_version=:profile AND "
                         "batch.terminal_status='failed'), unresolved AS (SELECT COUNT(*)::bigint AS fragment_count "
-                        "FROM failed LEFT JOIN accepted USING (fragment_id) WHERE accepted.fragment_id IS NULL) "
-                        "SELECT expected.fragment_count AS expected_fragment_count,COUNT(accepted.fragment_id)::bigint "
-                        "AS accepted_fragment_count,unresolved.fragment_count AS unresolved_failed_fragment_count "
-                        "FROM expected CROSS JOIN unresolved LEFT JOIN accepted ON true GROUP BY expected.fragment_count,"
-                        "unresolved.fragment_count"
+                        "FROM failed LEFT JOIN accepted USING (fragment_id) WHERE accepted.fragment_id IS NULL), "
+                        "covered AS (SELECT COUNT(*)::bigint fragment_count FROM expected_fragments expected "
+                        "JOIN accepted ON accepted.source_locator_id=expected.source_locator_id AND "
+                        "accepted.evidence_digest=expected.evidence_digest AND "
+                        "accepted.character_start=expected.character_start AND "
+                        "accepted.character_end=expected.character_end) "
+                        "SELECT expected.fragment_count AS expected_fragment_count,"
+                        "(SELECT COUNT(*)::bigint FROM accepted) AS accepted_fragment_count,"
+                        "covered.fragment_count AS covered_fragment_count,"
+                        "unresolved.fragment_count AS unresolved_failed_fragment_count "
+                        "FROM expected CROSS JOIN unresolved CROSS JOIN covered"
                     ),
                     {
                         "o": claimed.organization_id,
@@ -319,12 +333,15 @@ class IndustrialUnderstandingRepository:
             )
         expected = int(row["expected_fragment_count"])
         accepted = int(row["accepted_fragment_count"])
+        covered = int(row["covered_fragment_count"])
         unresolved = int(row["unresolved_failed_fragment_count"])
         return {
             "expected_fragment_count": expected,
             "accepted_fragment_count": accepted,
+            "covered_fragment_count": covered,
+            "unresolved_fragment_count": max(0, expected - covered),
             "unresolved_failed_fragment_count": unresolved,
-            "complete": expected > 0 and accepted == expected and unresolved == 0,
+            "complete": expected > 0 and covered == expected,
         }
 
     def record_accepted_engineering_batch(

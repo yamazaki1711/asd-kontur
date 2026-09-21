@@ -410,6 +410,8 @@ def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None
                 "expected_fragment_count": 20,
                 "accepted_batch_count": 3,
                 "accepted_fragment_count": 16,
+                "covered_fragment_count": 16,
+                "unresolved_fragment_count": 4,
                 "failed_batch_count": 1,
                 "failed_fragment_count": 4,
                 "recovered_failed_fragment_count": 0,
@@ -424,6 +426,8 @@ def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None
     row = next(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
     assert row["native_extraction_status"] == "complete"
     assert row["semantic_coverage_state"] == "partial"
+    assert row["covered_fragment_count"] == "16"
+    assert row["unresolved_fragment_count"] == "4"
     assert row["unresolved_failed_fragment_count"] == "4"
     assert row["project_coverage_gaps"] == "SEMANTIC_COVERAGE_PARTIAL"
 

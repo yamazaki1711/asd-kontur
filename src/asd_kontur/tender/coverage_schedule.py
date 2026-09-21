@@ -35,6 +35,8 @@ def render_tender_document_coverage_csv(
             "expected_fragment_count",
             "accepted_batch_count",
             "accepted_fragment_count",
+            "covered_fragment_count",
+            "unresolved_fragment_count",
             "failed_batch_count",
             "failed_fragment_count",
             "recovered_failed_fragment_count",
@@ -66,6 +68,8 @@ def render_tender_document_coverage_csv(
                 "expected_fragment_count": _text(row.get("expected_fragment_count")),
                 "accepted_batch_count": _text(row.get("accepted_batch_count")),
                 "accepted_fragment_count": _text(row.get("accepted_fragment_count")),
+                "covered_fragment_count": _text(row.get("covered_fragment_count")),
+                "unresolved_fragment_count": _text(row.get("unresolved_fragment_count")),
                 "failed_batch_count": _text(row.get("failed_batch_count")),
                 "failed_fragment_count": _text(row.get("failed_fragment_count")),
                 "recovered_failed_fragment_count": _text(

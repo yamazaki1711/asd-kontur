@@ -109,7 +109,7 @@ def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures
 
     assert (
         state(
-            accepted_fragment_count=0,
+            covered_fragment_count=0,
             expected_fragment_count=8,
             unresolved_failed_fragment_count=2,
         )
@@ -117,7 +117,7 @@ def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures
     )
     assert (
         state(
-            accepted_fragment_count=0,
+            covered_fragment_count=0,
             expected_fragment_count=8,
             unresolved_failed_fragment_count=0,
         )
@@ -125,7 +125,7 @@ def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures
     )
     assert (
         state(
-            accepted_fragment_count=7,
+            covered_fragment_count=7,
             expected_fragment_count=8,
             unresolved_failed_fragment_count=1,
         )
@@ -133,9 +133,17 @@ def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures
     )
     assert (
         state(
-            accepted_fragment_count=8,
+            covered_fragment_count=8,
             expected_fragment_count=8,
             unresolved_failed_fragment_count=0,
+        )
+        == "complete"
+    )
+    assert (
+        state(
+            covered_fragment_count=8,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=3,
         )
         == "complete"
     )

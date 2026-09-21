@@ -4270,16 +4270,24 @@ class SpinePostgresRepository:
                 " ORDER BY v.document_id,a.decision_version DESC"
                 "), latest_elements AS ("
                 " SELECT DISTINCT ON (source_locator_id) source_version_id,source_locator_id,"
-                " normalized_text FROM workspace.native_layout_element_versions "
+                " evidence_digest,normalized_text FROM workspace.native_layout_element_versions "
                 " WHERE organization_id=:o AND workspace_id=:w "
                 " ORDER BY source_locator_id,version DESC"
+                "), expected_fragments AS ("
+                " SELECT source_version_id,source_locator_id::text source_locator_id,evidence_digest,"
+                " offset_value character_start,LEAST(offset_value+2400,length(normalized_text)) "
+                " character_end FROM latest_elements CROSS JOIN LATERAL "
+                " generate_series(0,length(normalized_text)-1,2400) offset_value WHERE normalized_text<>''"
                 "), expected AS ("
-                " SELECT source_version_id,SUM(CEIL(length(normalized_text)::numeric/2400))::bigint "
-                " AS expected_fragment_count FROM latest_elements WHERE normalized_text<>'' "
-                " GROUP BY source_version_id"
+                " SELECT source_version_id,COUNT(*)::bigint AS expected_fragment_count "
+                " FROM expected_fragments GROUP BY source_version_id"
                 "), accepted_fragments AS ("
                 " SELECT DISTINCT b.source_version_id,b.profile_version,fragment->>'fragment_id' "
-                " AS fragment_id FROM workspace.engineering_extraction_batches b "
+                " AS fragment_id,COALESCE(fragment->>'source_locator_id',fragment->>'locator_id') "
+                " source_locator_id,fragment->>'evidence_digest' evidence_digest,"
+                " (fragment->>'character_start')::int character_start,"
+                " (fragment->>'character_end')::int character_end "
+                " FROM workspace.engineering_extraction_batches b "
                 " CROSS JOIN LATERAL jsonb_array_elements(CASE "
                 " WHEN jsonb_typeof(b.input_manifest)='array' THEN b.input_manifest "
                 " ELSE COALESCE(b.input_manifest->'fragments','[]'::jsonb) END) AS fragment "
@@ -4327,6 +4335,17 @@ class SpinePostgresRepository:
                 " profile_version FROM workspace.engineering_extraction_batches WHERE "
                 " organization_id=:o AND workspace_id=:w AND input_manifest IS NOT NULL "
                 " ORDER BY source_version_id,recorded_at DESC,batch_ordinal DESC,batch_digest DESC"
+                "), covered AS ("
+                " SELECT expected.source_version_id,activity.profile_version,COUNT(*)::bigint "
+                " AS covered_fragment_count FROM expected_fragments expected JOIN latest_activity "
+                " activity USING(source_version_id) JOIN accepted_fragments accepted ON "
+                " accepted.source_version_id=expected.source_version_id AND "
+                " accepted.profile_version=activity.profile_version AND "
+                " accepted.source_locator_id=expected.source_locator_id AND "
+                " accepted.evidence_digest=expected.evidence_digest AND "
+                " accepted.character_start=expected.character_start AND "
+                " accepted.character_end=expected.character_end GROUP BY "
+                " expected.source_version_id,activity.profile_version"
                 ") SELECT v.source_version_id,COALESCE(activity.profile_version,'not_started') AS profile_version,"
                 " COALESCE(a.accepted_batch_count,0) AS accepted_batch_count,"
                 " COALESCE(a.accepted_fragment_count,0) AS accepted_fragment_count,"
@@ -4334,6 +4353,7 @@ class SpinePostgresRepository:
                 " COALESCE(f.failed_fragment_count,0) AS failed_fragment_count,"
                 " COALESCE(u.unresolved_failed_fragment_count,0) AS unresolved_failed_fragment_count,"
                 " COALESCE(e.expected_fragment_count,0) AS expected_fragment_count,"
+                " COALESCE(covered.covered_fragment_count,0) AS covered_fragment_count,"
                 " v.document_id,v.version AS document_version,v.safe_display_name,"
                 " COALESCE(s.page_count,0) AS page_count,"
                 " s.admission_status,s.extraction_status "
@@ -4345,6 +4365,8 @@ class SpinePostgresRepository:
                 " AND f.profile_version=activity.profile_version "
                 " LEFT JOIN unresolved_failed u ON u.source_version_id=v.source_version_id "
                 " AND u.profile_version=activity.profile_version "
+                " LEFT JOIN covered ON covered.source_version_id=v.source_version_id "
+                " AND covered.profile_version=activity.profile_version "
                 " LEFT JOIN LATERAL (SELECT page_count,admission_status,extraction_status FROM "
                 " workspace.document_processing_states state "
                 " WHERE state.organization_id=v.organization_id AND state.workspace_id=v.workspace_id "
@@ -4383,8 +4405,13 @@ class SpinePostgresRepository:
                     - int(row["unresolved_failed_fragment_count"]),
                 ),
                 "expected_fragment_count": int(row["expected_fragment_count"]),
+                "covered_fragment_count": int(row["covered_fragment_count"]),
+                "unresolved_fragment_count": max(
+                    0,
+                    int(row["expected_fragment_count"]) - int(row["covered_fragment_count"]),
+                ),
                 "state": SpinePostgresRepository._semantic_coverage_state(
-                    accepted_fragment_count=int(row["accepted_fragment_count"]),
+                    covered_fragment_count=int(row["covered_fragment_count"]),
                     expected_fragment_count=int(row["expected_fragment_count"]),
                     unresolved_failed_fragment_count=int(row["unresolved_failed_fragment_count"]),
                 ),
@@ -4395,13 +4422,13 @@ class SpinePostgresRepository:
     @staticmethod
     def _semantic_coverage_state(
         *,
-        accepted_fragment_count: int,
+        covered_fragment_count: int,
         expected_fragment_count: int,
         unresolved_failed_fragment_count: int,
     ) -> str:
-        if accepted_fragment_count == 0:
+        if covered_fragment_count == 0:
             return "failed" if unresolved_failed_fragment_count else "not_started"
-        return "complete" if accepted_fragment_count == expected_fragment_count else "partial"
+        return "complete" if covered_fragment_count == expected_fragment_count else "partial"
 
     @staticmethod
     def _project_structure_rows(
