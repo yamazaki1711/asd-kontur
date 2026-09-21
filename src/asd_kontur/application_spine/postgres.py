@@ -13,6 +13,7 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from asd_kontur.document_understanding.models import PROJECT_RECONCILIATION_PROFILE_VERSION
 from asd_kontur.domain import uuid7
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
@@ -1563,9 +1564,13 @@ class SpinePostgresRepository:
                 "incremental_source_job_id": str(claimed.job_id),
                 "incremental_source_input_digest": str(source["input_digest"]),
                 "engineering_semantic_profile": semantic_profile,
+                "project_reconciliation_profile": PROJECT_RECONCILIATION_PROFILE_VERSION,
             }
             input_digest = semantic_digest(manifest)
-            idempotency_key = f"project-understanding-incremental:{claimed.job_id}:{input_digest}"
+            idempotency_key = (
+                "project-understanding-incremental:"
+                f"{PROJECT_RECONCILIATION_PROFILE_VERSION}:{claimed.job_id}:{input_digest}"
+            )
             existing = session.scalar(
                 sa.text(
                     "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -1604,6 +1609,9 @@ class SpinePostgresRepository:
                             "contract": "project-understanding.incremental-reconciliation@1.0.0",
                             "source_semantic_job_id": str(claimed.job_id),
                             "engineering_semantic_profile": semantic_profile,
+                            "project_reconciliation_profile": (
+                                PROJECT_RECONCILIATION_PROFILE_VERSION
+                            ),
                         }
                     ),
                     "correlation": source["correlation_id"],
@@ -3449,7 +3457,9 @@ class SpinePostgresRepository:
                     "semantic_jobs": semantic_jobs,
                 }
             )
-            idempotency_key = f"project-understanding:{semantic_input}"
+            idempotency_key = (
+                f"project-understanding:{PROJECT_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
+            )
             existing = session.execute(
                 sa.text(
                     "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -3482,6 +3492,7 @@ class SpinePostgresRepository:
                 "media_type": document["media_type"],
                 "content_digest": document["content_digest"],
                 "corpus_semantic_input": semantic_input,
+                "project_reconciliation_profile": PROJECT_RECONCILIATION_PROFILE_VERSION,
             }
             job_id = uuid7()
             session.execute(
@@ -3503,7 +3514,13 @@ class SpinePostgresRepository:
                     "digest": semantic_digest(manifest),
                     "key": idempotency_key,
                     "provenance": _json(
-                        {"contract": "project-understanding.command@1.0.0", "input": semantic_input}
+                        {
+                            "contract": "project-understanding.command@1.0.0",
+                            "input": semantic_input,
+                            "project_reconciliation_profile": (
+                                PROJECT_RECONCILIATION_PROFILE_VERSION
+                            ),
+                        }
                     ),
                     "correlation": correlation_id,
                     "owner": owner_identity_id,

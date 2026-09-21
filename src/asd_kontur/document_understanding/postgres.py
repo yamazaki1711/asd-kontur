@@ -33,7 +33,7 @@ from asd_kontur.ntd.pd_rd import (
 
 from .models import (
     PROJECT_EXTRACTION_PROFILE_VERSION,
-    UNDERSTANDING_PROFILE_VERSION,
+    PROJECT_RECONCILIATION_PROFILE_VERSION,
     WORK_EXTRACTION_PROFILE_VERSION,
     DocumentRole,
     ExactLocator,
@@ -1256,7 +1256,7 @@ class IndustrialUnderstandingRepository:
             )
             run_id = deterministic_uuid(
                 f"project-understanding-run:{claimed.organization_id}:{claimed.workspace_id}:"
-                f"{corpus_digest}:{UNDERSTANDING_PROFILE_VERSION}"
+                f"{corpus_digest}:{PROJECT_RECONCILIATION_PROFILE_VERSION}"
             )
             session.execute(
                 sa.text(
@@ -1270,7 +1270,7 @@ class IndustrialUnderstandingRepository:
                     "w": claimed.workspace_id,
                     "run": run_id,
                     "corpus": corpus_digest,
-                    "profile": UNDERSTANDING_PROFILE_VERSION,
+                    "profile": PROJECT_RECONCILIATION_PROFILE_VERSION,
                     "sources": source_ids,
                     "gaps": ["VERIFIED_NTD_UNAVAILABLE", "ACTIVE_RULE_VERSION_UNAVAILABLE"],
                 },

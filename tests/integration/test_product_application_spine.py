@@ -963,7 +963,9 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                         "structure.input_manifest AS structure_manifest,"
                         "structure.provenance AS structure_provenance,"
                         "dependency.depends_on_job_id,dependency.dependency_kind,"
-                        "project.idempotency_key AS project_key FROM "
+                        "project.idempotency_key AS project_key,"
+                        "project.input_manifest AS project_manifest,"
+                        "project.provenance AS project_provenance FROM "
                         "workspace.durable_jobs structure "
                         "JOIN workspace.durable_job_dependencies dependency ON "
                         "dependency.organization_id=structure.organization_id AND "
@@ -988,6 +990,18 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
         assert len(structure_jobs) == 1
         assert structure_jobs[0]["dependency_kind"] == "success_required"
+        assert structure_jobs[0]["project_key"].startswith(
+            "project-understanding:project-understanding-reconciliation-v0.3:"
+        )
+        assert (
+            structure_jobs[0]["project_manifest"]["project_reconciliation_profile"]
+            == "project-understanding-reconciliation-v0.3"
+        )
+        assert (
+            structure_jobs[0]["project_provenance"]["project_reconciliation_profile"]
+            == "project-understanding-reconciliation-v0.3"
+        )
+        assert "project-understanding-reconciliation-v0.3" not in structure_jobs[0]["structure_key"]
         assert (
             structure_jobs[0]["structure_manifest"]["structure_identity_result_manifest_version"]
             == "current-membership-v1"

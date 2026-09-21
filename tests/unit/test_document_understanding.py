@@ -44,6 +44,7 @@ from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOc
 from asd_kontur.document_understanding.pipeline import (
     IndustrialDocumentUnderstandingPipeline,
     UnderstandingStageFailure,
+    _profile_for,
 )
 from asd_kontur.document_understanding.postgres import (
     IndustrialUnderstandingRepository,
@@ -73,6 +74,17 @@ from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
 SOURCE_VERSION_ID = UUID("20000000-0000-4000-8000-000000000001")
+
+
+def test_project_materialization_profile_is_independent_from_structure_reconciliation() -> None:
+    assert (
+        _profile_for(JobKind.PROJECT_UNDERSTANDING_RECONCILIATION)
+        == "project-understanding-reconciliation-v0.3"
+    )
+    assert (
+        _profile_for(JobKind.PROJECT_STRUCTURE_RECONCILIATION)
+        == "industrial-document-understanding-v0.2"
+    )
 
 
 def test_identity_observation_groups_are_bounded_balanced_and_complete() -> None:
