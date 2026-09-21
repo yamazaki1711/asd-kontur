@@ -756,3 +756,16 @@ fragment. A controlled regression proves candidate reconstruction with no model
 call; live read-only PostgreSQL evidence identifies 62 redundant failed parents
 among 1,096 accepted TH batch manifests. Deployment and recovery acceptance are
 still open, and this optimization does not promote Tender or product readiness.
+
+The accepted-fragment cover and bounded output-exhaustion subdivision are now
+live in the document worker. They recover only unresolved semantic leaves and
+retain immutable failed attempts. OZERO validation currently proves 19/22 active
+documents complete and three documents partial by 3/1/1 fragments; it does not
+prove a reconciled project inventory. The next reusable capability is durable
+cross-document structure reconciliation: one idempotent job is scheduled behind
+the published project model, preserving partial publication while producing
+candidate facility identities for Tender navigation and consultation. Its
+independent PostgreSQL acceptance covers duplicate commands and the explicit
+success dependency. Deployment and real-Qwen identity reconciliation remain
+open, followed by scope-safe consolidation of the inflated raw work-package
+observations into user-usable schedules.

@@ -1186,3 +1186,40 @@ compatible correction is qualified; the API remains ready. Next executable
 action: checkpoint the correction, deploy the worker release, resume the same
 expired jobs through normal lease recovery, and verify that only the three TH
 and one IOS3 unresolved leaves can create new Qwen requests.
+
+### Continuation checkpoint — 2026-09-21 bounded output-exhaustion recovery
+
+The accepted-fragment-cover release completed the four source successors and the
+workspace reconciliation without repeating the accepted corpus. Scoped live
+coverage is 22 active documents and 2,529 pages: 19 documents are complete under
+the v15 fragment manifest, while IOS1, IOS3, and TH retained respectively 3, 1,
+and 1 unresolved output-exhausted leaves.
+
+Release `0848b26` is now the pinned live document worker at migration
+`0062_current_defect_memberships`. It recursively subdivides only a terminal
+single fragment whose complete-schema response still exhausts the 1,200-token
+budget, preserves the exact character and locator span, and writes the combined
+accepted result under a distinct immutable recovery identity. Recovery contract
+`engineering-leaf-recovery-v4` created four source-scoped successors: the
+already-complete KR2 source reused persisted evidence and succeeded immediately;
+IOS1 is actively processing its three unresolved leaves; IOS3 and TH remain
+queued for one leaf each. The existing reconciliation job remains queued behind
+the higher-priority source passes. Unit/static validation passes (74 semantic
+adapter tests, Ruff, format, strict mypy), and disposable PostgreSQL 17 proves
+idempotent recovery scheduling and incremental materialization after restart.
+
+The current project view is materially populated but not yet usable as a
+reconciled Tender model: it exposes 8,086 project-field observations, 7,619
+source-scoped structure observations, 6,360 work observations, 2,705 quantities,
+960 materials, 5,546 source-scoped candidate work packages, and 1,650 current
+defects. These are candidates, not confirmed project totals. No durable
+workspace-wide structure-identity job existed in the live OZERO lineage, so
+cross-document facility identity candidates remain zero. Pushed release candidate
+`69f2ca4` schedules one idempotent `PROJECT_STRUCTURE_RECONCILIATION` job behind
+the published model and has passed disposable PostgreSQL dependency tests; it is
+not deployed while the v4 source recovery is active. Next executable action:
+allow the three live source successors and their reconciliation to terminate,
+deploy `69f2ca4`, invoke the supported command once to create the durable
+structure job, then verify persisted cross-document identities and expose a
+reconciled facility dossier instead of treating raw observation counts as object
+counts.
