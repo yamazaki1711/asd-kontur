@@ -111,8 +111,8 @@ TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
     },
     {
         "name": "consultant.get_work_packages",
-        "description": "Получить виды работ, пакеты, связанные МТР и объёмы текущего объекта.",
-        "schema": {},
+        "description": "Найти относящиеся к вопросу наблюдения работ, связанные МТР и объёмы текущего объекта; результат содержит покрытие выборки и не является полным перечнем без явного признака полноты.",
+        "schema": {"query": "string", "limit": "integer 1..20"},
     },
     {
         "name": "consultant.get_requirement_matrix",
@@ -156,7 +156,6 @@ _NO_ARGUMENT_TOOLS = frozenset(
     {
         "consultant.get_workspace_overview",
         "consultant.get_ntd_inventory",
-        "consultant.get_work_packages",
         "consultant.get_requirement_matrix",
         "consultant.get_discrepancies",
         "consultant.get_id_package",
@@ -322,6 +321,34 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
             *plan.steps[replace_index + 1 :],
         )
     return SearchPlan(plan.intent, False, None, tuple(steps))
+
+
+def bind_workspace_work_query(plan: SearchPlan, question: str) -> SearchPlan:
+    """Bind work-observation retrieval to the actual user question.
+
+    Qwen plans created before the query-aware tool contract can still emit an
+    empty argument object.  Leaving that plan unchanged would expose an
+    arbitrary membership prefix when a workspace contains more observations
+    than the bounded assistant context.  The deterministic binding preserves
+    the bounded result while making its selection reproducible and relevant.
+    """
+
+    if plan.needs_clarification:
+        return plan
+    bounded_query = " ".join(question.split())
+    steps = tuple(
+        PlannedToolCall(
+            step.tool,
+            (
+                {"query": bounded_query, "limit": 20}
+                if step.tool == "consultant.get_work_packages" and not step.arguments
+                else step.arguments
+            ),
+            step.reason,
+        )
+        for step in plan.steps
+    )
+    return SearchPlan(plan.intent, plan.needs_clarification, plan.clarifying_question, steps)
 
 
 def requires_workspace_document_content(question: str) -> bool:
@@ -648,6 +675,16 @@ def _validate_arguments(tool: str, arguments: dict[str, Any]) -> None:
         if "search_document_id" in arguments:
             if not _is_uuid(str(arguments["search_document_id"])):
                 raise ValueError("assistant_plan_search_arguments_invalid")
+        return
+    if tool == "consultant.get_work_packages":
+        if set(arguments) - {"query", "limit"}:
+            raise ValueError("assistant_plan_work_packages_arguments_invalid")
+        query = " ".join(str(arguments.get("query", "")).split())
+        limit = arguments.get("limit", 20)
+        if query and not 2 <= len(query) <= 500:
+            raise ValueError("assistant_plan_work_packages_arguments_invalid")
+        if not isinstance(limit, int) or not 1 <= limit <= 20:
+            raise ValueError("assistant_plan_work_packages_arguments_invalid")
         return
     if tool == "consultant.resolve_ntd_designation":
         if set(arguments) != {"designation"}:

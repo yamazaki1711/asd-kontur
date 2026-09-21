@@ -19,8 +19,10 @@ from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.domain import uuid7
+from asd_kontur.knowledge.gateway import GatewayContext
 from asd_kontur.persistence import WorkspaceContext, WorkspaceUnitOfWork
 from asd_kontur.support.scope_commands import (
     SupportScopeCommandError,
@@ -468,7 +470,7 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
     work_type_id, catalog_id = _seed_verified_work_type_catalog(postgres_environment)
     settings = _settings(postgres_environment, tmp_path)
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
-    app.state.container.auth.bootstrap_owner(
+    owner_identity_id = app.state.container.auth.bootstrap_owner(
         username="understanding-owner",
         password="Synthetic-Owner-Password-42!",
         display_name="Synthetic understanding owner",
@@ -675,6 +677,33 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert package["quantities"][0]["raw_unit"] == "м³"
         assert package["materials"][0]["raw_name"] == "Бетон В25"
         assert package["uncertainties"] == []
+        consultant = ProfessionalAssistantKnowledgeQuery(postgres_environment.application_engine)
+        work_context = consultant.execute(
+            "consultant.get_work_packages",
+            {"mode": "Tender", "query": "монолитная плита", "limit": 20},
+            GatewayContext(
+                owner_identity_id,
+                "consultant.get_work_packages.invoke",
+                "integration-test",
+                uuid7(),
+                UUID(str(workspace_a["organization_id"])),
+                UUID(str(workspace_a["workspace_id"])),
+            ),
+        )
+        assert work_context.result["value"]["selection_coverage"] == {
+            "query": "монолитная плита",
+            "selection": "lexical_relevance",
+            "total_observation_count": 1,
+            "matched_observation_count": 1,
+            "returned_observation_count": 1,
+            "exhaustive_for_query": True,
+            "authority": "candidate_observations_not_confirmed_work_packages",
+        }
+        assert (
+            work_context.result["value"]["work_packages"][0]["package"]["work_type"]["raw"]
+            == "Устройство монолитной плиты"
+        )
+        assert len(work_context.evidence_pack.evidence) == 1
         assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}

@@ -180,13 +180,27 @@ class ProfessionalAssistantKnowledgeQuery:
                 _canonical_workspace_sources(view, workspace_id, mode, "Комплект ИД"),
             )
         else:
-            workspace = self._workspace_context(
-                organization_id,
-                workspace_id,
-                mode,
-                "",
-                owner_identity_id=context.actor_identity_id,
-            )
+            package_query = ""
+            package_limit = 20
+            if tool == "consultant.get_work_packages":
+                package_query, package_limit = _workspace_package_arguments(payload)
+            if tool == "consultant.get_work_packages":
+                workspace = self._workspace_context(
+                    organization_id,
+                    workspace_id,
+                    mode,
+                    package_query,
+                    work_package_limit=package_limit,
+                    owner_identity_id=context.actor_identity_id,
+                )
+            else:
+                workspace = self._workspace_context(
+                    organization_id,
+                    workspace_id,
+                    mode,
+                    "",
+                    owner_identity_id=context.actor_identity_id,
+                )
             selected = {
                 "consultant.get_workspace_overview": {
                     "name": workspace["name"],
@@ -200,7 +214,10 @@ class ProfessionalAssistantKnowledgeQuery:
                     "semantic_coverage": workspace.get("semantic_coverage", []),
                     "candidate_summary": workspace.get("candidate_summary", {}),
                 },
-                "consultant.get_work_packages": {"work_packages": workspace["work_packages"]},
+                "consultant.get_work_packages": {
+                    "work_packages": workspace["work_packages"],
+                    "selection_coverage": workspace["work_package_selection"],
+                },
                 "consultant.get_requirement_matrix": {
                     "requirement_matrix": workspace["requirement_matrix"]
                 },
@@ -347,6 +364,7 @@ class ProfessionalAssistantKnowledgeQuery:
         mode: str,
         query: str,
         *,
+        work_package_limit: int = 20,
         owner_identity_id: str | None = None,
     ) -> dict[str, Any]:
         with Session(self._engine) as session, session.begin():
@@ -376,14 +394,20 @@ class ProfessionalAssistantKnowledgeQuery:
                 .mappings()
                 .one_or_none()
             )
-            packages = list(
+            package_search_query = _work_package_search_query(query)
+            package_rows = list(
                 session.execute(
                     sa.text(
                         "WITH current_reconciliation AS (SELECT reconciliation_id,version FROM "
                         "workspace.project_understanding_reconciliations WHERE organization_id=:o "
                         "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1) "
-                        "SELECT package.work_package_id,package.version,package.work_type_key,"
-                        "package.package FROM current_reconciliation current JOIN "
+                        ",candidate_packages AS (SELECT package.work_package_id,package.version,"
+                        "package.work_type_key,package.package,member.member_sequence,"
+                        "to_tsvector('russian',concat_ws(' ',package.work_type_key,"
+                        "package.package->'work_type'->>'raw',"
+                        "package.package->'work_type'->>'normalized',package.package->>'scope',"
+                        "(package.package->'materials')::text)) AS search_vector FROM "
+                        "current_reconciliation current JOIN "
                         "workspace.project_reconciliation_work_package_memberships member ON "
                         "member.organization_id=:o AND member.workspace_id=:w AND "
                         "member.reconciliation_id=current.reconciliation_id AND "
@@ -392,12 +416,70 @@ class ProfessionalAssistantKnowledgeQuery:
                         "package.organization_id=member.organization_id AND "
                         "package.workspace_id=member.workspace_id AND "
                         "package.work_package_id=member.work_package_id AND "
-                        "package.version=member.work_package_version ORDER BY "
-                        "member.member_sequence LIMIT 20"
+                        "package.version=member.work_package_version),selected AS (SELECT candidate.*,"
+                        "CASE WHEN :search_query='' THEN 0::real ELSE ts_rank_cd(search_vector,"
+                        "websearch_to_tsquery('russian',:search_query)) END AS relevance FROM "
+                        "candidate_packages candidate WHERE :search_query='' OR search_vector @@ "
+                        "websearch_to_tsquery('russian',:search_query)) SELECT work_package_id,version,"
+                        "work_type_key,package,relevance,(SELECT count(*)::int FROM candidate_packages) "
+                        "AS total_observation_count,count(*) OVER()::int AS matched_observation_count "
+                        "FROM selected ORDER BY relevance DESC,member_sequence LIMIT :package_limit"
                     ),
-                    {"o": organization_id, "w": workspace_id},
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "search_query": package_search_query,
+                        "package_limit": work_package_limit,
+                    },
                 ).mappings()
             )
+            total_observation_count = (
+                int(package_rows[0]["total_observation_count"]) if package_rows else 0
+            )
+            matched_observation_count = (
+                int(package_rows[0]["matched_observation_count"]) if package_rows else 0
+            )
+            if not package_rows:
+                total_observation_count = int(
+                    session.scalar(
+                        sa.text(
+                            "WITH current_reconciliation AS (SELECT reconciliation_id,version FROM "
+                            "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                            "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1) "
+                            "SELECT count(*) FROM current_reconciliation current JOIN "
+                            "workspace.project_reconciliation_work_package_memberships member ON "
+                            "member.organization_id=:o AND member.workspace_id=:w AND "
+                            "member.reconciliation_id=current.reconciliation_id AND "
+                            "member.reconciliation_version=current.version"
+                        ),
+                        {"o": organization_id, "w": workspace_id},
+                    )
+                    or 0
+                )
+            packages = [
+                {
+                    key: value
+                    for key, value in dict(row).items()
+                    if key
+                    not in {
+                        "relevance",
+                        "total_observation_count",
+                        "matched_observation_count",
+                    }
+                }
+                for row in package_rows
+            ]
+            package_selection = {
+                "query": query or None,
+                "selection": (
+                    "lexical_relevance" if package_search_query else "bounded_membership_prefix"
+                ),
+                "total_observation_count": total_observation_count,
+                "matched_observation_count": matched_observation_count,
+                "returned_observation_count": len(packages),
+                "exhaustive_for_query": matched_observation_count <= len(packages),
+                "authority": "candidate_observations_not_confirmed_work_packages",
+            }
             matrix = (
                 session.execute(
                     sa.text(
@@ -515,6 +597,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "name": str(workspace["display_name"]),
             "project_definition": _public_value(_json_row(project)),
             "work_packages": _public_value([_json_row(row) for row in packages]),
+            "work_package_selection": _public_value(package_selection),
             "requirement_matrix": _public_value(_matrix_with_work_names(matrix, packages)),
             "discrepancies": _public_value([_json_row(row) for row in defects]),
             "mode_result": _public_value(_mode_result_row(result)),
@@ -1580,6 +1663,21 @@ def _search_arguments(payload: dict[str, Any], *, maximum: int) -> tuple[str, in
     return query, limit
 
 
+def _workspace_package_arguments(payload: dict[str, Any]) -> tuple[str, int]:
+    """Validate the bounded work-observation selection independently of search tools."""
+
+    query = " ".join(str(payload.get("query", "")).split())
+    limit = payload.get("limit", 20)
+    if (
+        set(payload) - {"mode", "query", "limit"}
+        or (query and not 2 <= len(query) <= 500)
+        or not isinstance(limit, int)
+        or not 1 <= limit <= 20
+    ):
+        raise ValueError("assistant_tool_work_packages_invalid")
+    return query, limit
+
+
 def _source_id(payload: dict[str, Any]) -> UUID:
     if set(payload) - {"mode", "source_id", "radius"} or "source_id" not in payload:
         raise ValueError("assistant_tool_source_invalid")
@@ -1683,6 +1781,27 @@ def _search_tokens(query: str) -> tuple[str, ...]:
 def _search_query(query: str) -> str:
     tokens = _search_tokens(query)
     return " OR ".join(tokens or ("строительство",))
+
+
+_WORK_PACKAGE_STOP_WORDS = frozenset(
+    {
+        "работа",
+        "работы",
+        "работ",
+        "предусмотрено",
+        "предусмотрены",
+        "проект",
+        "проекте",
+        "проектом",
+    }
+)
+
+
+def _work_package_search_query(query: str) -> str:
+    tokens = tuple(
+        token for token in _search_tokens(query) if token not in _WORK_PACKAGE_STOP_WORDS
+    )
+    return " OR ".join(tokens)
 
 
 def _normative_designation(query: str) -> str:

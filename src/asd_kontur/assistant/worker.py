@@ -39,6 +39,7 @@ from .reasoning import (
     PlannedToolCall,
     SearchPlan,
     SynthesizedAnswer,
+    bind_workspace_work_query,
     compact_history,
     ensure_explicit_designation_resolution,
     ensure_workspace_content_search,
@@ -306,8 +307,13 @@ class AssistantWorker:
         prompt = _planning_prompt(claimed, history, dialogue_state)
         raw = self._model_complete(claimed, prompt, max_tokens=520, temperature=0.1)
         try:
-            return ensure_workspace_content_search(
-                ensure_explicit_designation_resolution(parse_search_plan(raw), claimed.question),
+            return bind_workspace_work_query(
+                ensure_workspace_content_search(
+                    ensure_explicit_designation_resolution(
+                        parse_search_plan(raw), claimed.question
+                    ),
+                    claimed.question,
+                ),
                 claimed.question,
             )
         except (ValueError, json.JSONDecodeError) as error:
@@ -317,9 +323,12 @@ class AssistantWorker:
                 max_tokens=520,
                 temperature=0.0,
             )
-            return ensure_workspace_content_search(
-                ensure_explicit_designation_resolution(
-                    parse_search_plan(corrected), claimed.question
+            return bind_workspace_work_query(
+                ensure_workspace_content_search(
+                    ensure_explicit_designation_resolution(
+                        parse_search_plan(corrected), claimed.question
+                    ),
+                    claimed.question,
                 ),
                 claimed.question,
             )

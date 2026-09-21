@@ -104,14 +104,34 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
     package_source = _source("Лист работ")
     package_source["authority_layer"] = "workspace_fact"
 
-    monkeypatch.setattr(
-        query,
-        "_workspace_context",
-        lambda organization, workspace, mode, question, *, owner_identity_id=None: {
+    def workspace_context(
+        organization: object,
+        workspace: object,
+        mode: object,
+        question: object,
+        *,
+        work_package_limit: int = 20,
+        owner_identity_id: str | None = None,
+    ) -> dict[str, Any]:
+        assert organization == organization_id
+        assert mode == "Tender"
+        assert question == "разработка грунта"
+        assert work_package_limit == 20
+        assert owner_identity_id == "owner-a"
+        return {
             "workspace_id": str(workspace),
             "name": "Изолированный ОКС",
             "project_definition": {"purpose": "test"},
             "work_packages": [{"package": {"work_type": {"raw": "Разработка грунта"}}}],
+            "work_package_selection": {
+                "query": "разработка грунта",
+                "selection": "lexical_relevance",
+                "total_observation_count": 31,
+                "matched_observation_count": 1,
+                "returned_observation_count": 1,
+                "exhaustive_for_query": True,
+                "authority": "candidate_observations_not_confirmed_work_packages",
+            },
             "requirement_matrix": {},
             "discrepancies": [],
             "mode_result": None,
@@ -123,12 +143,13 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
             "work_package_source_items": [{"source": package_source}],
             "discrepancy_source_items": [],
             "gap_source_items": [],
-        },
-    )
+        }
+
+    monkeypatch.setattr(query, "_workspace_context", workspace_context)
 
     response = query.execute(
         "consultant.get_work_packages",
-        {"mode": "Tender"},
+        {"mode": "Tender", "query": "разработка грунта", "limit": 20},
         GatewayContext(
             "owner-a",
             "assistant.chat.invoke",
@@ -142,5 +163,7 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
     assert response.result["value"]["work_packages"][0]["package"]["work_type"]["raw"] == (
         "Разработка грунта"
     )
+    assert response.result["value"]["selection_coverage"]["total_observation_count"] == 31
+    assert response.result["value"]["selection_coverage"]["exhaustive_for_query"] is True
     assert response.evidence_pack.evidence[0].evidence_link_id == "Лист работ-source"
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"

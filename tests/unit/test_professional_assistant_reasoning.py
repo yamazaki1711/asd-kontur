@@ -11,6 +11,7 @@ from asd_kontur.assistant.reasoning import (
     MAX_TOOL_STEPS,
     PlannedToolCall,
     SearchPlan,
+    bind_workspace_work_query,
     compact_history,
     ensure_workspace_content_search,
     parse_adequacy_decision,
@@ -72,6 +73,32 @@ def test_plan_accepts_bounded_granular_tools_and_rejects_megapack() -> None:
             '{"intent":"mixed","needs_clarification":false,"clarifying_question":null,'
             '"steps":[{"tool":"knowledge.get_professional_assistant_context",'
             '"arguments":{},"reason":"весь контекст"}]}'
+        )
+
+
+def test_work_observation_read_is_bound_to_question_and_remains_bounded() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (PlannedToolCall("consultant.get_work_packages", {}, "Нужны работы объекта."),),
+    )
+
+    bound = bind_workspace_work_query(plan, "Какие шпунтовые работы предусмотрены проектом?")
+
+    assert bound.steps[0].arguments == {
+        "query": "Какие шпунтовые работы предусмотрены проектом?",
+        "limit": 20,
+    }
+
+
+def test_work_observation_plan_rejects_unbounded_or_unknown_arguments() -> None:
+    with pytest.raises(ValueError, match="assistant_plan_work_packages_arguments_invalid"):
+        parse_search_plan(
+            '{"intent":"workspace","needs_clarification":false,'
+            '"clarifying_question":null,"steps":[{"tool":'
+            '"consultant.get_work_packages","arguments":{"query":"шпунт",'
+            '"limit":21},"reason":"Нужны работы"}]}'
         )
 
 

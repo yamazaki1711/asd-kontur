@@ -580,6 +580,37 @@ its acceptance is a changed PostgreSQL plan plus completion of the supported
 successor. A listening Qwen endpoint is not counted as processing while this
 database prerequisite is active.
 
+### Active delivery evidence: question-bound work observations — 2026-09-21
+
+**Reusable capability:** the workspace consultant selects current-reconciliation
+work observations by the user's actual question instead of returning the first
+twenty membership rows. The bounded result includes total, matched and returned
+denominators, an explicit exhaustive-for-query flag, and candidate-only authority.
+Generic inventory questions remain visibly non-exhaustive rather than becoming a
+false project total.
+
+**User-visible output:** questions about a named work or material receive the
+relevant source-scoped observations and their exact evidence links. The existing
+Russian assistant contract continues to expose the compatible `work_packages`
+field, while its tool description and coverage state explain that these rows are
+work observations until catalog and facility reconciliation qualify them.
+
+**Independent acceptance:** controlled planning tests bind legacy empty-argument
+plans to the question and enforce a maximum of twenty rows. A disposable
+PostgreSQL application-path test proves exact current-reconciliation membership,
+catalog-mapped work retrieval, source evidence, and exhaustive selection metadata.
+
+**OZERO role:** an owner-scoped, read-only Gateway execution over the current
+OZERO reconciliation found 17 sheet-pile-related observation groups with 17
+evidence locators, while a generic all-work query reported 20 returned from 5,537
+and `exhaustive_for_query=false`. These counts validate selection and coverage
+signalling only; they do not establish a deduplicated OZERO scope or final quantity.
+
+**Remaining production acceptance:** deploy the compatible assistant release and
+verify a persisted local-Qwen turn. The live platform work-type catalog still has
+no verified catalog version, cross-document facility identity remains unresolved,
+and professional Tender acceptance is still open.
+
 ## Completed prerequisite
 
 `MEMORY-INTEGRITY-FIX-01` resolved the two canonical memory defects and passed
