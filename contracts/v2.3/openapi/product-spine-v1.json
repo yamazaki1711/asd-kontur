@@ -2744,6 +2744,13 @@
             "title": "Structure Relationships",
             "type": "array"
           },
+          "summary_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Summary Counts",
+            "type": "object"
+          },
           "work_packages": {
             "items": {
               "additionalProperties": true,
@@ -6547,6 +6554,31 @@
               "format": "uuid",
               "title": "Workspace Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "general",
+                    "structure",
+                    "works",
+                    "materials",
+                    "packages",
+                    "matrix",
+                    "gaps"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section"
             }
           }
         ],

@@ -1963,7 +1963,7 @@ function JobsPage() {
       );
       return requireData(data, error);
     },
-    refetchInterval: 5_000,
+    refetchInterval: 30_000,
   });
   useEffect(() => {
     const stream = new EventSource(`/api/v1/workspaces/${workspaceId}/events`);
@@ -2151,11 +2151,16 @@ function WorkMatrixPage() {
   const { workspaceId = "" } = useParams();
   const { mode } = useParams();
   const understanding = useQuery({
-    queryKey: ["project-understanding", workspaceId],
+    queryKey: ["project-understanding", workspaceId, "matrix"],
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/project-understanding",
-        { params: { path: { workspace_id: workspaceId } } },
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: { section: "matrix" },
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -4582,11 +4587,25 @@ function ProjectUnderstandingPage() {
     searchParams.get("section") ?? "general",
   );
   const understanding = useQuery({
-    queryKey: ["project-understanding", workspaceId],
+    queryKey: ["project-understanding", workspaceId, section],
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/project-understanding",
-        { params: { path: { workspace_id: workspaceId } } },
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: {
+              section: section as
+                | "general"
+                | "structure"
+                | "works"
+                | "materials"
+                | "packages"
+                | "matrix"
+                | "gaps",
+            },
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -4782,6 +4801,10 @@ function ProjectUnderstandingPage() {
           const semanticCoverage = Array.isArray(value.semantic_coverage)
             ? (value.semantic_coverage as Record<string, unknown>[])
             : [];
+          const summaryCounts = (value.summary_counts ?? {}) as Record<
+            string,
+            number
+          >;
           const tenderInputAssessment = Array.isArray(
             (value.intake_summary as Record<string, unknown> | undefined)
               ?.tender_input_assessment,
@@ -4810,31 +4833,31 @@ function ProjectUnderstandingPage() {
               <div className="metrics">
                 <Metric
                   label="Сведений-кандидатов"
-                  value={projectFieldCandidates.length}
+                  value={summaryCounts.project_field_candidate_count ?? 0}
                 />
                 <Metric
                   label="Структур-кандидатов"
-                  value={structureNodes.length}
+                  value={summaryCounts.structure_node_count ?? 0}
                 />
                 <Metric
                   label="Связей-кандидатов"
-                  value={structureRelationships.length}
+                  value={summaryCounts.structure_relationship_count ?? 0}
                 />
                 <Metric
                   label="Ограниченных групп Qwen"
-                  value={structureIdentityCandidates.length}
+                  value={summaryCounts.structure_identity_candidate_count ?? 0}
                 />
                 <Metric
                   label="Групп после пересечения наблюдений"
-                  value={structureIdentityComponents.length}
+                  value={summaryCounts.structure_identity_component_count ?? 0}
                 />
                 <Metric
                   label="Котлованов с явной привязкой"
-                  value={excavationPitCandidates.length}
+                  value={summaryCounts.excavation_pit_candidate_count ?? 0}
                 />
                 <Metric
                   label="Работ-кандидатов"
-                  value={workCandidates.length}
+                  value={summaryCounts.work_candidate_count ?? 0}
                 />
                 <Metric
                   label="Работ с точной группой объекта"
@@ -4844,15 +4867,15 @@ function ProjectUnderstandingPage() {
                 />
                 <Metric
                   label="Количеств-кандидатов"
-                  value={quantityCandidates.length}
+                  value={summaryCounts.quantity_candidate_count ?? 0}
                 />
                 <Metric
                   label="Материалов-кандидатов"
-                  value={materialCandidates.length}
+                  value={summaryCounts.material_candidate_count ?? 0}
                 />
                 <Metric
                   label="Классифицировано страниц"
-                  value={value.page_roles.length}
+                  value={summaryCounts.page_role_count ?? 0}
                 />
               </div>
               {materializationState !== "complete" && (
@@ -4966,15 +4989,26 @@ function ProjectUnderstandingPage() {
                   </section>
                   <section className="panel">
                     <h2>Сведения, требующие решения</h2>
-                    <CandidateReviewTable
-                      kind="project_field"
-                      candidates={candidates.project_fields ?? []}
-                      decisions={decisions}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                      onReview={(payload) => review.mutate(payload)}
-                      pending={review.isPending}
-                    />
+                    <InfoNotice>
+                      Исходных наблюдений:{" "}
+                      {(
+                        summaryCounts.project_field_candidate_count ?? 0
+                      ).toString()}
+                      . В рабочем представлении показаны согласованные значения
+                      и конфликты модели; полный массив исходных наблюдений не
+                      пересылается при каждом обновлении страницы.
+                    </InfoNotice>
+                    {projectFieldCandidates.length > 0 && (
+                      <CandidateReviewTable
+                        kind="project_field"
+                        candidates={projectFieldCandidates}
+                        decisions={decisions}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                        onReview={(payload) => review.mutate(payload)}
+                        pending={review.isPending}
+                      />
+                    )}
                   </section>
                 </div>
               )}
@@ -5092,44 +5126,79 @@ function ProjectUnderstandingPage() {
                     modeSlug={mode}
                   />
                   <h3>Классифицированные страницы</h3>
-                  <EvidenceObject value={{ pages: value.page_roles }} />
+                  <p>
+                    Учтено решений по страницам:{" "}
+                    {(summaryCounts.page_role_count ?? 0).toString()}. Покрытие
+                    каждого документа показано выше.
+                  </p>
                 </section>
               )}
               {section === "works" && (
                 <section className="panel">
                   <h2>Виды и объёмы работ</h2>
-                  <CandidateReviewTable
-                    kind="work_type"
-                    candidates={candidates.work_types ?? []}
-                    decisions={decisions}
+                  <InfoNotice>
+                    Извлечено наблюдений работ:{" "}
+                    {(summaryCounts.work_candidate_count ?? 0).toString()};
+                    количеств:{" "}
+                    {(summaryCounts.quantity_candidate_count ?? 0).toString()}.
+                    Ниже показана только доказанно связанная с группами объектов
+                    часть; значения остаются кандидатами.
+                  </InfoNotice>
+                  <FacilityWorkCandidateList
+                    items={facilityWorkCandidateGroups}
                     workspaceId={workspaceId}
                     modeSlug={mode}
-                    onReview={(payload) => review.mutate(payload)}
-                    pending={review.isPending}
                   />
-                  <CandidateReviewTable
-                    kind="quantity"
-                    candidates={candidates.quantities ?? []}
-                    decisions={decisions}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
-                    onReview={(payload) => review.mutate(payload)}
-                    pending={review.isPending}
-                  />
+                  {workCandidates.length > 0 && (
+                    <CandidateReviewTable
+                      kind="work_type"
+                      candidates={workCandidates}
+                      decisions={decisions}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      onReview={(payload) => review.mutate(payload)}
+                      pending={review.isPending}
+                    />
+                  )}
+                  {quantityCandidates.length > 0 && (
+                    <CandidateReviewTable
+                      kind="quantity"
+                      candidates={quantityCandidates}
+                      decisions={decisions}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      onReview={(payload) => review.mutate(payload)}
+                      pending={review.isPending}
+                    />
+                  )}
                 </section>
               )}
               {section === "materials" && (
                 <section className="panel">
                   <h2>Материалы и изделия</h2>
-                  <CandidateReviewTable
-                    kind="material"
-                    candidates={candidates.materials ?? []}
-                    decisions={decisions}
+                  <InfoNotice>
+                    Извлечено наблюдений материалов:{" "}
+                    {(summaryCounts.material_candidate_count ?? 0).toString()}.
+                    Материалы показаны только внутри доказанно связанной группы
+                    объекта и работы; общий итог не рассчитывается из
+                    неоднозначных наблюдений.
+                  </InfoNotice>
+                  <FacilityWorkCandidateList
+                    items={facilityWorkCandidateGroups}
                     workspaceId={workspaceId}
                     modeSlug={mode}
-                    onReview={(payload) => review.mutate(payload)}
-                    pending={review.isPending}
                   />
+                  {materialCandidates.length > 0 && (
+                    <CandidateReviewTable
+                      kind="material"
+                      candidates={materialCandidates}
+                      decisions={decisions}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      onReview={(payload) => review.mutate(payload)}
+                      pending={review.isPending}
+                    />
+                  )}
                 </section>
               )}
               {section === "packages" && (
@@ -5193,6 +5262,11 @@ function ProjectUnderstandingPage() {
                       modeSlug={mode}
                       evidenceIndex={evidenceIndex}
                     />
+                  ) : (summaryCounts.work_package_count ?? 0) > 0 ? (
+                    <p className="empty-state">
+                      Полный массив исходных наблюдений доступен в выгружаемой
+                      ведомости; интерактивно показаны только связанные группы.
+                    </p>
                   ) : (
                     <p className="empty-state">
                       Наблюдения по работам ещё не извлечены.
@@ -5412,6 +5486,9 @@ function TenderInputAssessmentTable({
             const sourceNames = Array.isArray(item.source_names)
               ? item.source_names.map(String)
               : [];
+            const locatorCount = Number(
+              item.source_locator_count ?? locators.length,
+            );
             const state = displayValue(item.state, "classification_incomplete");
             return (
               <tr key={displayValue(item.category, "tender-input")}>
@@ -5454,6 +5531,11 @@ function TenderInputAssessmentTable({
                           </Link>
                         </span>
                       ))}
+                      {locatorCount > locators.length && (
+                        <span>
+                          {` … показано ${locators.length.toString()} из ${locatorCount.toString()} исходных фрагментов`}
+                        </span>
+                      )}
                     </p>
                   )}
                 </td>

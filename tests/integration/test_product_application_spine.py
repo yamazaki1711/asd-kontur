@@ -1221,6 +1221,19 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             candidate["identity_candidate_id"]
             for candidate in filtered_view.json()["structure_identity_candidates"]
         } == {str(identity_candidate_id)}
+        application_view = client.get(
+            f"/api/v1/workspaces/{workspace_id}/project-understanding?section=structure"
+        )
+        assert application_view.status_code == 200, application_view.text
+        application_payload = application_view.json()
+        assert application_payload["structure_nodes"] == []
+        assert application_payload["work_packages"] == []
+        assert {
+            candidate["identity_candidate_id"]
+            for candidate in application_payload["structure_identity_candidates"]
+        } == {str(identity_candidate_id)}
+        assert application_payload["summary_counts"]["structure_node_count"] == 0
+        assert application_payload["summary_counts"]["structure_identity_candidate_count"] == 1
 
         # A later reconciliation receipt may refer to the same source, but it
         # is not itself a semantic extraction attempt.  Recovery must continue

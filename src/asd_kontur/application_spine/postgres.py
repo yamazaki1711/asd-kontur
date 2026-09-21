@@ -2850,7 +2850,11 @@ class SpinePostgresRepository:
         )
 
     def project_understanding_view(
-        self, *, owner_identity_id: str, workspace_id: UUID
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        section: str | None = None,
     ) -> dict[str, Any] | None:
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
@@ -2868,9 +2872,10 @@ class SpinePostgresRepository:
                 .one_or_none()
             )
             if reconciliation is None:
-                return self._empty_project_understanding_view(
+                view = self._empty_project_understanding_view(
                     session, organization_id=organization_id, workspace_id=workspace_id
                 )
+                return self._project_understanding_application_projection(view, section=section)
             project = (
                 session.execute(
                     sa.text(
@@ -3047,70 +3052,139 @@ class SpinePostgresRepository:
             structure_identity_reconciliation = self._structure_identity_reconciliation_status(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
-            evidence_index = self._workspace_evidence_index(
+            summary_counts = {
+                "project_field_candidate_count": len(candidates.get("project_fields", [])),
+                "work_candidate_count": len(candidates.get("work_types", [])),
+                "quantity_candidate_count": len(candidates.get("quantities", [])),
+                "material_candidate_count": len(candidates.get("materials", [])),
+                "page_role_count": len(page_roles),
+                "work_package_count": len(packages),
+                "defect_count": len(defects),
+                "structure_node_count": len(structure_nodes),
+                "structure_relationship_count": len(structure_relationships),
+                "structure_identity_candidate_count": len(structure_identity_candidates),
+                "structure_identity_component_count": len(structure_identity_components),
+                "excavation_pit_candidate_count": len(
+                    excavation_pit_inventory.get("candidate_pits", [])
+                ),
+                "facility_work_candidate_group_count": len(
+                    facility_work_projection["candidate_groups"]
+                ),
+            }
+            full_view = {
+                "materialization": {
+                    "state": "complete"
+                    if str(reconciliation["terminal_status"]) == "complete"
+                    else "partial",
+                    "reconciliation_id": str(reconciliation["reconciliation_id"]),
+                    "source_count": int(reconciliation["source_count"]),
+                    "page_count": int(reconciliation["page_count"]),
+                    "gaps": list(reconciliation["gaps"]),
+                },
+                "reconciliation": _jsonable_row(reconciliation),
+                "project_definition": _jsonable_row(project),
+                "page_roles": [_jsonable_row(row) for row in page_roles],
+                "work_packages": [_jsonable_row(row) for row in packages],
+                "matrix": _jsonable_row(matrix),
+                "normative_profile": _jsonable_row(profile) if profile is not None else None,
+                "defects": [_jsonable_row(row) for row in defects],
+                "evidence_index": {},
+                "candidates": candidates,
+                "structure_nodes": structure_nodes,
+                "structure_relationships": structure_relationships,
+                "structure_dossiers": structure_dossiers,
+                "structure_components": structure_components,
+                "structure_identity_candidates": structure_identity_candidates,
+                "structure_identity_components": structure_identity_components,
+                "structure_identity_reconciliation": structure_identity_reconciliation,
+                "structure_identity_dossiers": structure_identity_dossiers,
+                "excavation_pit_inventory": excavation_pit_inventory,
+                "facility_work_projection": {
+                    "candidate_groups": facility_work_projection["candidate_groups"],
+                    "coverage": facility_work_projection["coverage"],
+                },
+                "review_decisions": review_decisions,
+                "intake_summary": intake_summary,
+                "semantic_coverage": semantic_coverage,
+                "summary_counts": summary_counts,
+                "authority_layers": {
+                    "workspace_fact": "project_definition_and_document_registry",
+                    "methodological_practice": "advisory_only",
+                    "normative_authority": "verified_subset_only",
+                    "customer_addition": "workspace_additive_only",
+                    "ai_candidate": "candidate_only",
+                },
+            }
+            view = self._project_understanding_application_projection(full_view, section=section)
+            view["evidence_index"] = self._workspace_evidence_index(
                 session,
                 organization_id=organization_id,
                 workspace_id=workspace_id,
-                locator_ids=self._response_locator_ids(
-                    project,
-                    packages,
-                    matrix,
-                    profile,
-                    page_roles,
-                    defects,
-                    candidates,
-                    structure_nodes,
-                    structure_relationships,
-                    structure_components,
-                    structure_identity_candidates,
-                    structure_identity_components,
-                    structure_identity_dossiers,
-                    tender_input_assessment,
-                ),
+                locator_ids=self._response_locator_ids(view),
             )
-        return {
-            "materialization": {
-                "state": "complete"
-                if str(reconciliation["terminal_status"]) == "complete"
-                else "partial",
-                "reconciliation_id": str(reconciliation["reconciliation_id"]),
-                "source_count": int(reconciliation["source_count"]),
-                "page_count": int(reconciliation["page_count"]),
-                "gaps": list(reconciliation["gaps"]),
-            },
-            "reconciliation": _jsonable_row(reconciliation),
-            "project_definition": _jsonable_row(project),
-            "page_roles": [_jsonable_row(row) for row in page_roles],
-            "work_packages": [_jsonable_row(row) for row in packages],
-            "matrix": _jsonable_row(matrix),
-            "normative_profile": _jsonable_row(profile) if profile is not None else None,
-            "defects": [_jsonable_row(row) for row in defects],
-            "evidence_index": evidence_index,
-            "candidates": candidates,
-            "structure_nodes": structure_nodes,
-            "structure_relationships": structure_relationships,
-            "structure_dossiers": structure_dossiers,
-            "structure_components": structure_components,
-            "structure_identity_candidates": structure_identity_candidates,
-            "structure_identity_components": structure_identity_components,
-            "structure_identity_reconciliation": structure_identity_reconciliation,
-            "structure_identity_dossiers": structure_identity_dossiers,
-            "excavation_pit_inventory": excavation_pit_inventory,
-            "facility_work_projection": {
-                "candidate_groups": facility_work_projection["candidate_groups"],
-                "coverage": facility_work_projection["coverage"],
-            },
-            "review_decisions": review_decisions,
-            "intake_summary": intake_summary,
-            "semantic_coverage": semantic_coverage,
-            "authority_layers": {
-                "workspace_fact": "project_definition_and_document_registry",
-                "methodological_practice": "advisory_only",
-                "normative_authority": "verified_subset_only",
-                "customer_addition": "workspace_additive_only",
-                "ai_candidate": "candidate_only",
-            },
-        }
+        return view
+
+    @staticmethod
+    def _project_understanding_application_projection(
+        view: dict[str, Any], *, section: str | None
+    ) -> dict[str, Any]:
+        """Bound the interactive response without changing canonical results.
+
+        The complete projection remains available to internal exports.  The UI
+        asks for one named section and receives reconciled/application data plus
+        exact counts, instead of serializing every raw extraction observation on
+        every refresh.
+        """
+
+        if section is None:
+            return view
+        if section not in {
+            "general",
+            "structure",
+            "works",
+            "materials",
+            "packages",
+            "matrix",
+            "gaps",
+        }:
+            raise SpinePersistenceError("project_understanding_section_invalid")
+        result = dict(view)
+        result["page_roles"] = []
+        result["work_packages"] = []
+        result["defects"] = view["defects"] if section == "gaps" else []
+        result["candidates"] = {}
+        result["review_decisions"] = []
+        result["structure_nodes"] = []
+        result["structure_relationships"] = []
+        result["structure_dossiers"] = []
+        result["structure_components"] = []
+        if section != "structure":
+            result["structure_identity_candidates"] = []
+            result["structure_identity_components"] = []
+            result["structure_identity_dossiers"] = []
+            result["excavation_pit_inventory"] = {}
+        if section not in {"works", "materials", "packages"}:
+            result["facility_work_projection"] = {}
+        if section != "matrix":
+            result["matrix"] = {"matrix": {"rows": []}}
+        if section not in {"matrix", "gaps"}:
+            result["normative_profile"] = None
+        if section != "general":
+            intake = dict(result.get("intake_summary") or {})
+            intake.pop("tender_input_assessment", None)
+            result["intake_summary"] = intake
+        else:
+            intake = dict(result.get("intake_summary") or {})
+            bounded_assessment: list[dict[str, Any]] = []
+            for raw_item in intake.get("tender_input_assessment", []):
+                item = dict(raw_item)
+                locator_ids = [str(value) for value in item.get("source_locator_ids") or ()]
+                item["source_locator_count"] = len(locator_ids)
+                item["source_locator_ids"] = locator_ids[:10]
+                bounded_assessment.append(item)
+            intake["tender_input_assessment"] = bounded_assessment
+            result["intake_summary"] = intake
+        return result
 
     def _schedule_workspace_semantic_extractions(
         self,
@@ -4283,7 +4357,7 @@ class SpinePostgresRepository:
             relationships=structure_relationships,
         )
         excavation_pit_inventory = build_excavation_pit_inventory(structure_nodes)
-        return {
+        view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
@@ -4341,6 +4415,23 @@ class SpinePostgresRepository:
             "semantic_coverage": cls._semantic_extraction_coverage(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
+            "summary_counts": {
+                "project_field_candidate_count": len(candidates.get("project_fields", [])),
+                "work_candidate_count": len(candidates.get("work_types", [])),
+                "quantity_candidate_count": len(candidates.get("quantities", [])),
+                "material_candidate_count": len(candidates.get("materials", [])),
+                "page_role_count": 0,
+                "work_package_count": 0,
+                "defect_count": 0,
+                "structure_node_count": len(structure_nodes),
+                "structure_relationship_count": len(structure_relationships),
+                "structure_identity_candidate_count": len(structure_identity_candidates),
+                "structure_identity_component_count": len(structure_identity_components),
+                "excavation_pit_candidate_count": len(
+                    excavation_pit_inventory.get("candidate_pits", [])
+                ),
+                "facility_work_candidate_group_count": 0,
+            },
             "authority_layers": {
                 "workspace_fact": "project_definition_and_document_registry",
                 "methodological_practice": "advisory_only",
@@ -4349,6 +4440,7 @@ class SpinePostgresRepository:
                 "ai_candidate": "candidate_only",
             },
         }
+        return view
 
     @staticmethod
     def _structure_identity_reconciliation_status(

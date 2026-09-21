@@ -10,7 +10,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -957,10 +957,13 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        section: Literal["general", "structure", "works", "materials", "packages", "matrix", "gaps"]
+        | None = None,
     ) -> ProjectUnderstandingView:
         value = _container(request).service.project_understanding(
             owner_identity_id=principal.owner_identity_id,
             workspace_id=workspace_id,
+            section=section,
         )
         if value is None:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")

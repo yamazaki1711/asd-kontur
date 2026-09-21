@@ -20,6 +20,7 @@ from asd_kontur.application_spine.object_store import (
     sanitize_relative_path,
 )
 from asd_kontur.application_spine.postgres import (
+    SpinePersistenceError,
     SpinePostgresRepository,
     _semantic_extraction_priority,
 )
@@ -30,6 +31,70 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_project_understanding_application_projection_keeps_counts_and_selected_section() -> None:
+    view = {
+        "page_roles": [{"page_number": 1}],
+        "work_packages": [{"work_package_id": "work-1"}],
+        "defects": [{"defect_id": "defect-1"}],
+        "candidates": {"work_types": [{"candidate_id": "candidate-1"}]},
+        "review_decisions": [{"review_decision_id": "review-1"}],
+        "structure_nodes": [{"structure_node_id": "node-1"}],
+        "structure_relationships": [{"relationship_candidate_id": "relationship-1"}],
+        "structure_dossiers": [{"structure_node": {"structure_node_id": "node-1"}}],
+        "structure_components": [{"component_key": "component-1"}],
+        "structure_identity_candidates": [{"identity_candidate_id": "identity-1"}],
+        "structure_identity_components": [{"identity_candidate_id": "identity-component-1"}],
+        "structure_identity_dossiers": [{"identity_candidate_id": "identity-component-1"}],
+        "structure_identity_reconciliation": {"state": "running"},
+        "excavation_pit_inventory": {"candidate_pits": [{"pit_candidate_id": "pit-1"}]},
+        "facility_work_projection": {"candidate_groups": [{"facility_work_candidate_id": "fw-1"}]},
+        "matrix": {"matrix": {"rows": [{"row": "matrix-1"}]}},
+        "normative_profile": {"profile_id": "profile-1"},
+        "intake_summary": {
+            "tender_input_assessment": [
+                {
+                    "category": "design",
+                    "source_locator_ids": [f"locator-{index}" for index in range(12)],
+                }
+            ]
+        },
+        "summary_counts": {"structure_node_count": 7000},
+    }
+
+    structure = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="structure"
+    )
+
+    assert structure["summary_counts"] == {"structure_node_count": 7000}
+    assert structure["structure_identity_candidates"] == [{"identity_candidate_id": "identity-1"}]
+    assert structure["excavation_pit_inventory"]["candidate_pits"] == [
+        {"pit_candidate_id": "pit-1"}
+    ]
+    assert structure["structure_nodes"] == []
+    assert structure["work_packages"] == []
+    assert structure["facility_work_projection"] == {}
+    assert structure["matrix"] == {"matrix": {"rows": []}}
+    assert "tender_input_assessment" not in structure["intake_summary"]
+
+    packages = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="packages"
+    )
+    assert packages["facility_work_projection"] == view["facility_work_projection"]
+    assert packages["structure_identity_candidates"] == []
+
+    general = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="general"
+    )
+    assessment = general["intake_summary"]["tender_input_assessment"][0]
+    assert assessment["source_locator_count"] == 12
+    assert assessment["source_locator_ids"] == [f"locator-{index}" for index in range(10)]
+
+    with pytest.raises(SpinePersistenceError, match="project_understanding_section_invalid"):
+        SpinePostgresRepository._project_understanding_application_projection(
+            view, section="unknown"
+        )
 
 
 def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> None:

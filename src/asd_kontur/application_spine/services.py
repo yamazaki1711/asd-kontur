@@ -614,11 +614,21 @@ class ProductSpineService:
         )
 
     def project_understanding(
-        self, *, owner_identity_id: str, workspace_id: UUID
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        section: str | None = None,
     ) -> dict[str, Any] | None:
+        if section is None:
+            return self._repository.project_understanding_view(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+            )
         return self._repository.project_understanding_view(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+            section=section,
         )
 
     def tender_findings_schedule(

@@ -2301,6 +2301,10 @@ export interface components {
             structure_relationships?: {
                 [key: string]: unknown;
             }[];
+            /** Summary Counts */
+            summary_counts?: {
+                [key: string]: number;
+            };
             /** Work Packages */
             work_packages: {
                 [key: string]: unknown;
@@ -4351,7 +4355,9 @@ export interface operations {
     };
     project_understanding_api_v1_workspaces__workspace_id__project_understanding_get: {
         parameters: {
-            query?: never;
+            query?: {
+                section?: ("general" | "structure" | "works" | "materials" | "packages" | "matrix" | "gaps") | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;
