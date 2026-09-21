@@ -1631,6 +1631,90 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
         assert refresh["priority"] == 165
         assert refresh["causation_id"] == semantic_job_id
         assert refresh["contract"] == "project-understanding.incremental-reconciliation@1.0.0"
+
+        structure_job_id = uuid4()
+        structure_manifest = dict(row["input_manifest"])
+        structure_digest = semantic_digest(
+            {"structure_job_id": str(structure_job_id), "manifest": structure_manifest}
+        )
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,started_at,heartbeat_at,attempt_count,"
+                    "max_attempts,retry_policy_version,lease_owner,lease_generation,lease_expires_at,"
+                    "provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_STRUCTURE_RECONCILIATION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'running',110,CURRENT_TIMESTAMP,"
+                    "CURRENT_TIMESTAMP,1,3,'synthetic','synthetic-structure-worker',1,"
+                    "CURRENT_TIMESTAMP+interval '10 minutes',CAST('{}' AS jsonb),"
+                    ":correlation,:owner)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": structure_job_id,
+                    "document": row["subject_document_id"],
+                    "manifest": json.dumps(structure_manifest),
+                    "digest": structure_digest,
+                    "key": f"synthetic-structure-refresh-{structure_job_id}",
+                    "correlation": row["correlation_id"],
+                    "owner": row["created_by_identity_id"],
+                },
+            )
+        structure_claim = ClaimedJob(
+            UUID(workspace["organization_id"]),
+            workspace_id,
+            structure_job_id,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+            structure_manifest,
+            structure_digest,
+            1,
+            1,
+            "none",
+        )
+        worker_repository.finish_job(
+            structure_claim,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_structure_reconciliation_succeeded",
+            result_manifest={"structure_identity_candidate_ids": []},
+            worker_identity="synthetic-structure-worker",
+        )
+        first_structure_refresh = repository.schedule_post_structure_project_reconciliation(
+            structure_claim
+        )
+        second_structure_refresh = repository.schedule_post_structure_project_reconciliation(
+            structure_claim
+        )
+        assert first_structure_refresh is not None
+        assert first_structure_refresh == second_structure_refresh
+        with postgres_environment.owner_engine.connect() as connection:
+            structure_refresh = (
+                connection.execute(
+                    sa.text(
+                        "SELECT priority,causation_id,"
+                        "input_manifest->>'project_reconciliation_profile' "
+                        "AS profile,provenance->>'contract' AS contract FROM "
+                        "workspace.durable_jobs WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "job": first_structure_refresh,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+        assert structure_refresh["priority"] == 165
+        assert structure_refresh["causation_id"] == structure_job_id
+        assert structure_refresh["profile"] == "project-understanding-reconciliation-v0.3"
+        assert (
+            structure_refresh["contract"]
+            == "project-understanding.post-structure-reconciliation@1.0.0"
+        )
         with postgres_environment.owner_engine.connect() as connection:
             claim_definition = connection.scalar(
                 sa.text(

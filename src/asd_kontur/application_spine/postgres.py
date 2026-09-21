@@ -1632,6 +1632,142 @@ class SpinePostgresRepository:
             )
         return reconciliation_job_id
 
+    def schedule_post_structure_project_reconciliation(self, claimed: ClaimedJob) -> UUID | None:
+        """Materialize one current project view after identity reconciliation.
+
+        Structure identity candidates are versioned independently from the
+        project reconciliation that originally scheduled them.  Without this
+        successor, a completed structure pass can remain visible only through
+        ad-hoc projection queries while the persisted project definition and
+        its materialization receipt still describe the preceding candidate
+        set.  The structure terminal receipt is part of the idempotency key so
+        replay is safe and a newer identity result cannot reuse a stale view.
+        """
+
+        if claimed.job_kind is not JobKind.PROJECT_STRUCTURE_RECONCILIATION:
+            return None
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            source = (
+                session.execute(
+                    sa.text(
+                        "SELECT job.subject_document_id,job.input_manifest,job.input_digest,"
+                        "job.correlation_id,job.created_by_identity_id,receipt.result_digest "
+                        "FROM workspace.durable_jobs job JOIN workspace.job_terminal_receipts receipt "
+                        "ON receipt.organization_id=job.organization_id AND "
+                        "receipt.workspace_id=job.workspace_id AND receipt.job_id=job.job_id WHERE "
+                        "job.organization_id=:organization AND job.workspace_id=:workspace AND "
+                        "job.job_id=:job AND job.state='succeeded' AND "
+                        "receipt.terminal_state='succeeded' FOR UPDATE OF job"
+                    ),
+                    {
+                        "organization": claimed.organization_id,
+                        "workspace": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if source is None:
+                return None
+            source_manifest = dict(source["input_manifest"])
+            required = {
+                "document_id",
+                "document_version",
+                "source_version_id",
+                "object_key",
+                "media_type",
+                "content_digest",
+            }
+            if not required.issubset(source_manifest):
+                raise SpinePersistenceError("structure_reconciliation_source_manifest_invalid")
+            manifest = {
+                key: source_manifest[key]
+                for key in (
+                    "document_id",
+                    "document_version",
+                    "source_version_id",
+                    "object_key",
+                    "media_type",
+                    "content_digest",
+                )
+            }
+            manifest.update(
+                {
+                    "structure_reconciliation_job_id": str(claimed.job_id),
+                    "structure_reconciliation_result_digest": str(source["result_digest"]),
+                    "project_reconciliation_profile": PROJECT_RECONCILIATION_PROFILE_VERSION,
+                }
+            )
+            input_digest = semantic_digest(manifest)
+            idempotency_key = (
+                "project-understanding-after-structure:"
+                f"{PROJECT_RECONCILIATION_PROFILE_VERSION}:{claimed.job_id}:{input_digest}"
+            )
+            existing = session.scalar(
+                sa.text(
+                    "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
+                    "AND workspace_id=:workspace AND job_kind='PROJECT_UNDERSTANDING_RECONCILIATION' "
+                    "AND idempotency_key=:key"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "key": idempotency_key,
+                },
+            )
+            if existing is not None:
+                return UUID(str(existing))
+            reconciliation_job_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs "
+                    "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                    "provenance,correlation_id,causation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,:document,'PROJECT_UNDERSTANDING_RECONCILIATION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',165,3,'spine-retry-v0.1',"
+                    "CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                ),
+                {
+                    "organization": claimed.organization_id,
+                    "workspace": claimed.workspace_id,
+                    "job": reconciliation_job_id,
+                    "document": source["subject_document_id"],
+                    "manifest": _json(manifest),
+                    "digest": input_digest,
+                    "key": idempotency_key,
+                    "provenance": _json(
+                        {
+                            "contract": (
+                                "project-understanding.post-structure-reconciliation@1.0.0"
+                            ),
+                            "structure_reconciliation_job_id": str(claimed.job_id),
+                            "structure_reconciliation_result_digest": str(source["result_digest"]),
+                            "project_reconciliation_profile": (
+                                PROJECT_RECONCILIATION_PROFILE_VERSION
+                            ),
+                        }
+                    ),
+                    "correlation": source["correlation_id"],
+                    "causation": claimed.job_id,
+                    "owner": source["created_by_identity_id"],
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_id=reconciliation_job_id,
+                event_type="job.queued",
+                safe_message_code="project_model_structure_refresh_queued",
+                current=0,
+                total=1,
+                terminal=False,
+            )
+        return reconciliation_job_id
+
     def retry_job(
         self, claimed: ClaimedJob, *, worker_identity: str, failure_code: str, delay_seconds: int
     ) -> bool:

@@ -279,6 +279,8 @@ class DocumentWorker:
             # after a durable source result becomes effective instead of leaving
             # partial, useful evidence invisible until the complete corpus drains.
             self._repository.schedule_incremental_project_reconciliation(claimed)
+        elif claimed.job_kind is JobKind.PROJECT_STRUCTURE_RECONCILIATION:
+            self._repository.schedule_post_structure_project_reconciliation(claimed)
         return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
