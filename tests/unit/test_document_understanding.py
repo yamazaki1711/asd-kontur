@@ -1538,7 +1538,11 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     assert len(persisted) == 1
     assert persisted[0].member_structure_node_ids == (third, fourth)
     assert result["structure_identity_candidate_count"] == 1
+    assert result["structure_identity_candidate_ids"] == [
+        str(deterministic_uuid("identity-preserved-candidate"))
+    ]
     assert result["structure_identity_group_count"] == 2
+    assert len(result["structure_identity_group_fingerprints"]) == 2
     assert result["structure_identity_failed_group_count"] == 1
     assert result["structure_identity_reconciliation"] == "partial_group_failures"
     assert progress == [(0, 2), (1, 2), (2, 2)]
@@ -1732,6 +1736,8 @@ def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts(
     result = pipeline._reconciliation(claimed, BytesIO())
 
     assert result["structure_identity_candidate_count"] == 1
+    assert result["structure_identity_candidate_ids"] == [str(candidate_id)]
+    assert result["structure_identity_group_fingerprints"] == [group_fingerprint]
     assert result["structure_identity_failed_group_count"] == 0
     assert result["structure_identity_reconciliation"] == "completed"
     assert progress == [(0, 1), (1, 1)]

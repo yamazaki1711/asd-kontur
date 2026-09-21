@@ -1124,6 +1124,32 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             "identity_candidate_ids": (str(identity_candidate_id),),
             "failure_code": None,
         }
+        stale_identity_candidate_id = uuid4()
+        stale_input_manifest = tuple(reversed(identity_input_manifest))
+        stale_group_fingerprint = semantic_digest(
+            {
+                "profile_version": "qwen-structure-identity-v1",
+                "observations": stale_input_manifest,
+            }
+        )
+        understanding_repository.persist_structure_identity_group_outcome(
+            structure_claim,
+            group_fingerprint=stale_group_fingerprint,
+            profile_version="qwen-structure-identity-v1",
+            input_structure_node_ids=(second_node_id, first_node_id),
+            input_manifest=stale_input_manifest,
+            candidates=(
+                StructureIdentityCandidate(
+                    stale_identity_candidate_id,
+                    "facility",
+                    "Stale Facility 1",
+                    (second_node_id, first_node_id),
+                    (second_locator_id, locator_id),
+                    Decimal("0.8"),
+                    "qwen-structure-identity-v1",
+                ),
+            ),
+        )
         with postgres_environment.owner_engine.connect() as connection:
             assert (
                 connection.scalar(
@@ -1140,6 +1166,37 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 )
                 == 1
             )
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='running',"
+                    "lease_owner='structure-filter-test-worker',lease_generation=1,"
+                    "lease_expires_at=CURRENT_TIMESTAMP + interval '1 minute' "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_id=:job"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "job": structure_job_id,
+                },
+            )
+        SpinePostgresRepository(postgres_environment.document_worker_engine).finish_job(
+            structure_claim,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_structure_reconciliation_succeeded",
+            result_manifest={
+                "structure_identity_candidate_ids": [str(identity_candidate_id)],
+                "structure_identity_group_fingerprints": [group_fingerprint],
+            },
+            worker_identity="structure-filter-test-worker",
+        )
+        filtered_view = client.get(f"/api/v1/workspaces/{workspace_id}/project-understanding")
+        assert filtered_view.status_code == 200, filtered_view.text
+        assert {
+            candidate["identity_candidate_id"]
+            for candidate in filtered_view.json()["structure_identity_candidates"]
+        } == {str(identity_candidate_id)}
 
         # A later reconciliation receipt may refer to the same source, but it
         # is not itself a semantic extraction attempt.  Recovery must continue

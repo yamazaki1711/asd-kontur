@@ -4170,6 +4170,29 @@ class SpinePostgresRepository:
     def _structure_identity_candidate_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> list[dict[str, Any]]:
+        current_result = session.scalar(
+            sa.text(
+                "SELECT receipt.result_manifest FROM workspace.durable_jobs job JOIN "
+                "workspace.job_terminal_receipts receipt ON "
+                "receipt.organization_id=job.organization_id AND "
+                "receipt.workspace_id=job.workspace_id AND receipt.job_id=job.job_id WHERE "
+                "job.organization_id=:o AND job.workspace_id=:w AND "
+                "job.job_kind='PROJECT_STRUCTURE_RECONCILIATION' AND job.state='succeeded' AND "
+                "receipt.result_manifest ? 'structure_identity_candidate_ids' "
+                "ORDER BY job.completed_at DESC,job.job_id DESC LIMIT 1"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        )
+        current_candidate_ids: list[UUID] | None = None
+        if isinstance(current_result, Mapping):
+            values = current_result.get("structure_identity_candidate_ids")
+            if isinstance(values, list):
+                current_candidate_ids = [UUID(str(value)) for value in values]
+        current_predicate = (
+            "AND identity_candidate_id=ANY(CAST(:candidate_ids AS uuid[])) "
+            if current_candidate_ids is not None
+            else ""
+        )
         rows = (
             session.execute(
                 sa.text(
@@ -4177,9 +4200,18 @@ class SpinePostgresRepository:
                     "member_structure_node_ids,source_locator_ids,confidence,status,"
                     "reconciliation_profile_version,recorded_at FROM "
                     "workspace.project_structure_identity_candidates WHERE organization_id=:o "
-                    "AND workspace_id=:w ORDER BY recorded_at,identity_candidate_id,version"
+                    f"AND workspace_id=:w {current_predicate}"
+                    "ORDER BY recorded_at,identity_candidate_id,version"
                 ),
-                {"o": organization_id, "w": workspace_id},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    **(
+                        {"candidate_ids": current_candidate_ids}
+                        if current_candidate_ids is not None
+                        else {}
+                    ),
+                },
             )
             .mappings()
             .all()

@@ -521,6 +521,8 @@ class IndustrialDocumentUnderstandingPipeline:
             result["workspace_semantic_coverage"] = coverage
             return result
         identity_count = 0
+        current_identity_candidate_ids: set[str] = set()
+        current_group_fingerprints: set[str] = set()
         failures: list[dict[str, object]] = []
         receipts = self._repository.load_structure_identity_group_receipts(
             claimed, profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE
@@ -536,11 +538,13 @@ class IndustrialDocumentUnderstandingPipeline:
                     "observations": group,
                 }
             )
+            current_group_fingerprints.add(group_fingerprint)
             receipt = receipts.get(group_fingerprint)
             if receipt is not None:
                 candidate_ids = receipt.get("identity_candidate_ids", ())
                 if isinstance(candidate_ids, (list, tuple)):
                     identity_count += len(candidate_ids)
+                    current_identity_candidate_ids.update(str(value) for value in candidate_ids)
                 if receipt.get("outcome") == "failed":
                     failures.append(
                         {
@@ -593,6 +597,9 @@ class IndustrialDocumentUnderstandingPipeline:
                     candidates=candidates,
                 )
                 identity_count += len(candidates)
+                current_identity_candidate_ids.update(
+                    str(candidate.identity_candidate_id) for candidate in candidates
+                )
             self._record_structure_identity_progress(
                 claimed,
                 completed_groups=completed_groups,
@@ -600,7 +607,9 @@ class IndustrialDocumentUnderstandingPipeline:
             )
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
+        result["structure_identity_candidate_ids"] = sorted(current_identity_candidate_ids)
         result["structure_identity_group_count"] = len(groups)
+        result["structure_identity_group_fingerprints"] = sorted(current_group_fingerprints)
         result["structure_identity_failed_group_count"] = len(failures)
         result["structure_identity_failures"] = failures
         if failures:
