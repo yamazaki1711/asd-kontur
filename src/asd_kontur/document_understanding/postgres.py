@@ -979,7 +979,14 @@ class IndustrialUnderstandingRepository:
                         (str(item["relationship_candidate_id"]), int(item["version"]))
                         for item in structure_relationships
                     ],
-                    "defects": [str(item["defect_id"]) for item in defects],
+                    "defects": [
+                        (
+                            str(item["defect_id"]),
+                            int(item["version"]),
+                            str(item["defect_digest"]),
+                        )
+                        for item in defects
+                    ],
                     "gaps": gaps,
                 }
             )
@@ -1026,6 +1033,13 @@ class IndustrialUnderstandingRepository:
                 reconciliation_id=reconciliation_id,
                 reconciliation_version=1,
                 packages=package_rows,
+            )
+            self._record_defect_memberships(
+                session,
+                claimed=claimed,
+                reconciliation_id=reconciliation_id,
+                reconciliation_version=1,
+                defects=defects,
             )
             self._rebuild_projection_in_session(
                 session,
@@ -2221,6 +2235,50 @@ class IndustrialUnderstandingRepository:
                     "member_sequence,work_package_id,work_package_version,membership_fingerprint) "
                     "VALUES (:o,:w,:reconciliation,:reconciliation_version,:sequence,:package,"
                     ":package_version,:fingerprint) ON CONFLICT DO NOTHING"
+                ),
+                rows,
+            )
+
+    @staticmethod
+    def _record_defect_memberships(
+        session: Session,
+        *,
+        claimed: ClaimedJob,
+        reconciliation_id: UUID,
+        reconciliation_version: int,
+        defects: list[dict[str, Any]],
+    ) -> None:
+        rows: list[dict[str, Any]] = []
+        for sequence, defect in enumerate(defects, start=1):
+            membership_fingerprint = semantic_digest(
+                {
+                    "reconciliation_id": str(reconciliation_id),
+                    "reconciliation_version": reconciliation_version,
+                    "member_sequence": sequence,
+                    "defect_id": str(defect["defect_id"]),
+                    "defect_version": int(defect["version"]),
+                }
+            )
+            rows.append(
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "reconciliation": reconciliation_id,
+                    "reconciliation_version": reconciliation_version,
+                    "sequence": sequence,
+                    "defect": UUID(str(defect["defect_id"])),
+                    "defect_version": int(defect["version"]),
+                    "fingerprint": membership_fingerprint,
+                }
+            )
+        if rows:
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_reconciliation_defect_memberships "
+                    "(organization_id,workspace_id,reconciliation_id,reconciliation_version,"
+                    "member_sequence,defect_id,defect_version,membership_fingerprint) "
+                    "VALUES (:o,:w,:reconciliation,:reconciliation_version,:sequence,:defect,"
+                    ":defect_version,:fingerprint) ON CONFLICT DO NOTHING"
                 ),
                 rows,
             )

@@ -495,10 +495,21 @@ class ProfessionalAssistantKnowledgeQuery:
             defects = list(
                 session.execute(
                     sa.text(
-                        "SELECT defect_id,version,defect_kind,subject_identity,related_identity,"
-                        "source_locator_ids,parameters,blocking,status FROM "
-                        "workspace.project_reconciliation_defects WHERE organization_id=:o AND "
-                        "workspace_id=:w ORDER BY recorded_at DESC LIMIT 30"
+                        "WITH current_reconciliation AS (SELECT reconciliation_id,version FROM "
+                        "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                        "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC LIMIT 1) "
+                        "SELECT defect.defect_id,defect.version,defect.defect_kind,"
+                        "defect.subject_identity,defect.related_identity,defect.source_locator_ids,"
+                        "defect.parameters,defect.blocking,defect.status FROM current_reconciliation "
+                        "current JOIN workspace.project_reconciliation_defect_memberships member ON "
+                        "member.organization_id=:o AND member.workspace_id=:w AND "
+                        "member.reconciliation_id=current.reconciliation_id AND "
+                        "member.reconciliation_version=current.version JOIN "
+                        "workspace.project_reconciliation_defects defect ON "
+                        "defect.organization_id=member.organization_id AND "
+                        "defect.workspace_id=member.workspace_id AND "
+                        "defect.defect_id=member.defect_id AND defect.version=member.defect_version "
+                        "ORDER BY member.member_sequence LIMIT 30"
                     ),
                     {"o": organization_id, "w": workspace_id},
                 ).mappings()

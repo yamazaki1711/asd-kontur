@@ -538,8 +538,9 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             current = (
                 connection.execute(
                     sa.text(
-                        "SELECT reconciliation_id,version,project_definition_id FROM "
-                        "workspace.project_understanding_reconciliations WHERE organization_id=:o "
+                        "SELECT reconciliation_id,version,project_definition_id,"
+                        "open_defect_count FROM workspace.project_understanding_reconciliations "
+                        "WHERE organization_id=:o "
                         "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC "
                         "LIMIT 1"
                     ),
@@ -565,6 +566,23 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                 )
                 == 1
             )
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM "
+                        "workspace.project_reconciliation_defect_memberships "
+                        "WHERE organization_id=:o AND workspace_id=:w AND reconciliation_id=:r "
+                        "AND reconciliation_version=:v"
+                    ),
+                    {
+                        "o": workspace_a["organization_id"],
+                        "w": workspace_a["workspace_id"],
+                        "r": current["reconciliation_id"],
+                        "v": current["version"],
+                    },
+                )
+                == current["open_defect_count"]
+            )
             connection.execute(
                 sa.text(
                     "INSERT INTO workspace.construction_work_package_versions "
@@ -580,6 +598,23 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                     "project": current["project_definition_id"],
                     "document": json.dumps({"label": "historical unbound package"}),
                     "fingerprint": "sha256:" + "c" * 64,
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_reconciliation_defects "
+                    "(organization_id,workspace_id,defect_id,version,defect_kind,"
+                    "subject_identity,related_identity,source_locator_ids,parameters,blocking,"
+                    "status,defect_digest,extraction_profile_version) VALUES "
+                    "(:o,:w,:defect,1,'ambiguous_source_match','historical-unbound',NULL,"
+                    "ARRAY[]::uuid[],CAST('{}' AS jsonb),false,'open',:digest,"
+                    "'superseded-synthetic-profile@1')"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "defect": UUID("74000000-0000-4000-8000-000000000001"),
+                    "digest": "sha256:" + "d" * 64,
                 },
             )
 
@@ -654,6 +689,8 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert response.status_code == 200, response.text
         view = response.json()
         assert view["reconciliation"]["terminal_status"] == "partial"
+        assert len(view["defects"]) == view["reconciliation"]["open_defect_count"]
+        assert all(item["subject_identity"] != "historical-unbound" for item in view["defects"])
         assert view["project_definition"]["definition"]["fields"]["object_name"]["raw_value"] == (
             "Производственный корпус"
         )

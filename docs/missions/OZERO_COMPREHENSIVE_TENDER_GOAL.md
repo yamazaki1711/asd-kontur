@@ -1122,3 +1122,24 @@ Migration `0061_native_layout_locator_index` is the next active correction. The
 successor remains the sole current attempt; preserve its lineage and do not
 create another retry until that index is active and its current outcome is
 known.
+
+### Continuation checkpoint — 2026-09-21 current-defect qualification
+
+Release `bab2851` remains the pushed baseline. A compatible change now records
+exact reconciliation-to-defect-version memberships, includes defect version and
+digest in the reconciliation fingerprint, and makes both Project Understanding
+and the workspace consultant read only the current reconciliation's defects.
+Historical immutable defects are preserved but no longer qualify as current
+Tender findings merely because they share the workspace.
+
+Disposable PostgreSQL 17 acceptance proves that membership count equals the
+reconciliation's open-defect count and that an inserted historical unbound
+defect is excluded from the application view. The full migration downgrade and
+upgrade returned the same schema fingerprint. Ruff, format, strict mypy, and
+the focused integration path pass. OZERO has not yet been changed by this
+checkpoint. The next executable action is to commit the qualified change,
+prepare the live database backup and recovery record, deploy the exact compatible
+API/document-worker/assistant release at migration `0062`, then create one
+supported reconciliation successor so OZERO receives membership-bound current
+defects. Semantic coverage discrepancies, facility reconciliation, the work
+catalog, comprehensive Tender acceptance, and the full product goal remain open.

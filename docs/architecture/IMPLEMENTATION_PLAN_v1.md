@@ -700,3 +700,23 @@ MDM, security, offline-sync and delivery decisions precede any Android project.
 Its absence blocks Support/Audit/Restoration field acceptance and final
 `ProductReady`, but does not expand the current Industrial Document Understanding
 slice.
+
+### Product-led delivery evidence — current reconciliation defects
+
+The next reusable Tender correction binds every reconciliation to the exact
+immutable defect versions that it evaluated. Project Understanding and the
+workspace consultant read defects only through that membership, so historical
+superseded defects remain auditable without appearing as current project risks.
+The reconciliation fingerprint also includes each defect version and digest,
+preventing a changed defect result from reusing a stale reconciliation.
+
+This capability produces a truthful current Tender finding set rather than a
+larger accumulated history. OZERO is used only to validate that a fresh
+reconciliation excludes its superseded historical defects; the mechanism is
+accepted independently with changed identifiers in disposable PostgreSQL 17,
+including exact membership count, exclusion of an unbound historical defect,
+RLS-scoped application projection, and a destructive downgrade/upgrade schema
+fingerprint round trip. Static Ruff, format, and strict mypy gates pass. The
+change is not deployed at this checkpoint, and it does not establish semantic
+coverage, a verified work catalog, facility identity, Tender mode readiness,
+or ProductReady.

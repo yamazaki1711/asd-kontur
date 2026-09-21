@@ -2932,13 +2932,26 @@ class SpinePostgresRepository:
             defects = (
                 session.execute(
                     sa.text(
-                        "SELECT defect_id,version,defect_kind,subject_identity,related_identity,"
-                        "source_locator_ids,parameters,blocking,status FROM "
-                        "workspace.project_reconciliation_defects WHERE "
-                        "organization_id=:organization AND workspace_id=:workspace "
-                        "ORDER BY defect_id,version"
+                        "SELECT defect.defect_id,defect.version,defect.defect_kind,"
+                        "defect.subject_identity,defect.related_identity,defect.source_locator_ids,"
+                        "defect.parameters,defect.blocking,defect.status FROM "
+                        "workspace.project_reconciliation_defect_memberships member JOIN "
+                        "workspace.project_reconciliation_defects defect ON "
+                        "defect.organization_id=member.organization_id AND "
+                        "defect.workspace_id=member.workspace_id AND "
+                        "defect.defect_id=member.defect_id AND "
+                        "defect.version=member.defect_version WHERE "
+                        "member.organization_id=:organization AND member.workspace_id=:workspace AND "
+                        "member.reconciliation_id=:reconciliation AND "
+                        "member.reconciliation_version=:reconciliation_version "
+                        "ORDER BY member.member_sequence"
                     ),
-                    {"organization": organization_id, "workspace": workspace_id},
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "reconciliation": reconciliation["reconciliation_id"],
+                        "reconciliation_version": reconciliation["version"],
+                    },
                 )
                 .mappings()
                 .all()
