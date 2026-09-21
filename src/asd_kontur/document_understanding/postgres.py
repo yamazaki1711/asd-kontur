@@ -73,6 +73,31 @@ def _identity_observation_group_key(normalized_name: str) -> str:
     return re.sub(r"[^\w]+", "", normalized_name.casefold(), flags=re.UNICODE)
 
 
+def _structure_reconciliation_gaps_from_manifest(
+    manifest: dict[str, Any] | None,
+) -> set[str]:
+    """Translate one exact structure result into truthful materialization gaps."""
+
+    if manifest is None:
+        return {"STRUCTURE_CANDIDATE_RECONCILIATION_PENDING"}
+    coverage = manifest.get("workspace_semantic_coverage")
+    coverage_complete = isinstance(coverage, dict) and coverage.get("complete") is True
+    failed_count = manifest.get("structure_identity_failed_group_count")
+    try:
+        has_failed_groups = int(failed_count or 0) > 0
+    except (TypeError, ValueError):
+        return {"STRUCTURE_CANDIDATE_RECONCILIATION_PENDING"}
+    state = manifest.get("structure_identity_reconciliation")
+    gaps: set[str] = set()
+    if not coverage_complete:
+        gaps.add("STRUCTURE_IDENTITY_SOURCE_COVERAGE_INCOMPLETE")
+    if has_failed_groups or state == "partial_group_failures":
+        gaps.add("STRUCTURE_IDENTITY_GROUP_FAILURES")
+    if state not in {"completed", "partial_group_failures", "partial_completed_source_groups"}:
+        gaps.add("STRUCTURE_CANDIDATE_RECONCILIATION_PENDING")
+    return gaps
+
+
 def _bounded_cross_source_identity_groups(
     values: list[dict[str, object]], *, max_group_size: int = STRUCTURE_IDENTITY_GROUP_MAX_SIZE
 ) -> tuple[tuple[dict[str, object], ...], ...]:
@@ -1218,6 +1243,37 @@ class IndustrialUnderstandingRepository:
             "complete": total > 0 and total == completed,
         }
 
+    @staticmethod
+    def _structure_reconciliation_gaps(
+        session: Session,
+        claimed: ClaimedJob,
+        *,
+        required: bool,
+    ) -> set[str]:
+        if not required:
+            return set()
+        structure_job_id = claimed.input_manifest.get("structure_reconciliation_job_id")
+        result_digest = claimed.input_manifest.get("structure_reconciliation_result_digest")
+        if not structure_job_id or not result_digest:
+            return _structure_reconciliation_gaps_from_manifest(None)
+        manifest = session.scalar(
+            sa.text(
+                "SELECT receipt.result_manifest FROM workspace.job_terminal_receipts receipt "
+                "WHERE receipt.organization_id=:o AND receipt.workspace_id=:w AND "
+                "receipt.job_id=:job AND receipt.result_digest=:digest AND "
+                "receipt.terminal_state='succeeded'"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "job": UUID(str(structure_job_id)),
+                "digest": str(result_digest),
+            },
+        )
+        return _structure_reconciliation_gaps_from_manifest(
+            dict(manifest) if isinstance(manifest, dict) else None
+        )
+
     def assemble_workspace(self, claimed: ClaimedJob) -> dict[str, Any]:
         with self._session(claimed) as session:
             source_ids = self._active_source_ids(session, claimed)
@@ -1321,16 +1377,17 @@ class IndustrialUnderstandingRepository:
             package_gaps = {
                 str(gap) for package in package_rows for gap in package["uncertainties"]
             }
+            structure_gaps = self._structure_reconciliation_gaps(
+                session,
+                claimed,
+                required=bool(structures or structure_relationships),
+            )
             gaps = sorted(
                 {
                     *[str(item["code"]) for item in normative_profile["gaps"]],
                     *package_gaps,
                     *field_gaps,
-                    *(
-                        {"STRUCTURE_CANDIDATE_RECONCILIATION_PENDING"}
-                        if structures or structure_relationships
-                        else set()
-                    ),
+                    *structure_gaps,
                 }
             )
             terminal_status = (

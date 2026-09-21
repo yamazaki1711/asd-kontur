@@ -1678,7 +1678,12 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
             structure_claim,
             terminal_state=JobState.SUCCEEDED,
             outcome_code="synthetic_structure_reconciliation_succeeded",
-            result_manifest={"structure_identity_candidate_ids": []},
+            result_manifest={
+                "structure_identity_candidate_ids": [],
+                "structure_identity_reconciliation": "completed",
+                "structure_identity_failed_group_count": 0,
+                "workspace_semantic_coverage": {"complete": True},
+            },
             worker_identity="synthetic-structure-worker",
         )
         first_structure_refresh = repository.schedule_post_structure_project_reconciliation(
@@ -1695,7 +1700,8 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                     sa.text(
                         "SELECT priority,causation_id,"
                         "input_manifest->>'project_reconciliation_profile' "
-                        "AS profile,provenance->>'contract' AS contract FROM "
+                        "AS profile,input_manifest,input_digest,"
+                        "provenance->>'contract' AS contract FROM "
                         "workspace.durable_jobs WHERE organization_id=:organization "
                         "AND workspace_id=:workspace AND job_id=:job"
                     ),
@@ -1715,6 +1721,27 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
             structure_refresh["contract"]
             == "project-understanding.post-structure-reconciliation@1.0.0"
         )
+        refresh_claim = ClaimedJob(
+            UUID(workspace["organization_id"]),
+            workspace_id,
+            first_structure_refresh,
+            JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            dict(structure_refresh["input_manifest"]),
+            str(structure_refresh["input_digest"]),
+            0,
+            0,
+            "none",
+        )
+        understanding_repository = IndustrialUnderstandingRepository(
+            postgres_environment.document_worker_engine
+        )
+        with understanding_repository._session(refresh_claim) as session:
+            assert (
+                understanding_repository._structure_reconciliation_gaps(
+                    session, refresh_claim, required=True
+                )
+                == set()
+            )
         with postgres_environment.owner_engine.connect() as connection:
             claim_definition = connection.scalar(
                 sa.text(

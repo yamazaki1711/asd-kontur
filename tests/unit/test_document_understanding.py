@@ -49,6 +49,7 @@ from asd_kontur.document_understanding.pipeline import (
 from asd_kontur.document_understanding.postgres import (
     IndustrialUnderstandingRepository,
     _bounded_cross_source_identity_groups,
+    _structure_reconciliation_gaps_from_manifest,
 )
 from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
@@ -116,6 +117,36 @@ def test_identity_observation_groups_are_bounded_balanced_and_complete() -> None
     assert {item["structure_node_id"] for group in groups for item in group} == {
         item["structure_node_id"] for item in values
     }
+
+
+def test_structure_reconciliation_gaps_require_exact_completed_coverage() -> None:
+    assert _structure_reconciliation_gaps_from_manifest(None) == {
+        "STRUCTURE_CANDIDATE_RECONCILIATION_PENDING"
+    }
+    assert (
+        _structure_reconciliation_gaps_from_manifest(
+            {
+                "structure_identity_reconciliation": "completed",
+                "structure_identity_failed_group_count": 0,
+                "workspace_semantic_coverage": {"complete": True},
+            }
+        )
+        == set()
+    )
+    assert _structure_reconciliation_gaps_from_manifest(
+        {
+            "structure_identity_reconciliation": "partial_group_failures",
+            "structure_identity_failed_group_count": 3,
+            "workspace_semantic_coverage": {"complete": True},
+        }
+    ) == {"STRUCTURE_IDENTITY_GROUP_FAILURES"}
+    assert _structure_reconciliation_gaps_from_manifest(
+        {
+            "structure_identity_reconciliation": "partial_completed_source_groups",
+            "structure_identity_failed_group_count": 0,
+            "workspace_semantic_coverage": {"complete": False},
+        }
+    ) == {"STRUCTURE_IDENTITY_SOURCE_COVERAGE_INCOMPLETE"}
 
 
 def test_small_identity_observation_group_is_not_rewritten() -> None:
