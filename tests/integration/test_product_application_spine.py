@@ -944,6 +944,37 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             rows[0]["provenance"]["candidate_persistence_profile"]
             == "qwen-engineering-extraction-v15"
         )
+        with postgres_environment.owner_engine.connect() as connection:
+            structure_jobs = (
+                connection.execute(
+                    sa.text(
+                        "SELECT structure.job_id,structure.idempotency_key AS structure_key,"
+                        "dependency.depends_on_job_id,dependency.dependency_kind,"
+                        "project.idempotency_key AS project_key FROM "
+                        "workspace.durable_jobs structure "
+                        "JOIN workspace.durable_job_dependencies dependency ON "
+                        "dependency.organization_id=structure.organization_id AND "
+                        "dependency.workspace_id=structure.workspace_id AND "
+                        "dependency.job_id=structure.job_id JOIN workspace.durable_jobs project ON "
+                        "project.organization_id=dependency.organization_id AND "
+                        "project.workspace_id=dependency.workspace_id AND "
+                        "project.job_id=dependency.depends_on_job_id WHERE "
+                        "structure.organization_id=:organization AND "
+                        "structure.workspace_id=:workspace AND "
+                        "structure.job_kind='PROJECT_STRUCTURE_RECONCILIATION' AND "
+                        "structure.idempotency_key LIKE 'project-structure-reconciliation:%' AND "
+                        "project.job_kind='PROJECT_UNDERSTANDING_RECONCILIATION'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert len(structure_jobs) == 1
+        assert structure_jobs[0]["dependency_kind"] == "success_required"
 
         # A later reconciliation receipt may refer to the same source, but it
         # is not itself a semantic extraction attempt.  Recovery must continue

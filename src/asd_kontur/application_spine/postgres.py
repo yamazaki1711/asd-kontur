@@ -3404,6 +3404,16 @@ class SpinePostgresRepository:
                 },
             ).one_or_none()
             if existing is not None:
+                self._ensure_structure_reconciliation_job(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    owner_identity_id=owner_identity_id,
+                    correlation_id=correlation_id,
+                    project_job_id=UUID(str(existing.job_id)),
+                    document=dict(document),
+                    semantic_input=semantic_input,
+                )
                 return _job_summary(existing)
             manifest = {
                 "document_id": document["document_id"],
@@ -3451,6 +3461,16 @@ class SpinePostgresRepository:
                 total=1,
                 terminal=False,
             )
+            self._ensure_structure_reconciliation_job(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=owner_identity_id,
+                correlation_id=correlation_id,
+                project_job_id=job_id,
+                document=dict(document),
+                semantic_input=semantic_input,
+            )
             row = session.execute(
                 sa.text(
                     "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -3459,6 +3479,106 @@ class SpinePostgresRepository:
                 {"organization": organization_id, "workspace": workspace_id, "job": job_id},
             ).one()
         return _job_summary(row)
+
+    def _ensure_structure_reconciliation_job(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        project_job_id: UUID,
+        document: Mapping[str, Any],
+        semantic_input: str,
+    ) -> UUID:
+        """Queue one identity-reconciliation pass behind the materialized model.
+
+        Project publication deliberately does not wait for optional cross-document
+        identity inference.  The corresponding durable job still has to exist: it
+        consumes the published source-scoped observations and may fail partially
+        without suppressing the already useful project view.
+        """
+        idempotency_key = f"project-structure-reconciliation:{semantic_input}"
+        existing = session.scalar(
+            sa.text(
+                "SELECT job_id FROM workspace.durable_jobs WHERE organization_id=:organization "
+                "AND workspace_id=:workspace AND job_kind='PROJECT_STRUCTURE_RECONCILIATION' "
+                "AND idempotency_key=:key"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "key": idempotency_key,
+            },
+        )
+        if existing is not None:
+            return UUID(str(existing))
+        job_id = uuid7()
+        manifest = {
+            "document_id": str(document["document_id"]),
+            "document_version": int(document["version"]),
+            "source_version_id": str(document["source_version_id"]),
+            "object_key": str(document["object_key"]),
+            "media_type": str(document["media_type"]),
+            "content_digest": str(document["content_digest"]),
+            "corpus_semantic_input": semantic_input,
+            "project_reconciliation_job_id": str(project_job_id),
+        }
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs "
+                "(organization_id,workspace_id,job_id,subject_document_id,job_kind,input_manifest,"
+                "input_digest,idempotency_key,state,priority,max_attempts,retry_policy_version,"
+                "provenance,correlation_id,causation_id,created_by_identity_id) VALUES "
+                "(:organization,:workspace,:job,:document,'PROJECT_STRUCTURE_RECONCILIATION',"
+                "CAST(:manifest AS jsonb),:digest,:key,'queued',110,3,'spine-retry-v0.1',"
+                "CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": job_id,
+                "document": document["document_id"],
+                "manifest": _json(manifest),
+                "digest": semantic_digest(manifest),
+                "key": idempotency_key,
+                "provenance": _json(
+                    {
+                        "contract": "project-structure-reconciliation.command@1.0.0",
+                        "input": semantic_input,
+                    }
+                ),
+                "correlation": correlation_id,
+                "causation": project_job_id,
+                "owner": owner_identity_id,
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_job_dependencies "
+                "(organization_id,workspace_id,job_id,depends_on_job_id,dependency_kind) "
+                "VALUES (:organization,:workspace,:job,:project,'success_required')"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": job_id,
+                "project": project_job_id,
+            },
+        )
+        self._append_event(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            job_id=job_id,
+            event_type="job.queued",
+            safe_message_code="project_structure_reconciliation_queued",
+            current=0,
+            total=1,
+            terminal=False,
+        )
+        return job_id
 
     def review_project_candidate(
         self,
