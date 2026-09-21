@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any, cast
 from uuid import UUID
 
@@ -222,10 +223,17 @@ class ProfessionalAssistantKnowledgeQuery:
                     "materialization": workspace["materialization"],
                     "semantic_coverage": workspace.get("semantic_coverage", []),
                     "candidate_summary": workspace.get("candidate_summary", {}),
+                    "facility_work_coverage": workspace.get("facility_work_coverage", {}),
                 },
                 "consultant.get_work_packages": {
                     "work_packages": workspace["work_packages"],
                     "selection_coverage": workspace["work_package_selection"],
+                    "facility_work_candidate_groups": workspace.get(
+                        "facility_work_candidate_groups", []
+                    ),
+                    "facility_work_selection_coverage": workspace.get(
+                        "facility_work_selection", {}
+                    ),
                 },
                 "consultant.get_requirement_matrix": {
                     "requirement_matrix": workspace["requirement_matrix"]
@@ -566,6 +574,9 @@ class ProfessionalAssistantKnowledgeQuery:
         discrepancy_source_items: list[dict[str, Any]] = []
         overview_dossiers: list[dict[str, Any]] = []
         overview_identities: list[dict[str, Any]] = []
+        facility_work_candidate_groups: list[dict[str, Any]] = []
+        facility_work_selection: dict[str, Any] = {}
+        facility_work_coverage: dict[str, Any] = {}
         if owner_identity_id is not None:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
 
@@ -576,6 +587,16 @@ class ProfessionalAssistantKnowledgeQuery:
             overview_identities = list((model_view or {}).get("structure_identity_candidates", []))[
                 :30
             ]
+            facility_work_projection = dict((model_view or {}).get("facility_work_projection", {}))
+            facility_work_coverage = dict(facility_work_projection.get("coverage", {}))
+            facility_work_candidate_groups, facility_work_selection = (
+                _select_facility_work_candidates(
+                    facility_work_projection.get("candidate_groups", []),
+                    query=query,
+                    limit=work_package_limit,
+                    projection_coverage=facility_work_coverage,
+                )
+            )
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
 
             def evidence_items(locator_ids: set[str]) -> list[dict[str, Any]]:
@@ -603,6 +624,11 @@ class ProfessionalAssistantKnowledgeQuery:
                     for row in packages
                     for locator_id in dict(row["package"]).get("source_locator_ids", [])
                 }
+                | {
+                    str(locator_id)
+                    for group in facility_work_candidate_groups
+                    for locator_id in group.get("source_locator_ids", [])
+                }
             )
             discrepancy_source_items = evidence_items(
                 {str(locator_id) for row in defects for locator_id in row["source_locator_ids"]}
@@ -624,6 +650,9 @@ class ProfessionalAssistantKnowledgeQuery:
             "documents": _public_value([_json_row(row) for row in documents]),
             "structure_dossiers": _public_value(overview_dossiers),
             "structure_identity_candidates": _public_value(overview_identities),
+            "facility_work_candidate_groups": _public_value(facility_work_candidate_groups),
+            "facility_work_selection": _public_value(facility_work_selection),
+            "facility_work_coverage": _public_value(facility_work_coverage),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "semantic_coverage": _public_value(
                 list((model_view or {}).get("semantic_coverage", []))
@@ -1964,6 +1993,66 @@ def _work_package_search_query(query: str) -> str:
         token for token in _search_tokens(query) if token not in _WORK_PACKAGE_STOP_WORDS
     )
     return " OR ".join(tokens)
+
+
+def _select_facility_work_candidates(
+    groups: object,
+    *,
+    query: str,
+    limit: int,
+    projection_coverage: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Select facility/work candidates without treating labels as identity proof."""
+
+    candidates = (
+        [dict(item) for item in groups if isinstance(item, Mapping)]
+        if isinstance(groups, (list, tuple))
+        else []
+    )
+    terms = tuple(
+        token.casefold()[:5]
+        for token in _search_tokens(query)
+        if token not in _WORK_PACKAGE_STOP_WORDS
+    )
+
+    def searchable(item: Mapping[str, Any]) -> str:
+        work_type = item.get("work_type")
+        work_type = work_type if isinstance(work_type, Mapping) else {}
+        return " ".join(
+            str(value).casefold()
+            for value in (
+                item.get("identity_label"),
+                item.get("identity_kind"),
+                work_type.get("raw"),
+                work_type.get("normalized"),
+            )
+            if value
+        )
+
+    scored = [
+        (sum(term in searchable(item) for term in terms), item)
+        for item in candidates
+        if not terms or any(term in searchable(item) for term in terms)
+    ]
+    scored.sort(
+        key=lambda value: (
+            -value[0],
+            str(value[1].get("identity_label") or ""),
+            str(value[1].get("facility_work_candidate_id") or ""),
+        )
+    )
+    selected = [item for _, item in scored[:limit]]
+    matched = len(scored)
+    return selected, {
+        "query": query or None,
+        "selection": "facility_and_work_candidate_lexical_relevance" if terms else "bounded_prefix",
+        "total_candidate_group_count": len(candidates),
+        "matched_candidate_group_count": matched,
+        "returned_candidate_group_count": len(selected),
+        "exhaustive_for_query": matched <= len(selected),
+        "projection_coverage": dict(projection_coverage),
+        "authority": "exact_locator_association_candidates_not_confirmed_scope",
+    }
 
 
 def _normative_designation(query: str) -> str:

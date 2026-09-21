@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
+    _select_facility_work_candidates,
 )
 from asd_kontur.knowledge.gateway import GatewayContext
 
@@ -132,6 +133,20 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
                 "exhaustive_for_query": True,
                 "authority": "candidate_observations_not_confirmed_work_packages",
             },
+            "facility_work_candidate_groups": [
+                {
+                    "facility_work_candidate_id": "sha256:" + "2" * 64,
+                    "identity_label": "КНС-1",
+                    "work_type": {"raw": "Разработка грунта"},
+                    "candidate_state": "facility_work_candidate_not_confirmed",
+                }
+            ],
+            "facility_work_selection": {
+                "query": "разработка грунта",
+                "matched_candidate_group_count": 1,
+                "returned_candidate_group_count": 1,
+                "authority": "exact_locator_association_candidates_not_confirmed_scope",
+            },
             "requirement_matrix": {},
             "discrepancies": [],
             "mode_result": None,
@@ -165,8 +180,53 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
     )
     assert response.result["value"]["selection_coverage"]["total_observation_count"] == 31
     assert response.result["value"]["selection_coverage"]["exhaustive_for_query"] is True
+    assert (
+        response.result["value"]["facility_work_candidate_groups"][0]["identity_label"] == "КНС-1"
+    )
+    assert (
+        response.result["value"]["facility_work_selection_coverage"][
+            "matched_candidate_group_count"
+        ]
+        == 1
+    )
     assert response.evidence_pack.evidence[0].evidence_link_id == "Лист работ-source"
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
+def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
+    groups = [
+        {
+            "facility_work_candidate_id": "candidate-kns",
+            "identity_label": "КНС-1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Разработка грунта", "normalized": "разработка грунта"},
+        },
+        {
+            "facility_work_candidate_id": "candidate-los",
+            "identity_label": "ЛОС-1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Разработка грунта", "normalized": "разработка грунта"},
+        },
+    ]
+
+    selected, coverage = _select_facility_work_candidates(
+        groups,
+        query="Какие работы предусмотрены для КНС-1?",
+        limit=20,
+        projection_coverage={"exact_identity_package_count": 2},
+    )
+
+    assert [item["facility_work_candidate_id"] for item in selected] == ["candidate-kns"]
+    assert coverage == {
+        "query": "Какие работы предусмотрены для КНС-1?",
+        "selection": "facility_and_work_candidate_lexical_relevance",
+        "total_candidate_group_count": 2,
+        "matched_candidate_group_count": 1,
+        "returned_candidate_group_count": 1,
+        "exhaustive_for_query": True,
+        "projection_coverage": {"exact_identity_package_count": 2},
+        "authority": "exact_locator_association_candidates_not_confirmed_scope",
+    }
 
 
 def test_project_entity_inventory_returns_coverage_and_workspace_sources(monkeypatch: Any) -> None:
