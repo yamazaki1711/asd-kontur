@@ -1300,3 +1300,39 @@ The next executable action is to let this job reach its terminal receipt, verify
 its failed-group and identity-kind denominators, then allow the two leaf repairs
 to run and prove 22/22 exact semantic coverage before accepting the refreshed
 model and consultant behavior.
+
+### Continuation checkpoint — 2026-09-21 16:49 UTC+12
+
+The 484-group structure reconciliation completed successfully on the preserved
+`f013ead` worker. Its immutable receipts include accepted, accepted-empty, and
+failed outcomes; notably, all 20 cross-source excavation-pit alias groups were
+accepted-empty, so the application still cannot claim an exact distinct-pit
+total from identity candidates. Raw pit observations remain available as
+candidate evidence and must not be counted as entities.
+
+Commit `b769427` records the exact identity-candidate IDs and group fingerprints
+belonging to each new structure-reconciliation result. Project views now use the
+latest manifest-bearing successful result to exclude immutable candidates from
+superseded grouping runs, while retaining a compatibility fallback for older
+receipts. Regression coverage proves that a historical candidate present in
+the same workspace is excluded by the current result manifest. Validation:
+718 unit tests, Ruff/format, strict mypy, the focused PostgreSQL workspace/API
+test, and the replacement-lineage PostgreSQL integration test.
+
+API, frontend, and assistant release `798b9b3` is deployed at migration
+`0063_structure_group_receipts`. It also corrects the consultant inventory to
+read semantic coverage from the canonical `state` field rather than a
+nonexistent `status` field, and the Russian UI now displays that state per
+document. The live API is ready and serves frontend asset
+`index-DrJ6cDSA.js`. The document worker was not restarted: it remains the old
+exact release because it immediately claimed the first targeted semantic leaf.
+That IOS3 job is running with a fresh heartbeat and has resumed 414/422 batch
+receipts; TH remains queued, followed by project and structure refreshes. The
+on-disk worker configuration is pinned to `798b9b3` for the next safe start.
+
+Next executable action: preserve the two targeted Qwen repairs through their
+terminal receipts, allow the deterministic model refresh, then activate the
+pinned worker and run exactly one manifest-bearing final structure refresh if
+the old process consumed the queued one. Verify 22/22 current semantic coverage,
+current-only identity projection, and grounded inventory behavior before
+accepting the refreshed Tender view.
