@@ -800,3 +800,32 @@ worker/API release, observe real group receipts and facility dossiers, complete
 scope-safe work-package consolidation, qualify the supported ID form and its
 authority/runtime configuration, and pass professional Tender/Support/Audit/
 Restoration workflows. `ProductReady=false`.
+
+### External construction-skill intake — 2026-09-21
+
+`/Users/oleg/Downloads/new` was inspected as an external reference corpus, not
+installed as product behavior.  It contains 1,834 files (about 635 MB) and 337
+`SKILL.md` files across Architecture, DDC, Russian-construction, and skills-
+sandbox collections.  All Python sources compile; the 17 documented
+deterministic checks in the Russian-construction subset pass.  This establishes
+only that its standalone examples execute.
+
+The collections are not eligible for directory-wide reuse.  There are duplicate
+skill names, broken relative references, cloud/proprietary-tool assumptions, one
+skill without valid front matter, and hard-coded typical regulatory/document
+lists.  The Russian adaptation states MIT intent in its README but has no
+standalone license file at its root; its embedded normative snapshots also need
+the existing SourceVersion/edition/authority checks.  Its ID checklist, SPDS,
+DXF/IFC, КС-2/КС-3, tender, and closeout material therefore remains
+`USE_AS_REFERENCE_ONLY` until an exact asset or algorithm passes the Legacy
+Component Decision Gate with license, authority-version, characterization,
+workspace, provenance, and integration evidence.  No downloaded NTD text or
+project-independent example value was promoted into platform authority.
+
+The bounded live OZERO check also demonstrates the actual reusable product gap:
+the current 5,550 work-package candidates are all unresolved against the
+verified work-type catalog and use page-based extraction scopes; only 61 have a
+single exact-locator facility-identity candidate.  The next Tender modeling
+increment must preserve observations while creating evidence-bound facility/work
+association and work-type resolution.  Copying keyword dictionaries from the
+external skills would hide this gap and is explicitly rejected.
