@@ -594,11 +594,11 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
             worker_identity=worker,
         )
 
-        # Restart recovery discovers accepted replacements from the successor
-        # lineage. It must queue the blocked dependent exactly once rather than
-        # scanning historical terminal jobs until the worker cannot claim work.
-        assert repository.recover_dependency_terminal_failures() == 1
-        assert repository.recover_dependency_terminal_failures() == 0
+        # Success-driven recovery advances one lineage and rewires the failed
+        # prerequisite to the accepted successor. Repeating the callback must
+        # not create a parallel replacement of the same blocked job.
+        assert repository.recover_dependents_from_success(recovered_hash) == 1
+        assert repository.recover_dependents_from_success(recovered_hash) == 0
         recovered_inventory = repository.claim_next_job(
             worker_identity=worker, lease_seconds=5, **scope
         )
@@ -618,8 +618,16 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
                 sa.text("SELECT provenance FROM workspace.durable_jobs WHERE job_id=:job"),
                 {"job": recovered_inventory.job_id},
             )
+            dependencies = connection.scalars(
+                sa.text(
+                    "SELECT depends_on_job_id FROM workspace.durable_job_dependencies "
+                    "WHERE job_id=:job"
+                ),
+                {"job": recovered_inventory.job_id},
+            ).all()
         assert provenance["dependency_recovery_of"]
         assert provenance["dependency_recovery_replacement"] == str(recovered_hash.job_id)
+        assert dependencies == [recovered_hash.job_id]
 
 
 def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
@@ -1024,9 +1032,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 "safe_message_code": "structure_identity_group_processed",
             }
         ]
-        status_response = client.get(
-            f"/api/v1/workspaces/{workspace_id}/project-understanding"
-        )
+        status_response = client.get(f"/api/v1/workspaces/{workspace_id}/project-understanding")
         assert status_response.status_code == 200, status_response.text
         structure_status = status_response.json()["structure_identity_reconciliation"]
         assert structure_status["job_id"] == str(structure_job_id)

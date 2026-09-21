@@ -2330,6 +2330,11 @@ class SpinePostgresRepository:
                     "WHERE dependent.organization_id=:organization AND dependent.workspace_id=:workspace "
                     "AND dependent.state='reconciliation_required' "
                     "AND dependent.typed_failure_code='dependency_terminal_failure' "
+                    "AND NOT EXISTS (SELECT 1 FROM workspace.durable_jobs replacement WHERE "
+                    "replacement.organization_id=dependent.organization_id AND "
+                    "replacement.workspace_id=dependent.workspace_id AND "
+                    "replacement.provenance->>'dependency_recovery_of'=dependent.job_id::text AND "
+                    "replacement.state<>'cancelled') "
                     "ORDER BY dependent.created_at,dependent.job_id LIMIT 32"
                 ),
                 {
@@ -2385,17 +2390,27 @@ class SpinePostgresRepository:
                     continue
                 session.execute(
                     sa.text(
-                        "INSERT INTO workspace.durable_job_dependencies "
+                        "WITH RECURSIVE ancestors AS ("
+                        "SELECT job_id,causation_id,0 AS depth FROM workspace.durable_jobs "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace "
+                        "AND job_id=:success UNION ALL SELECT parent.job_id,parent.causation_id,"
+                        "ancestors.depth+1 FROM workspace.durable_jobs parent JOIN ancestors "
+                        "ON parent.job_id=ancestors.causation_id WHERE "
+                        "parent.organization_id=:organization AND parent.workspace_id=:workspace "
+                        "AND ancestors.depth<32) INSERT INTO workspace.durable_job_dependencies "
                         "(organization_id,workspace_id,job_id,depends_on_job_id,dependency_kind) "
-                        "SELECT organization_id,workspace_id,:recovery,depends_on_job_id,dependency_kind "
+                        "SELECT DISTINCT organization_id,workspace_id,:recovery,CASE WHEN "
+                        "depends_on_job_id IN (SELECT job_id FROM ancestors) THEN :success "
+                        "ELSE depends_on_job_id END,dependency_kind "
                         "FROM workspace.durable_job_dependencies WHERE organization_id=:organization "
-                        "AND workspace_id=:workspace AND job_id=:blocked"
+                        "AND workspace_id=:workspace AND job_id=:blocked ON CONFLICT DO NOTHING"
                     ),
                     {
                         "organization": claimed.organization_id,
                         "workspace": claimed.workspace_id,
                         "recovery": recovery_id,
                         "blocked": candidate["blocked_job_id"],
+                        "success": claimed.job_id,
                     },
                 )
                 self._append_event(
