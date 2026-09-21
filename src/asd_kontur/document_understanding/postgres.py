@@ -54,7 +54,10 @@ from .native import NativeDocument
 from .ocr import OcrAdapterResult
 from .project_identity import reconcile_project_identity_fields
 from .semantic import StructuredCandidates
-from .work_packages import consolidate_work_package_candidates
+from .work_packages import (
+    consolidate_work_package_candidates,
+    retain_unresolved_relationship_defects,
+)
 from .work_type_catalog import resolve_work_type_candidates
 
 
@@ -1232,6 +1235,14 @@ class IndustrialUnderstandingRepository:
                 session, claimed, source_ids
             )
             defects = self._current_defects(session, claimed, source_ids)
+            defects = list(
+                retain_unresolved_relationship_defects(
+                    defects,
+                    works,
+                    quantities,
+                    materials,
+                )
+            )
             review_digests = session.scalars(
                 sa.text(
                     "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "

@@ -13,6 +13,79 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 
+def retain_unresolved_relationship_defects(
+    defects: Iterable[Mapping[str, Any]],
+    works: Iterable[Mapping[str, Any]],
+    quantities: Iterable[Mapping[str, Any]],
+    materials: Iterable[Mapping[str, Any]],
+) -> tuple[dict[str, Any], ...]:
+    """Drop only relationship defects superseded by one exact child observation.
+
+    Incremental batch persistence can record an unresolved quantity or material
+    before a later batch exposes its work.  History remains immutable, but a new
+    project reconciliation must not keep presenting that old defect when the
+    completed source contains one exact, evidence-identical linked candidate.
+
+    Name equality alone is deliberately insufficient: the child must have the
+    same evidence locator and payload, and exactly one linked work must have the
+    normalized referenced name.  Zero or multiple matches preserve the defect.
+    """
+
+    work_by_id = {str(item["candidate_id"]): dict(item) for item in works}
+    quantity_rows = tuple(quantities)
+    material_rows = tuple(materials)
+
+    def normalized(value: object) -> str:
+        return " ".join(str(value or "").casefold().split())
+
+    def relationship_matches(defect: Mapping[str, Any]) -> set[str]:
+        parameters = defect.get("parameters")
+        if not isinstance(parameters, Mapping):
+            return set()
+        if parameters.get("code") != "unresolved_work_reference":
+            return set()
+        locators = defect.get("source_locator_ids")
+        if not isinstance(locators, (list, tuple)) or len(locators) != 1:
+            return set()
+        locator_id = str(locators[0])
+        work_name = normalized(parameters.get("work_name"))
+        payload = parameters.get("payload")
+        if not work_name or not isinstance(payload, Mapping):
+            return set()
+        kind = parameters.get("relationship_kind")
+        candidates = (
+            quantity_rows if kind == "quantity" else material_rows if kind == "material" else ()
+        )
+        matches: set[str] = set()
+        for child in candidates:
+            if str(child.get("source_locator_id")) != locator_id:
+                continue
+            work_id = str(child.get("work_candidate_id"))
+            work = work_by_id.get(work_id)
+            if work is None or normalized(work.get("normalized_name")) != work_name:
+                continue
+            if kind == "quantity":
+                exact_payload = str(child.get("raw_value") or "") == str(
+                    payload.get("value") or ""
+                ) and str(child.get("raw_unit") or "") == str(payload.get("unit") or "")
+            else:
+                exact_payload = (
+                    str(child.get("raw_name") or "") == str(payload.get("name") or "")
+                    and str(child.get("raw_quantity") or "") == str(payload.get("quantity") or "")
+                    and str(child.get("raw_unit") or "") == str(payload.get("unit") or "")
+                )
+            if exact_payload:
+                matches.add(work_id)
+        return matches
+
+    retained: list[dict[str, Any]] = []
+    for value in defects:
+        defect = dict(value)
+        if len(relationship_matches(defect)) != 1:
+            retained.append(defect)
+    return tuple(retained)
+
+
 def consolidate_work_package_candidates(
     works: Iterable[Mapping[str, Any]],
     quantities: Iterable[Mapping[str, Any]],

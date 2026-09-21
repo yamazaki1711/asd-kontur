@@ -68,7 +68,10 @@ from asd_kontur.document_understanding.semantic import (
     parse_exact_decimal,
     reconcile_sources,
 )
-from asd_kontur.document_understanding.work_packages import consolidate_work_package_candidates
+from asd_kontur.document_understanding.work_packages import (
+    consolidate_work_package_candidates,
+    retain_unresolved_relationship_defects,
+)
 from asd_kontur.document_understanding.work_type_catalog import resolve_work_type_candidates
 from asd_kontur.domain import deterministic_uuid
 
@@ -246,6 +249,97 @@ def test_work_package_consolidation_preserves_scope_and_does_not_sum_conflicts()
     assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in los["uncertainties"]
     kns = next(item for item in packages if item["scope_key"] == "facility:kns-1")
     assert len(kns["observations"]) == 1
+
+
+def test_completed_source_supersedes_exact_unresolved_quantity_defect() -> None:
+    defect = {
+        "defect_id": "defect-1",
+        "source_locator_ids": ["locator-1"],
+        "parameters": {
+            "code": "unresolved_work_reference",
+            "relationship_kind": "quantity",
+            "work_name": "Монтаж шпунта",
+            "payload": {"value": "12,5", "unit": "т"},
+        },
+    }
+    works = (
+        {"candidate_id": "work-1", "normalized_name": "монтаж шпунта"},
+        # The same name in another scope must not matter when it has no exact
+        # child observation at this locator.
+        {"candidate_id": "work-2", "normalized_name": "монтаж шпунта"},
+    )
+    quantities = (
+        {
+            "candidate_id": "quantity-1",
+            "work_candidate_id": "work-1",
+            "source_locator_id": "locator-1",
+            "raw_value": "12,5",
+            "raw_unit": "т",
+        },
+    )
+
+    retained = retain_unresolved_relationship_defects((defect,), works, quantities, ())
+
+    assert retained == ()
+
+
+def test_ambiguous_or_nonidentical_relationship_evidence_remains_unresolved() -> None:
+    quantity_defect = {
+        "defect_id": "defect-quantity",
+        "source_locator_ids": ["locator-1"],
+        "parameters": {
+            "code": "unresolved_work_reference",
+            "relationship_kind": "quantity",
+            "work_name": "Монтаж",
+            "payload": {"value": "2", "unit": "шт"},
+        },
+    }
+    material_defect = {
+        "defect_id": "defect-material",
+        "source_locator_ids": ["locator-2"],
+        "parameters": {
+            "code": "unresolved_work_reference",
+            "relationship_kind": "material",
+            "work_name": "Монтаж",
+            "payload": {"name": "Сталь", "quantity": "", "unit": ""},
+        },
+    }
+    works = (
+        {"candidate_id": "work-a", "normalized_name": "монтаж"},
+        {"candidate_id": "work-b", "normalized_name": "монтаж"},
+    )
+    quantities = (
+        {
+            "work_candidate_id": "work-a",
+            "source_locator_id": "locator-1",
+            "raw_value": "2",
+            "raw_unit": "шт",
+        },
+        {
+            "work_candidate_id": "work-b",
+            "source_locator_id": "locator-1",
+            "raw_value": "2",
+            "raw_unit": "шт",
+        },
+    )
+    materials = (
+        {
+            "work_candidate_id": "work-a",
+            "source_locator_id": "locator-2",
+            "raw_name": "Сталь",
+            "raw_quantity": "5",
+            "raw_unit": "т",
+        },
+    )
+
+    retained = retain_unresolved_relationship_defects(
+        (quantity_defect, material_defect), works, quantities, materials
+    )
+
+    assert tuple(item["defect_id"] for item in retained) == (
+        "defect-quantity",
+        "defect-material",
+    )
 
 
 def test_verified_work_type_catalog_resolution_is_exact_and_keeps_all_bindings() -> None:
