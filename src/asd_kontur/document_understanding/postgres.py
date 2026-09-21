@@ -65,6 +65,65 @@ def _identity_observation_group_key(normalized_name: str) -> str:
     return re.sub(r"[^\w]+", "", normalized_name.casefold(), flags=re.UNICODE)
 
 
+def _bounded_cross_source_identity_groups(
+    values: list[dict[str, object]], *, max_group_size: int = 16
+) -> tuple[tuple[dict[str, object], ...], ...]:
+    """Partition one alias set without losing dominant-source observations.
+
+    Qwen identity candidates can contain at most sixteen member observations.
+    Passing larger alias sets previously exhausted the bounded response and
+    converted an otherwise independent comparison into a terminal failed
+    group. Round-robin packing keeps ordinary groups source-balanced. When
+    only one source has observations left, one deterministic observation from
+    another source is repeated as comparison context; the remaining primary
+    observations are still covered and no repeated observation appears twice
+    inside a single group.
+
+    This function schedules comparisons only. It never asserts or persists
+    identity, and Qwen must still return exact evidence members before a
+    candidate is accepted.
+    """
+
+    if max_group_size < 2:
+        raise ValueError("identity_group_size_too_small")
+    by_source: dict[str, list[dict[str, object]]] = {}
+    for value in values:
+        by_source.setdefault(str(value["source_version_id"]), []).append(value)
+    source_order = tuple(by_source)
+    if len(source_order) < 2:
+        return ()
+    anchors = {source: rows[0] for source, rows in by_source.items()}
+    offsets = {source: 0 for source in source_order}
+    groups: list[tuple[dict[str, object], ...]] = []
+    while any(offsets[source] < len(by_source[source]) for source in source_order):
+        active = [source for source in source_order if offsets[source] < len(by_source[source])]
+        group: list[dict[str, object]] = []
+        if len(active) == 1:
+            primary = active[0]
+            capacity = max_group_size - 1
+            while offsets[primary] < len(by_source[primary]) and len(group) < capacity:
+                group.append(by_source[primary][offsets[primary]])
+                offsets[primary] += 1
+            anchor_source = next(source for source in source_order if source != primary)
+            group.append(anchors[anchor_source])
+        else:
+            while len(group) < max_group_size:
+                progressed = False
+                for source in source_order:
+                    if offsets[source] >= len(by_source[source]):
+                        continue
+                    group.append(by_source[source][offsets[source]])
+                    offsets[source] += 1
+                    progressed = True
+                    if len(group) == max_group_size:
+                        break
+                if not progressed:
+                    break
+        if len({str(item["source_version_id"]) for item in group}) >= 2:
+            groups.append(tuple(group))
+    return tuple(groups)
+
+
 class UnderstandingPersistenceError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -1089,10 +1148,7 @@ class IndustrialUnderstandingRepository:
         for values in grouped.values():
             if len({str(item["source_version_id"]) for item in values}) < 2:
                 continue
-            for offset in range(0, len(values), 48):
-                group = tuple(values[offset : offset + 48])
-                if len({str(item["source_version_id"]) for item in group}) >= 2:
-                    result.append(group)
+            result.extend(_bounded_cross_source_identity_groups(values))
         return tuple(result)
 
     def workspace_engineering_semantic_coverage(

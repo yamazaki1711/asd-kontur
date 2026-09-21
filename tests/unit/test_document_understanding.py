@@ -42,7 +42,10 @@ from asd_kontur.document_understanding.native import (
 )
 from asd_kontur.document_understanding.ocr import OcrAdapterResult, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.pipeline import IndustrialDocumentUnderstandingPipeline
-from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.postgres import (
+    IndustrialUnderstandingRepository,
+    _bounded_cross_source_identity_groups,
+)
 from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
@@ -66,6 +69,43 @@ from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
 SOURCE_VERSION_ID = UUID("20000000-0000-4000-8000-000000000001")
+
+
+def test_identity_observation_groups_are_bounded_balanced_and_complete() -> None:
+    source_a = deterministic_uuid("identity-group-source-a")
+    source_b = deterministic_uuid("identity-group-source-b")
+    values = [
+        {
+            "structure_node_id": str(deterministic_uuid(f"identity-group-a-{index}")),
+            "source_version_id": str(source_a),
+        }
+        for index in range(22)
+    ] + [
+        {
+            "structure_node_id": str(deterministic_uuid(f"identity-group-b-{index}")),
+            "source_version_id": str(source_b),
+        }
+        for index in range(2)
+    ]
+
+    groups = _bounded_cross_source_identity_groups(values)
+
+    assert groups
+    assert all(2 <= len(group) <= 16 for group in groups)
+    assert all(len({item["source_version_id"] for item in group}) >= 2 for group in groups)
+    assert all(len({item["structure_node_id"] for item in group}) == len(group) for group in groups)
+    assert {item["structure_node_id"] for group in groups for item in group} == {
+        item["structure_node_id"] for item in values
+    }
+
+
+def test_small_identity_observation_group_is_not_rewritten() -> None:
+    values = [
+        {"structure_node_id": "left", "source_version_id": "source-a"},
+        {"structure_node_id": "right", "source_version_id": "source-b"},
+    ]
+
+    assert _bounded_cross_source_identity_groups(values) == (tuple(values),)
 
 
 def _extract_csv(value: str):
