@@ -628,11 +628,30 @@ class ProfessionalAssistantKnowledgeQuery:
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
 
             def evidence_items(locator_ids: set[str]) -> list[dict[str, Any]]:
-                return [
-                    self._workspace_item(evidence_row, workspace_id, mode)
-                    for locator_id in sorted(locator_ids)[:30]
-                    if (evidence_row := evidence_index.get(locator_id)) is not None
-                ]
+                items: list[dict[str, Any]] = []
+                for locator_id in sorted(locator_ids)[:30]:
+                    evidence_row = evidence_index.get(locator_id)
+                    if evidence_row is not None:
+                        items.append(self._workspace_item(evidence_row, workspace_id, mode))
+                        continue
+                    # Section-bounded project views hydrate only evidence used
+                    # by that section. A selected work package can reference a
+                    # locator outside the structure section, so resolve that
+                    # exact scoped locator instead of restoring the unbounded
+                    # workspace evidence graph.
+                    try:
+                        source_id = UUID(locator_id)
+                    except ValueError:
+                        continue
+                    items.extend(
+                        self._workspace_fragment(
+                            organization_id,
+                            workspace_id,
+                            mode,
+                            source_id,
+                        )
+                    )
+                return items[:30]
 
             dossier_source_items = evidence_items(
                 {
