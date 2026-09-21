@@ -54,9 +54,9 @@ _MAX_ENGINEERING_BATCH_CHARS = 9_000
 _DENSE_ENGINEERING_BATCHING_POLICY = "dense-fragments-v1"
 _FAILED_BATCH_RECOVERY_STRATEGY = "failed_batch_recovery-v1"
 _SINGLE_FRAGMENT_RECOVERY_STRATEGY = "single_fragment_repair-v2"
-_OUTPUT_EXHAUSTION_SPLIT_STRATEGY = "output_exhaustion_split-v1"
-_OUTPUT_EXHAUSTION_RECOVERY_STRATEGY = "output_exhaustion_recovery-v1"
-_MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS = 600
+_OUTPUT_EXHAUSTION_SPLIT_STRATEGY = "output_exhaustion_split-v2"
+_OUTPUT_EXHAUSTION_RECOVERY_STRATEGY = "output_exhaustion_recovery-v2"
+_MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS = 300
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",

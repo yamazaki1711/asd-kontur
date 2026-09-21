@@ -53,6 +53,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     _engineering_batch,
     _engineering_batches,
     _fragments,
+    _SemanticFragment,
     _split_engineering_batch,
     _split_output_exhausted_fragment,
 )
@@ -2248,6 +2249,18 @@ def test_qwen_engineering_output_exhaustion_subdivides_without_losing_provenance
     assert split[0].character_end == split[1].character_start
     assert split[1].character_end == original.character_end
 
+    short_dense = _SemanticFragment(
+        original.locator,
+        "B" * 914,
+        str(UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")),
+        0,
+        914,
+    )
+    short_split = _split_output_exhausted_fragment(short_dense)
+    assert short_split
+    assert [len(fragment.text) for fragment in short_split] == [457, 457]
+    assert "".join(fragment.text for fragment in short_split) == short_dense.text
+
     adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
     accepted: list[tuple[Any, dict[str, object]]] = []
     failed: list[tuple[Any, str]] = []
@@ -2299,12 +2312,12 @@ def test_qwen_engineering_output_exhaustion_subdivides_without_losing_provenance
     assert [batch.prompt_strategy for batch, _code in failed] == [
         "standard",
         "single_fragment_repair-v2",
-        "output_exhaustion_split-v1",
+        "output_exhaustion_split-v2",
     ]
     parent_acceptances = [
         (batch, manifest)
         for batch, manifest in accepted
-        if batch.prompt_strategy == "output_exhaustion_recovery-v1"
+        if batch.prompt_strategy == "output_exhaustion_recovery-v2"
         and batch.fragments[0].fragment_id == original.fragment_id
     ]
     assert len(parent_acceptances) == 1
