@@ -4996,17 +4996,12 @@ function ProjectUnderstandingPage() {
                     Скачать связь наблюдений работ с группами объектов
                   </a>
                   {value.work_packages.length ? (
-                    <div className="card-grid">
-                      {value.work_packages.map((item) => (
-                        <WorkPackageCard
-                          key={String(item.work_package_id)}
-                          item={item}
-                          workspaceId={workspaceId}
-                          modeSlug={mode}
-                          evidenceIndex={evidenceIndex}
-                        />
-                      ))}
-                    </div>
+                    <WorkPackageList
+                      items={value.work_packages}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                      evidenceIndex={evidenceIndex}
+                    />
                   ) : (
                     <p className="empty-state">
                       Наблюдения по работам ещё не извлечены.
@@ -5893,6 +5888,84 @@ function WorkPackageCard({
           : "не указаны"}
       </p>
     </article>
+  );
+}
+
+function WorkPackageList({
+  items,
+  workspaceId,
+  modeSlug,
+  evidenceIndex,
+}: {
+  items: Record<string, unknown>[];
+  workspaceId: string;
+  modeSlug?: string | undefined;
+  evidenceIndex: Record<string, Record<string, unknown>>;
+}) {
+  const [filter, setFilter] = useState("");
+  const [visibleCount, setVisibleCount] = useState(100);
+  const normalizedFilter = filter.trim().toLocaleLowerCase("ru-RU");
+  const filtered = items.filter((item) => {
+    if (!normalizedFilter) return true;
+    const packageValue = (item.package ?? {}) as Record<string, unknown>;
+    const workType = (packageValue.work_type ?? {}) as Record<string, unknown>;
+    const values = [
+      workType.raw,
+      workType.normalized,
+      packageValue.scope,
+      ...(Array.isArray(packageValue.uncertainties)
+        ? packageValue.uncertainties.map(String)
+        : []),
+    ];
+    return values.some((value) =>
+      displayValue(value, "")
+        .toLocaleLowerCase("ru-RU")
+        .includes(normalizedFilter),
+    );
+  });
+  const visible = filtered.slice(0, visibleCount);
+  return (
+    <>
+      <label>
+        Найти наблюдение по работе, области или пробелу
+        <input
+          value={filter}
+          onChange={(event) => {
+            setFilter(event.target.value);
+            setVisibleCount(100);
+          }}
+          placeholder="Например: шпунт, котлован, объём"
+        />
+      </label>
+      <p>
+        Показано {visible.length.toString()} из {filtered.length.toString()}
+        {normalizedFilter
+          ? ` найденных (${items.length.toString()} всего)`
+          : ""}
+        . Повторные карточки могут относиться к разным исходным областям и не
+        считаются суммарным перечнем работ проекта.
+      </p>
+      <div className="card-grid">
+        {visible.map((item) => (
+          <WorkPackageCard
+            key={String(item.work_package_id)}
+            item={item}
+            workspaceId={workspaceId}
+            modeSlug={modeSlug}
+            evidenceIndex={evidenceIndex}
+          />
+        ))}
+      </div>
+      {visible.length < filtered.length && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => setVisibleCount((value) => value + 100)}
+        >
+          Показать ещё 100
+        </button>
+      )}
+    </>
   );
 }
 
