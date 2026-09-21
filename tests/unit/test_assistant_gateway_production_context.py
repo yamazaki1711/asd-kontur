@@ -167,3 +167,41 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
     assert response.result["value"]["selection_coverage"]["exhaustive_for_query"] is True
     assert response.evidence_pack.evidence[0].evidence_link_id == "Лист работ-source"
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
+def test_project_entity_inventory_returns_coverage_and_workspace_sources(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    source = _source("Лист котлована")
+    source["authority_layer"] = "workspace_fact"
+    monkeypatch.setattr(
+        query,
+        "_project_entity_inventory",
+        lambda **_kwargs: (
+            {
+                "authority": "cross_document_identity_candidates_not_confirmed_facts",
+                "candidate_entity_count": 2,
+                "unresolved_observation_count": 1,
+                "coverage": {"exact_total_supported": False},
+            },
+            [source],
+        ),
+    )
+
+    response = query.execute(
+        "consultant.get_project_entity_inventory",
+        {"mode": "Tender", "kind": "excavation_pit", "limit": 30},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert response.result["value"]["candidate_entity_count"] == 2
+    assert response.result["value"]["coverage"]["exact_total_supported"] is False
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"

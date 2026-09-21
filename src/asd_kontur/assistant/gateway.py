@@ -169,6 +169,15 @@ class ProfessionalAssistantKnowledgeQuery:
                     _source_id(payload),
                 ),
             )
+        elif tool == "consultant.get_project_entity_inventory":
+            value, inventory_sources = self._project_entity_inventory(
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=context.actor_identity_id,
+                mode=mode,
+                payload=payload,
+            )
+            result = self._plain_tool_result(tool, value, inventory_sources)
         elif tool == "consultant.get_id_package":
             view = SupportProductionRepository(self._engine).view(
                 owner_identity_id=context.actor_identity_id,
@@ -244,8 +253,8 @@ class ProfessionalAssistantKnowledgeQuery:
                 selected,
                 [dict(item["source"]) for item in selected_sources],
             )
-        sources = tuple(dict(item) for item in result.pop("sources", []))
-        evidence = tuple(_evidence(item) for item in sources)
+        canonical_sources = tuple(dict(item) for item in result.pop("sources", []))
+        evidence = tuple(_evidence(item) for item in canonical_sources)
         gaps = tuple(result.get("gaps", []))
         return GatewayResponse(
             tool,
@@ -254,7 +263,7 @@ class ProfessionalAssistantKnowledgeQuery:
             if result["outcome"]
             not in {"not_found", "document_not_present", "document_present_no_text"}
             else GatewayStatus.NO_RESULT,
-            {**result, "sources": list(sources)},
+            {**result, "sources": list(canonical_sources)},
             EvidencePack(evidence, (), (), gaps, ()),
         )
 
@@ -1509,6 +1518,131 @@ class ProfessionalAssistantKnowledgeQuery:
             )
         return [self._workspace_item(row, workspace_id, mode) for row in rows]
 
+    def _project_entity_inventory(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        mode: str,
+        payload: dict[str, Any],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Return a bounded inventory with explicit reconciliation coverage.
+
+        Identity candidates are evidence-backed cross-document proposals, not
+        confirmed facts. Unresolved observations remain separately counted so
+        a top-k or candidate count cannot be presented as an exhaustive project
+        total while semantic extraction or reconciliation is incomplete.
+        """
+
+        kind, query, limit = _project_entity_arguments(payload)
+        from asd_kontur.application_spine.postgres import SpinePostgresRepository
+
+        view = (
+            SpinePostgresRepository(self._engine).project_understanding_view(
+                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            )
+            or {}
+        )
+        identities = [
+            dict(item)
+            for item in view.get("structure_identity_candidates", [])
+            if isinstance(item, dict)
+        ]
+        nodes = [dict(item) for item in view.get("structure_nodes", []) if isinstance(item, dict)]
+
+        def selected(value: dict[str, Any], label_key: str) -> bool:
+            if kind and str(value.get("identity_kind") or value.get("node_kind")) != kind:
+                return False
+            if not query:
+                return True
+            label = " ".join(str(value.get(label_key, "")).casefold().split())
+            return query in label
+
+        identities = [item for item in identities if selected(item, "canonical_label")]
+        member_ids = {
+            str(member)
+            for item in identities
+            for member in item.get("member_structure_node_ids", [])
+        }
+        matching_nodes = [item for item in nodes if selected(item, "raw_name")]
+        unresolved = [
+            item for item in matching_nodes if str(item.get("structure_node_id")) not in member_ids
+        ]
+        identities.sort(key=lambda item: (str(item.get("canonical_label", "")), str(item)))
+        unresolved.sort(key=lambda item: (str(item.get("raw_name", "")), str(item)))
+        coverage_rows = [
+            dict(item) for item in view.get("semantic_coverage", []) if isinstance(item, dict)
+        ]
+        extraction_complete = bool(coverage_rows) and all(
+            str(item.get("status")) == "complete" for item in coverage_rows
+        )
+        with Session(self._engine) as session, session.begin():
+            _scope(session, organization_id, workspace_id)
+            reconciliation = (
+                session.execute(
+                    sa.text(
+                        "SELECT state,typed_failure_code,input_digest,completed_at FROM "
+                        "workspace.durable_jobs WHERE organization_id=:o AND workspace_id=:w "
+                        "AND job_kind='PROJECT_STRUCTURE_RECONCILIATION' ORDER BY created_at DESC LIMIT 1"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        reconciliation_state = (
+            "not_started" if reconciliation is None else str(reconciliation["state"])
+        )
+        exact_total_supported = bool(
+            extraction_complete
+            and reconciliation_state == "succeeded"
+            and not unresolved
+            and all(str(item.get("status")) == "confirmed" for item in identities)
+        )
+        evidence_index = dict(view.get("evidence_index", {}))
+        returned_identities = identities[:limit]
+        unresolved_sample_limit = min(limit, 10)
+        returned_unresolved = unresolved[:unresolved_sample_limit]
+        locator_ids = {
+            str(locator_id)
+            for item in [*returned_identities, *returned_unresolved]
+            for locator_id in (
+                item.get("source_locator_ids", [])
+                if item.get("source_locator_ids") is not None
+                else [item.get("source_locator_id")]
+            )
+            if locator_id
+        }
+        sources = [
+            self._workspace_item(row, workspace_id, mode)["source"]
+            for locator_id in sorted(locator_ids)
+            if isinstance((row := evidence_index.get(locator_id)), dict)
+        ]
+        value = {
+            "authority": "cross_document_identity_candidates_not_confirmed_facts",
+            "filter": {"kind": kind, "query": query or None},
+            "candidate_entity_count": len(identities),
+            "returned_candidate_entity_count": len(returned_identities),
+            "unresolved_observation_count": len(unresolved),
+            "returned_unresolved_observation_count": len(returned_unresolved),
+            "candidate_entities": _public_value(returned_identities),
+            "unresolved_observations": _public_value(returned_unresolved),
+            "coverage": {
+                "semantic_extraction_complete": extraction_complete,
+                "structure_reconciliation_state": reconciliation_state,
+                "structure_reconciliation_failure_code": (
+                    None if reconciliation is None else reconciliation.get("typed_failure_code")
+                ),
+                "exact_total_supported": exact_total_supported,
+                "limit": limit,
+                "unresolved_sample_limit": unresolved_sample_limit,
+                "candidate_page_complete": len(returned_identities) == len(identities),
+                "unresolved_page_complete": len(returned_unresolved) == len(unresolved),
+            },
+        }
+        return value, sources
+
     def _normative_rows(self, predicate: str, parameters: dict[str, Any]) -> list[Any]:
         with self._engine.connect() as connection:
             return list(
@@ -1687,6 +1821,23 @@ def _workspace_package_arguments(payload: dict[str, Any]) -> tuple[str, int]:
     ):
         raise ValueError("assistant_tool_work_packages_invalid")
     return query, limit
+
+
+def _project_entity_arguments(payload: dict[str, Any]) -> tuple[str | None, str, int]:
+    allowed_kinds = {"local_area", "facility", "excavation_pit", "structure", "zone"}
+    kind_value = payload.get("kind")
+    kind = None if kind_value is None else str(kind_value)
+    query = " ".join(str(payload.get("query", "")).casefold().split())
+    limit = payload.get("limit", 30)
+    if (
+        set(payload) - {"mode", "kind", "query", "limit"}
+        or (kind is not None and kind not in allowed_kinds)
+        or (query and not 2 <= len(query) <= 160)
+        or not isinstance(limit, int)
+        or not 1 <= limit <= 30
+    ):
+        raise ValueError("assistant_tool_entity_inventory_invalid")
+    return kind, query, limit
 
 
 def _source_id(payload: dict[str, Any]) -> UUID:

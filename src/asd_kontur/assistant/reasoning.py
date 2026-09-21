@@ -100,6 +100,15 @@ TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "schema": {},
     },
     {
+        "name": "consultant.get_project_entity_inventory",
+        "description": "Получить покрытие и сверенный перечень кандидатов объектов/сооружений текущего ОКС; использовать для полного подсчёта ЛОС, КНС, котлованов, зон и сооружений.",
+        "schema": {
+            "kind": "local_area|facility|excavation_pit|structure|zone optional",
+            "query": "string optional",
+            "limit": "integer 1..30",
+        },
+    },
+    {
         "name": "consultant.search_workspace_documents",
         "description": "Найти релевантные фрагменты документов только текущего объекта.",
         "schema": {"query": "string", "limit": "integer 1..10"},
@@ -318,6 +327,53 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
         steps = (
             *plan.steps[:replace_index],
             content_step,
+            *plan.steps[replace_index + 1 :],
+        )
+    return SearchPlan(plan.intent, False, None, tuple(steps))
+
+
+def ensure_workspace_entity_inventory(plan: SearchPlan, question: str) -> SearchPlan:
+    """Require structured inventory coverage for project-wide entity questions."""
+
+    if plan.needs_clarification or plan.intent not in {"workspace", "mixed"}:
+        return plan
+    normalized = " ".join(question.casefold().split())
+    if not re.search(r"\b(?:сколько|перечисл\w*|полный\s+перечень|все)\b", normalized):
+        return plan
+    kind: str | None = None
+    if re.search(r"\bкотлован\w*\b", normalized):
+        kind = "excavation_pit"
+    elif re.search(r"\b(?:лос|кнс)\b", normalized):
+        kind = "facility"
+    elif re.search(r"\b(?:зон\w*|участ\w*)\b", normalized):
+        kind = "local_area"
+    elif re.search(r"\bсооружен\w*\b", normalized):
+        kind = "structure"
+    if kind is None:
+        return plan
+    if any(step.tool == "consultant.get_project_entity_inventory" for step in plan.steps):
+        return plan
+    inventory_step = PlannedToolCall(
+        "consultant.get_project_entity_inventory",
+        {"kind": kind, "limit": 30},
+        "Для полного перечня или подсчёта требуется структурированный инвентарь и его покрытие, а не число поисковых совпадений.",
+    )
+    if len(plan.steps) < MAX_TOOL_STEPS:
+        steps = (*plan.steps, inventory_step)
+    else:
+        replace_index = next(
+            (
+                index
+                for index, step in enumerate(plan.steps)
+                if step.tool in _WORKSPACE_METADATA_TOOLS
+            ),
+            None,
+        )
+        if replace_index is None:
+            return plan
+        steps = (
+            *plan.steps[:replace_index],
+            inventory_step,
             *plan.steps[replace_index + 1 :],
         )
     return SearchPlan(plan.intent, False, None, tuple(steps))
@@ -685,6 +741,25 @@ def _validate_arguments(tool: str, arguments: dict[str, Any]) -> None:
             raise ValueError("assistant_plan_work_packages_arguments_invalid")
         if not isinstance(limit, int) or not 1 <= limit <= 20:
             raise ValueError("assistant_plan_work_packages_arguments_invalid")
+        return
+    if tool == "consultant.get_project_entity_inventory":
+        if set(arguments) - {"kind", "query", "limit"}:
+            raise ValueError("assistant_plan_entity_inventory_arguments_invalid")
+        kind = arguments.get("kind")
+        if kind is not None and kind not in {
+            "local_area",
+            "facility",
+            "excavation_pit",
+            "structure",
+            "zone",
+        }:
+            raise ValueError("assistant_plan_entity_inventory_arguments_invalid")
+        query = " ".join(str(arguments.get("query", "")).split())
+        if query and not 2 <= len(query) <= 160:
+            raise ValueError("assistant_plan_entity_inventory_arguments_invalid")
+        limit = arguments.get("limit", 30)
+        if not isinstance(limit, int) or not 1 <= limit <= 30:
+            raise ValueError("assistant_plan_entity_inventory_arguments_invalid")
         return
     if tool == "consultant.resolve_ntd_designation":
         if set(arguments) != {"designation"}:

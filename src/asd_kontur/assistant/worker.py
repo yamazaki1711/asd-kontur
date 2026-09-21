@@ -43,6 +43,7 @@ from .reasoning import (
     compact_history,
     ensure_explicit_designation_resolution,
     ensure_workspace_content_search,
+    ensure_workspace_entity_inventory,
     parse_adequacy_decision,
     parse_search_plan,
     parse_synthesized_answer,
@@ -308,9 +309,12 @@ class AssistantWorker:
         raw = self._model_complete(claimed, prompt, max_tokens=520, temperature=0.1)
         try:
             return bind_workspace_work_query(
-                ensure_workspace_content_search(
-                    ensure_explicit_designation_resolution(
-                        parse_search_plan(raw), claimed.question
+                ensure_workspace_entity_inventory(
+                    ensure_workspace_content_search(
+                        ensure_explicit_designation_resolution(
+                            parse_search_plan(raw), claimed.question
+                        ),
+                        claimed.question,
                     ),
                     claimed.question,
                 ),
@@ -324,9 +328,12 @@ class AssistantWorker:
                 temperature=0.0,
             )
             return bind_workspace_work_query(
-                ensure_workspace_content_search(
-                    ensure_explicit_designation_resolution(
-                        parse_search_plan(corrected), claimed.question
+                ensure_workspace_entity_inventory(
+                    ensure_workspace_content_search(
+                        ensure_explicit_designation_resolution(
+                            parse_search_plan(corrected), claimed.question
+                        ),
+                        claimed.question,
                     ),
                     claimed.question,
                 ),

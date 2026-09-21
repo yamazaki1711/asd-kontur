@@ -14,6 +14,7 @@ from asd_kontur.assistant.reasoning import (
     bind_workspace_work_query,
     compact_history,
     ensure_workspace_content_search,
+    ensure_workspace_entity_inventory,
     parse_adequacy_decision,
     parse_search_plan,
     parse_synthesized_answer,
@@ -287,6 +288,52 @@ def test_project_enumeration_replaces_metadata_when_plan_is_at_tool_budget() -> 
         "consultant.get_requirement_matrix",
         "consultant.get_information_gaps",
     ]
+
+
+def test_project_entity_count_requires_inventory_in_addition_to_content_search() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (PlannedToolCall("consultant.get_workspace_overview", {}, "Обзор объекта."),),
+    )
+
+    required = ensure_workspace_entity_inventory(
+        ensure_workspace_content_search(plan, "Сколько котлованов в этом проекте?"),
+        "Сколько котлованов в этом проекте?",
+    )
+
+    assert [step.tool for step in required.steps] == [
+        "consultant.get_workspace_overview",
+        "consultant.search_workspace_documents",
+        "consultant.get_project_entity_inventory",
+    ]
+    assert required.steps[-1].arguments == {"kind": "excavation_pit", "limit": 30}
+
+
+def test_entity_inventory_arguments_reject_unknown_kind_and_unbounded_limit() -> None:
+    for arguments in (
+        {"kind": "document", "limit": 30},
+        {"kind": "facility", "limit": 31},
+    ):
+        with pytest.raises(ValueError, match="assistant_plan_entity_inventory_arguments_invalid"):
+            parse_search_plan(
+                json.dumps(
+                    {
+                        "intent": "workspace",
+                        "needs_clarification": False,
+                        "clarifying_question": None,
+                        "steps": [
+                            {
+                                "tool": "consultant.get_project_entity_inventory",
+                                "arguments": arguments,
+                                "reason": "Нужен полный инвентарь объекта.",
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                )
+            )
 
 
 def test_workspace_answer_cannot_declare_uploaded_documents_empty_after_retrieval() -> None:
