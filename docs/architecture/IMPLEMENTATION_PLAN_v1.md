@@ -769,3 +769,34 @@ independent PostgreSQL acceptance covers duplicate commands and the explicit
 success dependency. Deployment and real-Qwen identity reconciliation remain
 open, followed by scope-safe consolidation of the inflated raw work-package
 observations into user-usable schedules.
+
+### Product-led delivery evidence — resumable facility reconciliation
+
+**Reusable capability:** every bounded cross-document facility comparison now
+has an immutable, versioned terminal receipt. Candidate, valid-empty, and
+content-failure outcomes are persisted separately; a worker restart reuses the
+exact receipt instead of repeating a Qwen call. Runtime unavailability remains
+retryable at the durable-job boundary and is never frozen as a content result.
+Workspace destruction covers both the receipts and identity candidates.
+
+**User-visible output:** long facility reconciliation can resume to produce
+candidate local-area/facility/pit groups and explicit unresolved groups for
+Tender navigation and consultation. It does not turn a repeated name into a
+confirmed identity or a candidate count into a project total.
+
+**Independent acceptance:** changed synthetic identifiers prove candidate-plus-
+receipt atomic persistence through PostgreSQL, repository re-instantiation,
+valid-empty/failure representation, duplicate-inference suppression, and
+retryable runtime loss. Ruff, strict mypy, 76 focused unit tests, and the scoped
+PostgreSQL application-spine path pass. OZERO is not the expected-value oracle.
+
+**OZERO role:** the live recovery worker remains on its prior compatible release
+while TH semantic processing is active. After a safe drain, OZERO will validate
+real multi-document group progress and restart reuse. This does not block the
+independently accepted mechanism or the ID-package stream.
+
+**Remaining production acceptance:** deploy the exact compatible migration and
+worker/API release, observe real group receipts and facility dossiers, complete
+scope-safe work-package consolidation, qualify the supported ID form and its
+authority/runtime configuration, and pass professional Tender/Support/Audit/
+Restoration workflows. `ProductReady=false`.

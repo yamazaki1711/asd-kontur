@@ -1417,10 +1417,29 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
                 ({"structure_node_id": str(third)}, {"structure_node_id": str(fourth)}),
             )
 
-        def persist_structure_identity_candidates(
-            self, _claimed: ClaimedJob, values: tuple[StructureIdentityCandidate, ...]
-        ) -> None:
-            persisted.extend(values)
+        def load_structure_identity_group_receipts(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-structure-identity-v1"
+            return {}
+
+        def persist_structure_identity_group_outcome(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            group_fingerprint: str,
+            profile_version: str,
+            input_structure_node_ids: tuple[UUID, ...],
+            input_manifest: tuple[dict[str, object], ...],
+            candidates: tuple[StructureIdentityCandidate, ...] = (),
+            failure_code: str | None = None,
+        ) -> dict[str, object]:
+            assert group_fingerprint.startswith("sha256:")
+            assert profile_version == "qwen-structure-identity-v1"
+            assert len(input_structure_node_ids) == 2
+            assert len(input_manifest) == 2
+            persisted.extend(candidates)
+            return {"failure_code": failure_code}
 
         def record_structure_identity_progress(
             self,
@@ -1484,7 +1503,15 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     assert progress == [(0, 2), (1, 2), (2, 2)]
     assert result["structure_identity_failures"] == [
         {
-            "group_fingerprint": semantic_digest(sorted((str(first), str(second)))),
+            "group_fingerprint": semantic_digest(
+                {
+                    "profile_version": "qwen-structure-identity-v1",
+                    "observations": (
+                        {"structure_node_id": str(first)},
+                        {"structure_node_id": str(second)},
+                    ),
+                }
+            ),
             "failure_code": "qwen_structure_identity_response_invalid_evidence",
         }
     ]
@@ -1514,10 +1541,33 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
             assert profile_version == "qwen-engineering-extraction-v15"
             return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
 
-        def persist_structure_identity_candidates(
-            self, _claimed: ClaimedJob, values: tuple[StructureIdentityCandidate, ...]
-        ) -> None:
-            persisted.extend(values)
+        def load_structure_identity_group_receipts(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-structure-identity-v1"
+            return {}
+
+        def persist_structure_identity_group_outcome(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            group_fingerprint: str,
+            profile_version: str,
+            input_structure_node_ids: tuple[UUID, ...],
+            input_manifest: tuple[dict[str, object], ...],
+            candidates: tuple[StructureIdentityCandidate, ...] = (),
+            failure_code: str | None = None,
+        ) -> dict[str, object]:
+            assert group_fingerprint.startswith("sha256:")
+            assert profile_version == "qwen-structure-identity-v1"
+            assert input_structure_node_ids == (left, right)
+            assert input_manifest == (
+                {"structure_node_id": str(left)},
+                {"structure_node_id": str(right)},
+            )
+            assert failure_code is None
+            persisted.extend(candidates)
+            return {"failure_code": None}
 
         def assemble_workspace(self, _claimed: ClaimedJob) -> dict[str, object]:
             return {"run_id": "synthetic-run"}
@@ -1561,6 +1611,147 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
     assert persisted and persisted[0].member_structure_node_ids == (left, right)
     assert result["structure_identity_candidate_count"] == 1
     assert result["structure_identity_reconciliation"] == "partial_completed_source_groups"
+
+
+def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts() -> None:
+    organization_id = deterministic_uuid("identity-resume-organization")
+    workspace_id = deterministic_uuid("identity-resume-workspace")
+    left = deterministic_uuid("identity-resume-left")
+    right = deterministic_uuid("identity-resume-right")
+    observations = ({"structure_node_id": str(left)}, {"structure_node_id": str(right)})
+    group_fingerprint = semantic_digest(
+        {
+            "profile_version": "qwen-structure-identity-v1",
+            "observations": observations,
+        }
+    )
+    candidate_id = deterministic_uuid("identity-resume-candidate")
+    progress: list[tuple[int, int]] = []
+
+    class Repository:
+        def workspace_engineering_semantic_coverage(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, int | bool]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return {"source_count": 2, "complete_source_count": 2, "complete": True}
+
+        def load_structure_identity_observation_groups(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> tuple[tuple[dict[str, object], ...], ...]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return (observations,)
+
+        def load_structure_identity_group_receipts(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-structure-identity-v1"
+            return {
+                group_fingerprint: {
+                    "outcome": "accepted",
+                    "identity_candidate_ids": (str(candidate_id),),
+                    "failure_code": None,
+                }
+            }
+
+        def record_structure_identity_progress(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            completed_groups: int,
+            total_groups: int,
+        ) -> None:
+            progress.append((completed_groups, total_groups))
+
+        def assemble_workspace(self, _claimed: ClaimedJob) -> dict[str, object]:
+            return {"run_id": "identity-resumed-run"}
+
+    class Qwen:
+        def reconcile_structure_identities(
+            self, _observations: tuple[dict[str, object], ...]
+        ) -> tuple[StructureIdentityCandidate, ...]:
+            raise AssertionError("a terminal group receipt must suppress duplicate inference")
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        organization_id,
+        workspace_id,
+        deterministic_uuid("identity-resume-job"),
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        {},
+        "sha256:" + "c" * 64,
+        1,
+        1,
+        "not_requested",
+    )
+
+    result = pipeline._reconciliation(claimed, BytesIO())
+
+    assert result["structure_identity_candidate_count"] == 1
+    assert result["structure_identity_failed_group_count"] == 0
+    assert result["structure_identity_reconciliation"] == "completed"
+    assert progress == [(0, 1), (1, 1)]
+
+
+def test_structure_identity_runtime_outage_is_not_persisted_as_content_outcome() -> None:
+    organization_id = deterministic_uuid("identity-runtime-organization")
+    workspace_id = deterministic_uuid("identity-runtime-workspace")
+    left = deterministic_uuid("identity-runtime-left")
+    right = deterministic_uuid("identity-runtime-right")
+    persisted_outcomes = 0
+
+    class Repository:
+        def workspace_engineering_semantic_coverage(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, int | bool]:
+            return {"source_count": 2, "complete_source_count": 2, "complete": True}
+
+        def load_structure_identity_observation_groups(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> tuple[tuple[dict[str, object], ...], ...]:
+            return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
+
+        def load_structure_identity_group_receipts(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            return {}
+
+        def persist_structure_identity_group_outcome(
+            self, *_args: object, **_kwargs: object
+        ) -> None:
+            nonlocal persisted_outcomes
+            persisted_outcomes += 1
+
+    class Qwen:
+        def reconcile_structure_identities(
+            self, _observations: tuple[dict[str, object], ...]
+        ) -> tuple[StructureIdentityCandidate, ...]:
+            raise QwenSemanticFailure("qwen_semantic_runtime_unavailable")
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        organization_id,
+        workspace_id,
+        deterministic_uuid("identity-runtime-job"),
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        {},
+        "sha256:" + "d" * 64,
+        1,
+        1,
+        "not_requested",
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_semantic_runtime_unavailable"):
+        pipeline._reconciliation(claimed, BytesIO())
+
+    assert persisted_outcomes == 0
 
 
 def test_qwen_engineering_recovers_partial_candidates_only_from_exact_batch_manifest() -> None:

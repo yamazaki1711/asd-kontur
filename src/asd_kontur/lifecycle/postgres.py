@@ -800,6 +800,8 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.project_reconciliation_defect_memberships",
         "workspace.project_reconciliation_work_package_memberships",
         "workspace.project_understanding_reconciliations",
+        "workspace.project_structure_identity_group_receipts",
+        "workspace.project_structure_identity_candidates",
         "workspace.project_reconciliation_defects",
         "workspace.source_cross_references",
         "workspace.estimate_position_candidates",

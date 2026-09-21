@@ -11,6 +11,14 @@
 > acceptance requirement before claiming **comprehensive OZERO Tender**, but
 > do not delay reusable product work on full-corpus processing.
 
+> **Programme execution note — 2026-09-21:** the active delivery unit is a
+> reusable capability and application output. OZERO processing continues as a
+> healthy validation workload, but it does not gate independently testable
+> Tender analysis, Support ID production, Audit, or Restoration work. The
+> canonical 143-capability product plan and four-mode acceptance remain the
+> programme authority; this file retains OZERO-specific evidence and does not
+> narrow that denominator.
+
 ## Objective
 
 Deliver comprehensive, persistent, evidence-backed PD understanding and usable Tender analysis for

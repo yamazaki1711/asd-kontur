@@ -40,6 +40,7 @@ from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v15"
+QWEN_STRUCTURE_IDENTITY_PROFILE = "qwen-structure-identity-v1"
 # v14 adds a required relationship collection.  Prior batch manifests did not ask
 # the model to inspect or report those observations, so treating them as compatible
 # would silently turn missing relationship coverage into an accepted empty result.
@@ -315,7 +316,7 @@ class QwenDocumentSemanticAdapter:
                     tuple(UUID(value) for value in member_ids),
                     source_locator_ids,
                     confidence,
-                    "qwen-structure-identity-v1",
+                    QWEN_STRUCTURE_IDENTITY_PROFILE,
                 )
             )
         return tuple(accepted)

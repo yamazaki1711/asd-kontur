@@ -840,58 +840,200 @@ class IndustrialUnderstandingRepository:
         adapter response from naming an unrelated workspace's node.
         """
         with self._session(claimed) as session:
-            for value in values:
-                member_ids = list(value.member_structure_node_ids)
-                locator_ids = list(value.source_locator_ids)
-                membership = (
-                    session.execute(
-                        sa.text(
-                            "SELECT count(DISTINCT structure_node_id) AS member_count, "
-                            "count(DISTINCT source_locator_id) AS member_locator_count, "
-                            "count(DISTINCT source_locator_id) FILTER (WHERE source_locator_id=ANY(:locators)) "
-                            "AS matched_locator_count FROM workspace.project_structure_node_versions "
-                            "WHERE organization_id=:o AND workspace_id=:w "
-                            "AND structure_node_id=ANY(:members)"
-                        ),
-                        {
-                            "o": claimed.organization_id,
-                            "w": claimed.workspace_id,
-                            "members": member_ids,
-                            "locators": locator_ids,
-                        },
-                    )
-                    .mappings()
-                    .one()
-                )
-                if int(membership["member_count"]) != len(member_ids):
-                    raise UnderstandingPersistenceError("structure_identity_member_unavailable")
-                if int(membership["member_locator_count"]) != len(set(locator_ids)) or int(
-                    membership["matched_locator_count"]
-                ) != len(set(locator_ids)):
-                    raise UnderstandingPersistenceError("structure_identity_locator_unavailable")
+            self._insert_structure_identity_candidates(session, claimed, values)
+
+    def load_structure_identity_group_receipts(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, dict[str, object]]:
+        """Load immutable terminal group outcomes for restart-safe reconciliation."""
+        with self._session(claimed) as session:
+            rows = (
                 session.execute(
                     sa.text(
-                        "INSERT INTO workspace.project_structure_identity_candidates "
-                        "(organization_id,workspace_id,identity_candidate_id,version,identity_kind,"
-                        "canonical_label,member_structure_node_ids,source_locator_ids,confidence,status,"
-                        "reconciliation_profile_version,candidate_digest) VALUES "
-                        "(:o,:w,:candidate,1,:kind,:label,:members,:locators,:confidence,:status,:profile,:digest) "
-                        "ON CONFLICT DO NOTHING"
+                        "SELECT group_fingerprint,outcome,identity_candidate_ids,failure_code "
+                        "FROM workspace.project_structure_identity_group_receipts WHERE "
+                        "organization_id=:o AND workspace_id=:w AND "
+                        "reconciliation_profile_version=:profile"
                     ),
                     {
                         "o": claimed.organization_id,
                         "w": claimed.workspace_id,
-                        "candidate": value.identity_candidate_id,
-                        "kind": value.identity_kind,
-                        "label": value.canonical_label,
-                        "members": member_ids,
-                        "locators": locator_ids,
-                        "confidence": value.confidence,
-                        "status": value.status.value,
-                        "profile": value.reconciliation_profile_version,
-                        "digest": semantic_digest(value),
+                        "profile": profile_version,
                     },
                 )
+                .mappings()
+                .all()
+            )
+        return {
+            str(row["group_fingerprint"]): {
+                "outcome": str(row["outcome"]),
+                "identity_candidate_ids": tuple(
+                    str(value) for value in row["identity_candidate_ids"]
+                ),
+                "failure_code": (None if row["failure_code"] is None else str(row["failure_code"])),
+            }
+            for row in rows
+        }
+
+    def persist_structure_identity_group_outcome(
+        self,
+        claimed: ClaimedJob,
+        *,
+        group_fingerprint: str,
+        profile_version: str,
+        input_structure_node_ids: tuple[UUID, ...],
+        input_manifest: tuple[dict[str, object], ...],
+        candidates: tuple[StructureIdentityCandidate, ...] = (),
+        failure_code: str | None = None,
+    ) -> dict[str, object]:
+        """Atomically persist candidates and the terminal outcome for one input group."""
+        if len(input_structure_node_ids) < 2 or len(set(input_structure_node_ids)) != len(
+            input_structure_node_ids
+        ):
+            raise UnderstandingPersistenceError("structure_identity_group_input_invalid")
+        if candidates and failure_code is not None:
+            raise UnderstandingPersistenceError("structure_identity_group_outcome_invalid")
+        manifest_node_ids = tuple(
+            UUID(str(item.get("structure_node_id"))) for item in input_manifest
+        )
+        if manifest_node_ids != input_structure_node_ids:
+            raise UnderstandingPersistenceError("structure_identity_group_manifest_invalid")
+        if group_fingerprint != semantic_digest(
+            {"profile_version": profile_version, "observations": input_manifest}
+        ):
+            raise UnderstandingPersistenceError("structure_identity_group_fingerprint_invalid")
+        outcome = (
+            "failed"
+            if failure_code is not None
+            else ("accepted" if candidates else "accepted_empty")
+        )
+        candidate_ids = tuple(value.identity_candidate_id for value in candidates)
+        receipt_payload = {
+            "group_fingerprint": group_fingerprint,
+            "profile_version": profile_version,
+            "input_structure_node_ids": input_structure_node_ids,
+            "input_manifest": input_manifest,
+            "outcome": outcome,
+            "identity_candidate_ids": candidate_ids,
+            "failure_code": failure_code,
+        }
+        with self._session(claimed) as session:
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT outcome,identity_candidate_ids,failure_code FROM "
+                        "workspace.project_structure_identity_group_receipts WHERE "
+                        "organization_id=:o AND workspace_id=:w AND group_fingerprint=:group "
+                        "AND reconciliation_profile_version=:profile"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "group": group_fingerprint,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if existing is not None:
+                return {
+                    "outcome": str(existing["outcome"]),
+                    "identity_candidate_ids": tuple(
+                        str(value) for value in existing["identity_candidate_ids"]
+                    ),
+                    "failure_code": (
+                        None if existing["failure_code"] is None else str(existing["failure_code"])
+                    ),
+                }
+            self._insert_structure_identity_candidates(session, claimed, candidates)
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_structure_identity_group_receipts "
+                    "(organization_id,workspace_id,group_fingerprint,reconciliation_profile_version,"
+                    "input_structure_node_ids,input_manifest,outcome,identity_candidate_ids,failure_code,"
+                    "receipt_digest) VALUES (:o,:w,:group,:profile,:members,CAST(:manifest AS jsonb),"
+                    ":outcome,:candidates,:failure,:digest)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "group": group_fingerprint,
+                    "profile": profile_version,
+                    "members": list(input_structure_node_ids),
+                    "manifest": json.dumps(
+                        input_manifest, ensure_ascii=False, sort_keys=True, default=str
+                    ),
+                    "outcome": outcome,
+                    "candidates": list(candidate_ids),
+                    "failure": failure_code,
+                    "digest": semantic_digest(receipt_payload),
+                },
+            )
+        return {
+            "outcome": outcome,
+            "identity_candidate_ids": tuple(str(value) for value in candidate_ids),
+            "failure_code": failure_code,
+        }
+
+    @staticmethod
+    def _insert_structure_identity_candidates(
+        session: Session,
+        claimed: ClaimedJob,
+        values: tuple[StructureIdentityCandidate, ...],
+    ) -> None:
+        for value in values:
+            member_ids = list(value.member_structure_node_ids)
+            locator_ids = list(value.source_locator_ids)
+            membership = (
+                session.execute(
+                    sa.text(
+                        "SELECT count(DISTINCT structure_node_id) AS member_count, "
+                        "count(DISTINCT source_locator_id) AS member_locator_count, "
+                        "count(DISTINCT source_locator_id) FILTER (WHERE source_locator_id=ANY(:locators)) "
+                        "AS matched_locator_count FROM workspace.project_structure_node_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w "
+                        "AND structure_node_id=ANY(:members)"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "members": member_ids,
+                        "locators": locator_ids,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            if int(membership["member_count"]) != len(member_ids):
+                raise UnderstandingPersistenceError("structure_identity_member_unavailable")
+            if int(membership["member_locator_count"]) != len(set(locator_ids)) or int(
+                membership["matched_locator_count"]
+            ) != len(set(locator_ids)):
+                raise UnderstandingPersistenceError("structure_identity_locator_unavailable")
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_structure_identity_candidates "
+                    "(organization_id,workspace_id,identity_candidate_id,version,identity_kind,"
+                    "canonical_label,member_structure_node_ids,source_locator_ids,confidence,status,"
+                    "reconciliation_profile_version,candidate_digest) VALUES "
+                    "(:o,:w,:candidate,1,:kind,:label,:members,:locators,:confidence,:status,:profile,:digest) "
+                    "ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "candidate": value.identity_candidate_id,
+                    "kind": value.identity_kind,
+                    "label": value.canonical_label,
+                    "members": member_ids,
+                    "locators": locator_ids,
+                    "confidence": value.confidence,
+                    "status": value.status.value,
+                    "profile": value.reconciliation_profile_version,
+                    "digest": semantic_digest(value),
+                },
+            )
 
     def load_structure_identity_observation_groups(
         self, claimed: ClaimedJob, *, profile_version: str

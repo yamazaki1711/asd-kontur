@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -19,6 +20,7 @@ from asd_kontur.application_spine.postgres import (
     SpinePostgresRepository,
 )
 from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.document_understanding.models import StructureIdentityCandidate
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.web_app import create_app
 
@@ -1022,6 +1024,106 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 "safe_message_code": "structure_identity_group_processed",
             }
         ]
+
+        # A terminal group result is atomic with its candidate and survives a
+        # new repository instance, so worker restart cannot repeat Qwen work.
+        second_locator_id = uuid4()
+        first_node_id = uuid4()
+        second_node_id = uuid4()
+        identity_candidate_id = uuid4()
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,"
+                    "locator_kind,locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region','synthetic-2',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": second_locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [1, 0, 1, 1]}),
+                    "digest": semantic_digest({"synthetic": "native-layout-2"}),
+                },
+            )
+            for node_id, node_locator, suffix in (
+                (first_node_id, locator_id, "left"),
+                (second_node_id, second_locator_id, "right"),
+            ):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_structure_node_versions "
+                        "(organization_id,workspace_id,structure_node_id,version,node_kind,raw_name,"
+                        "normalized_name,parent_node_id,source_locator_id,status,fingerprint) "
+                        "VALUES "
+                        "(:organization,:workspace,:node,1,'facility',:name,'facility 1',NULL,"
+                        ":locator,'candidate',:fingerprint)"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "node": node_id,
+                        "name": f"Facility 1 {suffix}",
+                        "locator": node_locator,
+                        "fingerprint": semantic_digest({"structure-node": suffix}),
+                    },
+                )
+        identity_input_manifest = (
+            {"structure_node_id": str(first_node_id)},
+            {"structure_node_id": str(second_node_id)},
+        )
+        group_fingerprint = semantic_digest(
+            {
+                "profile_version": "qwen-structure-identity-v1",
+                "observations": identity_input_manifest,
+            }
+        )
+        identity_candidate = StructureIdentityCandidate(
+            identity_candidate_id,
+            "facility",
+            "Facility 1",
+            (first_node_id, second_node_id),
+            (locator_id, second_locator_id),
+            Decimal("0.9"),
+            "qwen-structure-identity-v1",
+        )
+        understanding_repository.persist_structure_identity_group_outcome(
+            structure_claim,
+            group_fingerprint=group_fingerprint,
+            profile_version="qwen-structure-identity-v1",
+            input_structure_node_ids=(first_node_id, second_node_id),
+            input_manifest=identity_input_manifest,
+            candidates=(identity_candidate,),
+        )
+        receipts = IndustrialUnderstandingRepository(
+            postgres_environment.document_worker_engine
+        ).load_structure_identity_group_receipts(
+            structure_claim, profile_version="qwen-structure-identity-v1"
+        )
+        assert receipts[group_fingerprint] == {
+            "outcome": "accepted",
+            "identity_candidate_ids": (str(identity_candidate_id),),
+            "failure_code": None,
+        }
+        with postgres_environment.owner_engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM workspace.project_structure_identity_candidates "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace "
+                        "AND identity_candidate_id=:candidate"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "candidate": identity_candidate_id,
+                    },
+                )
+                == 1
+            )
 
         # A later reconciliation receipt may refer to the same source, but it
         # is not itself a semantic extraction attempt.  Recovery must continue

@@ -5,6 +5,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 from typing import BinaryIO
+from uuid import UUID
 
 from asd_kontur.application_spine.models import ClaimedJob, JobKind
 
@@ -32,6 +33,7 @@ from .qwen_semantic import (
     _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES,
     _DENSE_ENGINEERING_BATCHING_POLICY,
     QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    QWEN_STRUCTURE_IDENTITY_PROFILE,
     QwenDocumentSemanticAdapter,
     QwenEngineeringBatch,
     QwenSemanticFailure,
@@ -520,24 +522,76 @@ class IndustrialDocumentUnderstandingPipeline:
             return result
         identity_count = 0
         failures: list[dict[str, object]] = []
+        receipts = self._repository.load_structure_identity_group_receipts(
+            claimed, profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE
+        )
         if groups:
             self._record_structure_identity_progress(
                 claimed, completed_groups=0, total_groups=len(groups)
             )
         for completed_groups, group in enumerate(groups, start=1):
+            group_fingerprint = _digest(
+                {
+                    "profile_version": QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    "observations": group,
+                }
+            )
+            receipt = receipts.get(group_fingerprint)
+            if receipt is not None:
+                candidate_ids = receipt.get("identity_candidate_ids", ())
+                if isinstance(candidate_ids, (list, tuple)):
+                    identity_count += len(candidate_ids)
+                if receipt.get("outcome") == "failed":
+                    failures.append(
+                        {
+                            "group_fingerprint": group_fingerprint,
+                            "failure_code": str(
+                                receipt.get("failure_code")
+                                or "qwen_structure_identity_group_failed"
+                            ),
+                        }
+                    )
+                self._record_structure_identity_progress(
+                    claimed,
+                    completed_groups=completed_groups,
+                    total_groups=len(groups),
+                )
+                continue
             try:
                 candidates = self._qwen_semantic.reconcile_structure_identities(group)
             except QwenSemanticFailure as exc:
+                # Infrastructure loss is retryable at the durable-job boundary;
+                # recording it as a terminal content receipt would suppress a
+                # valid future attempt under the unchanged semantic contract.
+                if exc.code == "qwen_semantic_runtime_unavailable":
+                    raise
+                self._repository.persist_structure_identity_group_outcome(
+                    claimed,
+                    group_fingerprint=group_fingerprint,
+                    profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    input_structure_node_ids=tuple(
+                        UUID(str(item["structure_node_id"])) for item in group
+                    ),
+                    input_manifest=group,
+                    failure_code=exc.code,
+                )
                 failures.append(
                     {
-                        "group_fingerprint": _digest(
-                            sorted(str(item["structure_node_id"]) for item in group)
-                        ),
+                        "group_fingerprint": group_fingerprint,
                         "failure_code": exc.code,
                     }
                 )
             else:
-                self._repository.persist_structure_identity_candidates(claimed, candidates)
+                self._repository.persist_structure_identity_group_outcome(
+                    claimed,
+                    group_fingerprint=group_fingerprint,
+                    profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    input_structure_node_ids=tuple(
+                        UUID(str(item["structure_node_id"])) for item in group
+                    ),
+                    input_manifest=group,
+                    candidates=candidates,
+                )
                 identity_count += len(candidates)
             self._record_structure_identity_progress(
                 claimed,
