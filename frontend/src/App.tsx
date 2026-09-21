@@ -4735,6 +4735,18 @@ function ProjectUnderstandingPage() {
               string,
               unknown
             >;
+          const excavationPitInventory = (value.excavation_pit_inventory ??
+            {}) as Record<string, unknown>;
+          const excavationPitCandidates = Array.isArray(
+            excavationPitInventory.candidate_pits,
+          )
+            ? (excavationPitInventory.candidate_pits as Record<
+                string,
+                unknown
+              >[])
+            : [];
+          const excavationPitCoverage = (excavationPitInventory.coverage ??
+            {}) as Record<string, unknown>;
           const facilityWorkProjection = (value.facility_work_projection ??
             {}) as Record<string, unknown>;
           const facilityWorkCandidateGroups = Array.isArray(
@@ -4814,6 +4826,10 @@ function ProjectUnderstandingPage() {
                 <Metric
                   label="Групп после пересечения наблюдений"
                   value={structureIdentityComponents.length}
+                />
+                <Metric
+                  label="Котлованов с явной привязкой"
+                  value={excavationPitCandidates.length}
                 />
                 <Metric
                   label="Работ-кандидатов"
@@ -4980,6 +4996,73 @@ function ProjectUnderstandingPage() {
                   >
                     Скачать ведомость междокументных групп-кандидатов
                   </a>
+                  <h3>Котлованы с явной привязкой к объекту</h3>
+                  <p>
+                    Показаны только исходные формулировки вида «котлован для
+                    ЛОС/КНС». Это установленное подмножество кандидатов, а не
+                    итоговое количество котлованов проекта.
+                  </p>
+                  <InfoNotice>
+                    Явно привязанных кандидатов:{" "}
+                    {Number(
+                      excavationPitCoverage.candidate_pit_count ?? 0,
+                    ).toString()}
+                    ; неразрешённых наблюдений о котлованах:{" "}
+                    {Number(
+                      excavationPitCoverage.unresolved_observation_count ?? 0,
+                    ).toString()}
+                    . Точный общий итог: не подтверждён.
+                  </InfoNotice>
+                  {excavationPitCandidates.length > 0 && (
+                    <div className="card-grid">
+                      {excavationPitCandidates.map((candidate) => {
+                        const locators = Array.isArray(
+                          candidate.source_locator_ids,
+                        )
+                          ? candidate.source_locator_ids.map(String)
+                          : [];
+                        return (
+                          <article
+                            className="candidate-row"
+                            key={displayValue(candidate.pit_candidate_id)}
+                          >
+                            <strong>
+                              {displayValue(
+                                candidate.display_name,
+                                "Котлован-кандидат",
+                              )}
+                            </strong>
+                            <p>
+                              Связанный объект:{" "}
+                              {displayValue(
+                                candidate.associated_facility_designation,
+                                "не разрешён",
+                              )}
+                            </p>
+                            <small>
+                              Наблюдений в источниках:{" "}
+                              {Number(
+                                candidate.observation_count ?? 0,
+                              ).toString()}
+                              . Статус: кандидат, не подтверждённый факт.
+                            </small>
+                            {locators.map((locator) => (
+                              <Link
+                                key={locator}
+                                to={workspaceRouteFromSlug(
+                                  mode,
+                                  workspaceId,
+                                  `/evidence/locators/${locator}`,
+                                )}
+                              >
+                                Открыть исходный фрагмент
+                              </Link>
+                            ))}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
                   <StructureCandidateList
                     nodes={structureNodes}
                     relationships={structureRelationships}

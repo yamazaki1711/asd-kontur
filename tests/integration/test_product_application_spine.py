@@ -960,6 +960,8 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 connection.execute(
                     sa.text(
                         "SELECT structure.job_id,structure.idempotency_key AS structure_key,"
+                        "structure.input_manifest AS structure_manifest,"
+                        "structure.provenance AS structure_provenance,"
                         "dependency.depends_on_job_id,dependency.dependency_kind,"
                         "project.idempotency_key AS project_key FROM "
                         "workspace.durable_jobs structure "
@@ -986,6 +988,14 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
         assert len(structure_jobs) == 1
         assert structure_jobs[0]["dependency_kind"] == "success_required"
+        assert (
+            structure_jobs[0]["structure_manifest"]["structure_identity_result_manifest_version"]
+            == "current-membership-v1"
+        )
+        assert (
+            structure_jobs[0]["structure_provenance"]["result_manifest_version"]
+            == "current-membership-v1"
+        )
         structure_job_id = UUID(str(structure_jobs[0]["job_id"]))
         understanding_repository = IndustrialUnderstandingRepository(
             postgres_environment.document_worker_engine

@@ -14,6 +14,7 @@ from uuid import UUID
 JsonValue = dict[str, Any]
 
 STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION = "source-balanced-v1"
+STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION = "current-membership-v1"
 STRUCTURE_IDENTITY_GROUP_MAX_SIZE = 16
 
 

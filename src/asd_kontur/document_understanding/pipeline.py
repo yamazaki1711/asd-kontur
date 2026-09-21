@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import BinaryIO
 from uuid import UUID
 
-from asd_kontur.application_spine.models import ClaimedJob, JobKind
+from asd_kontur.application_spine.models import (
+    STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
+    ClaimedJob,
+    JobKind,
+)
 
 from .models import (
     CLASSIFICATION_PROFILE_VERSION,
@@ -608,6 +612,9 @@ class IndustrialDocumentUnderstandingPipeline:
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
         result["structure_identity_candidate_ids"] = sorted(current_identity_candidate_ids)
+        result["structure_identity_result_manifest_version"] = (
+            STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION
+        )
         result["structure_identity_group_count"] = len(groups)
         result["structure_identity_group_fingerprints"] = sorted(current_group_fingerprints)
         result["structure_identity_failed_group_count"] = len(failures)

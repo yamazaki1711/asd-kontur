@@ -1605,17 +1605,24 @@ class ProfessionalAssistantKnowledgeQuery:
             )
             or {}
         )
-        identities = [
-            dict(item)
-            for item in view.get("structure_identity_components", [])
-            if isinstance(item, dict)
-        ]
+        pit_inventory = dict(view.get("excavation_pit_inventory", {}))
+        explicit_pit_inventory = kind == "excavation_pit"
+        identity_values = (
+            pit_inventory.get("candidate_pits", [])
+            if explicit_pit_inventory
+            else view.get("structure_identity_components", [])
+        )
+        identities = [dict(item) for item in identity_values if isinstance(item, dict)]
         nodes = [dict(item) for item in view.get("structure_nodes", []) if isinstance(item, dict)]
-        identity_dossiers = [
-            dict(item)
-            for item in view.get("structure_identity_dossiers", [])
-            if isinstance(item, dict)
-        ]
+        identity_dossiers = (
+            []
+            if explicit_pit_inventory
+            else [
+                dict(item)
+                for item in view.get("structure_identity_dossiers", [])
+                if isinstance(item, dict)
+            ]
+        )
 
         def selected(value: dict[str, Any], label_key: str) -> bool:
             if kind and str(value.get("identity_kind") or value.get("node_kind")) != kind:
@@ -1623,7 +1630,9 @@ class ProfessionalAssistantKnowledgeQuery:
             if not query:
                 return True
             label = " ".join(str(value.get(label_key, "")).casefold().split())
-            return query in label
+            compact_query = re.sub(r"[^0-9a-zа-яё]+", "", query)
+            compact_label = re.sub(r"[^0-9a-zа-яё]+", "", label)
+            return query in label or bool(compact_query and compact_query in compact_label)
 
         identities = [item for item in identities if selected(item, "canonical_label")]
         member_ids = {
@@ -1693,7 +1702,11 @@ class ProfessionalAssistantKnowledgeQuery:
             if isinstance((row := evidence_index.get(locator_id)), dict)
         ]
         value = {
-            "authority": "cross_document_identity_candidates_not_confirmed_facts",
+            "authority": (
+                "explicit_source_association_candidates_not_confirmed_project_total"
+                if explicit_pit_inventory
+                else "cross_document_identity_candidates_not_confirmed_facts"
+            ),
             "filter": {"kind": kind, "query": query or None},
             "candidate_entity_count": len(identities),
             "returned_candidate_entity_count": len(returned_identities),

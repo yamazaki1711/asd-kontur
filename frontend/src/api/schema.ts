@@ -2225,6 +2225,10 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
+            /** Excavation Pit Inventory */
+            excavation_pit_inventory?: {
+                [key: string]: unknown;
+            };
             /** Facility Work Projection */
             facility_work_projection?: {
                 [key: string]: unknown;

@@ -2612,6 +2612,11 @@
             "title": "Evidence Index",
             "type": "object"
           },
+          "excavation_pit_inventory": {
+            "additionalProperties": true,
+            "title": "Excavation Pit Inventory",
+            "type": "object"
+          },
           "facility_work_projection": {
             "additionalProperties": true,
             "title": "Facility Work Projection",

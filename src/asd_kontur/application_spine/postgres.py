@@ -14,6 +14,7 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from asd_kontur.domain import uuid7
+from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
 )
@@ -26,6 +27,7 @@ from asd_kontur.tender.structure_identity_dossier import (
 
 from .models import (
     STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
+    STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
     BatchRegistration,
     ClaimedJob,
     DocumentSummary,
@@ -3020,6 +3022,7 @@ class SpinePostgresRepository:
                 relationships=structure_relationships,
                 facility_work_groups=facility_work_projection["candidate_groups"],
             )
+            excavation_pit_inventory = build_excavation_pit_inventory(structure_nodes)
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -3084,6 +3087,7 @@ class SpinePostgresRepository:
             "structure_identity_components": structure_identity_components,
             "structure_identity_reconciliation": structure_identity_reconciliation,
             "structure_identity_dossiers": structure_identity_dossiers,
+            "excavation_pit_inventory": excavation_pit_inventory,
             "facility_work_projection": {
                 "candidate_groups": facility_work_projection["candidate_groups"],
                 "coverage": facility_work_projection["coverage"],
@@ -3556,7 +3560,8 @@ class SpinePostgresRepository:
         """
         idempotency_key = (
             "project-structure-reconciliation:"
-            f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:{semantic_input}"
+            f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:"
+            f"{STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION}:{semantic_input}"
         )
         existing = session.scalar(
             sa.text(
@@ -3583,6 +3588,9 @@ class SpinePostgresRepository:
             "corpus_semantic_input": semantic_input,
             "project_reconciliation_job_id": str(project_job_id),
             "structure_identity_grouping_policy": (STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION),
+            "structure_identity_result_manifest_version": (
+                STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION
+            ),
         }
         session.execute(
             sa.text(
@@ -3607,6 +3615,7 @@ class SpinePostgresRepository:
                         "contract": "project-structure-reconciliation.command@1.0.0",
                         "input": semantic_input,
                         "grouping_policy": STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
+                        "result_manifest_version": STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
                     }
                 ),
                 "correlation": correlation_id,
@@ -4256,6 +4265,7 @@ class SpinePostgresRepository:
             structure_nodes=structure_nodes,
             relationships=structure_relationships,
         )
+        excavation_pit_inventory = build_excavation_pit_inventory(structure_nodes)
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -4293,6 +4303,7 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
             "structure_identity_dossiers": structure_identity_dossiers,
+            "excavation_pit_inventory": excavation_pit_inventory,
             "facility_work_projection": {
                 "candidate_groups": [],
                 "coverage": {

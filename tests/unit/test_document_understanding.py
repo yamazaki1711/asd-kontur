@@ -1541,6 +1541,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     assert result["structure_identity_candidate_ids"] == [
         str(deterministic_uuid("identity-preserved-candidate"))
     ]
+    assert result["structure_identity_result_manifest_version"] == "current-membership-v1"
     assert result["structure_identity_group_count"] == 2
     assert len(result["structure_identity_group_fingerprints"]) == 2
     assert result["structure_identity_failed_group_count"] == 1
@@ -1737,6 +1738,7 @@ def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts(
 
     assert result["structure_identity_candidate_count"] == 1
     assert result["structure_identity_candidate_ids"] == [str(candidate_id)]
+    assert result["structure_identity_result_manifest_version"] == "current-membership-v1"
     assert result["structure_identity_group_fingerprints"] == [group_fingerprint]
     assert result["structure_identity_failed_group_count"] == 0
     assert result["structure_identity_reconciliation"] == "completed"

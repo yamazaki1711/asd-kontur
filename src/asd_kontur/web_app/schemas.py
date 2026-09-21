@@ -376,6 +376,7 @@ class ProjectUnderstandingView(ApiModel):
     structure_identity_components: list[dict[str, Any]] = Field(default_factory=list)
     structure_identity_dossiers: list[dict[str, Any]] = Field(default_factory=list)
     structure_identity_reconciliation: dict[str, Any] = Field(default_factory=dict)
+    excavation_pit_inventory: dict[str, Any] = Field(default_factory=dict)
     facility_work_projection: dict[str, Any] = Field(default_factory=dict)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
