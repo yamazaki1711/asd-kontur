@@ -2697,6 +2697,11 @@
             "title": "Structure Identity Candidates",
             "type": "array"
           },
+          "structure_identity_reconciliation": {
+            "additionalProperties": true,
+            "title": "Structure Identity Reconciliation",
+            "type": "object"
+          },
           "structure_nodes": {
             "items": {
               "additionalProperties": true,

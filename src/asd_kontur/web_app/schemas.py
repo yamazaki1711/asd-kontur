@@ -373,6 +373,7 @@ class ProjectUnderstandingView(ApiModel):
     structure_dossiers: list[dict[str, Any]] = Field(default_factory=list)
     structure_components: list[dict[str, Any]] = Field(default_factory=list)
     structure_identity_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    structure_identity_reconciliation: dict[str, Any] = Field(default_factory=dict)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
     semantic_coverage: list[dict[str, Any]] = Field(default_factory=list)

@@ -4720,6 +4720,11 @@ function ProjectUnderstandingPage() {
               string,
               unknown
             >[];
+          const structureIdentityReconciliation =
+            (value.structure_identity_reconciliation ?? {}) as Record<
+              string,
+              unknown
+            >;
           const decisions = (value.review_decisions ?? []) as Record<
             string,
             unknown
@@ -4912,6 +4917,23 @@ function ProjectUnderstandingPage() {
                     только при наличии точного исходного фрагмента.
                     Неразрешённые пространственные сведения остаются пробелом.
                   </p>
+                  <InfoNotice>
+                    Междокументное сопоставление:{" "}
+                    {displayValue(
+                      structureIdentityReconciliation.state,
+                      "не запускалось",
+                    )}
+                    {Number(
+                      structureIdentityReconciliation.progress_total ?? 0,
+                    ) > 0 &&
+                      `; обработано групп: ${Number(
+                        structureIdentityReconciliation.progress_current ?? 0,
+                      ).toString()}/${Number(
+                        structureIdentityReconciliation.progress_total ?? 0,
+                      ).toString()}`}
+                    . Сопоставленные группы остаются кандидатами до
+                    профессионального решения.
+                  </InfoNotice>
                   <a
                     className="button-link secondary"
                     href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-structure-identity-candidates.csv`}

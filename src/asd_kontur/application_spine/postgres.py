@@ -2991,6 +2991,9 @@ class SpinePostgresRepository:
             semantic_coverage = self._semantic_extraction_coverage(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            structure_identity_reconciliation = self._structure_identity_reconciliation_status(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             evidence_index = self._workspace_evidence_index(
                 session,
                 organization_id=organization_id,
@@ -3034,6 +3037,7 @@ class SpinePostgresRepository:
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
             "structure_identity_candidates": structure_identity_candidates,
+            "structure_identity_reconciliation": structure_identity_reconciliation,
             "review_decisions": review_decisions,
             "intake_summary": intake_summary,
             "semantic_coverage": semantic_coverage,
@@ -4192,6 +4196,9 @@ class SpinePostgresRepository:
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
             "structure_identity_candidates": structure_identity_candidates,
+            "structure_identity_reconciliation": cls._structure_identity_reconciliation_status(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
             "review_decisions": cls._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
@@ -4206,6 +4213,41 @@ class SpinePostgresRepository:
                 "customer_addition": "workspace_additive_only",
                 "ai_candidate": "candidate_only",
             },
+        }
+
+    @staticmethod
+    def _structure_identity_reconciliation_status(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any]:
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT j.job_id,j.state,j.attempt_count,j.typed_failure_code,j.started_at,"
+                    "j.completed_at,progress.progress_current,progress.progress_total,"
+                    "progress.safe_message_code progress_message_code,progress.recorded_at "
+                    "progress_recorded_at FROM workspace.durable_jobs j LEFT JOIN LATERAL ("
+                    "SELECT progress_current,progress_total,safe_message_code,recorded_at FROM "
+                    "workspace.job_progress_events e WHERE e.organization_id=j.organization_id "
+                    "AND e.workspace_id=j.workspace_id AND e.job_id=j.job_id ORDER BY "
+                    "e.event_sequence DESC LIMIT 1) progress ON true WHERE "
+                    "j.organization_id=:o AND j.workspace_id=:w AND "
+                    "j.job_kind='PROJECT_STRUCTURE_RECONCILIATION' ORDER BY j.created_at DESC LIMIT 1"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        if row is None:
+            return {
+                "state": "not_started",
+                "progress_current": 0,
+                "progress_total": 0,
+                "candidate_authority": "candidate_only",
+            }
+        return {
+            **_jsonable_row(row),
+            "candidate_authority": "candidate_only",
         }
 
     @staticmethod

@@ -1024,6 +1024,16 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 "safe_message_code": "structure_identity_group_processed",
             }
         ]
+        status_response = client.get(
+            f"/api/v1/workspaces/{workspace_id}/project-understanding"
+        )
+        assert status_response.status_code == 200, status_response.text
+        structure_status = status_response.json()["structure_identity_reconciliation"]
+        assert structure_status["job_id"] == str(structure_job_id)
+        assert structure_status["state"] == "queued"
+        assert structure_status["progress_current"] == 0
+        assert structure_status["progress_total"] == 2
+        assert structure_status["candidate_authority"] == "candidate_only"
 
         # A terminal group result is atomic with its candidate and survives a
         # new repository instance, so worker restart cannot repeat Qwen work.

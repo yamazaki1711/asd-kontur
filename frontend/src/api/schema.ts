@@ -2273,6 +2273,10 @@ export interface components {
             structure_identity_candidates?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Identity Reconciliation */
+            structure_identity_reconciliation?: {
+                [key: string]: unknown;
+            };
             /** Structure Nodes */
             structure_nodes?: {
                 [key: string]: unknown;
