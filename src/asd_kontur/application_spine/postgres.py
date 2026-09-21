@@ -37,7 +37,7 @@ from .object_store import StagedObject, WorkspaceObjectStore
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
 ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
-ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v3"
+ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v4"
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,
