@@ -37,6 +37,7 @@ from .ocr import (
 from .postgres import IndustrialUnderstandingRepository
 from .qwen_semantic import (
     _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES,
+    _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES,
     _DENSE_ENGINEERING_BATCHING_POLICY,
     QWEN_ENGINEERING_EXTRACTION_PROFILE,
     QWEN_STRUCTURE_IDENTITY_PROFILE,
@@ -537,7 +538,9 @@ class IndustrialDocumentUnderstandingPipeline:
         current_group_fingerprints: set[str] = set()
         failures: list[dict[str, object]] = []
         receipts = self._repository.load_structure_identity_group_receipts(
-            claimed, profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE
+            claimed,
+            profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+            compatible_profile_versions=_COMPATIBLE_STRUCTURE_IDENTITY_PROFILES,
         )
         if groups:
             self._record_structure_identity_progress(
@@ -620,6 +623,7 @@ class IndustrialDocumentUnderstandingPipeline:
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
         result["structure_identity_candidate_ids"] = sorted(current_identity_candidate_ids)
+        result["structure_identity_reconciliation_profile"] = QWEN_STRUCTURE_IDENTITY_PROFILE
         result["structure_identity_result_manifest_version"] = (
             STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION
         )

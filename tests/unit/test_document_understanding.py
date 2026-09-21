@@ -1461,6 +1461,7 @@ def test_qwen_structure_identity_reconciliation_requires_exact_cross_source_memb
     prompt = str(complete.call_args.args[1])
     assert str(left) in prompt
     assert str(left_locator) in prompt
+    assert complete.call_args.kwargs["max_tokens"] == 1_200
 
 
 def test_qwen_structure_identity_reconciliation_rejects_unknown_member() -> None:
@@ -1599,9 +1600,14 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
             )
 
         def load_structure_identity_group_receipts(
-            self, _claimed: ClaimedJob, *, profile_version: str
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            compatible_profile_versions: tuple[str, ...],
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-structure-identity-v1"
+            assert profile_version == "qwen-structure-identity-v2"
+            assert compatible_profile_versions == ("qwen-structure-identity-v1",)
             return {}
 
         def persist_structure_identity_group_outcome(
@@ -1616,7 +1622,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
             failure_code: str | None = None,
         ) -> dict[str, object]:
             assert group_fingerprint.startswith("sha256:")
-            assert profile_version == "qwen-structure-identity-v1"
+            assert profile_version == "qwen-structure-identity-v2"
             assert len(input_structure_node_ids) == 2
             assert len(input_manifest) == 2
             persisted.extend(candidates)
@@ -1652,7 +1658,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
                         deterministic_uuid("identity-preserved-right-locator"),
                     ),
                     Decimal("0.9"),
-                    "qwen-structure-identity-v1",
+                    "qwen-structure-identity-v2",
                 ),
             )
 
@@ -1681,6 +1687,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
     assert result["structure_identity_candidate_ids"] == [
         str(deterministic_uuid("identity-preserved-candidate"))
     ]
+    assert result["structure_identity_reconciliation_profile"] == "qwen-structure-identity-v2"
     assert result["structure_identity_result_manifest_version"] == "current-membership-v1"
     assert result["structure_identity_group_count"] == 2
     assert len(result["structure_identity_group_fingerprints"]) == 2
@@ -1691,7 +1698,7 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
         {
             "group_fingerprint": semantic_digest(
                 {
-                    "profile_version": "qwen-structure-identity-v1",
+                    "profile_version": "qwen-structure-identity-v2",
                     "observations": (
                         {"structure_node_id": str(first)},
                         {"structure_node_id": str(second)},
@@ -1728,9 +1735,14 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
             return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
 
         def load_structure_identity_group_receipts(
-            self, _claimed: ClaimedJob, *, profile_version: str
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            compatible_profile_versions: tuple[str, ...],
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-structure-identity-v1"
+            assert profile_version == "qwen-structure-identity-v2"
+            assert compatible_profile_versions == ("qwen-structure-identity-v1",)
             return {}
 
         def persist_structure_identity_group_outcome(
@@ -1745,7 +1757,7 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
             failure_code: str | None = None,
         ) -> dict[str, object]:
             assert group_fingerprint.startswith("sha256:")
-            assert profile_version == "qwen-structure-identity-v1"
+            assert profile_version == "qwen-structure-identity-v2"
             assert input_structure_node_ids == (left, right)
             assert input_manifest == (
                 {"structure_node_id": str(left)},
@@ -1771,7 +1783,7 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
                     (left, right),
                     (left_locator, right_locator),
                     Decimal("0.8"),
-                    "qwen-structure-identity-v1",
+                    "qwen-structure-identity-v2",
                 ),
             )
 
@@ -1807,7 +1819,7 @@ def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts(
     observations = ({"structure_node_id": str(left)}, {"structure_node_id": str(right)})
     group_fingerprint = semantic_digest(
         {
-            "profile_version": "qwen-structure-identity-v1",
+            "profile_version": "qwen-structure-identity-v2",
             "observations": observations,
         }
     )
@@ -1828,9 +1840,14 @@ def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts(
             return (observations,)
 
         def load_structure_identity_group_receipts(
-            self, _claimed: ClaimedJob, *, profile_version: str
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            compatible_profile_versions: tuple[str, ...],
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-structure-identity-v1"
+            assert profile_version == "qwen-structure-identity-v2"
+            assert compatible_profile_versions == ("qwen-structure-identity-v1",)
             return {
                 group_fingerprint: {
                     "outcome": "accepted",
@@ -1904,8 +1921,14 @@ def test_structure_identity_runtime_outage_is_not_persisted_as_content_outcome()
             return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
 
         def load_structure_identity_group_receipts(
-            self, _claimed: ClaimedJob, *, profile_version: str
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            compatible_profile_versions: tuple[str, ...],
         ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-structure-identity-v2"
+            assert compatible_profile_versions == ("qwen-structure-identity-v1",)
             return {}
 
         def persist_structure_identity_group_outcome(

@@ -19,6 +19,7 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import deterministic_uuid
 
 from .models import (
+    STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
     CandidateDecision,
     DocumentRole,
     ExactLocator,
@@ -40,7 +41,8 @@ from .semantic import StructuredCandidates
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v15"
-QWEN_STRUCTURE_IDENTITY_PROFILE = "qwen-structure-identity-v1"
+QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
+_COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
 # v14 adds a required relationship collection.  Prior batch manifests did not ask
 # the model to inspect or report those observations, so treating them as compatible
 # would silently turn missing relationship coverage into an accepted empty result.
@@ -262,7 +264,7 @@ class QwenDocumentSemanticAdapter:
         )
         try:
             value = _json_object(
-                _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=700)
+                _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=1_200)
             )
         except json.JSONDecodeError as exc:
             raise QwenSemanticFailure("qwen_structure_identity_response_invalid_json") from exc
@@ -304,7 +306,7 @@ class QwenDocumentSemanticAdapter:
             accepted.append(
                 StructureIdentityCandidate(
                     deterministic_uuid(
-                        "qwen-structure-identity:v1:"
+                        f"qwen-structure-identity:{QWEN_STRUCTURE_IDENTITY_PROFILE}:"
                         + kind
                         + ":"
                         + label.casefold()

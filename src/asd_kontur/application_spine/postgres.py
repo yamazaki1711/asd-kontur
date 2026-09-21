@@ -13,7 +13,10 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
-from asd_kontur.document_understanding.models import PROJECT_RECONCILIATION_PROFILE_VERSION
+from asd_kontur.document_understanding.models import (
+    PROJECT_RECONCILIATION_PROFILE_VERSION,
+    STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
+)
 from asd_kontur.domain import uuid7
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
@@ -3837,7 +3840,8 @@ class SpinePostgresRepository:
         idempotency_key = (
             "project-structure-reconciliation:"
             f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:"
-            f"{STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION}:{semantic_input}"
+            f"{STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION}:"
+            f"{STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
         )
         existing = session.scalar(
             sa.text(
@@ -3867,6 +3871,9 @@ class SpinePostgresRepository:
             "structure_identity_result_manifest_version": (
                 STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION
             ),
+            "structure_identity_reconciliation_profile": (
+                STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
+            ),
         }
         session.execute(
             sa.text(
@@ -3892,6 +3899,9 @@ class SpinePostgresRepository:
                         "input": semantic_input,
                         "grouping_policy": STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
                         "result_manifest_version": STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
+                        "reconciliation_profile": (
+                            STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
+                        ),
                     }
                 ),
                 "correlation": correlation_id,

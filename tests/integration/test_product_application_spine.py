@@ -1148,6 +1148,18 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             "identity_candidate_ids": (str(identity_candidate_id),),
             "failure_code": None,
         }
+        compatible_fingerprint = semantic_digest(
+            {
+                "profile_version": "qwen-structure-identity-v2",
+                "observations": identity_input_manifest,
+            }
+        )
+        compatible_receipts = understanding_repository.load_structure_identity_group_receipts(
+            structure_claim,
+            profile_version="qwen-structure-identity-v2",
+            compatible_profile_versions=("qwen-structure-identity-v1",),
+        )
+        assert compatible_receipts[compatible_fingerprint] == receipts[group_fingerprint]
         stale_identity_candidate_id = uuid4()
         stale_input_manifest = tuple(reversed(identity_input_manifest))
         stale_group_fingerprint = semantic_digest(

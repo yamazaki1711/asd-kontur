@@ -952,37 +952,70 @@ class IndustrialUnderstandingRepository:
             self._insert_structure_identity_candidates(session, claimed, values)
 
     def load_structure_identity_group_receipts(
-        self, claimed: ClaimedJob, *, profile_version: str
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+        compatible_profile_versions: tuple[str, ...] = (),
     ) -> dict[str, dict[str, object]]:
-        """Load immutable terminal group outcomes for restart-safe reconciliation."""
+        """Load exact outcomes and compatible accepted evidence for restart safety.
+
+        A compatible profile can reuse only accepted or accepted-empty outcomes.
+        Its failed outcomes remain historical evidence and are deliberately not
+        remapped, allowing a corrected bounded inference contract to retry them.
+        """
+
+        profiles = (profile_version, *compatible_profile_versions)
         with self._session(claimed) as session:
             rows = (
                 session.execute(
                     sa.text(
-                        "SELECT group_fingerprint,outcome,identity_candidate_ids,failure_code "
+                        "SELECT group_fingerprint,reconciliation_profile_version,input_manifest,"
+                        "outcome,identity_candidate_ids,failure_code "
                         "FROM workspace.project_structure_identity_group_receipts WHERE "
                         "organization_id=:o AND workspace_id=:w AND "
-                        "reconciliation_profile_version=:profile"
+                        "reconciliation_profile_version=ANY(:profiles) ORDER BY "
+                        "CASE WHEN reconciliation_profile_version=:profile THEN 0 ELSE 1 END,"
+                        "recorded_at,group_fingerprint"
                     ),
                     {
                         "o": claimed.organization_id,
                         "w": claimed.workspace_id,
                         "profile": profile_version,
+                        "profiles": list(profiles),
                     },
                 )
                 .mappings()
                 .all()
             )
-        return {
-            str(row["group_fingerprint"]): {
-                "outcome": str(row["outcome"]),
-                "identity_candidate_ids": tuple(
-                    str(value) for value in row["identity_candidate_ids"]
-                ),
-                "failure_code": (None if row["failure_code"] is None else str(row["failure_code"])),
-            }
-            for row in rows
-        }
+        receipts: dict[str, dict[str, object]] = {}
+        for row in rows:
+            row_profile = str(row["reconciliation_profile_version"])
+            outcome = str(row["outcome"])
+            if row_profile == profile_version:
+                fingerprint = str(row["group_fingerprint"])
+            elif outcome in {"accepted", "accepted_empty"}:
+                fingerprint = semantic_digest(
+                    {
+                        "profile_version": profile_version,
+                        "observations": row["input_manifest"],
+                    }
+                )
+            else:
+                continue
+            receipts.setdefault(
+                fingerprint,
+                {
+                    "outcome": str(row["outcome"]),
+                    "identity_candidate_ids": tuple(
+                        str(value) for value in row["identity_candidate_ids"]
+                    ),
+                    "failure_code": (
+                        None if row["failure_code"] is None else str(row["failure_code"])
+                    ),
+                },
+            )
+        return receipts
 
     def persist_structure_identity_group_outcome(
         self,
