@@ -11,6 +11,7 @@ from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
     _select_facility_work_candidates,
+    _semantic_coverage_complete,
 )
 from asd_kontur.knowledge.gateway import GatewayContext
 
@@ -30,6 +31,18 @@ def _source(title: str) -> dict[str, Any]:
         "href": "/api/v1/platform/sources/source/content#page=3",
         "edition_currency_notice": "Актуальность редакции не проверена",
     }
+
+
+def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> None:
+    assert _semantic_coverage_complete([]) is False
+    assert _semantic_coverage_complete([{"state": "complete"}]) is True
+    assert (
+        _semantic_coverage_complete(
+            [{"state": "complete"}, {"state": "partial", "status": "complete"}]
+        )
+        is False
+    )
+    assert _semantic_coverage_complete([{"status": "complete"}]) is False
 
 
 def test_workspace_context_uses_production_ntd_path_when_endpoint_configured(

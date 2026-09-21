@@ -4873,6 +4873,9 @@ function ProjectUnderstandingPage() {
                         "документ",
                       );
                       const pages = Number(item.page_count ?? 0);
+                      const coverageState = humanizeStatus(
+                        displayValue(item.state, "unknown"),
+                      );
                       const pageLabel =
                         pages > 0 ? `, ${pages.toString()} стр.` : "";
                       const unresolvedLabel =
@@ -4887,7 +4890,7 @@ function ProjectUnderstandingPage() {
                         failed > 0 && unresolved === 0 && recovered === 0
                           ? `, неуспешные попытки: ${failed.toString()} фрагм.`
                           : "";
-                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel} (${profile})`;
+                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel}; состояние: ${coverageState} (${profile})`;
                     })
                     .join("; ")}
                   . Это покрытие извлечения-кандидата, а не подтверждённые

@@ -50,6 +50,18 @@ PLATFORM_CONSULTANT_TOOLS = frozenset(
 )
 
 
+def _semantic_coverage_complete(rows: list[dict[str, Any]]) -> bool:
+    """Interpret the project-view semantic coverage contract exactly.
+
+    Coverage rows expose their effective result in ``state``.  Reading a
+    nonexistent ``status`` field made every fully processed workspace appear
+    incomplete to inventory questions and prevented exhaustive-answer
+    validation from ever observing completed extraction.
+    """
+
+    return bool(rows) and all(str(item.get("state")) == "complete" for item in rows)
+
+
 class ProfessionalAssistantKnowledgeQuery:
     """Consultant-only allowlisted reads; the model never receives SQL access."""
 
@@ -1628,9 +1640,7 @@ class ProfessionalAssistantKnowledgeQuery:
         coverage_rows = [
             dict(item) for item in view.get("semantic_coverage", []) if isinstance(item, dict)
         ]
-        extraction_complete = bool(coverage_rows) and all(
-            str(item.get("status")) == "complete" for item in coverage_rows
-        )
+        extraction_complete = _semantic_coverage_complete(coverage_rows)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
             reconciliation = (
