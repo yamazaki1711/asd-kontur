@@ -455,24 +455,59 @@ class IndustrialDocumentUnderstandingPipeline:
         coverage = self._repository.workspace_engineering_semantic_coverage(
             claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
         )
-        if self._qwen_semantic is None:
-            result = self._repository.assemble_workspace(claimed)
-            result["structure_identity_reconciliation"] = "qwen_runtime_unavailable"
-            result["workspace_semantic_coverage"] = coverage
-            return result
         groups = self._repository.load_structure_identity_observation_groups(
             claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
         )
+        if claimed.job_kind is JobKind.PROJECT_UNDERSTANDING_RECONCILIATION:
+            # Publishing the current project view is deterministic and must
+            # not wait for every optional cross-document identity proposal.
+            # A large corpus can contain hundreds of bounded identity groups;
+            # one malformed model response previously prevented all already
+            # persisted fields, structures, works and quantities from becoming
+            # current. The dedicated structure-reconciliation job owns that
+            # semantic work, while this job exposes its remaining denominator.
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_candidate_count"] = 0
+            result["structure_identity_group_count"] = len(groups)
+            result["structure_identity_reconciliation"] = (
+                "deferred_to_structure_reconciliation" if groups else "not_required"
+            )
+            result["workspace_semantic_coverage"] = coverage
+            return result
+        if self._qwen_semantic is None:
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_reconciliation"] = "qwen_runtime_unavailable"
+            result["structure_identity_group_count"] = len(groups)
+            result["workspace_semantic_coverage"] = coverage
+            return result
         identity_count = 0
+        failures: list[dict[str, object]] = []
         for group in groups:
-            candidates = self._qwen_semantic.reconcile_structure_identities(group)
+            try:
+                candidates = self._qwen_semantic.reconcile_structure_identities(group)
+            except QwenSemanticFailure as exc:
+                failures.append(
+                    {
+                        "group_fingerprint": _digest(
+                            sorted(str(item["structure_node_id"]) for item in group)
+                        ),
+                        "failure_code": exc.code,
+                    }
+                )
+                continue
             self._repository.persist_structure_identity_candidates(claimed, candidates)
             identity_count += len(candidates)
         result = self._repository.assemble_workspace(claimed)
         result["structure_identity_candidate_count"] = identity_count
-        result["structure_identity_reconciliation"] = (
-            "completed" if coverage["complete"] else "partial_completed_source_groups"
-        )
+        result["structure_identity_group_count"] = len(groups)
+        result["structure_identity_failed_group_count"] = len(failures)
+        result["structure_identity_failures"] = failures
+        if failures:
+            result["structure_identity_reconciliation"] = "partial_group_failures"
+        else:
+            result["structure_identity_reconciliation"] = (
+                "completed" if coverage["complete"] else "partial_completed_source_groups"
+            )
         result["workspace_semantic_coverage"] = coverage
         return result
 
