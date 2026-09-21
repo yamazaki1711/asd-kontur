@@ -148,6 +148,44 @@ class IndustrialUnderstandingRepository:
                 if isinstance(row["output_manifest"], dict)
             }
 
+    def load_accepted_engineering_batch_fragment_ids(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, tuple[str, ...]]:
+        """Return exact fragment membership for every immutable accepted batch."""
+
+        with self._session(claimed) as session:
+            rows = session.execute(
+                sa.text(
+                    "SELECT batch_digest,input_manifest FROM workspace.engineering_extraction_batches "
+                    "WHERE organization_id=:o AND workspace_id=:w AND source_version_id=:source "
+                    "AND profile_version=:profile AND terminal_status='accepted' "
+                    "AND input_manifest IS NOT NULL"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "source": self._source_version_id(claimed),
+                    "profile": profile_version,
+                },
+            ).mappings()
+            result: dict[str, tuple[str, ...]] = {}
+            for row in rows:
+                manifest = row["input_manifest"]
+                if isinstance(manifest, list):
+                    fragments = manifest
+                elif isinstance(manifest, dict):
+                    fragments = manifest.get("fragments", [])
+                else:
+                    continue
+                fragment_ids = tuple(
+                    str(fragment["fragment_id"])
+                    for fragment in fragments
+                    if isinstance(fragment, dict) and fragment.get("fragment_id")
+                )
+                if fragment_ids:
+                    result[str(row["batch_digest"])] = fragment_ids
+            return result
+
     def load_failed_engineering_batch_digests(
         self, claimed: ClaimedJob, *, profile_version: str
     ) -> frozenset[str]:

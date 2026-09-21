@@ -400,6 +400,16 @@ class IndustrialDocumentUnderstandingPipeline:
             accepted_batches = self._repository.load_accepted_engineering_batches(
                 claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
             )
+            accepted_fragment_loader = getattr(
+                self._repository, "load_accepted_engineering_batch_fragment_ids", None
+            )
+            accepted_batch_fragment_ids = (
+                accepted_fragment_loader(
+                    claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+                )
+                if callable(accepted_fragment_loader)
+                else {}
+            )
             failed_batch_loader = getattr(
                 self._repository, "load_failed_engineering_batch_digests", None
             )
@@ -409,12 +419,17 @@ class IndustrialDocumentUnderstandingPipeline:
                 else frozenset()
             )
             compatible_accepted_batches: dict[str, dict[str, object]] = {}
+            compatible_accepted_batch_fragment_ids: dict[str, tuple[str, ...]] = {}
             for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
                 compatible_accepted_batches.update(
                     self._repository.load_accepted_engineering_batches(
                         claimed, profile_version=profile_version
                     )
                 )
+                if callable(accepted_fragment_loader):
+                    compatible_accepted_batch_fragment_ids.update(
+                        accepted_fragment_loader(claimed, profile_version=profile_version)
+                    )
             for partial_bundle in self._qwen_semantic.accepted_source_batch_candidates(
                 elements,
                 accepted_batches=accepted_batches,
@@ -424,8 +439,10 @@ class IndustrialDocumentUnderstandingPipeline:
             return self._qwen_semantic.extract_engineering(
                 elements,
                 accepted_batches=accepted_batches,
+                accepted_batch_fragment_ids=accepted_batch_fragment_ids,
                 failed_batch_digests=failed_batch_digests,
                 compatible_accepted_batches=compatible_accepted_batches,
+                compatible_accepted_batch_fragment_ids=(compatible_accepted_batch_fragment_ids),
                 batching_policy_version=_DENSE_ENGINEERING_BATCHING_POLICY,
                 on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
                     claimed, batch, manifest

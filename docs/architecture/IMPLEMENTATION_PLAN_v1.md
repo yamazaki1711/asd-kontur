@@ -745,3 +745,14 @@ the new recovery result cannot overwrite or masquerade as the historical
 failure. A controlled adapter regression proves the retry digest differs and
 persists a valid full-schema result. Existing live successors continue on the
 prior release and must drain before this correction is activated.
+
+Live activation demonstrated a separate resume-efficiency defect: historic
+failed parent digests may already be fully covered by accepted child batches
+whose split boundaries differ from the current recursive parent lookup. The next
+reusable correction loads accepted input membership, builds an exact
+non-overlapping fragment cover, and reconstructs candidates from those immutable
+manifests. It never satisfies changed content or a batch with an unresolved
+fragment. A controlled regression proves candidate reconstruction with no model
+call; live read-only PostgreSQL evidence identifies 62 redundant failed parents
+among 1,096 accepted TH batch manifests. Deployment and recovery acceptance are
+still open, and this optimization does not promote Tender or product readiness.

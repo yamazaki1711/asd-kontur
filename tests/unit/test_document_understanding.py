@@ -47,6 +47,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
     _compatible_batch_digest,
+    _engineering_batch,
     _engineering_batches,
     _fragments,
     _split_engineering_batch,
@@ -2025,6 +2026,39 @@ def test_qwen_engineering_retry_uses_new_identity_after_immutable_failure() -> N
     recovered, _manifest = accepted[0]
     assert recovered.prompt_strategy == "failed_batch_recovery-v1"
     assert recovered.digest != original.digest
+
+
+def test_qwen_engineering_reuses_nonoverlapping_accepted_fragment_cover() -> None:
+    document = _extract_csv("A" * 7_500)
+    parent = _engineering_batches(document.pages[0].elements)[0]
+    assert len(parent.fragments) > 1
+    accepted: dict[str, dict[str, object]] = {}
+    memberships: dict[str, tuple[str, ...]] = {}
+    for ordinal, fragment in enumerate(parent.fragments, start=1):
+        child = _engineering_batch(ordinal, (fragment,))
+        accepted[child.digest] = {
+            "fields": (
+                [["project_name", "Accepted project", fragment.fragment_id]] if ordinal == 1 else []
+            ),
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+        memberships[child.digest] = (str(fragment.fragment_id),)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete") as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            accepted_batches=accepted,
+            accepted_batch_fragment_ids=memberships,
+            failed_batch_digests=frozenset({parent.digest}),
+        )
+
+    complete.assert_not_called()
+    assert {field.raw_value for field in result.project_fields} == {"Accepted project"}
 
 
 def test_qwen_engineering_extraction_preserves_unrepaired_leaf_as_partial_coverage() -> None:

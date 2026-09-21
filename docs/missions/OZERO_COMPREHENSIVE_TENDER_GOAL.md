@@ -1165,3 +1165,24 @@ remaining three successors continue safely on the prior release; do not restart
 their worker. After they terminate, deploy the pending retry-identity correction
 and schedule one bounded successor per still-partial source under the next
 recovery-contract version.
+
+### Continuation checkpoint — 2026-09-21 accepted-fragment cover
+
+Release `159d3b0` was deployed to the public API and document worker at migration
+`0062`; the assistant worker and Qwen runtime were not restarted. The live TH
+retry then proved that digest-level reuse was still insufficient: five model
+requests covered only fragments that already had accepted receipts before the
+request, and the full live ledger contains 62 failed parent batches whose exact
+fragment sets are already covered by non-overlapping accepted child manifests.
+
+The pending reusable correction loads immutable accepted batch membership and
+constructs a deterministic, non-overlapping cover constrained to the current
+fragment identities. It reconstructs candidates from the persisted manifests
+and sends Qwen only a batch containing at least one genuinely unresolved
+fragment. Live read-only PostgreSQL validation loaded all 1,096 accepted TH
+batches and identified the 62 redundant failed parents without changing data.
+The document worker is stopped with its leases and outputs preserved while this
+compatible correction is qualified; the API remains ready. Next executable
+action: checkpoint the correction, deploy the worker release, resume the same
+expired jobs through normal lease recovery, and verify that only the three TH
+and one IOS3 unresolved leaves can create new Qwen requests.

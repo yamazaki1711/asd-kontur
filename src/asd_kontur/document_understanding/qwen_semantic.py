@@ -322,8 +322,10 @@ class QwenDocumentSemanticAdapter:
         elements: Iterable[LayoutElement],
         *,
         accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]] | None = None,
         failed_batch_digests: frozenset[str] | None = None,
         compatible_accepted_batches: Mapping[str, dict[str, object]] | None = None,
+        compatible_accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]] | None = None,
         batching_policy_version: str | None = None,
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None = None,
         on_batch_progress: Callable[[int, int], None] | None = None,
@@ -332,8 +334,10 @@ class QwenDocumentSemanticAdapter:
     ) -> StructuredCandidates:
         """Extract evidence-bound engineering candidates from every bounded locator batch."""
         accepted = accepted_batches or {}
+        accepted_fragments = accepted_batch_fragment_ids or {}
         failed = failed_batch_digests or frozenset()
         compatible = compatible_accepted_batches or {}
+        compatible_fragments = compatible_accepted_batch_fragment_ids or {}
         # Existing accepted v15 batches predate the dense packing policy. Resume
         # them with byte-identical manifests so their evidence can be reused.
         # Callers opt into dense packing explicitly; the adapter's default stays
@@ -350,10 +354,12 @@ class QwenDocumentSemanticAdapter:
                 self._extract_engineering_batch(
                     batch,
                     accepted=accepted,
+                    accepted_batch_fragment_ids=accepted_fragments,
                     failed=failed,
                     on_accepted_batch=on_accepted_batch,
                     on_failed_batch=on_failed_batch,
                     compatible_accepted_batches=compatible,
+                    compatible_accepted_batch_fragment_ids=compatible_fragments,
                 )
             )
             if on_batch_progress is not None:
@@ -733,8 +739,10 @@ class QwenDocumentSemanticAdapter:
         batch: QwenEngineeringBatch,
         *,
         accepted: Mapping[str, dict[str, object]],
+        accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
         failed: frozenset[str],
         compatible_accepted_batches: Mapping[str, dict[str, object]],
+        compatible_accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
         on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
         on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None] | None,
     ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
@@ -749,6 +757,23 @@ class QwenDocumentSemanticAdapter:
                     break
         if persisted is not None:
             return ((allowed, _parse_engineering_manifest(persisted, allowed)),)
+        accepted_cover = _accepted_engineering_fragment_cover(
+            batch,
+            accepted=accepted,
+            accepted_batch_fragment_ids=accepted_batch_fragment_ids,
+            compatible_accepted_batches=compatible_accepted_batches,
+            compatible_accepted_batch_fragment_ids=compatible_accepted_batch_fragment_ids,
+        )
+        if accepted_cover:
+            covered_values: list[
+                tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]
+            ] = []
+            for fragments, manifest in accepted_cover:
+                covered_allowed = _engineering_allowed_fragments(fragments)
+                covered_values.append(
+                    (covered_allowed, _parse_engineering_manifest(manifest, covered_allowed))
+                )
+            return tuple(covered_values)
         # A failed parent batch can already have fully accepted standard child
         # batches from its bounded recovery.  Reuse those exact child manifests
         # instead of asking Qwen to repeat the failed parent request during a
@@ -770,8 +795,12 @@ class QwenDocumentSemanticAdapter:
                     self._extract_engineering_batch(
                         child,
                         accepted=accepted,
+                        accepted_batch_fragment_ids=accepted_batch_fragment_ids,
                         failed=failed,
                         compatible_accepted_batches=compatible_accepted_batches,
+                        compatible_accepted_batch_fragment_ids=(
+                            compatible_accepted_batch_fragment_ids
+                        ),
                         on_accepted_batch=on_accepted_batch,
                         on_failed_batch=on_failed_batch,
                     )
@@ -786,8 +815,10 @@ class QwenDocumentSemanticAdapter:
                     batching_policy_version=batch.batching_policy_version,
                 ),
                 accepted=accepted,
+                accepted_batch_fragment_ids=accepted_batch_fragment_ids,
                 failed=failed,
                 compatible_accepted_batches=compatible_accepted_batches,
+                compatible_accepted_batch_fragment_ids=(compatible_accepted_batch_fragment_ids),
                 on_accepted_batch=on_accepted_batch,
                 on_failed_batch=on_failed_batch,
             )
@@ -851,8 +882,10 @@ class QwenDocumentSemanticAdapter:
                         batching_policy_version=batch.batching_policy_version,
                     ),
                     accepted=accepted,
+                    accepted_batch_fragment_ids=accepted_batch_fragment_ids,
                     failed=failed,
                     compatible_accepted_batches=compatible_accepted_batches,
+                    compatible_accepted_batch_fragment_ids=(compatible_accepted_batch_fragment_ids),
                     on_accepted_batch=on_accepted_batch,
                     on_failed_batch=on_failed_batch,
                 )
@@ -862,10 +895,14 @@ class QwenDocumentSemanticAdapter:
                     self._extract_engineering_batch(
                         child,
                         accepted=accepted,
+                        accepted_batch_fragment_ids=accepted_batch_fragment_ids,
                         failed=failed,
                         on_accepted_batch=on_accepted_batch,
                         on_failed_batch=on_failed_batch,
                         compatible_accepted_batches=compatible_accepted_batches,
+                        compatible_accepted_batch_fragment_ids=(
+                            compatible_accepted_batch_fragment_ids
+                        ),
                     )
                 )
             return tuple(values)
@@ -1072,6 +1109,55 @@ def _accepted_engineering_batch_available(
         _compatible_batch_digest(batch.fragments, profile_version) in compatible_accepted_batches
         for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES
     )
+
+
+def _accepted_engineering_fragment_cover(
+    batch: QwenEngineeringBatch,
+    *,
+    accepted: Mapping[str, dict[str, object]],
+    accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+    compatible_accepted_batches: Mapping[str, dict[str, object]],
+    compatible_accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+) -> tuple[tuple[tuple[_SemanticFragment, ...], dict[str, object]], ...]:
+    """Return a non-overlapping accepted-batch cover for one current batch.
+
+    Recovery history can contain failed parent batches whose fragments were all
+    accepted later under differently shaped child batches. Exact parent/child
+    digest lookup cannot recognize that state and would repeat model inference.
+    The cover is constrained to current fragment identities and persisted
+    accepted manifests, so changed source content cannot satisfy it.
+    """
+
+    current = {
+        fragment.fragment_id: fragment
+        for fragment in batch.fragments
+        if fragment.fragment_id is not None
+    }
+    if len(current) != len(batch.fragments):
+        return ()
+    candidates: list[tuple[int, str, frozenset[str], dict[str, object]]] = []
+    for manifests, memberships in (
+        (accepted, accepted_batch_fragment_ids),
+        (compatible_accepted_batches, compatible_accepted_batch_fragment_ids),
+    ):
+        for digest, fragment_ids in memberships.items():
+            manifest = manifests.get(digest)
+            member_set = frozenset(fragment_ids)
+            if manifest is None or not member_set or not member_set.issubset(current):
+                continue
+            candidates.append((-len(member_set), digest, member_set, manifest))
+    remaining = set(current)
+    selected: list[tuple[tuple[_SemanticFragment, ...], dict[str, object]]] = []
+    for _negative_size, _digest, member_set, manifest in sorted(candidates):
+        if not member_set.issubset(remaining):
+            continue
+        selected.append(
+            (tuple(current[fragment_id] for fragment_id in sorted(member_set)), manifest)
+        )
+        remaining.difference_update(member_set)
+        if not remaining:
+            return tuple(selected)
+    return ()
 
 
 def _split_engineering_batch(batch: QwenEngineeringBatch) -> tuple[QwenEngineeringBatch, ...]:
