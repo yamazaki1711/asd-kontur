@@ -4252,7 +4252,11 @@ class SpinePostgresRepository:
                     "AND e.workspace_id=j.workspace_id AND e.job_id=j.job_id ORDER BY "
                     "e.event_sequence DESC LIMIT 1) progress ON true WHERE "
                     "j.organization_id=:o AND j.workspace_id=:w AND "
-                    "j.job_kind='PROJECT_STRUCTURE_RECONCILIATION' ORDER BY j.created_at DESC LIMIT 1"
+                    "j.job_kind='PROJECT_STRUCTURE_RECONCILIATION' ORDER BY CASE "
+                    "WHEN j.state IN ('running','leased') AND "
+                    "COALESCE(j.lease_expires_at,CURRENT_TIMESTAMP)>CURRENT_TIMESTAMP THEN 0 "
+                    "WHEN j.state='queued' THEN 1 WHEN j.state='paused' THEN 2 ELSE 3 END,"
+                    "j.created_at DESC,j.job_id DESC LIMIT 1"
                 ),
                 {"o": organization_id, "w": workspace_id},
             )
