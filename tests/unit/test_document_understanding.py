@@ -51,6 +51,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     _engineering_batches,
     _fragments,
     _split_engineering_batch,
+    _split_output_exhausted_fragment,
 )
 from asd_kontur.document_understanding.semantic import (
     StructuredCandidates,
@@ -1993,6 +1994,88 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert batch.input_manifest["prompt_strategy"] == "single_fragment_repair-v2"
     assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v2"
     assert complete.call_args_list[-1].kwargs["max_tokens"] == 1_200
+
+
+def test_qwen_engineering_output_exhaustion_subdivides_without_losing_provenance() -> None:
+    document = _extract_csv("A" * 2_400 + "\n")
+    original = _engineering_batches(document.pages[0].elements)[0].fragments[0]
+    split = _split_output_exhausted_fragment(original)
+    assert split
+    assert "".join(fragment.text for fragment in split) == original.text
+    assert split[0].character_start == original.character_start
+    assert split[0].character_end == split[1].character_start
+    assert split[1].character_end == original.character_end
+
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: list[tuple[Any, dict[str, object]]] = []
+    failed: list[tuple[Any, str]] = []
+    exhausted = QwenSemanticFailure(
+        "qwen_semantic_response_output_exhausted", {"finish_reason": "length"}
+    )
+    valid_field = json.dumps(
+        {
+            "fields": [{"key": "object_name", "value": "Насосная станция", "fragment_id": "F1"}],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        },
+        ensure_ascii=False,
+    )
+    valid_empty = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+    )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=(
+            exhausted,
+            exhausted,
+            exhausted,
+            exhausted,
+            valid_field,
+            valid_empty,
+            valid_empty,
+        ),
+    ) as complete:
+        result = adapter.extract_engineering(
+            document.pages[0].elements,
+            on_accepted_batch=lambda batch, manifest: accepted.append((batch, manifest)),
+            on_failed_batch=lambda batch, code, _details: failed.append((batch, code)),
+        )
+
+    assert complete.call_count == 7
+    assert [item.raw_value for item in result.project_fields] == ["Насосная станция"]
+    assert [batch.prompt_strategy for batch, _code in failed] == [
+        "standard",
+        "single_fragment_repair-v2",
+        "output_exhaustion_split-v1",
+    ]
+    parent_acceptances = [
+        (batch, manifest)
+        for batch, manifest in accepted
+        if batch.prompt_strategy == "output_exhaustion_recovery-v1"
+        and batch.fragments[0].fragment_id == original.fragment_id
+    ]
+    assert len(parent_acceptances) == 1
+    parent_batch, parent_manifest = parent_acceptances[0]
+    assert (
+        parent_batch.digest
+        != _engineering_batch(
+            parent_batch.ordinal,
+            parent_batch.fragments,
+            prompt_strategy="single_fragment_repair-v2",
+        ).digest
+    )
+    assert parent_manifest["fields"] == [["object_name", "Насосная станция", original.fragment_id]]
 
 
 def test_qwen_engineering_retry_uses_new_identity_after_immutable_failure() -> None:

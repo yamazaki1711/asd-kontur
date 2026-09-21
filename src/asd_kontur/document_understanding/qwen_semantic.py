@@ -53,6 +53,9 @@ _MAX_ENGINEERING_BATCH_CHARS = 9_000
 _DENSE_ENGINEERING_BATCHING_POLICY = "dense-fragments-v1"
 _FAILED_BATCH_RECOVERY_STRATEGY = "failed_batch_recovery-v1"
 _SINGLE_FRAGMENT_RECOVERY_STRATEGY = "single_fragment_repair-v2"
+_OUTPUT_EXHAUSTION_SPLIT_STRATEGY = "output_exhaustion_split-v1"
+_OUTPUT_EXHAUSTION_RECOVERY_STRATEGY = "output_exhaustion_recovery-v1"
+_MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS = 600
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",
@@ -865,6 +868,22 @@ class QwenDocumentSemanticAdapter:
             if failure.code not in _RECOVERABLE_ENGINEERING_BATCH_FAILURES:
                 raise failure from None
             if len(batch.fragments) == 1:
+                if failure.code == "qwen_semantic_response_output_exhausted" and (
+                    batch.prompt_strategy == _SINGLE_FRAGMENT_RECOVERY_STRATEGY
+                    or batch.prompt_strategy == _OUTPUT_EXHAUSTION_SPLIT_STRATEGY
+                ):
+                    return self._recover_output_exhausted_fragment(
+                        batch,
+                        accepted=accepted,
+                        accepted_batch_fragment_ids=accepted_batch_fragment_ids,
+                        failed=failed,
+                        compatible_accepted_batches=compatible_accepted_batches,
+                        compatible_accepted_batch_fragment_ids=(
+                            compatible_accepted_batch_fragment_ids
+                        ),
+                        on_accepted_batch=on_accepted_batch,
+                        on_failed_batch=on_failed_batch,
+                    )
                 if batch.prompt_strategy not in {"standard", _FAILED_BATCH_RECOVERY_STRATEGY}:
                     # This is the bounded terminal recovery attempt for one exact
                     # source fragment.  Its failed receipt is already durable via
@@ -909,6 +928,64 @@ class QwenDocumentSemanticAdapter:
         if on_accepted_batch is not None:
             on_accepted_batch(batch, _engineering_manifest(parsed))
         return ((allowed, parsed),)
+
+    def _recover_output_exhausted_fragment(
+        self,
+        batch: QwenEngineeringBatch,
+        *,
+        accepted: Mapping[str, dict[str, object]],
+        accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+        failed: frozenset[str],
+        compatible_accepted_batches: Mapping[str, dict[str, object]],
+        compatible_accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+        on_accepted_batch: Callable[[QwenEngineeringBatch, dict[str, object]], None] | None,
+        on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None] | None,
+    ) -> tuple[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]], ...]:
+        original = batch.fragments[0]
+        split = _split_output_exhausted_fragment(original)
+        if not split:
+            return ()
+        recovered: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
+        for ordinal, fragment in enumerate(split, start=1):
+            values = self._extract_engineering_batch(
+                _engineering_batch(
+                    batch.ordinal * 1000 + ordinal,
+                    (fragment,),
+                    prompt_strategy=_OUTPUT_EXHAUSTION_SPLIT_STRATEGY,
+                    batching_policy_version=batch.batching_policy_version,
+                ),
+                accepted=accepted,
+                accepted_batch_fragment_ids=accepted_batch_fragment_ids,
+                failed=failed,
+                compatible_accepted_batches=compatible_accepted_batches,
+                compatible_accepted_batch_fragment_ids=compatible_accepted_batch_fragment_ids,
+                on_accepted_batch=on_accepted_batch,
+                on_failed_batch=on_failed_batch,
+            )
+            if not values:
+                return ()
+            recovered.extend(values)
+        child_ids = {
+            str(fragment.fragment_id) for fragment in split if fragment.fragment_id is not None
+        }
+        parent_id = str(original.fragment_id)
+        combined = _remap_engineering_fragment_ids(
+            (parsed for _allowed, parsed in recovered),
+            source_fragment_ids=child_ids,
+            target_fragment_id=parent_id,
+        )
+        parent_recovery = _engineering_batch(
+            batch.ordinal,
+            batch.fragments,
+            # The attempted parent digest is already an immutable failure. Use
+            # a distinct identity for successfully combined child evidence so
+            # ON CONFLICT cannot retain the old failure in place of acceptance.
+            prompt_strategy=_OUTPUT_EXHAUSTION_RECOVERY_STRATEGY,
+            batching_policy_version=batch.batching_policy_version,
+        )
+        if on_accepted_batch is not None:
+            on_accepted_batch(parent_recovery, _engineering_manifest(combined))
+        return ((_engineering_allowed_fragments(batch.fragments), combined),)
 
 
 def _resolve_work_reference(
@@ -1160,6 +1237,84 @@ def _accepted_engineering_fragment_cover(
     return ()
 
 
+def _split_output_exhausted_fragment(
+    fragment: _SemanticFragment,
+) -> tuple[_SemanticFragment, _SemanticFragment] | tuple[()]:
+    if fragment.fragment_id is None or len(fragment.text) < _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS * 2:
+        return ()
+    midpoint = len(fragment.text) // 2
+    left_boundary = fragment.text.rfind("\n", 0, midpoint)
+    right_boundary = fragment.text.find("\n", midpoint)
+    if (
+        left_boundary >= _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS
+        and len(fragment.text) - (left_boundary + 1) >= _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS
+    ):
+        boundary = left_boundary + 1
+    elif (
+        right_boundary >= _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS
+        and len(fragment.text) - (right_boundary + 1) >= _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS
+    ):
+        boundary = right_boundary + 1
+    else:
+        boundary = midpoint
+    if boundary < _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS or len(fragment.text) - boundary < (
+        _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS
+    ):
+        return ()
+    absolute_boundary = fragment.character_start + boundary
+
+    def part(text: str, start: int, end: int) -> _SemanticFragment:
+        return _SemanticFragment(
+            fragment.locator,
+            text,
+            str(
+                deterministic_uuid(
+                    f"qwen-output-exhaustion-split:{fragment.fragment_id}:{start}:{end}:"
+                    f"{_OUTPUT_EXHAUSTION_SPLIT_STRATEGY}"
+                )
+            ),
+            start,
+            end,
+        )
+
+    return (
+        part(fragment.text[:boundary], fragment.character_start, absolute_boundary),
+        part(
+            fragment.text[boundary:],
+            absolute_boundary,
+            fragment.character_start + len(fragment.text),
+        ),
+    )
+
+
+def _remap_engineering_fragment_ids(
+    parsed_values: Iterable[Mapping[str, list[tuple[str, ...]]]],
+    *,
+    source_fragment_ids: set[str],
+    target_fragment_id: str,
+) -> dict[str, list[tuple[str, ...]]]:
+    combined: dict[str, list[tuple[str, ...]]] = {
+        "fields": [],
+        "structures": [],
+        "structure_relationships": [],
+        "works": [],
+        "quantities": [],
+        "incomplete_quantities": [],
+        "materials": [],
+        "incomplete_materials": [],
+    }
+    for parsed in parsed_values:
+        for key in combined:
+            for row in parsed.get(key, []):
+                combined[key].append(
+                    tuple(
+                        target_fragment_id if value in source_fragment_ids else value
+                        for value in row
+                    )
+                )
+    return combined
+
+
 def _split_engineering_batch(batch: QwenEngineeringBatch) -> tuple[QwenEngineeringBatch, ...]:
     midpoint = len(batch.fragments) // 2
     if midpoint < 1:
@@ -1239,7 +1394,7 @@ def _engineering_prompt(
         "work_fragment_id, если не пуст, также обязан быть одним из них. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"
         + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
     )
-    if strategy == "single_fragment_repair-v1":
+    if strategy == _SINGLE_FRAGMENT_RECOVERY_STRATEGY:
         return (
             "Исправь только формат доказательства для одного входного фрагмента. "
             "Верни полный JSON по указанной схеме. fragment_id копируй только точно из входа; "
