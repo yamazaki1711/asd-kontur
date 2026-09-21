@@ -51,6 +51,7 @@ _LEGACY_ENGINEERING_BATCH_FRAGMENTS = 12
 _DENSE_ENGINEERING_BATCH_FRAGMENTS = 48
 _MAX_ENGINEERING_BATCH_CHARS = 9_000
 _DENSE_ENGINEERING_BATCHING_POLICY = "dense-fragments-v1"
+_SINGLE_FRAGMENT_RECOVERY_STRATEGY = "single_fragment_repair-v2"
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
         "qwen_engineering_response_invalid_json",
@@ -362,6 +363,7 @@ class QwenDocumentSemanticAdapter:
         parsed_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
         incomplete_quantities: list[tuple[str, str, str, ExactLocator, str]] = []
         parsed_materials: list[tuple[str, str, str, str, ExactLocator, str]] = []
+        incomplete_materials: list[tuple[str, str, str, str, ExactLocator, str]] = []
         work_by_fragment_identity: dict[tuple[str, str], WorkTypeCandidate] = {}
         works_by_name: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
         works_by_fragment: dict[str, WorkTypeCandidate] = {}
@@ -454,6 +456,11 @@ class QwenDocumentSemanticAdapter:
             for work_name, name, raw, unit, locator_id, work_fragment_id in parsed["materials"]:
                 locator = allowed[locator_id].locator
                 parsed_materials.append((work_name, name, raw, unit, locator, work_fragment_id))
+            for work_name, name, raw, unit, locator_id, work_fragment_id in parsed[
+                "incomplete_materials"
+            ]:
+                locator = allowed[locator_id].locator
+                incomplete_materials.append((work_name, name, raw, unit, locator, work_fragment_id))
         defects: list[ReconciliationDefect] = []
         for work_name, raw, unit, locator, work_fragment_id in incomplete_quantities:
             defects.append(
@@ -472,6 +479,31 @@ class QwenDocumentSemanticAdapter:
                         "code": "incomplete_quantity_candidate",
                         "work_name": work_name or None,
                         "raw_value": raw or None,
+                        "unit": unit or None,
+                        "work_fragment_id": work_fragment_id or None,
+                    },
+                    False,
+                    QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                )
+            )
+        for work_name, name, raw, unit, locator, work_fragment_id in incomplete_materials:
+            defects.append(
+                ReconciliationDefect(
+                    deterministic_uuid(
+                        "qwen-incomplete-material-candidate:"
+                        f"{QWEN_ENGINEERING_EXTRACTION_PROFILE}:{locator.source_version_id}:"
+                        f"{locator.source_locator_id}:"
+                        f"{work_name}:{name}:{raw}:{unit}:{work_fragment_id}"
+                    ),
+                    ReconciliationDefectKind.AMBIGUOUS_SOURCE_MATCH,
+                    f"qwen_material:{locator.source_locator_id}",
+                    " ".join(work_name.casefold().split()) or None,
+                    (locator,),
+                    {
+                        "code": "incomplete_material_candidate",
+                        "work_name": work_name or None,
+                        "material_name": name or None,
+                        "raw_quantity": raw or None,
                         "unit": unit or None,
                         "work_fragment_id": work_fragment_id or None,
                     },
@@ -745,7 +777,7 @@ class QwenDocumentSemanticAdapter:
                 self._endpoint,
                 _engineering_prompt(batch.fragments, strategy=batch.prompt_strategy),
                 self._timeout_seconds,
-                max_tokens=350 if batch.prompt_strategy != "standard" else 1_200,
+                max_tokens=1_200,
             )
             parsed = _parse_engineering(payload, allowed)
         except QwenSemanticFailure as exc:
@@ -795,7 +827,7 @@ class QwenDocumentSemanticAdapter:
                     _engineering_batch(
                         batch.ordinal,
                         batch.fragments,
-                        prompt_strategy="single_fragment_repair-v1",
+                        prompt_strategy=_SINGLE_FRAGMENT_RECOVERY_STRATEGY,
                         batching_policy_version=batch.batching_policy_version,
                     ),
                     accepted=accepted,
@@ -1166,6 +1198,7 @@ def _parse_engineering(
         "quantities": [],
         "incomplete_quantities": [],
         "materials": [],
+        "incomplete_materials": [],
     }
     specs = {
         "fields": ("key", "value", "fragment_id"),
@@ -1204,6 +1237,13 @@ def _parse_engineering(
                     result[key].append(item)
                 else:
                     result["incomplete_quantities"].append(item)
+                continue
+            if key == "materials" and _engineering_material_evidence_valid(item, allowed):
+                item = _canonicalize_engineering_item(key, item, allowed)
+                if item[0] and item[1]:
+                    result[key].append(item)
+                else:
+                    result["incomplete_materials"].append(item)
                 continue
             if not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure(
@@ -1300,6 +1340,7 @@ def _parse_engineering_manifest(
         "quantities": [],
         "incomplete_quantities": [],
         "materials": [],
+        "incomplete_materials": [],
     }
     specs = {
         "fields": ("key", "value", "fragment_id"),
@@ -1327,6 +1368,14 @@ def _parse_engineering_manifest(
             "fragment_id",
             "work_fragment_id",
         ),
+        "incomplete_materials": (
+            "work_name",
+            "name",
+            "quantity",
+            "unit",
+            "fragment_id",
+            "work_fragment_id",
+        ),
     }
     for key, names in specs.items():
         rows = manifest.get(key, [])
@@ -1338,6 +1387,9 @@ def _parse_engineering_manifest(
             item = tuple(" ".join(str(value).split()) for value in row)
             if key == "incomplete_quantities":
                 if not _engineering_quantity_evidence_valid(item, allowed) or all(item[:3]):
+                    raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
+            elif key == "incomplete_materials":
+                if not _engineering_material_evidence_valid(item, allowed) or all(item[:2]):
                     raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
             elif not _engineering_item_valid(key, item, allowed):
                 raise QwenSemanticFailure("qwen_engineering_manifest_invalid_evidence")
@@ -1389,6 +1441,15 @@ def _engineering_quantity_evidence_valid(
     """
 
     _work_name, _raw_value, _unit, fragment_id, work_fragment_id = item
+    return fragment_id in allowed and (not work_fragment_id or work_fragment_id in allowed)
+
+
+def _engineering_material_evidence_valid(
+    item: tuple[str, ...], allowed: Mapping[str, _SemanticFragment]
+) -> bool:
+    """Retain cited incomplete material observations for later relationship repair."""
+
+    _work_name, _name, _raw_quantity, _unit, fragment_id, work_fragment_id = item
     return fragment_id in allowed and (not work_fragment_id or work_fragment_id in allowed)
 
 

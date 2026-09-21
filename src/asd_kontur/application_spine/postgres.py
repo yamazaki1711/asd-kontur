@@ -37,6 +37,7 @@ from .object_store import StagedObject, WorkspaceObjectStore
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
 ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
+ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v2"
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,
@@ -3193,6 +3194,8 @@ class SpinePostgresRepository:
                 and str(latest["state"]) == "succeeded"
                 and coverage is not None
                 and str(coverage["state"]) == "partial"
+                and latest_provenance.get("semantic_coverage_recovery_contract")
+                == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
                 and recovery_attempt >= 1
             ):
                 scheduled.append(
@@ -3221,8 +3224,13 @@ class SpinePostgresRepository:
             control_id = uuid7()
             job_id = uuid7()
             coverage_state = str(coverage["state"]) if coverage is not None else "not_started"
-            next_recovery_attempt = recovery_attempt + int(
-                coverage is not None and coverage_state == "partial"
+            next_recovery_attempt = (
+                recovery_attempt + 1
+                if coverage is not None
+                and coverage_state == "partial"
+                and latest_provenance.get("semantic_coverage_recovery_contract")
+                == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
+                else int(coverage is not None and coverage_state == "partial")
             )
             recovery_reason = (
                 "accepted_batches_pending_persistence"
@@ -3239,6 +3247,7 @@ class SpinePostgresRepository:
                 "engineering_semantic_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                 "candidate_persistence_profile": ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE,
                 "semantic_coverage_state": coverage_state,
+                "semantic_coverage_recovery_contract": ENGINEERING_SEMANTIC_RECOVERY_CONTRACT,
             }
             provenance = {
                 "contract": "project-understanding.semantic-recovery@1.0.0",
@@ -3253,6 +3262,7 @@ class SpinePostgresRepository:
                 if coverage is not None
                 else 0,
                 "semantic_coverage_recovery_attempt": next_recovery_attempt,
+                "semantic_coverage_recovery_contract": ENGINEERING_SEMANTIC_RECOVERY_CONTRACT,
                 "control_decision_id": str(control_id),
                 "semantic_recovery_of": str(latest["job_id"]) if latest is not None else None,
             }

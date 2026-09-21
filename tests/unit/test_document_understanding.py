@@ -1988,9 +1988,10 @@ def test_qwen_engineering_extraction_repairs_one_invalid_single_fragment_respons
     assert complete.call_count == 3
     assert result == StructuredCandidates((), (), (), (), (), ())
     batch, _manifest = accepted[0]
-    assert batch.prompt_strategy == "single_fragment_repair-v1"
-    assert batch.input_manifest["prompt_strategy"] == "single_fragment_repair-v1"
-    assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v1"
+    assert batch.prompt_strategy == "single_fragment_repair-v2"
+    assert batch.input_manifest["prompt_strategy"] == "single_fragment_repair-v2"
+    assert batch.input_manifest["fragments"][0]["prompt_strategy"] == "single_fragment_repair-v2"
+    assert complete.call_args_list[-1].kwargs["max_tokens"] == 1_200
 
 
 def test_qwen_engineering_extraction_preserves_unrepaired_leaf_as_partial_coverage() -> None:
@@ -2015,8 +2016,50 @@ def test_qwen_engineering_extraction_preserves_unrepaired_leaf_as_partial_covera
     ]
     assert [batch.prompt_strategy for batch, _ in failed] == [
         "standard",
-        "single_fragment_repair-v1",
+        "single_fragment_repair-v2",
     ]
+
+
+def test_qwen_engineering_extraction_preserves_incomplete_material_observation() -> None:
+    document = _extract_csv("Шпунт Л5-УМ\n")
+    fragment_id = str(_engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(
+            {
+                "fields": [],
+                "structures": [],
+                "structure_relationships": [],
+                "works": [],
+                "quantities": [],
+                "materials": [
+                    {
+                        "work_name": "",
+                        "name": "Шпунт Л5-УМ",
+                        "quantity": "",
+                        "unit": "",
+                        "fragment_id": fragment_id,
+                        "work_fragment_id": "",
+                    }
+                ],
+            },
+            ensure_ascii=False,
+        ),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert result.materials == ()
+    assert len(result.defects) == 1
+    assert result.defects[0].parameters == {
+        "code": "incomplete_material_candidate",
+        "work_name": None,
+        "material_name": "Шпунт Л5-УМ",
+        "raw_quantity": None,
+        "unit": None,
+        "work_fragment_id": None,
+    }
 
 
 def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> None:

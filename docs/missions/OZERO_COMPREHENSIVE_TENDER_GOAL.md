@@ -1143,3 +1143,15 @@ API/document-worker/assistant release at migration `0062`, then create one
 supported reconciliation successor so OZERO receives membership-bound current
 defects. Semantic coverage discrepancies, facility reconciliation, the work
 catalog, comprehensive Tender acceptance, and the full product goal remain open.
+
+Four active OZERO sources remain semantically partial by exactly 1, 3, 1, and 3
+fragments. Sanitized immutable receipts demonstrate three causes: incomplete cited
+material relationships, malformed/empty terminal JSON, and output exhaustion under
+the former 350-token single-fragment repair budget. A pending reusable recovery
+contract preserves an incomplete cited material as a reconciliation defect, raises
+only the terminal repair budget to 1,200 tokens, and allows exactly one new recovery
+attempt for the changed contract while reusing every accepted v15 batch. Unit/static
+validation and disposable PostgreSQL scheduling acceptance pass. The next executable
+action is to checkpoint and deploy that exact worker-compatible change, invoke the
+existing project-understanding command once, and verify the four source leaves through
+real worker-to-Qwen receipts before refreshing the current reconciliation.

@@ -720,3 +720,17 @@ fingerprint round trip. Static Ruff, format, and strict mypy gates pass. The
 change is not deployed at this checkpoint, and it does not establish semantic
 coverage, a verified work catalog, facility identity, Tender mode readiness,
 or ProductReady.
+
+The next reusable semantic-recovery increment addresses terminal fragment leaves
+without changing the accepted v15 source contract or repeating accepted batches.
+Incomplete but cited material relationships become explicit reconciliation defects
+instead of invalidating the fragment, the terminal one-fragment repair keeps the
+complete six-collection schema and receives the normal 1,200-token output budget,
+and the scheduler permits one retry per explicit recovery-contract version. A
+changed recovery contract resets only that bounded attempt counter; repeated calls
+under the same contract remain idempotent. Controlled tests cover optional material
+quantity/unit, an absent parent-work name, exact evidence preservation, the larger
+terminal budget, and single-successor scheduling. OZERO supplies four observed
+partial-source leaves for later runtime validation; it is not the mechanism's
+acceptance oracle. Deployment and real-Qwen worker acceptance remain open at this
+checkpoint.
