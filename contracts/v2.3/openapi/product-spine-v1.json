@@ -2578,6 +2578,11 @@
       "ProjectUnderstandingView": {
         "additionalProperties": false,
         "properties": {
+          "application_page": {
+            "additionalProperties": true,
+            "title": "Application Page",
+            "type": "object"
+          },
           "authority_layers": {
             "additionalProperties": {
               "type": "string"
@@ -6579,6 +6584,29 @@
                 }
               ],
               "title": "Section"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Page Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Limit",
+              "type": "integer"
             }
           }
         ],

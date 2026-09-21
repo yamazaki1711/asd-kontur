@@ -37,7 +37,11 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     view = {
         "page_roles": [{"page_number": 1}],
         "work_packages": [{"work_package_id": "work-1"}],
-        "defects": [{"defect_id": "defect-1"}],
+        "defects": [
+            {"defect_id": "defect-1"},
+            {"defect_id": "defect-2"},
+            {"defect_id": "defect-3"},
+        ],
         "candidates": {"work_types": [{"candidate_id": "candidate-1"}]},
         "review_decisions": [{"review_decision_id": "review-1"}],
         "structure_nodes": [{"structure_node_id": "node-1"}],
@@ -50,7 +54,9 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
         "structure_identity_reconciliation": {"state": "running"},
         "excavation_pit_inventory": {"candidate_pits": [{"pit_candidate_id": "pit-1"}]},
         "facility_work_projection": {"candidate_groups": [{"facility_work_candidate_id": "fw-1"}]},
-        "matrix": {"matrix": {"rows": [{"row": "matrix-1"}]}},
+        "matrix": {
+            "matrix": {"rows": [{"row": "matrix-1"}, {"row": "matrix-2"}, {"row": "matrix-3"}]}
+        },
         "normative_profile": {"profile_id": "profile-1"},
         "intake_summary": {
             "tender_input_assessment": [
@@ -84,6 +90,27 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     assert packages["facility_work_projection"] == view["facility_work_projection"]
     assert packages["structure_identity_candidates"] == []
 
+    matrix = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="matrix", page_offset=1, page_limit=1
+    )
+    assert matrix["matrix"]["matrix"]["rows"] == [{"row": "matrix-2"}]
+    assert matrix["application_page"] == {
+        "collection": "matrix_rows",
+        "offset": 1,
+        "limit": 1,
+        "returned": 1,
+        "total": 3,
+        "has_previous": True,
+        "has_more": True,
+    }
+
+    gaps = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="gaps", page_offset=2, page_limit=2
+    )
+    assert gaps["defects"] == [{"defect_id": "defect-3"}]
+    assert gaps["application_page"]["total"] == 3
+    assert gaps["application_page"]["has_more"] is False
+
     general = SpinePostgresRepository._project_understanding_application_projection(
         view, section="general"
     )
@@ -94,6 +121,10 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     with pytest.raises(SpinePersistenceError, match="project_understanding_section_invalid"):
         SpinePostgresRepository._project_understanding_application_projection(
             view, section="unknown"
+        )
+    with pytest.raises(SpinePersistenceError, match="project_understanding_page_invalid"):
+        SpinePostgresRepository._project_understanding_application_projection(
+            view, section="gaps", page_offset=-1
         )
 
 

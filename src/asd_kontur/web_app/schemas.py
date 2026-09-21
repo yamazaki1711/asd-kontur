@@ -382,6 +382,7 @@ class ProjectUnderstandingView(ApiModel):
     intake_summary: dict[str, Any] = Field(default_factory=dict)
     semantic_coverage: list[dict[str, Any]] = Field(default_factory=list)
     summary_counts: dict[str, int] = Field(default_factory=dict)
+    application_page: dict[str, Any] = Field(default_factory=dict)
     authority_layers: dict[str, str]
 
 

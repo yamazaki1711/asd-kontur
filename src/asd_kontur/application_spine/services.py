@@ -619,6 +619,8 @@ class ProductSpineService:
         owner_identity_id: str,
         workspace_id: UUID,
         section: str | None = None,
+        page_offset: int = 0,
+        page_limit: int = 100,
     ) -> dict[str, Any] | None:
         if section is None:
             return self._repository.project_understanding_view(
@@ -629,6 +631,8 @@ class ProductSpineService:
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             section=section,
+            page_offset=page_offset,
+            page_limit=page_limit,
         )
 
     def tender_findings_schedule(

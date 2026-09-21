@@ -2991,7 +2991,11 @@ class SpinePostgresRepository:
         owner_identity_id: str,
         workspace_id: UUID,
         section: str | None = None,
+        page_offset: int = 0,
+        page_limit: int = 100,
     ) -> dict[str, Any] | None:
+        if page_offset < 0 or not 1 <= page_limit <= 200:
+            raise SpinePersistenceError("project_understanding_page_invalid")
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
@@ -3011,7 +3015,12 @@ class SpinePostgresRepository:
                 view = self._empty_project_understanding_view(
                     session, organization_id=organization_id, workspace_id=workspace_id
                 )
-                return self._project_understanding_application_projection(view, section=section)
+                return self._project_understanding_application_projection(
+                    view,
+                    section=section,
+                    page_offset=page_offset,
+                    page_limit=page_limit,
+                )
             project = (
                 session.execute(
                     sa.text(
@@ -3251,7 +3260,12 @@ class SpinePostgresRepository:
                     "ai_candidate": "candidate_only",
                 },
             }
-            view = self._project_understanding_application_projection(full_view, section=section)
+            view = self._project_understanding_application_projection(
+                full_view,
+                section=section,
+                page_offset=page_offset,
+                page_limit=page_limit,
+            )
             view["evidence_index"] = self._workspace_evidence_index(
                 session,
                 organization_id=organization_id,
@@ -3262,7 +3276,7 @@ class SpinePostgresRepository:
 
     @staticmethod
     def _project_understanding_application_projection(
-        view: dict[str, Any], *, section: str | None
+        view: dict[str, Any], *, section: str | None, page_offset: int = 0, page_limit: int = 100
     ) -> dict[str, Any]:
         """Bound the interactive response without changing canonical results.
 
@@ -3274,6 +3288,8 @@ class SpinePostgresRepository:
 
         if section is None:
             return view
+        if page_offset < 0 or not 1 <= page_limit <= 200:
+            raise SpinePersistenceError("project_understanding_page_invalid")
         if section not in {
             "general",
             "structure",
@@ -3287,7 +3303,8 @@ class SpinePostgresRepository:
         result = dict(view)
         result["page_roles"] = []
         result["work_packages"] = []
-        result["defects"] = view["defects"] if section == "gaps" else []
+        result["defects"] = []
+        result["application_page"] = {}
         result["candidates"] = {}
         result["review_decisions"] = []
         result["structure_nodes"] = []
@@ -3307,6 +3324,34 @@ class SpinePostgresRepository:
             result["facility_work_projection"] = {}
         if section != "matrix":
             result["matrix"] = {"matrix": {"rows": []}}
+        else:
+            matrix = dict(view.get("matrix") or {})
+            matrix_value = dict(matrix.get("matrix") or {})
+            rows = list(matrix_value.get("rows") or [])
+            matrix_value["rows"] = rows[page_offset : page_offset + page_limit]
+            matrix["matrix"] = matrix_value
+            result["matrix"] = matrix
+            result["application_page"] = {
+                "collection": "matrix_rows",
+                "offset": page_offset,
+                "limit": page_limit,
+                "returned": len(matrix_value["rows"]),
+                "total": len(rows),
+                "has_previous": page_offset > 0,
+                "has_more": page_offset + page_limit < len(rows),
+            }
+        if section == "gaps":
+            defects = list(view.get("defects") or [])
+            result["defects"] = defects[page_offset : page_offset + page_limit]
+            result["application_page"] = {
+                "collection": "defects",
+                "offset": page_offset,
+                "limit": page_limit,
+                "returned": len(result["defects"]),
+                "total": len(defects),
+                "has_previous": page_offset > 0,
+                "has_more": page_offset + page_limit < len(defects),
+            }
         if section not in {"matrix", "gaps"}:
             result["normative_profile"] = None
         if section != "general":

@@ -691,6 +691,22 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert view["reconciliation"]["terminal_status"] == "partial"
         assert len(view["defects"]) == view["reconciliation"]["open_defect_count"]
         assert all(item["subject_identity"] != "historical-unbound" for item in view["defects"])
+        paged_gaps = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding",
+            params={"section": "gaps", "page_offset": 0, "page_limit": 1},
+        )
+        assert paged_gaps.status_code == 200, paged_gaps.text
+        paged_gaps_value = paged_gaps.json()
+        assert len(paged_gaps_value["defects"]) == 1
+        assert paged_gaps_value["application_page"] == {
+            "collection": "defects",
+            "offset": 0,
+            "limit": 1,
+            "returned": 1,
+            "total": len(view["defects"]),
+            "has_previous": False,
+            "has_more": len(view["defects"]) > 1,
+        }
         assert view["project_definition"]["definition"]["fields"]["object_name"]["raw_value"] == (
             "Производственный корпус"
         )

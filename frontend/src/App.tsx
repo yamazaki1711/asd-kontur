@@ -4586,8 +4586,10 @@ function ProjectUnderstandingPage() {
   const [section, setSection] = useState(
     searchParams.get("section") ?? "general",
   );
+  const [pageOffset, setPageOffset] = useState(0);
+  const pageLimit = 100;
   const understanding = useQuery({
-    queryKey: ["project-understanding", workspaceId, section],
+    queryKey: ["project-understanding", workspaceId, section, pageOffset],
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/project-understanding",
@@ -4603,6 +4605,8 @@ function ProjectUnderstandingPage() {
                 | "packages"
                 | "matrix"
                 | "gaps",
+              page_offset: pageOffset,
+              page_limit: pageLimit,
             },
           },
         },
@@ -4610,7 +4614,7 @@ function ProjectUnderstandingPage() {
       return requireData(data, error);
     },
     retry: false,
-    refetchInterval: 5_000,
+    refetchInterval: 30_000,
   });
   const start = useMutation({
     mutationFn: async () => {
@@ -4694,6 +4698,7 @@ function ProjectUnderstandingPage() {
             key={key}
             onClick={() => {
               setSection(key);
+              setPageOffset(0);
               setSearchParams({ section: key }, { replace: true });
             }}
           >
@@ -4804,6 +4809,10 @@ function ProjectUnderstandingPage() {
           const summaryCounts = (value.summary_counts ?? {}) as Record<
             string,
             number
+          >;
+          const applicationPage = (value.application_page ?? {}) as Record<
+            string,
+            unknown
           >;
           const tenderInputAssessment = Array.isArray(
             (value.intake_summary as Record<string, unknown> | undefined)
@@ -5282,6 +5291,13 @@ function ProjectUnderstandingPage() {
                   ) : (
                     <p className="empty-state">Матрица ещё не сформирована.</p>
                   )}
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
                   {profile ? (
                     <>
                       <h3>Нормативные основания</h3>
@@ -5355,6 +5371,13 @@ function ProjectUnderstandingPage() {
                       означает, что документы не содержат расхождений.
                     </p>
                   )}
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
                   <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
                   <GapList
                     gaps={profileGaps.map(
@@ -5368,6 +5391,44 @@ function ProjectUnderstandingPage() {
         }}
       </QueryState>
     </Page>
+  );
+}
+
+function ProjectModelPageControls({
+  page,
+  onPrevious,
+  onNext,
+}: {
+  page: Record<string, unknown>;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  const total = Number(page.total ?? 0);
+  const returned = Number(page.returned ?? 0);
+  const offset = Number(page.offset ?? 0);
+  if (total <= returned && offset === 0) return null;
+  return (
+    <div className="model-actions" aria-label="Страницы результатов">
+      <button
+        type="button"
+        className="ghost"
+        disabled={!page.has_previous}
+        onClick={onPrevious}
+      >
+        Предыдущие
+      </button>
+      <span>
+        Показано {returned ? offset + 1 : 0}–{offset + returned} из {total}
+      </span>
+      <button
+        type="button"
+        className="ghost"
+        disabled={!page.has_more}
+        onClick={onNext}
+      >
+        Следующие
+      </button>
+    </div>
   );
 }
 

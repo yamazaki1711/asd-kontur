@@ -22,6 +22,7 @@ from fastapi import (
     Form,
     Header,
     HTTPException,
+    Query,
     Request,
     Response,
     UploadFile,
@@ -959,11 +960,15 @@ def _api_router() -> APIRouter:
         principal: Annotated[SessionPrincipal, Depends(_principal)],
         section: Literal["general", "structure", "works", "materials", "packages", "matrix", "gaps"]
         | None = None,
+        page_offset: Annotated[int, Query(ge=0)] = 0,
+        page_limit: Annotated[int, Query(ge=1, le=200)] = 100,
     ) -> ProjectUnderstandingView:
         value = _container(request).service.project_understanding(
             owner_identity_id=principal.owner_identity_id,
             workspace_id=workspace_id,
             section=section,
+            page_offset=page_offset,
+            page_limit=page_limit,
         )
         if value is None:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")

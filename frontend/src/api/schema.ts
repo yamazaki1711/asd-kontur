@@ -2205,6 +2205,10 @@ export interface components {
         };
         /** ProjectUnderstandingView */
         ProjectUnderstandingView: {
+            /** Application Page */
+            application_page?: {
+                [key: string]: unknown;
+            };
             /** Authority Layers */
             authority_layers: {
                 [key: string]: string;
@@ -4357,6 +4361,8 @@ export interface operations {
         parameters: {
             query?: {
                 section?: ("general" | "structure" | "works" | "materials" | "packages" | "matrix" | "gaps") | null;
+                page_offset?: number;
+                page_limit?: number;
             };
             header?: never;
             path: {
