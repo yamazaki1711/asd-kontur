@@ -87,6 +87,7 @@ ASSISTANT_TOOLS = frozenset(
         "consultant.get_ntd_provision",
         "consultant.get_ntd_section_context",
         "consultant.get_workspace_overview",
+        "consultant.get_project_entity_inventory",
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
         "consultant.get_work_packages",
