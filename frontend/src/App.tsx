@@ -4919,9 +4919,11 @@ function ProjectUnderstandingPage() {
                   </p>
                   <InfoNotice>
                     Междокументное сопоставление:{" "}
-                    {displayValue(
-                      structureIdentityReconciliation.state,
-                      "не запускалось",
+                    {humanizeStatus(
+                      displayValue(
+                        structureIdentityReconciliation.state,
+                        "not_started",
+                      ),
                     )}
                     {Number(
                       structureIdentityReconciliation.progress_total ?? 0,

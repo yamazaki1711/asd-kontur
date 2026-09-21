@@ -242,6 +242,32 @@ class SynthesizedAnswer:
     active_subjects: tuple[str, ...]
 
 
+def _required_step_replacement_index(
+    steps: tuple[PlannedToolCall, ...],
+    *,
+    preferred_leaf_tools: frozenset[str] = frozenset(),
+    protected_tools: frozenset[str] = frozenset(),
+) -> int:
+    """Select a leaf step that can be replaced without orphaning dependencies."""
+
+    prerequisite_tools = {
+        _DEPENDENT_SOURCE_TOOLS[step.tool][0]
+        for step in steps
+        if step.tool in _DEPENDENT_SOURCE_TOOLS
+    }
+    replaceable = [
+        index
+        for index, step in enumerate(steps)
+        if step.tool not in prerequisite_tools and step.tool not in protected_tools
+    ]
+    preferred = [index for index in replaceable if steps[index].tool in preferred_leaf_tools]
+    if preferred:
+        return preferred[-1]
+    if replaceable:
+        return replaceable[-1]
+    raise ValueError("assistant_plan_required_workspace_step_unavailable")
+
+
 def ensure_explicit_designation_resolution(plan: SearchPlan, question: str) -> SearchPlan:
     """Make exact inventory resolution the first read when the user names an NTD."""
 
@@ -320,10 +346,7 @@ def ensure_workspace_content_search(plan: SearchPlan, question: str) -> SearchPl
             None,
         )
         if replace_index is None:
-            # The parser already removes impossible dependent calls.  A full
-            # plan with no replaceable metadata call is therefore an explicit
-            # retrieval plan; preserve it rather than dropping a valid step.
-            return plan
+            replace_index = _required_step_replacement_index(plan.steps)
         steps = (
             *plan.steps[:replace_index],
             content_step,
@@ -370,7 +393,11 @@ def ensure_workspace_entity_inventory(plan: SearchPlan, question: str) -> Search
             None,
         )
         if replace_index is None:
-            return plan
+            replace_index = _required_step_replacement_index(
+                plan.steps,
+                preferred_leaf_tools=frozenset({"consultant.get_workspace_fragment"}),
+                protected_tools=frozenset({"consultant.search_workspace_documents"}),
+            )
         steps = (
             *plan.steps[:replace_index],
             inventory_step,

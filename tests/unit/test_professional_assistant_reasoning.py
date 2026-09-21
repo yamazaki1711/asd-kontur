@@ -290,6 +290,35 @@ def test_project_enumeration_replaces_metadata_when_plan_is_at_tool_budget() -> 
     ]
 
 
+def test_project_enumeration_replaces_leaf_when_full_plan_has_no_metadata() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (
+            PlannedToolCall("consultant.search_practice", {"query": "котлован"}, "Поиск."),
+            PlannedToolCall(
+                "consultant.get_practice_fragment",
+                {"source_id": "$step.1.source_id"},
+                "Фрагмент.",
+            ),
+            PlannedToolCall("consultant.search_ntd", {"query": "котлован"}, "Поиск НТД."),
+            PlannedToolCall(
+                "consultant.get_ntd_provision",
+                {"source_id": "$step.3.source_id"},
+                "Положение.",
+            ),
+        ),
+    )
+
+    required = ensure_workspace_content_search(plan, "Сколько котлованов в этом проекте?")
+
+    assert len(required.steps) == MAX_TOOL_STEPS
+    assert required.steps[-1].tool == "consultant.search_workspace_documents"
+    assert required.steps[0].tool == "consultant.search_practice"
+    assert required.steps[1].tool == "consultant.get_practice_fragment"
+
+
 def test_project_entity_count_requires_inventory_in_addition_to_content_search() -> None:
     plan = SearchPlan(
         "workspace",
@@ -309,6 +338,48 @@ def test_project_entity_count_requires_inventory_in_addition_to_content_search()
         "consultant.get_project_entity_inventory",
     ]
     assert required.steps[-1].arguments == {"kind": "excavation_pit", "limit": 30}
+
+
+def test_project_entity_inventory_survives_full_content_and_ntd_plan() -> None:
+    plan = SearchPlan(
+        "workspace",
+        False,
+        None,
+        (
+            PlannedToolCall(
+                "consultant.search_workspace_documents",
+                {"query": "котлован", "limit": 10},
+                "Поиск по проекту.",
+            ),
+            PlannedToolCall(
+                "consultant.get_workspace_fragment",
+                {"source_id": "$step.1.source_id"},
+                "Исходный фрагмент.",
+            ),
+            PlannedToolCall(
+                "consultant.resolve_ntd_designation",
+                {"designation": "СП 45.13330"},
+                "Точное обозначение.",
+            ),
+            PlannedToolCall(
+                "consultant.get_ntd_page",
+                {"search_document_id": "$step.3.search_document_id", "page_number": 1},
+                "Страница НТД.",
+            ),
+        ),
+    )
+
+    required = ensure_workspace_entity_inventory(
+        plan, "Сколько котлованов в этом проекте по СП 45.13330?"
+    )
+
+    assert [step.tool for step in required.steps] == [
+        "consultant.search_workspace_documents",
+        "consultant.get_project_entity_inventory",
+        "consultant.resolve_ntd_designation",
+        "consultant.get_ntd_page",
+    ]
+    assert required.steps[1].arguments == {"kind": "excavation_pit", "limit": 30}
 
 
 def test_entity_inventory_arguments_reject_unknown_kind_and_unbounded_limit() -> None:
