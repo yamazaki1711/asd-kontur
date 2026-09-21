@@ -1231,3 +1231,38 @@ deploy `69f2ca4`, invoke the supported command once to create the durable
 structure job, then verify persisted cross-document identities and expose a
 reconciled facility dossier instead of treating raw observation counts as object
 counts.
+
+### Continuation checkpoint — 2026-09-21 15:42 UTC+12
+
+The reusable cross-document identity job
+`01a0c1e1-ad2d-7312-99ac-af32bcb65f15` remains active on the compatible
+`77aa6ad` document-worker release and has reached 287/422 durable comparison
+groups without a worker or Qwen restart. Its immutable receipts currently
+contain 84 accepted candidate groups, 190 accepted-empty groups, and 17 failed
+legacy groups; the failed groups all exceed the now-qualified 16-observation
+bound. The 84 candidates comprise 56 facility and 28 local-area candidates.
+They are cross-document observations, not confirmed project entities or totals.
+
+The public API and assistant worker run `9a3f2e6` at migration
+`0063_structure_group_receipts`. The application now exposes reconciliation
+progress and exact semantic coverage. Exact locator/evidence/span comparison
+shows 20 of 22 active documents complete and two partial by one current fragment
+each (133,405/133,407 current fragments covered); raw accepted fragment IDs are
+retained separately because recovery child manifests can exceed the current
+denominator. The in-app browser was unavailable in this execution environment,
+so authenticated visual acceptance remains open rather than being reported as
+passed.
+
+Release `f931b27` is built and the on-disk document-worker launchd configuration
+is pinned for its next supervised start; the running process is deliberately
+unchanged until the active identity job reaches a terminal boundary. This
+release bounds source-balanced identity groups, preserves mandatory project
+content plus structured inventory under the four-tool consultant budget,
+measures semantic coverage by exact current spans, and advances dependency
+recovery as one rewired lineage instead of parallel copies retaining historical
+failed parents. Independent acceptance includes 115 focused unit tests and a
+disposable PostgreSQL dependency-recovery test. After the current job terminates,
+the next executable action is to start the pinned worker, cancel only superseded
+queued recovery copies through supported job control, schedule one versioned
+bounded identity reconciliation, and verify its API/UI/consultant consumers.
+Comprehensive Tender acceptance and all four product mode gates remain open.
