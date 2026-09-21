@@ -1266,3 +1266,37 @@ the next executable action is to start the pinned worker, cancel only superseded
 queued recovery copies through supported job control, schedule one versioned
 bounded identity reconciliation, and verify its API/UI/consultant consumers.
 Comprehensive Tender acceptance and all four product mode gates remain open.
+
+### Continuation checkpoint — 2026-09-21 16:25 UTC+12
+
+The reusable source-bound facility/work projection is now implemented and
+deployed. API/frontend release `9a8454f` exposes candidate associations in the
+Project Understanding view and adds an editable
+`06_facility_work_candidate_groups.csv` to Tender analysis archive contract
+`tender.analysis-delivery@1.4.0`. Assistant release `8b3fcfc` retrieves these
+groups by both facility and work terms. The projection never consolidates an
+unresolved work name, never sums quantity observations, and never promotes the
+association beyond candidate authority. Independent checks passed: 713 unit
+tests, strict mypy/Ruff, frontend typecheck/lint/build, and the disposable
+PostgreSQL workspace-isolation/API integration path.
+
+The live OZERO snapshot at this checkpoint has 5,550 current work observations.
+Ninety-four have exactly one cross-document identity candidate at a shared
+source locator, 14 are ambiguous, and 5,442 remain unassociated. The editable
+candidate schedule contains 94 rows and every row has at least one source
+reference; none is marked confirmed. A deterministic live Gateway invocation
+for `Какие работы предусмотрены для КНС?` returned 11 facility/work candidates
+and 30 workspace evidence items. This proves the reusable retrieval connection,
+not consultant answer quality or comprehensive Tender coverage.
+
+The document worker remains the undisturbed `f013ead` process. Its active
+source-balanced structure reconciliation job
+`01a0c213-c7df-7f24-8047-09a909fff29f` is at 296/484 durable groups with a fresh
+heartbeat. The API and assistant deployments did not restart it. Two exact-span
+semantic leaves, the current project-model refresh, and a final structure refresh
+remain queued behind this job. The in-app browser is unavailable in the current
+execution environment, so authenticated visual acceptance is still unverified.
+The next executable action is to let this job reach its terminal receipt, verify
+its failed-group and identity-kind denominators, then allow the two leaf repairs
+to run and prove 22/22 exact semantic coverage before accepting the refreshed
+model and consultant behavior.
