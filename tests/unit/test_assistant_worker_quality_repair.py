@@ -8,7 +8,11 @@ from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.models import AssistantMode, ClaimedTurn
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.assistant.reasoning import SynthesizedAnswer
-from asd_kontur.assistant.worker import AssistantWorker
+from asd_kontur.assistant.worker import (
+    AssistantWorker,
+    _repair_prompt,
+    _with_inventory_checks,
+)
 
 
 class _RecordingRepository:
@@ -104,6 +108,103 @@ def test_quality_check_fails_closed_for_non_protocol_response(monkeypatch: Any) 
         "passed": False,
         "issues": ["model_quality_response_invalid"],
     }
+
+
+def test_inventory_candidates_cannot_be_replaced_by_generic_insufficient_answer() -> None:
+    source_id = "11111111-1111-4111-8111-111111111111"
+    receipts = [
+        {
+            "step_sequence": 1,
+            "tool": "consultant.get_project_entity_inventory",
+            "arguments": {"kind": "excavation_pit", "limit": 30},
+            "reason": "Inventory coverage.",
+            "response": {
+                "outcome": "found",
+                "value": {
+                    "candidate_entity_count": 1,
+                    "candidate_entities": [
+                        {
+                            "canonical_label": "Excavation Alpha",
+                            "authority": "candidate_only_not_confirmed_distinct_project_entity",
+                        }
+                    ],
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id, "title": "Controlled source"}],
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Недостаточно данных.",
+        "insufficient_data",
+        False,
+        (),
+        "Inventory requested.",
+        ("excavations",),
+    )
+
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+    )
+
+    assert checked["passed"] is False
+    assert checked["problems"] == [
+        "workspace_inventory_candidates_ignored",
+        "workspace_inventory_evidence_not_used",
+    ]
+
+
+def test_inventory_repair_receives_candidates_coverage_and_allowed_sources() -> None:
+    source_id = "22222222-2222-4222-8222-222222222222"
+    receipts = [
+        {
+            "step_sequence": 1,
+            "tool": "consultant.get_project_entity_inventory",
+            "arguments": {"kind": "facility", "limit": 30},
+            "reason": "Inventory coverage.",
+            "response": {
+                "outcome": "found",
+                "value": {
+                    "candidate_entity_count": 1,
+                    "candidate_entities": [{"canonical_label": "Facility Delta"}],
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id, "title": "Controlled source"}],
+            },
+        }
+    ]
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "List every facility.",
+        "owner-a",
+        1,
+        1,
+    )
+    answer = SynthesizedAnswer(
+        "Недостаточно данных.",
+        "insufficient_data",
+        False,
+        (),
+        "Facility inventory requested.",
+        ("facilities",),
+    )
+
+    prompt = _repair_prompt(
+        claimed,
+        answer,
+        {"issues": ["workspace_inventory_candidates_ignored"]},
+        receipts,
+    )
+
+    assert "Facility Delta" in prompt
+    assert 'exact_total_supported\\": false' in prompt
+    assert source_id in prompt
 
 
 def test_full_metadata_plan_executes_required_workspace_content_search(monkeypatch: Any) -> None:

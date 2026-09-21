@@ -159,11 +159,18 @@ class AssistantWorker:
                 sources=available_sources,
                 question=claimed.question,
             )
+            deterministic = _with_inventory_checks(
+                deterministic,
+                answer=answer,
+                receipts=receipts,
+            )
             repairable_deterministic = set(deterministic["problems"]) <= {
                 "clarification_has_unverified_numeric_estimate",
                 "clarification_without_question",
                 "insufficient_without_next_question",
                 "repeated_phrase",
+                "workspace_inventory_candidates_ignored",
+                "workspace_inventory_evidence_not_used",
             }
             if (deterministic["passed"] and not model_checks["passed"]) or (
                 not deterministic["passed"] and repairable_deterministic
@@ -171,13 +178,24 @@ class AssistantWorker:
                 repair_checks = {
                     "issues": list(deterministic["problems"]) + list(model_checks["issues"])
                 }
-                answer = self._repair_answer(claimed, answer, repair_checks, available_sources)
+                answer = self._repair_answer(
+                    claimed,
+                    answer,
+                    repair_checks,
+                    available_sources,
+                    receipts,
+                )
                 deterministic = validate_answer(
                     answer,
                     intent=plan.intent,
                     tool_names=tuple(item["tool"] for item in receipts),
                     sources=available_sources,
                     question=claimed.question,
+                )
+                deterministic = _with_inventory_checks(
+                    deterministic,
+                    answer=answer,
+                    receipts=receipts,
                 )
                 model_checks = self._model_quality_check(claimed, answer, receipts)
             quality_passed = bool(deterministic["passed"] and model_checks["passed"])
@@ -426,10 +444,11 @@ class AssistantWorker:
         answer: SynthesizedAnswer,
         model_checks: dict[str, Any],
         available_sources: tuple[dict[str, Any], ...],
+        receipts: list[dict[str, Any]],
     ) -> SynthesizedAnswer:
         raw = self._model_complete(
             claimed,
-            _repair_prompt(claimed, answer, model_checks),
+            _repair_prompt(claimed, answer, model_checks, receipts),
             max_tokens=min(1_400, max(800, len(answer.answer))),
             temperature=0.1,
         )
@@ -529,6 +548,10 @@ def _synthesis_prompt(
 оговоркой. Никогда не предлагайте загрузить документ, если inventory сообщает, что bytes присутствуют.
 Полнотекстовое совпадение не доказывает применимость: для вывода о применимости учитывайте предмет
 регулирования, конструкцию и вид работ либо задайте уточняющий вопрос.
+Если структурированный инвентарь содержит candidate_entities, перечислите подтверждённый им
+кандидатный поднабор и используйте его существенные source_id. Если exact_total_supported=false,
+не называйте число проектным итогом: явно скажите, что точный общий итог пока не доказан, и укажите
+границу установленного поднабора. Не заменяйте найденный кандидатный поднабор общим отказом.
 Для намерения general_engineering допустимо использовать устойчивые общие строительные знания и
 давать ограниченные конвенциональные числовые оценки, если вы явно указываете допущения. Помечайте
 такой ответ как оценку (estimate) и чётко разделяйте её от фактических испытаний или приёмки.
@@ -582,6 +605,7 @@ def _repair_prompt(
     claimed: ClaimedTurn,
     answer: SynthesizedAnswer,
     model_checks: dict[str, Any],
+    receipts: list[dict[str, Any]],
 ) -> str:
     answer_value = {
         "answer": answer.answer,
@@ -591,9 +615,14 @@ def _repair_prompt(
         "dialogue_summary": answer.dialogue_summary,
         "active_subjects": answer.active_subjects,
     }
-    return f"""Исправьте только перечисленные дефекты проекта ответа. Не добавляйте новые факты,
-числа, требования, источники или выводы. Не меняйте установленные сведения. Если дефект нельзя
-исправить без новых данных, замените ответ точным сообщением о недостаточности данных.
+    source_ids = [str(item["source_id"]) for item in _deduplicated_sources(receipts)]
+    return f"""Исправьте только перечисленные дефекты проекта ответа. Используйте только факты и
+источники из приведённых результатов инструментов; не добавляйте сведения извне. Не меняйте
+установленные сведения. Если структурированный инвентарь содержит candidate_entities, перечислите
+этот установленный кандидатный поднабор и используйте существенные source_id. При
+exact_total_supported=false прямо укажите, что точный проектный итог не доказан; не превращайте
+число кандидатов в окончательный итог и не заменяйте найденные кандидаты общим отказом. Если дефект
+нельзя исправить из приведённых результатов, дайте точное сообщение о границе данных.
 Ответ должен быть законченным естественным русским текстом: не обрывайте последнюю фразу,
 не оставляйте незавершённое предложение и завершите его точкой.
 Верните только JSON той же схемы:
@@ -603,7 +632,52 @@ def _repair_prompt(
 Вопрос: {claimed.question}
 Проект: {json.dumps(answer_value, ensure_ascii=False)}
 Дефекты: {json.dumps(model_checks["issues"], ensure_ascii=False)}
+Допустимые source_id: {json.dumps(source_ids, ensure_ascii=False)}
+Результаты инструментов: {_tool_results_for_prompt(receipts)}
 """
+
+
+def _with_inventory_checks(
+    checks: dict[str, Any],
+    *,
+    answer: SynthesizedAnswer,
+    receipts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Reject a generic refusal when structured workspace candidates exist.
+
+    The inventory is candidate authority, not a confirmed project total.  It is
+    nevertheless useful evidence that must survive synthesis and repair.  This
+    check is deliberately independent of Russian entity labels and workspace
+    identity so it applies to every project and inventory kind.
+    """
+
+    inventory_source_ids: set[str] = set()
+    candidate_count = 0
+    for receipt in receipts:
+        if receipt.get("tool") != "consultant.get_project_entity_inventory":
+            continue
+        response = receipt.get("response")
+        if not isinstance(response, dict):
+            continue
+        value = response.get("value")
+        if not isinstance(value, dict):
+            continue
+        raw_count = value.get("candidate_entity_count", 0)
+        if isinstance(raw_count, int) and raw_count > 0:
+            candidate_count += raw_count
+        for source in response.get("sources", []):
+            if isinstance(source, dict) and source.get("source_id"):
+                inventory_source_ids.add(str(source["source_id"]))
+    if candidate_count == 0:
+        return checks
+
+    problems = list(checks.get("problems", []))
+    if answer.answer_type in {"insufficient_data", "clarification"}:
+        problems.append("workspace_inventory_candidates_ignored")
+    if inventory_source_ids and not inventory_source_ids.intersection(answer.used_source_ids):
+        problems.append("workspace_inventory_evidence_not_used")
+    problems = list(dict.fromkeys(problems))
+    return {**checks, "passed": not problems, "problems": problems}
 
 
 def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
