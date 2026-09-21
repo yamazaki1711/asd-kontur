@@ -1232,7 +1232,7 @@ structure job, then verify persisted cross-document identities and expose a
 reconciled facility dossier instead of treating raw observation counts as object
 counts.
 
-### Continuation checkpoint — 2026-09-21 15:42 UTC+12
+### Continuation checkpoint — 2026-09-21 15:37 UTC+12
 
 The reusable cross-document identity job
 `01a0c1e1-ad2d-7312-99ac-af32bcb65f15` remains active on the compatible
