@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import signal
 import time
 import urllib.error
@@ -171,6 +172,7 @@ class AssistantWorker:
                 "repeated_phrase",
                 "workspace_inventory_candidates_ignored",
                 "workspace_inventory_evidence_not_used",
+                "workspace_inventory_unproven_total_claimed",
             }
             if (deterministic["passed"] and not model_checks["passed"]) or (
                 not deterministic["passed"] and repairable_deterministic
@@ -621,7 +623,9 @@ def _repair_prompt(
 установленные сведения. Если структурированный инвентарь содержит candidate_entities, перечислите
 этот установленный кандидатный поднабор и используйте существенные source_id. При
 exact_total_supported=false прямо укажите, что точный проектный итог не доказан; не превращайте
-число кандидатов в окончательный итог и не заменяйте найденные кандидаты общим отказом. Если дефект
+число кандидатов в окончательный итог и не заменяйте найденные кандидаты общим отказом. Запрещено
+писать «всего N», «подтверждено наличие N», «в проекте N» или эквивалентное утверждение общего
+количества. Формулируйте число только как размер установленного кандидатного поднабора. Если дефект
 нельзя исправить из приведённых результатов, дайте точное сообщение о границе данных.
 Ответ должен быть законченным естественным русским текстом: не обрывайте последнюю фразу,
 не оставляйте незавершённое предложение и завершите его точкой.
@@ -653,6 +657,7 @@ def _with_inventory_checks(
 
     inventory_source_ids: set[str] = set()
     candidate_count = 0
+    exact_total_supported = True
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_project_entity_inventory":
             continue
@@ -665,6 +670,9 @@ def _with_inventory_checks(
         raw_count = value.get("candidate_entity_count", 0)
         if isinstance(raw_count, int) and raw_count > 0:
             candidate_count += raw_count
+        coverage = value.get("coverage")
+        if isinstance(coverage, dict) and coverage.get("exact_total_supported") is False:
+            exact_total_supported = False
         for source in response.get("sources", []):
             if isinstance(source, dict) and source.get("source_id"):
                 inventory_source_ids.add(str(source["source_id"]))
@@ -676,8 +684,27 @@ def _with_inventory_checks(
         problems.append("workspace_inventory_candidates_ignored")
     if inventory_source_ids and not inventory_source_ids.intersection(answer.used_source_ids):
         problems.append("workspace_inventory_evidence_not_used")
+    if not exact_total_supported and _claims_unproven_inventory_total(
+        answer.answer, candidate_count
+    ):
+        problems.append("workspace_inventory_unproven_total_claimed")
     problems = list(dict.fromkeys(problems))
     return {**checks, "passed": not problems, "problems": problems}
+
+
+def _claims_unproven_inventory_total(answer: str, candidate_count: int) -> bool:
+    """Detect publication wording that promotes a candidate subset to a total."""
+
+    normalized = " ".join(answer.casefold().replace("ё", "е").split())
+    number = re.escape(str(candidate_count))
+    patterns = (
+        rf"\bвсего\D{{0,24}}\b{number}\b",
+        rf"\bподтвержден(?:о|ы)?\s+наличие\D{{0,24}}\b{number}\b",
+        rf"\b(?:общее|точное)\s+количество\D{{0,24}}\b{number}\b",
+        rf"\b(?:насчитывается|имеется|содержит)\D{{0,24}}\b{number}\b",
+        rf"\bв\s+проекте\D{{0,12}}\b{number}\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in patterns)
 
 
 def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:

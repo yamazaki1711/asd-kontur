@@ -207,6 +207,74 @@ def test_inventory_repair_receives_candidates_coverage_and_allowed_sources() -> 
     assert source_id in prompt
 
 
+def test_inventory_candidate_count_cannot_be_published_as_project_total() -> None:
+    source_id = "33333333-3333-4333-8333-333333333333"
+    receipts = [
+        {
+            "step_sequence": 1,
+            "tool": "consultant.get_project_entity_inventory",
+            "arguments": {"kind": "excavation_pit", "limit": 30},
+            "reason": "Inventory coverage.",
+            "response": {
+                "outcome": "found",
+                "value": {
+                    "candidate_entity_count": 4,
+                    "candidate_entities": [
+                        {"canonical_label": f"Excavation {index}"} for index in range(4)
+                    ],
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id, "title": "Controlled source"}],
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "В проекте подтверждено наличие 4 котлованов. Точный итог пока не доказан.",  # noqa: RUF001
+        "workspace_conclusion",
+        False,
+        (source_id,),
+        "Excavation inventory requested.",
+        ("excavations",),
+    )
+
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []}, answer=answer, receipts=receipts
+    )
+
+    assert checked["passed"] is False
+    assert checked["problems"] == ["workspace_inventory_unproven_total_claimed"]
+
+
+def test_inventory_candidate_subset_wording_remains_publishable() -> None:
+    source_id = "44444444-4444-4444-8444-444444444444"
+    receipts = [
+        {
+            "tool": "consultant.get_project_entity_inventory",
+            "response": {
+                "value": {
+                    "candidate_entity_count": 4,
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id}],
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Установленный кандидатный поднабор включает 4 котлована; точный итог не доказан.",
+        "workspace_conclusion",
+        False,
+        (source_id,),
+        "Excavation inventory requested.",
+        ("excavations",),
+    )
+
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []}, answer=answer, receipts=receipts
+    )
+
+    assert checked == {"passed": True, "problems": []}
+
+
 def test_full_metadata_plan_executes_required_workspace_content_search(monkeypatch: Any) -> None:
     repository = _RecordingRepository()
     worker = AssistantWorker(
