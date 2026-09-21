@@ -219,7 +219,7 @@ def test_facility_work_candidate_selection_matches_facility_without_name_merging
     assert [item["facility_work_candidate_id"] for item in selected] == ["candidate-kns"]
     assert coverage == {
         "query": "Какие работы предусмотрены для КНС-1?",
-        "selection": "facility_and_work_candidate_lexical_relevance",
+        "selection": "facility_designation_and_lexical_relevance",
         "total_candidate_group_count": 2,
         "matched_candidate_group_count": 1,
         "returned_candidate_group_count": 1,

@@ -17,6 +17,12 @@ from asd_kontur.domain import uuid7
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
 )
+from asd_kontur.tender.structure_identity_components import (
+    build_structure_identity_components,
+)
+from asd_kontur.tender.structure_identity_dossier import (
+    build_structure_identity_dossiers,
+)
 
 from .models import (
     STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION,
@@ -3002,8 +3008,17 @@ class SpinePostgresRepository:
             structure_identity_candidates = self._structure_identity_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            structure_identity_components = build_structure_identity_components(
+                structure_identity_candidates
+            )
             facility_work_projection = build_facility_work_candidate_projection(
-                [_jsonable_row(row) for row in packages], structure_identity_candidates
+                [_jsonable_row(row) for row in packages], structure_identity_components
+            )
+            structure_identity_dossiers = build_structure_identity_dossiers(
+                structure_identity_components,
+                structure_nodes=structure_nodes,
+                relationships=structure_relationships,
+                facility_work_groups=facility_work_projection["candidate_groups"],
             )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -3037,6 +3052,8 @@ class SpinePostgresRepository:
                     structure_relationships,
                     structure_components,
                     structure_identity_candidates,
+                    structure_identity_components,
+                    structure_identity_dossiers,
                     tender_input_assessment,
                 ),
             )
@@ -3064,7 +3081,9 @@ class SpinePostgresRepository:
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
             "structure_identity_candidates": structure_identity_candidates,
+            "structure_identity_components": structure_identity_components,
             "structure_identity_reconciliation": structure_identity_reconciliation,
+            "structure_identity_dossiers": structure_identity_dossiers,
             "facility_work_projection": {
                 "candidate_groups": facility_work_projection["candidate_groups"],
                 "coverage": facility_work_projection["coverage"],
@@ -4197,6 +4216,14 @@ class SpinePostgresRepository:
         structure_identity_candidates = cls._structure_identity_candidate_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
+        structure_identity_components = build_structure_identity_components(
+            structure_identity_candidates
+        )
+        structure_identity_dossiers = build_structure_identity_dossiers(
+            structure_identity_components,
+            structure_nodes=structure_nodes,
+            relationships=structure_relationships,
+        )
         return {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -4218,6 +4245,8 @@ class SpinePostgresRepository:
                     structure_relationships,
                     structure_components,
                     structure_identity_candidates,
+                    structure_identity_components,
+                    structure_identity_dossiers,
                     tender_input_assessment,
                 ),
             ),
@@ -4227,9 +4256,11 @@ class SpinePostgresRepository:
             "structure_dossiers": structure_dossiers,
             "structure_components": structure_components,
             "structure_identity_candidates": structure_identity_candidates,
+            "structure_identity_components": structure_identity_components,
             "structure_identity_reconciliation": cls._structure_identity_reconciliation_status(
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
+            "structure_identity_dossiers": structure_identity_dossiers,
             "facility_work_projection": {
                 "candidate_groups": [],
                 "coverage": {

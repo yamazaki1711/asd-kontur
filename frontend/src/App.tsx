@@ -4720,6 +4720,16 @@ function ProjectUnderstandingPage() {
               string,
               unknown
             >[];
+          const structureIdentityComponents =
+            (value.structure_identity_components ?? []) as Record<
+              string,
+              unknown
+            >[];
+          const structureIdentityDossiers =
+            (value.structure_identity_dossiers ?? []) as Record<
+              string,
+              unknown
+            >[];
           const structureIdentityReconciliation =
             (value.structure_identity_reconciliation ?? {}) as Record<
               string,
@@ -4798,8 +4808,12 @@ function ProjectUnderstandingPage() {
                   value={structureRelationships.length}
                 />
                 <Metric
-                  label="Междокументных групп-кандидатов"
+                  label="Ограниченных групп Qwen"
                   value={structureIdentityCandidates.length}
+                />
+                <Metric
+                  label="Групп после пересечения наблюдений"
+                  value={structureIdentityComponents.length}
                 />
                 <Metric
                   label="Работ-кандидатов"
@@ -4952,7 +4966,10 @@ function ProjectUnderstandingPage() {
                         structureIdentityReconciliation.progress_total ?? 0,
                       ).toString()}`}
                     . Сопоставленные группы остаются кандидатами до
-                    профессионального решения.
+                    профессионального решения. Группы с одним общим исходным
+                    наблюдением объединяются транзитивно без сравнения названий:{" "}
+                    {structureIdentityCandidates.length.toString()} →{" "}
+                    {structureIdentityComponents.length.toString()}.
                   </InfoNotice>
                   <a
                     className="button-link secondary"
@@ -4965,7 +4982,8 @@ function ProjectUnderstandingPage() {
                     relationships={structureRelationships}
                     dossiers={structureDossiers}
                     components={structureComponents}
-                    identityCandidates={structureIdentityCandidates}
+                    identityCandidates={structureIdentityComponents}
+                    identityDossiers={structureIdentityDossiers}
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
@@ -5350,6 +5368,7 @@ function StructureCandidateList({
   dossiers,
   components,
   identityCandidates,
+  identityDossiers,
   workspaceId,
   modeSlug,
 }: {
@@ -5358,12 +5377,22 @@ function StructureCandidateList({
   dossiers: Record<string, unknown>[];
   components: Record<string, unknown>[];
   identityCandidates: Record<string, unknown>[];
+  identityDossiers: Record<string, unknown>[];
   workspaceId: string;
   modeSlug?: string | undefined;
 }) {
   const [filter, setFilter] = useState("");
   const [visibleNodeCount, setVisibleNodeCount] = useState(200);
   const [visibleRelationshipCount, setVisibleRelationshipCount] = useState(200);
+  const identityDossiersById = new Map(
+    identityDossiers.map((dossier) => {
+      const identity = (dossier.identity_candidate ?? {}) as Record<
+        string,
+        unknown
+      >;
+      return [displayValue(identity.identity_candidate_id), dossier] as const;
+    }),
+  );
   const kindLabels: Record<string, string> = {
     local_area: "Локальная площадка или участок",
     facility: "Объект или сооружение",
@@ -5417,9 +5446,26 @@ function StructureCandidateList({
           </p>
           <div className="card-grid">
             {identityCandidates.slice(0, visibleNodeCount).map((candidate) => {
-              const locators = Array.isArray(candidate.source_locator_ids)
-                ? candidate.source_locator_ids.map(String)
+              const dossier = identityDossiersById.get(
+                displayValue(candidate.identity_candidate_id),
+              );
+              const coverage = (dossier?.coverage ?? {}) as Record<
+                string,
+                unknown
+              >;
+              const workGroups = Array.isArray(
+                dossier?.facility_work_candidate_groups,
+              )
+                ? dossier.facility_work_candidate_groups
                 : [];
+              const aliases = Array.isArray(dossier?.aliases)
+                ? dossier.aliases.map(String)
+                : [];
+              const locators = Array.isArray(dossier?.source_locator_ids)
+                ? dossier.source_locator_ids.map(String)
+                : Array.isArray(candidate.source_locator_ids)
+                  ? candidate.source_locator_ids.map(String)
+                  : [];
               return (
                 <article
                   className="candidate-row"
@@ -5443,6 +5489,24 @@ function StructureCandidateList({
                     ; уверенность:{" "}
                     {displayValue(candidate.confidence, "не указана")}
                   </small>
+                  {dossier && (
+                    <p>
+                      <small>
+                        Варианты наименования:{" "}
+                        {aliases.join("; ") || "не извлечены"};
+                        связей-наблюдений:{" "}
+                        {Number(
+                          coverage.relationship_observation_count ?? 0,
+                        ).toString()}
+                        ; кандидатов работ: {workGroups.length}; отсутствующих
+                        наблюдений группы:{" "}
+                        {Number(
+                          coverage.missing_member_observation_count ?? 0,
+                        ).toString()}
+                        .
+                      </small>
+                    </p>
+                  )}
                   {locators.slice(0, 4).map((locator) => (
                     <Link
                       key={locator}

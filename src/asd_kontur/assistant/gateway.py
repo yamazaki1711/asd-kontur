@@ -220,6 +220,7 @@ class ProfessionalAssistantKnowledgeQuery:
                     "structure_identity_candidates": workspace.get(
                         "structure_identity_candidates", []
                     ),
+                    "structure_identity_dossiers": workspace.get("structure_identity_dossiers", []),
                     "materialization": workspace["materialization"],
                     "semantic_coverage": workspace.get("semantic_coverage", []),
                     "candidate_summary": workspace.get("candidate_summary", {}),
@@ -574,6 +575,7 @@ class ProfessionalAssistantKnowledgeQuery:
         discrepancy_source_items: list[dict[str, Any]] = []
         overview_dossiers: list[dict[str, Any]] = []
         overview_identities: list[dict[str, Any]] = []
+        overview_identity_dossiers: list[dict[str, Any]] = []
         facility_work_candidate_groups: list[dict[str, Any]] = []
         facility_work_selection: dict[str, Any] = {}
         facility_work_coverage: dict[str, Any] = {}
@@ -584,8 +586,20 @@ class ProfessionalAssistantKnowledgeQuery:
                 owner_identity_id=owner_identity_id, workspace_id=workspace_id
             )
             overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
-            overview_identities = list((model_view or {}).get("structure_identity_candidates", []))[
+            overview_identities = list((model_view or {}).get("structure_identity_components", []))[
                 :30
+            ]
+            overview_identity_ids = {
+                str(item.get("identity_candidate_id") or "") for item in overview_identities
+            }
+            overview_identity_dossiers = [
+                dict(item)
+                for item in (model_view or {}).get("structure_identity_dossiers", [])
+                if isinstance(item, Mapping)
+                and str(
+                    dict(item.get("identity_candidate") or {}).get("identity_candidate_id") or ""
+                )
+                in overview_identity_ids
             ]
             facility_work_projection = dict((model_view or {}).get("facility_work_projection", {}))
             facility_work_coverage = dict(facility_work_projection.get("coverage", {}))
@@ -616,6 +630,11 @@ class ProfessionalAssistantKnowledgeQuery:
                     str(locator_id)
                     for identity in overview_identities
                     for locator_id in identity.get("source_locator_ids", [])
+                }
+                | {
+                    str(locator_id)
+                    for dossier in overview_identity_dossiers
+                    for locator_id in dossier.get("source_locator_ids", [])
                 }
             )
             work_package_source_items = evidence_items(
@@ -650,6 +669,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "documents": _public_value([_json_row(row) for row in documents]),
             "structure_dossiers": _public_value(overview_dossiers),
             "structure_identity_candidates": _public_value(overview_identities),
+            "structure_identity_dossiers": _public_value(overview_identity_dossiers),
             "facility_work_candidate_groups": _public_value(facility_work_candidate_groups),
             "facility_work_selection": _public_value(facility_work_selection),
             "facility_work_coverage": _public_value(facility_work_coverage),
@@ -1575,10 +1595,15 @@ class ProfessionalAssistantKnowledgeQuery:
         )
         identities = [
             dict(item)
-            for item in view.get("structure_identity_candidates", [])
+            for item in view.get("structure_identity_components", [])
             if isinstance(item, dict)
         ]
         nodes = [dict(item) for item in view.get("structure_nodes", []) if isinstance(item, dict)]
+        identity_dossiers = [
+            dict(item)
+            for item in view.get("structure_identity_dossiers", [])
+            if isinstance(item, dict)
+        ]
 
         def selected(value: dict[str, Any], label_key: str) -> bool:
             if kind and str(value.get("identity_kind") or value.get("node_kind")) != kind:
@@ -1631,11 +1656,20 @@ class ProfessionalAssistantKnowledgeQuery:
         )
         evidence_index = dict(view.get("evidence_index", {}))
         returned_identities = identities[:limit]
+        returned_identity_ids = {
+            str(item.get("identity_candidate_id") or "") for item in returned_identities
+        }
+        returned_dossiers = [
+            item
+            for item in identity_dossiers
+            if str(dict(item.get("identity_candidate") or {}).get("identity_candidate_id") or "")
+            in returned_identity_ids
+        ]
         unresolved_sample_limit = min(limit, 10)
         returned_unresolved = unresolved[:unresolved_sample_limit]
         locator_ids = {
             str(locator_id)
-            for item in [*returned_identities, *returned_unresolved]
+            for item in [*returned_identities, *returned_dossiers, *returned_unresolved]
             for locator_id in (
                 item.get("source_locator_ids", [])
                 if item.get("source_locator_ids") is not None
@@ -1656,6 +1690,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "unresolved_observation_count": len(unresolved),
             "returned_unresolved_observation_count": len(returned_unresolved),
             "candidate_entities": _public_value(returned_identities),
+            "candidate_dossiers": _public_value(returned_dossiers),
             "unresolved_observations": _public_value(returned_unresolved),
             "coverage": {
                 "semantic_extraction_complete": extraction_complete,
@@ -2014,6 +2049,14 @@ def _select_facility_work_candidates(
         for token in _search_tokens(query)
         if token not in _WORK_PACKAGE_STOP_WORDS
     )
+    designations = tuple(
+        re.sub(r"[^0-9a-zа-яё]+", "", match.group(0).casefold())
+        for match in re.finditer(
+            r"\b(?:кнс|лос)\s*[-№]?\s*\d+(?:[.,]\d+)*\b",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
 
     def searchable(item: Mapping[str, Any]) -> str:
         work_type = item.get("work_type")
@@ -2029,11 +2072,15 @@ def _select_facility_work_candidates(
             if value
         )
 
-    scored = [
-        (sum(term in searchable(item) for term in terms), item)
-        for item in candidates
-        if not terms or any(term in searchable(item) for term in terms)
-    ]
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for item in candidates:
+        text = searchable(item)
+        compact_text = re.sub(r"[^0-9a-zа-яё]+", "", text)
+        if designations and not any(value in compact_text for value in designations):
+            continue
+        if terms and not any(term in text for term in terms):
+            continue
+        scored.append((sum(term in text for term in terms), item))
     scored.sort(
         key=lambda value: (
             -value[0],
@@ -2045,7 +2092,13 @@ def _select_facility_work_candidates(
     matched = len(scored)
     return selected, {
         "query": query or None,
-        "selection": "facility_and_work_candidate_lexical_relevance" if terms else "bounded_prefix",
+        "selection": (
+            "facility_designation_and_lexical_relevance"
+            if designations
+            else "facility_and_work_candidate_lexical_relevance"
+            if terms
+            else "bounded_prefix"
+        ),
         "total_candidate_group_count": len(candidates),
         "matched_candidate_group_count": matched,
         "returned_candidate_group_count": len(selected),

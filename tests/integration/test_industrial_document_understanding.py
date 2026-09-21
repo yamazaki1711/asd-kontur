@@ -699,6 +699,8 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         )
         assert len(view["work_packages"]) == 1
         assert view["facility_work_projection"]["candidate_groups"] == []
+        assert view["structure_identity_components"] == []
+        assert view["structure_identity_dossiers"] == []
         assert view["facility_work_projection"]["coverage"] == {
             "total_work_package_count": 1,
             "exact_identity_package_count": 0,

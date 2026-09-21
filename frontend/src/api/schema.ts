@@ -2277,6 +2277,14 @@ export interface components {
             structure_identity_candidates?: {
                 [key: string]: unknown;
             }[];
+            /** Structure Identity Components */
+            structure_identity_components?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Identity Dossiers */
+            structure_identity_dossiers?: {
+                [key: string]: unknown;
+            }[];
             /** Structure Identity Reconciliation */
             structure_identity_reconciliation?: {
                 [key: string]: unknown;
