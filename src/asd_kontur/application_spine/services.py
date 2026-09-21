@@ -38,6 +38,9 @@ from asd_kontur.tender.contract_analysis_report import render_tender_contract_an
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
+from asd_kontur.tender.facility_work_projection import (
+    render_facility_work_candidate_schedule_csv,
+)
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
@@ -829,6 +832,12 @@ class ProductSpineService:
                 identity_candidates=view.get("structure_identity_candidates", []),
                 materialization_state=common["materialization_state"],
                 coverage_gaps=common["coverage_gaps"],
+            ),
+            facility_candidate_schedule=render_facility_work_candidate_schedule_csv(
+                view.get("facility_work_projection", {}),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
+                evidence_index=common["evidence_index"],
             ),
             document_coverage_schedule=render_tender_document_coverage_csv(
                 view.get("semantic_coverage", []),

@@ -261,6 +261,7 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
         scope_schedule=b"scope-csv",
         structure_identity_schedule=b"identity-csv",
         facility_scope_schedule=b"facility-work-csv",
+        facility_candidate_schedule=b"facility-candidate-csv",
         document_coverage_schedule=b"coverage-csv",
         materialization={"state": "partial", "gaps": ["SEMANTIC_COVERAGE_PARTIAL"]},
     )
@@ -272,20 +273,22 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
             "03_tender_work_resource_schedule.csv",
             "04_structure_identity_candidates.csv",
             "05_facility_work_observation_candidates.csv",
-            "06_document_processing_coverage.csv",
-            "07_delivery_manifest.json",
+            "06_facility_work_candidate_groups.csv",
+            "07_document_processing_coverage.csv",
+            "08_delivery_manifest.json",
             "99_analysis_status.txt",
         ]
         assert exported.read("01_tender_findings_report.docx") == b"docx-payload"
         assert exported.read("04_structure_identity_candidates.csv") == b"identity-csv"
         assert exported.read("05_facility_work_observation_candidates.csv") == b"facility-work-csv"
-        assert exported.read("06_document_processing_coverage.csv") == b"coverage-csv"
-        manifest = json.loads(exported.read("07_delivery_manifest.json"))
+        assert exported.read("06_facility_work_candidate_groups.csv") == b"facility-candidate-csv"
+        assert exported.read("07_document_processing_coverage.csv") == b"coverage-csv"
+        manifest = json.loads(exported.read("08_delivery_manifest.json"))
         status = exported.read("99_analysis_status.txt").decode("utf-8")
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
     assert manifest["candidate_boundary"] is True
-    assert manifest["contract"] == "tender.analysis-delivery@1.3.0"
+    assert manifest["contract"] == "tender.analysis-delivery@1.4.0"
     assert (
         manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
     )

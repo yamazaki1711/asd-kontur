@@ -9,11 +9,15 @@ never summed by this projection.
 
 from __future__ import annotations
 
+import csv
+import io
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
+
+from .findings_schedule import source_reference
 
 
 def build_facility_work_candidate_projection(
@@ -198,3 +202,116 @@ def build_facility_work_candidate_projection(
             "association_rule": "exact_shared_source_locator",
         },
     }
+
+
+def render_facility_work_candidate_schedule_csv(
+    projection: Mapping[str, Any],
+    *,
+    materialization_state: str,
+    coverage_gaps: Iterable[str],
+    evidence_index: Mapping[str, Mapping[str, Any]] | None = None,
+) -> bytes:
+    """Render the safely associated candidate subset without commercial totals."""
+
+    output = io.StringIO(newline="")
+    writer = csv.DictWriter(
+        output,
+        fieldnames=(
+            "facility_work_candidate_id",
+            "identity_candidate_id",
+            "identity_kind",
+            "identity_label",
+            "identity_confidence",
+            "work_name",
+            "normalized_work_name",
+            "work_identity_resolution",
+            "work_package_ids",
+            "candidate_observation_count",
+            "quantity_observations",
+            "material_observations",
+            "source_references",
+            "source_locator_ids",
+            "uncertainties",
+            "candidate_status",
+            "materialization_state",
+            "coverage_gaps",
+        ),
+    )
+    writer.writeheader()
+    evidence = evidence_index or {}
+    gaps = ";".join(sorted(str(value) for value in coverage_gaps))
+    groups = projection.get("candidate_groups")
+    groups = groups if isinstance(groups, (list, tuple)) else ()
+    for value in sorted(
+        (dict(item) for item in groups if isinstance(item, Mapping)),
+        key=lambda item: (
+            str(item.get("identity_label") or ""),
+            str(item.get("facility_work_candidate_id") or ""),
+        ),
+    ):
+        work_type = value.get("work_type")
+        work_type = work_type if isinstance(work_type, Mapping) else {}
+        locator_ids = tuple(str(item) for item in value.get("source_locator_ids") or ())
+        writer.writerow(
+            {
+                "facility_work_candidate_id": str(value.get("facility_work_candidate_id") or ""),
+                "identity_candidate_id": str(value.get("identity_candidate_id") or ""),
+                "identity_kind": str(value.get("identity_kind") or ""),
+                "identity_label": str(value.get("identity_label") or ""),
+                "identity_confidence": str(value.get("identity_confidence") or ""),
+                "work_name": str(work_type.get("raw") or ""),
+                "normalized_work_name": str(work_type.get("normalized") or ""),
+                "work_identity_resolution": str(value.get("work_identity_resolution") or ""),
+                "work_package_ids": ";".join(
+                    str(item) for item in value.get("work_package_ids") or ()
+                ),
+                "candidate_observation_count": str(value.get("candidate_observation_count") or 0),
+                "quantity_observations": " | ".join(
+                    _quantity_observation_text(item)
+                    for item in value.get("quantities") or ()
+                    if isinstance(item, Mapping)
+                ),
+                "material_observations": " | ".join(
+                    _material_observation_text(item)
+                    for item in value.get("materials") or ()
+                    if isinstance(item, Mapping)
+                ),
+                "source_references": "; ".join(
+                    source_reference(locator_id, evidence.get(locator_id))
+                    for locator_id in locator_ids
+                ),
+                "source_locator_ids": ";".join(locator_ids),
+                "uncertainties": ";".join(
+                    sorted(str(item) for item in value.get("uncertainties") or ())
+                ),
+                "candidate_status": str(
+                    value.get("candidate_state") or "facility_work_candidate_not_confirmed"
+                ),
+                "materialization_state": materialization_state,
+                "coverage_gaps": gaps,
+            }
+        )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def _quantity_observation_text(value: Mapping[str, Any]) -> str:
+    raw = " ".join(
+        str(item) for item in (value.get("raw_value"), value.get("raw_unit")) if item is not None
+    )
+    normalized = " ".join(
+        str(item)
+        for item in (value.get("normalized_value"), value.get("normalized_unit"))
+        if item is not None
+    )
+    locator = str(value.get("source_locator_id") or "")
+    return f"raw={raw}; normalized={normalized}; locator={locator}"
+
+
+def _material_observation_text(value: Mapping[str, Any]) -> str:
+    quantity = " ".join(
+        str(item) for item in (value.get("raw_quantity"), value.get("raw_unit")) if item is not None
+    )
+    return (
+        f"name={value.get('raw_name') or ''}; quantity={quantity}; "
+        f"locator={value.get('source_locator_id') or ''}"
+    )

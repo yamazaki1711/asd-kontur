@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import csv
+from io import StringIO
+
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
+    render_facility_work_candidate_schedule_csv,
 )
 
 
@@ -150,3 +154,53 @@ def test_projection_preserves_ambiguous_and_unassociated_packages() -> None:
     assert by_id["ambiguous"]["association_state"] == "ambiguous_identity_candidates"
     assert by_id["ambiguous"]["identity_candidate_ids"] == ["identity-a", "identity-b"]
     assert by_id["unassociated"]["association_state"] == ("no_identity_candidate_at_exact_locator")
+
+
+def test_candidate_schedule_keeps_evidence_and_does_not_sum_quantities() -> None:
+    projection = build_facility_work_candidate_projection(
+        (
+            _package(
+                "package-a",
+                "locator-a",
+                quantity="12",
+                canonical_work_type_id="concrete.formwork.install",
+            ),
+            _package(
+                "package-b",
+                "locator-b",
+                quantity="15",
+                canonical_work_type_id="concrete.formwork.install",
+            ),
+        ),
+        (_identity("identity-1", "locator-a", "locator-b"),),
+    )
+
+    content = render_facility_work_candidate_schedule_csv(
+        projection,
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+        evidence_index={
+            "locator-a": {
+                "safe_display_name": "Plan A.pdf",
+                "document_version": 1,
+                "locator_value": "page:17",
+            },
+            "locator-b": {
+                "safe_display_name": "Plan B.pdf",
+                "document_version": 2,
+                "locator_value": "page:4",
+            },
+        },
+    )
+
+    rows = list(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["identity_label"] == "Сооружение identity-1"
+    assert row["work_package_ids"] == "package-a;package-b"
+    assert row["quantity_observations"].count("normalized=") == 2
+    assert "12.0" not in row["quantity_observations"]
+    assert "Plan A.pdf, version 1, page:17 (locator-a)" in row["source_references"]
+    assert "Plan B.pdf, version 2, page:4 (locator-b)" in row["source_references"]
+    assert row["candidate_status"] == "facility_work_candidate_not_confirmed"
+    assert row["materialization_state"] == "partial"
