@@ -1056,6 +1056,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 "safe_message_code": "structure_identity_group_processed",
             }
         ]
+
         status_response = client.get(f"/api/v1/workspaces/{workspace_id}/project-understanding")
         assert status_response.status_code == 200, status_response.text
         structure_status = status_response.json()["structure_identity_reconciliation"]
@@ -1351,6 +1352,136 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             successor["provenance"]["semantic_coverage_recovery_contract"]
             == "engineering-leaf-recovery-v6"
         )
+
+
+def test_start_project_understanding_recovers_missing_classification_without_ocr_dependency(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="classification-recovery-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Classification recovery owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "classification-recovery-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Classification recovery"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("source.txt", b"Project explanatory note", "text/plain"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id FROM "
+                        "workspace.document_versions WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators (organization_id,workspace_id,"
+                    "source_locator_id,source_version_id,locator_kind,locator_key,locator_value,"
+                    "fragment_digest) VALUES (:organization,:workspace,:locator,:source,"
+                    "'document_page_region','classification-recovery',"
+                    "CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"classification": "locator"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.native_layout_element_versions (organization_id,"
+                    "workspace_id,element_id,version,document_id,document_version,source_version_id,"
+                    "source_locator_id,page_number,element_kind,raw_text,normalized_text,reading_order,"
+                    "region,cell_locator,row_index,column_index,evidence_digest,extraction_method,"
+                    "profile_version,semantic_digest) VALUES (:organization,:workspace,:element,1,"
+                    ":document,:version,:source,:locator,1,'paragraph','Project explanatory note',"
+                    "'project explanatory note',1,CAST(:region AS jsonb),NULL,NULL,NULL,:evidence,"
+                    "'native_layout','native-layout-v0.1',:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                    "element": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "locator": locator_id,
+                    "region": json.dumps([0, 0, 1, 1]),
+                    "evidence": semantic_digest({"classification": "evidence"}),
+                    "digest": semantic_digest({"classification": "element"}),
+                },
+            )
+
+        endpoint = f"/api/v1/workspaces/{workspace_id}/project-understanding/runs"
+        assert client.post(endpoint, headers=csrf).status_code == 202
+        assert client.post(endpoint, headers=csrf).status_code == 202
+
+        with postgres_environment.owner_engine.connect() as connection:
+            rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT job_id,causation_id,input_manifest FROM workspace.durable_jobs "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='DOCUMENT_PAGE_CLASSIFICATION' AND "
+                        "provenance->>'classification_recovery_contract'="
+                        "'document-classification-recovery-v1'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+                .mappings()
+                .all()
+            )
+            assert len(rows) == 1
+            recovery = rows[0]
+            assert recovery["causation_id"] is not None
+            assert recovery["input_manifest"]["source_version_id"] == str(
+                source["source_version_id"]
+            )
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM workspace.durable_job_dependencies WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "job": recovery["job_id"],
+                    },
+                )
+                == 0
+            )
 
 
 def test_project_view_selects_only_the_latest_source_semantic_profile(

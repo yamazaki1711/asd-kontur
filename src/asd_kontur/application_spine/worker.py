@@ -273,11 +273,21 @@ class DocumentWorker:
         finally:
             keepalive.stop()
         outcome = self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
-        self._repository.recover_dependents_from_success(claimed)
-        if claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION:
+        independent_classification_recovery = bool(
+            claimed.job_kind is JobKind.DOCUMENT_PAGE_CLASSIFICATION
+            and claimed.input_manifest.get("classification_recovery_contract")
+        )
+        if not independent_classification_recovery:
+            self._repository.recover_dependents_from_success(claimed)
+        if claimed.job_kind in {
+            JobKind.PROJECT_DEFINITION_EXTRACTION,
+            JobKind.DOCUMENT_PAGE_CLASSIFICATION,
+        }:
             # A workspace-wide reconciliation is a materialized view.  Refresh it
-            # after a durable source result becomes effective instead of leaving
-            # partial, useful evidence invisible until the complete corpus drains.
+            # after durable source content or classification becomes effective
+            # instead of leaving partial, useful evidence invisible until the
+            # complete corpus drains.  Independent classification recovery does
+            # not revive the obsolete OCR-dependent intake chain.
             self._repository.schedule_incremental_project_reconciliation(claimed)
         elif claimed.job_kind is JobKind.PROJECT_STRUCTURE_RECONCILIATION:
             self._repository.schedule_post_structure_project_reconciliation(claimed)

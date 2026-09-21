@@ -191,6 +191,71 @@ def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> 
     assert repository.finished["result_manifest"] == {"exception_type": "TypeError"}
 
 
+def test_independent_classification_recovery_refreshes_model_without_reviving_old_chain() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001804"),
+        JobKind.DOCUMENT_PAGE_CLASSIFICATION,
+        {"classification_recovery_contract": "document-classification-recovery-v1"},
+        "sha256:" + "2" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claimed = False
+            self.recovered = 0
+            self.refreshed = 0
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            if self.claimed:
+                return None
+            self.claimed = True
+            return claimed
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return False
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def finish_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def recover_dependents_from_success(self, *_args: object) -> int:
+            self.recovered += 1
+            return 0
+
+        def schedule_incremental_project_reconciliation(self, *_args: object) -> None:
+            self.refreshed += 1
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+    worker._execute = lambda _claimed: {"decision_count": 1}  # type: ignore[method-assign]
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.SUCCEEDED
+    assert repository.recovered == 0
+    assert repository.refreshed == 1
+
+
 def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
     """A one-slot worker reaches source-backed structural evidence before estimates."""
 

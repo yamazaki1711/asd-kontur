@@ -14,8 +14,12 @@ from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.models import (
+    CLASSIFICATION_PROFILE_VERSION,
     PROJECT_RECONCILIATION_PROFILE_VERSION,
     STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
+)
+from asd_kontur.document_understanding.qwen_semantic import (
+    QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
 from asd_kontur.domain import uuid7
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
@@ -54,6 +58,7 @@ from .object_store import StagedObject, WorkspaceObjectStore
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
 ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
+DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT = "document-classification-recovery-v1"
 TERMINAL_STATES = frozenset(
     {
         JobState.SUCCEEDED,
@@ -3645,6 +3650,171 @@ class SpinePostgresRepository:
             )
         return scheduled
 
+    def _schedule_workspace_classifications(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        sources: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        """Recover missing active-source roles from already persisted layout.
+
+        Historical intake jobs chained classification behind OCR even when native
+        layout was already usable.  A failed OCR attempt must not permanently hide
+        that content, and a successful replacement must not create an unbounded
+        chain of clones retaining the obsolete dependency.  This recovery job is
+        therefore source/profile scoped, dependency-free, and idempotent.  It keeps
+        the original classification job as causal history without mutating it.
+        """
+
+        scheduled: list[dict[str, object]] = []
+        profile = f"{CLASSIFICATION_PROFILE_VERSION}+{QWEN_SEMANTIC_CLASSIFICATION_PROFILE}"
+        for source in sources:
+            source_version_id = UUID(str(source["source_version_id"]))
+            roles = tuple(str(role) for role in source.get("document_roles", ()))
+            if roles:
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "state": "succeeded",
+                        "selected_roles": sorted(roles),
+                    }
+                )
+                continue
+            if int(source["native_locator_count"]) == 0:
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "state": "native_layout_unavailable",
+                    }
+                )
+                continue
+
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='DOCUMENT_PAGE_CLASSIFICATION' AND "
+                        "input_manifest->>'source_version_id'=:source AND "
+                        "provenance->>'classification_recovery_contract'=:contract AND "
+                        "provenance->>'classification_profile'=:profile "
+                        "ORDER BY created_at DESC,job_id DESC LIMIT 1"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "source": str(source_version_id),
+                        "contract": DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT,
+                        "profile": profile,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if existing is not None:
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "job_id": str(existing["job_id"]),
+                        "state": str(existing["state"]),
+                        "failure_code": existing["typed_failure_code"],
+                    }
+                )
+                continue
+
+            original = (
+                session.execute(
+                    sa.text(
+                        "SELECT job_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='DOCUMENT_PAGE_CLASSIFICATION' AND "
+                        "input_manifest->>'source_version_id'=:source "
+                        "ORDER BY created_at,job_id LIMIT 1"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "source": str(source_version_id),
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            manifest = {
+                "document_id": str(source["document_id"]),
+                "document_version": int(source["version"]),
+                "source_version_id": str(source_version_id),
+                "object_key": str(source["object_key"]),
+                "media_type": str(source["media_type"]),
+                "content_digest": str(source["content_digest"]),
+                "classification_recovery_contract": (DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT),
+                "classification_profile": profile,
+            }
+            job_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,"
+                    "'DOCUMENT_PAGE_CLASSIFICATION',CAST(:manifest AS jsonb),:digest,:key,'queued',"
+                    "180,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "document": source["document_id"],
+                    "manifest": _json(manifest),
+                    "digest": semantic_digest(
+                        {
+                            "kind": JobKind.DOCUMENT_PAGE_CLASSIFICATION.value,
+                            "manifest": manifest,
+                        }
+                    ),
+                    "key": f"classification-recovery:{source_version_id}:{profile}",
+                    "provenance": _json(
+                        {
+                            "contract": "application.durable-job@2.1.0",
+                            "source_version_id": str(source_version_id),
+                            "classification_recovery_contract": (
+                                DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT
+                            ),
+                            "classification_profile": profile,
+                            "classification_recovery_of": (
+                                str(original["job_id"]) if original is not None else None
+                            ),
+                        }
+                    ),
+                    "correlation": correlation_id,
+                    "causation": original["job_id"] if original is not None else None,
+                    "owner": owner_identity_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.queued",
+                safe_message_code="classification_queued_from_native_layout",
+                current=0,
+                total=1,
+                terminal=False,
+            )
+            scheduled.append(
+                {
+                    "source_version_id": str(source_version_id),
+                    "job_id": str(job_id),
+                    "state": "queued",
+                }
+            )
+        return scheduled
+
     def start_project_understanding(
         self,
         *,
@@ -3696,6 +3866,14 @@ class SpinePostgresRepository:
                 raise SpinePersistenceError("project_understanding_sources_unavailable")
             document = sources[0]
             source_ids = [UUID(str(source["source_version_id"])) for source in sources]
+            classification_jobs = self._schedule_workspace_classifications(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=owner_identity_id,
+                correlation_id=correlation_id,
+                sources=[dict(source) for source in sources],
+            )
             semantic_jobs = self._schedule_workspace_semantic_extractions(
                 session,
                 organization_id=organization_id,
@@ -3716,6 +3894,7 @@ class SpinePostgresRepository:
                 {
                     "source_version_ids": [str(item) for item in source_ids],
                     "reviews": list(reviews),
+                    "classification_jobs": classification_jobs,
                     "semantic_jobs": semantic_jobs,
                 }
             )
