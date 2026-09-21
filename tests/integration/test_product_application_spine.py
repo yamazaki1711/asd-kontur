@@ -19,6 +19,7 @@ from asd_kontur.application_spine.postgres import (
     SpinePostgresRepository,
 )
 from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
@@ -975,6 +976,52 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             )
         assert len(structure_jobs) == 1
         assert structure_jobs[0]["dependency_kind"] == "success_required"
+        structure_job_id = UUID(str(structure_jobs[0]["job_id"]))
+        understanding_repository = IndustrialUnderstandingRepository(
+            postgres_environment.document_worker_engine
+        )
+        structure_claim = ClaimedJob(
+            UUID(workspace["organization_id"]),
+            workspace_id,
+            structure_job_id,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+            {},
+            "sha256:" + "e" * 64,
+            1,
+            1,
+            "none",
+        )
+        understanding_repository.record_structure_identity_progress(
+            structure_claim, completed_groups=0, total_groups=2
+        )
+        understanding_repository.record_structure_identity_progress(
+            structure_claim, completed_groups=0, total_groups=2
+        )
+        with postgres_environment.owner_engine.connect() as connection:
+            progress_rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT progress_current,progress_total,safe_message_code FROM "
+                        "workspace.job_progress_events WHERE organization_id=:organization AND "
+                        "workspace_id=:workspace AND job_id=:job AND "
+                        "event_type='engineering.structure_identity_progress'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "job": structure_job_id,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert [dict(row) for row in progress_rows] == [
+            {
+                "progress_current": 0,
+                "progress_total": 2,
+                "safe_message_code": "structure_identity_group_processed",
+            }
+        ]
 
         # A later reconciliation receipt may refer to the same source, but it
         # is not itself a semantic extraction attempt.  Recovery must continue
