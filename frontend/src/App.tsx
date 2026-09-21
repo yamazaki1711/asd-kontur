@@ -4689,6 +4689,7 @@ function ProjectUnderstandingPage() {
         {(value) => {
           const definition = value.project_definition.definition as {
             fields?: Record<string, unknown>;
+            candidate_fields?: Record<string, unknown>;
             gaps?: string[];
           };
           const profile = value.normative_profile;
@@ -4943,6 +4944,23 @@ function ProjectUnderstandingPage() {
                       modeSlug={mode}
                       evidenceIndex={evidenceIndex}
                     />
+                    {Object.keys(definition.candidate_fields ?? {}).length >
+                      0 && (
+                      <>
+                        <h3>Согласованные сведения-кандидаты</h3>
+                        <InfoNotice>
+                          Эти значения повторяются в нескольких независимых
+                          исходных версиях, но ещё не являются подтверждёнными
+                          фактами проекта.
+                        </InfoNotice>
+                        <EvidenceObject
+                          value={definition.candidate_fields ?? {}}
+                          workspaceId={workspaceId}
+                          modeSlug={mode}
+                          evidenceIndex={evidenceIndex}
+                        />
+                      </>
+                    )}
                     <h3>Недостающие сведения</h3>
                     <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
                   </section>
@@ -7221,6 +7239,12 @@ function humanizeReadiness(value: string) {
 }
 
 function humanizeGap(value: string) {
+  if (value.startsWith("PROJECT_FIELD_CANDIDATE_ONLY:"))
+    return "Сведения найдены в нескольких источниках как согласованный кандидат, но ещё не подтверждены как факт проекта.";
+  if (value.startsWith("PROJECT_FIELD_CONFLICT:"))
+    return "В исходных документах обнаружены несовместимые значения проектного сведения.";
+  if (value.startsWith("PROJECT_FIELD_GAP:"))
+    return "Обязательное проектное сведение пока не установлено.";
   const labels: Record<string, string> = {
     WORK_REQUIREMENT_MATRIX_UNAVAILABLE: "Матрица работ ещё не сформирована.",
     VERIFIED_NTD_SUBSET: "Не все нормативные основания проверены.",

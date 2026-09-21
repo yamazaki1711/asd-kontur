@@ -52,6 +52,7 @@ from .models import (
 )
 from .native import NativeDocument
 from .ocr import OcrAdapterResult
+from .project_identity import reconcile_project_identity_fields
 from .semantic import StructuredCandidates
 from .work_packages import consolidate_work_package_candidates
 from .work_type_catalog import resolve_work_type_candidates
@@ -2270,7 +2271,12 @@ class IndustrialUnderstandingRepository:
         result: list[dict[str, Any]] = []
         for row in rows:
             decision = by_candidate.get(str(row["candidate_id"]))
-            if decision is None or decision["action"] == "confirmed":
+            if decision is None:
+                result.append(row)
+                continue
+            if decision["action"] == "confirmed":
+                if candidate_kind in {"project_field", "quantity", "material"}:
+                    row["status"] = "verified"
                 result.append(row)
                 continue
             if decision["action"] == "rejected":
@@ -2345,78 +2351,97 @@ class IndustrialUnderstandingRepository:
         fields: list[dict[str, Any]],
         corpus_digest: str,
     ) -> tuple[UUID, str, list[str], dict[str, Any]]:
-        # Engineering extraction deliberately retains measurements, materials and
-        # facility properties as generic field observations.  They are not safe
-        # project-wide attributes merely because their extraction batch happened
-        # to use the same ``field_key``.  Treating every such observation as a
-        # project-definition key made unrelated dimensions and equipment values
-        # manufacture thousands of false project conflicts, hiding an otherwise
-        # useful partial model.  Keep those candidates for the later
-        # evidence/scope reconciliation; only identity fields belong here.
-        project_identity_keys = frozenset({"object_name", "purpose", "object_composition"})
-        by_key: dict[str, list[dict[str, Any]]] = {}
-        for item in fields:
-            key = str(item["field_key"])
-            if key in project_identity_keys:
-                by_key.setdefault(key, []).append(item)
-        selected: dict[str, Any] = {}
+        # Measurements and facility properties remain source-scoped observations.
+        # Project identity uses a separate evidence hierarchy: reviewed or
+        # deterministic verified values are authoritative; repeated model values
+        # are exposed only as multi-source candidate consensus.
+        identity = reconcile_project_identity_fields(fields)
+        selected = identity["verified_fields"]
+        candidate_fields = identity["candidate_fields"]
+        outcomes = identity["outcomes"]
         gaps: list[str] = []
-        for key, candidates in sorted(by_key.items()):
-            normalized = {
-                json.dumps(item["normalized_value"], sort_keys=True) for item in candidates
-            }
+        for key, outcome in sorted(outcomes.items()):
+            candidate_ids = list(outcome.get("candidate_ids") or ())
+            if not candidate_ids:
+                continue
             decision_id = deterministic_uuid(f"project-field-decision:{claimed.workspace_id}:{key}")
-            if len(normalized) == 1:
-                candidate = candidates[0]
-                status = "verified"
-                selected[key] = {
-                    "raw_value": candidate["raw_value"],
-                    "normalized_value": candidate["normalized_value"],
-                    "source_version_id": str(candidate["source_version_id"]),
-                    "source_locator_id": str(candidate["source_locator_id"]),
-                    "candidate_id": str(candidate["candidate_id"]),
-                }
-                selected_id = candidate["candidate_id"]
-                selected_version = candidate["version"]
-            else:
-                status = "conflict"
-                selected_id = None
-                selected_version = None
-                gaps.append(f"PROJECT_FIELD_CONFLICT:{key}")
+            state = str(outcome["state"])
+            status = (
+                "verified"
+                if state == "verified"
+                else "conflict"
+                if state in {"verified_conflict", "candidate_conflict"}
+                else "gap"
+            )
+            selected_id = outcome.get("selected_candidate_id")
+            selected_version = outcome.get("selected_candidate_version")
             receipt = semantic_digest(
                 {
                     "key": key,
-                    "candidates": [str(item["candidate_id"]) for item in candidates],
+                    "candidates": candidate_ids,
+                    "state": state,
                     "status": status,
                 }
             )
-            session.execute(
-                sa.text(
-                    "INSERT INTO workspace.project_field_decisions "
-                    "(organization_id,workspace_id,decision_id,decision_version,field_key,selected_candidate_id,"
-                    "selected_candidate_version,status,validation_profile_version,decision_receipt_digest) VALUES "
-                    "(:o,:w,:decision,1,:key,:candidate,:candidate_version,:status,'project-field-validator-v0.1',"
-                    ":receipt) ON CONFLICT DO NOTHING"
-                ),
-                {
-                    "o": claimed.organization_id,
-                    "w": claimed.workspace_id,
-                    "decision": decision_id,
-                    "key": key,
-                    "candidate": selected_id,
-                    "candidate_version": selected_version,
-                    "status": status,
-                    "receipt": receipt,
-                },
+            latest = (
+                session.execute(
+                    sa.text(
+                        "SELECT decision_version,decision_receipt_digest FROM "
+                        "workspace.project_field_decisions WHERE organization_id=:o AND "
+                        "workspace_id=:w AND decision_id=:decision ORDER BY decision_version DESC LIMIT 1"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "decision": decision_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
             )
+            if latest is None or str(latest["decision_receipt_digest"]) != receipt:
+                decision_version = 1 if latest is None else int(latest["decision_version"]) + 1
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_field_decisions "
+                        "(organization_id,workspace_id,decision_id,decision_version,field_key,selected_candidate_id,"
+                        "selected_candidate_version,status,validation_profile_version,decision_receipt_digest,"
+                        "supersedes_decision_version) VALUES "
+                        "(:o,:w,:decision,:decision_version,:key,:candidate,:candidate_version,:status,"
+                        "'project-field-validator-v0.2',:receipt,:supersedes)"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "decision": decision_id,
+                        "decision_version": decision_version,
+                        "key": key,
+                        "candidate": selected_id,
+                        "candidate_version": selected_version,
+                        "status": status,
+                        "receipt": receipt,
+                        "supersedes": int(latest["decision_version"])
+                        if latest is not None
+                        else None,
+                    },
+                )
         for required in ("object_name", "purpose", "object_composition"):
-            if required not in selected:
+            if required in selected:
+                continue
+            outcome_state = str(outcomes.get(required, {}).get("state") or "missing")
+            if required in candidate_fields:
+                gaps.append(f"PROJECT_FIELD_CANDIDATE_ONLY:{required}")
+            elif outcome_state in {"verified_conflict", "candidate_conflict"}:
+                gaps.append(f"PROJECT_FIELD_CONFLICT:{required}")
+            else:
                 gaps.append(f"PROJECT_FIELD_GAP:{required}")
         definition = {
             "fields": selected,
+            "candidate_fields": candidate_fields,
             "gaps": sorted(gaps),
             "complete": not gaps,
             "authority": "workspace_verified_facts_only",
+            "candidate_authority": "multi_source_consensus_not_confirmed_fact",
         }
         project_id = deterministic_uuid(
             f"project-definition:{claimed.organization_id}:{claimed.workspace_id}:{corpus_digest}"
@@ -2442,7 +2467,7 @@ class IndustrialUnderstandingRepository:
                 "project": project_id,
                 "purpose": str(selected.get("purpose", {}).get("normalized_value", "unresolved")),
                 "object_class": str(
-                    selected.get("printed_class", {}).get("normalized_value", "unresolved")
+                    selected.get("object_class", {}).get("normalized_value", "unresolved")
                 ),
                 "sources": source_ids,
                 "definition": _json(definition),
