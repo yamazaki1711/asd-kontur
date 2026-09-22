@@ -1,0 +1,181 @@
+{
+ "schema_version": "rule-activation-selection-v1",
+ "selection_decision": "NTD-RULE-ACTIVATION-ID-COMPOSITION-01",
+ "interpretation_profile_version": "normative-rule-candidate-manifest-v1",
+ "qualification_profile_version": "normative-rule-qualification-v1",
+ "rules": [
+  {
+   "structural_path": "4.5",
+   "deontic_type": "obligation",
+   "actor": {
+    "kind": "construction_control_performer"
+   },
+   "regulated_object": {
+    "kind": "instrumental_control_results"
+   },
+   "required_action": {
+    "action": "reflect_in_executive_documentation"
+   },
+   "applicability_predicate": {
+    "field": "control.kind",
+    "operator": "eq",
+    "value": "instrumental"
+   },
+   "output_contract": {
+    "required_documents": [
+     "executive_documentation",
+     "general_work_journal",
+     "special_work_journal"
+    ]
+   },
+   "evidence_bindings": {
+    "deontic_type": [
+     "должны отображаться"
+    ],
+    "actor": [
+     "должно выполнять инструментальный"
+    ],
+    "regulated_object": [
+     "Результаты\nинструментального контроля"
+    ],
+    "required_action": [
+     "включая общий и специальн"
+    ],
+    "applicability_predicate": [
+     "в исполнительной"
+    ]
+   },
+   "designation": "СП 543.1325800.2024",
+   "provision_verbatim": "4.5 Лицо, осуществляющее строительство, при проведении строительного\nконтроля должно выполнять инструментальный контроль для подтверждения\nфизико-механических и иных характеристик материалов, конструкций и\nизделий в объеме, установленном проектной документацией, а в случае\nотсутствия таких указаний– в объеме требований документов по\nстандартизации. Испытания в рамках инструментального контроля\nвыполняются собственными силами лица, осуществляющего строительный\nконтроль, с использованием предусмотренных для этого средств измерений и\nприборов в соответствии с 4.3, 4.4 и (или)путемзаключения договора\nвозмездного оказания услуг по выполнению тех видов измерений и\nиспытаний, которые не могут быть осуществлены самостоятельно, со\nсторонними юридическими лицами, осуществляющими инструментальный\nконтроль. Привлеченные подрядчиком или заказчиком по договору\nвозмездного оказания услуг юридические лица, осуществляющие\nинструментальный контроль, должны соответствовать требованиям\nдействующего законодательства и документов по стандартизации. Результаты\nинструментального контроля должны отображаться в исполнительной\nдокументации (включая общий и специальный журналы работ), в том числе в\nсоставе информационной модели объекта (в случае, если формирование и\nведение информационной модели являются обязательными в соответствии с\nтребованиями действующего законодательства)."
+  },
+  {
+   "structural_path": "6.6",
+   "deontic_type": "obligation",
+   "actor": {
+    "kind": "construction_performer"
+   },
+   "regulated_object": {
+    "kind": "structure_conformity_assessment"
+   },
+   "required_action": {
+    "action": "present_hidden_work_evidence"
+   },
+   "applicability_predicate": {
+    "field": "assessment.stage",
+    "operator": "eq",
+    "value": "structure_conformity"
+   },
+   "output_contract": {
+    "required_documents": [
+     "hidden_work_survey_act",
+     "geodetic_executive_scheme",
+     "structure_test_protocol"
+    ]
+   },
+   "evidence_bindings": {
+    "deontic_type": [
+     "должно\nпредставить"
+    ],
+    "actor": [
+     "осуществляющее строительство"
+    ],
+    "regulated_object": [
+     "оценки соответствия"
+    ],
+    "required_action": [
+     "акты освидетельствования"
+    ],
+    "applicability_predicate": [
+     "всех скрытых работ"
+    ]
+   },
+   "designation": "СП 543.1325800.2024",
+   "provision_verbatim": "6.6 К процедуре оценки соответствия отдельных конструкций, ярусов\nконструкций (этажей) лицо, осуществляющее строительство, должно\nпредставить акты освидетельствования всех скрытых работ, входящих в\nсостав этих конструкций, геодезические исполнительные схемы, а также\nпротоколы испытаний конструкций (в том числе в составе информационной\nмодели объекта) в случаях, предусмотренных проектной документацией,\nдокументами по стандартизации и технической документацией и (или)\nдоговором строительного подряда. Для обеспечения возможности\nзастройщика (технического заказчика) выполнить контроль достоверности\nпредставленных исполнителем работ, исполнительных геодезических схем,\nлицо, осуществляющее строительство, должно сохранять до момента\nзавершения приемки закрепленные в натуре разбивочные оси и монтажные\nориентиры."
+  },
+  {
+   "structural_path": "6.9",
+   "deontic_type": "obligation",
+   "actor": {
+    "kind": "defect_elimination_participant"
+   },
+   "regulated_object": {
+    "kind": "defect_elimination_facts"
+   },
+   "required_action": {
+    "action": "formalize_in_writing"
+   },
+   "applicability_predicate": {
+    "field": "work.defect_remarks",
+    "operator": "eq",
+    "value": true
+   },
+   "output_contract": {
+    "required_documents": [
+     "written_defect_elimination_record"
+    ]
+   },
+   "evidence_bindings": {
+    "deontic_type": [
+     "должны быть оформлены в письменной"
+    ],
+    "actor": [
+     "по замечаниям"
+    ],
+    "regulated_object": [
+     "Факты устранения"
+    ],
+    "required_action": [
+     "в письменной форме"
+    ],
+    "applicability_predicate": [
+     "недостатков выполнения работ"
+    ]
+   },
+   "designation": "СП 543.1325800.2024",
+   "provision_verbatim": "6.9 Факты устранения недостатков выполнения работ по замечаниям\nзастройщика (технического заказчика),лица, осуществляющего\nстроительство, лица, ответственного за эксплуатацию здания, сооружения,\nили регионального оператора должны быть оформлены в письменной форме.\nОб устранении указанных недостатков составляется акт,который\nподписывается лицом, предъявившим замечания об указанных недостатках, и\nлицом, осуществляющим строительство."
+  },
+  {
+   "structural_path": "7.2.3",
+   "deontic_type": "obligation",
+   "actor": {
+    "kind": "operational_control_performer"
+   },
+   "regulated_object": {
+    "kind": "operational_control_results"
+   },
+   "required_action": {
+    "action": "document_in_journals"
+   },
+   "applicability_predicate": {
+    "field": "control.kind",
+    "operator": "eq",
+    "value": "operational"
+   },
+   "output_contract": {
+    "required_documents": [
+     "general_work_journal",
+     "special_work_journal"
+    ]
+   },
+   "evidence_bindings": {
+    "deontic_type": [
+     "должны быть\nдокументированы"
+    ],
+    "actor": [
+     "Результаты операционного контроля"
+    ],
+    "regulated_object": [
+     "общем и специальных журналах"
+    ],
+    "required_action": [
+     "ведется учет"
+    ],
+    "applicability_predicate": [
+     "выполнения работ"
+    ]
+   },
+   "designation": "СП 543.1325800.2024",
+   "provision_verbatim": "7.2.3 Результаты операционного контроля должны быть\nдокументированы в общем и специальных журналах, в которых ведется учет\nвыполнения работ [5]."
+  }
+ ]
+}

@@ -210,7 +210,7 @@ def qualify_rule_candidate(
     """Apply deterministic provenance and semantic-evidence gates."""
 
     modal_quotes = {
-        DeonticType.OBLIGATION: ("должен", "должны", "должна", "необходимо"),
+        DeonticType.OBLIGATION: ("должен", "должны", "должна", "должно", "необходимо"),
         DeonticType.PROHIBITION: ("запрещается", "не допускается"),
         DeonticType.PERMISSION: ("допускается", "может"),
     }
