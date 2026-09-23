@@ -11,6 +11,7 @@ from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
     _project_pit_unresolved_inventory,
+    _public_inventory_candidate,
     _select_facility_work_candidates,
     _semantic_coverage_complete,
 )
@@ -44,6 +45,25 @@ def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> No
         is False
     )
     assert _semantic_coverage_complete([{"status": "complete"}]) is False
+
+
+def test_public_inventory_candidate_preserves_evidence_sources_not_internal_ids() -> None:
+    source_id = uuid4()
+    candidate = _public_inventory_candidate(
+        {
+            "identity_candidate_id": uuid4(),
+            "member_structure_node_ids": [uuid4()],
+            "source_locator_ids": [source_id],
+            "canonical_label": "Котлован К-1",
+            "status": "candidate",
+        }
+    )
+
+    assert candidate == {
+        "canonical_label": "Котлован К-1",
+        "status": "требует подтверждения",
+        "source_ids": [str(source_id)],
+    }
 
 
 def test_pit_inventory_preserves_dispositions_and_full_unresolved_denominator() -> None:

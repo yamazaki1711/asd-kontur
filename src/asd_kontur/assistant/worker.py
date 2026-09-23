@@ -764,10 +764,29 @@ def _claims_unproven_inventory_total(answer: str, candidate_count: int) -> bool:
 def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
     bounded: list[dict[str, Any]] = []
     remaining = 14_000
-    for receipt in receipts:
+    # An exhaustive inventory is a completeness contract, not optional metadata.
+    # Serialize it first so an earlier verbose overview/search result cannot evict
+    # the candidate identities required by synthesis and deterministic validation.
+    ordered = sorted(
+        receipts,
+        key=lambda receipt: receipt.get("tool") != "consultant.get_project_entity_inventory",
+    )
+    for receipt in ordered:
         if remaining <= 0:
             break
         response = receipt["response"]
+        if receipt.get("tool") == "consultant.get_project_entity_inventory":
+            record = _inventory_prompt_record(receipt)
+            available = min(9_000, remaining)
+            record_text = json.dumps(record, ensure_ascii=False, default=str)
+            if len(record_text) > available:
+                record = _minimal_inventory_prompt_record(record)
+                record_text = json.dumps(record, ensure_ascii=False, default=str)
+            if len(record_text) > available:
+                raise ValueError("assistant_inventory_prompt_budget_exhausted")
+            remaining -= len(record_text)
+            bounded.append(record)
+            continue
         source_index = [
             {
                 "source_id": str(source.get("source_id", "")),
@@ -800,6 +819,166 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         remaining -= len(record_text)
         bounded.append(record)
     return json.dumps(bounded, ensure_ascii=False)
+
+
+def _inventory_prompt_record(receipt: dict[str, Any]) -> dict[str, Any]:
+    """Project an exhaustive inventory without slicing its JSON representation.
+
+    Candidate identity, scope and source bindings are mandatory.  Large member
+    observations and dossier bodies are useful in the application but are not
+    needed to enumerate the selected candidate page.  Their counts and coverage
+    remain visible so compaction cannot be mistaken for project completeness.
+    """
+
+    response = receipt["response"]
+    value = response.get("value") if isinstance(response, dict) else None
+    if not isinstance(value, dict):
+        value = {}
+    raw_candidates = value.get("candidate_entities", [])
+    candidates = [
+        _inventory_prompt_candidate(item) for item in raw_candidates if isinstance(item, dict)
+    ]
+    dossiers = value.get("candidate_dossiers", [])
+    compact_value = {
+        key: value[key]
+        for key in (
+            "authority",
+            "filter",
+            "candidate_entity_count",
+            "returned_candidate_entity_count",
+            "unresolved_observation_count",
+            "returned_unresolved_observation_count",
+            "coverage",
+        )
+        if key in value
+    }
+    compact_value["candidate_entities"] = candidates
+    compact_value["candidate_dossier_count"] = len(dossiers) if isinstance(dossiers, list) else 0
+    sources = _inventory_prompt_sources(response, candidates)
+    return {
+        "step": receipt["step_sequence"],
+        "tool": receipt["tool"],
+        "reason": receipt["reason"],
+        "result": {
+            "contract": response.get("contract"),
+            "outcome": response.get("outcome"),
+            "value": compact_value,
+            "gaps": response.get("gaps", []),
+            "prompt_projection": "project-entity-inventory-v1",
+        },
+        "evidence": sources,
+        "evidence_coverage": {
+            "available_source_count": len(response.get("sources", [])),
+            "returned_source_count": len(sources),
+        },
+    }
+
+
+def _inventory_prompt_candidate(item: dict[str, Any]) -> dict[str, Any]:
+    selected = {
+        key: item[key]
+        for key in (
+            "canonical_label",
+            "display_name",
+            "identity_kind",
+            "associated_facility_designation",
+            "aliases",
+            "observation_count",
+            "status",
+            "candidate_state",
+            "authority",
+        )
+        if item.get(key) not in (None, "", [], ())
+    }
+    selected["source_ids"] = [
+        str(source_id) for source_id in item.get("source_ids", []) if source_id
+    ]
+    return selected
+
+
+def _inventory_prompt_sources(
+    response: dict[str, Any], candidates: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    raw_sources = [
+        source
+        for source in response.get("sources", [])
+        if isinstance(source, dict) and source.get("source_id")
+    ]
+    by_id = {str(source["source_id"]): source for source in raw_sources}
+    preferred: list[str] = []
+    # First preserve one exact locator per candidate, then fill the remaining
+    # bounded index in stable gateway order.
+    for candidate in candidates:
+        source_ids = candidate.get("source_ids", [])
+        if source_ids:
+            preferred.append(str(source_ids[0]))
+    preferred.extend(str(source["source_id"]) for source in raw_sources)
+    selected: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for source_id in preferred:
+        source = by_id.get(source_id)
+        if source is None or source_id in seen:
+            continue
+        seen.add(source_id)
+        selected.append(
+            {
+                "source_id": source_id,
+                "source_version_id": str(source.get("source_version_id", "")),
+                "title": str(source.get("title", "")),
+                "locator": str(source.get("locator_label", "")),
+                "page": source.get("page"),
+                "fragment": str(source.get("fragment", ""))[:180],
+            }
+        )
+        if len(selected) >= 12:
+            break
+    return selected
+
+
+def _minimal_inventory_prompt_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Drop optional display detail while retaining every candidate and source ID."""
+
+    value = record["result"]["value"]
+    candidates = []
+    for item in value.get("candidate_entities", []):
+        candidate = {
+            key: item[key]
+            for key in (
+                "canonical_label",
+                "associated_facility_designation",
+                "status",
+                "authority",
+                "source_ids",
+            )
+            if item.get(key) not in (None, "", [], ())
+        }
+        candidates.append(candidate)
+    compact_value = {
+        key: value[key]
+        for key in (
+            "authority",
+            "filter",
+            "candidate_entity_count",
+            "returned_candidate_entity_count",
+            "unresolved_observation_count",
+            "returned_unresolved_observation_count",
+            "coverage",
+        )
+        if key in value
+    }
+    compact_value["candidate_entities"] = candidates
+    return {
+        **record,
+        "result": {**record["result"], "value": compact_value},
+        "evidence": [
+            {key: source[key] for key in ("source_id", "title", "locator", "page")}
+            for source in record["evidence"][:8]
+        ],
+        "evidence_coverage": {
+            **record["evidence_coverage"],
+            "projection_reduced_to_fit": True,
+        },
+    }
 
 
 def _deduplicated_sources(

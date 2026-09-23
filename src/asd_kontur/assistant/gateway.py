@@ -1736,6 +1736,7 @@ class ProfessionalAssistantKnowledgeQuery:
             for locator_id in sorted(locator_ids)
             if isinstance((row := evidence_index.get(locator_id)), dict)
         ]
+        public_identities = [_public_inventory_candidate(item) for item in returned_identities]
         value = {
             "authority": (
                 "explicit_source_association_candidates_not_confirmed_project_total"
@@ -1747,7 +1748,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "returned_candidate_entity_count": len(returned_identities),
             "unresolved_observation_count": unresolved_total,
             "returned_unresolved_observation_count": len(returned_unresolved),
-            "candidate_entities": _public_value(returned_identities),
+            "candidate_entities": public_identities,
             "candidate_dossiers": _public_value(returned_dossiers),
             "unresolved_observations": _public_value(returned_unresolved),
             "coverage": {
@@ -2341,6 +2342,17 @@ def _public_value(value: Any) -> Any:
             return _PUBLIC_GAP_LABELS[value]
         return value[:1200]
     return value
+
+
+def _public_inventory_candidate(value: dict[str, Any]) -> dict[str, Any]:
+    """Expose only the internal identifiers that are public evidence locators."""
+
+    result = dict(_public_value(value))
+    # Source-locator UUIDs are already the public EvidenceItem source IDs.
+    # Preserve that intentional citation binding while continuing to hide
+    # internal candidate/member identifiers through ``_public_value``.
+    result["source_ids"] = [str(locator_id) for locator_id in value.get("source_locator_ids", [])]
+    return result
 
 
 def _page_from_locator(value: Any) -> int:

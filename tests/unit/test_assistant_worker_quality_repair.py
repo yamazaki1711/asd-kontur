@@ -203,7 +203,7 @@ def test_inventory_repair_receives_candidates_coverage_and_allowed_sources() -> 
     )
 
     assert "Facility Delta" in prompt
-    assert 'exact_total_supported\\": false' in prompt
+    assert '"exact_total_supported": false' in prompt
     assert source_id in prompt
 
 
