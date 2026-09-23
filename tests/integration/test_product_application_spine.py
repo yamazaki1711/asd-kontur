@@ -465,7 +465,13 @@ def test_job_cancellation_and_retry_exhaustion_are_terminal_and_receipted(
                 ),
                 {"job": running.job_id},
             )
-        assert worker_repository.reconcile_unclaimable_jobs() >= 1
+        assert (
+            worker_repository.reconcile_expired_exhausted_jobs(
+                organization_id=UUID(workspace["organization_id"]),
+                workspace_id=UUID(workspace["workspace_id"]),
+            )
+            == 1
+        )
 
         third = client.post(
             f"/api/v1/workspaces/{workspace['workspace_id']}/documents",

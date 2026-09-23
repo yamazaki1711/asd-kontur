@@ -1212,7 +1212,7 @@ class SpinePostgresRepository:
     def reconcile_expired_exhausted_jobs(
         self, *, organization_id: UUID, workspace_id: UUID, limit: int = 8
     ) -> int:
-        """Fence crashed jobs whose lease and retry budget are both exhausted."""
+        """Fence expired jobs that are cancelled or have exhausted retries."""
 
         if not 1 <= limit <= 64:
             raise ValueError("expired job reconciliation limit is invalid")
@@ -1221,10 +1221,12 @@ class SpinePostgresRepository:
             _set_scope(session, organization_id, workspace_id)
             rows = session.execute(
                 sa.text(
-                    "SELECT job_id,lease_generation FROM workspace.durable_jobs WHERE "
+                    "SELECT job_id,lease_generation,cancellation_state FROM "
+                    "workspace.durable_jobs WHERE "
                     "organization_id=:organization AND workspace_id=:workspace AND "
                     "state IN ('leased','running') AND lease_expires_at<CURRENT_TIMESTAMP AND "
-                    "attempt_count>=max_attempts ORDER BY lease_expires_at,job_id "
+                    "(attempt_count>=max_attempts OR cancellation_state='requested') "
+                    "ORDER BY lease_expires_at,job_id "
                     "FOR UPDATE SKIP LOCKED LIMIT :limit"
                 ),
                 {
@@ -1236,17 +1238,26 @@ class SpinePostgresRepository:
             for row in rows:
                 job_id = UUID(str(row.job_id))
                 generation = int(row.lease_generation)
+                cancelled = str(row.cancellation_state) == "requested"
+                terminal_state = (
+                    JobState.CANCELLED if cancelled else JobState.RECONCILIATION_REQUIRED
+                )
+                outcome_code = (
+                    "job_cancelled_after_worker_loss"
+                    if cancelled
+                    else "worker_lease_expired_after_attempt_exhaustion"
+                )
                 receipt_id = uuid7()
                 result = {
                     "semantic_effect": "unknown",
-                    "reason": "lease_expired_after_attempt_exhaustion",
+                    "reason": outcome_code,
                 }
                 result_digest = semantic_digest(
                     {
                         "job_id": job_id,
                         "lease_generation": generation,
-                        "terminal_state": JobState.RECONCILIATION_REQUIRED.value,
-                        "outcome_code": "worker_lease_expired_after_attempt_exhaustion",
+                        "terminal_state": terminal_state.value,
+                        "outcome_code": outcome_code,
                         "result": result,
                     }
                 )
@@ -1255,8 +1266,7 @@ class SpinePostgresRepository:
                         "INSERT INTO workspace.job_terminal_receipts "
                         "(organization_id,workspace_id,terminal_receipt_id,job_id,lease_generation,"
                         "terminal_state,typed_outcome_code,result_manifest,result_digest) VALUES "
-                        "(:organization,:workspace,:receipt,:job,:generation,"
-                        "'reconciliation_required','worker_lease_expired_after_attempt_exhaustion',"
+                        "(:organization,:workspace,:receipt,:job,:generation,:terminal,:outcome,"
                         "CAST(:result AS jsonb),:digest)"
                     ),
                     {
@@ -1265,23 +1275,29 @@ class SpinePostgresRepository:
                         "receipt": receipt_id,
                         "job": job_id,
                         "generation": generation,
+                        "terminal": terminal_state.value,
+                        "outcome": outcome_code,
                         "result": _json(result),
                         "digest": result_digest,
                     },
                 )
                 session.execute(
                     sa.text(
-                        "UPDATE workspace.durable_jobs SET state='reconciliation_required',"
-                        "completed_at=CURRENT_TIMESTAMP,typed_failure_code="
-                        "'worker_lease_expired_after_attempt_exhaustion',result_receipt_id=:receipt,"
-                        "lease_owner=NULL,lease_expires_at=NULL WHERE organization_id=:organization "
+                        "UPDATE workspace.durable_jobs SET state=:terminal,"
+                        "completed_at=CURRENT_TIMESTAMP,typed_failure_code=:outcome,"
+                        "result_receipt_id=:receipt,lease_owner=NULL,lease_expires_at=NULL,"
+                        "cancellation_state=CASE WHEN :cancelled THEN 'acknowledged' "
+                        "ELSE cancellation_state END WHERE organization_id=:organization "
                         "AND workspace_id=:workspace AND job_id=:job"
                     ),
                     {
+                        "terminal": terminal_state.value,
+                        "outcome": outcome_code,
                         "organization": organization_id,
                         "workspace": workspace_id,
                         "job": job_id,
                         "receipt": receipt_id,
+                        "cancelled": cancelled,
                     },
                 )
                 self._append_event(
@@ -1289,8 +1305,8 @@ class SpinePostgresRepository:
                     organization_id=organization_id,
                     workspace_id=workspace_id,
                     job_id=job_id,
-                    event_type="job.reconciliation_required",
-                    safe_message_code="worker_lease_expired_after_attempt_exhaustion",
+                    event_type=f"job.{terminal_state.value}",
+                    safe_message_code=outcome_code,
                     current=1,
                     total=1,
                     terminal=True,
