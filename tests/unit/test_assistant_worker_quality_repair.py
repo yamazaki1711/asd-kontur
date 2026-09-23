@@ -7,7 +7,7 @@ from uuid import uuid4
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.models import AssistantMode, ClaimedTurn
 from asd_kontur.assistant.postgres import AssistantRepository
-from asd_kontur.assistant.reasoning import SynthesizedAnswer
+from asd_kontur.assistant.reasoning import SearchPlan, SynthesizedAnswer
 from asd_kontur.assistant.worker import (
     AssistantWorker,
     _repair_prompt,
@@ -285,6 +285,76 @@ def test_answer_repair_retries_one_malformed_model_response(monkeypatch: Any) ->
     assert repaired.used_source_ids == (source_id,)
     assert repaired.answer_type == "workspace_conclusion"
     assert [call["max_tokens"] for call in calls] == [800, 2400]
+
+
+def test_initial_synthesis_repairs_one_truncated_json_response(monkeypatch: Any) -> None:
+    source_id = "22222222-2222-4222-8222-222222222222"
+    worker = AssistantWorker(
+        cast(AssistantRepository, object()),
+        cast(ProfessionalAssistantKnowledgeQuery, object()),
+        identity="test-worker",
+    )
+    responses = iter(
+        (
+            '{"answer":"Оборванный первичный ответ',
+            json.dumps(
+                {
+                    "answer": "Кандидатный перечень приведён; точный итог не доказан.",
+                    "answer_type": "workspace_conclusion",
+                    "needs_clarification": False,
+                    "used_source_ids": [source_id],
+                    "dialogue_summary": "Проверяется инвентарь котлованов.",
+                    "active_subjects": ["котлованы"],
+                },
+                ensure_ascii=False,
+            ),
+        )
+    )
+    calls: list[dict[str, Any]] = []
+
+    def complete(*_args: Any, **kwargs: Any) -> str:
+        calls.append(kwargs)
+        return next(responses)
+
+    monkeypatch.setattr(worker, "_model_complete", complete)
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "Перечисли котлованы.",
+        "owner-a",
+        1,
+        1,
+    )
+    receipts = [
+        {
+            "step_sequence": 1,
+            "tool": "consultant.get_project_entity_inventory",
+            "reason": "Inventory coverage.",
+            "response": {
+                "value": {
+                    "candidate_entity_count": 1,
+                    "candidate_entities": [{"canonical_label": "Котлован 1"}],
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id}],
+            },
+        }
+    ]
+
+    answer = worker._synthesize(
+        claimed,
+        SearchPlan("workspace", False, None, ()),
+        receipts,
+        (),
+        None,
+    )
+
+    assert answer.used_source_ids == (source_id,)
+    assert answer.answer_type == "workspace_conclusion"
+    assert [call["max_tokens"] for call in calls] == [520, 2400]
 
 
 def test_inventory_candidate_count_cannot_be_published_as_project_total() -> None:

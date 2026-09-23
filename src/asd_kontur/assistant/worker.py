@@ -416,13 +416,24 @@ class AssistantWorker:
         dialogue_state: dict[str, Any] | None,
     ) -> SynthesizedAnswer:
         available_sources = _deduplicated_sources(receipts)
+        prompt = _synthesis_prompt(claimed, plan, receipts, history, dialogue_state)
         raw = self._model_complete(
             claimed,
-            _synthesis_prompt(claimed, plan, receipts, history, dialogue_state),
+            prompt,
             max_tokens=_answer_budget(claimed.question, receipts),
             temperature=0.2,
         )
-        return parse_synthesized_answer(raw, {str(item["source_id"]) for item in available_sources})
+        allowed_source_ids = {str(item["source_id"]) for item in available_sources}
+        try:
+            return parse_synthesized_answer(raw, allowed_source_ids)
+        except (ValueError, json.JSONDecodeError) as error:
+            corrected = self._model_complete(
+                claimed,
+                _answer_repair_output_prompt(prompt, raw, str(error)),
+                max_tokens=2_400,
+                temperature=0.0,
+            )
+            return parse_synthesized_answer(corrected, allowed_source_ids)
 
     def _model_quality_check(
         self,
