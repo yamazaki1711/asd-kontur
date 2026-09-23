@@ -4865,9 +4865,16 @@ function ProjectUnderstandingPage() {
                   value={summaryCounts.work_candidate_count ?? 0}
                 />
                 <Metric
-                  label="Работ с точной группой объекта"
+                  label="Работ с группой объекта по общему источнику"
                   value={Number(
                     facilityWorkCoverage.exact_identity_package_count ?? 0,
+                  )}
+                />
+                <Metric
+                  label="Работ с группой объекта по явному уникальному обозначению"
+                  value={Number(
+                    facilityWorkCoverage.explicit_label_identity_package_count ??
+                      0,
                   )}
                 />
                 <Metric
@@ -5271,7 +5278,13 @@ function ProjectUnderstandingPage() {
                     {Number(
                       facilityWorkCoverage.total_work_package_count ?? 0,
                     ).toString()}{" "}
-                    наблюдений; неоднозначных:{" "}
+                    наблюдений; по явному уникальному обозначению объекта в
+                    наименовании работы:{" "}
+                    {Number(
+                      facilityWorkCoverage.explicit_label_identity_package_count ??
+                        0,
+                    ).toString()}
+                    ; неоднозначных:{" "}
                     {Number(
                       facilityWorkCoverage.ambiguous_identity_package_count ??
                         0,
@@ -5492,9 +5505,12 @@ function FacilityWorkCandidateList({
           const uncertainties = Array.isArray(item.uncertainties)
             ? item.uncertainties.map((value) => humanizeGap(String(value)))
             : [];
-          const locators = Array.isArray(item.shared_source_locator_ids)
-            ? item.shared_source_locator_ids.map(String)
-            : [];
+          const locators = Array.isArray(item.association_evidence_locator_ids)
+            ? item.association_evidence_locator_ids.map(String)
+            : Array.isArray(item.shared_source_locator_ids)
+              ? item.shared_source_locator_ids.map(String)
+              : [];
+          const associationState = displayValue(item.association_state);
           return (
             <article
               className="candidate-row"
@@ -5512,6 +5528,18 @@ function FacilityWorkCandidateList({
                 {Number(item.candidate_observation_count ?? 0).toString()};
                 количеств: {quantities.length}; материалов: {materials.length}.
               </small>
+              <p>
+                <small>
+                  Основание связи:{" "}
+                  {associationState === "exact_locator_identity_candidate"
+                    ? "общий исходный фрагмент"
+                    : associationState ===
+                        "explicit_unique_identity_label_candidate"
+                      ? "явное уникальное обозначение объекта в наименовании работы"
+                      : "смешанный набор кандидатных оснований"}
+                  . Связь не является подтверждённым назначением работы объекту.
+                </small>
+              </p>
               {uncertainties.length > 0 && (
                 <p>
                   <small>Ограничения: {uncertainties.join("; ")}</small>

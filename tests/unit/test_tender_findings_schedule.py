@@ -288,7 +288,7 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
     assert manifest["candidate_boundary"] is True
-    assert manifest["contract"] == "tender.analysis-delivery@1.4.0"
+    assert manifest["contract"] == "tender.analysis-delivery@1.5.0"
     assert (
         manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
     )
@@ -397,6 +397,41 @@ def test_facility_scope_schedule_requires_one_exact_shared_locator() -> None:
     assert rows[1]["association_state"] == "ambiguous_identity_candidates"
     assert rows[1]["identity_candidate_ids"] == "facility-b;facility-c"
     assert rows[1]["candidate_status"] == "candidate_no_canonical_work_package"
+
+
+def test_facility_scope_schedule_keeps_explicit_unique_label_as_candidate_evidence() -> None:
+    content = render_tender_facility_scope_schedule_csv(
+        (
+            {
+                "work_package_id": "work-los-4",
+                "package": {
+                    "work_package_id": "work-los-4",
+                    "work_type": {"raw": "Строительство ЛОС-4"},
+                    "scope": "page:7",
+                    "source_locator_ids": ["work-locator"],
+                },
+            },
+        ),
+        identity_candidates=(
+            {
+                "identity_candidate_id": "facility-los-4",
+                "canonical_label": "ЛОС 4",
+                "identity_kind": "facility",
+                "confidence": "0.81",
+                "source_locator_ids": ["identity-locator"],
+            },
+        ),
+        materialization_state="partial",
+        coverage_gaps=("SEMANTIC_COVERAGE_PARTIAL",),
+    )
+
+    row = next(csv.DictReader(StringIO(content.decode("utf-8-sig"))))
+    assert row["association_state"] == "explicit_unique_identity_label_candidate"
+    assert row["identity_candidate_ids"] == "facility-los-4"
+    assert row["shared_source_locator_ids"] == ""
+    assert row["association_evidence_locator_ids"] == "identity-locator;work-locator"
+    assert row["matched_identity_labels"] == "лос 4"
+    assert row["candidate_status"] == "candidate_no_canonical_work_package"
 
 
 def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None:

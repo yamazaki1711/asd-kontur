@@ -60,7 +60,7 @@ def _delivery_manifest(
     """Bind this download to exact candidate projections and coverage state."""
 
     payload = {
-        "contract": "tender.analysis-delivery@1.4.0",
+        "contract": "tender.analysis-delivery@1.5.0",
         "candidate_boundary": True,
         "materialization": {
             "state": str(materialization.get("state") or "not_requested"),

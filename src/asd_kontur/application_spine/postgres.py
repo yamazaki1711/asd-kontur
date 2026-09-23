@@ -4929,12 +4929,15 @@ class SpinePostgresRepository:
                 "coverage": {
                     "total_work_package_count": 0,
                     "exact_identity_package_count": 0,
+                    "explicit_label_identity_package_count": 0,
                     "ambiguous_identity_package_count": 0,
                     "unassociated_package_count": 0,
                     "consolidated_candidate_group_count": 0,
                     "complete": False,
                     "candidate_authority": "candidate_only",
-                    "association_rule": "exact_shared_source_locator",
+                    "association_rule": (
+                        "exact_shared_source_locator_or_explicit_unique_identity_label"
+                    ),
                 },
             },
             "review_decisions": cls._project_review_rows(
