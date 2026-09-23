@@ -72,12 +72,28 @@ def build_pilot_result(
         "tender_scope_schedule": tender_scope_schedule,
         "source_manifest": source_manifest,
         "unresolved_questions": unresolved,
-        "available_exports": [item.value for item in MODE_EXPORTS[mode]],
+        "available_exports": available_exports(mode=mode, items=items),
         "normative_notice": "Актуальность редакций нормативных документов не проверена",
         "status": "draft_with_open_questions" if unresolved else "reviewed_draft",
     }
     payload["fingerprint"] = semantic_digest(payload)
     return payload
+
+
+def available_exports(*, mode: PilotMode, items: Iterable[dict[str, Any]]) -> list[str]:
+    """Expose only outputs whose required source analysis is actually available."""
+
+    exports = [item.value for item in MODE_EXPORTS[mode]]
+    if mode is not PilotMode.TENDER:
+        return exports
+    item_kinds = {str(item.get("kind")) for item in items}
+    if item_kinds.intersection({"contract_input_unavailable", "contract_analysis_pending"}):
+        unavailable = {
+            "disagreement_protocol",
+            "contract_changes",
+        }
+        return [value for value in exports if value not in unavailable]
+    return exports
 
 
 def _source_manifest(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:

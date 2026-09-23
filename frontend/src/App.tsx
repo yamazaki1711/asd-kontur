@@ -4741,11 +4741,6 @@ function ProjectUnderstandingPage() {
           >[];
           const structureComponents = (value.structure_components ??
             []) as Record<string, unknown>[];
-          const structureIdentityCandidates =
-            (value.structure_identity_candidates ?? []) as Record<
-              string,
-              unknown
-            >[];
           const structureIdentityComponents =
             (value.structure_identity_components ?? []) as Record<
               string,
@@ -5022,6 +5017,15 @@ function ProjectUnderstandingPage() {
                   </section>
                 </div>
               )}
+              {section === "general" && (
+                <ProjectModelPageControls
+                  page={applicationPage}
+                  onPrevious={() =>
+                    setPageOffset(Math.max(0, pageOffset - pageLimit))
+                  }
+                  onNext={() => setPageOffset(pageOffset + pageLimit)}
+                />
+              )}
               {section === "structure" && (
                 <section className="panel">
                   <h2>Структура объекта</h2>
@@ -5049,8 +5053,14 @@ function ProjectUnderstandingPage() {
                     . Сопоставленные группы остаются кандидатами до
                     профессионального решения. Группы с одним общим исходным
                     наблюдением объединяются транзитивно без сравнения названий:{" "}
-                    {structureIdentityCandidates.length.toString()} →{" "}
-                    {structureIdentityComponents.length.toString()}.
+                    {(
+                      summaryCounts.structure_identity_candidate_count ?? 0
+                    ).toString()}{" "}
+                    →{" "}
+                    {(
+                      summaryCounts.structure_identity_component_count ?? 0
+                    ).toString()}
+                    .
                   </InfoNotice>
                   <a
                     className="button-link secondary"
@@ -5135,6 +5145,13 @@ function ProjectUnderstandingPage() {
                     workspaceId={workspaceId}
                     modeSlug={mode}
                   />
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
                   <h3>Классифицированные страницы</h3>
                   <p>
                     Учтено решений по страницам:{" "}
@@ -5151,14 +5168,10 @@ function ProjectUnderstandingPage() {
                     {(summaryCounts.work_candidate_count ?? 0).toString()};
                     количеств:{" "}
                     {(summaryCounts.quantity_candidate_count ?? 0).toString()}.
-                    Ниже показана только доказанно связанная с группами объектов
-                    часть; значения остаются кандидатами.
+                    Интерактивно показана страница исходных наблюдений; их
+                    доказанные связи с группами объектов доступны во вкладке
+                    «Пакеты работ». Значения остаются кандидатами.
                   </InfoNotice>
-                  <FacilityWorkCandidateList
-                    items={facilityWorkCandidateGroups}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
-                  />
                   {workCandidates.length > 0 && (
                     <CandidateReviewTable
                       kind="work_type"
@@ -5181,6 +5194,13 @@ function ProjectUnderstandingPage() {
                       pending={review.isPending}
                     />
                   )}
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
                 </section>
               )}
               {section === "materials" && (
@@ -5189,15 +5209,11 @@ function ProjectUnderstandingPage() {
                   <InfoNotice>
                     Извлечено наблюдений материалов:{" "}
                     {(summaryCounts.material_candidate_count ?? 0).toString()}.
-                    Материалы показаны только внутри доказанно связанной группы
-                    объекта и работы; общий итог не рассчитывается из
-                    неоднозначных наблюдений.
+                    Интерактивно показана страница исходных наблюдений;
+                    доказанные связи материалов с группами объектов и работ
+                    доступны во вкладке «Пакеты работ». Общий итог не
+                    рассчитывается из неоднозначных наблюдений.
                   </InfoNotice>
-                  <FacilityWorkCandidateList
-                    items={facilityWorkCandidateGroups}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
-                  />
                   {materialCandidates.length > 0 && (
                     <CandidateReviewTable
                       kind="material"
@@ -5209,6 +5225,13 @@ function ProjectUnderstandingPage() {
                       pending={review.isPending}
                     />
                   )}
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
                 </section>
               )}
               {section === "packages" && (
@@ -5264,6 +5287,13 @@ function ProjectUnderstandingPage() {
                     items={facilityWorkCandidateGroups}
                     workspaceId={workspaceId}
                     modeSlug={mode}
+                  />
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
                   />
                   {value.work_packages.length ? (
                     <WorkPackageList

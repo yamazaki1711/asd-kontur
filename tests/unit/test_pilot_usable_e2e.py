@@ -127,6 +127,8 @@ def test_tender_exposes_missing_contract_input_without_inventing_contract_review
     assert "не сопоставлялись" in contract_item["description"]
     assert contract_item["source_locator_ids"] == []
     assert "Предоставить актуальную редакцию договора" in contract_item["recommended_action"]
+    assert "disagreement_protocol" not in result["available_exports"]
+    assert "contract_changes" not in result["available_exports"]
 
 
 def test_tender_material_gap_does_not_claim_an_unparsed_estimate_omission() -> None:

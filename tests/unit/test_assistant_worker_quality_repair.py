@@ -355,6 +355,46 @@ def test_inventory_candidate_subset_wording_remains_publishable() -> None:
     assert checked == {"passed": True, "problems": []}
 
 
+def test_exhaustive_inventory_answer_must_name_every_returned_candidate() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_project_entity_inventory",
+            "response": {
+                "value": {
+                    "candidate_entity_count": 2,
+                    "candidate_entities": [
+                        {"canonical_label": "Котлован для ЛОС -4"},
+                        {"canonical_label": "Котлован для КНС 8.1"},  # noqa: RUF001
+                    ],
+                    "coverage": {
+                        "exact_total_supported": False,
+                        "candidate_page_complete": True,
+                    },
+                },
+                "sources": [],
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Кандидатный поднабор включает котлован для ЛОС-4; точный итог не доказан.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Проверяется инвентарь.",
+        ("котлованы",),
+    )
+
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+        question="Перечисли котлованы.",
+    )
+
+    assert checked["passed"] is False
+    assert checked["problems"] == ["workspace_inventory_candidates_incomplete"]
+
+
 def test_full_metadata_plan_executes_required_workspace_content_search(monkeypatch: Any) -> None:
     repository = _RecordingRepository()
     worker = AssistantWorker(

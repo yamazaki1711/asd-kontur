@@ -67,3 +67,38 @@ def test_tender_design_export_remains_available_without_contract_input() -> None
         mode=PilotMode.TENDER,
         kind=PilotExportKind.WORKSPACE_RESULTS,
     )
+
+
+def test_legacy_tender_result_does_not_advertise_blocked_contract_exports() -> None:
+    workspace_id = UUID("d0100000-0000-4000-8000-000000000002")
+
+    class Spine:
+        @staticmethod
+        def resolve_scope(owner_identity_id: str, requested_workspace_id: UUID) -> str:
+            assert owner_identity_id == "owner-1"
+            assert requested_workspace_id == workspace_id
+            return "organization-1"
+
+    class Repository:
+        @staticmethod
+        def latest_result(**_: object) -> dict[str, object]:
+            return {
+                "items": [{"kind": "contract_input_unavailable"}],
+                "available_exports": [
+                    "disagreement_protocol",
+                    "contract_changes",
+                ],
+            }
+
+    service = object.__new__(PilotResultService)
+    service._spine = Spine()
+    service._repository = Repository()
+
+    result = service.get_result(
+        owner_identity_id="owner-1",
+        workspace_id=workspace_id,
+        mode=PilotMode.TENDER,
+    )
+
+    assert result is not None
+    assert result["available_exports"] == []

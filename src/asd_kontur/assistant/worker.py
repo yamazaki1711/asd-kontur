@@ -164,6 +164,7 @@ class AssistantWorker:
                 deterministic,
                 answer=answer,
                 receipts=receipts,
+                question=claimed.question,
             )
             repairable_deterministic = set(deterministic["problems"]) <= {
                 "clarification_has_unverified_numeric_estimate",
@@ -171,6 +172,7 @@ class AssistantWorker:
                 "insufficient_without_next_question",
                 "repeated_phrase",
                 "workspace_inventory_candidates_ignored",
+                "workspace_inventory_candidates_incomplete",
                 "workspace_inventory_evidence_not_used",
                 "workspace_inventory_unproven_total_claimed",
             }
@@ -198,6 +200,7 @@ class AssistantWorker:
                     deterministic,
                     answer=answer,
                     receipts=receipts,
+                    question=claimed.question,
                 )
                 model_checks = self._model_quality_check(claimed, answer, receipts)
             quality_passed = bool(deterministic["passed"] and model_checks["passed"])
@@ -654,8 +657,8 @@ exact_total_supported=false прямо укажите, что точный пр�
 
 def _answer_repair_output_prompt(prompt: str, raw: str, error: str) -> str:
     return f"""Исправьте только формат и завершённость предыдущего ответа. Не добавляйте новые
-факты, числа или source_id. Сохраните существенные найденные кандидаты и границу доказанности,
-но сократите answer до 1200 символов и используйте не более 8 существенных source_id.
+факты, числа или source_id. Сохраните все перечисленные в исходном задании кандидаты и границу
+доказанности, но сократите answer до 2200 символов и используйте не более 8 существенных source_id.
 Верните один полный JSON по схеме исходного задания; последняя строка должна содержать закрывающую
 фигурную скобку. Не используйте Markdown-кодовый блок.
 
@@ -670,6 +673,7 @@ def _with_inventory_checks(
     *,
     answer: SynthesizedAnswer,
     receipts: list[dict[str, Any]],
+    question: str = "",
 ) -> dict[str, Any]:
     """Reject a generic refusal when structured workspace candidates exist.
 
@@ -681,6 +685,8 @@ def _with_inventory_checks(
 
     inventory_source_ids: set[str] = set()
     candidate_count = 0
+    returned_candidate_labels: list[str] = []
+    candidate_page_complete = False
     exact_total_supported = True
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_project_entity_inventory":
@@ -694,9 +700,17 @@ def _with_inventory_checks(
         raw_count = value.get("candidate_entity_count", 0)
         if isinstance(raw_count, int) and raw_count > 0:
             candidate_count += raw_count
+        for candidate in value.get("candidate_entities", []):
+            if not isinstance(candidate, dict):
+                continue
+            label = candidate.get("canonical_label") or candidate.get("display_name")
+            if isinstance(label, str) and label.strip():
+                returned_candidate_labels.append(label)
         coverage = value.get("coverage")
         if isinstance(coverage, dict) and coverage.get("exact_total_supported") is False:
             exact_total_supported = False
+        if isinstance(coverage, dict) and coverage.get("candidate_page_complete") is True:
+            candidate_page_complete = True
         for source in response.get("sources", []):
             if isinstance(source, dict) and source.get("source_id"):
                 inventory_source_ids.add(str(source["source_id"]))
@@ -706,6 +720,18 @@ def _with_inventory_checks(
     problems = list(checks.get("problems", []))
     if answer.answer_type in {"insufficient_data", "clarification"}:
         problems.append("workspace_inventory_candidates_ignored")
+    normalized_question = _inventory_text_key(question)
+    enumerative_question = any(
+        marker in normalized_question
+        for marker in ("перечисл", "назов", "какие", "list", "enumerat", "which")
+    )
+    if enumerative_question and candidate_page_complete and returned_candidate_labels:
+        normalized_answer = _inventory_text_key(answer.answer)
+        if any(
+            _inventory_text_key(label) not in normalized_answer
+            for label in returned_candidate_labels
+        ):
+            problems.append("workspace_inventory_candidates_incomplete")
     if inventory_source_ids and not inventory_source_ids.intersection(answer.used_source_ids):
         problems.append("workspace_inventory_evidence_not_used")
     if not exact_total_supported and _claims_unproven_inventory_total(
@@ -714,6 +740,10 @@ def _with_inventory_checks(
         problems.append("workspace_inventory_unproven_total_claimed")
     problems = list(dict.fromkeys(problems))
     return {**checks, "passed": not problems, "problems": problems}
+
+
+def _inventory_text_key(value: str) -> str:
+    return "".join(character for character in value.casefold() if character.isalnum())
 
 
 def _claims_unproven_inventory_total(answer: str, candidate_count: int) -> bool:

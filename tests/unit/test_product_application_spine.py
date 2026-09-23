@@ -42,15 +42,28 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
             {"defect_id": "defect-2"},
             {"defect_id": "defect-3"},
         ],
-        "candidates": {"work_types": [{"candidate_id": "candidate-1"}]},
-        "review_decisions": [{"review_decision_id": "review-1"}],
+        "candidates": {
+            "project_fields": [{"candidate_id": "field-1"}],
+            "work_types": [
+                {"candidate_id": "work-1"},
+                {"candidate_id": "work-2"},
+            ],
+            "quantities": [{"candidate_id": "quantity-1"}],
+            "materials": [{"candidate_id": "material-1"}],
+        },
+        "review_decisions": [
+            {"review_decision_id": "review-work", "candidate_id": "work-2"},
+            {"review_decision_id": "review-material", "candidate_id": "material-1"},
+        ],
         "structure_nodes": [{"structure_node_id": "node-1"}],
         "structure_relationships": [{"relationship_candidate_id": "relationship-1"}],
         "structure_dossiers": [{"structure_node": {"structure_node_id": "node-1"}}],
         "structure_components": [{"component_key": "component-1"}],
         "structure_identity_candidates": [{"identity_candidate_id": "identity-1"}],
         "structure_identity_components": [{"identity_candidate_id": "identity-component-1"}],
-        "structure_identity_dossiers": [{"identity_candidate_id": "identity-component-1"}],
+        "structure_identity_dossiers": [
+            {"identity_candidate": {"identity_candidate_id": "identity-component-1"}}
+        ],
         "structure_identity_reconciliation": {"state": "running"},
         "excavation_pit_inventory": {"candidate_pits": [{"pit_candidate_id": "pit-1"}]},
         "facility_work_projection": {"candidate_groups": [{"facility_work_candidate_id": "fw-1"}]},
@@ -74,21 +87,57 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     )
 
     assert structure["summary_counts"] == {"structure_node_count": 7000}
-    assert structure["structure_identity_candidates"] == [{"identity_candidate_id": "identity-1"}]
+    assert structure["structure_identity_candidates"] == []
+    assert structure["structure_identity_components"] == [
+        {"identity_candidate_id": "identity-component-1"}
+    ]
     assert structure["excavation_pit_inventory"]["candidate_pits"] == [
         {"pit_candidate_id": "pit-1"}
     ]
     assert structure["structure_nodes"] == []
     assert structure["work_packages"] == []
-    assert structure["facility_work_projection"] == view["facility_work_projection"]
+    assert structure["facility_work_projection"] == {}
+    assert structure["application_page"]["collection"] == "structure_identity_components"
     assert structure["matrix"] == {"matrix": {"rows": []}}
     assert "tender_input_assessment" not in structure["intake_summary"]
 
     packages = SpinePostgresRepository._project_understanding_application_projection(
         view, section="packages"
     )
-    assert packages["facility_work_projection"] == view["facility_work_projection"]
+    assert packages["facility_work_projection"]["candidate_groups"] == [
+        {"facility_work_candidate_id": "fw-1"}
+    ]
+    assert packages["application_page"]["collection"] == "facility_work_candidate_groups"
     assert packages["structure_identity_candidates"] == []
+
+    works = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="works", page_offset=1, page_limit=2
+    )
+    assert works["candidates"] == {
+        "work_types": [{"candidate_id": "work-2"}],
+        "quantities": [{"candidate_id": "quantity-1"}],
+    }
+    assert works["review_decisions"] == [
+        {"review_decision_id": "review-work", "candidate_id": "work-2"}
+    ]
+    assert works["facility_work_projection"] == {}
+    assert works["application_page"] == {
+        "collection": "work_types+quantities",
+        "offset": 1,
+        "limit": 2,
+        "returned": 2,
+        "total": 3,
+        "has_previous": True,
+        "has_more": False,
+    }
+
+    materials = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="materials"
+    )
+    assert materials["candidates"] == {"materials": [{"candidate_id": "material-1"}]}
+    assert materials["review_decisions"] == [
+        {"review_decision_id": "review-material", "candidate_id": "material-1"}
+    ]
 
     matrix = SpinePostgresRepository._project_understanding_application_projection(
         view, section="matrix", page_offset=1, page_limit=1
@@ -117,6 +166,7 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
     assessment = general["intake_summary"]["tender_input_assessment"][0]
     assert assessment["source_locator_count"] == 12
     assert assessment["source_locator_ids"] == [f"locator-{index}" for index in range(10)]
+    assert general["candidates"] == {"project_fields": [{"candidate_id": "field-1"}]}
 
     with pytest.raises(SpinePersistenceError, match="project_understanding_section_invalid"):
         SpinePostgresRepository._project_understanding_application_projection(
@@ -126,6 +176,84 @@ def test_project_understanding_application_projection_keeps_counts_and_selected_
         SpinePostgresRepository._project_understanding_application_projection(
             view, section="gaps", page_offset=-1
         )
+
+
+def test_project_candidate_projection_pages_beyond_first_two_hundred_rows() -> None:
+    view = {
+        "candidates": {
+            "project_fields": [],
+            "work_types": [{"candidate_id": f"work-{ordinal}"} for ordinal in range(205)],
+            "quantities": [{"candidate_id": f"quantity-{ordinal}"} for ordinal in range(3)],
+            "materials": [],
+        },
+        "review_decisions": [],
+        "intake_summary": {},
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="works",
+        page_offset=200,
+        page_limit=8,
+    )
+
+    assert page["candidates"] == {
+        "work_types": [{"candidate_id": f"work-{ordinal}"} for ordinal in range(200, 205)],
+        "quantities": [{"candidate_id": f"quantity-{ordinal}"} for ordinal in range(3)],
+    }
+    assert page["application_page"] == {
+        "collection": "work_types+quantities",
+        "offset": 200,
+        "limit": 8,
+        "returned": 8,
+        "total": 208,
+        "has_previous": True,
+        "has_more": False,
+    }
+
+
+def test_facility_work_projection_pages_groups_without_changing_canonical_coverage() -> None:
+    view = {
+        "candidates": {},
+        "review_decisions": [],
+        "intake_summary": {},
+        "facility_work_projection": {
+            "candidate_groups": [
+                {"facility_work_candidate_id": f"group-{ordinal}"} for ordinal in range(205)
+            ],
+            "coverage": {
+                "total_work_package_count": 900,
+                "consolidated_candidate_group_count": 205,
+            },
+        },
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="packages",
+        page_offset=200,
+        page_limit=5,
+    )
+
+    assert page["facility_work_projection"]["candidate_groups"] == [
+        {"facility_work_candidate_id": f"group-{ordinal}"} for ordinal in range(200, 205)
+    ]
+    assert page["facility_work_projection"]["coverage"] == {
+        "total_work_package_count": 900,
+        "consolidated_candidate_group_count": 205,
+        "returned_candidate_group_count": 5,
+        "total_candidate_group_count": 205,
+        "candidate_group_page_complete": False,
+    }
+    assert page["application_page"] == {
+        "collection": "facility_work_candidate_groups",
+        "offset": 200,
+        "limit": 5,
+        "returned": 5,
+        "total": 205,
+        "has_previous": True,
+        "has_more": False,
+    }
 
 
 def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> None:

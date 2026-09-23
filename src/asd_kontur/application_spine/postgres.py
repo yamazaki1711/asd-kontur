@@ -3343,16 +3343,105 @@ class SpinePostgresRepository:
         result["structure_relationships"] = []
         result["structure_dossiers"] = []
         result["structure_components"] = []
-        if section != "structure":
+        all_candidates = dict(view.get("candidates") or {})
+        candidate_collections: tuple[str, ...] = ()
+        if section == "general":
+            candidate_collections = ("project_fields",)
+        elif section == "works":
+            candidate_collections = ("work_types", "quantities")
+        elif section == "materials":
+            candidate_collections = ("materials",)
+        if candidate_collections:
+            combined_candidates = [
+                (collection, dict(candidate))
+                for collection in candidate_collections
+                for candidate in list(all_candidates.get(collection) or [])
+            ]
+            selected_candidates = combined_candidates[page_offset : page_offset + page_limit]
+            result["candidates"] = {
+                collection: [
+                    candidate
+                    for candidate_collection, candidate in selected_candidates
+                    if candidate_collection == collection
+                ]
+                for collection in candidate_collections
+            }
+            selected_candidate_ids = {
+                str(candidate.get("candidate_id"))
+                for _, candidate in selected_candidates
+                if candidate.get("candidate_id") is not None
+            }
+            result["review_decisions"] = [
+                decision
+                for decision in list(view.get("review_decisions") or [])
+                if str(dict(decision).get("candidate_id")) in selected_candidate_ids
+            ]
+            result["application_page"] = {
+                "collection": "+".join(candidate_collections),
+                "offset": page_offset,
+                "limit": page_limit,
+                "returned": len(selected_candidates),
+                "total": len(combined_candidates),
+                "has_previous": page_offset > 0,
+                "has_more": page_offset + page_limit < len(combined_candidates),
+            }
+        if section == "structure":
+            identity_components = list(view.get("structure_identity_components") or [])
+            selected_components = identity_components[page_offset : page_offset + page_limit]
+            selected_identity_ids = {
+                str(dict(component).get("identity_candidate_id") or "")
+                for component in selected_components
+            }
+            result["structure_identity_candidates"] = []
+            result["structure_identity_components"] = selected_components
+            result["structure_identity_dossiers"] = [
+                dossier
+                for dossier in list(view.get("structure_identity_dossiers") or [])
+                if str(
+                    dict(dict(dossier).get("identity_candidate") or {}).get("identity_candidate_id")
+                    or ""
+                )
+                in selected_identity_ids
+            ]
+            result["application_page"] = {
+                "collection": "structure_identity_components",
+                "offset": page_offset,
+                "limit": page_limit,
+                "returned": len(selected_components),
+                "total": len(identity_components),
+                "has_previous": page_offset > 0,
+                "has_more": page_offset + page_limit < len(identity_components),
+            }
+        else:
             result["structure_identity_candidates"] = []
             result["structure_identity_components"] = []
             result["structure_identity_dossiers"] = []
             result["excavation_pit_inventory"] = {}
-        # Facility/work associations are part of a structure dossier as well as
-        # the dedicated work/package views.  Keeping this bounded projection in
-        # the structure section lets the consultant answer facility-scoped work
-        # questions without loading the canonical raw candidate corpus.
-        if section not in {"structure", "works", "materials", "packages"}:
+        if section == "packages":
+            facility_projection = dict(view.get("facility_work_projection") or {})
+            facility_groups = list(facility_projection.get("candidate_groups") or [])
+            selected_groups = facility_groups[page_offset : page_offset + page_limit]
+            facility_projection["candidate_groups"] = selected_groups
+            facility_coverage = dict(facility_projection.get("coverage") or {})
+            facility_coverage.update(
+                {
+                    "returned_candidate_group_count": len(selected_groups),
+                    "total_candidate_group_count": len(facility_groups),
+                    "candidate_group_page_complete": len(selected_groups) == len(facility_groups),
+                }
+            )
+            facility_projection["coverage"] = facility_coverage
+            result["facility_work_projection"] = facility_projection
+            result["application_page"] = {
+                "collection": "facility_work_candidate_groups",
+                "offset": page_offset,
+                "limit": page_limit,
+                "returned": len(selected_groups),
+                "total": len(facility_groups),
+                "has_previous": page_offset > 0,
+                "has_more": page_offset + page_limit < len(facility_groups),
+            }
+        else:
             result["facility_work_projection"] = {}
         if section != "matrix":
             result["matrix"] = {"matrix": {"rows": []}}
@@ -3387,9 +3476,7 @@ class SpinePostgresRepository:
         if section not in {"matrix", "gaps"}:
             result["normative_profile"] = None
         if section != "general":
-            intake = dict(result.get("intake_summary") or {})
-            intake.pop("tender_input_assessment", None)
-            result["intake_summary"] = intake
+            result["intake_summary"] = {}
         else:
             intake = dict(result.get("intake_summary") or {})
             bounded_assessment: list[dict[str, Any]] = []

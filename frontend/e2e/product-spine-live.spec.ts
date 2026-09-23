@@ -132,6 +132,7 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
 test("live PostgreSQL spine survives worker loss and isolated reset", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
   const marker = `/tmp/asd-kontur-spine-worker-${String(process.pid)}.marker`;
   let interrupted: ChildProcess | null = null;
@@ -233,44 +234,98 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(page.getByText("Требует подтверждения")).toBeVisible();
     await expect(page.getByText("workspace_fact_candidate")).toHaveCount(0);
 
-    for (const [slug, title, exportLabel] of [
-      ["tender", "Тендерный анализ", "Протокол разногласий"],
-      ["support", "Инженерное сопровождение", "Матрица работ и требований"],
-      ["audit", "Аудит", "Отчёт аудита"],
-      ["restoration", "Восстановление", "План восстановления"],
+    for (const [slug, modeName, title, resultMarker] of [
+      [
+        "tender",
+        "Tender",
+        "Тендерный анализ",
+        "Договор не предоставлен для договорного анализа",
+      ],
+      [
+        "support",
+        "Support",
+        "Инженерное сопровождение",
+        "Матрица работ и требований",
+      ],
+      ["audit", "Audit", "Аудит", "Отчёт аудита"],
+      ["restoration", "Restoration", "Восстановление", "План восстановления"],
     ] as const) {
       await page.goto(`/modes/${slug}/workspaces/${workspaceA}`);
       await expect(page.getByRole("heading", { name: title })).toBeVisible();
       await expect(page.getByText("Доступно частично")).toBeVisible();
-      await page.getByRole("link", { name: "Перейти к результату" }).click();
-      const formButton = page.getByRole("button", {
+      await page.getByRole("link", { name: "Результат режима" }).click();
+      const main = page.getByRole("main");
+      const formButton = main.getByRole("button", {
         name: "Сформировать результат",
       });
-      const exportHeading = page.getByText(exportLabel, { exact: true });
-      await expect(formButton.or(exportHeading)).toBeVisible();
-      if (await formButton.isVisible()) await formButton.click();
+      const resultMarkerText = main.getByText(resultMarker, { exact: true });
+      await expect(formButton.or(resultMarkerText)).toBeVisible();
+      if (await formButton.isVisible()) {
+        const formed = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            response
+              .url()
+              .endsWith(`/workspaces/${workspaceA}/modes/${modeName}/result`),
+        );
+        await formButton.click();
+        expect((await formed).ok()).toBe(true);
+      }
       await expect(
-        page.getByRole("heading", { name: `Результат: ${title}` }),
+        main.getByRole("heading", { name: `Результат: ${title}` }),
       ).toBeVisible();
-      await expect(exportHeading).toBeVisible();
-      await expect(page.getByText("Актуальность редакций")).toBeVisible();
+      await expect(resultMarkerText).toBeVisible();
+      await expect(
+        main.getByText(
+          "Актуальность редакций нормативных документов не проверена",
+        ),
+      ).toBeVisible();
     }
-    await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+    await page.goto(`/modes/audit/workspaces/${workspaceA}/result`);
+    const auditExportCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response
+          .url()
+          .endsWith(`/workspaces/${workspaceA}/modes/Audit/exports`),
+    );
     await page
       .locator(".export-card")
-      .filter({ hasText: "Протокол разногласий" })
+      .filter({ hasText: "Отчёт аудита" })
       .getByRole("button", { name: "Подготовить DOCX" })
       .click();
-    const protocolDownload = page.waitForEvent("download");
-    await page
-      .getByRole("link", { name: /Скачать Протокол разногласий \(DOCX\)/ })
-      .click();
-    expect((await protocolDownload).suggestedFilename()).toMatch(/\.docx$/);
+    expect((await auditExportCreated).ok()).toBe(true);
+    const auditLink = page.getByRole("link", {
+      name: /Скачать Отчёт аудита \(DOCX\)/,
+    });
+    await expect(auditLink).toBeVisible();
+    const auditDownload = page.waitForEvent("download");
+    await auditLink.click();
+    expect((await auditDownload).suggestedFilename()).toMatch(/\.docx$/);
+    await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+    await expect(
+      page.getByText("Договор не предоставлен для договорного анализа", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Протокол разногласий", { exact: true }),
+    ).toHaveCount(0);
+    const archiveCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response
+          .url()
+          .endsWith(`/workspaces/${workspaceA}/modes/Tender/exports`),
+    );
     await page.getByRole("button", { name: "Подготовить общий архив" }).click();
+    expect((await archiveCreated).ok()).toBe(true);
+    const archiveLink = page.getByRole("link", {
+      name: /Скачать Архив результатов объекта \(ZIP\)/,
+    });
+    await expect(archiveLink).toBeVisible();
     const archiveDownload = page.waitForEvent("download");
-    await page
-      .getByRole("link", { name: /Скачать Архив результатов объекта \(ZIP\)/ })
-      .click();
+    await archiveLink.click();
     expect((await archiveDownload).suggestedFilename()).toMatch(/\.zip$/);
     for (const viewport of [
       { width: 1440, height: 900 },
@@ -281,8 +336,13 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
       await page.setViewportSize(viewport);
       await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
       await expect(
-        page.getByText("Протокол разногласий", { exact: true }),
+        page.getByText("Договор не предоставлен для договорного анализа", {
+          exact: true,
+        }),
       ).toBeVisible();
+      await expect(
+        page.getByText("Протокол разногласий", { exact: true }),
+      ).toHaveCount(0);
       expect(
         await page.evaluate(
           () =>
