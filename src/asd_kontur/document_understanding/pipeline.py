@@ -514,7 +514,11 @@ class IndustrialDocumentUnderstandingPipeline:
         )
         pit_group_loader = getattr(self._repository, "load_pit_observation_groups", None)
         pit_groups = (
-            pit_group_loader(claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE)
+            pit_group_loader(
+                claimed,
+                profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                disposition_profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+            )
             if callable(pit_group_loader)
             else ()
         )

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.models import (
     CLASSIFICATION_PROFILE_VERSION,
+    PIT_OBSERVATION_GROUPING_POLICY_VERSION,
     PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
     PROJECT_RECONCILIATION_PROFILE_VERSION,
     STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
@@ -4044,7 +4045,8 @@ class SpinePostgresRepository:
             f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:"
             f"{STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION}:"
             f"{STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION}:"
-            f"{PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
+            f"{PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION}:"
+            f"{PIT_OBSERVATION_GROUPING_POLICY_VERSION}:{semantic_input}"
         )
         existing = session.scalar(
             sa.text(
@@ -4080,6 +4082,7 @@ class SpinePostgresRepository:
             "pit_observation_reconciliation_profile": (
                 PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
             ),
+            "pit_observation_grouping_policy": PIT_OBSERVATION_GROUPING_POLICY_VERSION,
         }
         session.execute(
             sa.text(
@@ -4109,6 +4112,9 @@ class SpinePostgresRepository:
                             STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
                         ),
                         "pit_observation_profile": PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
+                        "pit_observation_grouping_policy": (
+                            PIT_OBSERVATION_GROUPING_POLICY_VERSION
+                        ),
                     }
                 ),
                 "correlation": correlation_id,

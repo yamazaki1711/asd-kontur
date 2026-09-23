@@ -1024,6 +1024,14 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             structure_jobs[0]["structure_provenance"]["pit_observation_profile"]
             == "qwen-excavation-pit-observation-v2"
         )
+        assert (
+            structure_jobs[0]["structure_manifest"]["pit_observation_grouping_policy"]
+            == "pit-observation-bounded-groups-v2"
+        )
+        assert (
+            structure_jobs[0]["structure_provenance"]["pit_observation_grouping_policy"]
+            == "pit-observation-bounded-groups-v2"
+        )
         structure_job_id = UUID(str(structure_jobs[0]["job_id"]))
         understanding_repository = IndustrialUnderstandingRepository(
             postgres_environment.document_worker_engine
@@ -1211,6 +1219,83 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             "decisions": pit_decisions,
             "failure_code": None,
         }
+
+        # The v2 grouping policy bounds fresh calls at eight observations and
+        # excludes only node IDs already covered by an accepted receipt for the
+        # exact disposition profile. Failed or older-profile receipts remain
+        # eligible, while a worker restart resumes without replaying acceptance.
+        bounded_pit_node_ids = tuple(uuid4() for _ in range(10))
+        with postgres_environment.owner_engine.begin() as connection:
+            for index, node_id in enumerate(bounded_pit_node_ids, start=1):
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.project_structure_node_versions "
+                        "(organization_id,workspace_id,structure_node_id,version,node_kind,raw_name,"
+                        "normalized_name,parent_node_id,source_locator_id,status,"
+                        "extraction_profile_version,fingerprint) VALUES "
+                        "(:organization,:workspace,:node,1,'excavation_pit',:name,:normalized,NULL,"
+                        ":locator,'candidate','qwen-engineering-extraction-v15',:fingerprint)"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "node": node_id,
+                        "name": f"Synthetic pit observation {index}",
+                        "normalized": f"synthetic pit observation {index}",
+                        "locator": locator_id,
+                        "fingerprint": semantic_digest({"synthetic-pit-observation": index}),
+                    },
+                )
+        initial_pit_groups = understanding_repository.load_pit_observation_groups(
+            structure_claim,
+            profile_version="qwen-engineering-extraction-v15",
+            disposition_profile_version=pit_profile,
+        )
+        assert tuple(len(group) for group in initial_pit_groups) == (8, 2)
+        assert {
+            UUID(str(observation["structure_node_id"]))
+            for group in initial_pit_groups
+            for observation in group
+        } == set(bounded_pit_node_ids)
+
+        accepted_pit_node_ids = bounded_pit_node_ids[:2]
+        accepted_pit_manifest = tuple(
+            {"structure_node_id": str(node_id)} for node_id in accepted_pit_node_ids
+        )
+        accepted_pit_group_fingerprint = semantic_digest(
+            {"profile_version": pit_profile, "observations": accepted_pit_manifest}
+        )
+        accepted_pit_decisions = tuple(
+            {
+                "node_id": str(node_id),
+                "disposition": "generic_mention",
+                "canonical_label": "",
+                "facility_label": "",
+                "reason_code": "controlled_resume_fixture",
+                "confidence": "0.9",
+                "source_locator_id": str(locator_id),
+                "profile_version": pit_profile,
+            }
+            for node_id in accepted_pit_node_ids
+        )
+        understanding_repository.persist_pit_observation_disposition_outcome(
+            structure_claim,
+            group_fingerprint=accepted_pit_group_fingerprint,
+            profile_version=pit_profile,
+            input_structure_node_ids=accepted_pit_node_ids,
+            input_manifest=accepted_pit_manifest,
+            decisions=accepted_pit_decisions,
+        )
+        resumed_pit_groups = understanding_repository.load_pit_observation_groups(
+            structure_claim,
+            profile_version="qwen-engineering-extraction-v15",
+            disposition_profile_version=pit_profile,
+        )
+        assert tuple(len(group) for group in resumed_pit_groups) == (8,)
+        assert {
+            UUID(str(observation["structure_node_id"])) for observation in resumed_pit_groups[0]
+        } == set(bounded_pit_node_ids[2:])
+
         isolated_workspace = client.post(
             "/api/v1/workspaces",
             json={"display_name": "Pit disposition isolation workspace"},

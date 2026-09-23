@@ -32,6 +32,7 @@ from asd_kontur.ntd.pd_rd import (
 )
 
 from .models import (
+    PIT_OBSERVATION_GROUP_MAX_SIZE,
     PROJECT_EXTRACTION_PROFILE_VERSION,
     PROJECT_RECONCILIATION_PROFILE_VERSION,
     WORK_EXTRACTION_PROFILE_VERSION,
@@ -1235,7 +1236,11 @@ class IndustrialUnderstandingRepository:
         return tuple(result)
 
     def load_pit_observation_groups(
-        self, claimed: ClaimedJob, *, profile_version: str
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+        disposition_profile_version: str,
     ) -> tuple[tuple[dict[str, object], ...], ...]:
         """Load every current pit-kind observation into bounded Qwen batches.
 
@@ -1261,13 +1266,19 @@ class IndustrialUnderstandingRepository:
                         "AND element.workspace_id=n.workspace_id AND element.source_locator_id=n.source_locator_id "
                         "ORDER BY element.version DESC LIMIT 1) evidence ON true WHERE "
                         "n.organization_id=:o AND n.workspace_id=:w AND n.node_kind='excavation_pit' "
-                        "AND n.extraction_profile_version=:profile ORDER BY locator.source_version_id,"
+                        "AND n.extraction_profile_version=:profile AND NOT EXISTS (SELECT 1 FROM "
+                        "workspace.project_pit_observation_disposition_receipts receipt WHERE "
+                        "receipt.organization_id=n.organization_id AND receipt.workspace_id=n.workspace_id "
+                        "AND receipt.profile_version=:disposition_profile AND receipt.outcome='accepted' "
+                        "AND n.structure_node_id=ANY(receipt.input_structure_node_ids)) "
+                        "ORDER BY locator.source_version_id,"
                         "n.source_locator_id,n.structure_node_id"
                     ),
                     {
                         "o": claimed.organization_id,
                         "w": claimed.workspace_id,
                         "profile": profile_version,
+                        "disposition_profile": disposition_profile_version,
                     },
                 )
                 .mappings()
@@ -1275,8 +1286,8 @@ class IndustrialUnderstandingRepository:
             )
         values = [dict(row) for row in rows]
         return tuple(
-            tuple(values[index : index + STRUCTURE_IDENTITY_GROUP_MAX_SIZE])
-            for index in range(0, len(values), STRUCTURE_IDENTITY_GROUP_MAX_SIZE)
+            tuple(values[index : index + PIT_OBSERVATION_GROUP_MAX_SIZE])
+            for index in range(0, len(values), PIT_OBSERVATION_GROUP_MAX_SIZE)
         )
 
     def load_pit_observation_disposition_receipts(
