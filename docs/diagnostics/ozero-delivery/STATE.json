@@ -4,7 +4,7 @@
   "release": {
     "api": "c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f",
     "document_worker": "c4d7afff7fa8861a74deecedc84133a259ff2a6d",
-    "assistant_worker": "e7282fb257e73ec1960bfe757a98030ec468d30c",
+    "assistant_worker": "c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f",
     "database_migration": "0063_structure_group_receipts",
     "health": "ready"
   },
@@ -65,6 +65,7 @@
   "deployment": {
     "api_release_dir": "/Users/oleg/.asd-kontur/public-demo/releases/20260923-c83b3a3-pit-inventory",
     "api_readiness": "HTTP 200 on loopback /healthz",
+    "assistant_worker_release_dir": "/Users/oleg/.asd-kontur/public-demo/releases/20260923-c83b3a3-assistant-pit-inventory",
     "live_scoped_projection": "259 observations; 4 explicit candidates; exact total unsupported"
   },
   "next_executable_action": "Add a versioned, bounded Qwen classification for the 113 generic unresolved pit-like observations, then reconcile only accepted source-backed instance candidates and refresh the project view."
