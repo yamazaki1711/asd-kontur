@@ -389,6 +389,18 @@ class IndustrialDocumentUnderstandingPipeline:
                 total_groups=total_groups,
             )
 
+    def _record_pit_observation_progress(
+        self, claimed: ClaimedJob, *, completed_groups: int, total_groups: int
+    ) -> None:
+        """Publish content-free pit-observation disposition progress."""
+        recorder = getattr(self._repository, "record_pit_observation_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=total_groups,
+            )
+
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
         semantic = self._engineering_semantic(claimed)
         bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
@@ -659,7 +671,10 @@ class IndustrialDocumentUnderstandingPipeline:
         pit_failures: list[dict[str, object]] = []
         if callable(pit_receipt_loader) and callable(pit_persist) and pit_groups:
             pit_receipts = pit_receipt_loader(claimed, profile_version=QWEN_PIT_OBSERVATION_PROFILE)
-            for group in pit_groups:
+            self._record_pit_observation_progress(
+                claimed, completed_groups=0, total_groups=len(pit_groups)
+            )
+            for completed_groups, group in enumerate(pit_groups, start=1):
                 group_fingerprint = _digest(
                     {
                         "profile_version": QWEN_PIT_OBSERVATION_PROFILE,
@@ -681,6 +696,11 @@ class IndustrialDocumentUnderstandingPipeline:
                                 ),
                             }
                         )
+                    self._record_pit_observation_progress(
+                        claimed,
+                        completed_groups=completed_groups,
+                        total_groups=len(pit_groups),
+                    )
                     continue
                 try:
                     decisions = self._qwen_semantic.classify_excavation_pit_observations(group)
@@ -713,6 +733,11 @@ class IndustrialDocumentUnderstandingPipeline:
                         decisions=decisions,
                     )
                     pit_decision_count += len(decisions)
+                self._record_pit_observation_progress(
+                    claimed,
+                    completed_groups=completed_groups,
+                    total_groups=len(pit_groups),
+                )
         result["pit_observation_reconciliation_profile"] = QWEN_PIT_OBSERVATION_PROFILE
         result["pit_observation_group_count"] = len(pit_groups)
         result["pit_observation_group_fingerprints"] = sorted(pit_group_fingerprints)

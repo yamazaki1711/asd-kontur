@@ -538,9 +538,44 @@ class IndustrialUnderstandingRepository:
         total_groups: int,
     ) -> None:
         """Append a deduplicated progress event for cross-document identity groups."""
+        self._record_reconciliation_progress(
+            claimed,
+            completed_groups=completed_groups,
+            total_groups=total_groups,
+            event_type="engineering.structure_identity_progress",
+            safe_message_code="structure_identity_group_processed",
+            invalid_code="structure_identity_progress_invalid",
+        )
+
+    def record_pit_observation_progress(
+        self,
+        claimed: ClaimedJob,
+        *,
+        completed_groups: int,
+        total_groups: int,
+    ) -> None:
+        """Append deduplicated progress for the pit-observation disposition stage."""
+        self._record_reconciliation_progress(
+            claimed,
+            completed_groups=completed_groups,
+            total_groups=total_groups,
+            event_type="engineering.pit_observation_progress",
+            safe_message_code="pit_observation_group_processed",
+            invalid_code="pit_observation_progress_invalid",
+        )
+
+    def _record_reconciliation_progress(
+        self,
+        claimed: ClaimedJob,
+        *,
+        completed_groups: int,
+        total_groups: int,
+        event_type: str,
+        safe_message_code: str,
+        invalid_code: str,
+    ) -> None:
         if total_groups < 1 or not 0 <= completed_groups <= total_groups:
-            raise ValueError("structure_identity_progress_invalid")
-        event_type = "engineering.structure_identity_progress"
+            raise ValueError(invalid_code)
         with self._session(claimed) as session:
             session.execute(
                 sa.text(
@@ -595,8 +630,8 @@ class IndustrialUnderstandingRepository:
                     "INSERT INTO workspace.job_progress_events "
                     "(organization_id,workspace_id,job_id,event_sequence,event_type,progress_current,"
                     "progress_total,safe_message_code,terminal,recorded_at,retention_until,event_digest) "
-                    "VALUES (:o,:w,:job,:sequence,:event,:current,:total,"
-                    "'structure_identity_group_processed',false,:recorded,:retention,:digest)"
+                    "VALUES (:o,:w,:job,:sequence,:event,:current,:total,:message,false,:recorded,"
+                    ":retention,:digest)"
                 ),
                 {
                     "o": claimed.organization_id,
@@ -606,6 +641,7 @@ class IndustrialUnderstandingRepository:
                     "event": event_type,
                     "current": completed_groups,
                     "total": total_groups,
+                    "message": safe_message_code,
                     "recorded": recorded_at,
                     "retention": recorded_at + timedelta(days=1),
                     "digest": event_digest,

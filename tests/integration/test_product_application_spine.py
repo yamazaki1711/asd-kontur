@@ -1088,6 +1088,52 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         assert structure_status["progress_total"] == 2
         assert structure_status["candidate_authority"] == "candidate_only"
 
+        understanding_repository.record_pit_observation_progress(
+            structure_claim, completed_groups=0, total_groups=2
+        )
+        understanding_repository.record_pit_observation_progress(
+            structure_claim, completed_groups=0, total_groups=2
+        )
+        understanding_repository.record_pit_observation_progress(
+            structure_claim, completed_groups=1, total_groups=2
+        )
+        with postgres_environment.owner_engine.connect() as connection:
+            pit_progress_rows = (
+                connection.execute(
+                    sa.text(
+                        "SELECT progress_current,progress_total,safe_message_code FROM "
+                        "workspace.job_progress_events WHERE organization_id=:organization AND "
+                        "workspace_id=:workspace AND job_id=:job AND "
+                        "event_type='engineering.pit_observation_progress' ORDER BY event_sequence"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                        "job": structure_job_id,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        assert [dict(row) for row in pit_progress_rows] == [
+            {
+                "progress_current": 0,
+                "progress_total": 2,
+                "safe_message_code": "pit_observation_group_processed",
+            },
+            {
+                "progress_current": 1,
+                "progress_total": 2,
+                "safe_message_code": "pit_observation_group_processed",
+            },
+        ]
+        current_status = client.get(
+            f"/api/v1/workspaces/{workspace_id}/project-understanding"
+        ).json()["structure_identity_reconciliation"]
+        assert current_status["progress_current"] == 1
+        assert current_status["progress_total"] == 2
+        assert current_status["progress_message_code"] == "pit_observation_group_processed"
+
         # A terminal group result is atomic with its candidate and survives a
         # new repository instance, so worker restart cannot repeat Qwen work.
         second_locator_id = uuid4()

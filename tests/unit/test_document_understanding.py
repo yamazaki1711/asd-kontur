@@ -1642,6 +1642,131 @@ def test_qwen_pit_observation_single_item_exhaustion_remains_typed_failure() -> 
     assert complete.call_count == 1
 
 
+def test_pit_observation_reconciliation_reports_its_own_progress_stage() -> None:
+    organization_id = deterministic_uuid("pit-progress-organization")
+    workspace_id = deterministic_uuid("pit-progress-workspace")
+    node_ids = (
+        deterministic_uuid("pit-progress-first"),
+        deterministic_uuid("pit-progress-second"),
+    )
+    groups = tuple(
+        (
+            {
+                "structure_node_id": str(node_id),
+                "raw_name": f"Synthetic pit {index}",
+                "source_locator_id": str(deterministic_uuid(f"pit-progress-locator-{index}")),
+            },
+        )
+        for index, node_id in enumerate(node_ids, start=1)
+    )
+    progress: list[tuple[int, int]] = []
+    persisted: list[tuple[UUID, ...]] = []
+
+    class Repository:
+        def workspace_engineering_semantic_coverage(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, int | bool]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            return {"source_count": 1, "complete_source_count": 1, "complete": True}
+
+        def load_structure_identity_observation_groups(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> tuple[tuple[dict[str, object], ...], ...]:
+            return ()
+
+        def load_pit_observation_groups(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            disposition_profile_version: str,
+        ) -> tuple[tuple[dict[str, object], ...], ...]:
+            assert profile_version == "qwen-engineering-extraction-v15"
+            assert disposition_profile_version == "qwen-excavation-pit-observation-v2"
+            return groups
+
+        def load_structure_identity_group_receipts(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            profile_version: str,
+            compatible_profile_versions: tuple[str, ...],
+        ) -> dict[str, dict[str, object]]:
+            return {}
+
+        def load_pit_observation_disposition_receipts(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, dict[str, object]]:
+            assert profile_version == "qwen-excavation-pit-observation-v2"
+            return {}
+
+        def persist_pit_observation_disposition_outcome(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            group_fingerprint: str,
+            profile_version: str,
+            input_structure_node_ids: tuple[UUID, ...],
+            input_manifest: tuple[dict[str, object], ...],
+            decisions: tuple[dict[str, object], ...] = (),
+            failure_code: str | None = None,
+        ) -> dict[str, object]:
+            assert group_fingerprint.startswith("sha256:")
+            assert profile_version == "qwen-excavation-pit-observation-v2"
+            assert input_manifest
+            assert decisions and failure_code is None
+            persisted.append(input_structure_node_ids)
+            return {"outcome": "accepted"}
+
+        def record_pit_observation_progress(
+            self,
+            _claimed: ClaimedJob,
+            *,
+            completed_groups: int,
+            total_groups: int,
+        ) -> None:
+            progress.append((completed_groups, total_groups))
+
+        def assemble_workspace(self, _claimed: ClaimedJob) -> dict[str, object]:
+            return {"run_id": "pit-progress-run"}
+
+    class Qwen:
+        def classify_excavation_pit_observations(
+            self, observations: tuple[dict[str, object], ...]
+        ) -> tuple[dict[str, object], ...]:
+            return tuple(
+                {
+                    "node_id": str(item["structure_node_id"]),
+                    "disposition": "generic_mention",
+                }
+                for item in observations
+            )
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        organization_id,
+        workspace_id,
+        deterministic_uuid("pit-progress-job"),
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        {},
+        "sha256:" + "e" * 64,
+        1,
+        1,
+        "not_requested",
+    )
+
+    result = pipeline._reconciliation(claimed, BytesIO())
+
+    assert persisted == [(node_ids[0],), (node_ids[1],)]
+    assert progress == [(0, 2), (1, 2), (2, 2)]
+    assert result["pit_observation_decision_count"] == 2
+    assert result["pit_observation_failed_group_count"] == 0
+
+
 def test_project_materialization_defers_optional_structure_identity_inference() -> None:
     organization_id = deterministic_uuid("materialization-organization")
     workspace_id = deterministic_uuid("materialization-workspace")
