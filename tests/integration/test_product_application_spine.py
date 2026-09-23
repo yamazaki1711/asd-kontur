@@ -1444,10 +1444,13 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         application_payload = application_view.json()
         assert application_payload["structure_nodes"] == []
         assert application_payload["work_packages"] == []
+        assert application_payload["structure_identity_candidates"] == []
         assert {
-            candidate["identity_candidate_id"]
-            for candidate in application_payload["structure_identity_candidates"]
+            member_id
+            for candidate in application_payload["structure_identity_components"]
+            for member_id in candidate["member_identity_candidate_ids"]
         } == {str(identity_candidate_id)}
+        assert application_payload["application_page"]["total"] == 1
         assert application_payload["summary_counts"]["structure_node_count"] == 0
         assert application_payload["summary_counts"]["structure_identity_candidate_count"] == 1
 
