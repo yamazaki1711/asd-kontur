@@ -1647,26 +1647,34 @@ class ProfessionalAssistantKnowledgeQuery:
             ]
         )
 
-        def selected(value: dict[str, Any], label_key: str) -> bool:
-            if kind and str(value.get("identity_kind") or value.get("node_kind")) != kind:
-                return False
-            if not query:
-                return True
-            label = " ".join(str(value.get(label_key, "")).casefold().split())
-            compact_query = re.sub(r"[^0-9a-zа-яё]+", "", query)
-            compact_label = re.sub(r"[^0-9a-zа-яё]+", "", label)
-            return query in label or bool(compact_query and compact_query in compact_label)
-
-        identities = [item for item in identities if selected(item, "canonical_label")]
+        identities = [
+            item
+            for item in identities
+            if _project_entity_selected(item, "canonical_label", kind=kind, query=query)
+        ]
         member_ids = {
             str(member)
             for item in identities
             for member in item.get("member_structure_node_ids", [])
         }
-        matching_nodes = [item for item in nodes if selected(item, "raw_name")]
-        unresolved = [
-            item for item in matching_nodes if str(item.get("structure_node_id")) not in member_ids
-        ]
+        pit_coverage: dict[str, Any] = {}
+        unresolved_inventory_complete = True
+        if explicit_pit_inventory:
+            unresolved, unresolved_total, pit_coverage, unresolved_inventory_complete = (
+                _project_pit_unresolved_inventory(pit_inventory, query=query)
+            )
+        else:
+            matching_nodes = [
+                item
+                for item in nodes
+                if _project_entity_selected(item, "raw_name", kind=kind, query=query)
+            ]
+            unresolved = [
+                item
+                for item in matching_nodes
+                if str(item.get("structure_node_id")) not in member_ids
+            ]
+            unresolved_total = len(unresolved)
         identities.sort(key=lambda item: (str(item.get("canonical_label", "")), str(item)))
         unresolved.sort(key=lambda item: (str(item.get("raw_name", "")), str(item)))
         coverage_rows = [
@@ -1693,9 +1701,13 @@ class ProfessionalAssistantKnowledgeQuery:
         exact_total_supported = bool(
             extraction_complete
             and reconciliation_state == "succeeded"
-            and not unresolved
+            and unresolved_total == 0
             and all(str(item.get("status")) == "confirmed" for item in identities)
         )
+        if explicit_pit_inventory:
+            exact_total_supported = bool(
+                exact_total_supported and pit_coverage.get("exact_total_supported") is True
+            )
         evidence_index = dict(view.get("evidence_index", {}))
         returned_identities = identities[:limit]
         returned_identity_ids = {
@@ -1733,7 +1745,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "filter": {"kind": kind, "query": query or None},
             "candidate_entity_count": len(identities),
             "returned_candidate_entity_count": len(returned_identities),
-            "unresolved_observation_count": len(unresolved),
+            "unresolved_observation_count": unresolved_total,
             "returned_unresolved_observation_count": len(returned_unresolved),
             "candidate_entities": _public_value(returned_identities),
             "candidate_dossiers": _public_value(returned_dossiers),
@@ -1748,7 +1760,10 @@ class ProfessionalAssistantKnowledgeQuery:
                 "limit": limit,
                 "unresolved_sample_limit": unresolved_sample_limit,
                 "candidate_page_complete": len(returned_identities) == len(identities),
-                "unresolved_page_complete": len(returned_unresolved) == len(unresolved),
+                "unresolved_page_complete": (
+                    unresolved_inventory_complete and len(returned_unresolved) == unresolved_total
+                ),
+                "pit_inventory": _public_value(pit_coverage) if explicit_pit_inventory else None,
             },
         }
         return value, sources
@@ -1948,6 +1963,55 @@ def _project_entity_arguments(payload: dict[str, Any]) -> tuple[str | None, str,
     ):
         raise ValueError("assistant_tool_entity_inventory_invalid")
     return kind, query, limit
+
+
+def _project_entity_selected(
+    value: dict[str, Any], label_key: str, *, kind: str | None, query: str
+) -> bool:
+    if kind and str(value.get("identity_kind") or value.get("node_kind")) != kind:
+        return False
+    if not query:
+        return True
+    label = " ".join(str(value.get(label_key, "")).casefold().split())
+    compact_query = re.sub(r"[^0-9a-zа-яё]+", "", query)
+    compact_label = re.sub(r"[^0-9a-zа-яё]+", "", label)
+    return query in label or bool(compact_query and compact_query in compact_label)
+
+
+def _project_pit_unresolved_inventory(
+    pit_inventory: dict[str, Any], *, query: str
+) -> tuple[list[dict[str, Any]], int, dict[str, Any], bool]:
+    """Preserve disposition evidence and the full unresolved denominator.
+
+    The project projection intentionally bounds unresolved row bodies.  Its
+    coverage object remains authoritative for the complete count; filtering a
+    bounded sample cannot establish an exhaustive query-specific denominator.
+    """
+
+    coverage = dict(pit_inventory.get("coverage") or {})
+    rows = [
+        dict(item)
+        for item in pit_inventory.get("unresolved_observations", [])
+        if isinstance(item, dict)
+    ]
+    rows = [
+        item
+        for item in rows
+        if _project_entity_selected(
+            item,
+            "raw_name",
+            kind="excavation_pit",
+            query=query,
+        )
+    ]
+    full_total = int(coverage.get("unresolved_observation_count") or len(rows))
+    returned_total = int(coverage.get("returned_unresolved_observation_count") or len(rows))
+    sample_complete = returned_total >= full_total
+    if query:
+        # The bounded global sample can support returned matches but cannot
+        # prove how many matching unresolved rows exist outside that sample.
+        return rows, len(rows), coverage, sample_complete
+    return rows, full_total, coverage, sample_complete
 
 
 def _source_id(payload: dict[str, Any]) -> UUID:

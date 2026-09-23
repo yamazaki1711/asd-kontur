@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
+    _project_pit_unresolved_inventory,
     _select_facility_work_candidates,
     _semantic_coverage_complete,
 )
@@ -43,6 +44,42 @@ def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> No
         is False
     )
     assert _semantic_coverage_complete([{"status": "complete"}]) is False
+
+
+def test_pit_inventory_preserves_dispositions_and_full_unresolved_denominator() -> None:
+    rows, total, coverage, complete = _project_pit_unresolved_inventory(
+        {
+            "unresolved_observations": [
+                {
+                    "node_kind": "excavation_pit",
+                    "raw_name": "Котлован",
+                    "pit_observation_disposition": "generic_mention",
+                    "pit_observation_reason_code": "GENERIC_CONTEXT",
+                },
+                {
+                    "node_kind": "excavation_pit",
+                    "raw_name": "Скважина 7",
+                    "pit_observation_disposition": "non_pit",
+                    "pit_observation_reason_code": "EXPLORATION_BOREHOLE",
+                },
+            ],
+            "coverage": {
+                "unresolved_observation_count": 7,
+                "returned_unresolved_observation_count": 2,
+                "disposition_counts": {"generic_mention": 3, "non_pit": 4},
+                "exact_total_supported": False,
+            },
+        },
+        query="",
+    )
+
+    assert total == 7
+    assert complete is False
+    assert coverage["disposition_counts"] == {"generic_mention": 3, "non_pit": 4}
+    assert [row["pit_observation_disposition"] for row in rows] == [
+        "generic_mention",
+        "non_pit",
+    ]
 
 
 def test_workspace_context_uses_production_ntd_path_when_endpoint_configured(
