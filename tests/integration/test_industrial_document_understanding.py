@@ -6,6 +6,7 @@ import io
 import json
 import os
 import runpy
+import time
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -18,7 +19,7 @@ from fastapi.testclient import TestClient
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
-from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.application_spine.worker import DocumentWorker, WorkerOutcome
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.domain import uuid7
@@ -36,6 +37,27 @@ from .test_common_domain_kernel import _seed_rule
 from .test_workspace_lifecycle import Tenant
 
 pytestmark = pytest.mark.postgres
+
+
+def _drain_worker_through_bounded_retries(
+    worker: DocumentWorker, *, timeout_seconds: float = 8.0
+) -> tuple[list[WorkerOutcome], dict[str, str]]:
+    """Exercise scheduled retries and return each job's effective observed state."""
+
+    outcomes: list[WorkerOutcome] = []
+    latest_states: dict[str, str] = {}
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        outcome = worker.run_once()
+        if outcome is not None:
+            outcomes.append(outcome)
+            latest_states[outcome.job_id] = outcome.state.value
+            continue
+        if "queued" not in latest_states.values():
+            return outcomes, latest_states
+        if time.monotonic() >= deadline:
+            pytest.fail(f"worker_retry_did_not_settle:{latest_states}")
+        time.sleep(0.1)
 
 
 def _build_synthetic_corpus(root: Path) -> dict[str, object]:
@@ -515,16 +537,16 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             ),
             worker_identity="synthetic-understanding-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
             qwen_semantic_url=None,  # This fixture exercises native DOCX/CSV extraction.
         )
-        outcomes = []
-        while outcome := worker.run_once():
-            outcomes.append(outcome)
+        outcomes, latest_states = _drain_worker_through_bounded_retries(worker)
         # The exact number of internal materialization jobs is not a product
         # contract. The assertions below verify the required persisted view,
         # evidence navigation and workspace isolation instead.
         assert outcomes
-        assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
+        assert set(latest_states.values()) == {"succeeded"}
 
         with postgres_environment.document_worker_engine.begin() as connection:
             connection.execute(
@@ -1012,13 +1034,13 @@ def test_zip_intake_retains_container_and_registers_members(
             ),
             worker_identity="synthetic-archive-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
             qwen_semantic_url=None,  # Archive members are native DOCX/CSV fixtures.
         )
-        outcomes = []
-        while outcome := worker.run_once():
-            outcomes.append(outcome)
+        outcomes, latest_states = _drain_worker_through_bounded_retries(worker)
         assert outcomes
-        assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
+        assert set(latest_states.values()) == {"succeeded"}
 
 
 def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
@@ -1105,6 +1127,8 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
             ),
             worker_identity="qualified-corpus-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace_id),
             qwen_semantic_url=None,
         )
         outcomes = []
