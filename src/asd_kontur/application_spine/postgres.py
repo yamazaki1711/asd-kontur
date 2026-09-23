@@ -27,6 +27,7 @@ from asd_kontur.domain import uuid7
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
+    select_facility_work_candidates,
 )
 from asd_kontur.tender.structure_identity_components import (
     build_structure_identity_components,
@@ -3019,9 +3020,14 @@ class SpinePostgresRepository:
         section: str | None = None,
         page_offset: int = 0,
         page_limit: int = 100,
+        facility_query: str = "",
+        facility_limit: int = 20,
     ) -> dict[str, Any] | None:
         if page_offset < 0 or not 1 <= page_limit <= 200:
             raise SpinePersistenceError("project_understanding_page_invalid")
+        facility_query = " ".join(facility_query.split())
+        if len(facility_query) > 500 or not 1 <= facility_limit <= 200:
+            raise SpinePersistenceError("project_understanding_facility_query_invalid")
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
@@ -3046,6 +3052,8 @@ class SpinePostgresRepository:
                     section=section,
                     page_offset=page_offset,
                     page_limit=page_limit,
+                    facility_query=facility_query,
+                    facility_limit=facility_limit,
                 )
             project = (
                 session.execute(
@@ -3297,6 +3305,8 @@ class SpinePostgresRepository:
                 section=section,
                 page_offset=page_offset,
                 page_limit=page_limit,
+                facility_query=facility_query,
+                facility_limit=facility_limit,
             )
             view["evidence_index"] = self._workspace_evidence_index(
                 session,
@@ -3308,7 +3318,13 @@ class SpinePostgresRepository:
 
     @staticmethod
     def _project_understanding_application_projection(
-        view: dict[str, Any], *, section: str | None, page_offset: int = 0, page_limit: int = 100
+        view: dict[str, Any],
+        *,
+        section: str | None,
+        page_offset: int = 0,
+        page_limit: int = 100,
+        facility_query: str = "",
+        facility_limit: int = 20,
     ) -> dict[str, Any]:
         """Bound the interactive response without changing canonical results.
 
@@ -3320,7 +3336,12 @@ class SpinePostgresRepository:
 
         if section is None:
             return view
-        if page_offset < 0 or not 1 <= page_limit <= 200:
+        if (
+            page_offset < 0
+            or not 1 <= page_limit <= 200
+            or len(facility_query) > 500
+            or not 1 <= facility_limit <= 200
+        ):
             raise SpinePersistenceError("project_understanding_page_invalid")
         if section not in {
             "general",
@@ -3417,7 +3438,27 @@ class SpinePostgresRepository:
             result["structure_identity_components"] = []
             result["structure_identity_dossiers"] = []
             result["excavation_pit_inventory"] = {}
-        if section == "packages":
+        if section == "packages" and facility_query:
+            facility_projection = dict(view.get("facility_work_projection") or {})
+            selected_groups, selection = select_facility_work_candidates(
+                facility_projection.get("candidate_groups", []),
+                query=facility_query,
+                limit=facility_limit,
+                projection_coverage=dict(facility_projection.get("coverage") or {}),
+            )
+            facility_projection["candidate_groups"] = selected_groups
+            facility_projection["selection"] = selection
+            result["facility_work_projection"] = facility_projection
+            result["application_page"] = {
+                "collection": "facility_work_candidate_groups",
+                "offset": 0,
+                "limit": facility_limit,
+                "returned": len(selected_groups),
+                "total": int(selection["matched_candidate_group_count"]),
+                "has_previous": False,
+                "has_more": not bool(selection["exhaustive_for_query"]),
+            }
+        elif section == "packages":
             facility_projection = dict(view.get("facility_work_projection") or {})
             facility_groups = list(facility_projection.get("candidate_groups") or [])
             selected_groups = facility_groups[page_offset : page_offset + page_limit]
@@ -3440,6 +3481,19 @@ class SpinePostgresRepository:
                 "total": len(facility_groups),
                 "has_previous": page_offset > 0,
                 "has_more": page_offset + page_limit < len(facility_groups),
+            }
+        elif section == "structure" and facility_query:
+            facility_projection = dict(view.get("facility_work_projection") or {})
+            selected_groups, selection = select_facility_work_candidates(
+                facility_projection.get("candidate_groups", []),
+                query=facility_query,
+                limit=facility_limit,
+                projection_coverage=dict(facility_projection.get("coverage") or {}),
+            )
+            result["facility_work_projection"] = {
+                "candidate_groups": selected_groups,
+                "coverage": dict(facility_projection.get("coverage") or {}),
+                "selection": selection,
             }
         else:
             result["facility_work_projection"] = {}

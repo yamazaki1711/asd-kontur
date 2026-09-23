@@ -215,7 +215,7 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
                 "query": "разработка грунта",
                 "matched_candidate_group_count": 1,
                 "returned_candidate_group_count": 1,
-                "authority": "exact_locator_association_candidates_not_confirmed_scope",
+                "authority": "candidate_association_not_confirmed_scope",
             },
             "requirement_matrix": {},
             "discrepancies": [],
@@ -295,7 +295,7 @@ def test_facility_work_candidate_selection_matches_facility_without_name_merging
         "returned_candidate_group_count": 1,
         "exhaustive_for_query": True,
         "projection_coverage": {"exact_identity_package_count": 2},
-        "authority": "exact_locator_association_candidates_not_confirmed_scope",
+        "authority": "candidate_association_not_confirmed_scope",
     }
 
 

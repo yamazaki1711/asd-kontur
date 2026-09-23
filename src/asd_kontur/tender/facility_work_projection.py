@@ -3,9 +3,12 @@
 The projection makes the safely associated subset usable without pretending
 that page-scoped extraction observations are canonical work packages.  A work
 package is associated only when one cross-document identity candidate shares
-an exact source locator.  Quantities and materials remain observations and are
-never summed by this projection.
+an exact source locator or one explicit normalized identity label resolves to
+one candidate. Quantities and materials remain observations and are never
+summed by this projection.
 """
+
+# ruff: noqa: RUF001 -- Russian engineering identifiers are intentional.
 
 from __future__ import annotations
 
@@ -21,12 +24,116 @@ from asd_kontur.application_spine.models import semantic_digest
 
 from .findings_schedule import source_reference
 
+_FACILITY_WORK_QUERY_STOP_WORDS = frozenset(
+    {
+        "какие",
+        "какой",
+        "работа",
+        "работы",
+        "работ",
+        "предусмотрено",
+        "предусмотрены",
+        "проект",
+        "проекте",
+        "проектом",
+    }
+)
+
 
 @dataclass(frozen=True, slots=True)
 class FacilityIdentityAssociationIndex:
     identities: dict[str, dict[str, Any]]
     identity_ids_by_locator: dict[str, frozenset[str]]
     identity_ids_by_normalized_label: dict[str, frozenset[str]]
+
+
+def select_facility_work_candidates(
+    groups: object,
+    *,
+    query: str,
+    limit: int,
+    projection_coverage: Mapping[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Select relevant candidate groups before an interactive page is bounded.
+
+    The complete candidate collection is searched in memory after the canonical
+    projection has been built.  This prevents a relevant facility outside an
+    arbitrary first application page from disappearing from assistant context.
+    """
+
+    if not 1 <= limit <= 200:
+        raise ValueError("facility_work_candidate_limit_invalid")
+    candidates = (
+        [dict(item) for item in groups if isinstance(item, Mapping)]
+        if isinstance(groups, (list, tuple))
+        else []
+    )
+    designations = tuple(
+        re.sub(r"[^0-9a-zа-яё]+", "", match.group(0).casefold())
+        for match in re.finditer(
+            r"\b(?:кнс|лос)\s*[-№]?\s*\d+(?:[.,]\d+)*\b",
+            query,
+            flags=re.IGNORECASE,
+        )
+    )
+    terms = (
+        ()
+        if designations
+        else tuple(
+            normalized[:5]
+            for token in re.findall(r"[0-9A-Za-zА-Яа-яЁё]{3,}", query.casefold())
+            if (normalized := token.casefold()) not in _FACILITY_WORK_QUERY_STOP_WORDS
+        )
+    )
+
+    def searchable(item: Mapping[str, Any]) -> str:
+        work_type = item.get("work_type")
+        work_type = work_type if isinstance(work_type, Mapping) else {}
+        return " ".join(
+            str(value).casefold()
+            for value in (
+                item.get("identity_label"),
+                item.get("identity_kind"),
+                work_type.get("raw"),
+                work_type.get("normalized"),
+            )
+            if value
+        )
+
+    scored: list[tuple[int, dict[str, Any]]] = []
+    for item in candidates:
+        text = searchable(item)
+        compact_text = re.sub(r"[^0-9a-zа-яё]+", "", text)
+        if designations and not any(value in compact_text for value in designations):
+            continue
+        if terms and not any(term in text for term in terms):
+            continue
+        scored.append((sum(term in text for term in terms), item))
+    scored.sort(
+        key=lambda value: (
+            -value[0],
+            str(value[1].get("identity_label") or ""),
+            str(value[1].get("facility_work_candidate_id") or ""),
+        )
+    )
+    selected = [item for _, item in scored[:limit]]
+    matched = len(scored)
+    return selected, {
+        "query": query or None,
+        "selection": (
+            "facility_designation_and_lexical_relevance"
+            if designations
+            else "facility_and_work_candidate_lexical_relevance"
+            if terms
+            else "bounded_prefix"
+        ),
+        "total_candidate_group_count": len(candidates),
+        "matched_candidate_group_count": matched,
+        "returned_candidate_group_count": len(selected),
+        "exhaustive_for_query": matched <= len(selected),
+        "projection_coverage": dict(projection_coverage),
+        "authority": "candidate_association_not_confirmed_scope",
+    }
 
 
 def build_facility_identity_association_index(

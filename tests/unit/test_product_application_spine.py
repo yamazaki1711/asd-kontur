@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: RUF001 -- Russian engineering identifiers are intentional.
 import io
 import plistlib
 import sys
@@ -253,6 +254,67 @@ def test_facility_work_projection_pages_groups_without_changing_canonical_covera
         "total": 205,
         "has_previous": True,
         "has_more": False,
+    }
+
+
+def test_structure_projection_selects_relevant_facility_work_beyond_first_page() -> None:
+    groups = [
+        {
+            "facility_work_candidate_id": f"group-{ordinal}",
+            "identity_label": f"КНС-{ordinal}",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Общестроительные работы"},
+        }
+        for ordinal in range(205)
+    ]
+    groups.append(
+        {
+            "facility_work_candidate_id": "target-los-8-1",
+            "identity_label": "ЛОС 8.1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Устройство котлована"},
+        }
+    )
+    view = {
+        "candidates": {},
+        "review_decisions": [],
+        "intake_summary": {},
+        "structure_identity_components": [],
+        "structure_identity_dossiers": [],
+        "excavation_pit_inventory": {},
+        "facility_work_projection": {
+            "candidate_groups": groups,
+            "coverage": {
+                "total_work_package_count": 900,
+                "consolidated_candidate_group_count": len(groups),
+            },
+        },
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="structure",
+        page_limit=100,
+        facility_query="Какие работы относятся к ЛОС8.1?",
+        facility_limit=20,
+    )
+
+    projection = page["facility_work_projection"]
+    assert [item["facility_work_candidate_id"] for item in projection["candidate_groups"]] == [
+        "target-los-8-1"
+    ]
+    assert projection["selection"] == {
+        "query": "Какие работы относятся к ЛОС8.1?",
+        "selection": "facility_designation_and_lexical_relevance",
+        "total_candidate_group_count": len(groups),
+        "matched_candidate_group_count": 1,
+        "returned_candidate_group_count": 1,
+        "exhaustive_for_query": True,
+        "projection_coverage": {
+            "total_work_package_count": 900,
+            "consolidated_candidate_group_count": len(groups),
+        },
+        "authority": "candidate_association_not_confirmed_scope",
     }
 
 

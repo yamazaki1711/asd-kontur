@@ -25,6 +25,7 @@ from asd_kontur.knowledge.gateway import (
 )
 from asd_kontur.ntd.search_corpus import normalize_designation
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.facility_work_projection import select_facility_work_candidates
 
 from .engineering_gateway import execute_early_strength
 from .reasoning import TOOL_NAMES
@@ -598,6 +599,8 @@ class ProfessionalAssistantKnowledgeQuery:
                 owner_identity_id=owner_identity_id,
                 workspace_id=workspace_id,
                 section="structure",
+                facility_query=query,
+                facility_limit=work_package_limit,
             )
             overview_dossiers = list((model_view or {}).get("structure_dossiers", []))[:30]
             overview_identities = list((model_view or {}).get("structure_identity_components", []))[
@@ -617,14 +620,22 @@ class ProfessionalAssistantKnowledgeQuery:
             ]
             facility_work_projection = dict((model_view or {}).get("facility_work_projection", {}))
             facility_work_coverage = dict(facility_work_projection.get("coverage", {}))
-            facility_work_candidate_groups, facility_work_selection = (
-                _select_facility_work_candidates(
-                    facility_work_projection.get("candidate_groups", []),
-                    query=query,
-                    limit=work_package_limit,
-                    projection_coverage=facility_work_coverage,
+            facility_work_selection = dict(facility_work_projection.get("selection", {}))
+            if facility_work_selection:
+                facility_work_candidate_groups = [
+                    dict(item)
+                    for item in facility_work_projection.get("candidate_groups", [])
+                    if isinstance(item, Mapping)
+                ]
+            else:
+                facility_work_candidate_groups, facility_work_selection = (
+                    _select_facility_work_candidates(
+                        facility_work_projection.get("candidate_groups", []),
+                        query=query,
+                        limit=work_package_limit,
+                        projection_coverage=facility_work_coverage,
+                    )
                 )
-            )
             evidence_index = dict((model_view or {}).get("evidence_index", {}))
 
             def evidence_items(locator_ids: set[str]) -> list[dict[str, Any]]:
@@ -2148,75 +2159,14 @@ def _select_facility_work_candidates(
     limit: int,
     projection_coverage: Mapping[str, Any],
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Select facility/work candidates without treating labels as identity proof."""
+    """Compatibility wrapper for the shared bounded candidate selector."""
 
-    candidates = (
-        [dict(item) for item in groups if isinstance(item, Mapping)]
-        if isinstance(groups, (list, tuple))
-        else []
+    return select_facility_work_candidates(
+        groups,
+        query=query,
+        limit=limit,
+        projection_coverage=projection_coverage,
     )
-    terms = tuple(
-        token.casefold()[:5]
-        for token in _search_tokens(query)
-        if token not in _WORK_PACKAGE_STOP_WORDS
-    )
-    designations = tuple(
-        re.sub(r"[^0-9a-zа-яё]+", "", match.group(0).casefold())
-        for match in re.finditer(
-            r"\b(?:кнс|лос)\s*[-№]?\s*\d+(?:[.,]\d+)*\b",
-            query,
-            flags=re.IGNORECASE,
-        )
-    )
-
-    def searchable(item: Mapping[str, Any]) -> str:
-        work_type = item.get("work_type")
-        work_type = work_type if isinstance(work_type, Mapping) else {}
-        return " ".join(
-            str(value).casefold()
-            for value in (
-                item.get("identity_label"),
-                item.get("identity_kind"),
-                work_type.get("raw"),
-                work_type.get("normalized"),
-            )
-            if value
-        )
-
-    scored: list[tuple[int, dict[str, Any]]] = []
-    for item in candidates:
-        text = searchable(item)
-        compact_text = re.sub(r"[^0-9a-zа-яё]+", "", text)
-        if designations and not any(value in compact_text for value in designations):
-            continue
-        if terms and not any(term in text for term in terms):
-            continue
-        scored.append((sum(term in text for term in terms), item))
-    scored.sort(
-        key=lambda value: (
-            -value[0],
-            str(value[1].get("identity_label") or ""),
-            str(value[1].get("facility_work_candidate_id") or ""),
-        )
-    )
-    selected = [item for _, item in scored[:limit]]
-    matched = len(scored)
-    return selected, {
-        "query": query or None,
-        "selection": (
-            "facility_designation_and_lexical_relevance"
-            if designations
-            else "facility_and_work_candidate_lexical_relevance"
-            if terms
-            else "bounded_prefix"
-        ),
-        "total_candidate_group_count": len(candidates),
-        "matched_candidate_group_count": matched,
-        "returned_candidate_group_count": len(selected),
-        "exhaustive_for_query": matched <= len(selected),
-        "projection_coverage": dict(projection_coverage),
-        "authority": "exact_locator_association_candidates_not_confirmed_scope",
-    }
 
 
 def _normative_designation(query: str) -> str:
