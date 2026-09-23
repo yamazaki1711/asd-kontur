@@ -1,8 +1,9 @@
 {
-  "recorded_at": "2026-09-21T19:59:19+12:00",
+  "recorded_at": "2026-09-23T16:54:00+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api_and_document_worker": "c4d7afff7fa8861a74deecedc84133a259ff2a6d",
+    "api": "c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f",
+    "document_worker": "c4d7afff7fa8861a74deecedc84133a259ff2a6d",
     "assistant_worker": "e7282fb257e73ec1960bfe757a98030ec468d30c",
     "database_migration": "0063_structure_group_receipts",
     "health": "ready"
@@ -33,6 +34,11 @@
     "structure_identity_candidates": 256,
     "structure_identity_components": 251,
     "explicit_facility_associated_pit_candidates": 4,
+    "pit_observation_count": 259,
+    "identity_excavation_pit_candidate_count": 1,
+    "identity_rejected_non_pit_count": 1,
+    "non_pit_observation_count": 141,
+    "generic_unresolved_pit_like_observations": 113,
     "unresolved_pit_like_observations": 254,
     "exact_pit_total_supported": false,
     "authority": "candidate_only"
@@ -56,5 +62,10 @@
     "complete_package_tender_accepted": false,
     "product_ready": false
   },
-  "next_executable_action": "Reconcile unresolved pit-like observations by source scope and entity type without promoting mentions, trenches, or generic work descriptions to distinct pits."
+  "deployment": {
+    "api_release_dir": "/Users/oleg/.asd-kontur/public-demo/releases/20260923-c83b3a3-pit-inventory",
+    "api_readiness": "HTTP 200 on loopback /healthz",
+    "live_scoped_projection": "259 observations; 4 explicit candidates; exact total unsupported"
+  },
+  "next_executable_action": "Add a versioned, bounded Qwen classification for the 113 generic unresolved pit-like observations, then reconcile only accepted source-backed instance candidates and refresh the project view."
 }

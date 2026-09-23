@@ -1,5 +1,22 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-23 16:54 UTC+12 — scoped identity evidence connected to pit projection
+
+Reusable Tender materialization release `c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f`
+is active in the API launchd service; the document and assistant workers remain
+unchanged. No migration or document reprocessing was required. The projection now
+consumes the current persisted Qwen structure-identity candidates, rejects identity
+labels that are boreholes/trenches/shafts or similar non-pit observations, and
+retains generic observations as unresolved rather than promoting them.
+
+The live scoped view still has 259 pit-kind observations and four explicit
+facility-associated candidate pits (КНС 4, КНС 8.1, ЛОС 4, ЛОС 8.1). It now records
+one excavation-pit identity candidate and rejects one borehole-labelled identity;
+141 observations are typed non-pit terms and 113 remain generic unresolved
+observations. `exact_total_supported=false` remains enforced. This is a reusable
+candidate projection, not an accepted project total. Controlled browser acceptance
+and complete Tender acceptance remain open.
+
 ## 2026-09-21 19:59 UTC+12 — 22/22 classification and grounded inventory consultation
 
 API and document worker release `c4d7afff7fa8861a74deecedc84133a259ff2a6d`
