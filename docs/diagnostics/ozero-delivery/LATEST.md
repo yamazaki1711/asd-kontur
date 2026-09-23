@@ -1,5 +1,32 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-21 19:59 UTC+12 — 22/22 classification and grounded inventory consultation
+
+API and document worker release `c4d7afff7fa8861a74deecedc84133a259ff2a6d`
+is live and ready at migration `0063_structure_group_receipts`; assistant release
+`e7282fb257e73ec1960bfe757a98030ec468d30c` is live. Nine active sources whose
+historical classification jobs remained blocked behind failed OCR were recovered from
+their persisted native layout. The recovery produced exactly nine dependency-free,
+source/profile-scoped jobs: 9/9 succeeded, no OCR or semantic extraction was repeated,
+and active-source classification coverage is now 22/22.
+
+The refreshed candidate model retains complete v15 semantic-input coverage of
+133,407/133,407 fragments across 22 sources and 2,529 pages. Current candidate-only
+counts are 8,086 fields, 6,396 works, 2,718 quantities, 962 materials, 5,564 work
+packages, 7,629 structure nodes, 2,325 relationships, and 1,662 defects. These counts
+are persisted extraction/materialization evidence, not confirmed facts or Tender
+acceptance.
+
+Live assistant turns `01a0c2f6-1594-7958-9ab8-9c817c9df74e` and
+`01a0c2f8-d53e-727b-b299-a3b79823cc93` passed deterministic and model checks. They
+expose four explicit facility-associated pit candidates (КНС4, КНС8.1, ЛОС-4, and
+ЛОС 8.1) with source links to POS pages 47, 118, 119, and 122. The answer explicitly
+states that this is a candidate subset and that the exact project total is unproven.
+The inventory still contains 254 unresolved pit-like observations, including generic
+excavation descriptions and trenches, so an exact count remains open. Authenticated
+browser acceptance is unverified because this execution environment has no attachable
+browser instance.
+
 ## 2026-09-18 17:54 UTC+12 — source-linked Tender observations deployed
 
 API/frontend release `38f637b6720b365aeb09b15fc1691e69674e913e` is active from the

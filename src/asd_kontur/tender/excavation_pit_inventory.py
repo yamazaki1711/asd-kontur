@@ -7,7 +7,7 @@ That makes the resulting count useful as an established candidate subset while
 preventing it from being presented as a complete project total.
 """
 
-# ruff: noqa: RUF002 -- Russian construction terms are intentional.
+# ruff: noqa: RUF001, RUF002 -- Russian construction terms are intentional.
 
 from __future__ import annotations
 
@@ -22,6 +22,12 @@ _EXPLICIT_FACILITY_PIT = re.compile(
     r"\b(?P<pit>котлован|pit)\b(?P<prefix>.*?)\bдля\b\s*"
     r"(?P<kind>лос|кнс)\s*[-№nº]*\s*"
     r"(?P<number>\d+(?:\s*[.]\s*\d+)?)\b",
+    flags=re.IGNORECASE | re.UNICODE,
+)
+
+_NON_PIT_OBSERVATION = re.compile(
+    r"(?:\bскв(?:ажин(?:а|ы|у|е|ой)?)?\.?\b|\bтранше\w*\b|"
+    r"\bвыемк\w*\b|\bшурф\w*\b|\bприямк\w*\b)",
     flags=re.IGNORECASE | re.UNICODE,
 )
 
@@ -41,9 +47,17 @@ def _explicit_pit_identity(raw_name: str) -> tuple[str, str, str] | None:
 def build_excavation_pit_inventory(
     structure_nodes: Iterable[Mapping[str, Any]],
     *,
+    identity_candidates: Iterable[Mapping[str, Any]] = (),
     unresolved_sample_limit: int = 20,
 ) -> dict[str, Any]:
-    """Return explicit pit candidates and preserve every unresolved observation."""
+    """Return scoped pit candidates and preserve every unresolved observation.
+
+    Structure identity results are candidate evidence, not authority.  They are
+    consumed only when they refer to excavation-pit members and retain a source
+    association that this projection can validate.  Boreholes, trenches and
+    related excavation terms remain unresolved observations rather than being
+    promoted to distinct pits.
+    """
 
     if unresolved_sample_limit < 0:
         raise ValueError("excavation_pit_unresolved_sample_limit_invalid")
@@ -52,12 +66,49 @@ def build_excavation_pit_inventory(
         for node in structure_nodes
         if str(node.get("node_kind") or "") == "excavation_pit"
     ]
+    identity_rows = [dict(candidate) for candidate in identity_candidates]
+    node_by_id = {
+        str(node.get("structure_node_id")): node
+        for node in pit_nodes
+        if node.get("structure_node_id") is not None
+    }
+    identity_rejected = 0
+    identity_by_node: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for candidate in identity_rows:
+        if str(candidate.get("identity_kind") or "") != "excavation_pit":
+            continue
+        label = str(candidate.get("canonical_label") or "").strip()
+        member_ids = [str(value) for value in candidate.get("member_structure_node_ids") or ()]
+        if not label or not member_ids or _NON_PIT_OBSERVATION.search(label):
+            identity_rejected += 1
+            continue
+        for member_id in member_ids:
+            if member_id in node_by_id:
+                identity_by_node[member_id].append(dict(candidate))
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     unresolved: list[dict[str, Any]] = []
+    non_pit_observation_count = 0
+    generic_observation_count = 0
+    identity_enriched_observation_count = 0
     for node in pit_nodes:
         raw_name = str(node.get("raw_name") or "").strip()
         identity = _explicit_pit_identity(raw_name)
+        if identity is None and identity_by_node.get(str(node.get("structure_node_id"))):
+            # A Qwen identity candidate can enrich a source-backed explicit
+            # association only; it cannot turn a generic label into a pit.
+            for candidate in identity_by_node[str(node.get("structure_node_id"))]:
+                candidate_identity = _explicit_pit_identity(
+                    str(candidate.get("canonical_label") or "")
+                )
+                if candidate_identity is not None:
+                    identity = candidate_identity
+                    identity_enriched_observation_count += 1
+                    break
         if identity is None:
+            if _NON_PIT_OBSERVATION.search(raw_name):
+                non_pit_observation_count += 1
+            else:
+                generic_observation_count += 1
             unresolved.append(node)
             continue
         facility_key, _designation, normalized_label = identity
@@ -137,6 +188,15 @@ def build_excavation_pit_inventory(
             "unresolved_observation_count": len(unresolved),
             "returned_unresolved_observation_count": min(len(unresolved), unresolved_sample_limit),
             "candidate_pit_count": len(candidates),
+            "identity_candidate_count": sum(
+                1
+                for candidate in identity_rows
+                if str(candidate.get("identity_kind") or "") == "excavation_pit"
+            ),
+            "identity_rejected_non_pit_count": identity_rejected,
+            "identity_enriched_observation_count": identity_enriched_observation_count,
+            "non_pit_observation_count": non_pit_observation_count,
+            "generic_observation_count": generic_observation_count,
             "exact_total_supported": False,
             "count_meaning": ("distinct_explicit_source_association_candidates_not_project_total"),
             "candidate_authority": "candidate_only",

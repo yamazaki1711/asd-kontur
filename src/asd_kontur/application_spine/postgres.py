@@ -3188,7 +3188,9 @@ class SpinePostgresRepository:
                 relationships=structure_relationships,
                 facility_work_groups=facility_work_projection["candidate_groups"],
             )
-            excavation_pit_inventory = build_excavation_pit_inventory(structure_nodes)
+            excavation_pit_inventory = build_excavation_pit_inventory(
+                structure_nodes, identity_candidates=structure_identity_candidates
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -4730,7 +4732,9 @@ class SpinePostgresRepository:
             structure_nodes=structure_nodes,
             relationships=structure_relationships,
         )
-        excavation_pit_inventory = build_excavation_pit_inventory(structure_nodes)
+        excavation_pit_inventory = build_excavation_pit_inventory(
+            structure_nodes, identity_candidates=structure_identity_candidates
+        )
         view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id

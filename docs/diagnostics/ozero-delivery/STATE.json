@@ -1,56 +1,60 @@
 {
-  "recorded_at": "2026-09-12T01:06:20+12:00",
+  "recorded_at": "2026-09-21T19:59:19+12:00",
   "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
   "release": {
-    "api_live": "6194eb31fd82630b136dd0f404252b532a8cae44",
-    "document_worker_and_assistant_live": "9394b466a222d915d77f12b9577afd815a8476ba",
-    "database_migration": "0048_incremental_reconciliation_claim_priority",
-    "frontend_build_digest": "sha256:e97ded3a614e01641278bb70013f231b6963c93875684cdecf0dc8b34ace7b87",
-    "worker_transition": "deferred_until_current_Qwen_job_terminal",
-    "worker_recovery_candidate": "4f41617eb2c27784bd969f76de3b49a69f60547b",
-    "worker_recovery_candidate_state": "tested_not_deployed"
+    "api_and_document_worker": "c4d7afff7fa8861a74deecedc84133a259ff2a6d",
+    "assistant_worker": "e7282fb257e73ec1960bfe757a98030ec468d30c",
+    "database_migration": "0063_structure_group_receipts",
+    "health": "ready"
   },
   "corpus": {
     "active_source_versions": 22,
     "page_denominator": 2529,
-    "semantic_coverage": {
-      "complete_sources": 7,
-      "partial_sources": 3,
-      "not_started_sources": 12,
-      "meaning": "Coverage states describe exact accepted semantic input fragments, not confirmed engineering analysis or Tender acceptance."
-    }
+    "classified_active_sources": 22,
+    "semantic_profile": "qwen-engineering-extraction-v15",
+    "semantic_fragments": {"covered": 133407, "expected": 133407, "unresolved_failed": 0}
   },
-  "active_job": {
-    "job_id": "01a08f4e-3b5e-798c-9d5b-b3acd1724683",
-    "kind": "PROJECT_DEFINITION_EXTRACTION",
-    "state": "running",
-    "source_version_id": "01a088ac-7fdb-7b12-be33-e3a325af8edf",
-    "safe_display_name": "Раздел ПД №12.2 005.2-2025-СМ2. Изм.3.pdf",
-    "accepted_batch_progress": {"current": 162, "total": 1074},
-    "ledger_at_observation": {
-      "accepted_receipts": 183,
-      "accepted_input_fragments": 1800,
-      "failed_receipts": 25,
-      "failed_input_fragments": 240
-    },
-    "progress_observed_at": "2026-09-12T01:06:03+12:00"
+  "classification_recovery": {
+    "contract": "document-classification-recovery-v1",
+    "scheduled": 9,
+    "succeeded": 9,
+    "failed": 0,
+    "historical_ocr_dependencies_reused": 0
   },
   "candidate_projection": {
-    "project_fields": 1869,
-    "works": 1256,
-    "quantities": 377,
-    "materials": 160,
-    "structure_observations": 1308,
-    "relationship_observations": 417,
-    "authority": "candidate_only",
-    "pit_count": null,
-    "facility_inventory_reconciled": false
+    "project_fields": 8086,
+    "works": 6396,
+    "quantities": 2718,
+    "materials": 962,
+    "work_packages": 5564,
+    "defects": 1662,
+    "structure_nodes": 7629,
+    "structure_relationships": 2325,
+    "structure_identity_candidates": 256,
+    "structure_identity_components": 251,
+    "explicit_facility_associated_pit_candidates": 4,
+    "unresolved_pit_like_observations": 254,
+    "exact_pit_total_supported": false,
+    "authority": "candidate_only"
   },
+  "consultant_acceptance": {
+    "conversation_id": "01a0c2d6-1fa8-77fe-9610-88cbe924e502",
+    "accepted_inventory_turn": "01a0c2f6-1594-7958-9ab8-9c817c9df74e",
+    "accepted_source_followup_turn": "01a0c2f8-d53e-727b-b299-a3b79823cc93",
+    "source_pages": [47, 118, 119, 122],
+    "deterministic_quality": "PASS",
+    "model_quality": "PASS",
+    "exact_total_claimed": false
+  },
+  "active_jobs": [],
   "acceptance": {
+    "classification_coverage": "PASS_22_OF_22",
+    "semantic_input_coverage": "PASS_133407_OF_133407",
+    "candidate_inventory_consultation": "PASS",
+    "exact_excavation_pit_inventory": "OPEN",
+    "browser_source_navigation": "UNVERIFIED_NO_ATTACHABLE_BROWSER",
     "complete_package_tender_accepted": false,
-    "cross_document_facility_reconciliation": "open",
-    "project_specific_ntd_checks": "open",
-    "consultant_source_answer_acceptance": "open",
-    "browser_source_navigation": "unverified"
-  }
+    "product_ready": false
+  },
+  "next_executable_action": "Reconcile unresolved pit-like observations by source scope and entity type without promoting mentions, trenches, or generic work descriptions to distinct pits."
 }

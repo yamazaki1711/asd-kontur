@@ -43,6 +43,11 @@ def test_explicit_facility_pits_are_grouped_without_claiming_a_project_total() -
         "unresolved_observation_count": 2,
         "returned_unresolved_observation_count": 2,
         "candidate_pit_count": 2,
+        "identity_candidate_count": 0,
+        "identity_rejected_non_pit_count": 0,
+        "identity_enriched_observation_count": 0,
+        "non_pit_observation_count": 1,
+        "generic_observation_count": 1,
         "exact_total_supported": False,
         "count_meaning": "distinct_explicit_source_association_candidates_not_project_total",
         "candidate_authority": "candidate_only",
@@ -73,3 +78,31 @@ def test_unresolved_observation_sample_is_bounded_without_losing_denominator() -
     assert len(result["unresolved_observations"]) == 2
     assert result["coverage"]["unresolved_observation_count"] == 5
     assert result["coverage"]["returned_unresolved_observation_count"] == 2
+
+
+def test_identity_candidates_cannot_promote_boreholes_and_can_retain_explicit_scope() -> None:
+    result = build_excavation_pit_inventory(
+        [
+            _node("pit", "котлован для ЛОС 4", "locator-a"),
+            _node("borehole", "скв.897", "locator-b"),
+        ],
+        identity_candidates=[
+            {
+                "identity_candidate_id": "pit-candidate",
+                "identity_kind": "excavation_pit",
+                "canonical_label": "скв.897",
+                "member_structure_node_ids": ["borehole"],
+            },
+            {
+                "identity_candidate_id": "scoped-pit-candidate",
+                "identity_kind": "excavation_pit",
+                "canonical_label": "котлован для ЛОС 4",
+                "member_structure_node_ids": ["pit"],
+            },
+        ],
+    )
+
+    assert len(result["candidate_pits"]) == 1
+    assert result["coverage"]["identity_candidate_count"] == 2
+    assert result["coverage"]["identity_rejected_non_pit_count"] == 1
+    assert result["coverage"]["non_pit_observation_count"] == 1
