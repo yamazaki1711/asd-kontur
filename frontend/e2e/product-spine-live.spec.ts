@@ -188,7 +188,11 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await page.getByRole("link", { name: "Обработка", exact: true }).click();
     await expect(page.getByText("Выполняется")).toBeVisible();
     await page.waitForTimeout(5_500);
-    const restarted = worker("drain", undefined, 27);
+    // Two admitted sources now schedule structure reconciliation as an
+    // explicit durable stage. The restarted worker therefore completes 29
+    // jobs after reclaiming the interrupted lease, and the history table
+    // exposes 28 terminal rows in addition to the interrupted attempt.
+    const restarted = worker("drain", undefined, 29);
     expect(await exited(restarted)).toBe(0);
     await expect
       .poll(
@@ -196,7 +200,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
           page.locator("tbody tr").filter({ hasText: "Завершено" }).count(),
         { timeout: 15_000 },
       )
-      .toBe(26);
+      .toBe(28);
 
     await page.getByRole("link", { name: "Документы" }).click();
     await expect(
