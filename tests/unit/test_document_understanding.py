@@ -1623,6 +1623,25 @@ def test_qwen_pit_observation_output_exhaustion_subdivides_exact_group() -> None
     )
 
 
+def test_qwen_pit_observation_single_item_exhaustion_remains_typed_failure() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    observation = (
+        {
+            "structure_node_id": str(deterministic_uuid("pit-single-exhausted-node")),
+            "raw_name": "Котлован",
+            "source_locator_id": str(deterministic_uuid("pit-single-exhausted-locator")),
+        },
+    )
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        side_effect=QwenSemanticFailure("qwen_semantic_response_output_exhausted"),
+    ) as complete:
+        with pytest.raises(QwenSemanticFailure, match="response_output_exhausted"):
+            adapter.classify_excavation_pit_observations(observation)
+
+    assert complete.call_count == 1
+
+
 def test_project_materialization_defers_optional_structure_identity_inference() -> None:
     organization_id = deterministic_uuid("materialization-organization")
     workspace_id = deterministic_uuid("materialization-workspace")

@@ -1211,6 +1211,28 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             "decisions": pit_decisions,
             "failure_code": None,
         }
+        isolated_workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Pit disposition isolation workspace"},
+            headers=csrf,
+        ).json()
+        isolated_claim = ClaimedJob(
+            UUID(isolated_workspace["organization_id"]),
+            UUID(isolated_workspace["workspace_id"]),
+            uuid4(),
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+            {},
+            "sha256:" + "f" * 64,
+            1,
+            1,
+            "none",
+        )
+        assert (
+            understanding_repository.load_pit_observation_disposition_receipts(
+                isolated_claim, profile_version=pit_profile
+            )
+            == {}
+        )
         stale_identity_candidate_id = uuid4()
         stale_input_manifest = tuple(reversed(identity_input_manifest))
         stale_group_fingerprint = semantic_digest(
