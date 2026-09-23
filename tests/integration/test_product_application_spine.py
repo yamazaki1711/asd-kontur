@@ -1010,6 +1010,14 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             structure_jobs[0]["structure_provenance"]["result_manifest_version"]
             == "current-membership-v1"
         )
+        assert (
+            structure_jobs[0]["structure_manifest"]["pit_observation_reconciliation_profile"]
+            == "qwen-excavation-pit-observation-v2"
+        )
+        assert (
+            structure_jobs[0]["structure_provenance"]["pit_observation_profile"]
+            == "qwen-excavation-pit-observation-v2"
+        )
         structure_job_id = UUID(str(structure_jobs[0]["job_id"]))
         understanding_repository = IndustrialUnderstandingRepository(
             postgres_environment.document_worker_engine
@@ -1161,6 +1169,42 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
             compatible_profile_versions=("qwen-structure-identity-v1",),
         )
         assert compatible_receipts[compatible_fingerprint] == receipts[group_fingerprint]
+        pit_profile = "qwen-excavation-pit-observation-v2"
+        pit_group_fingerprint = semantic_digest(
+            {"profile_version": pit_profile, "observations": identity_input_manifest}
+        )
+        pit_decisions = tuple(
+            {
+                "node_id": str(node_id),
+                "disposition": "ambiguous",
+                "canonical_label": "",
+                "facility_label": "",
+                "reason_code": "controlled_persistence_fixture",
+                "confidence": "0.5",
+                "source_locator_id": str(source_locator_id),
+                "profile_version": pit_profile,
+            }
+            for node_id, source_locator_id in (
+                (first_node_id, locator_id),
+                (second_node_id, second_locator_id),
+            )
+        )
+        understanding_repository.persist_pit_observation_disposition_outcome(
+            structure_claim,
+            group_fingerprint=pit_group_fingerprint,
+            profile_version=pit_profile,
+            input_structure_node_ids=(first_node_id, second_node_id),
+            input_manifest=identity_input_manifest,
+            decisions=pit_decisions,
+        )
+        pit_receipts = understanding_repository.load_pit_observation_disposition_receipts(
+            structure_claim, profile_version=pit_profile
+        )
+        assert pit_receipts[pit_group_fingerprint] == {
+            "outcome": "accepted",
+            "decisions": pit_decisions,
+            "failure_code": None,
+        }
         stale_identity_candidate_id = uuid4()
         stale_input_manifest = tuple(reversed(identity_input_manifest))
         stale_group_fingerprint = semantic_digest(

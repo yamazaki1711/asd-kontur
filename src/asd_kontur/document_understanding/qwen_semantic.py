@@ -356,9 +356,16 @@ class QwenDocumentSemanticAdapter:
             )
         )
         try:
-            value = _json_object(
-                _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=1_200)
-            )
+            response = _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=1_200)
+        except QwenSemanticFailure as exc:
+            if exc.code != "qwen_semantic_response_output_exhausted" or len(rows) == 1:
+                raise
+            midpoint = len(rows) // 2
+            left = self.classify_excavation_pit_observations(rows[:midpoint])
+            right = self.classify_excavation_pit_observations(rows[midpoint:])
+            return left + right
+        try:
+            value = _json_object(response)
         except json.JSONDecodeError as exc:
             raise QwenSemanticFailure("qwen_pit_observation_response_invalid_json") from exc
         raw = value.get("observations") if isinstance(value, dict) else None

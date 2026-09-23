@@ -1580,6 +1580,49 @@ def test_qwen_pit_observation_disposition_rejects_incomplete_response() -> None:
             adapter.classify_excavation_pit_observations(observation)
 
 
+def test_qwen_pit_observation_output_exhaustion_subdivides_exact_group() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    observations = tuple(
+        {
+            "structure_node_id": str(deterministic_uuid(f"pit-split-node-{index}")),
+            "raw_name": f"Котлован ЛОС-{index}",
+            "source_locator_id": str(deterministic_uuid(f"pit-split-locator-{index}")),
+        }
+        for index in range(4)
+    )
+
+    def response(_endpoint: str, prompt: str, *_args: object, **_kwargs: object) -> str:
+        payload = json.loads(prompt.split("НАБЛЮДЕНИЯ:\n", 1)[1])
+        if len(payload) == 4:
+            raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "node_id": item["structure_node_id"],
+                        "disposition": "distinct_instance_candidate",
+                        "canonical_label": item["raw_name"],
+                        "facility_label": item["raw_name"].replace("Котлован ", ""),
+                        "reason_code": "explicit_facility_label",
+                        "confidence": 0.9,
+                    }
+                    for item in payload
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    with patch("asd_kontur.document_understanding.qwen_semantic._complete", side_effect=response):
+        decisions = adapter.classify_excavation_pit_observations(observations)
+
+    assert [item["node_id"] for item in decisions] == [
+        item["structure_node_id"] for item in observations
+    ]
+    assert all(
+        item["profile_version"] == "qwen-excavation-pit-observation-v2" for item in decisions
+    )
+
+
 def test_project_materialization_defers_optional_structure_identity_inference() -> None:
     organization_id = deterministic_uuid("materialization-organization")
     workspace_id = deterministic_uuid("materialization-workspace")
