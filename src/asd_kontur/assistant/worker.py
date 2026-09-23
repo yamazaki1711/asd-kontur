@@ -448,13 +448,24 @@ class AssistantWorker:
         available_sources: tuple[dict[str, Any], ...],
         receipts: list[dict[str, Any]],
     ) -> SynthesizedAnswer:
+        prompt = _repair_prompt(claimed, answer, model_checks, receipts)
         raw = self._model_complete(
             claimed,
-            _repair_prompt(claimed, answer, model_checks, receipts),
+            prompt,
             max_tokens=min(1_400, max(800, len(answer.answer))),
             temperature=0.1,
         )
-        return parse_synthesized_answer(raw, {str(item["source_id"]) for item in available_sources})
+        allowed_source_ids = {str(item["source_id"]) for item in available_sources}
+        try:
+            return parse_synthesized_answer(raw, allowed_source_ids)
+        except (ValueError, json.JSONDecodeError) as error:
+            corrected = self._model_complete(
+                claimed,
+                _answer_repair_output_prompt(prompt, raw, str(error)),
+                max_tokens=2_400,
+                temperature=0.0,
+            )
+            return parse_synthesized_answer(corrected, allowed_source_ids)
 
     def _publish_content(self, claimed: ClaimedTurn, content: str) -> None:
         for start in range(0, len(content), 48):
@@ -638,6 +649,19 @@ exact_total_supported=false прямо укажите, что точный пр�
 Дефекты: {json.dumps(model_checks["issues"], ensure_ascii=False)}
 Допустимые source_id: {json.dumps(source_ids, ensure_ascii=False)}
 Результаты инструментов: {_tool_results_for_prompt(receipts)}
+"""
+
+
+def _answer_repair_output_prompt(prompt: str, raw: str, error: str) -> str:
+    return f"""Исправьте только формат и завершённость предыдущего ответа. Не добавляйте новые
+факты, числа или source_id. Сохраните существенные найденные кандидаты и границу доказанности,
+но сократите answer до 1200 символов и используйте не более 8 существенных source_id.
+Верните один полный JSON по схеме исходного задания; последняя строка должна содержать закрывающую
+фигурную скобку. Не используйте Markdown-кодовый блок.
+
+Ошибка проверки: {error}
+Неполный ответ: {raw[:5000]}
+Исходное задание: {prompt}
 """
 
 

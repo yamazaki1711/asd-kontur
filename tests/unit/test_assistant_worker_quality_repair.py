@@ -207,6 +207,86 @@ def test_inventory_repair_receives_candidates_coverage_and_allowed_sources() -> 
     assert source_id in prompt
 
 
+def test_answer_repair_retries_one_malformed_model_response(monkeypatch: Any) -> None:
+    source_id = "22222222-2222-4222-8222-222222222222"
+    worker = AssistantWorker(
+        cast(AssistantRepository, object()),
+        cast(ProfessionalAssistantKnowledgeQuery, object()),
+        identity="test-worker",
+    )
+    responses = iter(
+        (
+            '{"answer":"Оборванный ответ',
+            json.dumps(
+                {
+                    "answer": "Установлен кандидатный поднабор; точный итог не доказан.",
+                    "answer_type": "workspace_conclusion",
+                    "needs_clarification": False,
+                    "used_source_ids": [source_id],
+                    "dialogue_summary": "Проверяется инвентарь котлованов.",
+                    "active_subjects": ["котлованы"],
+                },
+                ensure_ascii=False,
+            ),
+        )
+    )
+    calls: list[dict[str, Any]] = []
+
+    def complete(*_args: Any, **kwargs: Any) -> str:
+        calls.append(kwargs)
+        return next(responses)
+
+    monkeypatch.setattr(worker, "_model_complete", complete)
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "Перечисли котлованы.",
+        "owner-a",
+        1,
+        1,
+    )
+    answer = SynthesizedAnswer(
+        "Недостаточно данных.",
+        "insufficient_data",
+        False,
+        (),
+        "Проверяется инвентарь.",
+        ("котлованы",),
+    )
+    receipts = [
+        {
+            "step_sequence": 1,
+            "tool": "consultant.get_project_entity_inventory",
+            "reason": "Inventory coverage.",
+            "response": {
+                "value": {
+                    "candidate_entity_count": 1,
+                    "candidate_entities": [
+                        {"canonical_label": "Котлован А"}  # noqa: RUF001
+                    ],
+                    "coverage": {"exact_total_supported": False},
+                },
+                "sources": [{"source_id": source_id}],
+            },
+        }
+    ]
+
+    repaired = worker._repair_answer(
+        claimed,
+        answer,
+        {"issues": ["workspace_inventory_candidates_ignored"]},
+        ({"source_id": source_id},),
+        receipts,
+    )
+
+    assert repaired.used_source_ids == (source_id,)
+    assert repaired.answer_type == "workspace_conclusion"
+    assert [call["max_tokens"] for call in calls] == [800, 2400]
+
+
 def test_inventory_candidate_count_cannot_be_published_as_project_total() -> None:
     source_id = "33333333-3333-4333-8333-333333333333"
     receipts = [
