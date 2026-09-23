@@ -687,6 +687,8 @@ def validate_answer(
         problems.append("source_selection_inconsistent")
     if len(selected) > 10:
         problems.append("too_many_sources")
+    if re.search(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+){2,}\b", answer.answer):
+        problems.append("internal_contract_token_exposed")
     normalized_words = re.findall(r"[0-9A-Za-zА-Яа-яЁё]+", answer.answer.casefold())
     for index in range(len(normalized_words) - 2):
         if normalized_words[index] == normalized_words[index + 2] and normalized_words[

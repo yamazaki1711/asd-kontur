@@ -170,6 +170,7 @@ class AssistantWorker:
                 "clarification_has_unverified_numeric_estimate",
                 "clarification_without_question",
                 "insufficient_without_next_question",
+                "internal_contract_token_exposed",
                 "repeated_phrase",
                 "workspace_inventory_candidates_ignored",
                 "workspace_inventory_candidates_incomplete",
@@ -654,6 +655,8 @@ exact_total_supported=false прямо укажите, что точный пр�
 нельзя исправить из приведённых результатов, дайте точное сообщение о границе данных.
 Ответ должен быть законченным естественным русским текстом: не обрывайте последнюю фразу,
 не оставляйте незавершённое предложение и завершите его точкой.
+Не раскрывайте пользователю внутренние status keys, schema keys, названия инструментов или
+машинные коды с подчёркиваниями; передайте их смысл естественным русским языком.
 Верните только JSON той же схемы:
 {{"answer":"...","answer_type":"direct|explanation|procedure|comparison|workspace_conclusion|clarification|insufficient_data",
 "needs_clarification":false,"used_source_ids":[],"dialogue_summary":"...","active_subjects":[]}}

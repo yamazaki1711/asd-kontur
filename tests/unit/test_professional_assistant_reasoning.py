@@ -171,6 +171,26 @@ def test_answer_can_be_direct_and_selects_only_relevant_sources() -> None:
     assert receipt["selected_source_count"] == 1
 
 
+def test_answer_rejects_internal_contract_status_token() -> None:
+    answer = parse_synthesized_answer(
+        '{"answer":"Статус candidate_observations_not_confirmed_work_packages.",'
+        '"answer_type":"workspace_conclusion","needs_clarification":false,'
+        '"used_source_ids":[],"dialogue_summary":"Проверяются работы.",'
+        '"active_subjects":["работы"]}',
+        set(),
+    )
+
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.get_work_packages",),
+        sources=(),
+    )
+
+    assert receipt["passed"] is False
+    assert receipt["problems"] == ["internal_contract_token_exposed"]
+
+
 def test_answer_rejects_source_that_was_not_retrieved() -> None:
     with pytest.raises(ValueError, match="assistant_answer_unknown_source"):
         parse_synthesized_answer(
