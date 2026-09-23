@@ -1508,6 +1508,78 @@ def test_qwen_structure_identity_reconciliation_rejects_unknown_member() -> None
             adapter.reconcile_structure_identities(observations)
 
 
+def test_qwen_pit_observation_disposition_requires_one_decision_per_input() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    first = deterministic_uuid("pit-observation-first")
+    second = deterministic_uuid("pit-observation-second")
+    response = json.dumps(
+        {
+            "observations": [
+                {
+                    "node_id": str(first),
+                    "disposition": "distinct_instance_candidate",
+                    "canonical_label": "котлован В-1",
+                    "facility_label": "ЛОС 4",
+                    "reason_code": "named_on_plan",
+                    "confidence": 0.82,
+                },
+                {
+                    "node_id": str(second),
+                    "disposition": "non_pit",
+                    "canonical_label": "",
+                    "facility_label": "",
+                    "reason_code": "borehole_label",
+                    "confidence": 0.99,
+                },
+            ]
+        }
+    )
+    observations = (
+        {
+            "structure_node_id": str(first),
+            "node_kind": "excavation_pit",
+            "raw_name": "котлован",
+            "source_locator_id": str(deterministic_uuid("pit-locator-first")),
+        },
+        {
+            "structure_node_id": str(second),
+            "node_kind": "excavation_pit",
+            "raw_name": "скв.897",
+            "source_locator_id": str(deterministic_uuid("pit-locator-second")),
+        },
+    )
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete", return_value=response
+    ) as complete:
+        result = adapter.classify_excavation_pit_observations(observations)
+
+    assert [item["disposition"] for item in result] == [
+        "distinct_instance_candidate",
+        "non_pit",
+    ]
+    assert result[0]["source_locator_id"] == observations[0]["source_locator_id"]
+    assert complete.call_args.kwargs["max_tokens"] == 1_200
+
+
+def test_qwen_pit_observation_disposition_rejects_incomplete_response() -> None:
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    node = deterministic_uuid("pit-observation-incomplete")
+    observation = (
+        {
+            "structure_node_id": str(node),
+            "node_kind": "excavation_pit",
+            "raw_name": "котлован",
+            "source_locator_id": str(deterministic_uuid("pit-observation-locator")),
+        },
+    )
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value='{"observations":[]}',
+    ):
+        with pytest.raises(QwenSemanticFailure, match="invalid_shape"):
+            adapter.classify_excavation_pit_observations(observation)
+
+
 def test_project_materialization_defers_optional_structure_identity_inference() -> None:
     organization_id = deterministic_uuid("materialization-organization")
     workspace_id = deterministic_uuid("materialization-workspace")

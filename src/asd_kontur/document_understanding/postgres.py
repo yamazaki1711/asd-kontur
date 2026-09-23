@@ -1234,6 +1234,187 @@ class IndustrialUnderstandingRepository:
             result.extend(_bounded_cross_source_identity_groups(values))
         return tuple(result)
 
+    def load_pit_observation_groups(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> tuple[tuple[dict[str, object], ...], ...]:
+        """Load every current pit-kind observation into bounded Qwen batches.
+
+        Unlike identity reconciliation, this pass does not require repeated
+        names or cross-source matches. Each active observation receives one
+        disposition, so generic mentions and non-pit terms remain accounted for.
+        """
+        with self._session(claimed) as session:
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT n.structure_node_id,n.node_kind,n.raw_name,n.normalized_name,"
+                        "n.source_locator_id,locator.source_version_id,"
+                        "COALESCE(locator.locator_value->>'page','') AS page,"
+                        "document.safe_display_name,COALESCE(evidence.normalized_text,'') AS evidence_excerpt "
+                        "FROM workspace.project_structure_node_versions n JOIN workspace.source_locators locator ON "
+                        "locator.organization_id=n.organization_id AND locator.workspace_id=n.workspace_id AND "
+                        "locator.source_locator_id=n.source_locator_id JOIN workspace.document_versions document ON "
+                        "document.organization_id=locator.organization_id AND document.workspace_id=locator.workspace_id AND "
+                        "document.source_version_id=locator.source_version_id LEFT JOIN LATERAL ("
+                        "SELECT left(element.normalized_text,1200) AS normalized_text FROM "
+                        "workspace.native_layout_element_versions element WHERE element.organization_id=n.organization_id "
+                        "AND element.workspace_id=n.workspace_id AND element.source_locator_id=n.source_locator_id "
+                        "ORDER BY element.version DESC LIMIT 1) evidence ON true WHERE "
+                        "n.organization_id=:o AND n.workspace_id=:w AND n.node_kind='excavation_pit' "
+                        "AND n.extraction_profile_version=:profile ORDER BY locator.source_version_id,"
+                        "n.source_locator_id,n.structure_node_id"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        values = [dict(row) for row in rows]
+        return tuple(
+            tuple(values[index : index + STRUCTURE_IDENTITY_GROUP_MAX_SIZE])
+            for index in range(0, len(values), STRUCTURE_IDENTITY_GROUP_MAX_SIZE)
+        )
+
+    def load_pit_observation_disposition_receipts(
+        self, claimed: ClaimedJob, *, profile_version: str
+    ) -> dict[str, dict[str, object]]:
+        with self._session(claimed) as session:
+            rows = (
+                session.execute(
+                    sa.text(
+                        "SELECT group_fingerprint,outcome,decisions,failure_code FROM "
+                        "workspace.project_pit_observation_disposition_receipts WHERE "
+                        "organization_id=:o AND workspace_id=:w AND profile_version=:profile "
+                        "ORDER BY recorded_at,group_fingerprint"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+        return {
+            str(row["group_fingerprint"]): {
+                "outcome": str(row["outcome"]),
+                "decisions": tuple(row["decisions"] or ()),
+                "failure_code": None if row["failure_code"] is None else str(row["failure_code"]),
+            }
+            for row in rows
+        }
+
+    def persist_pit_observation_disposition_outcome(
+        self,
+        claimed: ClaimedJob,
+        *,
+        group_fingerprint: str,
+        profile_version: str,
+        input_structure_node_ids: tuple[UUID, ...],
+        input_manifest: tuple[dict[str, object], ...],
+        decisions: tuple[dict[str, object], ...] = (),
+        failure_code: str | None = None,
+    ) -> dict[str, object]:
+        if not input_structure_node_ids or len(set(input_structure_node_ids)) != len(
+            input_structure_node_ids
+        ):
+            raise UnderstandingPersistenceError("pit_observation_group_input_invalid")
+        manifest_ids = tuple(UUID(str(item.get("structure_node_id"))) for item in input_manifest)
+        if manifest_ids != input_structure_node_ids:
+            raise UnderstandingPersistenceError("pit_observation_group_manifest_invalid")
+        if group_fingerprint != semantic_digest(
+            {"profile_version": profile_version, "observations": input_manifest}
+        ):
+            raise UnderstandingPersistenceError("pit_observation_group_fingerprint_invalid")
+        if (failure_code is None) != bool(decisions):
+            raise UnderstandingPersistenceError("pit_observation_group_outcome_invalid")
+        outcome = "failed" if failure_code is not None else "accepted"
+        payload = {
+            "group_fingerprint": group_fingerprint,
+            "profile_version": profile_version,
+            "input_structure_node_ids": input_structure_node_ids,
+            "input_manifest": input_manifest,
+            "outcome": outcome,
+            "decisions": decisions,
+            "failure_code": failure_code,
+        }
+        with self._session(claimed) as session:
+            existing = (
+                session.execute(
+                    sa.text(
+                        "SELECT outcome,decisions,failure_code FROM "
+                        "workspace.project_pit_observation_disposition_receipts WHERE "
+                        "organization_id=:o AND workspace_id=:w AND group_fingerprint=:group AND profile_version=:profile"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "group": group_fingerprint,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if existing is not None:
+                return {
+                    "outcome": str(existing["outcome"]),
+                    "decisions": tuple(existing["decisions"] or ()),
+                    "failure_code": existing["failure_code"],
+                }
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_pit_observation_disposition_receipts "
+                    "(organization_id,workspace_id,group_fingerprint,profile_version,input_structure_node_ids,"
+                    "input_manifest,outcome,decisions,failure_code,receipt_digest) VALUES "
+                    "(:o,:w,:group,:profile,:members,CAST(:manifest AS jsonb),:outcome,CAST(:decisions AS jsonb),"
+                    ":failure,:digest)"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "group": group_fingerprint,
+                    "profile": profile_version,
+                    "members": list(input_structure_node_ids),
+                    "manifest": json.dumps(
+                        input_manifest, ensure_ascii=False, sort_keys=True, default=str
+                    ),
+                    "outcome": outcome,
+                    "decisions": json.dumps(
+                        decisions, ensure_ascii=False, sort_keys=True, default=str
+                    ),
+                    "failure": failure_code,
+                    "digest": semantic_digest(payload),
+                },
+            )
+        return {"outcome": outcome, "decisions": decisions, "failure_code": failure_code}
+
+    def load_current_pit_observation_decisions(
+        self, session: Session, *, organization_id: UUID, workspace_id: UUID, profile_version: str
+    ) -> list[dict[str, object]]:
+        rows = (
+            session.execute(
+                sa.text(
+                    "SELECT receipt.decisions FROM workspace.project_pit_observation_disposition_receipts receipt "
+                    "WHERE receipt.organization_id=:o AND receipt.workspace_id=:w AND receipt.profile_version=:profile "
+                    "AND receipt.outcome='accepted' ORDER BY receipt.recorded_at,receipt.group_fingerprint"
+                ),
+                {"o": organization_id, "w": workspace_id, "profile": profile_version},
+            )
+            .scalars()
+            .all()
+        )
+        decisions: list[dict[str, object]] = []
+        for value in rows:
+            if isinstance(value, list):
+                decisions.extend(dict(item) for item in value if isinstance(item, dict))
+        return decisions
+
     def workspace_engineering_semantic_coverage(
         self, claimed: ClaimedJob, *, profile_version: str
     ) -> dict[str, int | bool]:

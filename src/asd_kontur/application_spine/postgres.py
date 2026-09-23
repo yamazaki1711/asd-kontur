@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.models import (
     CLASSIFICATION_PROFILE_VERSION,
+    PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
     PROJECT_RECONCILIATION_PROFILE_VERSION,
     STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
 )
@@ -3189,7 +3190,11 @@ class SpinePostgresRepository:
                 facility_work_groups=facility_work_projection["candidate_groups"],
             )
             excavation_pit_inventory = build_excavation_pit_inventory(
-                structure_nodes, identity_candidates=structure_identity_candidates
+                structure_nodes,
+                identity_candidates=structure_identity_candidates,
+                pit_observation_decisions=self._pit_observation_decision_rows(
+                    session, organization_id=organization_id, workspace_id=workspace_id
+                ),
             )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -4022,7 +4027,8 @@ class SpinePostgresRepository:
             "project-structure-reconciliation:"
             f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:"
             f"{STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION}:"
-            f"{STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
+            f"{STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION}:"
+            f"{PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
         )
         existing = session.scalar(
             sa.text(
@@ -4055,6 +4061,9 @@ class SpinePostgresRepository:
             "structure_identity_reconciliation_profile": (
                 STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
             ),
+            "pit_observation_reconciliation_profile": (
+                PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
+            ),
         }
         session.execute(
             sa.text(
@@ -4083,6 +4092,7 @@ class SpinePostgresRepository:
                         "reconciliation_profile": (
                             STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
                         ),
+                        "pit_observation_profile": PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
                     }
                 ),
                 "correlation": correlation_id,
@@ -4643,6 +4653,34 @@ class SpinePostgresRepository:
         return sorted(rows, key=lambda item: str(item["component_key"]))
 
     @staticmethod
+    def _pit_observation_decision_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> list[dict[str, Any]]:
+        rows = (
+            session.execute(
+                sa.text(
+                    "SELECT receipt.decisions FROM "
+                    "workspace.project_pit_observation_disposition_receipts receipt WHERE "
+                    "receipt.organization_id=:o AND receipt.workspace_id=:w AND "
+                    "receipt.profile_version=:profile AND receipt.outcome='accepted' "
+                    "ORDER BY receipt.recorded_at,receipt.group_fingerprint"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "profile": PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
+                },
+            )
+            .scalars()
+            .all()
+        )
+        values: list[dict[str, Any]] = []
+        for decisions in rows:
+            if isinstance(decisions, list):
+                values.extend(dict(item) for item in decisions if isinstance(item, dict))
+        return values
+
+    @staticmethod
     def _structure_identity_candidate_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> list[dict[str, Any]]:
@@ -4733,7 +4771,11 @@ class SpinePostgresRepository:
             relationships=structure_relationships,
         )
         excavation_pit_inventory = build_excavation_pit_inventory(
-            structure_nodes, identity_candidates=structure_identity_candidates
+            structure_nodes,
+            identity_candidates=structure_identity_candidates,
+            pit_observation_decisions=cls._pit_observation_decision_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ),
         )
         view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(

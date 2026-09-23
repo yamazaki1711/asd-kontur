@@ -19,6 +19,7 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import deterministic_uuid
 
 from .models import (
+    PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION,
     STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION,
     CandidateDecision,
     DocumentRole,
@@ -42,6 +43,7 @@ from .semantic import StructuredCandidates
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v15"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
+QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
 _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
 # v14 adds a required relationship collection.  Prior batch manifests did not ask
 # the model to inspect or report those observations, so treating them as compatible
@@ -322,6 +324,83 @@ class QwenDocumentSemanticAdapter:
                 )
             )
         return tuple(accepted)
+
+    def classify_excavation_pit_observations(
+        self, observations: Iterable[Mapping[str, object]]
+    ) -> tuple[dict[str, object], ...]:
+        """Classify bounded pit-like observations without inventing entities.
+
+        This is intentionally a disposition contract, not an authority grant.
+        The caller persists every validated disposition with its exact input
+        manifest; only ``distinct_instance_candidate`` can enrich a candidate
+        inventory, while generic and ambiguous observations remain visible.
+        """
+        rows = [dict(item) for item in observations]
+        if not 1 <= len(rows) <= 16:
+            raise QwenSemanticFailure("qwen_pit_observation_input_unavailable")
+        by_id = {str(item.get("structure_node_id", "")): item for item in rows}
+        if len(by_id) != len(rows) or not all(by_id):
+            raise QwenSemanticFailure("qwen_pit_observation_input_invalid")
+        prompt = (
+            "Классифицируй каждое входное наблюдение о выемке для инженерного реестра. "
+            "Не считай упоминания, типовые детали, траншеи, скважины, шурфы и приямки "
+            "отдельными котлованами. Верни только JSON вида "
+            '{"observations":[{"node_id":"...","disposition":"distinct_instance_candidate|'
+            'generic_mention|non_pit|ambiguous","canonical_label":"...",'
+            '"facility_label":"...","reason_code":"...","confidence":0.0}]}. '
+            "Должна быть ровно одна запись для каждого входного node_id; не создавай ID, "
+            "не добавляй наблюдения и не утверждай полный проектный итог. "
+            "canonical_label и facility_label могут быть пустыми строками.\nНАБЛЮДЕНИЯ:\n"
+            + json.dumps(
+                rows, ensure_ascii=False, separators=(",", ":"), default=_prompt_json_scalar
+            )
+        )
+        try:
+            value = _json_object(
+                _complete(self._endpoint, prompt, self._timeout_seconds, max_tokens=1_200)
+            )
+        except json.JSONDecodeError as exc:
+            raise QwenSemanticFailure("qwen_pit_observation_response_invalid_json") from exc
+        raw = value.get("observations") if isinstance(value, dict) else None
+        if not isinstance(raw, list) or len(raw) != len(rows):
+            raise QwenSemanticFailure("qwen_pit_observation_response_invalid_shape")
+        allowed = {"distinct_instance_candidate", "generic_mention", "non_pit", "ambiguous"}
+        decisions: list[dict[str, object]] = []
+        seen: set[str] = set()
+        for item in raw:
+            if not isinstance(item, dict):
+                raise QwenSemanticFailure("qwen_pit_observation_response_invalid_shape")
+            node_id = str(item.get("node_id", ""))
+            disposition = str(item.get("disposition", ""))
+            if node_id not in by_id or node_id in seen or disposition not in allowed:
+                raise QwenSemanticFailure("qwen_pit_observation_response_invalid_evidence")
+            label = " ".join(str(item.get("canonical_label", "")).split())
+            facility = " ".join(str(item.get("facility_label", "")).split())
+            reason = " ".join(str(item.get("reason_code", "")).split())
+            if len(label) > 500 or len(facility) > 500 or not 1 <= len(reason) <= 120:
+                raise QwenSemanticFailure("qwen_pit_observation_response_invalid_shape")
+            try:
+                confidence = Decimal(str(item.get("confidence", "")))
+            except InvalidOperation as exc:
+                raise QwenSemanticFailure("qwen_pit_observation_response_invalid_shape") from exc
+            if not Decimal("0") <= confidence <= Decimal("1"):
+                raise QwenSemanticFailure("qwen_pit_observation_response_invalid_shape")
+            seen.add(node_id)
+            decisions.append(
+                {
+                    "node_id": node_id,
+                    "disposition": disposition,
+                    "canonical_label": label,
+                    "facility_label": facility,
+                    "reason_code": reason,
+                    "confidence": str(confidence),
+                    "source_locator_id": str(by_id[node_id]["source_locator_id"]),
+                    "profile_version": QWEN_PIT_OBSERVATION_PROFILE,
+                }
+            )
+        if set(seen) != set(by_id):
+            raise QwenSemanticFailure("qwen_pit_observation_response_missing_evidence")
+        return tuple(decisions)
 
     def extract_engineering(
         self,

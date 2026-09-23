@@ -48,6 +48,7 @@ def build_excavation_pit_inventory(
     structure_nodes: Iterable[Mapping[str, Any]],
     *,
     identity_candidates: Iterable[Mapping[str, Any]] = (),
+    pit_observation_decisions: Iterable[Mapping[str, Any]] = (),
     unresolved_sample_limit: int = 20,
 ) -> dict[str, Any]:
     """Return scoped pit candidates and preserve every unresolved observation.
@@ -67,6 +68,11 @@ def build_excavation_pit_inventory(
         if str(node.get("node_kind") or "") == "excavation_pit"
     ]
     identity_rows = [dict(candidate) for candidate in identity_candidates]
+    decisions_by_node = {
+        str(decision.get("node_id")): dict(decision)
+        for decision in pit_observation_decisions
+        if decision.get("node_id") is not None
+    }
     node_by_id = {
         str(node.get("structure_node_id")): node
         for node in pit_nodes
@@ -90,9 +96,49 @@ def build_excavation_pit_inventory(
     non_pit_observation_count = 0
     generic_observation_count = 0
     identity_enriched_observation_count = 0
+    semantic_candidate_observation_count = 0
+    disposition_counts: dict[str, int] = defaultdict(int)
     for node in pit_nodes:
         raw_name = str(node.get("raw_name") or "").strip()
+        node_id = str(node.get("structure_node_id") or "")
+        decision = decisions_by_node.get(node_id)
+        disposition = str(decision.get("disposition") or "") if decision else ""
+        if disposition:
+            disposition_counts[disposition] += 1
+        if disposition in {"generic_mention", "non_pit", "ambiguous"}:
+            unresolved_node = dict(node)
+            unresolved_node["pit_observation_disposition"] = disposition
+            unresolved_node["pit_observation_reason_code"] = str(
+                decision.get("reason_code") if decision else ""
+            )
+            unresolved.append(unresolved_node)
+            if disposition == "non_pit":
+                non_pit_observation_count += 1
+            else:
+                generic_observation_count += 1
+            continue
         identity = _explicit_pit_identity(raw_name)
+        if disposition == "distinct_instance_candidate" and decision is not None:
+            semantic_label = str(decision.get("canonical_label") or raw_name).strip()
+            semantic_facility = str(decision.get("facility_label") or "").strip()
+            parsed_identity = _explicit_pit_identity(semantic_label)
+            if parsed_identity is None:
+                facility_key = (
+                    re.sub(r"[^\w]+", " ", semantic_facility.casefold(), flags=re.UNICODE).strip()
+                    or "unscoped"
+                )
+                normalized_label = re.sub(
+                    r"[^\w]+", " ", semantic_label.casefold(), flags=re.UNICODE
+                ).strip()
+                identity = (
+                    f"semantic:{facility_key}:{normalized_label}",
+                    semantic_facility or "Не установлено",
+                    normalized_label,
+                )
+            else:
+                identity = parsed_identity
+            semantic_candidate_observation_count += 1
+            identity_enriched_observation_count += 1
         if identity is None and identity_by_node.get(str(node.get("structure_node_id"))):
             # A Qwen identity candidate can enrich a source-backed explicit
             # association only; it cannot turn a generic label into a pit.
@@ -112,11 +158,20 @@ def build_excavation_pit_inventory(
             unresolved.append(node)
             continue
         facility_key, _designation, normalized_label = identity
-        grouped[(facility_key, normalized_label)].append(node)
+        grouped_node = dict(node)
+        grouped_node["_pit_identity"] = identity
+        grouped_node["_pit_candidate_state"] = (
+            "semantic_distinct_instance_candidate"
+            if disposition == "distinct_instance_candidate"
+            else "explicit_source_association_candidate"
+        )
+        grouped[(facility_key, normalized_label)].append(grouped_node)
 
     candidates: list[dict[str, Any]] = []
     for (facility_key, normalized_label), members in grouped.items():
-        identity = _explicit_pit_identity(str(members[0].get("raw_name") or ""))
+        identity = members[0].get("_pit_identity")
+        if not isinstance(identity, tuple):
+            identity = _explicit_pit_identity(str(members[0].get("raw_name") or ""))
         if identity is None:  # pragma: no cover - guarded while grouping.
             continue
         _key, designation, _label = identity
@@ -141,6 +196,9 @@ def build_excavation_pit_inventory(
                 if str(member.get("raw_name") or "").strip()
             }
         )
+        candidate_state = str(
+            members[0].get("_pit_candidate_state") or "explicit_source_association_candidate"
+        )
         candidate_payload = {
             "contract": "excavation-pit-explicit-association-candidate-v1",
             "facility_designation_key": facility_key,
@@ -161,7 +219,7 @@ def build_excavation_pit_inventory(
                 "source_locator_ids": locator_ids,
                 "observation_count": len(node_ids),
                 "status": "candidate",
-                "candidate_state": "explicit_source_association_candidate",
+                "candidate_state": candidate_state,
                 "authority": "candidate_only_not_confirmed_distinct_project_entity",
             }
         )
@@ -195,8 +253,10 @@ def build_excavation_pit_inventory(
             ),
             "identity_rejected_non_pit_count": identity_rejected,
             "identity_enriched_observation_count": identity_enriched_observation_count,
+            "semantic_candidate_observation_count": semantic_candidate_observation_count,
             "non_pit_observation_count": non_pit_observation_count,
             "generic_observation_count": generic_observation_count,
+            "disposition_counts": dict(sorted(disposition_counts.items())),
             "exact_total_supported": False,
             "count_meaning": ("distinct_explicit_source_association_candidates_not_project_total"),
             "candidate_authority": "candidate_only",

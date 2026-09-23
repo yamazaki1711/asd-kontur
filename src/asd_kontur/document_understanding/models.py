@@ -18,6 +18,7 @@ from asd_kontur.harness.models import digest_of
 UNDERSTANDING_PROFILE_VERSION = "industrial-document-understanding-v0.2"
 PROJECT_RECONCILIATION_PROFILE_VERSION = "project-understanding-reconciliation-v0.3"
 STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION = "qwen-structure-identity-v2"
+PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION = "qwen-excavation-pit-observation-v1"
 PAGE_HEALTH_PROFILE_VERSION = "page-health-v0.1"
 NATIVE_LAYOUT_PROFILE_VERSION = "native-layout-v0.1"
 OCR_ROUTING_PROFILE_VERSION = "ocr-routing-v0.1"

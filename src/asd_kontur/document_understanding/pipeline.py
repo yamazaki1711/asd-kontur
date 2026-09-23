@@ -40,6 +40,7 @@ from .qwen_semantic import (
     _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES,
     _DENSE_ENGINEERING_BATCHING_POLICY,
     QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    QWEN_PIT_OBSERVATION_PROFILE,
     QWEN_STRUCTURE_IDENTITY_PROFILE,
     QwenDocumentSemanticAdapter,
     QwenEngineeringBatch,
@@ -511,6 +512,12 @@ class IndustrialDocumentUnderstandingPipeline:
         groups = self._repository.load_structure_identity_observation_groups(
             claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
         )
+        pit_group_loader = getattr(self._repository, "load_pit_observation_groups", None)
+        pit_groups = (
+            pit_group_loader(claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE)
+            if callable(pit_group_loader)
+            else ()
+        )
         if claimed.job_kind is JobKind.PROJECT_UNDERSTANDING_RECONCILIATION:
             # Publishing the current project view is deterministic and must
             # not wait for every optional cross-document identity proposal.
@@ -638,6 +645,76 @@ class IndustrialDocumentUnderstandingPipeline:
                 "completed" if coverage["complete"] else "partial_completed_source_groups"
             )
         result["workspace_semantic_coverage"] = coverage
+        pit_receipt_loader = getattr(
+            self._repository, "load_pit_observation_disposition_receipts", None
+        )
+        pit_persist = getattr(self._repository, "persist_pit_observation_disposition_outcome", None)
+        pit_failure_count = 0
+        pit_decision_count = 0
+        pit_group_fingerprints: set[str] = set()
+        pit_failures: list[dict[str, object]] = []
+        if callable(pit_receipt_loader) and callable(pit_persist) and pit_groups:
+            pit_receipts = pit_receipt_loader(claimed, profile_version=QWEN_PIT_OBSERVATION_PROFILE)
+            for group in pit_groups:
+                group_fingerprint = _digest(
+                    {
+                        "profile_version": QWEN_PIT_OBSERVATION_PROFILE,
+                        "observations": group,
+                    }
+                )
+                pit_group_fingerprints.add(group_fingerprint)
+                receipt = pit_receipts.get(group_fingerprint)
+                if receipt is not None:
+                    pit_decision_count += len(receipt.get("decisions", ()))
+                    if receipt.get("outcome") == "failed":
+                        pit_failure_count += 1
+                        pit_failures.append(
+                            {
+                                "group_fingerprint": group_fingerprint,
+                                "failure_code": str(
+                                    receipt.get("failure_code")
+                                    or "qwen_pit_observation_group_failed"
+                                ),
+                            }
+                        )
+                    continue
+                try:
+                    decisions = self._qwen_semantic.classify_excavation_pit_observations(group)
+                except QwenSemanticFailure as exc:
+                    if exc.code == "qwen_semantic_runtime_unavailable":
+                        raise
+                    pit_persist(
+                        claimed,
+                        group_fingerprint=group_fingerprint,
+                        profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+                        input_structure_node_ids=tuple(
+                            UUID(str(item["structure_node_id"])) for item in group
+                        ),
+                        input_manifest=group,
+                        failure_code=exc.code,
+                    )
+                    pit_failure_count += 1
+                    pit_failures.append(
+                        {"group_fingerprint": group_fingerprint, "failure_code": exc.code}
+                    )
+                else:
+                    pit_persist(
+                        claimed,
+                        group_fingerprint=group_fingerprint,
+                        profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+                        input_structure_node_ids=tuple(
+                            UUID(str(item["structure_node_id"])) for item in group
+                        ),
+                        input_manifest=group,
+                        decisions=decisions,
+                    )
+                    pit_decision_count += len(decisions)
+        result["pit_observation_reconciliation_profile"] = QWEN_PIT_OBSERVATION_PROFILE
+        result["pit_observation_group_count"] = len(pit_groups)
+        result["pit_observation_group_fingerprints"] = sorted(pit_group_fingerprints)
+        result["pit_observation_decision_count"] = pit_decision_count
+        result["pit_observation_failed_group_count"] = pit_failure_count
+        result["pit_observation_failures"] = pit_failures
         return result
 
 

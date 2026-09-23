@@ -46,8 +46,10 @@ def test_explicit_facility_pits_are_grouped_without_claiming_a_project_total() -
         "identity_candidate_count": 0,
         "identity_rejected_non_pit_count": 0,
         "identity_enriched_observation_count": 0,
+        "semantic_candidate_observation_count": 0,
         "non_pit_observation_count": 1,
         "generic_observation_count": 1,
+        "disposition_counts": {},
         "exact_total_supported": False,
         "count_meaning": "distinct_explicit_source_association_candidates_not_project_total",
         "candidate_authority": "candidate_only",
@@ -106,3 +108,27 @@ def test_identity_candidates_cannot_promote_boreholes_and_can_retain_explicit_sc
     assert result["coverage"]["identity_candidate_count"] == 2
     assert result["coverage"]["identity_rejected_non_pit_count"] == 1
     assert result["coverage"]["non_pit_observation_count"] == 1
+
+
+def test_semantic_distinct_candidate_keeps_unscoped_identity_as_candidate() -> None:
+    result = build_excavation_pit_inventory(
+        [_node("pit", "котлован", "locator-a")],
+        pit_observation_decisions=[
+            {
+                "node_id": "pit",
+                "disposition": "distinct_instance_candidate",
+                "canonical_label": "котлован В-1",
+                "facility_label": "",
+                "reason_code": "named_on_plan",
+                "confidence": "0.82",
+            }
+        ],
+    )
+
+    assert len(result["candidate_pits"]) == 1
+    assert result["candidate_pits"][0]["candidate_state"] == (
+        "semantic_distinct_instance_candidate"
+    )
+    assert result["candidate_pits"][0]["associated_facility_designation"] == "Не установлено"
+    assert result["coverage"]["semantic_candidate_observation_count"] == 1
+    assert result["coverage"]["disposition_counts"] == {"distinct_instance_candidate": 1}
