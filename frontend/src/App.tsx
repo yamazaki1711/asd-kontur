@@ -2072,6 +2072,7 @@ function JobTable({ jobs, workspaceId }: { jobs: Job[]; workspaceId: string }) {
                 {[
                   "engineering_semantic_batch_accepted",
                   "structure_identity_group_processed",
+                  "pit_observation_group_processed",
                 ].includes(job.progress_message_code ?? "") &&
                 Number.isInteger(job.progress_current) &&
                 Number.isInteger(job.progress_total)
