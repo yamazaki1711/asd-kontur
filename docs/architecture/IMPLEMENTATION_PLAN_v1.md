@@ -111,6 +111,18 @@ live UI run through scope configuration, package formation, generation and
 export. This is an
 operational/authority dependency, not an OZERO-processing blocker.
 
+The current Support candidate (`7277c63`, 2026-09-24) additionally carries the
+exact official AOSR PDF and its editable DOCX companion in the same register-first
+archive. Generated editable documents may expand beyond the four-page blank form;
+they may not collapse below that minimum. Exact-official-source browser acceptance
+now inspects the downloaded archive member list instead of treating a successful
+download as proof that the editable representation is present. Software/export
+qualification is complete for the controlled workspace, while independent all-page
+DOCX print rendering, the public Support writer credential, a production-approved
+`concrete.slab.install` catalog entry, and a real professional grant remain separate
+activation gates. The detailed release and parallel NTD evidence is recorded in
+`docs/implementation/SUPPORT_NTD_CONTINUATION_2026-09-24.md`.
+
 * The platform construction consultant now projects Gateway evidence into a
   bounded structural prompt before local-Qwen generation. Every selected
   source retains its source-version identity, locator, authority layer, and
