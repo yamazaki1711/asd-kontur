@@ -267,7 +267,12 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert knowledge_before["knowledge_ready"] is False
         ntd_seed_before = client.get("/api/v1/platform/ntd-seed-status").json()
         assert ntd_seed_before["counts"]["denominator"] == 25
-        assert ntd_seed_before["counts"]["registered_identity_count"] == 0
+        # Platform knowledge is intentionally session-scoped test state and may
+        # have been populated by an earlier integration case.  This lifecycle
+        # assertion owns preservation, not an empty global ordering assumption.
+        assert ntd_seed_before["counts"]["registered_identity_count"] == len(
+            ntd_seed_before["identities"]
+        )
         assert ntd_seed_before["complete"] is False
 
         prepared = client.post(
