@@ -2166,6 +2166,7 @@ class IndustrialUnderstandingRepository:
     def _insert_project_field(
         self, session: Session, claimed: ClaimedJob, value: ProjectFieldCandidate
     ) -> None:
+        candidate_digest = semantic_digest(value)
         session.execute(
             sa.text(
                 "INSERT INTO workspace.project_field_candidates "
@@ -2189,7 +2190,159 @@ class IndustrialUnderstandingRepository:
                 "uncertainty": list(value.uncertainty_codes),
                 "status": value.status.value,
                 "profile": value.extraction_profile_version,
-                "digest": semantic_digest(value),
+                "digest": candidate_digest,
+            },
+        )
+        self._bridge_project_field_candidate(
+            session,
+            claimed,
+            value,
+            candidate_digest=candidate_digest,
+        )
+
+    @staticmethod
+    def _bridge_project_field_candidate(
+        session: Session,
+        claimed: ClaimedJob,
+        value: ProjectFieldCandidate,
+        *,
+        candidate_digest: str,
+    ) -> None:
+        """Expose one exact extracted field to the common confirmation kernel.
+
+        The bridge is deliberately candidate-only.  It validates the immutable
+        schema and source binding, but it does not confirm the value or create a
+        workspace Fact.  That later transition still requires the configured
+        confirmation policy and authority command.
+        """
+
+        field_path = f"/project/{value.field_key}"
+        evidence_link_id = deterministic_uuid(
+            "project-field-evidence-link:"
+            f"{claimed.organization_id}:{claimed.workspace_id}:"
+            f"{value.candidate_id}:1:{value.locator.source_locator_id}"
+        )
+        validation_run_id = deterministic_uuid(
+            "project-field-validation:"
+            f"{claimed.organization_id}:{claimed.workspace_id}:"
+            f"{value.candidate_id}:1:{candidate_digest}"
+        )
+        source_version = str(value.locator.source_version_id)
+        origin = (
+            "vlm"
+            if value.extraction_profile_version.startswith("qwen-")
+            or value.extraction_method.startswith("qwen-")
+            else "native_parser"
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.evidence_links "
+                "(organization_id,workspace_id,evidence_link_id,subject_type,subject_id,"
+                "subject_version,source_version_id,source_locator_id,evidence_role,validity_status,"
+                "decision_ref) VALUES (:o,:w,:evidence,'project_field_candidate',:candidate,'1',"
+                ":source,:locator,'candidate_source','verified',:decision) ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "evidence": evidence_link_id,
+                "candidate": value.candidate_id,
+                "source": value.locator.source_version_id,
+                "locator": value.locator.source_locator_id,
+                "decision": (f"extraction:{value.extraction_profile_version}:{candidate_digest}"),
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.candidates "
+                "(organization_id,workspace_id,candidate_id,purpose,source_version_id,"
+                "retention_class,created_at) VALUES (:o,:w,:candidate,'project_field_interpretation',"
+                ":source,'workspace.domain',CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": value.candidate_id,
+                "source": value.locator.source_version_id,
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.candidate_versions "
+                "(organization_id,workspace_id,candidate_id,candidate_version,parent_version,"
+                "attempt_id,origin,status,output_schema_version,digest,created_at) VALUES "
+                "(:o,:w,:candidate,1,NULL,NULL,:origin,'validated_candidate',:profile,:digest,"
+                "CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": value.candidate_id,
+                "origin": origin,
+                "profile": value.extraction_profile_version,
+                "digest": candidate_digest,
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.candidate_fields "
+                "(organization_id,workspace_id,candidate_id,candidate_version,field_path,"
+                "value_type,typed_value,unit,validation_state) VALUES "
+                "(:o,:w,:candidate,1,:path,:type,CAST(:value AS jsonb),NULL,'passed') "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": value.candidate_id,
+                "path": field_path,
+                "type": value.value_type,
+                "value": _json(value.normalized_value),
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.candidate_field_evidence "
+                "(organization_id,workspace_id,candidate_id,candidate_version,field_path,"
+                "source_version_id,source_locator_id,evidence_link_id,evidence_role) VALUES "
+                "(:o,:w,:candidate,1,:path,:source,:locator,:evidence,'candidate_source') "
+                "ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "candidate": value.candidate_id,
+                "path": field_path,
+                "source": value.locator.source_version_id,
+                "locator": value.locator.source_locator_id,
+                "evidence": evidence_link_id,
+            },
+        )
+        session.execute(
+            sa.text(
+                "INSERT INTO workspace.vlm_validation_runs "
+                "(organization_id,workspace_id,validation_run_id,candidate_id,candidate_version,"
+                "validator_profile_version,required_validators,skipped_validators,status,digest,"
+                "validated_at) VALUES (:o,:w,:validation,:candidate,1,"
+                "'project-field-bridge-validator@1.0.0',ARRAY['exact_source_locator',"
+                "'admitted_source','typed_value'],ARRAY[]::text[],'passed',:digest,"
+                "CURRENT_TIMESTAMP) ON CONFLICT DO NOTHING"
+            ),
+            {
+                "o": claimed.organization_id,
+                "w": claimed.workspace_id,
+                "validation": validation_run_id,
+                "candidate": value.candidate_id,
+                "digest": semantic_digest(
+                    {
+                        "candidate_id": value.candidate_id,
+                        "candidate_version": 1,
+                        "field_path": field_path,
+                        "source_version_id": source_version,
+                        "source_locator_id": value.locator.source_locator_id,
+                        "candidate_digest": candidate_digest,
+                    }
+                ),
             },
         )
 

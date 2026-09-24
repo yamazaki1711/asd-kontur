@@ -51,6 +51,10 @@ class SpineSettings:
     qwen_bind_port: int = 8790
     ntd_embedding_endpoint: str | None = None
     support_command_database_url: str | None = None
+    harness_command_database_url: str | None = None
+    kernel_command_database_url: str | None = None
+    ntd_processing_database_url: str | None = None
+    ntd_processing_pgpassfile: Path | None = None
     document_worker_organization_id: UUID | None = None
     document_worker_workspace_id: UUID | None = None
 
@@ -63,17 +67,25 @@ class SpineSettings:
             raise ValueError("ASD_WORKER_DATABASE_URL must be an explicit PostgreSQL URL")
         if not self.destruction_database_url.startswith(("postgresql+psycopg://", "postgresql://")):
             raise ValueError("ASD_DESTRUCTION_DATABASE_URL must be an explicit PostgreSQL URL")
-        if (
-            self.support_command_database_url is not None
-            and not self.support_command_database_url.startswith(
-                ("postgresql+psycopg://", "postgresql://")
-            )
+        for name, value in (
+            ("ASD_SUPPORT_COMMAND_DATABASE_URL", self.support_command_database_url),
+            ("ASD_HARNESS_COMMAND_DATABASE_URL", self.harness_command_database_url),
+            ("ASD_KERNEL_COMMAND_DATABASE_URL", self.kernel_command_database_url),
+            ("ASD_NTD_PROCESSING_DATABASE_URL", self.ntd_processing_database_url),
         ):
-            raise ValueError("ASD_SUPPORT_COMMAND_DATABASE_URL must be an explicit PostgreSQL URL")
+            if value is not None and not value.startswith(
+                ("postgresql+psycopg://", "postgresql://")
+            ):
+                raise ValueError(f"{name} must be an explicit PostgreSQL URL")
         if not self.object_store_root.is_absolute():
             raise ValueError("ASD_OBJECT_STORE_ROOT must be absolute")
         if not self.archive_store_root.is_absolute():
             raise ValueError("ASD_ARCHIVE_STORE_ROOT must be absolute")
+        if (
+            self.ntd_processing_pgpassfile is not None
+            and not self.ntd_processing_pgpassfile.is_absolute()
+        ):
+            raise ValueError("ASD_NTD_PROCESSING_PGPASSFILE must be absolute")
         if self.object_store_root.resolve() == self.archive_store_root.resolve():
             raise ValueError("workspace object and archive roots must be distinct")
         if len(self.audit_pepper) < 32:
@@ -144,6 +156,12 @@ class SpineSettings:
             qwen_bind_port=int(os.environ.get("ASD_QWEN_BIND_PORT", "8790")),
             ntd_embedding_endpoint=os.environ.get("ASD_NTD_EMBEDDING_ENDPOINT") or None,
             support_command_database_url=os.environ.get("ASD_SUPPORT_COMMAND_DATABASE_URL") or None,
+            harness_command_database_url=os.environ.get("ASD_HARNESS_COMMAND_DATABASE_URL") or None,
+            kernel_command_database_url=os.environ.get("ASD_KERNEL_COMMAND_DATABASE_URL") or None,
+            ntd_processing_database_url=os.environ.get("ASD_NTD_PROCESSING_DATABASE_URL") or None,
+            ntd_processing_pgpassfile=(
+                Path(value) if (value := os.environ.get("ASD_NTD_PROCESSING_PGPASSFILE")) else None
+            ),
             document_worker_organization_id=_optional_uuid("ASD_DOCUMENT_WORKER_ORGANIZATION_ID"),
             document_worker_workspace_id=_optional_uuid("ASD_DOCUMENT_WORKER_WORKSPACE_ID"),
         )

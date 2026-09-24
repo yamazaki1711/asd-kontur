@@ -3086,6 +3086,159 @@
         "title": "StartGenerationRequest",
         "type": "object"
       },
+      "SupportFieldCommandView": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "candidate_id": {
+            "format": "uuid",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "candidate_version": {
+            "title": "Candidate Version",
+            "type": "integer"
+          },
+          "fact_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Id"
+          },
+          "fact_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fact Version"
+          },
+          "field_key": {
+            "title": "Field Key",
+            "type": "string"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "work_package_id": {
+            "format": "uuid",
+            "title": "Work Package Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "work_package_id",
+          "field_key",
+          "candidate_id",
+          "candidate_version",
+          "outcome"
+        ],
+        "title": "SupportFieldCommandView",
+        "type": "object"
+      },
+      "SupportFieldConfirmationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "format": "uuid",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "candidate_version": {
+            "minimum": 1.0,
+            "title": "Candidate Version",
+            "type": "integer"
+          },
+          "field_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Field Key",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "work_package_id": {
+            "format": "uuid",
+            "title": "Work Package Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_package_id",
+          "field_key",
+          "candidate_id",
+          "candidate_version",
+          "idempotency_key"
+        ],
+        "title": "SupportFieldConfirmationRequest",
+        "type": "object"
+      },
+      "SupportFieldCorrectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "format": "uuid",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "candidate_version": {
+            "minimum": 1.0,
+            "title": "Candidate Version",
+            "type": "integer"
+          },
+          "corrected_value": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "title": "Corrected Value",
+            "type": "string"
+          },
+          "field_key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Field Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          },
+          "work_package_id": {
+            "format": "uuid",
+            "title": "Work Package Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "work_package_id",
+          "field_key",
+          "candidate_id",
+          "candidate_version",
+          "corrected_value",
+          "reason"
+        ],
+        "title": "SupportFieldCorrectionRequest",
+        "type": "object"
+      },
       "SupportProductionView": {
         "additionalProperties": false,
         "properties": {
@@ -3214,6 +3367,14 @@
               "type": "object"
             },
             "title": "Requirements",
+            "type": "array"
+          },
+          "source_field_candidates": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Source Field Candidates",
             "type": "array"
           },
           "support_process": {
@@ -7191,6 +7352,144 @@
         "summary": "Capture Restoration Recovery Plan",
         "tags": [
           "restoration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/fields/confirmations": {
+      "post": {
+        "operationId": "confirm_support_field_api_v1_workspaces__workspace_id__support_fields_confirmations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportFieldConfirmationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportFieldCommandView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Support Field",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/fields/corrections": {
+      "post": {
+        "operationId": "correct_support_field_api_v1_workspaces__workspace_id__support_fields_corrections_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SupportFieldCorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportFieldCommandView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Correct Support Field",
+        "tags": [
+          "support-production"
         ]
       }
     },

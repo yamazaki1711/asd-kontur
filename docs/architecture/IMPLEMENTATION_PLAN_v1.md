@@ -829,3 +829,45 @@ single exact-locator facility-identity candidate.  The next Tender modeling
 increment must preserve observations while creating evidence-bound facility/work
 association and work-type resolution.  Copying keyword dictionaries from the
 external skills would hide this gap and is explicitly rejected.
+
+### Active delivery slice — source to ID package for monolithic foundation-slab work
+
+**Reusable capability.** Connect admitted, evidence-located source records to one
+professionally named Support work path: `concrete.slab.install`, “Устройство
+монолитной железобетонной фундаментной плиты”.  The path must carry bounded local-
+Qwen interpretations into reviewable field candidates, retain corrections as new
+versions, scope confirmed facts to the exact work package, evaluate the pinned ID
+requirements, and form a register-first editable package using the already qualified
+official AOSR PDF profile.  AOSR remains a document family, not the work type.
+
+**Evidence and authority boundary.** The work name and source/quantity/material
+observations already exercise the verified-catalog resolution contract in the
+Industrial Document Understanding acceptance corpus, and the official AOSR form is
+qualified by `SUPPORT-PRODUCTION-ID-02`.  The live platform currently has no verified
+production work-type catalog entry for this work, so the first end-to-end acceptance
+uses a clearly synthetic, source-backed qualification catalog and workspace.  It may
+prove software behavior but cannot promote a platform work type, a professional grant,
+or a real execution fact.  Production activation remains fail-closed until those
+authorities exist.
+
+**User-visible output.** In the existing Support application the user selects the
+declared work package, sees source-backed candidate values and exact missing inputs,
+records a versioned correction or confirmation through the proper command boundary,
+forms the package, inspects evidence and completeness, and downloads a ZIP whose first
+document is the current editable register and whose included files exactly match that
+register.  The qualified AOSR PDF remains the authoritative rendered form; synthetic
+DOCX generation is not promoted.
+
+**Independent acceptance.** A disposable PostgreSQL workspace with changed identifiers
+must cover complete input, missing facts/attachments, conflicting/revised values,
+same-named work in distinct scopes, repeated commands, restart/reload, cross-workspace
+denial, editable register reopening, and package/register agreement.  One controlled
+Russian free-text source must traverse the real local Qwen3.8 worker path; expected
+values are specified independently.  OZERO is optional validation data and is not an
+acceptance prerequisite.  Its unfinished Tender reconciliation remains explicit and
+must not be replayed merely to exercise this slice.
+
+**Readiness boundary.** This slice advances Support document production only.  It does
+not establish professional acceptance for the selected work, Support ModeReady,
+TrialReady, OKSReady, or ProductReady.  The full denominators for Tender, Support,
+Audit, Restoration, Field/Offline and Operations remain unchanged.

@@ -1562,23 +1562,30 @@ class SpinePostgresRepository:
             if source is None:
                 return None
             provenance = dict(source["provenance"])
+            stage = (
+                session.execute(
+                    sa.text(
+                        "SELECT profile_version,terminal_status FROM "
+                        "workspace.project_understanding_stage_results "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace "
+                        "AND job_id=:job AND stage_kind='PROJECT_DEFINITION_EXTRACTION' "
+                        "ORDER BY recorded_at DESC,stage_result_id DESC LIMIT 1"
+                    ),
+                    {
+                        "organization": claimed.organization_id,
+                        "workspace": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+            if stage is None or str(stage["terminal_status"]) != "complete":
+                return None
             semantic_profile = provenance.get("engineering_semantic_profile")
             if not isinstance(semantic_profile, str) or not semantic_profile:
-                return None
-            stage_complete = session.scalar(
-                sa.text(
-                    "SELECT EXISTS (SELECT 1 FROM workspace.project_understanding_stage_results "
-                    "WHERE organization_id=:organization AND workspace_id=:workspace "
-                    "AND job_id=:job AND stage_kind='PROJECT_DEFINITION_EXTRACTION' "
-                    "AND terminal_status='complete')"
-                ),
-                {
-                    "organization": claimed.organization_id,
-                    "workspace": claimed.workspace_id,
-                    "job": claimed.job_id,
-                },
-            )
-            if not stage_complete:
+                semantic_profile = str(stage["profile_version"])
+            if not semantic_profile.startswith("qwen-engineering-extraction-"):
                 return None
             source_manifest = dict(source["input_manifest"])
             manifest = {

@@ -421,10 +421,39 @@ class SupportProductionView(ApiModel):
     registers: list[dict[str, Any]] = Field(default_factory=list)
     readiness: dict[str, Any] | None = None
     field_resolutions: list[dict[str, Any]] = Field(default_factory=list)
+    source_field_candidates: list[dict[str, Any]] = Field(default_factory=list)
     support_process: dict[str, Any] | None = None
     consistency: dict[str, Any]
     gaps: list[str]
     authority_layers: dict[str, str]
+
+
+class SupportFieldCorrectionRequest(ApiModel):
+    work_package_id: UUID
+    field_key: str = Field(min_length=1, max_length=128)
+    candidate_id: UUID
+    candidate_version: int = Field(ge=1)
+    corrected_value: str = Field(min_length=1, max_length=10000)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class SupportFieldConfirmationRequest(ApiModel):
+    work_package_id: UUID
+    field_key: str = Field(min_length=1, max_length=128)
+    candidate_id: UUID
+    candidate_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=256)
+
+
+class SupportFieldCommandView(ApiModel):
+    action: str
+    work_package_id: UUID
+    field_key: str
+    candidate_id: UUID
+    candidate_version: int
+    fact_id: UUID | None = None
+    fact_version: int | None = None
+    outcome: str
 
 
 class SupportScopeConfigureRequest(ApiModel):

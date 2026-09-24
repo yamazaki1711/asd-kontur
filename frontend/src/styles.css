@@ -625,6 +625,42 @@ button:disabled {
 .candidate-edit textarea {
   min-height: 5rem;
 }
+.subpanel {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--white) 94%, var(--green));
+}
+.subpanel h3 {
+  margin: 0 0 0.25rem;
+}
+.candidate-value + .candidate-value {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.candidate-value strong,
+.candidate-value small {
+  display: block;
+}
+.field-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(12rem, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.field-actions label {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.field-actions input {
+  display: block;
+  width: 100%;
+  margin-top: 0.2rem;
+}
+.field-actions button {
+  align-self: end;
+}
 .recent-object {
   margin: 1rem 0 1.5rem;
   max-width: 34rem;
@@ -1198,6 +1234,7 @@ pre {
     grid-template-columns: 1fr;
   }
   .candidate-actions,
+  .field-actions,
   .upload-actions,
   .model-actions {
     align-items: stretch;

@@ -979,6 +979,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/fields/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Support Field */
+        post: operations["confirm_support_field_api_v1_workspaces__workspace_id__support_fields_confirmations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/fields/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Correct Support Field */
+        post: operations["correct_support_field_api_v1_workspaces__workspace_id__support_fields_corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
         parameters: {
             query?: never;
@@ -2461,6 +2495,71 @@ export interface components {
              */
             membership_id: string;
         };
+        /** SupportFieldCommandView */
+        SupportFieldCommandView: {
+            /** Action */
+            action: string;
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Fact Id */
+            fact_id?: string | null;
+            /** Fact Version */
+            fact_version?: number | null;
+            /** Field Key */
+            field_key: string;
+            /** Outcome */
+            outcome: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
+        /** SupportFieldConfirmationRequest */
+        SupportFieldConfirmationRequest: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Field Key */
+            field_key: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
+        /** SupportFieldCorrectionRequest */
+        SupportFieldCorrectionRequest: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Corrected Value */
+            corrected_value: string;
+            /** Field Key */
+            field_key: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
         /** SupportProductionView */
         SupportProductionView: {
             /** Authority Layers */
@@ -2519,6 +2618,10 @@ export interface components {
             }[];
             /** Requirements */
             requirements: {
+                [key: string]: unknown;
+            }[];
+            /** Source Field Candidates */
+            source_field_candidates?: {
                 [key: string]: unknown;
             }[];
             /** Support Process */
@@ -4761,6 +4864,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestorationRecoveryPlanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_support_field_api_v1_workspaces__workspace_id__support_fields_confirmations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportFieldConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFieldCommandView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correct_support_field_api_v1_workspaces__workspace_id__support_fields_corrections_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportFieldCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFieldCommandView"];
                 };
             };
             /** @description Validation Error */

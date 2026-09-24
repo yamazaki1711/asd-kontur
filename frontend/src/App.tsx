@@ -2335,6 +2335,44 @@ function SupportProductionPage() {
       });
     },
   });
+  const correctSourceField = useMutation({
+    mutationFn: async (
+      correction: components["schemas"]["SupportFieldCorrectionRequest"],
+    ) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/fields/corrections",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: correction,
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
+  const confirmSourceField = useMutation({
+    mutationFn: async (
+      confirmation: components["schemas"]["SupportFieldConfirmationRequest"],
+    ) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/fields/confirmations",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: confirmation,
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
   const startGeneration = useMutation({
     mutationFn: async (membership: Record<string, unknown>) => {
       const identity = String(membership.membership_id);
@@ -2421,13 +2459,23 @@ function SupportProductionPage() {
             reviewPending={reviewCandidate.isPending}
             finalize={(identity) => finalizeCandidate.mutate(identity)}
             finalizationPending={finalizeCandidate.isPending}
+            correctSourceField={(correction) =>
+              correctSourceField.mutate(correction)
+            }
+            correctionPending={correctSourceField.isPending}
+            confirmSourceField={(confirmation) =>
+              confirmSourceField.mutate(confirmation)
+            }
+            confirmationPending={confirmSourceField.isPending}
             commandError={
               formPackage.error ??
               scopeReadiness.error ??
               configureScope.error ??
               startGeneration.error ??
               reviewCandidate.error ??
-              finalizeCandidate.error
+              finalizeCandidate.error ??
+              correctSourceField.error ??
+              confirmSourceField.error
             }
           />
         )}
@@ -3258,6 +3306,10 @@ function SupportProductionBody({
   reviewPending,
   finalize,
   finalizationPending,
+  correctSourceField,
+  correctionPending,
+  confirmSourceField,
+  confirmationPending,
   commandError,
 }: {
   value: SupportProduction;
@@ -3276,6 +3328,14 @@ function SupportProductionBody({
   reviewPending: boolean;
   finalize: (candidateId: string) => void;
   finalizationPending: boolean;
+  correctSourceField: (
+    correction: components["schemas"]["SupportFieldCorrectionRequest"],
+  ) => void;
+  correctionPending: boolean;
+  confirmSourceField: (
+    confirmation: components["schemas"]["SupportFieldConfirmationRequest"],
+  ) => void;
+  confirmationPending: boolean;
   commandError: unknown;
 }) {
   const workPackages = Array.from(
@@ -3289,6 +3349,7 @@ function SupportProductionBody({
   const registerHistory = value.register_history ?? [];
   const fields = value.field_resolutions ?? [];
   const fieldRows = mergeFieldResolutionRows(fields);
+  const sourceFieldCandidates = value.source_field_candidates ?? [];
   const supportProcess = value.support_process;
   return (
     <>
@@ -3396,6 +3457,18 @@ function SupportProductionBody({
           <ErrorNotice error={commandError} />
         ) : null}
       </section>
+
+      {sourceFieldCandidates.length > 0 && (
+        <SupportSourceFieldCandidates
+          workspaceId={workspaceId}
+          modeSlug={modeSlug}
+          workCandidates={sourceFieldCandidates}
+          correct={correctSourceField}
+          correctionPending={correctionPending}
+          confirm={confirmSourceField}
+          confirmationPending={confirmationPending}
+        />
+      )}
 
       {value.package && (
         <>
@@ -3741,6 +3814,259 @@ function SupportProductionBody({
         </>
       )}
     </>
+  );
+}
+
+function SupportSourceFieldCandidates({
+  workspaceId,
+  modeSlug,
+  workCandidates,
+  correct,
+  correctionPending,
+  confirm,
+  confirmationPending,
+}: {
+  workspaceId: string;
+  modeSlug?: string | undefined;
+  workCandidates: Record<string, unknown>[];
+  correct: (
+    correction: components["schemas"]["SupportFieldCorrectionRequest"],
+  ) => void;
+  correctionPending: boolean;
+  confirm: (
+    confirmation: components["schemas"]["SupportFieldConfirmationRequest"],
+  ) => void;
+  confirmationPending: boolean;
+}) {
+  const [correctionValues, setCorrectionValues] = useState<
+    Record<string, string>
+  >({});
+  const [correctionReasons, setCorrectionReasons] = useState<
+    Record<string, string>
+  >({});
+  return (
+    <section className="panel">
+      <div className="entity-heading">
+        <div>
+          <h2>Сведения из исходных документов</h2>
+          <p>
+            Значения показаны как кандидаты с точными источниками. Исправление
+            создаёт новую версию; подтверждение факта требует действующего
+            профессионального полномочия.
+          </p>
+        </div>
+      </div>
+      {workCandidates.map((work) => {
+        const workPackageId = String(work.work_package_id);
+        const fields = Array.isArray(work.fields)
+          ? (work.fields as Record<string, unknown>[])
+          : [];
+        return (
+          <article className="subpanel" key={workPackageId}>
+            <div className="entity-heading">
+              <div>
+                <h3>
+                  {displayValue(
+                    work.work_name,
+                    "Устройство монолитной железобетонной фундаментной плиты",
+                  )}
+                </h3>
+                <small>
+                  {displayValue(work.scope, "Объём работ не указан")} · профиль{" "}
+                  {displayValue(
+                    (work.profile as Record<string, unknown> | null)
+                      ?.profile_version,
+                    "не поддержан",
+                  )}
+                </small>
+              </div>
+              <StatusPill
+                tone={
+                  String(work.status) === "candidate_complete"
+                    ? "default"
+                    : "warning"
+                }
+              >
+                {humanizeStatus(String(work.status))}
+              </StatusPill>
+            </div>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Поле</th>
+                    <th>Кандидат и источник</th>
+                    <th>Состояние</th>
+                    <th>Версионное действие</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fields.map((field) => {
+                    const fieldKey = String(field.field_key);
+                    const observations = Array.isArray(field.observations)
+                      ? (field.observations as Record<string, unknown>[])
+                      : [];
+                    return (
+                      <tr key={`${workPackageId}:${fieldKey}`}>
+                        <td>
+                          <strong>{humanizeFieldKey(fieldKey)}</strong>
+                          {Boolean(field.required) && (
+                            <small>обязательное</small>
+                          )}
+                        </td>
+                        <td>
+                          {observations.length ? (
+                            observations.map((observation) => {
+                              const candidateId = String(
+                                observation.candidate_id,
+                              );
+                              const candidateVersion = Number(
+                                observation.kernel_candidate_version,
+                              );
+                              const locatorId = String(
+                                observation.source_locator_id,
+                              );
+                              const rowKey = `${workPackageId}:${fieldKey}:${candidateId}:v${String(candidateVersion)}`;
+                              return (
+                                <div className="candidate-value" key={rowKey}>
+                                  <strong>
+                                    {displayValue(
+                                      observation.effective_value,
+                                      "Значение не установлено",
+                                    )}
+                                  </strong>
+                                  <small>
+                                    {humanizeExtractionMethod(
+                                      String(observation.extraction_method),
+                                    )}
+                                    {locatorId && locatorId !== "undefined" ? (
+                                      <>
+                                        {" · "}
+                                        <Link
+                                          to={workspaceRouteFromSlug(
+                                            modeSlug,
+                                            workspaceId,
+                                            `/evidence/locators/${locatorId}`,
+                                          )}
+                                        >
+                                          открыть источник
+                                        </Link>
+                                      </>
+                                    ) : null}
+                                  </small>
+                                  {String(field.state) === "candidate" &&
+                                    candidateVersion > 0 && (
+                                      <div className="field-actions">
+                                        <label>
+                                          Исправленное значение
+                                          <input
+                                            value={
+                                              correctionValues[rowKey] ?? ""
+                                            }
+                                            onChange={(event) =>
+                                              setCorrectionValues(
+                                                (current) => ({
+                                                  ...current,
+                                                  [rowKey]: event.target.value,
+                                                }),
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                        <label>
+                                          Причина исправления
+                                          <input
+                                            value={
+                                              correctionReasons[rowKey] ?? ""
+                                            }
+                                            onChange={(event) =>
+                                              setCorrectionReasons(
+                                                (current) => ({
+                                                  ...current,
+                                                  [rowKey]: event.target.value,
+                                                }),
+                                              )
+                                            }
+                                          />
+                                        </label>
+                                        <button
+                                          className="ghost"
+                                          disabled={
+                                            correctionPending ||
+                                            !(
+                                              correctionValues[rowKey] ?? ""
+                                            ).trim() ||
+                                            (
+                                              correctionReasons[rowKey] ?? ""
+                                            ).trim().length < 3
+                                          }
+                                          onClick={() =>
+                                            correct({
+                                              work_package_id: workPackageId,
+                                              field_key: fieldKey,
+                                              candidate_id: candidateId,
+                                              candidate_version:
+                                                candidateVersion,
+                                              corrected_value:
+                                                correctionValues[rowKey] ?? "",
+                                              reason:
+                                                correctionReasons[rowKey] ?? "",
+                                            })
+                                          }
+                                        >
+                                          Сохранить исправленную версию
+                                        </button>
+                                        <button
+                                          className="ghost"
+                                          disabled={confirmationPending}
+                                          onClick={() =>
+                                            confirm({
+                                              work_package_id: workPackageId,
+                                              field_key: fieldKey,
+                                              candidate_id: candidateId,
+                                              candidate_version:
+                                                candidateVersion,
+                                              idempotency_key: `support-field:${workPackageId}:${fieldKey}:${candidateId}:v${String(candidateVersion)}`,
+                                            })
+                                          }
+                                        >
+                                          Подтвердить как факт
+                                        </button>
+                                      </div>
+                                    )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <small>Подтверждённый источник не найден</small>
+                          )}
+                        </td>
+                        <td>
+                          <StatusPill
+                            tone={
+                              String(field.state) === "candidate"
+                                ? "default"
+                                : "warning"
+                            }
+                          >
+                            {humanizeStatus(String(field.state))}
+                          </StatusPill>
+                        </td>
+                        <td>
+                          {String(field.scope_rule) === "project_global"
+                            ? "Сведения об объекте"
+                            : "Точное совпадение с источником этой работы"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        );
+      })}
+    </section>
   );
 }
 

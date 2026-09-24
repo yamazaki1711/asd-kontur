@@ -110,6 +110,28 @@ def _docx() -> bytes:
     return target.getvalue()
 
 
+def _support_qwen_qualification_docx() -> bytes:
+    """One controlled free-text case whose expected engineering values are fixed here."""
+
+    body = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body>'
+        "<w:p><w:r><w:t>Квалификационная пояснительная записка</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>На участке У-01 предусмотрено устройство монолитной "
+        "железобетонной фундаментной плиты объёмом 18,4 м³ из бетона класса В25."
+        "</w:t></w:r></w:p><w:p><w:r><w:t>Работы выполняются по синтетическому "
+        "листу КЖ-7 редакции 2. Исполнительные даты, результаты лабораторных "
+        "испытаний и подписи в источнике отсутствуют.</w:t></w:r></w:p>"
+        "</w:body></w:document>"
+    )
+    target = io.BytesIO()
+    with zipfile.ZipFile(target, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", body)
+    return target.getvalue()
+
+
 def _vor_csv() -> bytes:
     return (
         "Ведомость объёмов работ;;;;;\n"
@@ -180,7 +202,9 @@ def _seed_verified_work_type_catalog(environment: PostgreSQLEnvironment) -> tupl
                 "aliases,parent_work_type_id,applicability,state,provenance,semantic_digest) "
                 "VALUES "
                 "(:catalog,1,:work,'concrete.slab.install','Устройство монолитной плиты',"
-                "'устройство монолитной плиты',ARRAY[]::text[],NULL,CAST('{}' AS jsonb),"
+                "'устройство монолитной плиты',"
+                "ARRAY['устройство монолитной железобетонной фундаментной плиты']::text[],"
+                "NULL,CAST('{}' AS jsonb),"
                 "'effective',"
                 "CAST(:provenance AS jsonb),:digest)"
             ),
@@ -828,6 +852,36 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "Contract changes" in tender_inputs["draft_contract"]["practical_limitation"]
         assert view["page_roles"]
         assert len(view["candidates"]["project_fields"]) == 3
+        project_candidate_ids = [
+            UUID(str(item["candidate_id"])) for item in view["candidates"]["project_fields"]
+        ]
+        with postgres_environment.owner_engine.connect() as connection:
+            bridged = connection.execute(
+                sa.text(
+                    "SELECT count(DISTINCT version.candidate_id) candidate_count,"
+                    "count(DISTINCT evidence.candidate_id) evidence_count,"
+                    "count(DISTINCT validation.candidate_id) validation_count FROM "
+                    "workspace.candidate_versions version LEFT JOIN "
+                    "workspace.candidate_field_evidence evidence ON "
+                    "evidence.organization_id=version.organization_id AND "
+                    "evidence.workspace_id=version.workspace_id AND "
+                    "evidence.candidate_id=version.candidate_id AND "
+                    "evidence.candidate_version=version.candidate_version LEFT JOIN "
+                    "workspace.vlm_validation_runs validation ON "
+                    "validation.organization_id=version.organization_id AND "
+                    "validation.workspace_id=version.workspace_id AND "
+                    "validation.candidate_id=version.candidate_id AND "
+                    "validation.candidate_version=version.candidate_version WHERE "
+                    "version.organization_id=:o AND version.workspace_id=:w AND "
+                    "version.candidate_id=ANY(:candidates)"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "candidates": project_candidate_ids,
+                },
+            ).one()
+        assert tuple(bridged) == (3, 3, 3)
         assert len(view["candidates"]["quantities"]) == 1
         tender_schedule = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
@@ -1499,3 +1553,163 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
                     )
                     == 0
                 )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ASD_LOCAL_QWEN_ACCEPTANCE_URL"),
+    reason="ASD_LOCAL_QWEN_ACCEPTANCE_URL enables the sequential local-model acceptance",
+)
+def test_local_qwen_free_text_support_work_is_persisted_with_exact_evidence(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The production-shaped worker must persist useful local-Qwen engineering evidence."""
+
+    _seed_verified_work_type_catalog(postgres_environment)
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="understanding-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Synthetic understanding owner",
+    )
+    with TestClient(app) as client:
+        csrf = _login(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Квалификация Support через локальный Qwen"},
+            headers=csrf,
+        ).json()
+        uploaded = client.post(
+            f"/api/v1/workspaces/{workspace['workspace_id']}/documents",
+            files=[
+                (
+                    "files",
+                    (
+                        "support-source.docx",
+                        _support_qwen_qualification_docx(),
+                        "application/octet-stream",
+                    ),
+                )
+            ],
+            headers=csrf,
+        )
+        assert uploaded.status_code == 202, uploaded.text
+        worker = DocumentWorker(
+            SpinePostgresRepository(postgres_environment.document_worker_engine),
+            WorkspaceObjectStore(
+                settings.object_store_root,
+                chunk_bytes=settings.upload_chunk_bytes,
+                max_file_bytes=settings.max_file_bytes,
+            ),
+            worker_identity="local-qwen-support-qualification-worker",
+            lease_seconds=900,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
+            qwen_semantic_url=str(os.environ["ASD_LOCAL_QWEN_ACCEPTANCE_URL"]),
+        )
+        outcomes, states = _drain_worker_through_bounded_retries(worker, timeout_seconds=1_800)
+        assert outcomes
+        assert set(states.values()) == {"succeeded"}, {
+            "states": states,
+            "outcomes": [
+                (outcome.job_id, outcome.state.value, outcome.outcome_code)
+                for outcome in outcomes
+                if outcome.state.value != "succeeded"
+            ],
+        }
+
+        view = client.get(f"/api/v1/workspaces/{workspace['workspace_id']}/project-understanding")
+        assert view.status_code == 200, view.text
+        payload = view.json()
+        with postgres_environment.owner_engine.connect() as connection:
+            accepted = (
+                connection.execute(
+                    sa.text(
+                        "SELECT source_version_id,batch_digest,source_locator_ids,"
+                        "terminal_status,"
+                        "output_digest,output_manifest FROM "
+                        "workspace.engineering_extraction_batches "
+                        "WHERE organization_id=:o AND workspace_id=:w AND "
+                        "terminal_status='accepted'"
+                    ),
+                    {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                )
+                .mappings()
+                .all()
+            )
+            materialization_diagnostics = {
+                "jobs": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT job_id,job_kind,state,input_digest,provenance,"
+                            "result_receipt_id "
+                            "FROM workspace.durable_jobs WHERE organization_id=:o AND "
+                            "workspace_id=:w ORDER BY created_at,job_id"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "stage_results": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT job_id,stage_kind,terminal_status,profile_version,"
+                            "source_version_id "
+                            "FROM workspace.project_understanding_stage_results WHERE "
+                            "organization_id=:o AND workspace_id=:w ORDER BY "
+                            "recorded_at,stage_result_id"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "works": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT candidate_id,raw_name,normalized_name,source_version_id,"
+                            "extraction_profile_version FROM workspace.work_type_candidates "
+                            "WHERE organization_id=:o AND workspace_id=:w ORDER BY "
+                            "candidate_id,version"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "package_count": int(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT count(*) FROM workspace.construction_work_package_versions "
+                            "WHERE organization_id=:o AND workspace_id=:w"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    or 0
+                ),
+            }
+        assert accepted
+        assert all(item["source_locator_ids"] for item in accepted)
+        assert all(str(item["output_digest"]).startswith("sha256:") for item in accepted)
+        supported_work = [
+            item
+            for item in payload["work_packages"]
+            if item["package"]["work_type"].get("canonical_work_type_key")
+            == "concrete.slab.install"
+        ]
+        assert supported_work, {
+            "work_packages": payload["work_packages"],
+            "accepted_manifests": [item["output_manifest"] for item in accepted],
+            "materialization": materialization_diagnostics,
+        }
+        quantities = payload["candidates"]["quantities"]
+        assert any(item["value"] == "18,4" and item["raw_unit"] == "м³" for item in quantities), (
+            quantities
+        )
+        materials = payload["candidates"]["materials"]
+        assert any("В25" in item["value"] for item in materials), materials

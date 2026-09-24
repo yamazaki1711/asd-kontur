@@ -106,10 +106,19 @@ class IndustrialDocumentUnderstandingPipeline:
         ):
             terminal_status = "partial"
             typed_failure_code = "qwen_engineering_coverage_incomplete"
+        effective_profile = _profile_for(claimed.job_kind)
+        if claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION and isinstance(
+            semantic_coverage, dict
+        ):
+            # The stage receipt is the authoritative declaration of which
+            # candidate profile became effective.  Initial intake jobs predate
+            # semantic-recovery provenance and must not publish a deterministic
+            # profile after they actually persisted Qwen candidates.
+            effective_profile = QWEN_ENGINEERING_EXTRACTION_PROFILE
         self._repository.record_stage_result(
             claimed,
             stage_kind=claimed.job_kind.value,
-            profile_version=_profile_for(claimed.job_kind),
+            profile_version=effective_profile,
             output_manifest=result,
             terminal_status=terminal_status,
             typed_failure_code=typed_failure_code,

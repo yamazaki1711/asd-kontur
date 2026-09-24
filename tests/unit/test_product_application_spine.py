@@ -870,6 +870,31 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
         _render_launchd(tmp_path / "unconfigured", settings(tmp_path))
 
 
+def test_launchd_adds_ntd_worker_only_with_explicit_scoped_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    monkeypatch.setenv("ASD_LOG_ROOT", str(log_root))
+    pgpass = tmp_path / "ntd-worker.pgpass"
+    pgpass.touch(mode=0o600)
+    output = tmp_path / "launchd"
+    _render_launchd(
+        output,
+        settings(
+            tmp_path,
+            ntd_processing_database_url=("postgresql+psycopg://ntd-worker@127.0.0.1/spine"),
+            ntd_processing_pgpassfile=pgpass,
+        ),
+    )
+
+    ntd_plist = plistlib.loads((output / "ru.asd-kontur.spine.ntd-worker.plist").read_bytes())
+    assert ntd_plist["ProgramArguments"][-1] == "run-ntd-worker"
+    assert ntd_plist["EnvironmentVariables"]["ASD_NTD_PROCESSING_PGPASSFILE"] == str(pgpass)
+    assert ntd_plist["EnvironmentVariables"]["PGPASSFILE"] == str(pgpass)
+    assert not (tmp_path / "launchd" / "ru.asd-kontur.spine.ntd-worker.plist").is_symlink()
+
+
 @pytest.mark.parametrize(
     ("header", "size", "expected"),
     (

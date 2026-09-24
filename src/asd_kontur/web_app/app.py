@@ -56,6 +56,10 @@ from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewActi
 from asd_kontur.pilot.postgres import PilotResultError
 from asd_kontur.restoration import RestorationRecoveryError
 from asd_kontur.support import SupportError
+from asd_kontur.support.field_commands import (
+    SupportFieldCommandError,
+    SupportFieldCommandService,
+)
 from asd_kontur.support.production_postgres import SupportProductionError
 from asd_kontur.support.scope_commands import (
     SupportScopeCommandError,
@@ -116,6 +120,9 @@ from .schemas import (
     ReviewGeneratedCandidateRequest,
     SessionView,
     StartGenerationRequest,
+    SupportFieldCommandView,
+    SupportFieldConfirmationRequest,
+    SupportFieldCorrectionRequest,
     SupportProductionView,
     SupportScopeConfigurationView,
     SupportScopeConfigureRequest,
@@ -146,6 +153,16 @@ class ApplicationContainer:
             if settings.support_command_database_url is not None
             else None
         )
+        self.harness_command_engine = (
+            sa.create_engine(settings.harness_command_database_url, pool_pre_ping=True)
+            if settings.harness_command_database_url is not None
+            else None
+        )
+        self.kernel_command_engine = (
+            sa.create_engine(settings.kernel_command_database_url, pool_pre_ping=True)
+            if settings.kernel_command_database_url is not None
+            else None
+        )
         self.settings = settings
         self.repository = SpinePostgresRepository(
             engine,
@@ -169,6 +186,15 @@ class ApplicationContainer:
             else None
         )
         self.support_scope_readiness = SupportScopeReadinessService(engine)
+        self.support_field_commands = (
+            SupportFieldCommandService(
+                engine,
+                self.harness_command_engine,
+                self.kernel_command_engine,
+            )
+            if self.harness_command_engine is not None and self.kernel_command_engine is not None
+            else None
+        )
         assistant_repository = AssistantRepository(engine)
         self.assistant = ProfessionalAssistantService(
             self.repository,
@@ -213,6 +239,10 @@ def create_app(*, engine: Engine, settings: SpineSettings) -> FastAPI:
         container.destruction_engine.dispose()
         if container.support_command_engine is not None:
             container.support_command_engine.dispose()
+        if container.harness_command_engine is not None:
+            container.harness_command_engine.dispose()
+        if container.kernel_command_engine is not None:
+            container.kernel_command_engine.dispose()
 
     app = FastAPI(
         title="ASD-KONTUR Product Application Spine API",
@@ -278,6 +308,13 @@ def _install_middleware(app: FastAPI) -> None:
     @app.exception_handler(SupportScopeCommandError)
     async def support_scope_command_error(
         request: Request, exc: SupportScopeCommandError
+    ) -> JSONResponse:
+        status_code = 404 if exc.code.endswith("not_found") else 409
+        return _error(request, exc.code, status_code)
+
+    @app.exception_handler(SupportFieldCommandError)
+    async def support_field_command_error(
+        request: Request, exc: SupportFieldCommandError
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
@@ -1276,6 +1313,59 @@ def _api_router() -> APIRouter:
             workspace_id=workspace_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/fields/corrections",
+        response_model=SupportFieldCommandView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def correct_support_field(
+        request: Request,
+        workspace_id: UUID,
+        payload: SupportFieldCorrectionRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportFieldCommandView:
+        commands = _container(request).support_field_commands
+        if commands is None:
+            raise HTTPException(status_code=503, detail="support_field_command_service_unavailable")
+        value = commands.correct(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=payload.work_package_id,
+            field_key=payload.field_key,
+            candidate_id=payload.candidate_id,
+            candidate_version=payload.candidate_version,
+            corrected_value=payload.corrected_value,
+            reason=payload.reason,
+        )
+        return SupportFieldCommandView(**jsonable_encoder(asdict(value)))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/fields/confirmations",
+        response_model=SupportFieldCommandView,
+        status_code=201,
+        tags=["support-production"],
+    )
+    def confirm_support_field(
+        request: Request,
+        workspace_id: UUID,
+        payload: SupportFieldConfirmationRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> SupportFieldCommandView:
+        commands = _container(request).support_field_commands
+        if commands is None:
+            raise HTTPException(status_code=503, detail="support_field_command_service_unavailable")
+        value = commands.confirm(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=payload.work_package_id,
+            field_key=payload.field_key,
+            candidate_id=payload.candidate_id,
+            candidate_version=payload.candidate_version,
+            idempotency_key=payload.idempotency_key,
+        )
+        return SupportFieldCommandView(**jsonable_encoder(asdict(value)))
 
     @router.post(
         "/workspaces/{workspace_id}/support/processes",
