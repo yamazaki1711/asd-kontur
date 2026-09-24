@@ -122,6 +122,11 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
   await expect(
     page.getByRole("link", { name: "открыть источник" }).first(),
   ).toBeVisible();
+  const packageDownload = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: "Скачать редактируемый комплект" })
+    .click();
+  expect((await packageDownload).suggestedFilename()).toMatch(/\.zip$/);
   const download = page.waitForEvent("download");
   await page
     .getByRole("link", { name: "Скачать финализированный документ" })
