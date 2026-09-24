@@ -52,6 +52,7 @@ from asd_kontur.document_understanding.postgres import (
     _structure_reconciliation_gaps_from_manifest,
 )
 from asd_kontur.document_understanding.qwen_semantic import (
+    QWEN_ENGINEERING_EXTRACTION_PROFILE,
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
     _compatible_batch_digest,
@@ -3174,6 +3175,7 @@ def test_project_field_stage_marks_unresolved_semantic_coverage_partial() -> Non
 
     assert persisted["terminal_status"] == "partial"
     assert persisted["typed_failure_code"] == "qwen_engineering_coverage_incomplete"
+    assert persisted["profile_version"] == QWEN_ENGINEERING_EXTRACTION_PROFILE
 
 
 def test_project_field_stage_uses_qwen_evidence_when_classification_is_unavailable() -> None:
