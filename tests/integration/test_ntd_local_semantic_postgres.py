@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -338,3 +339,58 @@ def test_local_ntd_uses_qwen_kind_for_a_new_native_chunk(
             {"id": persisted.candidate_id, "version": persisted.candidate_version},
         )
     assert kind == "form"
+
+
+def test_local_ntd_cycle_retries_one_typed_failure_without_manual_intervention(
+    postgres_environment: PostgreSQLEnvironment,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seeded = _seed_ntd(postgres_environment)
+    identity = _resolution(postgres_environment, seeded)
+    candidate_id = uuid7()
+    text = "Исполнитель должен вести журнал бетонных работ. " * 4
+    NtdRepository(postgres_environment.ntd_ingestion_engine).register_provision_candidate(
+        _candidate(candidate_id=candidate_id, version=1, seeded=seeded, text=text)
+    )
+    key = f"ntd-local-provision:{candidate_id}:1:{LOCAL_NTD_PROVISION_PROFILE}"
+    job_id = _insert_job(
+        postgres_environment,
+        identity_id=identity,
+        artifact_id=seeded.artifact_id,
+        key=key,
+        state="queued",
+        priority=50,
+    )
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "UPDATE platform.ntd_processing_jobs SET state='failed',attempt_count=1,"
+                "completed_at=CURRENT_TIMESTAMP,typed_failure_code="
+                "'local_ntd_semantics_invalid_json' WHERE ntd_processing_job_id=:id"
+            ),
+            {"id": job_id},
+        )
+    response = {"provision_kind": "clause", **_semantics()}
+    monkeypatch.setattr(
+        "asd_kontur.ntd.local_semantic._complete",
+        lambda *_args, **_kwargs: json.dumps(response, ensure_ascii=False),
+    )
+
+    cycle = LocalNtdProvisionWorker(
+        postgres_environment.owner_engine,
+        qwen_url="http://127.0.0.1:1/generate",
+        identity="automatic-retry-worker",
+    ).run_cycle(refill_limit=1, profile_cap=1)
+
+    assert cycle["retried"] == 1
+    assert cycle["result"] is not None
+    assert cycle["result"]["candidate_id"] == str(candidate_id)
+    with postgres_environment.owner_engine.connect() as connection:
+        state = connection.execute(
+            sa.text(
+                "SELECT state,attempt_count,typed_failure_code FROM "
+                "platform.ntd_processing_jobs WHERE ntd_processing_job_id=:id"
+            ),
+            {"id": job_id},
+        ).one()
+    assert state == ("succeeded", 2, None)

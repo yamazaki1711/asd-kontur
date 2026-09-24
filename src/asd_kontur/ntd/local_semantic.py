@@ -645,13 +645,24 @@ class LocalNtdProvisionWorker:
             )
             return {"state": "failed", "job_id": str(job.job_id), "failure": exc.code}
 
+    def run_cycle(self, *, refill_limit: int = 2, profile_cap: int = 20) -> dict[str, Any]:
+        """Retry one bounded validation failure, refill capacity, and process one job."""
+
+        retried = self._repository.retry_failed_validation(eligible_at=datetime.now(UTC), limit=1)
+        refill = self._repository.enqueue_bounded(
+            eligible_at=datetime.now(UTC), limit=refill_limit, profile_cap=profile_cap
+        )
+        return {
+            "retried": retried,
+            "refill": refill,
+            "result": self.process_one(),
+        }
+
     def run_forever(self, *, refill_limit: int = 2, profile_cap: int = 20) -> None:
         self._repository.recover_expired_local_leases(recovered_at=datetime.now(UTC))
         while True:
-            self._repository.enqueue_bounded(
-                eligible_at=datetime.now(UTC), limit=refill_limit, profile_cap=profile_cap
-            )
-            result = self.process_one()
+            cycle = self.run_cycle(refill_limit=refill_limit, profile_cap=profile_cap)
+            result = cycle["result"]
             time.sleep(2 if result is not None else 30)
 
 
