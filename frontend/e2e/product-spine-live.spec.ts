@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -128,6 +128,18 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
     .click();
   const packageFile = await packageDownload;
   expect(packageFile.suggestedFilename()).toMatch(/\.zip$/);
+  if (process.env.ASD_SUPPORT_OFFICIAL_AOSR_SOURCE) {
+    const packagePath = await packageFile.path();
+    if (!packagePath)
+      throw new Error("downloaded Support package path missing");
+    const members = execFileSync("unzip", ["-Z1", packagePath], {
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n");
+    expect(members[0]).toBe("01_register_candidate.docx");
+    expect(members).toContain("02_support.aosr_editable.docx");
+  }
   const artifactRoot = process.env.ASD_E2E_ARTIFACT_ROOT;
   if (artifactRoot) {
     mkdirSync(artifactRoot, { recursive: true });
