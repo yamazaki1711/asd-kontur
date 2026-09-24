@@ -908,10 +908,16 @@ class ProductSpineService:
         )
 
     def support_production_view(
-        self, *, owner_identity_id: str, workspace_id: UUID
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
     ) -> dict[str, Any]:
         view = self._support_production.view(
-            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
         )
         return {**view, "consistency": assess_id_package_consistency(view)}
 
@@ -1050,19 +1056,26 @@ class ProductSpineService:
         workspace_id: UUID,
         work_package_id: UUID,
     ) -> dict[str, Any]:
-        return self._support_production.form_package(
+        view = self._support_production.form_package(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             work_package_id=work_package_id,
         )
+        return {**view, "consistency": assess_id_package_consistency(view)}
 
     def support_id_package_export(
-        self, *, owner_identity_id: str, workspace_id: UUID
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
     ) -> DocumentContent:
         """Deliver the exact formed ID package with an editable register first."""
 
         view = self.support_production_view(
-            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
         )
         package = view.get("package")
         registers = view.get("registers", [])

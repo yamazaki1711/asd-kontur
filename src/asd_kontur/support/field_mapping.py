@@ -1,4 +1,4 @@
-"""Versioned mapping from interpreted project fields to one supported ID form.
+"""Versioned mapping from interpreted project fields to supported ID forms.
 
 The mapping does not extract text and does not confirm facts.  It reconciles
 already evidence-bound candidate keys with the qualified AOSR field schema for
@@ -16,8 +16,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-MONOLITHIC_FOUNDATION_SLAB_PROFILE_VERSION = "support.concrete-slab.aosr-field-map@1.0.0"
-MONOLITHIC_FOUNDATION_SLAB_WORK_TYPE_KEY = "concrete.slab.install"
+AOSR_FIELD_MAPPING_PROFILE_VERSION = "support.aosr-field-map@2.0.0"
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +72,19 @@ _AOSR_RULES = (
 )
 
 
-def monolithic_foundation_slab_mapping_profile() -> dict[str, Any]:
+def aosr_mapping_profile(*, work_type_key: str) -> dict[str, Any]:
+    """Bind one canonical work type to the common AOSR field semantics.
+
+    AOSR applicability is decided upstream by the exact requirement matrix.
+    Once that matrix requires ``support.aosr``, field reconciliation is the
+    same for every work type and must not route on a pilot-specific key.
+    """
+
+    if not work_type_key.strip():
+        raise ValueError("support_work_type_key_required")
     document = {
-        "profile_version": MONOLITHIC_FOUNDATION_SLAB_PROFILE_VERSION,
-        "work_type_key": MONOLITHIC_FOUNDATION_SLAB_WORK_TYPE_KEY,
+        "profile_version": AOSR_FIELD_MAPPING_PROFILE_VERSION,
+        "work_type_key": work_type_key,
         "required_document_type_ref": "support.aosr",
         "rules": [
             {
@@ -99,14 +107,8 @@ def reconcile_support_field_candidates(
 ) -> dict[str, Any]:
     """Return candidate/conflict/missing states without promoting any value."""
 
-    if work_type_key != MONOLITHIC_FOUNDATION_SLAB_WORK_TYPE_KEY:
-        return {
-            "profile": None,
-            "status": "unsupported_work_type",
-            "fields": [],
-            "missing_field_keys": [],
-            "conflict_field_keys": [],
-        }
+    if not work_type_key.strip():
+        raise ValueError("support_work_type_key_required")
     locators = {str(value) for value in work_source_locator_ids}
     by_key: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in project_candidates:
@@ -146,7 +148,7 @@ def reconcile_support_field_candidates(
                 "scope_rule": "project_global" if rule.project_global else "exact_work_locator",
             }
         )
-    profile = monolithic_foundation_slab_mapping_profile()
+    profile = aosr_mapping_profile(work_type_key=work_type_key)
     return {
         "profile": profile,
         "status": "conflict" if conflicts else "partial" if missing else "candidate_complete",

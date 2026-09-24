@@ -61,6 +61,10 @@ from asd_kontur.support.field_commands import (
     SupportFieldCommandService,
 )
 from asd_kontur.support.production_postgres import SupportProductionError
+from asd_kontur.support.release_readiness import (
+    SupportReleaseReadinessService,
+    support_writer_status,
+)
 from asd_kontur.support.scope_commands import (
     SupportScopeCommandError,
     SupportScopeCommandService,
@@ -124,6 +128,7 @@ from .schemas import (
     SupportFieldConfirmationRequest,
     SupportFieldCorrectionRequest,
     SupportProductionView,
+    SupportReleaseReadinessView,
     SupportScopeConfigurationView,
     SupportScopeConfigureRequest,
     SupportScopeReadinessView,
@@ -153,6 +158,7 @@ class ApplicationContainer:
             if settings.support_command_database_url is not None
             else None
         )
+        self.support_command_writer_status = support_writer_status(self.support_command_engine)
         self.harness_command_engine = (
             sa.create_engine(settings.harness_command_database_url, pool_pre_ping=True)
             if settings.harness_command_database_url is not None
@@ -183,9 +189,13 @@ class ApplicationContainer:
         self.support_scope_commands = (
             SupportScopeCommandService(engine, self.support_command_engine)
             if self.support_command_engine is not None
+            and self.support_command_writer_status["role_valid"]
             else None
         )
         self.support_scope_readiness = SupportScopeReadinessService(engine)
+        self.support_release_readiness = SupportReleaseReadinessService(
+            engine, self.support_command_engine
+        )
         self.support_field_commands = (
             SupportFieldCommandService(
                 engine,
@@ -479,6 +489,22 @@ def _api_router() -> APIRouter:
             rollback_target=payload.rollback_target,
         )
         return TrialReadinessView(**jsonable_encoder(value))
+
+    @router.get(
+        "/admin/support-release-readiness",
+        response_model=SupportReleaseReadinessView,
+        tags=["platform"],
+    )
+    def support_release_readiness(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> SupportReleaseReadinessView:
+        value = _container(request).support_release_readiness.inspect(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return SupportReleaseReadinessView(**jsonable_encoder(asdict(value)))
 
     @router.get("/workspaces", response_model=list[WorkspaceView], tags=["workspaces"])
     def list_workspaces(
@@ -1307,10 +1333,12 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        work_package_id: UUID | None = None,
     ) -> SupportProductionView:
         value = _container(request).service.support_production_view(
             owner_identity_id=principal.owner_identity_id,
             workspace_id=workspace_id,
+            work_package_id=work_package_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
 
@@ -1587,10 +1615,12 @@ def _api_router() -> APIRouter:
         request: Request,
         workspace_id: UUID,
         principal: Annotated[SessionPrincipal, Depends(_principal)],
+        work_package_id: UUID | None = None,
     ) -> Response:
         value = _container(request).service.support_id_package_export(
             owner_identity_id=principal.owner_identity_id,
             workspace_id=workspace_id,
+            work_package_id=work_package_id,
         )
         return Response(
             content=b"".join(value.chunks),

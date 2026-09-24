@@ -2274,12 +2274,22 @@ function WorkMatrixPage() {
 function SupportProductionPage() {
   const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
+  const [selectedWorkPackageId, setSelectedWorkPackageId] = useState<
+    string | undefined
+  >();
   const production = useQuery({
-    queryKey: ["support-id-production", workspaceId],
+    queryKey: ["support-id-production", workspaceId, selectedWorkPackageId],
     queryFn: async () => {
       const { data, error } = await api.GET(
         "/api/v1/workspaces/{workspace_id}/support/id-production",
-        { params: { path: { workspace_id: workspaceId } } },
+        {
+          params: {
+            path: { workspace_id: workspaceId },
+            query: selectedWorkPackageId
+              ? { work_package_id: selectedWorkPackageId }
+              : {},
+          },
+        },
       );
       return requireData(data, error);
     },
@@ -2329,7 +2339,8 @@ function SupportProductionPage() {
       );
       return requireData(data, error);
     },
-    onSuccess: async () => {
+    onSuccess: async (_value, workPackageId) => {
+      setSelectedWorkPackageId(workPackageId);
       await queryClient.invalidateQueries({
         queryKey: ["support-id-production", workspaceId],
       });
@@ -2446,6 +2457,8 @@ function SupportProductionPage() {
             value={value}
             workspaceId={workspaceId}
             modeSlug={mode}
+            selectedWorkPackageId={selectedWorkPackageId}
+            selectWorkPackage={setSelectedWorkPackageId}
             scopeReadiness={scopeReadiness.data}
             configureScope={(configuration) =>
               configureScope.mutate(configuration)
@@ -3295,6 +3308,8 @@ function SupportProductionBody({
   value,
   workspaceId,
   modeSlug,
+  selectedWorkPackageId,
+  selectWorkPackage,
   scopeReadiness,
   configureScope,
   scopePending,
@@ -3315,6 +3330,8 @@ function SupportProductionBody({
   value: SupportProduction;
   workspaceId: string;
   modeSlug?: string | undefined;
+  selectedWorkPackageId?: string | undefined;
+  selectWorkPackage: (identity: string | undefined) => void;
   scopeReadiness?: SupportScopeReadiness | undefined;
   configureScope: (
     configuration: components["schemas"]["SupportScopeConfigureRequest"],
@@ -3341,6 +3358,7 @@ function SupportProductionBody({
   const workPackages = Array.from(
     new Set(value.requirements.map((item) => String(item.work_package_id))),
   );
+  const availablePackages = value.available_packages ?? [];
   const readiness = value.readiness as Record<string, unknown> | null;
   const consistency = value.consistency as Record<string, unknown>;
   const memberships = value.memberships ?? [];
@@ -3353,6 +3371,40 @@ function SupportProductionBody({
   const supportProcess = value.support_process;
   return (
     <>
+      {availablePackages.length > 0 && (
+        <section className="panel">
+          <div className="entity-heading">
+            <h2>Комплекты по видам работ</h2>
+            <StatusPill>{availablePackages.length}</StatusPill>
+          </div>
+          <p>
+            Каждый комплект связан с отдельным пакетом работ и собственной
+            матрицей документов. Выбор не объединяет одноимённые работы и не
+            переносит факты между областями.
+          </p>
+          <div className="button-row">
+            {availablePackages.map((item) => {
+              const identity = String(item.work_package_id);
+              const label = displayValue(
+                item.work_name ?? item.work_type_key,
+                identity,
+              );
+              return (
+                <button
+                  key={identity}
+                  type="button"
+                  className={
+                    selectedWorkPackageId === identity ? undefined : "secondary"
+                  }
+                  onClick={() => selectWorkPackage(identity)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
       <section className="panel">
         <div className="entity-heading">
           <h2>Требования к исполнительной документации</h2>
@@ -3507,7 +3559,11 @@ function SupportProductionBody({
             </div>
             <a
               className="button-link secondary"
-              href={`/api/v1/workspaces/${workspaceId}/support/id-packages/export`}
+              href={`/api/v1/workspaces/${workspaceId}/support/id-packages/export${
+                selectedWorkPackageId
+                  ? `?work_package_id=${encodeURIComponent(selectedWorkPackageId)}`
+                  : ""
+              }`}
             >
               Скачать редактируемый комплект
             </a>

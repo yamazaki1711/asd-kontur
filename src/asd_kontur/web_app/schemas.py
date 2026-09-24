@@ -411,6 +411,7 @@ class SupportProductionView(ApiModel):
     workspace_id: UUID
     matrix: dict[str, Any] | None
     requirements: list[dict[str, Any]]
+    available_packages: list[dict[str, Any]] = Field(default_factory=list)
     package: dict[str, Any] | None
     package_history: list[dict[str, Any]] = Field(default_factory=list)
     book_history: list[dict[str, Any]] = Field(default_factory=list)
@@ -486,6 +487,15 @@ class SupportScopeReadinessView(ApiModel):
     status: Literal["ready", "blocked", "configured"]
     gaps: list[str] = Field(default_factory=list)
     configuration: SupportScopeConfigureRequest | None = None
+
+
+class SupportReleaseReadinessView(ApiModel):
+    ready: bool
+    status: Literal["ready", "blocked"]
+    blockers: list[str]
+    coverage: dict[str, Any]
+    scope: dict[str, Any]
+    command_writer: dict[str, Any]
 
 
 class AuditExpectedActualPreflightView(ApiModel):

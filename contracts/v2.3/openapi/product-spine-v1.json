@@ -3249,6 +3249,14 @@
             "title": "Authority Layers",
             "type": "object"
           },
+          "available_packages": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Available Packages",
+            "type": "array"
+          },
           "book_history": {
             "items": {
               "additionalProperties": true,
@@ -3405,6 +3413,55 @@
           "authority_layers"
         ],
         "title": "SupportProductionView",
+        "type": "object"
+      },
+      "SupportReleaseReadinessView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "command_writer": {
+            "additionalProperties": true,
+            "title": "Command Writer",
+            "type": "object"
+          },
+          "coverage": {
+            "additionalProperties": true,
+            "title": "Coverage",
+            "type": "object"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "scope": {
+            "additionalProperties": true,
+            "title": "Scope",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "blocked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ready",
+          "status",
+          "blockers",
+          "coverage",
+          "scope",
+          "command_writer"
+        ],
+        "title": "SupportReleaseReadinessView",
         "type": "object"
       },
       "SupportScopeConfigurationView": {
@@ -4018,6 +4075,49 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/support-release-readiness": {
+      "get": {
+        "operationId": "support_release_readiness_api_v1_admin_support_release_readiness_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SupportReleaseReadinessView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Support Release Readiness",
+        "tags": [
+          "platform"
+        ]
+      }
+    },
     "/api/v1/admin/trial-readiness": {
       "get": {
         "operationId": "trial_readiness_api_v1_admin_trial_readiness_get",
@@ -7985,6 +8085,23 @@
               "title": "Workspace Id",
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "work_package_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Package Id"
+            }
           }
         ],
         "responses": {
@@ -8025,6 +8142,23 @@
               "format": "uuid",
               "title": "Workspace Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "work_package_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Work Package Id"
             }
           }
         ],

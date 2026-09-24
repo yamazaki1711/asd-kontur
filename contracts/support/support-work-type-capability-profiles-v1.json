@@ -1,0 +1,55 @@
+{
+  "schema": "asd-kontur-support-work-type-capability-profiles-v1",
+  "version": "1.0.0",
+  "authority_boundary": "qualification evidence only; production catalog approval remains durable database authority",
+  "profiles": [
+    {
+      "work_type_key": "concrete.slab.install",
+      "display_name": "Устройство монолитной плиты",
+      "evidence_basis": "docs/implementation/SUPPORT_NTD_CONTINUATION_2026-09-24.md",
+      "field_requirement_profile": "support.aosr-field-map@2.0.0",
+      "document_requirement_source": "workspace WorkRequirementMatrix",
+      "package_capable": true,
+      "isolated_qualification": true,
+      "browser_e2e": true,
+      "editable_artifact_roles": ["register", "support.aosr"],
+      "blockers": ["PRODUCTION_CATALOG_APPROVAL_REQUIRED", "REAL_SCOPE_GRANT_REQUIRED"]
+    },
+    {
+      "work_type_key": "earthworks",
+      "display_name": "Земляные работы",
+      "evidence_basis": "src/asd_kontur/integrity/qualification.py",
+      "field_requirement_profile": null,
+      "document_requirement_source": "controlled WorkRequirementMatrix qualification case",
+      "package_capable": true,
+      "isolated_qualification": true,
+      "browser_e2e": false,
+      "editable_artifact_roles": ["register"],
+      "blockers": ["PRODUCTION_CATALOG_APPROVAL_REQUIRED", "PRODUCTION_REQUIREMENT_MATRIX_REQUIRED", "BROWSER_E2E_REQUIRED"]
+    },
+    {
+      "work_type_key": "reinforced-concrete",
+      "display_name": "Железобетонные работы",
+      "evidence_basis": "src/asd_kontur/integrity/qualification.py",
+      "field_requirement_profile": "support.aosr-field-map@2.0.0",
+      "document_requirement_source": "controlled WorkRequirementMatrix qualification case",
+      "package_capable": true,
+      "isolated_qualification": true,
+      "browser_e2e": false,
+      "editable_artifact_roles": ["register"],
+      "blockers": ["PRODUCTION_CATALOG_APPROVAL_REQUIRED", "PRODUCTION_REQUIREMENT_MATRIX_REQUIRED", "BROWSER_E2E_REQUIRED"]
+    },
+    {
+      "work_type_key": "pipeline-installation",
+      "display_name": "Монтаж трубопровода",
+      "evidence_basis": "src/asd_kontur/integrity/qualification.py",
+      "field_requirement_profile": "support.aosr-field-map@2.0.0",
+      "document_requirement_source": "controlled WorkRequirementMatrix qualification case",
+      "package_capable": true,
+      "isolated_qualification": true,
+      "browser_e2e": false,
+      "editable_artifact_roles": ["register"],
+      "blockers": ["PRODUCTION_CATALOG_APPROVAL_REQUIRED", "PRODUCTION_REQUIREMENT_MATRIX_REQUIRED", "BROWSER_E2E_REQUIRED"]
+    }
+  ]
+}

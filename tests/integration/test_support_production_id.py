@@ -658,6 +658,186 @@ def test_support_production_package_generation_and_workspace_isolation(
         )
 
 
+def test_support_package_pipeline_persists_distinct_work_type_compositions(
+    postgres_environment: PostgreSQLEnvironment, tmp_path: Path
+) -> None:
+    """The same package boundary serves three unlike controlled work types.
+
+    The document compositions are qualification inputs, not promoted platform
+    rules.  Production applicability remains blocked until an approved catalog
+    and requirement matrix exist.
+    """
+
+    tenant = create_tenant(postgres_environment)
+    _start_support(postgres_environment, tenant)
+    settings = SpineSettings(
+        database_url=postgres_environment.application_engine.url.render_as_string(
+            hide_password=False
+        ),
+        lifecycle_database_url=postgres_environment.lifecycle_engine.url.render_as_string(
+            hide_password=False
+        ),
+        worker_database_url=postgres_environment.document_worker_engine.url.render_as_string(
+            hide_password=False
+        ),
+        destruction_database_url=postgres_environment.destruction_engine.url.render_as_string(
+            hide_password=False
+        ),
+        support_command_database_url=postgres_environment.application_engine.url.render_as_string(
+            hide_password=False
+        ),
+        object_store_root=tmp_path / "objects",
+        archive_store_root=tmp_path / "archives",
+        session_profile=SessionProfile.DEVELOPMENT_LOOPBACK,
+        audit_pepper="multi-work-support-qualification-pepper",
+    )
+    settings.object_store_root.mkdir()
+    settings.archive_store_root.mkdir()
+    owner = OwnerAuthService(postgres_environment.application_engine, settings).bootstrap_owner(
+        username="multi-work-support-owner",
+        password="Synthetic-Multi-Work-Support-Owner-42!",
+        display_name="Synthetic multi-work Support owner",
+    )
+    OwnerAuthService(postgres_environment.application_engine, settings).bootstrap_owner(
+        username="multi-work-support-outsider",
+        password="Synthetic-Multi-Work-Support-Outsider-42!",
+        display_name="Synthetic multi-work Support outsider",
+    )
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO application.owner_organization_grants VALUES "
+                "(:owner,:organization,ARRAY['workspace.read','support.generate'],1,CURRENT_TIMESTAMP)"
+            ),
+            {"owner": owner, "organization": tenant.organization_id},
+        )
+    rule_set_id, _, _, _ = _seed_rule(postgres_environment, tenant)
+    project = _project(tenant.organization_id, tenant.workspace_id)
+    harness = ConstructionHarnessRepository(
+        postgres_environment.harness_engine, workspace_context(tenant)
+    )
+    harness.register_project(project)
+    for work in project.work_packages:
+        harness.register_work_package(
+            project=project, work_package=work, created_at=datetime.now(UTC)
+        )
+    compositions = {
+        "earthworks": ("support.executive-scheme",),
+        "reinforced-concrete": ("support.aosr", "support.material-quality"),
+        "pipeline-installation": (
+            "support.aosr",
+            "support.material-quality",
+            "support.control-attachment",
+        ),
+    }
+    rows = []
+    for work in project.work_packages:
+        documents = tuple(
+            RequiredIDDocument(
+                uuid7(),
+                role,
+                1,
+                "qualification-controlled@1",
+                (f"qualification:multi-work:{work.work_type_key}:{role}",),
+                RequirementAuthority.CONTRACTUAL,
+            )
+            for role in compositions[work.work_type_key]
+        )
+        rows.append(WorkRequirementRow(work.work_package_id, (), (), documents, ()))
+    harness.register_matrix(
+        WorkRequirementMatrix(
+            uuid7(),
+            1,
+            tenant.organization_id,
+            tenant.workspace_id,
+            project.project_definition_id,
+            project.version,
+            tuple(rows),
+            (),
+            rule_set_id,
+            datetime.now(UTC),
+        )
+    )
+
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    with TestClient(app) as client:
+        login = client.post(
+            "/api/v1/session/login",
+            json={
+                "username": "multi-work-support-owner",
+                "password": "Synthetic-Multi-Work-Support-Owner-42!",
+            },
+        )
+        assert login.status_code == 200
+        csrf = {"X-CSRF-Token": str(client.cookies.get("asd_csrf"))}
+        release_readiness = client.get(
+            "/api/v1/admin/support-release-readiness",
+            params={"workspace_id": str(tenant.workspace_id)},
+        )
+        assert release_readiness.status_code == 200
+        assert release_readiness.json()["command_writer"] == {
+            "configured": True,
+            "role_valid": False,
+            "reason": "role_membership_missing",
+        }
+        assert release_readiness.json()["ready"] is False
+        observed: dict[str, list[str]] = {}
+        for work in project.work_packages:
+            formed = client.post(
+                f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages",
+                headers=csrf,
+                json={"work_package_id": str(work.work_package_id)},
+            )
+            assert formed.status_code == 201, formed.text
+            body = formed.json()
+            assert body["package"]["scope_subject_id"] == str(work.work_package_id)
+            assert body["memberships"][0]["role"] == "register"
+            selected = client.get(
+                f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production",
+                params={"work_package_id": str(work.work_package_id)},
+            )
+            assert selected.status_code == 200, selected.text
+            assert selected.json()["package"]["scope_subject_id"] == str(work.work_package_id)
+            exported = client.get(
+                f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export",
+                params={"work_package_id": str(work.work_package_id)},
+            )
+            assert exported.status_code == 200, exported.text
+            artifact_root_value = os.environ.get("ASD_SUPPORT_MULTI_WORK_ARTIFACT_DIR")
+            if artifact_root_value:
+                artifact_root = Path(artifact_root_value)
+                artifact_root.mkdir(parents=True, exist_ok=True)
+                (artifact_root / f"{work.work_type_key}.zip").write_bytes(exported.content)
+            with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+                assert archive.namelist()[0] == "01_register_candidate.docx"
+                manifest = json.loads(archive.read("96_package_manifest.json"))
+                roles = [item["role"] for item in manifest["members"] if item["role"] != "register"]
+                observed[work.work_type_key] = roles
+                assert set(roles) == set(compositions[work.work_type_key])
+                assert "99_missing_or_blocked_items.csv" in archive.namelist()
+        assert len({tuple(sorted(value)) for value in observed.values()}) == 3
+        reloaded = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production",
+            params={"work_package_id": str(project.work_packages[0].work_package_id)},
+        )
+        assert reloaded.status_code == 200
+        assert len(reloaded.json()["available_packages"]) == 3
+        client.post("/api/v1/session/logout", headers=csrf)
+        denied_login = client.post(
+            "/api/v1/session/login",
+            json={
+                "username": "multi-work-support-outsider",
+                "password": "Synthetic-Multi-Work-Support-Outsider-42!",
+            },
+        )
+        assert denied_login.status_code == 200
+        denied = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/id-production",
+            params={"work_package_id": str(project.work_packages[0].work_package_id)},
+        )
+        assert denied.status_code == 404
+
+
 def _seed_product_chain(
     environment: PostgreSQLEnvironment,
     organization_id: UUID,

@@ -66,12 +66,24 @@ class SupportProductionRepository:
         )
         return None if row is None else dict(row)
 
-    def view(self, *, owner_identity_id: str, workspace_id: UUID) -> dict[str, Any]:
+    def view(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
+    ) -> dict[str, Any]:
         organization_id = self._resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
             matrix = self._latest_matrix(session, organization_id, workspace_id)
             requirements = [] if matrix is None else _matrix_requirements(matrix)
+            if work_package_id is not None:
+                requirements = [
+                    item
+                    for item in requirements
+                    if UUID(str(item["work_package_id"])) == work_package_id
+                ]
             support_process = self._latest_support_process(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -81,6 +93,23 @@ class SupportProductionRepository:
                 workspace_id=workspace_id,
                 requirements=requirements,
             )
+            available_packages = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (p.id_package_id) p.id_package_id,p.version,"
+                        "p.scope_subject_id work_package_id,p.completeness_status status,p.required_count,"
+                        "p.covered_count,p.missing_count,p.indeterminate_count,p.recorded_at,"
+                        "wp.work_type_key,wp.work_type_version,wp.package->'work_type'->>'raw' work_name "
+                        "FROM workspace.id_package_versions p LEFT JOIN "
+                        "workspace.construction_work_package_versions wp ON "
+                        "wp.organization_id=p.organization_id AND wp.workspace_id=p.workspace_id "
+                        "AND wp.work_package_id=p.scope_subject_id WHERE p.organization_id=:o AND "
+                        "p.workspace_id=:w ORDER BY p.id_package_id,p.version DESC,wp.version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
             package_row = (
                 session.execute(
                     sa.text(
@@ -88,9 +117,11 @@ class SupportProductionRepository:
                         "AND p.workspace_id=:w AND EXISTS (SELECT 1 FROM "
                         "workspace.id_package_volume_book_versions b WHERE b.organization_id=p.organization_id "
                         "AND b.workspace_id=p.workspace_id AND b.id_package_id=p.id_package_id AND "
-                        "b.id_package_version=p.version) ORDER BY p.recorded_at DESC,p.version DESC LIMIT 1"
+                        "b.id_package_version=p.version) AND "
+                        "(CAST(:work AS uuid) IS NULL OR p.scope_subject_id=CAST(:work AS uuid)) "
+                        "ORDER BY p.recorded_at DESC,p.version DESC LIMIT 1"
                     ),
-                    {"o": organization_id, "w": workspace_id},
+                    {"o": organization_id, "w": workspace_id, "work": work_package_id},
                 )
                 .mappings()
                 .one_or_none()
@@ -100,6 +131,7 @@ class SupportProductionRepository:
                     "workspace_id": str(workspace_id),
                     "matrix": _matrix_ref(matrix),
                     "requirements": requirements,
+                    "available_packages": [_jsonable(item) for item in available_packages],
                     "package": None,
                     "package_history": [],
                     "book_history": [],
@@ -310,6 +342,7 @@ class SupportProductionRepository:
             "workspace_id": str(workspace_id),
             "matrix": _matrix_ref(matrix),
             "requirements": requirements,
+            "available_packages": [_jsonable(item) for item in available_packages],
             "package": _jsonable(package_row),
             "package_history": [_jsonable(item) for item in package_history],
             "book_history": [_jsonable(item) for item in book_history],
@@ -350,7 +383,12 @@ class SupportProductionRepository:
         """
 
         work_package_ids = sorted(
-            {UUID(str(item["work_package_id"])) for item in requirements}, key=str
+            {
+                UUID(str(item["work_package_id"]))
+                for item in requirements
+                if item.get("document_type") == "support.aosr"
+            },
+            key=str,
         )
         if not work_package_ids:
             return []
@@ -528,7 +566,11 @@ class SupportProductionRepository:
                 },
             )
             if existing is not None:
-                return self.view(owner_identity_id=owner_identity_id, workspace_id=workspace_id)
+                return self.view(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                    work_package_id=work_package_id,
+                )
             package_id = deterministic_uuid(f"support-id-package:{workspace_id}:{work_package_id}")
             package_version = int(
                 session.scalar(
@@ -725,7 +767,11 @@ class SupportProductionRepository:
                 },
             )
             self._insert_readiness(session, organization_id, workspace_id, readiness, now)
-        return self.view(owner_identity_id=owner_identity_id, workspace_id=workspace_id)
+        return self.view(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
+        )
 
     def start_generation(
         self,

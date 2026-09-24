@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from asd_kontur.support.field_mapping import reconcile_support_field_candidates
 
 
@@ -84,3 +86,36 @@ def test_mapping_does_not_promote_missing_required_field() -> None:
 
     assert result["status"] == "partial"
     assert result["missing_field_keys"] == ["act_date"]
+
+
+@pytest.mark.parametrize(
+    "work_type_key",
+    (
+        "concrete.slab.install",
+        "earthworks",
+        "reinforced-concrete",
+        "pipeline-installation",
+    ),
+)
+def test_aosr_mapping_is_requirement_driven_not_work_type_routed(work_type_key: str) -> None:
+    locator = uuid4()
+    result = reconcile_support_field_candidates(
+        work_type_key=work_type_key,
+        work_source_locator_ids=(locator,),
+        template_fields=(_field("hidden_work_description"),),
+        project_candidates=(_candidate("work_description", work_type_key, locator),),
+    )
+
+    assert result["status"] == "candidate_complete"
+    assert result["profile"]["work_type_key"] == work_type_key
+    assert result["profile"]["profile_version"] == "support.aosr-field-map@2.0.0"
+
+
+def test_aosr_mapping_rejects_missing_canonical_work_type() -> None:
+    with pytest.raises(ValueError, match="support_work_type_key_required"):
+        reconcile_support_field_candidates(
+            work_type_key="",
+            work_source_locator_ids=(),
+            template_fields=(),
+            project_candidates=(),
+        )

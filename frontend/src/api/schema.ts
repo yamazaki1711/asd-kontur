@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/admin/support-release-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Release Readiness */
+        get: operations["support_release_readiness_api_v1_admin_support_release_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/trial-readiness": {
         parameters: {
             query?: never;
@@ -2566,6 +2583,10 @@ export interface components {
             authority_layers: {
                 [key: string]: string;
             };
+            /** Available Packages */
+            available_packages?: {
+                [key: string]: unknown;
+            }[];
             /** Book History */
             book_history?: {
                 [key: string]: unknown;
@@ -2633,6 +2654,30 @@ export interface components {
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** SupportReleaseReadinessView */
+        SupportReleaseReadinessView: {
+            /** Blockers */
+            blockers: string[];
+            /** Command Writer */
+            command_writer: {
+                [key: string]: unknown;
+            };
+            /** Coverage */
+            coverage: {
+                [key: string]: unknown;
+            };
+            /** Ready */
+            ready: boolean;
+            /** Scope */
+            scope: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "blocked";
         };
         /** SupportScopeConfigurationView */
         SupportScopeConfigurationView: {
@@ -2887,6 +2932,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    support_release_readiness_api_v1_admin_support_release_readiness_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReleaseReadinessView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     trial_readiness_api_v1_admin_trial_readiness_get: {
         parameters: {
             query?: never;
@@ -5200,7 +5276,9 @@ export interface operations {
     };
     support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get: {
         parameters: {
-            query?: never;
+            query?: {
+                work_package_id?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -5231,7 +5309,9 @@ export interface operations {
     };
     support_production_api_v1_workspaces__workspace_id__support_id_production_get: {
         parameters: {
-            query?: never;
+            query?: {
+                work_package_id?: string | null;
+            };
             header?: never;
             path: {
                 workspace_id: string;

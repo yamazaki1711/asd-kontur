@@ -904,3 +904,26 @@ copied under the current Qwen-only policy.  Rebound text remains
 operation changes edition currency, normative authority, applicability or RuleVersion
 status.  Exact-SHA reconciliation is append-only and idempotent, and every copied chunk
 uses the current SourceVersion, edition, artifact and page-locator lineage.
+
+### Active delivery slice — reusable Support packages across work types
+
+The accepted `concrete.slab.install` vertical remains unchanged. The current slice
+removes its remaining work-type routing dependency and proves the same scoped package
+contract on `earthworks`, `reinforced-concrete`, and `pipeline-installation` controlled
+inputs with distinct document compositions. Package selection, persistence, reload,
+register-first export, missing/blocked schedules, and cross-workspace denial are generic;
+document composition remains an exact `WorkRequirementMatrix` input. OZERO is not used.
+
+The repository carries a qualification capability manifest while current professional
+authority stays in PostgreSQL. An authenticated readiness projection computes the active
+canonical denominator, verified catalog/approval state, qualified template coverage,
+package/browser qualification, exact workspace-scope gaps, and least-privilege writer
+status. A configured command URL is insufficient: the application constructs the Support
+command service only after verifying membership in `asd_support_service`, and never falls
+back to an owner/application connection.
+
+This increment is accepted only as software qualification. Production activation remains
+blocked by the Support writer credential, professionally approved production catalog and
+requirement matrices, real `support.scope.configure` authority, additional applicable
+templates, and public browser verification. See
+[`SUPPORT-REUSABILITY-03`](../implementation/SUPPORT_REUSABILITY_03.md).

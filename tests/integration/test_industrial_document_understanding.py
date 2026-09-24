@@ -408,6 +408,27 @@ def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
         assert payload["input_manifest_digest"] == manifest_digest
         assert payload["professional_grant_id"] == str(grant_id)
         assert payload["professional_qualification_ref"] == ("qualification:synthetic-support@1")
+        release_readiness = client.get(
+            "/api/v1/admin/support-release-readiness",
+            params={"workspace_id": str(workspace_id)},
+        )
+        assert release_readiness.status_code == 200, release_readiness.text
+        release_payload = release_readiness.json()
+        assert release_payload["ready"] is False
+        assert release_payload["command_writer"] == {
+            "configured": True,
+            "role_valid": True,
+            "reason": "ready",
+        }
+        assert "SUPPORT_PROFESSIONAL_CATALOG_APPROVAL_UNAVAILABLE" in release_payload["blockers"]
+        assert release_payload["coverage"]["canonical_work_types"] == len(
+            release_payload["coverage"]["canonical_work_type_keys"]
+        )
+        assert release_payload["coverage"]["production_catalog_work_type_keys"] == []
+        assert release_payload["coverage"]["professionally_approved_work_type_keys"] == []
+        assert release_payload["coverage"]["package_capable_work_types"] == 4
+        assert release_payload["coverage"]["isolated_qualified_work_types"] == 4
+        assert release_payload["coverage"]["browser_e2e_work_types"] == 1
         tampered_contract = client.post(
             f"/api/v1/workspaces/{workspace_id}/support/processes",
             json={
