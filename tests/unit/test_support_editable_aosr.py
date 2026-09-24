@@ -7,6 +7,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from pypdf import PdfWriter
 
 from asd_kontur.support.editable_aosr import (
     EDITABLE_AOSR_PAGE_COUNT,
@@ -14,6 +15,7 @@ from asd_kontur.support.editable_aosr import (
     field_keys,
     qualify_editable_aosr_template,
     validate_editable_aosr_template,
+    validate_generated_editable_aosr,
 )
 from asd_kontur.support.models import FieldResolution, ResolutionState
 from asd_kontur.support.production import TemplateBackedDocxRenderer
@@ -72,3 +74,34 @@ def test_editable_aosr_qualification_fails_closed_without_converter(tmp_path: Pa
             official_source_digest="sha256:" + "2" * 64,
             converter_path=tmp_path / "missing-converter",
         )
+
+
+def test_generated_editable_aosr_allows_content_to_expand_beyond_form_pages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    template = build_editable_aosr_template()
+    fields = tuple(_confirmed(key) for key in field_keys())
+    generated = TemplateBackedDocxRenderer().render(
+        template_bytes=template,
+        template_digest="sha256:" + hashlib.sha256(template).hexdigest(),
+        fields=fields,
+        semantic_input={"work_type_key": "concrete.slab.install"},
+    )
+    rendered = io.BytesIO()
+    writer = PdfWriter()
+    for _ in range(EDITABLE_AOSR_PAGE_COUNT + 1):
+        writer.add_blank_page(width=595, height=842)
+    writer.write(rendered)
+    monkeypatch.setattr(
+        "asd_kontur.support.editable_aosr._convert_to_pdf",
+        lambda *_args: rendered.getvalue(),
+    )
+
+    receipt = validate_generated_editable_aosr(
+        document_bytes=generated.package_bytes,
+        expected_values={},
+        converter_path=tmp_path / "controlled-converter",
+    )
+
+    assert receipt.page_count == EDITABLE_AOSR_PAGE_COUNT + 1
+    assert "A4_FORM_MINIMUM_PAGES_RENDERED" in receipt.check_codes

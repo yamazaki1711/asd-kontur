@@ -308,14 +308,14 @@ def validate_generated_editable_aosr(
     checks = list(validate_editable_aosr_template(document_bytes, tokens_expected=False))
     rendered = _convert_to_pdf(document_bytes, converter_path)
     reader = PdfReader(io.BytesIO(rendered))
-    if len(reader.pages) != EDITABLE_AOSR_PAGE_COUNT:
-        raise ValueError("editable_aosr_generated_page_count_mismatch")
+    if len(reader.pages) < EDITABLE_AOSR_PAGE_COUNT:
+        raise ValueError("editable_aosr_generated_page_count_below_form_minimum")
     rendered_text = _normalize(" ".join((page.extract_text() or "") for page in reader.pages))
     for key, value in expected_values.items():
         normalized = _normalize(value)
         if normalized and normalized not in rendered_text:
             raise ValueError(f"editable_aosr_rendered_value_missing:{key}")
-    checks.extend(("FOUR_A4_PAGES_RENDERED", "CONFIRMED_VALUES_RENDERED"))
+    checks.extend(("A4_FORM_MINIMUM_PAGES_RENDERED", "CONFIRMED_VALUES_RENDERED"))
     return EditableAosrPrintReceipt(
         _sha256(document_bytes),
         _sha256(rendered),
