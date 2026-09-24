@@ -147,19 +147,21 @@ def _insert_job(
     key: str,
     state: str,
     priority: int,
+    failure_code: str | None = None,
 ) -> UUID:
     job_id = deterministic_uuid(f"ntd-processing-job:{key}")
     now = datetime.now(UTC)
-    terminal = _digest(f"terminal:{key}") if state == "succeeded" else None
+    terminal = _digest(f"terminal:{key}") if state in {"succeeded", "failed"} else None
     with environment.owner_engine.begin() as connection:
         connection.execute(
             sa.text(
                 "INSERT INTO platform.ntd_processing_jobs "
                 "(ntd_processing_job_id,identity_reconciliation_id,normative_artifact_id,stage,"
                 "input_manifest_digest,idempotency_key,state,priority,eligible_at,attempt_count,"
-                "max_attempts,retry_policy_version,terminal_receipt_fingerprint,created_at) VALUES "
+                "max_attempts,retry_policy_version,typed_failure_code,"
+                "terminal_receipt_fingerprint,created_at) VALUES "
                 "(:id,:identity,:artifact,'provision_extraction',:digest,:key,:state,:priority,:now,"
-                "0,3,'synthetic-test@1.0.0',:terminal,:now)"
+                "0,3,'synthetic-test@1.0.0',:failure,:terminal,:now)"
             ),
             {
                 "id": job_id,
@@ -170,10 +172,47 @@ def _insert_job(
                 "state": state,
                 "priority": priority,
                 "now": now,
+                "failure": failure_code,
                 "terminal": terminal,
             },
         )
     return job_id
+
+
+def test_local_ntd_output_exhaustion_is_bounded_retryable(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    seeded = _seed_ntd(postgres_environment)
+    identity = _resolution(postgres_environment, seeded)
+    job_id = _insert_job(
+        postgres_environment,
+        identity_id=identity,
+        artifact_id=seeded.artifact_id,
+        key=f"ntd-local-provision:{uuid7()}:1:{LOCAL_NTD_PROVISION_PROFILE}",
+        state="failed",
+        priority=50,
+        failure_code="qwen_semantic_response_output_exhausted",
+    )
+
+    retried = LocalNtdProvisionRepository(
+        postgres_environment.owner_engine
+    ).retry_failed_validation(eligible_at=datetime.now(UTC), limit=1)
+
+    assert retried == 1
+    with postgres_environment.owner_engine.connect() as connection:
+        state = connection.execute(
+            sa.text(
+                "SELECT state,typed_failure_code,terminal_receipt_fingerprint FROM "
+                "platform.ntd_processing_jobs WHERE ntd_processing_job_id=:id"
+            ),
+            {"id": job_id},
+        ).one()
+    assert state == ("queued", None, None)
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text("DELETE FROM platform.ntd_processing_jobs WHERE ntd_processing_job_id=:id"),
+            {"id": job_id},
+        )
 
 
 def test_local_ntd_queue_is_outstanding_bounded_and_claim_namespace_is_fenced(

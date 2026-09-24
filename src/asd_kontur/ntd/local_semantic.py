@@ -28,6 +28,7 @@ LOCAL_NTD_PROVISION_PROFILE = "local-qwen-ntd-provision@1.0.0"
 LOCAL_NTD_PROMPT_VERSION = "local-qwen-ntd-provision-prompt@1.0.0"
 LOCAL_NTD_SCHEMA_VERSION = "normative-provision-semantics@1.0.0"
 LOCAL_NTD_MODEL = "Qwen3.8-27B-MLX-8bit"
+LOCAL_NTD_MAX_OUTPUT_TOKENS = 1600
 LOCAL_NTD_ELIGIBILITY_POLICY = "explicit-normative-language@2.0.0"
 LOCAL_NTD_MODAL_PATTERN = (
     r"должен|должна|должны|следует|не допускается|требуется|допускается|"
@@ -207,6 +208,7 @@ class LocalNtdProvisionRepository:
                     "profile": LOCAL_NTD_PROVISION_PROFILE,
                     "prompt": LOCAL_NTD_PROMPT_VERSION,
                     "output_schema": LOCAL_NTD_SCHEMA_VERSION,
+                    "max_output_tokens": LOCAL_NTD_MAX_OUTPUT_TOKENS,
                     "eligibility_policy": LOCAL_NTD_ELIGIBILITY_POLICY,
                     "eligibility_class": str(row["eligibility_class"]),
                 }
@@ -547,7 +549,7 @@ class LocalNtdProvisionRepository:
             raise ValueError("local_ntd_job_release_fence_rejected")
 
     def retry_failed_validation(self, *, eligible_at: datetime, limit: int = 1) -> int:
-        """Requeue typed validation failures while preserving immutable attempt rows."""
+        """Requeue bounded model/validation failures while preserving immutable attempts."""
 
         with self._engine.begin() as connection:
             result = connection.execute(
@@ -555,8 +557,10 @@ class LocalNtdProvisionRepository:
                     "WITH retry AS (SELECT ntd_processing_job_id FROM "
                     "platform.ntd_processing_jobs WHERE stage='provision_extraction' AND "
                     "idempotency_key LIKE :profile AND "
-                    "state='failed' AND attempt_count<max_attempts AND typed_failure_code LIKE "
-                    "'local_ntd_semantics_%' ORDER BY completed_at,ntd_processing_job_id LIMIT "
+                    "state='failed' AND attempt_count<max_attempts AND (typed_failure_code LIKE "
+                    "'local_ntd_semantics_%' OR typed_failure_code="
+                    "'qwen_semantic_response_output_exhausted') ORDER BY completed_at,"
+                    "ntd_processing_job_id LIMIT "
                     ":limit FOR UPDATE) UPDATE platform.ntd_processing_jobs job SET state='queued',"
                     "eligible_at=:eligible,completed_at=NULL,heartbeat_at=NULL,typed_failure_code=NULL,"
                     "terminal_receipt_fingerprint=NULL FROM retry WHERE "
@@ -596,7 +600,7 @@ class LocalNtdProvisionWorker:
                     self._qwen_url,
                     _prompt(item),
                     900.0,
-                    max_tokens=1000,
+                    max_tokens=LOCAL_NTD_MAX_OUTPUT_TOKENS,
                 )
                 semantics = _parse_semantics(answer)
                 if (
