@@ -361,26 +361,27 @@ def test_local_ntd_cycle_retries_one_typed_failure_without_manual_intervention(
         state="queued",
         priority=50,
     )
-    with postgres_environment.owner_engine.begin() as connection:
-        connection.execute(
-            sa.text(
-                "UPDATE platform.ntd_processing_jobs SET state='failed',attempt_count=1,"
-                "completed_at=CURRENT_TIMESTAMP,typed_failure_code="
-                "'local_ntd_semantics_invalid_json' WHERE ntd_processing_job_id=:id"
-            ),
-            {"id": job_id},
-        )
+    worker = LocalNtdProvisionWorker(
+        postgres_environment.owner_engine,
+        qwen_url="http://127.0.0.1:1/generate",
+        identity="automatic-retry-worker",
+    )
+    monkeypatch.setattr(
+        "asd_kontur.ntd.local_semantic._complete", lambda *_args, **_kwargs: "not-json"
+    )
+    failed = worker.process_one()
+    assert failed == {
+        "state": "failed",
+        "job_id": str(job_id),
+        "failure": "local_ntd_semantics_invalid_json",
+    }
     response = {"provision_kind": "clause", **_semantics()}
     monkeypatch.setattr(
         "asd_kontur.ntd.local_semantic._complete",
         lambda *_args, **_kwargs: json.dumps(response, ensure_ascii=False),
     )
 
-    cycle = LocalNtdProvisionWorker(
-        postgres_environment.owner_engine,
-        qwen_url="http://127.0.0.1:1/generate",
-        identity="automatic-retry-worker",
-    ).run_cycle(refill_limit=1, profile_cap=1)
+    cycle = worker.run_cycle(refill_limit=1, profile_cap=1)
 
     assert cycle["retried"] == 1
     assert cycle["result"] is not None
