@@ -855,8 +855,10 @@ declared work package, sees source-backed candidate values and exact missing inp
 records a versioned correction or confirmation through the proper command boundary,
 forms the package, inspects evidence and completeness, and downloads a ZIP whose first
 document is the current editable register and whose included files exactly match that
-register.  The qualified AOSR PDF remains the authoritative rendered form; synthetic
-DOCX generation is not promoted.
+register.  The qualified AOSR PDF remains the authoritative rendered form.  Its exact
+semantic bindings also produce an editable DOCX companion marked
+`template_candidate`; this companion cannot replace the qualified PDF or become
+`print_ready` until an independent local-office render is inspected and qualified.
 
 **Independent acceptance.** A disposable PostgreSQL workspace with changed identifiers
 must cover complete input, missing facts/attachments, conflicting/revised values,
@@ -871,3 +873,22 @@ must not be replayed merely to exercise this slice.
 not establish professional acceptance for the selected work, Support ModeReady,
 TrialReady, OKSReady, or ProductReady.  The full denominators for Tender, Support,
 Audit, Restoration, Field/Offline and Operations remain unchanged.
+
+### Parallel bounded NTD semantics — 2026-09-24
+
+NTD semantic processing is an independent background stream and is not a prerequisite
+for the Support package slice.  Eligible inputs are derived from exact source identity,
+edition and processing receipts; completed OZERO work and historical dependency rows
+are excluded.  Queue capacity applies only to outstanding local-profile jobs.  Claims,
+retries and lease recovery are fenced to the local-Qwen namespace, candidate versions
+remain exact, and a persisted semantic result is reused after a worker crash before the
+terminal receipt.
+
+The first recoverable subset is restricted to historical chunks whose artifact SHA-256
+is byte-identical to one of the 15 currently registered official artifacts and whose
+entire page range has `native_complete` extraction.  Historical OCR/model text is not
+copied under the current Qwen-only policy.  Rebound text remains
+`official_binding_recovered` and Qwen semantics remain unverified candidates; neither
+operation changes edition currency, normative authority, applicability or RuleVersion
+status.  Exact-SHA reconciliation is append-only and idempotent, and every copied chunk
+uses the current SourceVersion, edition, artifact and page-locator lineage.

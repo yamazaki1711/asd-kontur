@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa: E501, RUF001
 """Bounded PostgreSQL document worker for the Product Spine job kinds."""
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ import io
 import json
 import signal
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from threading import Event, Thread
 from typing import BinaryIO
@@ -30,6 +30,12 @@ from asd_kontur.document_understanding.pipeline import (
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.document_understanding.qwen_semantic import QwenDocumentSemanticAdapter
 from asd_kontur.domain import deterministic_uuid, uuid7
+from asd_kontur.support.editable_aosr import (
+    EDITABLE_AOSR_PROFILE_VERSION,
+    EDITABLE_AOSR_RENDERER_VERSION,
+    build_editable_aosr_template,
+    validate_editable_aosr_template,
+)
 from asd_kontur.support.models import FieldResolution, ResolutionState
 from asd_kontur.support.production import TemplateBackedDocxRenderer
 from asd_kontur.support.template_qualification import (
@@ -349,6 +355,7 @@ class DocumentWorker:
         output_format = str(manifest.get("format", "DOCX"))
         validation_fingerprint: str | None = None
         print_ready = False
+        editable_companion: tuple[str, str, tuple[str, ...]] | None = None
         try:
             if output_format == "PDF_OVERLAY":
                 with self._object_store.open(str(manifest["font_object_key"])) as source:
@@ -381,6 +388,53 @@ class DocumentWorker:
                 )
                 validation_fingerprint = print_receipt.fingerprint
                 print_ready = print_receipt.result == "print_ready"
+                if manifest.get("editable_companion_profile") == EDITABLE_AOSR_PROFILE_VERSION:
+                    editable_template = build_editable_aosr_template()
+                    editable_template_digest = (
+                        "sha256:" + hashlib.sha256(editable_template).hexdigest()
+                    )
+                    editable_fields = tuple(
+                        item
+                        if item.state is ResolutionState.CONFIRMED
+                        else replace(
+                            item,
+                            state=ResolutionState.CONFIRMED,
+                            normalized_value="",
+                            display_value=(
+                                ""
+                                if item.state is ResolutionState.NOT_APPLICABLE
+                                else f"НЕ УКАЗАНО — требуется заполнить поле {item.field_key}"
+                            ),
+                        )
+                        for item in fields
+                    )
+                    editable = TemplateBackedDocxRenderer().render(
+                        template_bytes=editable_template,
+                        template_digest=editable_template_digest,
+                        fields=editable_fields,
+                        semantic_input={
+                            **dict(manifest["semantic_input"]),
+                            "representation": "editable_aosr_docx",
+                            "profile": EDITABLE_AOSR_PROFILE_VERSION,
+                        },
+                    )
+                    editable_checks = validate_editable_aosr_template(
+                        editable.package_bytes, tokens_expected=False
+                    )
+                    editable_key = (
+                        f"derived/{claimed.organization_id}/{claimed.workspace_id}/generated/"
+                        f"{editable.bytes_digest[7:]}.docx"
+                    )
+                    editable_digest, _ = self._object_store.put_derived(
+                        object_key=editable_key, content=editable.package_bytes
+                    )
+                    if editable_digest != editable.bytes_digest:
+                        raise ValueError("editable_aosr_object_digest_mismatch")
+                    editable_companion = (
+                        editable_key,
+                        editable_digest,
+                        tuple((*editable.structural_checks, *editable_checks)),
+                    )
             else:
                 rendered = TemplateBackedDocxRenderer().render(
                     template_bytes=template_bytes,
@@ -417,6 +471,7 @@ class DocumentWorker:
             validator_profile_version=str(manifest["validator_profile_version"]),
             validation_fingerprint=validation_fingerprint,
             print_ready=print_ready,
+            editable_companion=editable_companion,
         )
         return {
             "generation_run_id": str(run_id),
@@ -562,6 +617,7 @@ class DocumentWorker:
         validator_profile_version: str,
         validation_fingerprint: str | None,
         print_ready: bool,
+        editable_companion: tuple[str, str, tuple[str, ...]] | None,
     ) -> str:
         now = datetime.now(UTC)
         with Session(self._repository.engine) as session, session.begin():
@@ -604,6 +660,28 @@ class DocumentWorker:
                     "now": now,
                 },
             )
+            if editable_companion is not None:
+                editable_object, editable_digest, _editable_checks = editable_companion
+                editable_render_id = deterministic_uuid(
+                    f"support-editable-render:{candidate_id}:{editable_digest}"
+                )
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.support_render_artifacts VALUES "
+                        "(:o,:w,:render,:candidate,:renderer,'DOCX',:object,:bytes,"
+                        "'template_candidate','verified',:now) ON CONFLICT DO NOTHING"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "render": editable_render_id,
+                        "candidate": candidate_id,
+                        "renderer": EDITABLE_AOSR_RENDERER_VERSION,
+                        "object": editable_object,
+                        "bytes": editable_digest,
+                        "now": now,
+                    },
+                )
             session.execute(
                 sa.text(
                     "INSERT INTO workspace.support_render_artifacts VALUES "

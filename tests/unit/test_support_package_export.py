@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import zipfile
@@ -39,6 +40,14 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
                 "object_reference": "objects/candidate-1.docx",
                 "format": "DOCX",
                 "blocker_codes": [],
+                "editable_representations": [
+                    {
+                        "object_reference": "objects/candidate-1-editable.docx",
+                        "format": "DOCX",
+                        "renderer_profile_version": "support.editable-docx-renderer@1.0.0",
+                        "assurance_class": "template_candidate",
+                    }
+                ],
             },
             {
                 "ordinal": 3,
@@ -90,7 +99,9 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             "status": "incomplete",
             "gaps": ["ID_MEMBER_MISSING:support.executive-scheme"],
         },
-        read_object=lambda key: b"docx-bytes" if key.endswith("candidate-1.docx") else b"",
+        read_object=lambda key: (
+            b"editable-docx-bytes" if key.endswith("candidate-1-editable.docx") else b"docx-bytes"
+        ),
     )
 
     with zipfile.ZipFile(io.BytesIO(archive)) as exported:
@@ -98,6 +109,7 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
             "01_register_candidate.docx",
             "01_register.csv",
             "02_support.aosr_candidate.docx",
+            "02_support.aosr_editable.docx",
             "95_package_consistency.json",
             "96_package_manifest.json",
             "97_field_evidence_and_missing_inputs.csv",
@@ -144,5 +156,14 @@ def test_editable_package_export_keeps_register_first_and_marks_missing_items() 
     generated = manifest["members"][1]
     assert generated["archive_member"] == "02_support.aosr_candidate.docx"
     assert generated["object_digest"].startswith("sha256:")
+    assert generated["representations"] == [
+        {
+            "archive_member": "02_support.aosr_editable.docx",
+            "assurance_class": "template_candidate",
+            "content_digest": "sha256:" + hashlib.sha256(b"editable-docx-bytes").hexdigest(),
+            "format": "DOCX",
+            "renderer_profile_version": "support.editable-docx-renderer@1.0.0",
+        }
+    ]
     assert manifest["members"][2]["state"] == "missing"
     assert consistency["status"] == "incomplete"

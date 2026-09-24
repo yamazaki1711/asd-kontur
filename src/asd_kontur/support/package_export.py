@@ -87,12 +87,38 @@ def build_editable_id_package_archive(
             name = f"{int(member['ordinal']):02d}_{role}_{suffix}.{extension}"
             payload = read_object(str(object_key))
             _write(archive, name, payload)
+            representation_entries: list[dict[str, str]] = []
+            for representation in member.get("editable_representations", []):
+                if not isinstance(representation, Mapping):
+                    continue
+                representation_key = representation.get("object_reference")
+                if not representation_key or str(representation_key) == str(object_key):
+                    continue
+                representation_format = str(representation.get("format", ""))
+                if representation_format != "DOCX":
+                    continue
+                representation_name = f"{int(member['ordinal']):02d}_{role}_editable.docx"
+                representation_payload = read_object(str(representation_key))
+                _write(archive, representation_name, representation_payload)
+                representation_entries.append(
+                    {
+                        "archive_member": representation_name,
+                        "format": representation_format,
+                        "content_digest": "sha256:"
+                        + hashlib.sha256(representation_payload).hexdigest(),
+                        "renderer_profile_version": str(
+                            representation.get("renderer_profile_version", "")
+                        ),
+                        "assurance_class": str(representation.get("assurance_class", "")),
+                    }
+                )
             manifest_members.append(
                 _manifest_member(
                     member,
                     state=state,
                     archive_member=name,
                     object_digest="sha256:" + hashlib.sha256(payload).hexdigest(),
+                    representations=representation_entries,
                 )
             )
         if consistency is not None:
@@ -368,6 +394,7 @@ def _manifest_member(
     state: str,
     archive_member: str | None = None,
     object_digest: str | None = None,
+    representations: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     """Describe one exact membership without treating it as a completed fact."""
 
@@ -380,6 +407,7 @@ def _manifest_member(
         "format": _as_text(member.get("format")),
         "archive_member": archive_member,
         "object_digest": object_digest,
+        "representations": representations or [],
         "generated_candidate_id": _as_text(member.get("generated_candidate_id")),
         "finalized_document_id": _as_text(member.get("finalized_document_id")),
         "template_id": _as_text(member.get("template_id")),

@@ -10,6 +10,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -22,6 +23,7 @@ from alembic.config import Config
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.assistant.worker import AssistantWorker
+from asd_kontur.ntd.exact_lineage import reconcile_exact_native_lineage
 from asd_kontur.ntd.local_semantic import (
     LocalNtdProvisionRepository,
     LocalNtdProvisionWorker,
@@ -53,6 +55,8 @@ def main(argv: list[str] | None = None) -> int:
     ntd_enqueue = subcommands.add_parser("enqueue-ntd-provisions")
     ntd_enqueue.add_argument("--limit", type=int, default=2)
     ntd_enqueue.add_argument("--profile-cap", type=int, default=20)
+    ntd_lineage = subcommands.add_parser("reconcile-ntd-native-lineage")
+    ntd_lineage.add_argument("--document-limit", type=int, default=15)
     subcommands.add_parser("status")
     subcommands.add_parser("health")
     stop = subcommands.add_parser("stop")
@@ -151,7 +155,17 @@ def main(argv: list[str] | None = None) -> int:
                 profile_cap=args.profile_cap if args.command == "enqueue-ntd-provisions" else 20,
             )
             if args.command == "enqueue-ntd-provisions":
-                print(json.dumps({"eligible": queued[0], "inserted": queued[1]}))
+                print(
+                    json.dumps(
+                        {
+                            "eligible": queued.eligible,
+                            "inserted": queued.inserted,
+                            "outstanding": queued.outstanding,
+                            "capacity_remaining": queued.capacity_remaining,
+                            "reason": queued.reason,
+                        }
+                    )
+                )
                 return 0
             LocalNtdProvisionWorker(
                 engine,
@@ -160,6 +174,25 @@ def main(argv: list[str] | None = None) -> int:
             ).run_forever()
         finally:
             engine.dispose()
+        return 0
+    if args.command == "reconcile-ntd-native-lineage":
+        historical_url = os.environ.get("ASD_NTD_HISTORICAL_DATABASE_URL")
+        if historical_url is None:
+            raise ValueError("ASD_NTD_HISTORICAL_DATABASE_URL is required")
+        if settings.ntd_processing_database_url is None:
+            raise ValueError("ASD_NTD_PROCESSING_DATABASE_URL is required")
+        historical_engine = sa.create_engine(historical_url, pool_pre_ping=True)
+        target_engine = sa.create_engine(settings.ntd_processing_database_url, pool_pre_ping=True)
+        try:
+            result = reconcile_exact_native_lineage(
+                historical_engine,
+                target_engine,
+                document_limit=args.document_limit,
+            )
+        finally:
+            historical_engine.dispose()
+            target_engine.dispose()
+        print(json.dumps(asdict(result), sort_keys=True))
         return 0
     if args.command in {"status", "health"}:
         return _http_status(settings)

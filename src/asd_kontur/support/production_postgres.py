@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import deterministic_uuid, uuid7
 
+from .editable_aosr import EDITABLE_AOSR_PROFILE_VERSION
 from .field_mapping import reconcile_support_field_candidates
 from .production import (
     DocumentMembershipVersion,
@@ -230,6 +231,28 @@ class SupportProductionRepository:
                     },
                 ).mappings()
             ]
+            representations = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT render_artifact_id,generated_candidate_id,renderer_profile_version,"
+                        "format,object_reference,content_digest,assurance_class,status,created_at FROM "
+                        "workspace.support_render_artifacts WHERE organization_id=:o AND "
+                        "workspace_id=:w AND format='DOCX' ORDER BY created_at,render_artifact_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
+            representations_by_candidate: dict[str, list[dict[str, Any]]] = {}
+            for representation in representations:
+                representations_by_candidate.setdefault(
+                    str(representation["generated_candidate_id"]), []
+                ).append(_jsonable(representation))
+            for membership in memberships:
+                candidate_id = membership.get("generated_candidate_id")
+                membership["editable_representations"] = representations_by_candidate.get(
+                    str(candidate_id), []
+                )
             registers = [
                 dict(item)
                 for item in session.execute(
@@ -748,12 +771,14 @@ class SupportProductionRepository:
                         "tv.format format_family,v.purpose,m.template_id,m.template_version,tv.field_schema_id,"
                         "tv.field_schema_version,tv.renderer_profile_version,tv.validator_profile_version,"
                         "tv.binding_profile_version,tv.qualification_state,tv.assurance_class,tv.official_status,"
-                        "a.object_key,a.content_digest template_digest,a.byte_length FROM "
+                        "ts.stable_key template_stable_key,a.object_key,a.content_digest template_digest,"
+                        "a.byte_length FROM "
                         "platform.required_document_types t JOIN platform.required_document_type_versions v "
                         "ON v.required_document_type_id=t.required_document_type_id JOIN "
                         "platform.required_document_type_templates m ON m.required_document_type_id=v.required_document_type_id "
                         "AND m.required_document_type_version=v.version JOIN platform.template_versions tv ON "
                         "tv.template_id=m.template_id AND tv.version=m.template_version JOIN "
+                        "platform.template_sources ts ON ts.template_source_id=tv.template_source_id JOIN "
                         "platform.template_artifacts a ON a.template_id=tv.template_id AND "
                         "a.template_version=tv.version WHERE t.document_type_key=:key AND "
                         "v.status='active' AND m.applicability_status IN ('candidate','qualified','active') "
@@ -1086,6 +1111,12 @@ class SupportProductionRepository:
                 "bindings": bindings,
                 "semantic_input": semantic_input,
             }
+            if (
+                membership["role"] == "support.aosr"
+                and format_family == "PDF_OVERLAY"
+                and catalog["template_stable_key"] == "support.aosr.344pr-2023.official-form"
+            ):
+                manifest["editable_companion_profile"] = EDITABLE_AOSR_PROFILE_VERSION
             if font_asset is not None:
                 manifest["font_object_key"] = str(font_asset["object_key"])
                 manifest["font_digest"] = str(font_asset["content_digest"])

@@ -35,6 +35,7 @@ from asd_kontur.kernel import (
 from asd_kontur.lifecycle import StorageAdapterDefinition
 from asd_kontur.lifecycle.postgres import PostgresWorkspaceStorageAdapter
 from asd_kontur.restoration import RestorationRecoveryError, RestorationRecoveryRepository
+from asd_kontur.support.editable_aosr import validate_editable_aosr_template
 from asd_kontur.support.production_postgres import (
     SupportProductionError,
     SupportProductionRepository,
@@ -453,6 +454,50 @@ def test_support_production_package_generation_and_workspace_isolation(
     qualified_candidate_id = UUID(str(qualified_member["generated_candidate_id"]))
     assert qualified_member["print_validation_result"] == "print_ready"
     assert qualified_member["template_qualification_state"] == "active"
+    if official_aosr_source:
+        editable_representations = qualified_member["editable_representations"]
+        assert len(editable_representations) == 1
+        editable = editable_representations[0]
+        assert editable["format"] == "DOCX"
+        assert editable["assurance_class"] == "template_candidate"
+        with store.open(str(editable["object_reference"])) as source:
+            editable_bytes = source.read()
+        assert validate_editable_aosr_template(editable_bytes, tokens_expected=False) == (
+            "DOCX_PACKAGE_COMPLETE",
+            "ACTIVE_CONTENT_ABSENT",
+            "A4_PAGE_SETTINGS_PRESENT",
+            "FIELD_BINDINGS_RESOLVED",
+        )
+        app = create_app(engine=postgres_environment.application_engine, settings=settings)
+        with TestClient(app) as client:
+            login = client.post(
+                "/api/v1/session/login",
+                json={
+                    "username": "synthetic-product-owner",
+                    "password": "Synthetic-Product-Owner-Password-42!",
+                },
+            )
+            assert login.status_code == 200
+            package_export = client.get(
+                f"/api/v1/workspaces/{tenant.workspace_id}/support/id-packages/export"
+            )
+            assert package_export.status_code == 200, package_export.text
+            with zipfile.ZipFile(io.BytesIO(package_export.content)) as exported:
+                assert exported.namelist()[0] == "01_register_candidate.docx"
+                editable_names = [
+                    name for name in exported.namelist() if name.endswith("_editable.docx")
+                ]
+                assert editable_names == ["02_support.aosr_editable.docx"]
+                assert exported.read(editable_names[0]) == editable_bytes
+                manifest = json.loads(exported.read("96_package_manifest.json"))
+                aosr_manifest = next(
+                    item for item in manifest["members"] if item["role"] == "support.aosr"
+                )
+                assert aosr_manifest["representations"][0]["archive_member"] == editable_names[0]
+                assert (
+                    aosr_manifest["representations"][0]["renderer_profile_version"]
+                    == "support.editable-docx-renderer@1.0.0"
+                )
     product.review_candidate(
         owner_identity_id=owner,
         workspace_id=tenant.workspace_id,

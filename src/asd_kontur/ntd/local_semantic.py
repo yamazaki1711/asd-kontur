@@ -79,6 +79,22 @@ class LocalNtdProvisionInput:
     existing_candidate_id: UUID | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class LocalNtdQueueRefill:
+    eligible: int
+    inserted: int
+    outstanding: int
+    capacity_remaining: int
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
+class PersistedProvisionSemantics:
+    candidate_id: UUID
+    candidate_version: int
+    semantics_fingerprint: str
+
+
 class LocalNtdProvisionRepository:
     """Idempotent producer/consumer for the existing NTD durable queue."""
 
@@ -87,23 +103,27 @@ class LocalNtdProvisionRepository:
 
     def enqueue_bounded(
         self, *, eligible_at: datetime, limit: int, profile_cap: int
-    ) -> tuple[int, int]:
+    ) -> LocalNtdQueueRefill:
         if limit < 1 or profile_cap < 1:
             raise ValueError("local_ntd_queue_bound_invalid")
         with Session(self._engine) as session, session.begin():
-            existing = int(
+            outstanding = int(
                 session.scalar(
                     sa.text(
                         "SELECT count(*) FROM platform.ntd_processing_jobs WHERE stage="
-                        "'provision_extraction' AND idempotency_key LIKE :profile"
+                        "'provision_extraction' AND state IN ('queued','leased','running') AND "
+                        "idempotency_key LIKE :profile"
                     ),
-                    {"profile": f"%:{LOCAL_NTD_PROVISION_PROFILE}"},
+                    {"profile": f"ntd-local-provision:%:{LOCAL_NTD_PROVISION_PROFILE}"},
                 )
                 or 0
             )
-            allowance = min(limit, max(0, profile_cap - existing))
+            capacity_remaining = max(0, profile_cap - outstanding)
+            allowance = min(limit, capacity_remaining)
             if allowance == 0:
-                return 0, 0
+                return LocalNtdQueueRefill(
+                    0, 0, outstanding, capacity_remaining, "outstanding_capacity_exhausted"
+                )
             candidate_rows = list(
                 session.execute(
                     sa.text(
@@ -207,7 +227,16 @@ class LocalNtdProvisionRepository:
                     },
                 )
                 inserted += int(getattr(result, "rowcount", 0) or 0)
-        return len(rows), inserted
+        reason = (
+            "enqueued" if inserted else ("no_eligible_input" if not rows else "already_enqueued")
+        )
+        return LocalNtdQueueRefill(
+            len(rows),
+            inserted,
+            outstanding + inserted,
+            max(0, capacity_remaining - inserted),
+            reason,
+        )
 
     def claim_next(
         self, *, lease_owner: str, claimed_at: datetime, lease_duration: timedelta
@@ -221,10 +250,14 @@ class LocalNtdProvisionRepository:
                         "split_part(idempotency_key,':',2)::uuid chunk_id,"
                         "split_part(idempotency_key,':',3)::bigint chunk_version FROM "
                         "platform.ntd_processing_jobs WHERE stage='provision_extraction' AND "
-                        "state='queued' AND eligible_at<=:now AND attempt_count<max_attempts ORDER BY "
+                        "idempotency_key LIKE :profile AND state='queued' AND eligible_at<=:now "
+                        "AND attempt_count<max_attempts ORDER BY "
                         "priority,eligible_at,ntd_processing_job_id FOR UPDATE SKIP LOCKED LIMIT 1"
                     ),
-                    {"now": claimed_at},
+                    {
+                        "now": claimed_at,
+                        "profile": f"ntd-local-provision:%:{LOCAL_NTD_PROVISION_PROFILE}",
+                    },
                 )
                 .mappings()
                 .one_or_none()
@@ -324,7 +357,7 @@ class LocalNtdProvisionRepository:
         semantics: dict[str, Any],
         job: LocalNtdProvisionJob,
         completed_at: datetime,
-    ) -> tuple[UUID, str]:
+    ) -> PersistedProvisionSemantics:
         candidate_id = item.existing_candidate_id or deterministic_uuid(
             f"local-ntd-provision:{item.normative_edition_id}:{item.source_version_id}:"
             f"{item.structural_path}:{item.raw_text_digest}:{LOCAL_NTD_PROVISION_PROFILE}"
@@ -339,33 +372,43 @@ class LocalNtdProvisionRepository:
             "source_locator_ids": [str(value) for value in item.source_locator_ids],
             "authority_class": item.authority_class,
             "candidate_authority": "unverified_model_interpretation",
+            "provision_kind_source": (
+                "existing_candidate" if item.existing_candidate_id is not None else "local_qwen"
+            ),
         }
+        provision_kind = (
+            item.provision_kind
+            if item.existing_candidate_id is not None
+            else str(semantics["provision_kind"])
+        )
+        candidate_version = item.chunk_version if item.existing_candidate_id is not None else 1
         semantics_fingerprint = digest_of(
             {
                 "schema": LOCAL_NTD_SCHEMA_VERSION,
                 "candidate_id": candidate_id,
-                "candidate_version": 1,
+                "candidate_version": candidate_version,
                 "semantics": semantics,
                 "model_provenance": model_provenance,
             }
         )
         with Session(self._engine) as session, session.begin():
-            session.execute(
+            candidate_insert = session.execute(
                 sa.text(
                     "INSERT INTO platform.normative_provision_candidates "
                     "(provision_candidate_id,candidate_version,normative_edition_id,source_version_id,"
                     "structural_path,provision_kind,page_number,region,verbatim_text,extraction_method,"
                     "extraction_profile_version,content_digest,model_provenance) VALUES "
-                    "(:id,1,:edition,:source,:path,:kind,:page,ARRAY[0.0,0.0,1.0,1.0],:text,"
+                    "(:id,:version,:edition,:source,:path,:kind,:page,ARRAY[0.0,0.0,1.0,1.0],:text,"
                     "'native_pdf_layout',:profile,:digest,CAST(:model AS jsonb)) ON CONFLICT "
                     "(provision_candidate_id,candidate_version) DO NOTHING"
                 ),
                 {
                     "id": candidate_id,
+                    "version": candidate_version,
                     "edition": item.normative_edition_id,
                     "source": item.source_version_id,
                     "path": item.structural_path,
-                    "kind": item.provision_kind,
+                    "kind": provision_kind,
                     "page": item.page_number,
                     "text": item.raw_text,
                     "profile": LOCAL_NTD_PROVISION_PROFILE,
@@ -373,14 +416,24 @@ class LocalNtdProvisionRepository:
                     "model": json.dumps(model_provenance, ensure_ascii=False),
                 },
             )
-            session.execute(
+            if not (getattr(candidate_insert, "rowcount", 0) or 0):
+                stored_digest = session.scalar(
+                    sa.text(
+                        "SELECT content_digest FROM platform.normative_provision_candidates "
+                        "WHERE provision_candidate_id=:id AND candidate_version=:version"
+                    ),
+                    {"id": candidate_id, "version": candidate_version},
+                )
+                if stored_digest != item.raw_text_digest:
+                    raise ValueError("local_ntd_candidate_version_conflict")
+            semantics_insert = session.execute(
                 sa.text(
                     "INSERT INTO platform.normative_provision_semantics "
                     "(provision_candidate_id,candidate_version,normalized_proposition,subject,"
                     "predicate,object_value,modality,conditions,exclusions,applicability,"
                     "units_dimensions,referenced_designations,uncertainty_codes,"
                     "semantics_fingerprint,recorded_at) VALUES "
-                    "(:id,1,CAST(:proposition AS jsonb),CAST(:subject AS jsonb),"
+                    "(:id,:version,CAST(:proposition AS jsonb),CAST(:subject AS jsonb),"
                     "CAST(:predicate AS jsonb),CAST(:object AS jsonb),:modality,"
                     "CAST(:conditions AS jsonb),CAST(:exclusions AS jsonb),"
                     "CAST(:applicability AS jsonb),CAST(:units AS jsonb),:references,"
@@ -389,6 +442,7 @@ class LocalNtdProvisionRepository:
                 ),
                 {
                     "id": candidate_id,
+                    "version": candidate_version,
                     "proposition": json.dumps(
                         semantics["normalized_proposition"], ensure_ascii=False
                     ),
@@ -406,7 +460,69 @@ class LocalNtdProvisionRepository:
                     "recorded": completed_at,
                 },
             )
-        return candidate_id, semantics_fingerprint
+            if not (getattr(semantics_insert, "rowcount", 0) or 0):
+                stored_fingerprint = session.scalar(
+                    sa.text(
+                        "SELECT semantics_fingerprint FROM platform.normative_provision_semantics "
+                        "WHERE provision_candidate_id=:id AND candidate_version=:version"
+                    ),
+                    {"id": candidate_id, "version": candidate_version},
+                )
+                if stored_fingerprint != semantics_fingerprint:
+                    raise ValueError("local_ntd_semantics_version_conflict")
+        return PersistedProvisionSemantics(candidate_id, candidate_version, semantics_fingerprint)
+
+    def find_persisted_semantics(
+        self, item: LocalNtdProvisionInput
+    ) -> PersistedProvisionSemantics | None:
+        candidate_id = item.existing_candidate_id or deterministic_uuid(
+            f"local-ntd-provision:{item.normative_edition_id}:{item.source_version_id}:"
+            f"{item.structural_path}:{item.raw_text_digest}:{LOCAL_NTD_PROVISION_PROFILE}"
+        )
+        candidate_version = item.chunk_version if item.existing_candidate_id is not None else 1
+        with self._engine.connect() as connection:
+            row = (
+                connection.execute(
+                    sa.text(
+                        "SELECT candidate.content_digest,semantics.semantics_fingerprint FROM "
+                        "platform.normative_provision_candidates candidate JOIN "
+                        "platform.normative_provision_semantics semantics ON "
+                        "semantics.provision_candidate_id=candidate.provision_candidate_id AND "
+                        "semantics.candidate_version=candidate.candidate_version WHERE "
+                        "candidate.provision_candidate_id=:id AND "
+                        "candidate.candidate_version=:version"
+                    ),
+                    {"id": candidate_id, "version": candidate_version},
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            return None
+        if str(row["content_digest"]) != item.raw_text_digest:
+            raise ValueError("local_ntd_persisted_semantics_input_conflict")
+        return PersistedProvisionSemantics(
+            candidate_id, candidate_version, str(row["semantics_fingerprint"])
+        )
+
+    def recover_expired_local_leases(self, *, recovered_at: datetime) -> int:
+        """Make this worker's expired jobs claimable without erasing their lineage."""
+
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                sa.text(
+                    "UPDATE platform.ntd_processing_jobs SET state='queued',eligible_at=:now,"
+                    "lease_owner=NULL,lease_expires_at=NULL,heartbeat_at=:now WHERE "
+                    "stage='provision_extraction' AND idempotency_key LIKE :profile AND "
+                    "state IN ('leased','running') AND lease_expires_at<:now AND "
+                    "attempt_count<max_attempts"
+                ),
+                {
+                    "now": recovered_at,
+                    "profile": f"ntd-local-provision:%:{LOCAL_NTD_PROVISION_PROFILE}",
+                },
+            )
+        return int(getattr(result, "rowcount", 0) or 0)
 
     def release_for_foreground(self, job: LocalNtdProvisionJob, *, eligible_at: datetime) -> None:
         with self._engine.begin() as connection:
@@ -429,6 +545,7 @@ class LocalNtdProvisionRepository:
                 sa.text(
                     "WITH retry AS (SELECT ntd_processing_job_id FROM "
                     "platform.ntd_processing_jobs WHERE stage='provision_extraction' AND "
+                    "idempotency_key LIKE :profile AND "
                     "state='failed' AND attempt_count<max_attempts AND typed_failure_code LIKE "
                     "'local_ntd_semantics_%' ORDER BY completed_at,ntd_processing_job_id LIMIT "
                     ":limit FOR UPDATE) UPDATE platform.ntd_processing_jobs job SET state='queued',"
@@ -436,7 +553,11 @@ class LocalNtdProvisionRepository:
                     "terminal_receipt_fingerprint=NULL FROM retry WHERE "
                     "job.ntd_processing_job_id=retry.ntd_processing_job_id"
                 ),
-                {"eligible": eligible_at, "limit": limit},
+                {
+                    "eligible": eligible_at,
+                    "limit": limit,
+                    "profile": f"ntd-local-provision:%:{LOCAL_NTD_PROVISION_PROFILE}",
+                },
             )
         return int(getattr(result, "rowcount", 0) or 0)
 
@@ -459,22 +580,28 @@ class LocalNtdProvisionWorker:
             return None
         try:
             item = self._repository.load_input(job)
-            answer = _complete(
-                self._qwen_url,
-                _prompt(item),
-                900.0,
-                max_tokens=1000,
-            )
-            semantics = _parse_semantics(answer)
-            if semantics["provision_kind"] != item.provision_kind:
-                raise QwenSemanticFailure("local_ntd_semantics_provision_kind_conflict")
+            persisted = self._repository.find_persisted_semantics(item)
+            reused_after_crash = persisted is not None
+            if persisted is None:
+                answer = _complete(
+                    self._qwen_url,
+                    _prompt(item),
+                    900.0,
+                    max_tokens=1000,
+                )
+                semantics = _parse_semantics(answer)
+                if (
+                    item.existing_candidate_id is not None
+                    and semantics["provision_kind"] != item.provision_kind
+                ):
+                    raise QwenSemanticFailure("local_ntd_semantics_provision_kind_conflict")
+                persisted = self._repository.persist_candidate(
+                    item=item,
+                    semantics=semantics,
+                    job=job,
+                    completed_at=datetime.now(UTC),
+                )
             completed = datetime.now(UTC)
-            candidate_id, semantics_fingerprint = self._repository.persist_candidate(
-                item=item,
-                semantics=semantics,
-                job=job,
-                completed_at=completed,
-            )
             output = {
                 "schema": "local-ntd-provision-job-output-v1",
                 "model": LOCAL_NTD_MODEL,
@@ -483,9 +610,10 @@ class LocalNtdProvisionWorker:
                 "chunk_version": item.chunk_version,
                 "source_version_id": str(item.source_version_id),
                 "page_number": item.page_number,
-                "candidate_id": str(candidate_id),
-                "candidate_version": 1,
-                "semantics_fingerprint": semantics_fingerprint,
+                "candidate_id": str(persisted.candidate_id),
+                "candidate_version": persisted.candidate_version,
+                "semantics_fingerprint": persisted.semantics_fingerprint,
+                "reused_persisted_semantics_after_crash": reused_after_crash,
             }
             self._terminal.terminalize(
                 _terminal_job(job, item),
@@ -518,6 +646,7 @@ class LocalNtdProvisionWorker:
             return {"state": "failed", "job_id": str(job.job_id), "failure": exc.code}
 
     def run_forever(self, *, refill_limit: int = 2, profile_cap: int = 20) -> None:
+        self._repository.recover_expired_local_leases(recovered_at=datetime.now(UTC))
         while True:
             self._repository.enqueue_bounded(
                 eligible_at=datetime.now(UTC), limit=refill_limit, profile_cap=profile_cap
