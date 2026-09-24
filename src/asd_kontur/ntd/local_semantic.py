@@ -28,6 +28,11 @@ LOCAL_NTD_PROVISION_PROFILE = "local-qwen-ntd-provision@1.0.0"
 LOCAL_NTD_PROMPT_VERSION = "local-qwen-ntd-provision-prompt@1.0.0"
 LOCAL_NTD_SCHEMA_VERSION = "normative-provision-semantics@1.0.0"
 LOCAL_NTD_MODEL = "Qwen3.8-27B-MLX-8bit"
+LOCAL_NTD_ELIGIBILITY_POLICY = "explicit-normative-language@2.0.0"
+LOCAL_NTD_MODAL_PATTERN = (
+    r"должен|должна|должны|следует|не допускается|требуется|допускается|"
+    r"не более|не менее|запрещается|разрешается|обязан|обязана|обязаны|надлежит"
+)
 _MODALITIES = frozenset(
     {
         "mandatory",
@@ -130,6 +135,7 @@ class LocalNtdProvisionRepository:
                         "SELECT candidate.provision_candidate_id chunk_id,"
                         "candidate.candidate_version version,candidate.content_digest "
                         "raw_text_digest,candidate.normative_edition_id,artifact.normative_artifact_id,"
+                        "'existing_provision_candidate' eligibility_class,"
                         "resolution.identity_reconciliation_id FROM "
                         "platform.normative_provision_candidates candidate JOIN "
                         "platform.normative_artifacts artifact ON artifact.normative_edition_id="
@@ -162,6 +168,7 @@ class LocalNtdProvisionRepository:
                     sa.text(
                         "SELECT chunk.chunk_id,chunk.version,chunk.raw_text_digest,"
                         "chunk.normative_edition_id,object.normative_artifact_id,"
+                        "'explicit_normative_language' eligibility_class,"
                         "resolution.identity_reconciliation_id FROM platform.ntd_chunks chunk "
                         "JOIN platform.ntd_corpus_objects object ON object.corpus_object_id="
                         "chunk.corpus_object_id JOIN LATERAL (SELECT value.identity_reconciliation_id "
@@ -181,7 +188,7 @@ class LocalNtdProvisionRepository:
                         "chunk.corpus_object_id,chunk.ordinal LIMIT :limit"
                     ),
                     {
-                        "modal": r"должен|должна|должны|следует|не допускается|требуется|допускается",
+                        "modal": LOCAL_NTD_MODAL_PATTERN,
                         "prefix": "ntd-local-provision:",
                         "profile_version": LOCAL_NTD_PROVISION_PROFILE,
                         "limit": max(0, allowance),
@@ -192,7 +199,7 @@ class LocalNtdProvisionRepository:
             inserted = 0
             for row in rows:
                 manifest = {
-                    "schema": "local-ntd-provision-job-input-v1",
+                    "schema": "local-ntd-provision-job-input-v2",
                     "chunk_id": str(row["chunk_id"]),
                     "chunk_version": int(row["version"]),
                     "raw_text_digest": str(row["raw_text_digest"]),
@@ -200,6 +207,8 @@ class LocalNtdProvisionRepository:
                     "profile": LOCAL_NTD_PROVISION_PROFILE,
                     "prompt": LOCAL_NTD_PROMPT_VERSION,
                     "output_schema": LOCAL_NTD_SCHEMA_VERSION,
+                    "eligibility_policy": LOCAL_NTD_ELIGIBILITY_POLICY,
+                    "eligibility_class": str(row["eligibility_class"]),
                 }
                 input_digest = digest_of(manifest)
                 key = (

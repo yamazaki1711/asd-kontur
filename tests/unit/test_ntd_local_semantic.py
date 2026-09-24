@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
-from asd_kontur.ntd.local_semantic import _parse_semantics
+from asd_kontur.ntd.local_semantic import LOCAL_NTD_MODAL_PATTERN, _parse_semantics
 
 
 def _valid() -> dict[str, object]:
@@ -45,3 +46,16 @@ def test_local_ntd_semantics_rejects_unqualified_modality() -> None:
 
     with pytest.raises(QwenSemanticFailure, match="invalid_enum"):
         _parse_semantics(json.dumps(value, ensure_ascii=False))
+
+
+@pytest.mark.parametrize(
+    "text",
+    (
+        "Расстояние должно быть не менее 50 мм.",
+        "Применение поврежденных изделий запрещается.",
+        "Предельное отклонение принимают не более 5 мм.",
+        "Исполнитель обязан сохранить результаты контроля.",
+    ),
+)
+def test_local_ntd_eligibility_covers_explicit_normative_language(text: str) -> None:
+    assert re.search(LOCAL_NTD_MODAL_PATTERN, text, re.IGNORECASE)
