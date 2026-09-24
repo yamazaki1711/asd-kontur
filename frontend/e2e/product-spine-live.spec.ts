@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 
 const repository = resolve(import.meta.dirname, "../..");
@@ -126,7 +126,15 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
   await page
     .getByRole("link", { name: "Скачать редактируемый комплект" })
     .click();
-  expect((await packageDownload).suggestedFilename()).toMatch(/\.zip$/);
+  const packageFile = await packageDownload;
+  expect(packageFile.suggestedFilename()).toMatch(/\.zip$/);
+  const artifactRoot = process.env.ASD_E2E_ARTIFACT_ROOT;
+  if (artifactRoot) {
+    mkdirSync(artifactRoot, { recursive: true });
+    await packageFile.saveAs(
+      resolve(artifactRoot, packageFile.suggestedFilename()),
+    );
+  }
   const download = page.waitForEvent("download");
   await page
     .getByRole("link", { name: "Скачать финализированный документ" })
