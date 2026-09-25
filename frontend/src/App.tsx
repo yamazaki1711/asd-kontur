@@ -5032,6 +5032,16 @@ function ProjectEngineeringResult({
   const comparisons = Array.isArray(model.quantity_comparisons)
     ? (model.quantity_comparisons as Record<string, unknown>[])
     : [];
+  const scopeComparisons = Array.isArray(model.scope_comparisons)
+    ? (model.scope_comparisons as Record<string, unknown>[])
+    : [];
+  const sheetPileSchedule = Array.isArray(model.sheet_pile_schedule)
+    ? (model.sheet_pile_schedule as Record<string, unknown>[])
+    : [];
+  const workClassification = (model.work_classification ?? {}) as Record<
+    string,
+    unknown
+  >;
   const issues = Array.isArray(model.issues)
     ? (model.issues as Record<string, unknown>[])
     : [];
@@ -5147,6 +5157,13 @@ function ProjectEngineeringResult({
               const facility = (card.facility ?? {}) as Record<string, unknown>;
               const cardWorks = Array.isArray(card.works) ? card.works : [];
               const cardPits = Array.isArray(card.pits) ? card.pits : [];
+              const cardMaterials = Array.isArray(card.materials)
+                ? card.materials
+                : [];
+              const cardComparisons = Array.isArray(card.comparisons)
+                ? card.comparisons
+                : [];
+              const cardIssues = Array.isArray(card.issues) ? card.issues : [];
               return (
                 <article
                   className="entity-card"
@@ -5155,6 +5172,30 @@ function ProjectEngineeringResult({
                   <h3>{displayValue(facility.name)}</h3>
                   <p>Котлованы: {String(cardPits.length)}</p>
                   <p>Работы: {String(cardWorks.length)}</p>
+                  <p>
+                    {cardWorks
+                      .map((value) =>
+                        displayValue(
+                          (value as Record<string, unknown>).work_name,
+                        ),
+                      )
+                      .filter(Boolean)
+                      .join("; ") || "Работы требуют привязки"}
+                  </p>
+                  <p>
+                    Материалы:{" "}
+                    {cardMaterials
+                      .map((value) =>
+                        displayValue((value as Record<string, unknown>).name),
+                      )
+                      .filter(Boolean)
+                      .slice(0, 6)
+                      .join("; ") || "не установлены"}
+                  </p>
+                  <p>
+                    Сопоставления: {String(cardComparisons.length)} · вопросы:{" "}
+                    {String(cardIssues.length)}
+                  </p>
                   <p>
                     {(Array.isArray(card.missing_information)
                       ? card.missing_information
@@ -5175,6 +5216,12 @@ function ProjectEngineeringResult({
     return (
       <section className="panel">
         <h2>Работы по сооружениям</h2>
+        <p>
+          Определено {displayValue(workClassification.classified_percent, "0")}%
+          исходных описаний работ;{" "}
+          {displayValue(workClassification.unclassified_observation_count, "0")}{" "}
+          описаний ещё требуют инженерной классификации.
+        </p>
         <div className="table-wrap">
           <table>
             <thead>
@@ -5244,6 +5291,77 @@ function ProjectEngineeringResult({
                   <td>
                     <ProjectSourceLinks
                       locatorIds={work.source_locator_ids}
+                      workspaceId={workspaceId}
+                      modeSlug={modeSlug}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h2>Шпунтовые работы и распределительные пояса</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Сооружение / котлован</th>
+                <th>Операция</th>
+                <th>Профиль / сталь</th>
+                <th>Объёмы по документам</th>
+                <th>Ограничение</th>
+                <th>Источник</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sheetPileSchedule.map((scope) => (
+                <tr key={displayValue(scope.sheet_pile_scope_id)}>
+                  <td>{displayValue(scope.facility, "Требует привязки")}</td>
+                  <td>{displayValue(scope.operation)}</td>
+                  <td>
+                    {[
+                      ...(Array.isArray(scope.profiles)
+                        ? scope.profiles.map(String)
+                        : []),
+                      ...(Array.isArray(scope.waling_beams)
+                        ? scope.waling_beams.map(String)
+                        : []),
+                      ...(Array.isArray(scope.steel)
+                        ? scope.steel.map(String)
+                        : []),
+                    ].join(", ") || "не найдено"}
+                  </td>
+                  <td>
+                    {Object.entries(
+                      (scope.quantities_by_document ?? {}) as Record<
+                        string,
+                        unknown
+                      >,
+                    ).map(([role, values]) => (
+                      <p key={role}>
+                        <strong>{role}:</strong>{" "}
+                        {(Array.isArray(values) ? values : [])
+                          .map((value) => {
+                            const row = value as Record<string, unknown>;
+                            return (
+                              displayValue(row.value) +
+                              " " +
+                              displayValue(row.unit) +
+                              (Number(row.occurrence_count ?? 1) > 1
+                                ? " (" +
+                                  displayValue(row.occurrence_count) +
+                                  " упоминания)"
+                                : "")
+                            );
+                          })
+                          .join(", ") || "не найдено"}
+                      </p>
+                    ))}
+                  </td>
+                  <td>{displayValue(scope.uncertainty, "Привязано")}</td>
+                  <td>
+                    <ProjectSourceLinks
+                      locatorIds={scope.source_locator_ids}
                       workspaceId={workspaceId}
                       modeSlug={modeSlug}
                     />
@@ -5363,6 +5481,26 @@ function ProjectEngineeringResult({
         )}
       </section>
       <section className="panel">
+        <h2>Сопоставление проектного и коммерческого состава</h2>
+        <div className="card-grid">
+          {scopeComparisons
+            .filter((comparison) => comparison.classification !== "MATCH")
+            .map((comparison) => (
+              <article
+                className="entity-card"
+                key={displayValue(comparison.scope_comparison_id)}
+              >
+                <h3>{displayValue(comparison.professional_status)}</h3>
+                <p>
+                  {displayValue(comparison.facility)} ·{" "}
+                  {displayValue(comparison.work)}
+                </p>
+                <p>{displayValue(comparison.conclusion)}</p>
+              </article>
+            ))}
+        </div>
+      </section>
+      <section className="panel">
         <h2>Технические вопросы и действия</h2>
         {issues.length ? (
           <div className="card-grid">
@@ -5400,6 +5538,14 @@ function ProjectEngineeringResult({
           {questions.map((question) => (
             <li key={displayValue(question.action_id)}>
               {displayValue(question.question)}
+            </li>
+          ))}
+        </ul>
+        <ul>
+          {risks.map((risk) => (
+            <li key={displayValue(risk.risk_id)}>
+              <strong>{displayValue(risk.location)}:</strong>{" "}
+              {displayValue(risk.risk)}
             </li>
           ))}
         </ul>
@@ -5489,13 +5635,13 @@ function ProjectUnderstandingPage() {
     },
   });
   const sections = [
-    ["general", "Общие сведения"],
-    ["structure", "Структура объекта"],
-    ["works", "Виды и объёмы работ"],
-    ["materials", "Материалы и изделия"],
-    ["packages", "Пакеты работ"],
-    ["matrix", "Матрица требований"],
-    ["gaps", "Расхождения и пробелы"],
+    ["general", "Объект"],
+    ["structure", "Сооружения и котлованы"],
+    ["works", "Работы и объёмы"],
+    ["materials", "Материалы"],
+    ["packages", "Работы по сооружениям"],
+    ["matrix", "Требования"],
+    ["gaps", "Расхождения, вопросы и риски"],
   ] as const;
   return (
     <Page
@@ -6238,7 +6384,7 @@ function ProjectUnderstandingPage() {
                       className="button-link secondary"
                       href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
                     >
-                      Скачать редактируемый график наблюдений
+                      Скачать ведомость инженерных вопросов
                     </a>
                     <a
                       className="button-link secondary"

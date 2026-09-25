@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v1"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v2"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -49,14 +49,55 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ),
     ),
     (
+        "bracing",
+        "Распорки и раскрепление",
+        ("распорк", "раскреп", "подкос"),
+    ),
+    (
+        "dewatering",
+        "Водопонижение и водоотлив",
+        ("водопонижен", "водоотлив", "откачк грунтов", "откачк вод"),
+    ),
+    (
+        "backfill",
+        "Обратная засыпка",
+        ("обратн засып", "засыпк транше", "засыпк котлован", "засыпк пазух"),
+    ),
+    (
+        "compaction",
+        "Уплотнение грунта",
+        ("уплотнен грунт", "трамбовк"),
+    ),
+    (
         "excavation",
         "Разработка котлованов и земляные работы",
         ("котлован", "разработк грунт", "землян", "выемк грунт"),
     ),
     (
+        "reinforcement",
+        "Армирование",
+        ("армирован", "арматурн каркас", "арматурн сетк", "установк арматур"),
+    ),
+    (
+        "formwork",
+        "Опалубочные работы",
+        ("опалуб",),
+    ),
+    (
+        "pit_preparation",
+        "Подготовка основания",
+        (
+            "бетонн подготов",
+            "песчан основан",
+            "щебеночн основан",
+            "основан под фундамент",
+            "подготовк из бетон",
+        ),
+    ),
+    (
         "reinforced_concrete",
-        "Железобетонные работы",
-        ("железобетон", "армирован", "бетонирован", "бетонн работ", "арматур"),
+        "Бетонные и железобетонные работы",
+        ("железобетон", "бетонирован", "бетонн работ", "монолитн конструкц"),
     ),
     (
         "foundation_slab",
@@ -64,19 +105,175 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("фундамент", "фундаментн плит", "плит основан", "монолитн плит"),
     ),
     (
+        "walls",
+        "Стены и перегородки",
+        ("кладк стен", "кладк перегород", "возведен стен", "кирпич и блок"),
+    ),
+    (
         "pipeline",
         "Трубопроводы и сети",
-        ("трубопровод", "прокладк труб", "ливнев канализац", "коллектор"),
+        (
+            "трубопровод",
+            "прокладк труб",
+            "укладк стальн водопроводн труб",
+            "ливнев канализац",
+            "коллектор",
+        ),
+    ),
+    (
+        "pile_foundation",
+        "Свайные работы",
+        ("свайн работ", "устройств свай", "погружен свай", "забивк свай"),
+    ),
+    (
+        "chambers_wells",
+        "Колодцы, камеры и технологические сооружения",
+        (
+            "монтаж колодц",
+            "устройств колодц",
+            "монтаж камер",
+            "устройств камер",
+            "установк канализационн насосн станц",
+            "монтаж очистн сооружен",
+            "устройств локальн очистн сооружен",
+            "строительств локальн очистн сооружен",
+        ),
+    ),
+    (
+        "embedded_parts",
+        "Закладные детали",
+        ("закладн детал", "закладн издел", "закладн част"),
+    ),
+    (
+        "structural_steel",
+        "Металлоконструкции",
+        ("металлоконструк", "стальн конструкц", "металлическ конструкц"),
     ),
     (
         "waterproofing",
         "Гидроизоляция",
-        ("гидроизоляц", "водоизоляц"),
+        ("гидроизоляц", "водоизоляц", "изоляц поверхност колодц", "битумн мастик"),
     ),
     (
-        "backfill",
-        "Обратная засыпка и уплотнение",
-        ("обратн засып", "засыпк грунт", "уплотнен грунт"),
+        "temporary_works",
+        "Временные сооружения и крепления",
+        (
+            "временн креплен",
+            "временн огражден",
+            "временн дорог",
+            "временн сооружен",
+            "строительн городок",
+        ),
+    ),
+    (
+        "soil_disposal",
+        "Погрузка и вывоз грунта",
+        ("вывоз грунт", "вывоз излишк грунт", "погрузк грунт"),
+    ),
+    (
+        "demolition",
+        "Демонтажные работы",
+        ("демонтаж", "разборк"),
+    ),
+    (
+        "landscaping",
+        "Благоустройство и озеленение",
+        ("благоустройств", "озеленен", "газон", "растительн земл"),
+    ),
+    (
+        "roadworks",
+        "Дорожные работы",
+        ("дорожн покрыт", "асфальтобетон", "автомобильн дорог"),
+    ),
+    (
+        "electrical",
+        "Электромонтажные работы",
+        ("электромонтаж", "электротехническ установ", "прокладк кабел"),
+    ),
+    (
+        "equipment_installation",
+        "Монтаж технологического оборудования",
+        (
+            "монтаж технологическ оборудован",
+            "монтаж оборудован",
+            "установк корпус",
+            "монтаж кнс",
+            "монтаж очистн сооружен",
+        ),
+    ),
+    (
+        "commissioning",
+        "Пусконаладочные работы",
+        ("пусконаладочн работ", "пуско наладочн работ"),
+    ),
+    (
+        "testing",
+        "Испытания и проверка",
+        (
+            "испытан на герметичн",
+            "промывк систем",
+            "гидравлическ испытан",
+            "испытан трубопровод",
+        ),
+    ),
+    (
+        "surveying",
+        "Геодезические работы",
+        ("геодезическ разбив", "разбивочн основ", "камеральн работ"),
+    ),
+    (
+        "site_preparation",
+        "Подготовка строительной площадки",
+        (
+            "подготовительн работ",
+            "освобожден строительн площадк",
+            "вырубк дерев",
+            "валк дерев",
+            "складск площадк",
+        ),
+    ),
+    (
+        "reclamation",
+        "Рекультивация",
+        (
+            "рекультивац",
+            "плодородн сло",
+            "восстановлен травян",
+            "растительн грунт",
+        ),
+    ),
+)
+
+_NON_WORK_OBSERVATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "Обобщённый заголовок без конкретной строительной операции",
+        (
+            "строительные работы",
+            "строительно монтажные работы",
+            "монтажные работы",
+            "строительство",
+            "монтаж",
+            "материалы",
+        ),
+    ),
+    (
+        "Сметный ресурс или начисление, а не отдельная работа",
+        (
+            "оплата труда",
+            "эксплуатация машин",
+            "накладные расходы",
+            "автомобили бортовые",
+            "вода",
+        ),
+    ),
+    (
+        "Описание материала, а не строительной операции",
+        (
+            "смеси бетонные",
+            "сталь арматурная",
+            "песок природный",
+            "щиты настила",
+        ),
     ),
 )
 
@@ -144,16 +341,22 @@ def build_project_engineering_model(
         source_context,
     )
     comparisons = _deduplicate_dicts(
-        [
-            *_comparisons(work_model["works"]),
-            *_exact_work_comparisons(
-                candidates.get("work_types", ()),
-                candidates.get("quantities", ()),
-                source_context,
-            ),
-        ]
+        _exact_work_comparisons(
+            candidates.get("work_types", ()),
+            candidates.get("quantities", ()),
+            source_context,
+        )
     )
-    issues = _issues(defects, comparisons, work_model["works"], source_context)
+    scope_comparisons = _scope_comparisons(work_model["works"])
+    sheet_pile_schedule = _sheet_pile_schedule(work_model["works"])
+    issues = _issues(
+        defects,
+        comparisons,
+        scope_comparisons,
+        sheet_pile_schedule,
+        work_model["works"],
+        source_context,
+    )
     requirements = _requirements(matrix, normative_profile)
     actions, risks = _actions_and_risks(issues)
     facility_cards = _facility_cards(
@@ -181,7 +384,11 @@ def build_project_engineering_model(
         "pits": pits,
         "works": work_model["works"],
         "unclassified_works": work_model["unclassified"],
+        "excluded_non_work_observations": work_model["excluded"],
+        "work_classification": work_model["classification"],
         "quantity_comparisons": comparisons,
+        "scope_comparisons": scope_comparisons,
+        "sheet_pile_schedule": sheet_pile_schedule,
         "materials": work_model["materials"],
         "requirements": requirements,
         "issues": issues,
@@ -195,7 +402,17 @@ def build_project_engineering_model(
             "pit_count_is_final": bool(pits["is_final"]),
             "work_scope_count": len(work_model["works"]),
             "unclassified_work_count": len(work_model["unclassified"]),
+            "excluded_non_work_observation_count": len(work_model["excluded"]),
+            "classified_work_observation_count": work_model["classification"][
+                "classified_observation_count"
+            ],
+            "total_work_observation_count": work_model["classification"]["total_observation_count"],
+            "classified_work_percent": work_model["classification"]["classified_percent"],
+            "facility_assigned_work_observation_count": work_model["classification"][
+                "facility_assigned_observation_count"
+            ],
             "quantity_comparison_count": len(comparisons),
+            "scope_comparison_count": len(scope_comparisons),
             "issue_count": len(issues),
             "risk_count": len(risks),
             "customer_question_count": len(actions),
@@ -233,9 +450,39 @@ def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> 
 def classify_work_family(value: object) -> tuple[str, str] | None:
     normalized = _normalized(value)
     for key, title, terms in _WORK_FAMILIES:
-        if any(term in normalized for term in terms):
+        if any(_ordered_stem_phrase(normalized, term) for term in terms):
             return key, title
     return None
+
+
+def non_work_reason(value: object) -> str | None:
+    """Identify extracted headings/resources that are not construction operations."""
+
+    normalized = _normalized(value)
+    for reason, exact_values in _NON_WORK_OBSERVATIONS:
+        if normalized in exact_values or any(
+            normalized.startswith(f"{item} ") for item in exact_values if len(item) > 8
+        ):
+            return reason
+    if re.fullmatch(r"\d+(?:[.-]\d+){2,}", normalized):
+        return "Сметный шифр без описания строительной операции"
+    return None
+
+
+def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
+    """Match a short engineering phrase by ordered Russian word stems.
+
+    Extraction preserves inflection (``разработка``/``разработке``), while the
+    compact work-family contract deliberately stores stable stems.  Requiring
+    every stem in order is more conservative than an unordered keyword bag and
+    still groups inflected wording without an OZERO-specific dictionary.
+    """
+
+    stems = tuple(value for value in phrase.split() if value)
+    if not stems:
+        return False
+    pattern = r"\b" + r"\w*\s+\w*".join(re.escape(value) for value in stems) + r"\w*\b"
+    return re.search(pattern, normalized) is not None
 
 
 def professional_work_name(family_key: str, wording: object) -> str:
@@ -444,18 +691,39 @@ def _pits(
             current["source_locator_ids"] = sorted({*current["source_locator_ids"], *locator_ids})
             current["sources"] = _source_refs(current["source_locator_ids"], source_context)
         else:
+            description = str(pit.get("display_name") or pit.get("canonical_label") or "Котлован")
+            stated_count_match = re.search(r"\b(\d+)\s*шт", _normalized(description))
+            stated_count = int(stated_count_match.group(1)) if stated_count_match else None
+            paired_working_receiving = "рабоч" in _normalized(
+                description
+            ) and "приемн" in _normalized(description)
+            if stated_count is not None:
+                reason = (
+                    f"В документе указано {stated_count} шт., но нет поштучных марок и "
+                    "привязки, позволяющих исключить пересечение с другими группами."
+                )
+            elif paired_working_receiving:
+                reason = (
+                    "Указаны рабочие и приёмные котлованы переходов (не менее двух), "
+                    "но число переходов и их поштучные марки не установлены."
+                )
+            elif any("котлованы" in _normalized(value) for value in aliases):
+                reason = (
+                    "Указана группа котлованов без количества, поштучных марок и "
+                    "однозначной привязки к сооружениям."
+                )
+            else:
+                reason = (
+                    "Упоминание отдельного котлована не содержит марки сооружения; "
+                    "нельзя исключить повторное упоминание уже установленного котлована."
+                )
             clarification.append(
                 {
-                    "description": str(
-                        pit.get("display_name") or pit.get("canonical_label") or "Котлован"
-                    ),
+                    "description": description,
                     "related_facility": pit.get("associated_facility_designation"),
-                    "reason": (
-                        "В документах указана группа или несколько котлованов "
-                        "без поштучного обозначения"
-                        if any("котлованы" in _normalized(value) for value in aliases)
-                        else "Не установлена однозначная привязка к отдельному сооружению"
-                    ),
+                    "reason": reason,
+                    "stated_count": stated_count,
+                    "minimum_count": 2 if paired_working_receiving else stated_count,
                     "sources": _source_refs(pit.get("source_locator_ids") or (), source_context),
                     "source_locator_ids": sorted(
                         str(value) for value in pit.get("source_locator_ids") or ()
@@ -466,11 +734,23 @@ def _pits(
     ambiguous_count = int(dict(coverage.get("disposition_counts") or {}).get("ambiguous", 0))
     unresolved_count = len(clarification)
     established = sorted(established_by_facility.values(), key=lambda value: value["name"])
+    quantified_group_count = sum(
+        int(value["stated_count"])
+        for value in clarification
+        if value.get("stated_count") is not None
+    )
+    stated_minimum_count = sum(
+        int(value["minimum_count"])
+        for value in clarification
+        if value.get("minimum_count") is not None
+    )
     return {
         "established": established,
         "established_count": len(established),
         "requires_clarification": clarification,
         "unresolved_group_count": unresolved_count,
+        "quantified_unresolved_group_pit_count": quantified_group_count,
+        "stated_minimum_unresolved_pit_count": stated_minimum_count,
         "ambiguous_observation_count": ambiguous_count,
         "is_final": unresolved_count == 0,
         "professional_answer": (
@@ -478,8 +758,21 @@ def _pits(
             if unresolved_count == 0
             else f"{_russian_pit_count(len(established), established=True).capitalize()}. "
             f"Ещё {unresolved_count} {_russian_group_word(unresolved_count)} обозначений "
-            "требуют уточнения; "
-            "поэтому окончательное количество по имеющимся данным пока не установлено."
+            + ("требует уточнения. " if unresolved_count == 1 else "требуют уточнения. ")
+            + (
+                f"В двух группах прямо указано суммарно {quantified_group_count} шт., "
+                "но их пересечение с другими обозначениями не исключено. "
+                if quantified_group_count
+                else ""
+            )
+            + (
+                f"С учётом явно названной пары рабочих и приёмных котлованов в "
+                f"неразрешённых группах описано не менее {stated_minimum_count} котлованов, "
+                "однако часть из них может повторять уже установленные объекты. "
+                if stated_minimum_count > quantified_group_count
+                else ""
+            )
+            + "Поэтому окончательное количество по имеющимся данным пока не установлено."
         ),
     }
 
@@ -512,6 +805,7 @@ def _work_schedule(
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     del node_to_facility  # Exact relationship assignment can extend the locator rule later.
+    work_rows = [dict(raw) for raw in works]
     facility_by_designation = {
         str(item.get("designation")): dict(item) for item in facilities if item.get("designation")
     }
@@ -531,6 +825,22 @@ def _work_schedule(
                     facility_ids_by_page[
                         (str(context.get("source_version_id") or ""), int(page))
                     ].add(facility_id)
+    # A unique explicit designation elsewhere on the same drawing/estimate page
+    # is a stronger engineering basis than document co-occurrence.  Pages that
+    # mention several facilities remain unassigned.
+    for row in work_rows:
+        name = str(row.get("value") or row.get("raw_name") or "")
+        designation = facility_designation(f"{name} {row.get('scope_key') or ''}")
+        facility = facility_by_designation.get(designation or "")
+        context = source_context.get(str(row.get("source_locator_id") or ""))
+        if facility is None or not isinstance(context, Mapping):
+            continue
+        locator_value = context.get("locator_value")
+        page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
+        if page is not None:
+            facility_ids_by_page[(str(context.get("source_version_id") or ""), int(page))].add(
+                str(facility["facility_id"])
+            )
     quantity_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
     material_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for raw in quantities:
@@ -542,8 +852,8 @@ def _work_schedule(
 
     exact_observations: dict[tuple[str, str, str], dict[str, Any]] = {}
     unclassified: list[dict[str, Any]] = []
-    for raw in works:
-        row = dict(raw)
+    excluded: list[dict[str, Any]] = []
+    for row in work_rows:
         candidate_id = str(row.get("candidate_id") or "")
         name = str(row.get("value") or row.get("raw_name") or "").strip()
         normalized_name = str(row.get("label") or row.get("normalized_name") or _normalized(name))
@@ -573,7 +883,9 @@ def _work_schedule(
             if len(page_facilities) == 1:
                 facility = facility_by_id[next(iter(page_facilities))]
                 designation = str(facility.get("designation") or facility.get("name") or "")
-                assignment_basis = "Работа и сооружение указаны на одном листе"
+                assignment_basis = (
+                    "Работа отнесена к единственному явно обозначенному сооружению на листе"
+                )
         role = _professional_document_role(row.get("source_role"), context.get("safe_display_name"))
         observation = {
             "candidate_id": candidate_id,
@@ -591,7 +903,11 @@ def _work_schedule(
         }
         if family is None:
             if name:
-                unclassified.append(observation)
+                reason = non_work_reason(name)
+                if reason:
+                    excluded.append({**observation, "exclusion_reason": reason})
+                else:
+                    unclassified.append(observation)
             continue
         family_key, family_name = family
         operation_name = professional_work_name(family_key, name)
@@ -632,16 +948,20 @@ def _work_schedule(
         )
         quantities_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         materials_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        sources_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for observation in observations:
             role = str(observation["document_role"])
             quantities_by_role[role].extend(observation["quantities"])
             materials_by_role[role].extend(observation["materials"])
+            if observation.get("source"):
+                sources_by_role[role].append(dict(observation["source"]))
         quantities_by_role = {
             key: _deduplicate_dicts(value) for key, value in quantities_by_role.items()
         }
         materials_by_role = {
             key: _deduplicate_dicts(value) for key, value in materials_by_role.items()
         }
+        sources_by_role = {key: _deduplicate_dicts(value) for key, value in sources_by_role.items()}
         schedule_id = semantic_digest(
             {
                 "facility": facility_key,
@@ -662,6 +982,8 @@ def _work_schedule(
             ),
             "quantities_by_document": quantities_by_role,
             "materials_by_document": materials_by_role,
+            "document_roles": sorted({str(item["document_role"]) for item in observations}),
+            "sources_by_document": sources_by_role,
             "sources": [item["source"] for item in observations if item.get("source")],
             "source_locator_ids": sorted(
                 {
@@ -689,7 +1011,33 @@ def _work_schedule(
                     }
                 )
     unclassified = _deduplicate_dicts(unclassified)
-    return {"works": schedules, "materials": material_rows, "unclassified": unclassified}
+    excluded = _deduplicate_dicts(excluded)
+    classified_count = len(exact_observations)
+    assigned_count = len(
+        [value for value in exact_observations.values() if value.get("facility_id")]
+    )
+    total_count = classified_count + len(unclassified) + len(excluded)
+    return {
+        "works": schedules,
+        "materials": material_rows,
+        "unclassified": unclassified,
+        "excluded": excluded,
+        "classification": {
+            "total_observation_count": total_count,
+            "classified_observation_count": classified_count,
+            "unclassified_observation_count": len(unclassified),
+            "excluded_non_work_observation_count": len(excluded),
+            "classified_percent": (
+                round(classified_count * 100 / total_count, 1) if total_count else 0.0
+            ),
+            "facility_assigned_observation_count": assigned_count,
+            "facility_unassigned_observation_count": classified_count - assigned_count,
+            "policy": (
+                "Упорядоченные инженерные термины и явные обозначения; одинаковые слова "
+                "без контекста не объединяют разные работы или сооружения."
+            ),
+        },
+    }
 
 
 def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -754,8 +1102,6 @@ def _exact_work_comparisons(
         normalized_name = str(
             row.get("label") or row.get("normalized_name") or _normalized(wording)
         )
-        if classify_work_family(normalized_name) is not None:
-            continue
         locator_id = str(row.get("source_locator_id") or "")
         context = dict(source_context.get(locator_id) or {})
         grouped[
@@ -851,9 +1197,199 @@ def _comparison_row(
     }
 
 
+def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Classify design/commercial coverage for the same engineering family.
+
+    This does not call a design item omitted merely because its exact wording is
+    absent.  When a commercial row exists for the family but lacks a facility
+    allocation, the result is explicitly an unresolved scope match.
+    """
+
+    rows = [dict(value) for value in works]
+    design_roles = {"ПД", "РД", "Спецификация"}
+    commercial_roles = {"ВОР", "Смета"}
+    commercial_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        roles = set(str(value) for value in row.get("document_roles") or ())
+        if roles.intersection(commercial_roles):
+            commercial_by_family[str(row.get("family_key") or "")].append(row)
+
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        roles = set(str(value) for value in row.get("document_roles") or ())
+        design = roles.intersection(design_roles)
+        commercial = roles.intersection(commercial_roles)
+        if not design:
+            if commercial:
+                status = "COMMERCIAL_ONLY_WORK"
+                conclusion = "Коммерческая позиция пока не связана с проектным объёмом."
+            else:
+                continue
+        elif commercial:
+            status = "MATCH"
+            conclusion = "Проектная и коммерческая позиции найдены в одном инженерном объёме."
+        else:
+            possible = commercial_by_family.get(str(row.get("family_key") or ""), [])
+            if possible:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                conclusion = (
+                    "Коммерческие позиции этого вида найдены, но их нельзя однозначно "
+                    "распределить по сооружениям."
+                )
+            else:
+                status = "WORK_MISSING_IN_COMMERCIAL"
+                conclusion = (
+                    "Работа установлена в проектных документах, но соответствующая позиция "
+                    "не найдена в имеющихся ВОР/сметах."
+                )
+        result.append(
+            {
+                "scope_comparison_id": semantic_digest(
+                    {
+                        "work_scope_id": row.get("work_scope_id"),
+                        "status": status,
+                    }
+                ),
+                "classification": status,
+                "professional_status": {
+                    "MATCH": "Состав сопоставлен",
+                    "WORK_MISSING_IN_COMMERCIAL": "Возможная неучтённая работа",
+                    "COMMERCIAL_ONLY_WORK": "Коммерческая позиция без установленного основания",
+                    "UNRESOLVED_SCOPE_MATCH": "Требуется распределить коммерческий объём",
+                }[status],
+                "facility": row.get("facility"),
+                "facility_id": row.get("facility_id"),
+                "family_key": row.get("family_key"),
+                "work": row.get("work_name"),
+                "design_roles": sorted(design),
+                "commercial_roles": sorted(commercial),
+                "conclusion": conclusion,
+                "source_locator_ids": list(row.get("source_locator_ids") or ()),
+            }
+        )
+    return _deduplicate_dicts(result)
+
+
+def _sheet_pile_schedule(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Return a professional sheet-pile/waling schedule without false totals."""
+
+    result: list[dict[str, Any]] = []
+    relevant_families = {"sheet_piling", "waling_beam", "bracing"}
+    for raw in works:
+        row = dict(raw)
+        materials = dict(row.get("materials_by_document") or {})
+        wording = [str(value) for value in row.get("project_wording") or ()]
+        material_names = [
+            str(value.get("name") or "") for values in materials.values() for value in values or ()
+        ]
+        combined = " ".join([*wording, *material_names])
+        normalized = _normalized(combined)
+        unassigned_profile_observation = row.get("family_key") not in relevant_families and bool(
+            re.search(r"\bл5(?:ум|\s*10)?\b", normalized)
+        )
+        if row.get("family_key") not in relevant_families and not unassigned_profile_observation:
+            continue
+        profiles = _sheet_pile_profiles(normalized)
+        profiles_by_document = {
+            role: _sheet_pile_profiles(
+                _normalized(" ".join(str(value.get("name") or "") for value in values or ()))
+            )
+            for role, values in materials.items()
+            if _sheet_pile_profiles(
+                _normalized(" ".join(str(value.get("name") or "") for value in values or ()))
+            )
+        }
+        beams = _ordered_unique(
+            match.group(0).upper() for match in re.finditer(r"\b(?:30ш2|35ш2)\b", normalized)
+        )
+        steel = _ordered_unique(
+            match.group(0).upper() for match in re.finditer(r"\bс\s*255\b", normalized)
+        )
+        lengths = _ordered_unique(
+            f"{match.group(1)}–{match.group(2)} м"
+            for match in re.finditer(r"длин\w*\s+(?:свыше\s+)?(\d+)\s+до\s+(\d+)\s*м", normalized)
+        )
+        quantities = dict(row.get("quantities_by_document") or {})
+        profile_locator_ids = sorted(
+            {
+                str(value.get("source_locator_id"))
+                for values in materials.values()
+                for value in values or ()
+                if _sheet_pile_profiles(_normalized(value.get("name")))
+                and value.get("source_locator_id")
+            }
+        )
+        if unassigned_profile_observation:
+            # The profile observation is useful, but the extractor associated it
+            # with a non-sheet-pile work.  Keep the exact material observation and
+            # its locator without inheriting unrelated excavation quantities.
+            quantities = {}
+        else:
+            quantities = {
+                role: _consolidate_quantity_mentions(values) for role, values in quantities.items()
+            }
+        project_roles = {
+            key: value for key, value in quantities.items() if key in {"ПД", "РД", "Спецификация"}
+        }
+        commercial_roles = {
+            key: value for key, value in quantities.items() if key in {"ВОР", "Смета"}
+        }
+        result.append(
+            {
+                "sheet_pile_scope_id": semantic_digest(
+                    {"work_scope_id": row.get("work_scope_id"), "kind": "sheet_pile_schedule"}
+                ),
+                "facility": row.get("facility"),
+                "facility_id": row.get("facility_id"),
+                "pit": (
+                    f"Котлован {row.get('facility')}"
+                    if row.get("facility_id")
+                    else "Требует привязки"
+                ),
+                "operation": (
+                    "Материал шпунтового ограждения — привязка требует уточнения"
+                    if unassigned_profile_observation
+                    else row.get("work_name")
+                ),
+                "profiles": profiles,
+                "profiles_by_document": profiles_by_document,
+                "pile_length": lengths,
+                "quantities_by_document": quantities,
+                "project_quantities": project_roles,
+                "commercial_quantities": commercial_roles,
+                "waling_beams": beams,
+                "steel": steel,
+                "project_wording": wording,
+                "source_locator_ids": (
+                    profile_locator_ids
+                    if unassigned_profile_observation
+                    else list(row.get("source_locator_ids") or ())
+                ),
+                "sources_by_document": (
+                    {}
+                    if unassigned_profile_observation
+                    else dict(row.get("sources_by_document") or {})
+                ),
+                "uncertainty": (
+                    "Наблюдение о профиле найдено, но связь с конкретной шпунтовой работой "
+                    "и сооружением не установлена."
+                    if unassigned_profile_observation
+                    else "Коммерческий объём не распределён по сооружениям."
+                    if row.get("facility_id") is None and commercial_roles
+                    else "Место выполнения требует уточнения."
+                    if row.get("facility_id") is None
+                    else None
+                ),
+            }
+        )
+    return result
+
+
 def _issues(
     defects: Iterable[Mapping[str, Any]],
     comparisons: Iterable[Mapping[str, Any]],
+    scope_comparisons: Iterable[Mapping[str, Any]],
+    sheet_pile_schedule: Iterable[Mapping[str, Any]],
     works: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -883,6 +1419,91 @@ def _issues(
                 "status": "Установленное расхождение"
                 if comparison.get("difference") is not None
                 else "Требует уточнения",
+            }
+        )
+    omission_families = {
+        "waling_beam",
+        "bracing",
+        "dewatering",
+        "pit_preparation",
+        "formwork",
+        "reinforcement",
+        "waterproofing",
+        "backfill",
+    }
+    for comparison in scope_comparisons:
+        if comparison.get("classification") != "WORK_MISSING_IN_COMMERCIAL":
+            continue
+        if comparison.get("family_key") not in omission_families:
+            continue
+        if not comparison.get("facility_id"):
+            continue
+        locators = [str(value) for value in comparison.get("source_locator_ids") or ()]
+        issues.append(
+            {
+                "issue_id": str(comparison["scope_comparison_id"]),
+                "kind": "Возможная неучтённая работа",
+                "location": comparison.get("facility"),
+                "subject": comparison.get("work"),
+                "description": str(comparison.get("conclusion") or ""),
+                "practical_consequence": (
+                    "При отсутствии этой позиции в коммерческом объёме работа может остаться "
+                    "нерасценённой и потребовать дополнительного согласования."
+                ),
+                "recommended_action": (
+                    f"Просим подтвердить включение работы «{comparison.get('work')}» для "
+                    f"{comparison.get('facility')} в ВОР/смету либо выдать отдельную позицию."
+                ),
+                "source_locator_ids": locators,
+                "sources": _source_refs(locators, source_context),
+                "status": "Возможное отсутствие — требуется подтверждение Заказчика",
+            }
+        )
+
+    design_profiles: dict[str, set[str]] = defaultdict(set)
+    commercial_profiles: dict[str, set[str]] = defaultdict(set)
+    profile_locators: set[str] = set()
+    for row in sheet_pile_schedule:
+        for role, values in dict(row.get("profiles_by_document") or {}).items():
+            target = commercial_profiles if role in {"ВОР", "Смета"} else design_profiles
+            target[str(role)].update(str(value) for value in values or ())
+            profile_locators.update(str(value) for value in row.get("source_locator_ids") or ())
+    design_values = sorted({value for values in design_profiles.values() for value in values})
+    commercial_values = sorted(
+        {value for values in commercial_profiles.values() for value in values}
+    )
+    if design_values and commercial_values and set(design_values) != set(commercial_values):
+        locators = sorted(profile_locators)
+        issues.append(
+            {
+                "issue_id": semantic_digest(
+                    {
+                        "kind": "sheet_pile_profile_scope_unresolved",
+                        "design_profiles": design_values,
+                        "commercial_profiles": commercial_values,
+                        "locators": locators,
+                    }
+                ),
+                "kind": "Профиль шпунта требует согласования",
+                "location": "Шпунтовые ограждения проекта",
+                "subject": "Профиль шпунта",
+                "description": (
+                    f"В проектных разделах найдено обозначение {', '.join(design_values)}, "
+                    f"а в сметных позициях — {', '.join(commercial_values)}. Коммерческие "
+                    "позиции не распределены по сооружениям, поэтому это пока не доказанная "
+                    "замена, а существенная неопределённость соответствия."
+                ),
+                "practical_consequence": (
+                    "Без пообъектной увязки профиля нельзя подтвердить массу, стоимость, "
+                    "возможность повторного использования и соответствие расчётному решению."
+                ),
+                "recommended_action": (
+                    "Просим подтвердить применяемый профиль шпунта по каждому котловану и "
+                    "увязать обозначения Л5УМ, Л5 и Л5-10 с расчётами и сметными позициями."
+                ),
+                "source_locator_ids": locators,
+                "sources": _source_refs(locators, source_context),
+                "status": "Требуется пообъектная увязка проектных и сметных обозначений",
             }
         )
     work_rows = [dict(row) for row in works]
@@ -1284,5 +1905,46 @@ def _decimal_text(value: Decimal) -> str:
     return format(normalized, "f")
 
 
+def _ordered_unique(values: Iterable[str]) -> list[str]:
+    return list(dict.fromkeys(value for value in values if value))
+
+
+def _consolidate_quantity_mentions(values: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse repeated document mentions without summing overlapping scopes."""
+
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for raw in values:
+        row = dict(raw)
+        key = (str(row.get("value") or ""), str(row.get("unit") or ""))
+        current = grouped.setdefault(
+            key,
+            {
+                "value": row.get("value"),
+                "unit": row.get("unit"),
+                "occurrence_count": 0,
+                "source_locator_ids": [],
+            },
+        )
+        current["occurrence_count"] += 1
+        if row.get("source_locator_id"):
+            current["source_locator_ids"] = sorted(
+                {
+                    *current["source_locator_ids"],
+                    str(row["source_locator_id"]),
+                }
+            )
+    return [grouped[key] for key in sorted(grouped)]
+
+
+def _sheet_pile_profiles(normalized: str) -> list[str]:
+    profiles: list[str] = []
+    for match in re.finditer(r"\bл5(?:ум|\s*10)?\b", normalized):
+        value = match.group(0).upper().replace(" ", "-")
+        profiles.append(value)
+    return _ordered_unique(profiles)
+
+
 def _normalized(value: object) -> str:
-    return " ".join(re.sub(r"[^0-9a-zа-яё.,]+", " ", str(value or "").casefold()).split())
+    return " ".join(
+        re.sub(r"[^0-9a-zа-яё.,]+", " ", str(value or "").casefold().replace("ё", "е")).split()
+    )

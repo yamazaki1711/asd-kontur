@@ -263,6 +263,68 @@ def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
 
 
+def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    engineering_source = _source("Лист КР")
+    engineering_source["authority_layer"] = "workspace_fact"
+    model = {
+        "model_version": "project-engineering-model-v2",
+        "pits": {"professional_answer": "Подтверждены 4 отдельных котлована."},
+        "sheet_pile_schedule": [
+            {
+                "facility": "КНС 4",
+                "operation": "Устройство шпунтового ограждения",
+                "source_locator_ids": ["locator-a"],
+            }
+        ],
+        "issues": [{"kind": "Требуется распределить коммерческий объём"}],
+    }
+
+    monkeypatch.setattr(
+        query,
+        "_workspace_context",
+        lambda *_args, **_kwargs: {
+            "name": "Испытательный объект",
+            "project_definition": {},
+            "project_engineering": model,
+            "work_packages": [],
+            "work_package_selection": {},
+            "facility_work_candidate_groups": [],
+            "facility_work_selection": {},
+            "requirement_matrix": {},
+            "discrepancies": [],
+            "mode_result": None,
+            "documents": [],
+            "structure_dossiers": [],
+            "structure_identity_candidates": [],
+            "structure_identity_dossiers": [],
+            "materialization": {"state": "partial"},
+            "semantic_coverage": [],
+            "candidate_summary": {},
+            "facility_work_coverage": {},
+            "overview_source_items": [{"source": engineering_source}],
+        },
+    )
+
+    response = query.execute(
+        "consultant.get_workspace_overview",
+        {"mode": "Tender"},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert response.result["value"]["project_engineering"] == model
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
     groups = [
         {

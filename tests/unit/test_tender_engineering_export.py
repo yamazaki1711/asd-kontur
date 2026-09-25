@@ -21,6 +21,7 @@ def _model() -> dict[str, object]:
         },
         "pits": {"professional_answer": "Установлено два котлована."},
         "facilities": [{"name": "КНС 7", "kind": "Сооружение", "status": "Установлено"}],
+        "facility_cards": [],
         "works": [
             {
                 "work_scope_id": "work-1",
@@ -46,6 +47,24 @@ def _model() -> dict[str, object]:
                 "conclusion": "Разница РД ↔ ВОР: 2.5 т",
             }
         ],
+        "scope_comparisons": [
+            {
+                "classification": "UNRESOLVED_SCOPE_MATCH",
+                "professional_status": "Требуется распределить коммерческий объём",
+                "facility": "КНС 7",
+                "work": "Погружение шпунта",
+                "conclusion": "Сметный объём не распределён по сооружениям.",
+            }
+        ],
+        "sheet_pile_schedule": [
+            {
+                "facility": "КНС 7",
+                "operation": "Погружение шпунта",
+                "quantities_by_document": {"РД": [{"value": "18.5", "unit": "т"}]},
+                "uncertainty": "Требуется распределить коммерческий объём.",
+            }
+        ],
+        "materials": [],
         "issues": [
             {
                 "kind": "Расхождение объёмов",
@@ -93,4 +112,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Tender-анализ проекта" in xml
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
+    assert "Возможные неучтённые работы" in xml
+    assert "Нормативные вопросы" in xml
+    assert "Неопределённости / недостающие данные" in xml
     assert "Вопросы Заказчику" in xml

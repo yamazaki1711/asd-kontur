@@ -129,7 +129,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         _paragraph(
             str(pits.get("professional_answer") or "Инвентаризация котлованов не завершена.")
         ),
-        _heading("2. Состав сооружений"),
+        _heading("2. Состав объекта"),
         _simple_table(
             ("Сооружение / участок", "Тип", "Статус"),
             [
@@ -141,7 +141,22 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 for row in model.get("facilities") or ()
             ],
         ),
-        _heading("3. Основные виды работ и объёмы"),
+        _heading("3. Сооружения"),
+        _simple_table(
+            ("Сооружение", "Котлованы", "Основные работы", "Нерешённые вопросы"),
+            [
+                (
+                    str(dict(row.get("facility") or {}).get("name") or ""),
+                    ", ".join(str(value.get("name") or "") for value in row.get("pits") or ())
+                    or "не установлен / не предусмотрен",
+                    ", ".join(str(value.get("work_name") or "") for value in row.get("works") or ())
+                    or "требуют привязки",
+                    "; ".join(str(value) for value in row.get("missing_information") or ()),
+                )
+                for row in model.get("facility_cards") or ()
+            ],
+        ),
+        _heading("4. Основные виды работ"),
         _simple_table(
             ("Место", "Работа", "Объёмы по документам", "Материалы"),
             [
@@ -154,7 +169,39 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 for row in model.get("works") or ()
             ],
         ),
-        _heading("4. Расхождения ПД/РД/ВОР/сметы"),
+        _heading("5. Основные объёмы"),
+        _simple_table(
+            ("Сооружение / котлован", "Операция", "Объёмы по документам", "Ограничение"),
+            [
+                (
+                    str(row.get("facility") or "Требует привязки"),
+                    str(row.get("operation") or ""),
+                    _role_values(row.get("quantities_by_document")),
+                    str(row.get("uncertainty") or ""),
+                )
+                for row in model.get("sheet_pile_schedule") or ()
+            ],
+            empty="Пообъектные объёмы пока не установлены.",
+        ),
+        _heading("6. Материалы"),
+        _simple_table(
+            ("Место", "Работа", "Документ", "Материал"),
+            [
+                (
+                    str(row.get("facility") or "Требует уточнения"),
+                    str(row.get("work") or ""),
+                    str(row.get("document_role") or ""),
+                    " ".join(
+                        str(value)
+                        for value in (row.get("name"), row.get("quantity"), row.get("unit"))
+                        if value not in (None, "")
+                    ),
+                )
+                for row in model.get("materials") or ()
+            ],
+            empty="Материалы по установленным работам не найдены.",
+        ),
+        _heading("7. Расхождения ПД/РД/спецификаций/ВОР/сметы"),
         _simple_table(
             ("Место", "Работа", "Сравнение", "Вывод"),
             [
@@ -168,27 +215,49 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             ],
             empty="Сопоставимые значения по ролям документов пока не установлены.",
         ),
-        _heading("5. Неучтённые или спорные работы"),
-        _paragraph(
-            f"Не удалось однозначно классифицировать: "
-            f"{len(model.get('unclassified_works') or ())} описаний. "
-            "Они сохранены для дальнейшего уточнения и не исключены из состава проекта."
+        _heading("8. Возможные неучтённые работы"),
+        _simple_table(
+            ("Место", "Работа", "Результат сопоставления", "Вывод"),
+            [
+                (
+                    str(row.get("facility") or "Требует уточнения"),
+                    str(row.get("work") or ""),
+                    str(row.get("professional_status") or ""),
+                    str(row.get("conclusion") or ""),
+                )
+                for row in model.get("scope_comparisons") or ()
+                if row.get("classification") != "MATCH"
+            ],
+            empty="В установленном объёме возможные неучтённые работы не выявлены.",
         ),
-        _heading("6. Технические противоречия"),
+        _heading("9. Технические противоречия"),
         _issue_table(model.get("issues") or ()),
-        _heading("7. Вопросы Заказчику"),
+        _heading("10. Нормативные вопросы"),
+        _paragraph(str(dict(model.get("requirements") or {}).get("professional_summary") or "")),
+        _bullet_list(
+            [str(value) for value in dict(model.get("requirements") or {}).get("unresolved") or ()],
+            empty="Нормативные вопросы не установлены.",
+        ),
+        _heading("11. Вопросы Заказчику"),
         _bullet_list(
             [str(row.get("question") or "") for row in model.get("customer_questions") or ()],
             empty="Вопросы будут сформированы после установления инженерных расхождений.",
         ),
-        _heading("8. Риски Подрядчика"),
+        _heading("12. Риски Подрядчика"),
         _bullet_list(
             [str(row.get("risk") or "") for row in model.get("risks") or ()],
             empty="Риски будут сформированы после установления инженерных расхождений.",
         ),
-        _heading("9. Применимые требования"),
-        _paragraph(str(dict(model.get("requirements") or {}).get("professional_summary") or "")),
-        _heading("10. Список исходных документов"),
+        _heading("13. Неопределённости / недостающие данные"),
+        _bullet_list(
+            [
+                str(value.get("reason") or value.get("description") or "")
+                for value in pits.get("requires_clarification") or ()
+            ]
+            + [str(value) for value in project.get("missing_information") or ()],
+            empty="Неопределённости не установлены.",
+        ),
+        _heading("Список исходных документов"),
         _bullet_list(
             [
                 f"{row.get('name')} (версия {row.get('version')}; {row.get('document_role')})"

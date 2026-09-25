@@ -228,6 +228,7 @@ class ProfessionalAssistantKnowledgeQuery:
                 "consultant.get_workspace_overview": {
                     "name": workspace["name"],
                     "project_definition": workspace["project_definition"],
+                    "project_engineering": workspace.get("project_engineering", {}),
                     "documents": workspace["documents"],
                     "structure_dossiers": workspace["structure_dossiers"],
                     "structure_identity_candidates": workspace.get(
@@ -711,7 +712,10 @@ class ProfessionalAssistantKnowledgeQuery:
                 "facility_cards",
                 "pits",
                 "works",
+                "work_classification",
                 "quantity_comparisons",
+                "scope_comparisons",
+                "sheet_pile_schedule",
                 "materials",
                 "requirements",
                 "issues",
@@ -721,6 +725,28 @@ class ProfessionalAssistantKnowledgeQuery:
             )
             if key in engineering
         }
+        engineering_source_items = evidence_items(
+            {
+                str(locator_id)
+                for key in (
+                    "facilities",
+                    "works",
+                    "quantity_comparisons",
+                    "scope_comparisons",
+                    "sheet_pile_schedule",
+                    "issues",
+                )
+                for row in engineering.get(key) or ()
+                if isinstance(row, Mapping)
+                for locator_id in row.get("source_locator_ids") or ()
+            }
+            | {
+                str(locator_id)
+                for row in dict(engineering.get("pits") or {}).get("established") or ()
+                if isinstance(row, Mapping)
+                for locator_id in row.get("source_locator_ids") or ()
+            }
+        )
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -757,8 +783,8 @@ class ProfessionalAssistantKnowledgeQuery:
                 "cross_source_identity_candidate_count": len(overview_identities),
                 "meaning": "Извлечённые кандидаты не являются подтверждёнными фактами или полным перечнем.",
             },
-            "source_items": [*source_items, *dossier_source_items],
-            "overview_source_items": dossier_source_items,
+            "source_items": [*source_items, *dossier_source_items, *engineering_source_items],
+            "overview_source_items": [*dossier_source_items, *engineering_source_items][:60],
             "work_package_source_items": work_package_source_items,
             "discrepancy_source_items": discrepancy_source_items,
             "gap_source_items": gap_source_items,

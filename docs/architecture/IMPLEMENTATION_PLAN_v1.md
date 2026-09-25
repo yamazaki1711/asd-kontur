@@ -40,7 +40,7 @@ is the shared project model and its Tender engineering result:
 | Project understanding and Tender engineering analysis | Tender; shared model for all modes | Project/facility/structure inventory, work/quantity/material schedules, actual comparisons, engineering issues, risks, questions and editable report | Thousands of extracted observations are not reconciled into construction identities, scopes, comparable quantities or professional findings | Controlled edge cases plus real OZERO answers and application navigation; source links and safety checks support the result | Primary real-project validation corpus; no OZERO-specific logic or expected count |
 | Supported ID package formation and export | Support; reusable data prepared in Tender | Register-first editable ID package, generated supported forms, attachments/missing-field manifest and export | Existing package formation needs a scope-aware, deduplicated work package and a production-facing completeness/report boundary | Controlled known work type with composition, missing fields, revisions, export/render/edit/reload/isolation | Optional regression check only; OZERO does not supply execution dates, measurements, signatures or a Support transition |
 
-## Active delivery slice — OZERO PROJECT UNDERSTANDING AND TENDER ENGINEERING ANALYSIS v1 (2026-09-25)
+## Active delivery slice — OZERO TENDER ENGINEERING ANALYSIS v2 (2026-09-25)
 
 The user-visible OZERO audit demonstrated that completed extraction does not yet
 produce a usable construction model.  This slice therefore supersedes further
@@ -90,6 +90,24 @@ Controlled fixtures still cover repeated mentions, same-named distinct
 objects, shared pits, revisions, duplicate quantities, incompatible units,
 real discrepancies, missing comparison inputs and workspace isolation. OZERO
 names, identifiers, counts and conclusions are never encoded in product logic.
+
+**v2 bounded delta:** deepen the accepted v1 model rather than repeat source
+extraction. Construction operations are grouped by ordered engineering terms,
+explicit facility designations and unique sheet context; estimate resources,
+headings and material rows are accounted for separately and are not presented
+as work packages. Comparisons require the same normalized operation and
+compatible units. A project item without an allocated commercial row is shown
+as an unresolved scope match unless the available commercial denominator is
+clear enough to support a possible-omission finding.
+
+The application exposes facility dossiers, the pit inventory, the sheet-pile
+and waling schedule, role-specific quantities/materials, project/commercial
+scope results, issues, customer questions and contractor risks. The same model
+feeds the editable Tender report and the consultant workspace overview.
+Recomputation is deterministic: the model fingerprint changes when active
+source/candidate versions, facility identities, pit dispositions, applicable
+requirements or professional corrections change; historical extraction is not
+rewritten and unrelated documents are not reprocessed.
 
 ### Product-led delivery evidence — 2026-09-19
 

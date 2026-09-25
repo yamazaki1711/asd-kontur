@@ -79,6 +79,13 @@ def _model() -> dict[str, object]:
                 "source_version_id": "source-rd",
                 "source_locator_id": "work-rd",
             },
+            {
+                "candidate_id": "heading",
+                "value": "Строительные работы",
+                "label": "строительные работы",
+                "source_version_id": "source-vor",
+                "source_locator_id": "work-vor",
+            },
         ],
         "quantities": [
             {
@@ -158,6 +165,10 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     assert works[0]["work_name"] == "Погружение шпунта"
     assert works[0]["materials_by_document"]["РД"][0]["name"] == ("Шпунт Л5-УМ, сталь С255")
     assert model["unclassified_works"][0]["project_wording"] == ("Особая технологическая операция")
+    assert model["excluded_non_work_observations"][0]["project_wording"] == ("Строительные работы")
+    assert model["work_classification"]["excluded_non_work_observation_count"] == 1
+    assert model["scope_comparisons"][0]["classification"] == "MATCH"
+    assert model["sheet_pile_schedule"][0]["operation"] == "Погружение шпунта"
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:
@@ -171,6 +182,15 @@ def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> 
     assert model["issues"][0]["kind"] == "Расхождение объёмов"
     assert all(item["issue_id"] != "technical" for item in model["issues"])
     assert model["customer_questions"][0]["question"].startswith("Запросить у Заказчика")
+
+
+def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None:
+    model = _model()
+    group = model["pits"]["requires_clarification"][0]
+
+    assert group["reason"].startswith("Указана группа котлованов без количества")
+    assert model["pits"]["is_final"] is False
+    assert "окончательное количество" in model["pits"]["professional_answer"]
 
 
 def test_model_ids_are_workspace_scoped_and_repeatable() -> None:
