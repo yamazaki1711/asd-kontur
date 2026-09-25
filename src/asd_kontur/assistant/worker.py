@@ -166,6 +166,12 @@ class AssistantWorker:
                 receipts=receipts,
                 question=claimed.question,
             )
+            deterministic = _with_structured_project_fact_checks(
+                deterministic,
+                answer=answer,
+                receipts=receipts,
+                question=claimed.question,
+            )
             repairable_deterministic = set(deterministic["problems"]) <= {
                 "clarification_has_unverified_numeric_estimate",
                 "clarification_without_question",
@@ -176,6 +182,8 @@ class AssistantWorker:
                 "workspace_inventory_candidates_incomplete",
                 "workspace_inventory_evidence_not_used",
                 "workspace_inventory_unproven_total_claimed",
+                "workspace_structured_fact_omitted",
+                "workspace_structured_fact_contradicted",
             }
             if (deterministic["passed"] and not model_checks["passed"]) or (
                 not deterministic["passed"] and repairable_deterministic
@@ -198,6 +206,12 @@ class AssistantWorker:
                     question=claimed.question,
                 )
                 deterministic = _with_inventory_checks(
+                    deterministic,
+                    answer=answer,
+                    receipts=receipts,
+                    question=claimed.question,
+                )
+                deterministic = _with_structured_project_fact_checks(
                     deterministic,
                     answer=answer,
                     receipts=receipts,
@@ -666,6 +680,10 @@ count_is_final=false не превращайте established_count в оконч
 Вопрос: {claimed.question}
 Проект: {json.dumps(answer_value, ensure_ascii=False)}
 Дефекты: {json.dumps(model_checks["issues"], ensure_ascii=False)}
+Если среди дефектов есть workspace_structured_fact_omitted или
+workspace_structured_fact_contradicted, обязательно перенесите в ответ все прямо запрошенные
+значения из sheet_pile_answer_facts (включая объём и профили балок) и не утверждайте, что они
+отсутствуют. Не добавляйте значения, которых нет в этих структурированных данных.
 Допустимые source_id: {json.dumps(source_ids, ensure_ascii=False)}
 Результаты инструментов: {_tool_results_for_prompt(receipts)}
 """
@@ -781,6 +799,89 @@ def _with_inventory_checks(
         answer.answer, candidate_count
     ):
         problems.append("workspace_inventory_unproven_total_claimed")
+    problems = list(dict.fromkeys(problems))
+    return {**checks, "passed": not problems, "problems": problems}
+
+
+def _with_structured_project_fact_checks(
+    checks: dict[str, Any],
+    *,
+    answer: SynthesizedAnswer,
+    receipts: list[dict[str, Any]],
+    question: str,
+) -> dict[str, Any]:
+    """Keep directly requested, structured engineering facts in the answer.
+
+    Qwen remains responsible for natural-language synthesis, but it must not
+    discard or contradict compact facts already calculated by the project
+    model. This validates only values the question explicitly asks for.
+    """
+
+    normalized_question = " ".join(question.casefold().replace("ё", "е").split())
+    asks_for_waling = any(
+        marker in normalized_question
+        for marker in ("распределительн", "обвязочн", "пояс", "балк")
+    )
+    if not asks_for_waling:
+        return checks
+
+    required_terms: set[str] = set()
+    required_quantities: set[tuple[str, str]] = set()
+    for receipt in receipts:
+        if receipt.get("tool") not in {
+            "consultant.get_workspace_overview",
+            "consultant.get_work_packages",
+        }:
+            continue
+        response = receipt.get("response")
+        value = response.get("value") if isinstance(response, dict) else None
+        engineering = value.get("project_engineering") if isinstance(value, dict) else None
+        if not isinstance(engineering, dict):
+            continue
+        for raw in engineering.get("sheet_pile_answer_facts") or ():
+            if not isinstance(raw, dict):
+                continue
+            operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
+            if not any(marker in operation for marker in ("пояс", "обвяз", "балк")):
+                continue
+            for beam in raw.get("waling_beams") or ():
+                if str(beam).strip():
+                    required_terms.add(str(beam).strip())
+            quantities = raw.get("quantities_by_document")
+            if not isinstance(quantities, dict):
+                continue
+            for rows in quantities.values():
+                if not isinstance(rows, list):
+                    continue
+                for item in rows:
+                    if not isinstance(item, dict) or item.get("value") in (None, ""):
+                        continue
+                    required_quantities.add(
+                        (str(item["value"]).strip(), str(item.get("unit") or "").strip())
+                    )
+    if not required_terms and not required_quantities:
+        return checks
+
+    normalized_answer = answer.answer.casefold().replace("ё", "е").replace(",", ".")
+    omitted = any(term.casefold().replace("ё", "е") not in normalized_answer for term in required_terms)
+    omitted = omitted or any(
+        value.replace(",", ".") not in normalized_answer
+        or (unit and unit.casefold() not in normalized_answer)
+        for value, unit in required_quantities
+    )
+    contradicted = bool(
+        re.search(
+            r"(?:профил\w*|объ[её]м\w*|масс\w*)[^.]{0,80}"
+            r"(?:не\s+указан|не\s+найден|отсутству|нет\s+данн)",
+            answer.answer,
+            re.IGNORECASE,
+        )
+    )
+    problems = list(checks.get("problems", []))
+    if omitted:
+        problems.append("workspace_structured_fact_omitted")
+    if contradicted:
+        problems.append("workspace_structured_fact_contradicted")
     problems = list(dict.fromkeys(problems))
     return {**checks, "passed": not problems, "problems": problems}
 

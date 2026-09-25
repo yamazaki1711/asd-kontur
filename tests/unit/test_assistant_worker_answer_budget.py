@@ -2,7 +2,12 @@
 
 import json
 
-from asd_kontur.assistant.worker import _answer_budget, _tool_results_for_prompt
+from asd_kontur.assistant.reasoning import SynthesizedAnswer
+from asd_kontur.assistant.worker import (
+    _answer_budget,
+    _tool_results_for_prompt,
+    _with_structured_project_fact_checks,
+)
 
 
 def test_explicit_normative_question_has_budget_for_complete_evidence_bound_answer() -> None:
@@ -90,6 +95,88 @@ def test_prompt_budget_prioritizes_structured_sheet_pile_facts_over_verbose_over
     assert "35Ш2" in prompt
     assert "waling-source" in prompt
     assert len(prompt) <= 14_000
+
+
+def test_requested_structured_waling_facts_cannot_be_omitted_or_contradicted() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_work_packages",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "sheet_pile_answer_facts": [
+                            {
+                                "operation": "Устройство распределительного пояса",
+                                "waling_beams": ["30Ш2", "35Ш2"],
+                                "quantities_by_document": {
+                                    "Смета": [{"value": "9.841", "unit": "т"}]
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Профили балок в документах не указаны.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Пояса шпунтового ограждения.",
+        ("распределительный пояс",),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+        question="Каковы объём и профили распределительного пояса?",
+    )
+
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+    assert "workspace_structured_fact_contradicted" in checks["problems"]
+
+
+def test_requested_structured_waling_facts_pass_when_answered() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_work_packages",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "sheet_pile_answer_facts": [
+                            {
+                                "operation": "Устройство обвязочного пояса",
+                                "waling_beams": ["30Ш2", "35Ш2"],
+                                "quantities_by_document": {
+                                    "Смета": [{"value": "9.841", "unit": "т"}]
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "По смете учтено 9,841 т поясов из балок 30Ш2 и 35Ш2.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Пояса шпунтового ограждения.",
+        ("обвязочный пояс",),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+        question="Каковы объём и профили обвязочного пояса?",
+    )
+
+    assert checks == {"passed": True, "problems": []}
 
 
 def test_inventory_prompt_preserves_all_candidates_as_structured_json() -> None:
