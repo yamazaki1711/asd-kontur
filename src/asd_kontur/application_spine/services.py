@@ -651,7 +651,7 @@ class ProductSpineService:
         if view is None:
             raise ValueError("project_understanding_no_result")
         engineering = dict(view.get("project_engineering") or {})
-        if engineering:
+        if engineering.get("works"):
             data = render_engineering_findings_csv(engineering)
             digest = "sha256:" + hashlib.sha256(data).hexdigest()
             return DocumentContent(
@@ -887,7 +887,7 @@ class ProductSpineService:
             ),
             scope_schedule=(
                 render_engineering_work_schedule_csv(engineering)
-                if engineering
+                if engineering.get("works")
                 else render_tender_scope_schedule_csv(
                     view.get("work_packages", []),
                     **common,
