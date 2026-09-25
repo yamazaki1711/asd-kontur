@@ -244,7 +244,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(
       page.getByRole("heading", { name: "Модель объекта" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Виды и объёмы работ" }).click();
+    await page.getByRole("button", { name: "Работы и объёмы" }).click();
     await expect(
       page.getByText("Устройство монолитной плиты", { exact: true }),
     ).toBeVisible();
