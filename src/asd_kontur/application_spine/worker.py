@@ -329,6 +329,7 @@ class DocumentWorker:
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
             JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+            JobKind.PROJECT_WORK_RECONCILIATION,
         }:
             try:
                 with self._open_source(claimed) as source:

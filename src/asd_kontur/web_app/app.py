@@ -1301,6 +1301,24 @@ def _api_router() -> APIRouter:
         return JobView(**jsonable_encoder(asdict(value)))
 
     @router.post(
+        "/workspaces/{workspace_id}/project-understanding/work-reconciliation-runs",
+        response_model=list[JobView],
+        status_code=202,
+        tags=["project-understanding"],
+    )
+    def start_project_work_reconciliation(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> list[JobView]:
+        values = _container(request).service.start_project_work_reconciliation(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=request.state.correlation_id,
+        )
+        return [JobView(**jsonable_encoder(asdict(value))) for value in values]
+
+    @router.post(
         "/workspaces/{workspace_id}/project-understanding/reviews",
         response_model=ProjectCandidateReviewView,
         status_code=201,

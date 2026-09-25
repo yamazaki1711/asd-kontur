@@ -206,6 +206,22 @@ class QwenDocumentSemanticAdapter:
         )
         return QwenSemanticClassification(tuple(role_candidates), (decision,))
 
+    def reconcile_project_works(
+        self,
+        rows: Iterable[Mapping[str, object]],
+        *,
+        work_families: Mapping[str, str],
+        facilities: Iterable[str],
+    ) -> dict[str, object]:
+        """Interpret bounded unresolved work rows through the same local runtime."""
+
+        from asd_kontur.tender.qwen_work_reconciliation import QwenProjectWorkReconciler
+
+        return QwenProjectWorkReconciler(
+            self._endpoint,
+            timeout_seconds=self._timeout_seconds,
+        ).reconcile(rows, work_families=work_families, facilities=facilities)
+
     def extract_structures(
         self, elements: Iterable[LayoutElement]
     ) -> tuple[StructureNodeCandidate, ...]:

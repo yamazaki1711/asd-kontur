@@ -90,6 +90,67 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
         _profile_for(JobKind.PROJECT_STRUCTURE_RECONCILIATION)
         == "industrial-document-understanding-v0.2"
     )
+    assert (
+        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION)
+        == "qwen-project-work-reconciliation-v1"
+    )
+
+
+def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> None:
+    result = {
+        "contract": "project-work-reconciliation-result@1.0.0",
+        "profile_version": "qwen-project-work-reconciliation-v1",
+        "observations": [
+            {
+                "candidate_id": "candidate-a",
+                "status": "MATCHED",
+                "family_key": "backfill",
+                "operation": "Обратная засыпка",
+                "facility": None,
+                "confidence": "0.91",
+                "reason": "Явная строительная операция.",
+            }
+        ],
+    }
+    calls = 0
+
+    class Repository:
+        def load_project_work_reconciliation_result(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, object]:
+            assert profile_version == "qwen-project-work-reconciliation-v1"
+            return result
+
+    class Qwen:
+        def reconcile_project_works(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            raise AssertionError("persisted inference must be reused")
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        deterministic_uuid("work-reconciliation-organization"),
+        deterministic_uuid("work-reconciliation-workspace"),
+        deterministic_uuid("work-reconciliation-job"),
+        JobKind.PROJECT_WORK_RECONCILIATION,
+        {
+            "work_reconciliation_profile": "qwen-project-work-reconciliation-v1",
+            "work_observations": [{"candidate_id": "candidate-a"}],
+            "work_families": {"backfill": "Обратная засыпка"},
+            "facilities": [],
+        },
+        "sha256:" + "e" * 64,
+        2,
+        2,
+        "not_requested",
+    )
+
+    assert pipeline._work_reconciliation(claimed, BytesIO()) == result
+    assert calls == 0
 
 
 def test_identity_observation_groups_are_bounded_balanced_and_complete() -> None:

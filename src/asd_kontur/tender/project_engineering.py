@@ -307,6 +307,7 @@ def build_project_engineering_model(
     matrix: Mapping[str, Any],
     normative_profile: Mapping[str, Any] | None,
     source_context: Mapping[str, Mapping[str, Any]],
+    work_resolutions: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return the project-first model consumed by UI, report and assistant."""
 
@@ -339,6 +340,7 @@ def build_project_engineering_model(
         facilities,
         node_to_facility,
         source_context,
+        work_resolutions or {},
     )
     comparisons = _deduplicate_dicts(
         _exact_work_comparisons(
@@ -453,6 +455,12 @@ def classify_work_family(value: object) -> tuple[str, str] | None:
         if any(_ordered_stem_phrase(normalized, term) for term in terms):
             return key, title
     return None
+
+
+def work_family_catalog() -> dict[str, str]:
+    """Return the reusable construction taxonomy accepted from local Qwen."""
+
+    return {key: title for key, title, _terms in _WORK_FAMILIES}
 
 
 def non_work_reason(value: object) -> str | None:
@@ -803,6 +811,7 @@ def _work_schedule(
     facilities: Iterable[Mapping[str, Any]],
     node_to_facility: Mapping[str, str],
     source_context: Mapping[str, Mapping[str, Any]],
+    work_resolutions: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     del node_to_facility  # Exact relationship assignment can extend the locator rule later.
     work_rows = [dict(raw) for raw in works]
@@ -860,6 +869,9 @@ def _work_schedule(
         locator_id = str(row.get("source_locator_id") or "")
         source_version_id = str(row.get("source_version_id") or "")
         family = classify_work_family(normalized_name)
+        resolution = dict(work_resolutions.get(candidate_id) or {})
+        if int(resolution.get("candidate_version") or 0) != int(row.get("version") or 0):
+            resolution = {}
         designation = facility_designation(f"{name} {row.get('scope_key') or ''}")
         facility = facility_by_designation.get(designation or "")
         assignment_basis = "Явное обозначение сооружения в описании работы"
@@ -886,6 +898,15 @@ def _work_schedule(
                 assignment_basis = (
                     "Работа отнесена к единственному явно обозначенному сооружению на листе"
                 )
+        if facility is None and resolution.get("facility"):
+            semantic_designation = str(resolution["facility"])
+            semantic_facility = facility_by_designation.get(semantic_designation)
+            if semantic_facility is not None:
+                facility = semantic_facility
+                designation = semantic_designation
+                assignment_basis = (
+                    "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
+                )
         role = _professional_document_role(row.get("source_role"), context.get("safe_display_name"))
         observation = {
             "candidate_id": candidate_id,
@@ -900,7 +921,27 @@ def _work_schedule(
             "source": _source_ref(locator_id, source_context),
             "quantities": _unique_values(quantity_by_work.get(candidate_id, ()), "quantity"),
             "materials": _unique_values(material_by_work.get(candidate_id, ()), "material"),
+            "semantic_resolution_status": resolution.get("status"),
+            "semantic_resolution_reason": resolution.get("reason"),
         }
+        if family is None:
+            if resolution.get("status") == "MATCHED":
+                family_key = str(resolution.get("family_key") or "")
+                family_name = work_family_catalog().get(family_key)
+                if family_name:
+                    operation_name = str(resolution.get("operation") or family_name)
+                    family = (family_key, family_name)
+            elif resolution.get("status") == "NOT_A_WORK":
+                excluded.append(
+                    {
+                        **observation,
+                        "exclusion_reason": str(
+                            resolution.get("reason")
+                            or "Локальная модель определила, что строка не является работой"
+                        ),
+                    }
+                )
+                continue
         if family is None:
             if name:
                 reason = non_work_reason(name)
@@ -910,7 +951,11 @@ def _work_schedule(
                     unclassified.append(observation)
             continue
         family_key, family_name = family
-        operation_name = professional_work_name(family_key, name)
+        operation_name = str(
+            resolution.get("operation")
+            if resolution.get("status") == "MATCHED" and resolution.get("operation")
+            else professional_work_name(family_key, name)
+        )
         exact_key = (source_version_id, locator_id, normalized_name)
         exact_observations.setdefault(
             exact_key,

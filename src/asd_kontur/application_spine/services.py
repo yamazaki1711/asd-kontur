@@ -943,6 +943,23 @@ class ProductSpineService:
             correlation_id=correlation_id,
         )
 
+    def start_project_work_reconciliation(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        correlation_id: UUID,
+        batch_size: int = 12,
+        max_batches: int = 4,
+    ) -> tuple[JobSummary, ...]:
+        return self._repository.start_project_work_reconciliation(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=correlation_id,
+            batch_size=batch_size,
+            max_batches=max_batches,
+        )
+
     def review_project_candidate(
         self,
         *,

@@ -408,6 +408,89 @@ class IndustrialUnderstandingRepository:
                 },
             )
 
+    def record_project_work_reconciliation_result(
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+        output_manifest: dict[str, object],
+        model_identity: str,
+    ) -> None:
+        """Persist one validated semantic work batch without rewriting extraction."""
+
+        if profile_version != "qwen-project-work-reconciliation-v1":
+            raise ValueError("project_work_reconciliation_profile_invalid")
+        result_digest = semantic_digest(output_manifest)
+        with self._session(claimed) as session:
+            inserted = session.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_work_reconciliation_results "
+                    "(organization_id,workspace_id,job_id,profile_version,input_digest,"
+                    "result_manifest,result_digest,model_identity) VALUES "
+                    "(:o,:w,:job,:profile,:input,CAST(:manifest AS jsonb),:result,:model) "
+                    "ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "profile": profile_version,
+                    "input": claimed.input_digest,
+                    "manifest": _json(output_manifest),
+                    "result": result_digest,
+                    "model": model_identity,
+                },
+            )
+            if not (getattr(inserted, "rowcount", 0) or 0):
+                existing = session.execute(
+                    sa.text(
+                        "SELECT input_digest,result_digest FROM "
+                        "workspace.project_work_reconciliation_results WHERE "
+                        "organization_id=:o AND workspace_id=:w AND job_id=:job"
+                    ),
+                    {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+                ).one()
+                if str(existing.input_digest) != claimed.input_digest or str(
+                    existing.result_digest
+                ) != result_digest:
+                    raise ValueError("project_work_reconciliation_result_conflict")
+
+    def load_project_work_reconciliation_result(
+        self,
+        claimed: ClaimedJob,
+        *,
+        profile_version: str,
+    ) -> dict[str, object] | None:
+        """Resume a job after persistence without repeating local inference."""
+
+        with self._session(claimed) as session:
+            row = (
+                session.execute(
+                    sa.text(
+                        "SELECT input_digest,result_manifest FROM "
+                        "workspace.project_work_reconciliation_results WHERE "
+                        "organization_id=:o AND workspace_id=:w AND job_id=:job AND "
+                        "profile_version=:profile"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "job": claimed.job_id,
+                        "profile": profile_version,
+                    },
+                )
+                .mappings()
+                .one_or_none()
+            )
+        if row is None:
+            return None
+        if str(row["input_digest"]) != claimed.input_digest:
+            raise ValueError("project_work_reconciliation_input_conflict")
+        manifest = row["result_manifest"]
+        if not isinstance(manifest, dict):
+            raise ValueError("project_work_reconciliation_result_invalid")
+        return dict(manifest)
+
     def record_failed_engineering_batch(
         self,
         claimed: ClaimedJob,

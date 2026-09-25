@@ -91,6 +91,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY: self._assembly,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: self._reconciliation,
             JobKind.PROJECT_STRUCTURE_RECONCILIATION: self._reconciliation,
+            JobKind.PROJECT_WORK_RECONCILIATION: self._work_reconciliation,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -755,6 +756,39 @@ class IndustrialDocumentUnderstandingPipeline:
         result["pit_observation_failures"] = pit_failures
         return result
 
+    def _work_reconciliation(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_work_reconciliation_runtime_unavailable")
+        manifest = claimed.input_manifest
+        rows = manifest.get("work_observations")
+        families = manifest.get("work_families")
+        facilities = manifest.get("facilities")
+        if (
+            not isinstance(rows, list)
+            or not isinstance(families, dict)
+            or not isinstance(facilities, list)
+        ):
+            raise UnderstandingStageFailure("work_reconciliation_manifest_invalid")
+        profile_version = str(manifest.get("work_reconciliation_profile") or "")
+        reusable = self._repository.load_project_work_reconciliation_result(
+            claimed,
+            profile_version=profile_version,
+        )
+        if reusable is not None:
+            return reusable
+        result = self._qwen_semantic.reconcile_project_works(
+            [dict(row) for row in rows if isinstance(row, dict)],
+            work_families={str(key): str(value) for key, value in families.items()},
+            facilities=[str(value) for value in facilities],
+        )
+        self._repository.record_project_work_reconciliation_result(
+            claimed,
+            profile_version=profile_version,
+            output_manifest=result,
+            model_identity=str(manifest.get("model_identity") or "local-qwen3.8-27b"),
+        )
+        return result
+
 
 def _read_bounded(source: BinaryIO) -> bytes:
     content = source.read(MAX_BOUNDED_PROCESSING_BYTES + 1)
@@ -784,6 +818,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.REQUIREMENT_MATRIX_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: PROJECT_RECONCILIATION_PROFILE_VERSION,
         JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
+        JobKind.PROJECT_WORK_RECONCILIATION: "qwen-project-work-reconciliation-v1",
     }[kind]
 
 

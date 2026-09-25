@@ -224,6 +224,107 @@ def test_model_ids_are_workspace_scoped_and_repeatable() -> None:
     assert changed["facilities"][0]["facility_id"] != rebuilt["facilities"][0]["facility_id"]
 
 
+def test_semantic_work_resolution_materializes_without_manual_candidate_approval() -> None:
+    source_context = dict([_source("work", "Технологическая карта.pdf", 17)])
+    model = build_project_engineering_model(
+        workspace_id="workspace-semantic",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "work-ambiguous",
+                    "version": 3,
+                    "value": "Послойное уплотнение обратной засыпки",
+                    "label": "нестандартное описание операции",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "not-work",
+                    "version": 1,
+                    "value": "Технические характеристики",
+                    "label": "нестандартный раздел",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work",
+                    "source_role": "working_documentation",
+                },
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={},
+        defects=[],
+        matrix={},
+        normative_profile=None,
+        source_context=source_context,
+        work_resolutions={
+            "work-ambiguous": {
+                "candidate_version": 3,
+                "status": "MATCHED",
+                "family_key": "backfill",
+                "operation": "Послойное уплотнение обратной засыпки",
+                "reason": "В описании явно указана строительная операция.",
+            },
+            "not-work": {
+                "candidate_version": 1,
+                "status": "NOT_A_WORK",
+                "reason": "Заголовок раздела без строительной операции.",
+            },
+        },
+    )
+
+    assert model["works"][0]["work_name"] == "Послойное уплотнение обратной засыпки"
+    assert model["works"][0]["family_key"] == "backfill"
+    assert model["unclassified_works"] == []
+    assert model["excluded_non_work_observations"][0]["candidate_id"] == "not-work"
+
+
+def test_semantic_work_resolution_is_invalidated_by_candidate_version_change() -> None:
+    source_context = dict([_source("work", "Технологическая карта.pdf", 17)])
+    model = build_project_engineering_model(
+        workspace_id="workspace-semantic",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "work-ambiguous",
+                    "version": 4,
+                    "value": "Неопределённая операция",
+                    "label": "неопределенная операция",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={},
+        defects=[],
+        matrix={},
+        normative_profile=None,
+        source_context=source_context,
+        work_resolutions={
+            "work-ambiguous": {
+                "candidate_version": 3,
+                "status": "MATCHED",
+                "family_key": "backfill",
+                "operation": "Обратная засыпка",
+                "reason": "Старая версия.",
+            }
+        },
+    )
+
+    assert model["works"] == []
+    assert model["unclassified_works"][0]["candidate_id"] == "work-ambiguous"
+
+
 def test_application_projection_hides_bulk_unclassified_rows_outside_work_view() -> None:
     model = _model()
     model["unclassified_works"] = [

@@ -29,7 +29,15 @@ from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
     select_facility_work_candidates,
 )
-from asd_kontur.tender.project_engineering import build_project_engineering_model
+from asd_kontur.tender.project_engineering import (
+    build_project_engineering_model,
+    classify_work_family,
+    non_work_reason,
+    work_family_catalog,
+)
+from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_PROFILE,
+)
 from asd_kontur.tender.structure_identity_components import (
     build_structure_identity_components,
 )
@@ -943,6 +951,7 @@ class SpinePostgresRepository:
             not in {
                 JobKind.WORKSPACE_RESET_RECONCILIATION,
                 JobKind.ID_DOCUMENT_GENERATION,
+                JobKind.PROJECT_WORK_RECONCILIATION,
             }
         )
         if media_type == "application/zip":
@@ -3193,6 +3202,9 @@ class SpinePostgresRepository:
             candidates = self._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            work_resolutions = self._project_work_resolution_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             structure_nodes = self._project_structure_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -3252,6 +3264,7 @@ class SpinePostgresRepository:
                 matrix=_jsonable_row(matrix),
                 normative_profile=_jsonable_row(profile) if profile is not None else None,
                 source_context=project_source_context,
+                work_resolutions=work_resolutions,
             )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -4201,6 +4214,233 @@ class SpinePostgresRepository:
             ).one()
         return _job_summary(row)
 
+    def start_project_work_reconciliation(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        correlation_id: UUID,
+        batch_size: int = 12,
+        max_batches: int = 4,
+    ) -> tuple[JobSummary, ...]:
+        """Queue bounded Qwen interpretation of still-unclassified work rows.
+
+        This command never repeats source extraction. It versions the exact
+        candidate rows supplied to Qwen and skips compatible successful
+        results, so it can be called repeatedly as a fair, resumable refill.
+        """
+
+        if not 1 <= batch_size <= 16 or not 1 <= max_batches <= 20:
+            raise SpinePersistenceError("project_work_reconciliation_batch_invalid")
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            candidates = self._project_candidate_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            prior = self._project_work_resolution_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            unresolved = []
+            for raw in candidates.get("work_types", []):
+                row = dict(raw)
+                candidate_id = str(row.get("candidate_id") or "")
+                version = int(row.get("version") or 0)
+                wording = str(row.get("value") or row.get("label") or "").strip()
+                if (
+                    not candidate_id
+                    or not wording
+                    or classify_work_family(wording) is not None
+                    or non_work_reason(wording) is not None
+                ):
+                    continue
+                existing = prior.get(candidate_id)
+                if existing is not None and int(existing.get("candidate_version") or 0) == version:
+                    continue
+                row["wording"] = wording
+                unresolved.append(row)
+            if not unresolved:
+                return ()
+
+            locator_ids = sorted(
+                {str(row["source_locator_id"]) for row in unresolved if row.get("source_locator_id")}
+            )
+            source_context = self._project_source_context(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=locator_ids,
+            )
+            source_rows = {
+                str(row["source_version_id"]): dict(row)
+                for row in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (v.source_version_id) v.source_version_id,v.document_id,"
+                        "v.version,v.object_key,v.media_type,v.content_digest,v.safe_display_name "
+                        "FROM workspace.document_versions v JOIN "
+                        "workspace.document_version_activation_decisions a ON "
+                        "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
+                        "a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
+                        "v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+                        "workspace.document_version_activation_decisions newer WHERE "
+                        "newer.organization_id=a.organization_id AND "
+                        "newer.workspace_id=a.workspace_id AND newer.document_id=a.document_id AND "
+                        "newer.decision_version>a.decision_version) ORDER BY "
+                        "v.source_version_id,a.decision_version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            }
+            identity_candidates = self._structure_identity_candidate_rows(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            components = build_structure_identity_components(identity_candidates)
+            facilities = sorted(
+                {
+                    str(item.get("canonical_label") or "").strip()
+                    for item in components
+                    if str(item.get("identity_kind") or "") in {"facility", "local_area"}
+                    and str(item.get("canonical_label") or "").strip()
+                }
+            )
+
+            prepared: list[dict[str, Any]] = []
+            for row in unresolved:
+                context = source_context.get(str(row.get("source_locator_id") or ""), {})
+                locator_value = context.get("locator_value")
+                page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
+                wording = str(row["wording"])
+                hints = [value for value in facilities if value.casefold() in wording.casefold()]
+                prepared.append(
+                    {
+                        "candidate_id": str(row["candidate_id"]),
+                        "candidate_version": int(row["version"]),
+                        "wording": wording,
+                        "document_role": str(row.get("source_role") or ""),
+                        "document": str(context.get("safe_display_name") or ""),
+                        "page": page,
+                        "scope": str(row.get("scope_key") or ""),
+                        "facility_hints": hints,
+                        "nearby_context": "",
+                        "source_version_id": str(row.get("source_version_id") or ""),
+                        "source_locator_id": str(row.get("source_locator_id") or ""),
+                    }
+                )
+            frequency: dict[str, int] = defaultdict(int)
+            for row in prepared:
+                frequency[" ".join(str(row["wording"]).casefold().split())] += 1
+            prepared.sort(
+                key=lambda row: (
+                    -frequency[" ".join(str(row["wording"]).casefold().split())],
+                    str(row["source_version_id"]),
+                    int(row.get("page") or 0),
+                    str(row["candidate_id"]),
+                )
+            )
+
+            batches: list[list[dict[str, Any]]] = []
+            by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for row in prepared:
+                by_source[str(row["source_version_id"])].append(row)
+            while len(batches) < max_batches:
+                available = [rows for rows in by_source.values() if rows]
+                if not available:
+                    break
+                rows = max(
+                    available,
+                    key=lambda values: (
+                        max(
+                            frequency[" ".join(str(row["wording"]).casefold().split())]
+                            for row in values
+                        ),
+                        len(values),
+                    ),
+                )
+                batches.append(rows[:batch_size])
+                del rows[:batch_size]
+
+            scheduled: list[JobSummary] = []
+            for batch in batches:
+                source = source_rows.get(str(batch[0]["source_version_id"]))
+                if source is None:
+                    continue
+                manifest = {
+                    "document_id": str(source["document_id"]),
+                    "document_version": int(source["version"]),
+                    "source_version_id": str(source["source_version_id"]),
+                    "object_key": str(source["object_key"]),
+                    "media_type": str(source["media_type"]),
+                    "content_digest": str(source["content_digest"]),
+                    "work_reconciliation_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    "model_identity": "Qwen3.8-27B-MLX-8bit",
+                    "work_families": work_family_catalog(),
+                    "facilities": facilities,
+                    "work_observations": batch,
+                }
+                digest = semantic_digest(manifest)
+                idempotency_key = f"project-work-reconciliation:{digest}"
+                existing_job_row = session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE organization_id=:o AND "
+                        "workspace_id=:w AND job_kind='PROJECT_WORK_RECONCILIATION' AND "
+                        "idempotency_key=:key"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "key": idempotency_key},
+                ).one_or_none()
+                if existing_job_row is not None:
+                    scheduled.append(_job_summary(existing_job_row))
+                    continue
+                job_id = uuid7()
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs "
+                        "(organization_id,workspace_id,job_id,subject_document_id,job_kind,"
+                        "input_manifest,input_digest,idempotency_key,state,priority,max_attempts,"
+                        "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                        "(:o,:w,:job,:document,'PROJECT_WORK_RECONCILIATION',CAST(:manifest AS jsonb),"
+                        ":digest,:key,'queued',168,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),"
+                        ":correlation,:owner)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "job": job_id,
+                        "document": source["document_id"],
+                        "manifest": _json(manifest),
+                        "digest": digest,
+                        "key": idempotency_key,
+                        "provenance": _json(
+                            {
+                                "contract": "project-work-reconciliation.command@1.0.0",
+                                "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                                "model": "Qwen3.8-27B-MLX-8bit",
+                            }
+                        ),
+                        "correlation": correlation_id,
+                        "owner": owner_identity_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.queued",
+                    safe_message_code="project_work_interpretation_queued",
+                    current=0,
+                    total=len(batch),
+                    terminal=False,
+                )
+                scheduled_job_row = session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE organization_id=:o AND "
+                        "workspace_id=:w AND job_id=:job"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "job": job_id},
+                ).one()
+                scheduled.append(_job_summary(scheduled_job_row))
+            return tuple(scheduled)
+
     def _ensure_structure_reconciliation_job(
         self,
         session: Session,
@@ -4682,6 +4922,52 @@ class SpinePostgresRepository:
         }
 
     @staticmethod
+    def _project_work_resolution_rows(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, dict[str, Any]]:
+        """Return only terminal, profile-compatible semantic work decisions."""
+
+        rows = session.execute(
+            sa.text(
+                "SELECT job.input_manifest,result.result_manifest,result.recorded_at FROM "
+                "workspace.project_work_reconciliation_results result JOIN "
+                "workspace.durable_jobs job ON job.organization_id=result.organization_id AND "
+                "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
+                "result.organization_id=:o AND result.workspace_id=:w AND "
+                "result.profile_version=:profile AND job.job_kind='PROJECT_WORK_RECONCILIATION' "
+                "AND job.state='succeeded' ORDER BY result.recorded_at,result.job_id"
+            ),
+            {
+                "o": organization_id,
+                "w": workspace_id,
+                "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+            },
+        ).mappings()
+        resolved: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            manifest = row["input_manifest"]
+            result = row["result_manifest"]
+            if not isinstance(manifest, Mapping) or not isinstance(result, Mapping):
+                continue
+            versions = {
+                str(item.get("candidate_id") or ""): int(item.get("candidate_version") or 0)
+                for item in manifest.get("work_observations") or ()
+                if isinstance(item, Mapping) and item.get("candidate_id")
+            }
+            for item in result.get("observations") or ():
+                if not isinstance(item, Mapping):
+                    continue
+                candidate_id = str(item.get("candidate_id") or "")
+                if candidate_id not in versions:
+                    continue
+                resolved[candidate_id] = {
+                    **dict(item),
+                    "candidate_version": versions[candidate_id],
+                    "recorded_at": row["recorded_at"],
+                }
+        return resolved
+
+    @staticmethod
     def _project_review_rows(
         session: Session, *, organization_id: UUID, workspace_id: UUID
     ) -> list[dict[str, Any]]:
@@ -4955,6 +5241,9 @@ class SpinePostgresRepository:
         candidates = cls._project_candidate_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
+        work_resolutions = cls._project_work_resolution_rows(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        )
         structure_nodes = cls._project_structure_rows(
             session, organization_id=organization_id, workspace_id=workspace_id
         )
@@ -5005,6 +5294,7 @@ class SpinePostgresRepository:
             matrix={"matrix": {"rows": []}},
             normative_profile=None,
             source_context=project_source_context,
+            work_resolutions=work_resolutions,
         )
         view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(
