@@ -266,9 +266,7 @@ def test_answer_repair_retries_one_malformed_model_response(monkeypatch: Any) ->
             "response": {
                 "value": {
                     "candidate_entity_count": 1,
-                    "candidate_entities": [
-                        {"canonical_label": "Котлован А"}
-                    ],
+                    "candidate_entities": [{"canonical_label": "Котлован А"}],
                     "coverage": {"exact_total_supported": False},
                 },
                 "sources": [{"source_id": source_id}],
