@@ -2288,10 +2288,6 @@ export interface components {
             facility_work_projection?: {
                 [key: string]: unknown;
             };
-            /** Project Engineering */
-            project_engineering?: {
-                [key: string]: unknown;
-            };
             /** Intake Summary */
             intake_summary?: {
                 [key: string]: unknown;
@@ -2314,6 +2310,10 @@ export interface components {
             }[];
             /** Project Definition */
             project_definition: {
+                [key: string]: unknown;
+            };
+            /** Project Engineering */
+            project_engineering?: {
                 [key: string]: unknown;
             };
             /** Reconciliation */
