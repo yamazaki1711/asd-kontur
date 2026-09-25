@@ -30,6 +30,9 @@ def render_engineering_work_schedule_csv(model: Mapping[str, Any]) -> bytes:
             "Материалы",
             "Статус",
             "Источники",
+            "work_package_id",
+            "candidate_status",
+            "source_references",
         ),
     )
     writer.writeheader()
@@ -60,6 +63,11 @@ def render_engineering_work_schedule_csv(model: Mapping[str, Any]) -> bytes:
                         ),
                         "Статус": row.get("status") or "",
                         "Источники": "; ".join(
+                            str(value) for value in row.get("source_locator_ids") or ()
+                        ),
+                        "work_package_id": row.get("work_package_id") or "",
+                        "candidate_status": "candidate",
+                        "source_references": "; ".join(
                             str(value) for value in row.get("source_locator_ids") or ()
                         ),
                     }

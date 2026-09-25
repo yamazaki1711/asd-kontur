@@ -735,7 +735,7 @@ class ProductSpineService:
         if view is None:
             raise ValueError("project_understanding_no_result")
         engineering = dict(view.get("project_engineering") or {})
-        if engineering:
+        if engineering.get("works"):
             data = render_engineering_work_schedule_csv(engineering)
             digest = "sha256:" + hashlib.sha256(data).hexdigest()
             return DocumentContent(
@@ -861,6 +861,7 @@ class ProductSpineService:
             raise ValueError("project_understanding_no_result")
         materialization = dict(view.get("materialization") or {})
         engineering = dict(view.get("project_engineering") or {})
+        professional = bool(engineering.get("works"))
         common = {
             "materialization_state": str(materialization.get("state", "not_requested")),
             "coverage_gaps": materialization.get("gaps", []),
@@ -869,7 +870,7 @@ class ProductSpineService:
         data = build_tender_analysis_archive(
             findings_report=(
                 render_engineering_tender_report_docx(engineering)
-                if engineering
+                if professional
                 else render_tender_findings_docx(
                     view.get("defects", []),
                     work_packages=view.get("work_packages", []),
@@ -878,7 +879,7 @@ class ProductSpineService:
             ),
             findings_schedule=(
                 render_engineering_findings_csv(engineering)
-                if engineering
+                if professional
                 else render_tender_findings_csv(
                     view.get("defects", []),
                     work_packages=view.get("work_packages", []),
@@ -887,7 +888,7 @@ class ProductSpineService:
             ),
             scope_schedule=(
                 render_engineering_work_schedule_csv(engineering)
-                if engineering.get("works")
+                if professional
                 else render_tender_scope_schedule_csv(
                     view.get("work_packages", []),
                     **common,
@@ -916,7 +917,7 @@ class ProductSpineService:
                 coverage_gaps=common["coverage_gaps"],
             ),
             materialization=materialization,
-            professional=bool(engineering),
+            professional=professional,
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(
