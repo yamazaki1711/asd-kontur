@@ -191,6 +191,32 @@ def test_answer_rejects_internal_contract_status_token() -> None:
     assert receipt["problems"] == ["internal_contract_token_exposed"]
 
 
+def test_repeated_phrase_is_recorded_without_suppressing_grounded_answer() -> None:
+    source = {
+        "source_id": "11111111-1111-4111-8111-111111111111",
+        "authority_layer": "workspace_fact",
+    }
+    answer = parse_synthesized_answer(
+        '{"answer":"Пояса и пояса указаны в разных строках спецификации.",'
+        '"answer_type":"workspace_conclusion","needs_clarification":false,'
+        '"used_source_ids":["11111111-1111-4111-8111-111111111111"],'
+        '"dialogue_summary":"Проверяется шпунтовое ограждение.",'
+        '"active_subjects":["шпунт"]}',
+        {source["source_id"]},
+    )
+
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.get_work_packages",),
+        sources=(source,),
+    )
+
+    assert receipt["passed"] is True
+    assert receipt["problems"] == ["repeated_phrase"]
+    assert receipt["warnings"] == ["repeated_phrase"]
+
+
 def test_answer_rejects_source_that_was_not_retrieved() -> None:
     with pytest.raises(ValueError, match="assistant_answer_unknown_source"):
         parse_synthesized_answer(

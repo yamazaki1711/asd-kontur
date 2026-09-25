@@ -696,10 +696,18 @@ def validate_answer(
         ] in {"и", "или"}:
             problems.append("repeated_phrase")
             break
+    # A repeated ``X и X`` phrase is a presentation defect, not a factual or
+    # citation defect.  Keep it visible in the quality receipt, but do not
+    # replace an otherwise grounded engineering answer with the generic
+    # insufficient-data fallback.  The model quality check still evaluates
+    # readability, while all authority, source-selection and non-fabrication
+    # failures remain blocking.
+    blocking_problems = [item for item in problems if item != "repeated_phrase"]
     citation_ratio = len(selected) / max(1, len(sources))
     return {
-        "passed": not problems,
+        "passed": not blocking_problems,
         "problems": problems,
+        "warnings": [item for item in problems if item == "repeated_phrase"],
         "selected_source_count": len(selected),
         "retrieved_source_count": len(sources),
         "source_selection_ratio": round(citation_ratio, 4),
