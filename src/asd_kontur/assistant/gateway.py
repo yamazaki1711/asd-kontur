@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Mapping
 from typing import Any, cast
@@ -740,50 +741,12 @@ class ProfessionalAssistantKnowledgeQuery:
             *discrepancy_source_items,
         ][:30]
         engineering = dict((model_view or {}).get("project_engineering") or {})
-        assistant_engineering = {
-            key: engineering.get(key)
-            for key in (
-                "model_version",
-                "project",
-                "facilities",
-                "facility_cards",
-                "pits",
-                "works",
-                "work_classification",
-                "quantity_comparisons",
-                "scope_comparisons",
-                "sheet_pile_schedule",
-                "materials",
-                "requirements",
-                "issues",
-                "risks",
-                "customer_questions",
-                "summary",
-            )
-            if key in engineering
-        }
-        engineering_source_items = evidence_items(
-            {
-                str(locator_id)
-                for key in (
-                    "facilities",
-                    "works",
-                    "quantity_comparisons",
-                    "scope_comparisons",
-                    "sheet_pile_schedule",
-                    "issues",
-                )
-                for row in engineering.get(key) or ()
-                if isinstance(row, Mapping)
-                for locator_id in row.get("source_locator_ids") or ()
-            }
-            | {
-                str(locator_id)
-                for row in dict(engineering.get("pits") or {}).get("established") or ()
-                if isinstance(row, Mapping)
-                for locator_id in row.get("source_locator_ids") or ()
-            }
+        assistant_engineering = _assistant_engineering_for_query(
+            engineering,
+            query=query,
+            limit=work_package_limit,
         )
+        engineering_source_items = evidence_items(_nested_source_locator_ids(assistant_engineering))
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -2245,6 +2208,198 @@ def _search_tokens(query: str) -> tuple[str, ...]:
         for synonym in sorted(group)
     ]
     return tuple(dict.fromkeys((*tokens, *expansions)))[:12]
+
+
+_SHEET_PILE_QUERY_MARKERS = (
+    "шпунт",
+    "пояс",
+    "обвяз",
+    "распредел",
+    "распор",
+    "30ш2",
+    "35ш2",
+    "л5",
+)
+
+
+def _assistant_engineering_for_query(
+    engineering: Mapping[str, Any], *, query: str, limit: int
+) -> dict[str, Any]:
+    """Return the compact engineering facts needed for one consultant task.
+
+    The application model can be many megabytes.  Passing it verbatim through
+    the consultant's bounded tool budget caused facts located after the work
+    catalogue (notably waling quantities and beam profiles) to be silently
+    omitted.  This projection keeps professional values and locator bindings,
+    selects rows by the user's construction subject, and leaves the complete
+    model available through the application API.
+    """
+
+    normalized_query = " ".join(query.casefold().replace("ё", "е").split())
+    tokens = tuple(token for token in _search_tokens(query) if len(token) >= 3)
+    sheet_pile_query = not normalized_query or any(
+        marker in normalized_query for marker in _SHEET_PILE_QUERY_MARKERS
+    )
+    facility_markers = tuple(
+        match.group(0).replace(" ", "")
+        for match in re.finditer(r"(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_query)
+    )
+
+    def relevant(row: Mapping[str, Any]) -> bool:
+        if not tokens and not facility_markers:
+            return True
+        text = json.dumps(row, ensure_ascii=False, default=str).casefold().replace("ё", "е")
+        compact = text.replace(" ", "").replace("-", "")
+        return any(token in text for token in tokens) or any(
+            marker.replace("-", "") in compact for marker in facility_markers
+        )
+
+    def compact_quantities(value: Any) -> dict[str, list[dict[str, Any]]]:
+        if not isinstance(value, Mapping):
+            return {}
+        return {
+            str(role): [
+                {
+                    key: item.get(key)
+                    for key in ("value", "unit", "occurrence_count")
+                    if item.get(key) is not None
+                }
+                for item in rows
+                if isinstance(item, Mapping)
+            ]
+            for role, rows in value.items()
+            if isinstance(rows, list)
+        }
+
+    def compact_row(row: Mapping[str, Any]) -> dict[str, Any]:
+        result = {
+            key: row.get(key)
+            for key in (
+                "facility",
+                "pit",
+                "operation",
+                "work_name",
+                "kind",
+                "location",
+                "subject",
+                "description",
+                "practical_consequence",
+                "recommended_action",
+                "status",
+                "comparison_state",
+                "design_value",
+                "commercial_value",
+                "difference",
+                "profiles",
+                "profiles_by_document",
+                "pile_length",
+                "steel",
+                "waling_beams",
+                "uncertainty",
+                "material",
+                "grade",
+                "dimensions",
+            )
+            if row.get(key) not in (None, "", [], {})
+        }
+        quantities = compact_quantities(row.get("quantities_by_document"))
+        if quantities:
+            result["quantities_by_document"] = quantities
+        locator_ids = [str(value) for value in row.get("source_locator_ids") or () if value]
+        if locator_ids:
+            result["source_locator_ids"] = locator_ids[:12]
+        wording = [str(value) for value in row.get("project_wording") or () if value]
+        if wording:
+            result["project_wording"] = wording[:4]
+        return result
+
+    def selected_rows(key: str, *, max_rows: int | None = None) -> list[dict[str, Any]]:
+        rows = [row for row in engineering.get(key) or () if isinstance(row, Mapping)]
+        selected = [row for row in rows if relevant(row)]
+        return [compact_row(row) for row in selected[: max_rows or limit]]
+
+    result: dict[str, Any] = {}
+    if sheet_pile_query:
+        # Keep the direct answer facts first and locator-free.  Source bindings
+        # travel in the tool's source index; duplicating them here previously
+        # displaced the final belt row beyond the synthesis budget.
+        result["sheet_pile_answer_facts"] = [
+            {
+                key: compact_row(row).get(key)
+                for key in (
+                    "facility",
+                    "pit",
+                    "operation",
+                    "profiles",
+                    "steel",
+                    "waling_beams",
+                    "quantities_by_document",
+                    "uncertainty",
+                )
+                if compact_row(row).get(key) not in (None, "", [], {})
+            }
+            for row in engineering.get("sheet_pile_schedule") or ()
+            if isinstance(row, Mapping)
+        ]
+    result.update(
+        {
+            "model_version": engineering.get("model_version"),
+            "summary": engineering.get("summary", {}),
+        }
+    )
+    project = engineering.get("project")
+    if isinstance(project, Mapping):
+        result["project"] = {
+            key: value for key, value in project.items() if key in {"name", "purpose", "status"}
+        }
+    pits = engineering.get("pits")
+    if isinstance(pits, Mapping) and (
+        "котл" in normalized_query or "pit" in normalized_query or not query
+    ):
+        result["pits"] = {
+            "professional_answer": pits.get("professional_answer"),
+            "established_count": pits.get("established_count"),
+            "is_final": pits.get("is_final"),
+        }
+    if sheet_pile_query:
+        # This schedule is already a compact professional result.  It must be
+        # serialized before generic work rows so direct facts cannot be evicted.
+        result["sheet_pile_schedule"] = [
+            compact_row(row)
+            for row in engineering.get("sheet_pile_schedule") or ()
+            if isinstance(row, Mapping)
+        ]
+    for key in ("issues", "scope_comparisons", "quantity_comparisons", "works", "materials"):
+        rows = selected_rows(key, max_rows=min(limit, 12))
+        if rows:
+            result[key] = rows
+    for key in ("customer_questions", "risks"):
+        values = [value for value in engineering.get(key) or () if isinstance(value, Mapping)]
+        selected = [compact_row(value) for value in values if relevant(value)]
+        if selected:
+            result[key] = selected[:12]
+    requirements = engineering.get("requirements")
+    if isinstance(requirements, Mapping) and any(
+        marker in normalized_query for marker in ("нтд", "норм", "требован")
+    ):
+        result["requirements"] = dict(requirements)
+    return result
+
+
+def _nested_source_locator_ids(value: Any) -> set[str]:
+    """Collect locator bindings from a compact nested assistant projection."""
+
+    locator_ids: set[str] = set()
+    if isinstance(value, Mapping):
+        for key, nested in value.items():
+            if key == "source_locator_ids" and isinstance(nested, (list, tuple)):
+                locator_ids.update(str(item) for item in nested if item)
+            else:
+                locator_ids.update(_nested_source_locator_ids(nested))
+    elif isinstance(value, (list, tuple)):
+        for nested in value:
+            locator_ids.update(_nested_source_locator_ids(nested))
+    return locator_ids
 
 
 def _search_query(query: str) -> str:

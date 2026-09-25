@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
+    _assistant_engineering_for_query,
     _project_pit_unresolved_inventory,
     _public_inventory_candidate,
     _select_facility_work_candidates,
@@ -276,6 +277,17 @@ def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -
             {
                 "facility": "КНС 4",
                 "operation": "Устройство шпунтового ограждения",
+                "waling_beams": ["30Ш2", "35Ш2"],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "9.841",
+                            "unit": "т",
+                            "occurrence_count": 2,
+                            "source_locator_ids": ["locator-a"],
+                        }
+                    ]
+                },
                 "source_locator_ids": ["locator-a"],
             }
         ],
@@ -321,7 +333,9 @@ def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -
         ),
     )
 
-    assert response.result["value"]["project_engineering"] == model
+    overview_engineering = response.result["value"]["project_engineering"]
+    assert overview_engineering["model_version"] == "project-engineering-model-v2"
+    assert overview_engineering["sheet_pile_schedule"][0]["waling_beams"] == ["30Ш2", "35Ш2"]
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
 
     work_response = query.execute(
@@ -337,8 +351,59 @@ def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -
         ),
     )
 
-    assert work_response.result["value"]["project_engineering"] == model
+    work_engineering = work_response.result["value"]["project_engineering"]
+    sheet_pile = work_engineering["sheet_pile_schedule"][0]
+    assert sheet_pile["waling_beams"] == ["30Ш2", "35Ш2"]
+    assert sheet_pile["quantities_by_document"]["Смета"][0]["value"] == "9.841"
     assert work_response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
+def test_query_focused_engineering_projection_preserves_waling_facts_before_verbose_works() -> None:
+    model = {
+        "model_version": "project-engineering-model-v2",
+        "works": [
+            {
+                "work_name": "Прочая работа",
+                "project_wording": ["x" * 2_000],
+                "source_locator_ids": [f"unrelated-{index}"],
+            }
+            for index in range(20)
+        ],
+        "sheet_pile_schedule": [
+            {
+                "facility": "КНС 4",
+                "operation": "Устройство распределительного пояса",
+                "waling_beams": ["30Ш2", "35Ш2"],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "9.841",
+                            "unit": "т",
+                            "occurrence_count": 2,
+                            "source_locator_ids": ["waling-a", "waling-b"],
+                        }
+                    ]
+                },
+                "source_locator_ids": ["waling-a", "waling-b"],
+            }
+        ],
+        "issues": [],
+        "summary": {"work_scope_count": 96},
+    }
+
+    projected = _assistant_engineering_for_query(
+        model,
+        query="Что предусмотрено по распределительным поясам?",
+        limit=20,
+    )
+
+    assert "works" not in projected
+    row = projected["sheet_pile_schedule"][0]
+    assert row["waling_beams"] == ["30Ш2", "35Ш2"]
+    assert row["quantities_by_document"]["Смета"] == [
+        {"value": "9.841", "unit": "т", "occurrence_count": 2}
+    ]
+    assert row["source_locator_ids"] == ["waling-a", "waling-b"]
 
 
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:

@@ -806,10 +806,14 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
     # An exhaustive inventory is a completeness contract, not optional metadata.
     # Serialize it first so an earlier verbose overview/search result cannot evict
     # the candidate identities required by synthesis and deterministic validation.
-    ordered = sorted(
-        receipts,
-        key=lambda receipt: receipt.get("tool") != "consultant.get_project_entity_inventory",
-    )
+    priority = {
+        "consultant.get_project_entity_inventory": 0,
+        "consultant.get_work_packages": 1,
+        "consultant.get_discrepancies": 2,
+        "consultant.get_information_gaps": 3,
+        "consultant.get_workspace_overview": 4,
+    }
+    ordered = sorted(receipts, key=lambda receipt: priority.get(str(receipt.get("tool")), 10))
     for receipt in ordered:
         if remaining <= 0:
             break
@@ -838,17 +842,24 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
             for source in response.get("sources", [])
             if isinstance(source, dict) and source.get("source_id")
         ]
-        while source_index and len(json.dumps(source_index, ensure_ascii=False)) > 3_000:
+        structured_project_tool = receipt.get("tool") in {
+            "consultant.get_work_packages",
+            "consultant.get_discrepancies",
+            "consultant.get_information_gaps",
+            "consultant.get_workspace_overview",
+        }
+        source_budget = 2_000 if structured_project_tool else 3_000
+        while source_index and len(json.dumps(source_index, ensure_ascii=False)) > source_budget:
             source_index.pop()
         result = {key: value for key, value in response.items() if key != "sources"}
-        available = min(5_000, remaining)
+        available = min(9_000 if structured_project_tool else 5_000, remaining)
         source_text = json.dumps(source_index, ensure_ascii=False, default=str)
         result_text = json.dumps(result, ensure_ascii=False, default=str)
         record = {
             "step": receipt["step_sequence"],
             "tool": receipt["tool"],
             "reason": receipt["reason"],
-            "result": result_text[: max(0, available - min(len(source_text), 3_000))],
+            "result": result_text[: max(0, available - min(len(source_text), source_budget))],
             "evidence": source_index,
         }
         record_text = json.dumps(record, ensure_ascii=False, default=str)

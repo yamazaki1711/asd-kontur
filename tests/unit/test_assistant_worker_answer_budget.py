@@ -42,6 +42,56 @@ def test_prompt_budget_keeps_evidence_identity_after_long_metadata() -> None:
     assert "Котлован К-1" in prompt
 
 
+def test_prompt_budget_prioritizes_structured_sheet_pile_facts_over_verbose_overview() -> None:
+    prompt = _tool_results_for_prompt(
+        [
+            {
+                "step_sequence": 1,
+                "tool": "consultant.get_workspace_overview",
+                "reason": "Общий обзор.",
+                "response": {"metadata": "x" * 40_000, "sources": []},
+            },
+            {
+                "step_sequence": 2,
+                "tool": "consultant.get_work_packages",
+                "reason": "Шпунтовые работы.",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "sheet_pile_answer_facts": [
+                                {
+                                    "operation": "Устройство распределительного пояса",
+                                    "waling_beams": ["30Ш2", "35Ш2"],
+                                    "quantities_by_document": {
+                                        "Смета": [{"value": "9.841", "unit": "т"}]
+                                    },
+                                }
+                            ],
+                            "verbose_tail": "y" * 20_000,
+                        }
+                    },
+                    "sources": [
+                        {
+                            "source_id": "waling-source",
+                            "source_version_id": "waling-version",
+                            "title": "Смета",
+                            "locator_label": "страница 32",
+                            "page": 32,
+                            "fragment": "Распределительный пояс 9,841 т.",
+                        }
+                    ],
+                },
+            },
+        ]
+    )
+
+    assert prompt.index("9.841") < prompt.index("xxxxxxxxxx")
+    assert "30Ш2" in prompt
+    assert "35Ш2" in prompt
+    assert "waling-source" in prompt
+    assert len(prompt) <= 14_000
+
+
 def test_inventory_prompt_preserves_all_candidates_as_structured_json() -> None:
     candidates = [
         {
