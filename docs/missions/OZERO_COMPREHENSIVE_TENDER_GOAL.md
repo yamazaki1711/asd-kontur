@@ -1,5 +1,16 @@
 # OZERO Comprehensive Tender Goal
 
+> **Product-language correction — 2026-09-25:** the active OZERO result is
+> **OZERO PROJECT UNDERSTANDING AND TENDER ENGINEERING ANALYSIS v1**. ASD-KONTUR
+> is an applied construction-engineering system, not an evidence-management
+> product. The professional result—understood facilities, structures, pits,
+> works, quantities, materials, differences, issues, risks and actions—is
+> primary. Source/version links, provenance, processing state, candidate
+> lifecycle and receipts remain internal reliability mechanisms and secondary
+> diagnostics. This correction supersedes evidence-centered wording below
+> without weakening non-fabrication, isolation, traceability or historical
+> acceptance records.
+
 > **Superseded delivery priority — 2026-09-19:** this document remains the
 > durable evidence and acceptance contract for OZERO-specific Tender
 > validation. It no longer defines the programme's exclusive active delivery
@@ -21,11 +32,17 @@
 
 ## Objective
 
-Deliver comprehensive, persistent, evidence-backed PD understanding and usable Tender analysis for
+Deliver comprehensive, persistent PD understanding and usable Tender engineering analysis for
 the existing OZERO workspace `01a088aa-0491-7bdd-9127-8359fe927a27`. The result must cover the
 complete uploaded package, including every identifiable local area, LOS, KNS, associated excavation,
 structure, work scope, quantities, materials, requirements, cross-document disagreement, and missing
 information. It is a Tender delivery through shared ASD-KONTUR architecture, not a ProductReady claim.
+
+The primary application result is project-first:
+`project → facility/area → structure/pit → work → quantity/material →`
+`requirement → issue/risk → action → document`. Processing and diagnostics are
+secondary. A capability is materially useful only when the user obtains its
+professional result through the application on representative project data.
 
 ## Authority and boundaries
 
@@ -48,15 +65,15 @@ to main, reset OZERO, weaken access controls, or repeat accepted OCR without a d
 2. Build connected reusable entities for the project, locations, LOS/KNS, structures, pits, works,
    quantities, materials, interfaces, and construction dependencies. Preserve containment, location,
    functional connection, and dependency separately. Keep ambiguous links and unresolved observations.
-3. Provide evidence-backed dossiers for each identified facility and local area, including aliases,
+3. Provide engineering dossiers for each identified facility and local area, including aliases,
    purpose, location references, constituent elements, supported dimensions/levels/conditions,
    construction solution, work/material scope, interfaces, source revisions, contradictions, and gaps.
-4. Reconcile evidence across disciplines for Tender findings, clarification questions, scope uncertainty,
+4. Compare project information across disciplines for Tender findings, clarification questions, scope uncertainty,
    potential omissions, and constructability risks. The preliminary sheet-pile/waling-beam business
    scope remains unawarded until sources and authority establish otherwise.
 5. Publish Russian project navigation: project → local area → facility → structures/pits → works/materials
-   → evidence. Publish honest partial coverage and candidate status; never present no-analysis as zero.
-6. Connect the consultant to structured inventory plus evidence. It must support project-wide/local
+   → requirements/issues/risks/actions, with document/page sources available on demand. Never present no-analysis as zero.
+6. Connect the consultant to the shared project model plus relevant source context. It must support project-wide/local
    questions, comparisons, follow-ups, and exhaustive inventories only where coverage supports them.
 7. Accept only after all active pages are accounted for, eligible analysis completes, local-area/LOS/KNS
    dossiers reconcile, relationships survive batch/document boundaries, Tender findings are traceable,

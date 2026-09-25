@@ -2,70 +2,93 @@
 
 ## Common spine
 
-Every mode operates inside one workspace and uses the same version-pinned:
+Every mode uses the same practical construction model:
 
-`Source/Evidence Ledger → ProjectDefinition → ConstructionWorkPackage`
-`→ WorkRequirementMatrix → Context Assembly → professional mode result`.
+`project → area/facility → structure/pit → work → quantity/material`
+`→ requirement → issue/risk → action → document`.
 
-Platform Practice Intelligence explains professional practice. Verified NTD
-provides normative authority. Qualified RuleVersion provides deterministic
-behavior. Workspace facts provide OKS-specific evidence. No layer substitutes
-for another and no model confirms facts or applicability.
+Versioned sources, locators, candidate lifecycles, rules, jobs, authorization,
+and immutable history support this model internally. They must not become the
+main professional navigation or be mistaken for the product result. Platform
+Practice Intelligence explains construction practice. Verified NTD provides
+normative authority. Qualified deterministic rules evaluate conditions where
+their inputs are available. Models may interpret and propose; they do not
+invent execution facts, signatures, geometry, legal approval, or normative
+applicability.
 
 ## Tender
 
-Inputs: tender PD/RD, VOR/estimate, draft contract, appendices, customer
-regulation and exact available NTD. The user journey admits and inventories the
-package, resolves ProjectDefinition/work/quantity/material structure, compares
-project against commercial documents, analyzes contract contradictions and
-constructability, then produces:
+Inputs may include PD/RD, specifications, VOR/estimate, draft contract,
+appendices, customer requirements and applicable NTD. The user must be able to
+understand what is being built, navigate facilities and structures, see the
+required works, quantities and materials, compare design and commercial
+sources, and receive practical conclusions:
 
-- package completeness and evidence gaps;
-- omitted work/material and quantity deltas;
-- obsolete/unresolved NTD references;
-- evidence-bound time/cost feasibility and risk conclusion;
-- contractor-protective protocol of disagreements;
-- revised contract candidate for professional approval/export.
+- project engineering overview and facility/structure inventory;
+- work, quantity, and material schedules;
+- omissions, quantity/material/revision discrepancies, and missing inputs;
+- constructability, geometric, sequencing, cost, schedule, and contractor
+  risks where the supplied data support those conclusions;
+- applicable NTD issues and concrete customer clarification questions;
+- contractor-protective disagreement protocol and revised contract candidate
+  when a contract is present.
 
-No conclusion is allowed without calculation and locators.
+Every material conclusion retains a document/page source and calculation where
+applicable, but the conclusion—not the locator—is the user result.
 
 ## Support
 
-The same work matrix drives planning, MTR batches and incoming control, hold
-points, field evidence, laboratory/geodesy, ID dependencies, AOSR, journals,
-executive schemes, presented quantities and KS/payment readiness. The earlier
-[Support model v0.1](../mvp/FUNCTIONAL_MODEL_v0.1.md), including its 14 screen
-contours and offline requirements, remains a design input—not the whole product
-and not evidence that Support is implemented.
+The same project/work model tells PTO and site staff what ID documents are
+required for each performed work, what is ready, what is missing, and which
+known data can safely populate AOSR, journals, registers and executive schemes.
+It manages material quality records, laboratory/geodesy information,
+attachments, package consistency, presented quantities, and KS/payment
+preparation. The register is the first document of an ID package. Missing
+dates, measurements, tests, geometry, signatures, or external certificates are
+named precisely and never fabricated.
 
 ## Audit
 
-Expected requirements from the shared matrix are compared with admitted actual
-documents. Outcomes distinguish present, missing, incomplete, invalid, wrong
-edition/form, unsupported, duplicate, contradictory and evidence gap. The
-operator can navigate every finding to source and export a reproducible audit
-report.
+For an admitted ID/document folder, the system determines the performed works,
+the documents that should exist, what actually exists, and what is missing,
+incomplete, in the wrong form/revision, duplicated, contradictory, or
+quantity-inconsistent. It produces a concrete correction schedule and usable
+audit report; source navigation supports each finding.
 
 ## Restoration
 
-Restoration starts from gaps in the same matrix and preserved facts. It
-classifies recoverable and non-recoverable documents, evidence sufficiency,
-restoration order and blockers. Generated documents remain candidates; the
-system never invents dates, signatures, measurements, attendance, tests or
-geometry. A dedicated workflow is currently not implemented.
+Restoration determines what can be reconstructed from available PD/RD,
+journals, laboratory records, schemes and other known facts. It fills and
+generates the recoverable documents, orders the work, and states exactly what
+still requires human input. It never invents dates, signatures, measurements,
+attendance, tests, or geometry. A dedicated workflow is currently not
+implemented.
+
+## User-interface and acceptance principles
+
+- Project-first professional information is primary; processing and diagnostics
+  are secondary.
+- A user sees construction terms and actions, not UUID-heavy lifecycle or
+  model-processing concepts.
+- A capability is materially accepted only when its professional result is
+  obtainable through the application on representative project data.
+- A valid uncertainty is written in professional language and identifies its
+  consequence and the needed clarification. Internal flags are not a user
+  answer.
 
 ## Cross-mode invariants
 
 - one ProjectDefinition and WorkRequirementMatrix identity per selected version;
 - hard workspace isolation and default deny;
-- base EvidencePack before every substantial AI/VLM operation;
+- bounded source and knowledge context before every substantial AI/VLM
+  operation;
 - direct model SQL prohibited;
 - customer regulation is additive only;
 - gaps remain gaps and block only claims requiring missing authority;
 - any contradiction in extraction/knowledge/rules is a
   `KnowledgeConsistencyDefect`, not a silent authority choice;
-- every result includes source, locator, authority, uncertainty, blocker and
-  version identity;
+- every material result can be traced to source/version and clearly separates
+  fact, calculation, interpretation and unresolved input;
 - all long work is a durable job with recovery and reconciliation;
 - exports require explicit finalization and lifecycle receipts.
 

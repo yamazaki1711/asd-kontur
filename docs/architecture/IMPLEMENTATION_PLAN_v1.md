@@ -4,19 +4,27 @@
 
 One active delivery slice advances the complete Product Capability Registry.
 Infrastructure micro-gates cannot displace the product path. Every capability
-stream ends in a visible professional result with source/evidence, blockers,
-recovery and export—not a test-count claim.
+stream ends in a visible professional result, practical user action and usable
+document or analysis—not a processing, candidate, test-count or readiness
+claim. Traceability, recovery, isolation and non-fabrication remain mandatory
+supporting qualities.
 
 ## Active product-led delivery policy — 2026-09-19
 
 **Programme objective:** production-quality ASD-KONTUR for Tender, Support,
-Audit and Restoration, including evidence-backed analysis and complete,
-editable executive-documentation (ID) packages. The 143-capability registry
-remains the readiness denominator.
+Audit and Restoration: understand construction projects, compare technical and
+commercial sources, identify engineering/commercial problems, guide action and
+prepare complete editable professional documents. The 143-capability registry
+remains the formal readiness denominator, not the user experience.
 
-**Delivery unit:** one reusable product capability with a visible application
-output. A source receipt, page counter, candidate store, or test suite is
-supporting evidence, never the output by itself.
+**Delivery unit:** one solved professional user task with a visible application
+result. A source receipt, page counter, candidate store, migration, test suite
+or readiness state is supporting infrastructure, never the output by itself.
+
+**UI and acceptance:** project-first professional information is primary;
+processing and diagnostics are secondary. A capability is not materially
+useful until a user obtains its professional result through the application on
+representative project data.
 
 **OZERO:** the preserved OZERO workspace is one real validation corpus. It is
 not the product boundary, a required fact source for all development, or a
@@ -24,12 +32,64 @@ reason to postpone an independently testable capability. OZERO checks are
 recorded with the precise subset they exercise; controlled inputs with known
 outcomes establish reusable behaviour first.
 
-The current product path is deliberately two connected increments:
+The accepted Support/export increment is preserved. The immediate product path
+is the shared project model and its Tender engineering result:
 
 | Capability | Modes | User-visible output | Implementation gap | Acceptance | OZERO role |
 | --- | --- | --- | --- | --- | --- |
-| Evidence-bound Tender comparison and findings schedule | Tender | Editable schedule of source-backed quantity/material comparisons, risks, consequences and exact missing inputs | Work packages currently mirror raw observations and generic reconciliation cards cannot distinguish a real comparison from unavailable comparison input | Controlled revisions, repeated names, distinct scopes, quantity discrepancy and missing-input cases; persistence, evidence navigation and isolation | Validate a selected available design/estimate subset only; no project-wide claim until coverage supports it |
+| Project understanding and Tender engineering analysis | Tender; shared model for all modes | Project/facility/structure inventory, work/quantity/material schedules, actual comparisons, engineering issues, risks, questions and editable report | Thousands of extracted observations are not reconciled into construction identities, scopes, comparable quantities or professional findings | Controlled edge cases plus real OZERO answers and application navigation; source links and safety checks support the result | Primary real-project validation corpus; no OZERO-specific logic or expected count |
 | Supported ID package formation and export | Support; reusable data prepared in Tender | Register-first editable ID package, generated supported forms, attachments/missing-field manifest and export | Existing package formation needs a scope-aware, deduplicated work package and a production-facing completeness/report boundary | Controlled known work type with composition, missing fields, revisions, export/render/edit/reload/isolation | Optional regression check only; OZERO does not supply execution dates, measurements, signatures or a Support transition |
+
+## Active delivery slice — OZERO PROJECT UNDERSTANDING AND TENDER ENGINEERING ANALYSIS v1 (2026-09-25)
+
+The user-visible OZERO audit demonstrated that completed extraction does not yet
+produce a usable construction model.  This slice therefore supersedes further
+Support release polish without reverting the accepted Support/export work.
+
+**Purpose:** turn the already processed OZERO documentation into an
+understandable construction project and a useful Tender engineering analysis.
+The reusable product transformation is:
+
+`processed project documents → project model → engineering comparison`
+`→ professional finding → user action`.
+
+The result describes project purpose and composition, facilities/local areas,
+LOS/KNS, structures and pits, works by location, quantities and materials,
+document differences, applicable requirements, engineering issues, contractor
+risks and customer questions. Tender consumes it first; Support, Audit and
+Restoration reuse the same project/work model later.
+
+**Engineering policy:** supported identities, relationships and values are
+resolved automatically from design marks, location, explicit relations,
+revision and compatible units. Equal words alone, weak transitive similarity,
+overlapping scopes and incompatible units do not justify a merge or total.
+Usable analytical results appear without thousands of approval clicks; a user
+can correct them. Genuine ambiguity is stated in professional language with
+its practical consequence and required clarification.
+
+**Supporting reliability:** the internal model remains versioned and is
+invalidated when active sources, revisions, interpretation, rules or user
+corrections change. Historical versions and source references remain
+addressable, but lifecycle terminology is not the primary user result.
+
+**Application path:** project → facility/local area → structure or excavation
+pit → work → quantity/material → requirement → issue/risk → action → document.
+The same model feeds Russian UI views, editable Tender exports and consultant
+answers. Document/page links are available on demand. Technical processing and
+matching failures live in a secondary diagnostics surface and must not appear
+as construction defects.
+
+**Professional OZERO acceptance:** the application must answer the pit
+inventory, show all sheet-pile works and locations, show sheet-pile quantities
+by structure, compare RD with VOR/estimate where those inputs exist, identify
+unaccounted works/material differences/technical contradictions, and produce
+customer questions and contractor risks. An unresolved answer is acceptable
+only when written professionally—for example, a confirmed count plus clearly
+identified ambiguous designations—not as an internal boolean or status code.
+Controlled fixtures still cover repeated mentions, same-named distinct
+objects, shared pits, revisions, duplicate quantities, incompatible units,
+real discrepancies, missing comparison inputs and workspace isolation. OZERO
+names, identifiers, counts and conclusions are never encoded in product logic.
 
 ### Product-led delivery evidence — 2026-09-19
 
