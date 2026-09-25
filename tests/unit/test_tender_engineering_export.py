@@ -110,6 +110,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
         assert document.testzip() is None
         xml = document.read("word/document.xml").decode("utf-8")
     assert "Tender-анализ проекта" in xml
+    assert "Общая характеристика проекта" in xml
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
     assert "Возможные неучтённые работы" in xml

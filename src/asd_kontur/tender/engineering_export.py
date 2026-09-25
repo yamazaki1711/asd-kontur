@@ -124,7 +124,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     body: list[str] = [
         _heading("Tender-анализ проекта", level=1),
         _paragraph(str(name)),
-        _heading("1. Краткое описание объекта"),
+        _heading("1. Общая характеристика проекта"),
         _paragraph(str(purpose)),
         _paragraph(
             str(pits.get("professional_answer") or "Инвентаризация котлованов не завершена.")
