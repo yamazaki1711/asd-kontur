@@ -82,7 +82,7 @@ def render_engineering_findings_csv(model: Mapping[str, Any]) -> bytes:
             "Практическое последствие",
             "Действие / вопрос Заказчику",
             "Статус",
-            "Источники",
+            "Источники / source_references",
         ),
     )
     writer.writeheader()
@@ -98,7 +98,9 @@ def render_engineering_findings_csv(model: Mapping[str, Any]) -> bytes:
                 "Практическое последствие": row.get("practical_consequence") or "",
                 "Действие / вопрос Заказчику": row.get("recommended_action") or "",
                 "Статус": row.get("status") or "",
-                "Источники": "; ".join(str(value) for value in row.get("source_locator_ids") or ()),
+                "Источники / source_references": "; ".join(
+                    str(value) for value in row.get("source_locator_ids") or ()
+                ),
             }
         )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
