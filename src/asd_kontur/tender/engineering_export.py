@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 from xml.sax.saxutils import escape
 
@@ -210,7 +210,7 @@ def _paragraph(value: str) -> str:
 
 
 def _simple_table(
-    headers: tuple[str, ...], rows: list[tuple[str, ...]], *, empty: str = "Нет данных."
+    headers: tuple[str, ...], rows: Sequence[tuple[str, ...]], *, empty: str = "Нет данных."
 ) -> str:
     values = [headers, *rows] if rows else [headers, (empty, *("" for _ in headers[1:]))]
     rendered = []
@@ -252,6 +252,7 @@ def _operand(value: object) -> str:
 
 
 def _issue_table(values: object) -> str:
+    items = values if isinstance(values, Sequence) and not isinstance(values, (str, bytes)) else ()
     rows = [
         (
             str(row.get("location") or "Требует уточнения"),
@@ -259,7 +260,9 @@ def _issue_table(values: object) -> str:
             str(row.get("description") or ""),
             str(row.get("recommended_action") or ""),
         )
-        for row in (values or ())
+        for value in items
+        if isinstance(value, Mapping)
+        for row in (dict(value),)
     ]
     return _simple_table(("Место", "Вопрос", "Вывод", "Действие"), rows, empty="Не установлены.")
 
