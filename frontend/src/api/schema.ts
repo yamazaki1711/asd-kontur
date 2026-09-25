@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/admin/support-release-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Release Readiness */
+        get: operations["support_release_readiness_api_v1_admin_support_release_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/trial-readiness": {
         parameters: {
             query?: never;
@@ -33,6 +50,58 @@ export interface paths {
         get: operations["capabilities_api_v1_capabilities_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/construction-consultant/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversations */
+        get: operations["list_conversations_api_v1_construction_consultant_conversations_get"];
+        put?: never;
+        /** Create Construction Consultant Conversation */
+        post: operations["create_construction_consultant_conversation_api_v1_construction_consultant_conversations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/construction-consultant/conversations/{conversation_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation Messages */
+        get: operations["get_conversation_messages_api_v1_construction_consultant_conversations__conversation_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/construction-consultant/conversations/{conversation_id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask Construction Consultant */
+        post: operations["ask_construction_consultant_api_v1_construction_consultant_conversations__conversation_id__questions_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -322,6 +391,74 @@ export interface paths {
         };
         /** Assistant Turn Events */
         get: operations["assistant_turn_events_api_v1_workspaces__workspace_id__assistant_turns__turn_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Expected Actual Preflight */
+        get: operations["audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit/expected-actual-preflight.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Expected Actual Preflight Export */
+        get: operations["audit_expected_actual_preflight_export_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Audit Report Projection */
+        get: operations["latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Report Projection Export */
+        get: operations["audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -689,6 +826,210 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-analysis.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Analysis Export */
+        get: operations["tender_analysis_export_api_v1_workspaces__workspace_id__project_understanding_tender_analysis_zip_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-document-coverage.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Document Coverage Schedule */
+        get: operations["tender_document_coverage_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_document_coverage_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-facility-work-observations.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Facility Scope Schedule */
+        get: operations["tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Findings Schedule */
+        get: operations["tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-findings.docx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Findings Report */
+        get: operations["tender_findings_report_api_v1_workspaces__workspace_id__project_understanding_tender_findings_docx_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-scope-schedule.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Scope Schedule */
+        get: operations["tender_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_scope_schedule_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/project-understanding/tender-structure-identity-candidates.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Structure Identity Schedule */
+        get: operations["tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Restoration Recovery Plan */
+        get: operations["restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Restoration Recovery Plan Export */
+        get: operations["restoration_recovery_plan_export_api_v1_workspaces__workspace_id__restoration_recovery_plan_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/restoration/recovery-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capture Restoration Recovery Plan */
+        post: operations["capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/fields/confirmations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Support Field */
+        post: operations["confirm_support_field_api_v1_workspaces__workspace_id__support_fields_confirmations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/fields/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Correct Support Field */
+        post: operations["correct_support_field_api_v1_workspaces__workspace_id__support_fields_corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/finalized-documents/{finalized_id}/content": {
         parameters: {
             query?: never;
@@ -808,6 +1149,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/id-packages/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Id Package Export */
+        get: operations["support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/id-production": {
         parameters: {
             query?: never;
@@ -817,6 +1175,91 @@ export interface paths {
         };
         /** Support Production */
         get: operations["support_production_api_v1_workspaces__workspace_id__support_id_production_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/processes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Configure Support Scope */
+        post: operations["configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/support/scope-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Support Scope Readiness */
+        get: operations["support_scope_readiness_api_v1_workspaces__workspace_id__support_scope_readiness_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract Analysis */
+        get: operations["tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract Analysis Export */
+        get: operations["tender_contract_analysis_export_api_v1_workspaces__workspace_id__tender_contract_analysis_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Contract Analysis Report */
+        get: operations["tender_contract_analysis_report_api_v1_workspaces__workspace_id__tender_contract_analysis_docx_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -955,6 +1398,59 @@ export interface components {
              */
             turn_id: string;
         };
+        /** AuditExpectedActualPreflightView */
+        AuditExpectedActualPreflightView: {
+            /**
+             * Assessment Kind
+             * @constant
+             */
+            assessment_kind: "expected_vs_package_preflight";
+            /** Authority Layers */
+            authority_layers: {
+                [key: string]: string;
+            };
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Gaps */
+            gaps: string[];
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Matrix */
+            matrix: {
+                [key: string]: unknown;
+            } | null;
+            /** Package */
+            package: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_started" | "partial";
+        };
+        /** AuditReportProjectionView */
+        AuditReportProjectionView: {
+            /** Customer */
+            customer?: {
+                [key: string]: unknown;
+            } | null;
+            /** Gaps */
+            gaps?: string[];
+            /** Pto */
+            pto?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "not_published" | "partial" | "published";
+        };
         /** Body_upload_documents_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_documents_api_v1_workspaces__workspace_id__documents_post: {
             /** Files */
@@ -966,9 +1462,13 @@ export interface components {
         CapabilityStatusView: {
             /** Blockers */
             blockers: string[];
+            /** Construction Consultant Quality Ready */
+            construction_consultant_quality_ready: boolean;
             /** Contract Version */
             contract_version: string;
             deployment: components["schemas"]["DeploymentStatusView"];
+            /** Domain Harness Ready */
+            domain_harness_ready: boolean;
             /** Implemented */
             implemented: string[];
             /** Oks Ready */
@@ -979,6 +1479,82 @@ export interface components {
             slice: string;
             /** Trial Ready */
             trial_ready: boolean;
+        };
+        /** ConstructionConsultantAnswerView */
+        ConstructionConsultantAnswerView: {
+            assistant_message: components["schemas"]["ConstructionConsultantMessageView"];
+            /** Evidence Statuses */
+            evidence_statuses: string[];
+            user_message: components["schemas"]["ConstructionConsultantMessageView"];
+        };
+        /** ConstructionConsultantConversationCreate */
+        ConstructionConsultantConversationCreate: {
+            /** Title */
+            title?: string | null;
+        };
+        /** ConstructionConsultantConversationView */
+        ConstructionConsultantConversationView: {
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Message Count */
+            message_count: number;
+            /** Title */
+            title: string;
+        };
+        /** ConstructionConsultantMessageView */
+        ConstructionConsultantMessageView: {
+            /** Content */
+            content: string;
+            /**
+             * Conversation Id
+             * Format: uuid
+             */
+            conversation_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
+            /** Model Identity */
+            model_identity: string | null;
+            /** Model Profile Version */
+            model_profile_version: string | null;
+            /** Ordinal */
+            ordinal: number;
+            /** Request Id */
+            request_id: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Sources */
+            sources: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** ConstructionConsultantQuestionRequest */
+        ConstructionConsultantQuestionRequest: {
+            /** Question */
+            question: string;
+            /**
+             * Request Id
+             * Format: uuid
+             */
+            request_id: string;
         };
         /** DeploymentStatusView */
         DeploymentStatusView: {
@@ -1181,6 +1757,10 @@ export interface components {
             job_id: string;
             /** Job Kind */
             job_kind: string;
+            /** Lease Expired */
+            lease_expired: boolean;
+            /** Lease Expires At */
+            lease_expires_at: string | null;
             /** Max Attempts */
             max_attempts: number;
             /**
@@ -1190,6 +1770,14 @@ export interface components {
             organization_id: string;
             /** Priority */
             priority: number;
+            /** Progress Current */
+            progress_current: number | null;
+            /** Progress Message Code */
+            progress_message_code: string | null;
+            /** Progress Recorded At */
+            progress_recorded_at: string | null;
+            /** Progress Total */
+            progress_total: number | null;
             /** Started At */
             started_at: string | null;
             /** State */
@@ -1226,6 +1814,10 @@ export interface components {
             memory_data_defect: boolean;
             /** Normative Identity Count */
             normative_identity_count: number;
+            /** Ntd Inventory */
+            ntd_inventory: {
+                [key: string]: unknown;
+            };
             /** Practice Edition Count */
             practice_edition_count: number;
             /** Practice Guide Count */
@@ -1608,6 +2200,10 @@ export interface components {
             summary: {
                 [key: string]: unknown;
             };
+            /** Tender Scope Schedule */
+            tender_scope_schedule?: {
+                [key: string]: unknown;
+            }[];
             /** Unresolved Questions */
             unresolved_questions: string[];
             /** Version */
@@ -1660,6 +2256,10 @@ export interface components {
         };
         /** ProjectUnderstandingView */
         ProjectUnderstandingView: {
+            /** Application Page */
+            application_page?: {
+                [key: string]: unknown;
+            };
             /** Authority Layers */
             authority_layers: {
                 [key: string]: string;
@@ -1680,8 +2280,20 @@ export interface components {
                     [key: string]: unknown;
                 };
             };
+            /** Excavation Pit Inventory */
+            excavation_pit_inventory?: {
+                [key: string]: unknown;
+            };
+            /** Facility Work Projection */
+            facility_work_projection?: {
+                [key: string]: unknown;
+            };
             /** Intake Summary */
             intake_summary?: {
+                [key: string]: unknown;
+            };
+            /** Materialization */
+            materialization?: {
                 [key: string]: unknown;
             };
             /** Matrix */
@@ -1700,6 +2312,10 @@ export interface components {
             project_definition: {
                 [key: string]: unknown;
             };
+            /** Project Engineering */
+            project_engineering?: {
+                [key: string]: unknown;
+            };
             /** Reconciliation */
             reconciliation: {
                 [key: string]: unknown;
@@ -1708,6 +2324,46 @@ export interface components {
             review_decisions?: {
                 [key: string]: unknown;
             }[];
+            /** Semantic Coverage */
+            semantic_coverage?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Components */
+            structure_components?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Dossiers */
+            structure_dossiers?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Identity Candidates */
+            structure_identity_candidates?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Identity Components */
+            structure_identity_components?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Identity Dossiers */
+            structure_identity_dossiers?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Identity Reconciliation */
+            structure_identity_reconciliation?: {
+                [key: string]: unknown;
+            };
+            /** Structure Nodes */
+            structure_nodes?: {
+                [key: string]: unknown;
+            }[];
+            /** Structure Relationships */
+            structure_relationships?: {
+                [key: string]: unknown;
+            }[];
+            /** Summary Counts */
+            summary_counts?: {
+                [key: string]: number;
+            };
             /** Work Packages */
             work_packages: {
                 [key: string]: unknown;
@@ -1791,6 +2447,43 @@ export interface components {
              */
             workspace_id: string;
         };
+        /** RestorationRecoveryPlanView */
+        RestorationRecoveryPlanView: {
+            /** Authority Boundary */
+            authority_boundary: string;
+            /** Basis */
+            basis: {
+                [key: string]: unknown;
+            };
+            /** Blocked Actions */
+            blocked_actions: {
+                [key: string]: unknown;
+            }[];
+            /** Global Blockers */
+            global_blockers: string[];
+            /**
+             * Plan Kind
+             * @constant
+             */
+            plan_kind: "id_package_recovery_plan";
+            /** Recoverable Actions */
+            recoverable_actions: {
+                [key: string]: unknown;
+            }[];
+            /** Snapshot */
+            snapshot?: {
+                [key: string]: unknown;
+            } | null;
+            /** Snapshot Duplicate */
+            snapshot_duplicate?: boolean | null;
+            /** Snapshot Is Current */
+            snapshot_is_current?: boolean | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "partial" | "blocked";
+        };
         /** ReviewGeneratedCandidateRequest */
         ReviewGeneratedCandidateRequest: {
             /**
@@ -1823,12 +2516,81 @@ export interface components {
              */
             membership_id: string;
         };
+        /** SupportFieldCommandView */
+        SupportFieldCommandView: {
+            /** Action */
+            action: string;
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Fact Id */
+            fact_id?: string | null;
+            /** Fact Version */
+            fact_version?: number | null;
+            /** Field Key */
+            field_key: string;
+            /** Outcome */
+            outcome: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
+        /** SupportFieldConfirmationRequest */
+        SupportFieldConfirmationRequest: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Field Key */
+            field_key: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
+        /** SupportFieldCorrectionRequest */
+        SupportFieldCorrectionRequest: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /** Candidate Version */
+            candidate_version: number;
+            /** Corrected Value */
+            corrected_value: string;
+            /** Field Key */
+            field_key: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Work Package Id
+             * Format: uuid
+             */
+            work_package_id: string;
+        };
         /** SupportProductionView */
         SupportProductionView: {
             /** Authority Layers */
             authority_layers: {
                 [key: string]: string;
             };
+            /** Available Packages */
+            available_packages?: {
+                [key: string]: unknown;
+            }[];
             /** Book History */
             book_history?: {
                 [key: string]: unknown;
@@ -1837,6 +2599,10 @@ export interface components {
             books?: {
                 [key: string]: unknown;
             }[];
+            /** Consistency */
+            consistency: {
+                [key: string]: unknown;
+            };
             /** Field Resolutions */
             field_resolutions?: {
                 [key: string]: unknown;
@@ -1879,11 +2645,157 @@ export interface components {
             requirements: {
                 [key: string]: unknown;
             }[];
+            /** Source Field Candidates */
+            source_field_candidates?: {
+                [key: string]: unknown;
+            }[];
+            /** Support Process */
+            support_process?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Workspace Id
              * Format: uuid
              */
             workspace_id: string;
+        };
+        /** SupportReleaseReadinessView */
+        SupportReleaseReadinessView: {
+            /** Blockers */
+            blockers: string[];
+            /** Command Writer */
+            command_writer: {
+                [key: string]: unknown;
+            };
+            /** Coverage */
+            coverage: {
+                [key: string]: unknown;
+            };
+            /** Ready */
+            ready: boolean;
+            /** Scope */
+            scope: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "blocked";
+        };
+        /** SupportScopeConfigurationView */
+        SupportScopeConfigurationView: {
+            /** Outcome */
+            outcome: string;
+            /** Reason Code */
+            reason_code: string;
+            /** Revision */
+            revision: number;
+            /** State */
+            state: string;
+            /**
+             * Support Process Id
+             * Format: uuid
+             */
+            support_process_id: string;
+        };
+        /** SupportScopeConfigureRequest */
+        SupportScopeConfigureRequest: {
+            /** Authority Profile Version */
+            authority_profile_version: string;
+            /** Classification */
+            classification: string;
+            /** Contract Registry Version */
+            contract_registry_version: string;
+            /** Deliverable Scope */
+            deliverable_scope: string[];
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Input Manifest Digest */
+            input_manifest_digest: string;
+            /**
+             * Mode Execution Id
+             * Format: uuid
+             */
+            mode_execution_id: string;
+            /** Policy Versions */
+            policy_versions: string[];
+            /** Process Definition Version */
+            process_definition_version: string;
+            /**
+             * Professional Grant Id
+             * Format: uuid
+             */
+            professional_grant_id: string;
+            /** Professional Grant Version */
+            professional_grant_version: number;
+            /** Professional Qualification Ref */
+            professional_qualification_ref: string;
+            /** Purpose */
+            purpose: string;
+            /**
+             * Rule Set Version Id
+             * Format: uuid
+             */
+            rule_set_version_id: string;
+            /** Source Class Allowlist */
+            source_class_allowlist: string[];
+        };
+        /** SupportScopeReadinessView */
+        SupportScopeReadinessView: {
+            configuration?: components["schemas"]["SupportScopeConfigureRequest"] | null;
+            /** Gaps */
+            gaps?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "blocked" | "configured";
+        };
+        /** TenderContractAnalysisView */
+        TenderContractAnalysisView: {
+            /** Assessment */
+            assessment: {
+                [key: string]: unknown;
+            } | null;
+            /** Authority Boundary */
+            authority_boundary: string;
+            /** Clauses */
+            clauses: {
+                [key: string]: unknown;
+            }[];
+            /** Deliverables */
+            deliverables: {
+                [key: string]: unknown;
+            }[];
+            /** Disagreement Items */
+            disagreement_items: {
+                [key: string]: unknown;
+            }[];
+            /** Gaps */
+            gaps: string[];
+            /** Issues */
+            issues: {
+                [key: string]: unknown;
+            }[];
+            /** Process */
+            process: {
+                [key: string]: unknown;
+            } | null;
+            /** Protocols */
+            protocols: {
+                [key: string]: unknown;
+            }[];
+            /** Revised Clauses */
+            revised_clauses: {
+                [key: string]: unknown;
+            }[];
+            /** Revised Contracts */
+            revised_contracts: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
         };
         /** TrialReadinessRequest */
         TrialReadinessRequest: {
@@ -2024,6 +2936,37 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    support_release_readiness_api_v1_admin_support_release_readiness_get: {
+        parameters: {
+            query: {
+                workspace_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportReleaseReadinessView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     trial_readiness_api_v1_admin_trial_readiness_get: {
         parameters: {
             query?: never;
@@ -2095,6 +3038,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CapabilityStatusView"];
+                };
+            };
+        };
+    };
+    list_conversations_api_v1_construction_consultant_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstructionConsultantConversationView"][];
+                };
+            };
+        };
+    };
+    create_construction_consultant_conversation_api_v1_construction_consultant_conversations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConstructionConsultantConversationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstructionConsultantConversationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_conversation_messages_api_v1_construction_consultant_conversations__conversation_id__messages_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstructionConsultantMessageView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ask_construction_consultant_api_v1_construction_consultant_conversations__conversation_id__questions_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConstructionConsultantQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConstructionConsultantAnswerView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2655,6 +3721,130 @@ export interface operations {
             };
         };
     };
+    audit_expected_actual_preflight_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditExpectedActualPreflightView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_expected_actual_preflight_export_api_v1_workspaces__workspace_id__audit_expected_actual_preflight_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_audit_report_projection_api_v1_workspaces__workspace_id__audit_reports_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditReportProjectionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_report_projection_export_api_v1_workspaces__workspace_id__audit_reports_latest_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_documents_api_v1_workspaces__workspace_id__documents_get: {
         parameters: {
             query?: {
@@ -2863,7 +4053,9 @@ export interface operations {
     };
     jobs_api_v1_workspaces__workspace_id__jobs_get: {
         parameters: {
-            query?: never;
+            query?: {
+                effective_only?: boolean;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -3350,7 +4542,11 @@ export interface operations {
     };
     project_understanding_api_v1_workspaces__workspace_id__project_understanding_get: {
         parameters: {
-            query?: never;
+            query?: {
+                section?: ("general" | "structure" | "works" | "materials" | "packages" | "matrix" | "gaps") | null;
+                page_offset?: number;
+                page_limit?: number;
+            };
             header?: never;
             path: {
                 workspace_id: string;
@@ -3436,6 +4632,392 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_analysis_export_api_v1_workspaces__workspace_id__project_understanding_tender_analysis_zip_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_document_coverage_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_document_coverage_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_facility_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_facility_work_observations_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_findings_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_findings_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_findings_report_api_v1_workspaces__workspace_id__project_understanding_tender_findings_docx_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_scope_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_scope_schedule_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_structure_identity_schedule_api_v1_workspaces__workspace_id__project_understanding_tender_structure_identity_candidates_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorationRecoveryPlanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restoration_recovery_plan_export_api_v1_workspaces__workspace_id__restoration_recovery_plan_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    capture_restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plans_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestorationRecoveryPlanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_support_field_api_v1_workspaces__workspace_id__support_fields_confirmations_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportFieldConfirmationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFieldCommandView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    correct_support_field_api_v1_workspaces__workspace_id__support_fields_corrections_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportFieldCorrectionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportFieldCommandView"];
                 };
             };
             /** @description Validation Error */
@@ -3696,7 +5278,110 @@ export interface operations {
             };
         };
     };
+    support_id_package_export_api_v1_workspaces__workspace_id__support_id_packages_export_get: {
+        parameters: {
+            query?: {
+                work_package_id?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     support_production_api_v1_workspaces__workspace_id__support_id_production_get: {
+        parameters: {
+            query?: {
+                work_package_id?: string | null;
+            };
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportProductionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SupportScopeConfigureRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportScopeConfigurationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    support_scope_readiness_api_v1_workspaces__workspace_id__support_scope_readiness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -3713,7 +5398,100 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SupportProductionView"];
+                    "application/json": components["schemas"]["SupportScopeReadinessView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_analysis_api_v1_workspaces__workspace_id__tender_contract_analysis_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenderContractAnalysisView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_analysis_export_api_v1_workspaces__workspace_id__tender_contract_analysis_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_contract_analysis_report_api_v1_workspaces__workspace_id__tender_contract_analysis_docx_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
                 };
             };
             /** @description Validation Error */

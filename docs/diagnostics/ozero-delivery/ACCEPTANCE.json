@@ -1,0 +1,83 @@
+{
+  "recorded_at": "2026-09-11T16:27:00+12:00",
+  "scope": "OZERO comprehensive Tender delivery",
+  "cases": [
+    {
+      "id": "effective-job-semantic-progress-contract",
+      "expected": "The effective jobs API preserves a linked current retry beyond historical rows and returns the latest safe semantic batch current/total values without document content.",
+      "observed": "A disposable PostgreSQL integration test inserted 205 historical jobs, a failed/replacement lineage, and a 7/10 semantic event. After a safe-boundary transition, real OZERO job 01a08f4e-3b5b-7851-9f3d-fcaf3e84c096 under worker release 22142e2 persisted engineering_semantic_batch_accepted events 1/497 and 2/497. The compatible API is f533d5c and migration 0047 is ready.",
+      "status": "PASS",
+      "evidence": "tests/integration/test_product_application_spine.py::test_effective_jobs_keep_running_retry_visible_beyond_history_window; scoped workspace.job_progress_events; launchd worker manifest; /api/v1/health/ready."
+    },
+    {
+      "id": "profile-scoped-release-transition",
+      "expected": "A compatible API, document-worker, and assistant-worker release runs at the additive profile-scoping migration head without interrupting the accepted POS batch run.",
+      "observed": "After POS reached terminal success, a verified pre-0047 backup was created, migration 0047 was applied, and all three supervised services were restarted from e28da91. The loopback readiness route returned ready at 0047.",
+      "status": "PASS",
+      "evidence": "restricted backup record; alembic current; launchd process paths; /api/v1/health/ready"
+    },
+    {
+      "id": "pos-v15-batch-completeness-before-profile-persistence",
+      "expected": "The original POS v15 manifest completes with accepted recovery evidence while invalid model attempts remain visible independently.",
+      "observed": "443 accepted batches cover 5,252 manifest fragments. Five failed attempt receipts cover 60 attempt fragments; their accepted recovery lineage remains immutable. The resulting old-profile candidates are explicitly not accepted project facts.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches; POS durable-job receipt 01a08f49-d11d-7f8e-b895-e1764c4d6536"
+    },
+    {
+      "id": "release-ready",
+      "expected": "The pinned API and document-worker releases start at the expected database revision.",
+      "observed": "API 8e0c2f5, document worker 18c6893, and assistant worker a9a693a are pinned; /api/v1/health/ready reports PostgreSQL reachable and migration 0045_bounded_dep_recovery.",
+      "status": "PASS",
+      "evidence": "launchd service manifest and local readiness response"
+    },
+    {
+      "id": "pzu-semantic-coverage",
+      "expected": "Every deterministic PZU semantic input is represented by an accepted bounded batch or a visible unresolved outcome.",
+      "observed": "5,021 accepted fragment inputs for the 5,021-fragment PZU denominator; five rejected model attempts remain historical receipts.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches, profile qwen-engineering-extraction-v12"
+    },
+    {
+      "id": "pzu-materialization",
+      "expected": "Accepted semantic evidence reaches persistent candidate collections and downstream materialization.",
+      "observed": "PZU successor stages completed; candidates and a partial reconciliation are persisted.",
+      "status": "PASS",
+      "evidence": "source-scoped durable-job lineage and project-understanding view"
+    },
+    {
+      "id": "kr1-semantic-coverage-and-materialization",
+      "expected": "Every deterministic KR1 semantic input reaches an accepted bounded batch or a separate durable unresolved attempt, and accepted candidates reach the partial project view.",
+      "observed": "2,960 accepted v13 fragment inputs; one failed 12-input child receipt retained independently. The live partial view increased to 231 fields, 486 works, 142 quantities, 68 materials and 274 structures across the workspace.",
+      "status": "PASS",
+      "evidence": "workspace.engineering_extraction_batches; KR1 successor lineage; scoped live project_understanding_view"
+    },
+    {
+      "id": "full-package-semantic-coverage",
+      "expected": "All 22 active source versions and 2,529 pages have the required processing disposition and eligible semantic analysis.",
+      "observed": "Only two source versions have accepted engineering-batch coverage at this checkpoint; KR1 is active.",
+      "status": "FAIL",
+      "evidence": "semantic coverage rows and active KR1 job"
+    },
+    {
+      "id": "all-document-coverage-surface",
+      "expected": "The project view distinguishes every active source with no accepted semantic batch from a completed document.",
+      "observed": "A scoped application-repository read of pending commit e4b2083 returned 22 active documents: 1 complete, 2 partial, 19 not_started.",
+      "status": "UNVERIFIED",
+      "evidence": "controlled scoped repository read; API/frontend release is pending migration 0046 and worker quiescence"
+    },
+    {
+      "id": "facility-dossiers-and-pit-inventory",
+      "expected": "A reconciled facility/area/pit inventory with revision-aware evidence is accessible in the application.",
+      "observed": "The view contains candidate structures, including five pit candidates, but no cross-document identity reconciliation or exhaustive inventory.",
+      "status": "FAIL",
+      "evidence": "partial project-understanding view"
+    },
+    {
+      "id": "consultant-project-acceptance",
+      "expected": "The consultant answers project-wide and facility-specific questions with persisted project evidence and working source links.",
+      "observed": "Not yet exercised after comprehensive model completion.",
+      "status": "UNVERIFIED",
+      "evidence": "requires browser/application acceptance after source reconciliation"
+    }
+  ]
+}

@@ -12,8 +12,38 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.exc import DBAPIError
 
-from asd_kontur.audit import PostgresCorpusAuditStore
-from asd_kontur.corpus import CorpusScope, PageInspection, PhysicalObjectInspection
+from asd_kontur.audit import (
+    ActionRequest,
+    ActionRequestReference,
+    ActionRequestState,
+    AuditCommand,
+    AuditCommandType,
+    AuditReport,
+    AuditScope,
+    AuditTerminalOutcome,
+    CausalImpactPath,
+    CausalReadinessDelta,
+    DeltaDenominator,
+    DeltaState,
+    DocumentDelta,
+    EvidenceRatedItem,
+    PackageAssessment,
+    PackageReadiness,
+    PostgresCorpusAuditStore,
+    ProcessState,
+)
+from asd_kontur.corpus import (
+    CorpusCoverage,
+    CorpusOutcome,
+    CorpusReconciliation,
+    CorpusScope,
+    CorpusSnapshot,
+    PageInspection,
+    PhysicalObjectInspection,
+    PhysicalObjectRef,
+    ResourcePolicy,
+    build_processing_plan,
+)
 from asd_kontur.domain import uuid7
 from asd_kontur.lifecycle import (
     AdapterHealth,
@@ -25,6 +55,7 @@ from asd_kontur.lifecycle import (
 from asd_kontur.persistence import WorkspaceContext, WorkspaceUnitOfWork
 
 from .conftest import PostgreSQLEnvironment, create_database, drop_database, run_migration
+from .test_common_domain_kernel import _seed_rule
 from .test_workspace_lifecycle import (
     Tenant,
     create_tenant,
@@ -104,7 +135,139 @@ def insert_mission(
         )
 
 
+def _seed_processing_profile(environment: PostgreSQLEnvironment) -> UUID:
+    profile_id = uuid7()
+    with environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.corpus_processing_profile_versions "
+                "(processing_profile_id,version,purpose,policy_digest,max_local_pages,"
+                "max_local_bytes,max_pages_per_shard,max_raster_pages_per_shard,"
+                "external_egress_state,assurance_class,created_at) VALUES "
+                "(:profile,'development-1.0.0','synthetic-audit',:digest,50,52428800,"
+                "100,10,'denied','development_synthetic',CURRENT_TIMESTAMP)"
+            ),
+            {"profile": profile_id, "digest": DIGEST},
+        )
+    return profile_id
+
+
+def _complete_snapshot_scope(environment: PostgreSQLEnvironment, tenant: Tenant) -> AuditScope:
+    """Create the smallest reconciled snapshot through the actual Audit stores."""
+
+    mode_id = create_mode(environment, tenant)
+    mission_id = uuid7()
+    insert_mission(environment, tenant, mode_id, mission_id)
+    collection_scope_id = uuid7()
+    with environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.collection_scope_versions "
+                "(organization_id,workspace_id,collection_scope_id,version,"
+                "collection_mission_id,included_locations,included_media,"
+                "completeness_claim,authority_profile_version,fingerprint,created_at) "
+                "VALUES (:o,:w,:scope,1,:mission,'[\"synthetic\"]'::jsonb,"
+                "'[\"digital\"]'::jsonb,'claimed_complete','1.0.0',:digest,"
+                "CURRENT_TIMESTAMP)"
+            ),
+            {
+                "o": tenant.organization_id,
+                "w": tenant.workspace_id,
+                "scope": collection_scope_id,
+                "mission": mission_id,
+                "digest": DIGEST,
+            },
+        )
+    object_id = uuid7()
+    with WorkspaceUnitOfWork(environment.application_engine, workspace_context(tenant)) as unit:
+        assert unit.workspaces is not None
+        unit.workspaces.add_object(
+            object_id=object_id,
+            content_digest=DIGEST,
+            size_bytes=128,
+            object_class="synthetic_audit_source",
+        )
+    inspection = PhysicalObjectInspection(
+        CorpusScope(tenant.organization_id, tenant.workspace_id),
+        uuid7(),
+        object_id,
+        1,
+        DIGEST,
+        128,
+        "application/pdf",
+        False,
+        True,
+        1,
+        (PageInspection(1, 595.0, 842.0, 0, 120, 0),),
+        0,
+        0,
+        "preflight-1.0.0",
+        datetime.now(UTC),
+    )
+    store = PostgresCorpusAuditStore(environment.audit_engine)
+    context = audit_context(tenant)
+    store.record_inspection(context, inspection)
+    policy = ResourcePolicy("development-1.0.0", 50, 52428800, 100, 10, 1000, False, False)
+    plan = build_processing_plan(
+        inspection,
+        purpose="synthetic-audit",
+        classification="internal",
+        policy=policy,
+    )
+    store.record_plan(context, plan, processing_profile_id=_seed_processing_profile(environment))
+    reconciliation = CorpusReconciliation(
+        inspection.scope,
+        uuid7(),
+        plan.processing_plan_id,
+        plan.version,
+        (1,),
+        (1,),
+        (),
+        (),
+        (),
+        (),
+        (),
+        CorpusOutcome.COMPLETE,
+        DIGEST,
+    )
+    store.record_reconciliation(context, reconciliation)
+    rule_set_id, _, _, _ = _seed_rule(environment, tenant)
+    snapshot = CorpusSnapshot(
+        inspection.scope,
+        uuid7(),
+        1,
+        collection_scope_id,
+        1,
+        (PhysicalObjectRef(object_id, 1),),
+        ((inspection.inspection_id, 1),),
+        (),
+        (),
+        (),
+        (),
+        CorpusCoverage(1, 1, 1, 1, 1, 0, 0, "coverage-1.0.0"),
+        (reconciliation.reconciliation_id,),
+        rule_set_id,
+        datetime.now(UTC),
+        CorpusOutcome.COMPLETE,
+    )
+    store.record_snapshot(context, snapshot)
+    return AuditScope(
+        tenant.organization_id,
+        tenant.workspace_id,
+        mode_id,
+        uuid7(),
+        snapshot.corpus_snapshot_id,
+        snapshot.version,
+        rule_set_id,
+        "1.0.0",
+        "1.0.0",
+        "1.4.0",
+    )
+
+
 def test_wp14_schema_role_rls_and_force_rls(
+    migration_head: str,
     postgres_environment: PostgreSQLEnvironment,
 ) -> None:
     inspector = sa.inspect(postgres_environment.owner_engine)
@@ -122,8 +285,7 @@ def test_wp14_schema_role_rls_and_force_rls(
     } <= set(inspector.get_table_names(schema="workspace"))
     with postgres_environment.owner_engine.connect() as connection:
         assert (
-            connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-            == "0030_professional_assistant"
+            connection.scalar(sa.text("SELECT version_num FROM alembic_version")) == migration_head
         )
         assert (
             connection.scalar(
@@ -300,6 +462,618 @@ def test_header_updates_require_operation_context_and_exact_revision(
             )
 
 
+def test_audit_process_persists_exact_snapshot_and_all_declared_header_states(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    tenant = create_tenant(postgres_environment)
+    activate(postgres_environment, tenant)
+    scope = _complete_snapshot_scope(postgres_environment, tenant)
+    context = audit_context(tenant)
+    store = PostgresCorpusAuditStore(postgres_environment.audit_engine)
+
+    store.start_audit_process(context, scope)
+    # The exact immutable scope is a natural idempotency key: a safe retry
+    # neither creates a second header nor changes its revision.
+    store.start_audit_process(context, scope)
+    with pytest.raises(ValueError, match="different immutable scope"):
+        store.start_audit_process(context, replace(scope, contract_registry_version="1.4.1"))
+
+    commands = (
+        AuditCommandType.START_COLLECTION,
+        AuditCommandType.RECONCILE_CORPUS,
+        AuditCommandType.PUBLISH_CORPUS_SNAPSHOT,
+        AuditCommandType.START_AUDIT,
+    )
+    revision = 1
+    for command_type in commands:
+        outcome = store.apply_command(
+            context,
+            AuditCommand(
+                uuid7(),
+                command_type,
+                scope.audit_process_id,
+                revision,
+                f"audit-process:{scope.audit_process_id}:{revision}",
+                "service:synthetic-audit",
+                "audit.process.transition",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+        )
+        assert outcome.accepted
+        revision = outcome.revision
+
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        row = connection.execute(
+            sa.text(
+                "SELECT state,revision,corpus_snapshot_id,corpus_snapshot_version,rule_set_version_id "
+                "FROM workspace.audit_processes WHERE audit_process_id=:process"
+            ),
+            {"process": scope.audit_process_id},
+        ).one()
+    assert row == (
+        ProcessState.EVALUATING.value,
+        5,
+        scope.corpus_snapshot_id,
+        scope.corpus_snapshot_version,
+        scope.rule_set_version_id,
+    )
+
+    stale = store.apply_command(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+            scope.audit_process_id,
+            4,
+            f"audit-process:{scope.audit_process_id}:stale",
+            "service:synthetic-audit",
+            "audit.process.transition",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+    )
+    assert not stale.accepted
+    assert stale.outcome_code == "CONCURRENCY_CONFLICT"
+
+    document_delta = DocumentDelta(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-audit-scope",),
+            ("required-act",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            EvidenceRatedItem(
+                "required-act",
+                DeltaState.MISSING,
+                (),
+                (),
+                (),
+                (),
+                (),
+                ("ACT_NOT_COLLECTED",),
+                ("package_readiness",),
+            ),
+        ),
+    )
+    evaluated = store.evaluate_document_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+            scope.audit_process_id,
+            5,
+            f"audit-process:{scope.audit_process_id}:document-delta",
+            "service:synthetic-audit",
+            "audit.document.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        document_delta,
+    )
+    assert evaluated.accepted and evaluated.revision == 6
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 1
+        )
+        assert connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_items")) == 1
+        assert (
+            connection.scalar(
+                sa.text(
+                    "SELECT revision FROM workspace.audit_processes WHERE audit_process_id=:process"
+                ),
+                {"process": scope.audit_process_id},
+            )
+            == 6
+        )
+    repeated_evaluation = store.evaluate_document_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+            scope.audit_process_id,
+            5,
+            f"audit-process:{scope.audit_process_id}:document-delta-repeat",
+            "service:synthetic-audit",
+            "audit.document.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        document_delta,
+    )
+    assert not repeated_evaluation.accepted
+    assert repeated_evaluation.outcome_code == "CONCURRENCY_CONFLICT"
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 1
+        )
+
+    causal_delta = CausalReadinessDelta(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-material-batch",),
+            ("synthetic-material-batch",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            CausalImpactPath(
+                uuid7(),
+                "material-batch:1",
+                None,
+                None,
+                "work:sheet-pile",
+                None,
+                None,
+                None,
+                None,
+                None,
+                DeltaState.BLOCKED,
+                (),
+                ("MATERIAL_CERTIFICATE_MISSING",),
+                ("id_package", "payment_readiness"),
+            ),
+        ),
+    )
+    causal = store.evaluate_causal_delta(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_CAUSAL_DELTA,
+            scope.audit_process_id,
+            6,
+            f"audit-process:{scope.audit_process_id}:causal-delta",
+            "service:synthetic-audit",
+            "audit.causal.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        causal_delta,
+    )
+    assert causal.accepted and causal.revision == 7
+    package_delta = PackageReadiness(
+        uuid7(),
+        1,
+        scope,
+        DeltaDenominator(
+            uuid7(),
+            1,
+            ("synthetic-package",),
+            ("support.aosr",),
+            scope.rule_set_version_id,
+            ("rule-trace:synthetic",),
+        ),
+        (
+            PackageAssessment(
+                uuid7(),
+                1,
+                None,
+                "synthetic-section",
+                (),
+                DeltaState.SATISFIED,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                DeltaState.MISSING,
+                ("SIGNATURES_AND_HANDOVER_UNAVAILABLE",),
+            ),
+        ),
+    )
+    packaged = store.evaluate_package_readiness(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.EVALUATE_PACKAGE_READINESS,
+            scope.audit_process_id,
+            7,
+            f"audit-process:{scope.audit_process_id}:package-delta",
+            "service:synthetic-audit",
+            "audit.package.evaluate",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        package_delta,
+    )
+    assert packaged.accepted and packaged.revision == 8
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_delta_versions")) == 3
+        )
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_causal_path_versions"))
+            == 1
+        )
+        assert (
+            connection.scalar(
+                sa.text("SELECT count(*) FROM workspace.audit_package_delta_memberships")
+            )
+            == 1
+        )
+
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        snapshot_fingerprint = connection.scalar(
+            sa.text(
+                "SELECT fingerprint FROM workspace.corpus_snapshot_versions WHERE "
+                "corpus_snapshot_id=:snapshot AND version=:version"
+            ),
+            {"snapshot": scope.corpus_snapshot_id, "version": scope.corpus_snapshot_version},
+        )
+    assert snapshot_fingerprint is not None
+    action_request = ActionRequest(
+        uuid7(),
+        1,
+        scope,
+        "collect_missing_material_certificate",
+        "role:site-quality",
+        "work-package:synthetic-a",
+        ("locator:synthetic-material",),
+        None,
+        ("ID_READINESS_UNPROVEN",),
+        "service:synthetic-audit",
+        "role:independent-auditor",
+        ActionRequestState.OPEN,
+    )
+    issued = store.issue_action_request(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.ISSUE_ACTION_REQUEST,
+            scope.audit_process_id,
+            8,
+            f"audit-process:{scope.audit_process_id}:issue-report-action-request",
+            "service:synthetic-audit",
+            "audit.action.issue",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        action_request,
+    )
+    assert issued.accepted and issued.revision == 9
+    reopened = store.apply_command(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.RECLASSIFY_DOCUMENT,
+            scope.audit_process_id,
+            9,
+            f"audit-process:{scope.audit_process_id}:reopen-after-action-request",
+            "service:synthetic-audit",
+            "audit.document.reclassify",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+    )
+    assert reopened.accepted and reopened.revision == 10
+    report = AuditReport(
+        uuid7(),
+        1,
+        scope,
+        str(snapshot_fingerprint),
+        document_delta.document_delta_id,
+        document_delta.fingerprint,
+        causal_delta.causal_delta_id,
+        causal_delta.fingerprint,
+        package_delta.package_readiness_id,
+        package_delta.fingerprint,
+        (ActionRequestReference(action_request.action_request_id, 1),),
+        AuditTerminalOutcome.BLOCKED,
+        (
+            "ACT_NOT_COLLECTED",
+            "MATERIAL_CERTIFICATE_MISSING",
+            "SIGNATURES_AND_HANDOVER_UNAVAILABLE",
+        ),
+        datetime.now(UTC),
+    )
+    with pytest.raises(ValueError, match="exactly one persisted evidence version"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                10,
+                f"audit-process:{scope.audit_process_id}:invalid-final-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(report, document_delta_fingerprint=DIGEST),
+        )
+    with pytest.raises(ValueError, match="action-request reference must resolve"):
+        store.finalize_report(
+            context,
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.FINALIZE_AUDIT_REPORT,
+                scope.audit_process_id,
+                10,
+                f"audit-process:{scope.audit_process_id}:invalid-action-report",
+                "service:synthetic-audit",
+                "audit.report.finalize",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+            replace(
+                report,
+                audit_report_id=uuid7(),
+                action_request_refs=(ActionRequestReference(uuid7(), 1),),
+            ),
+        )
+    finalized = store.finalize_report(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.FINALIZE_AUDIT_REPORT,
+            scope.audit_process_id,
+            10,
+            f"audit-process:{scope.audit_process_id}:final-report",
+            "service:synthetic-audit",
+            "audit.report.finalize",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        report,
+    )
+    assert finalized.accepted and finalized.revision == 11
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        row = connection.execute(
+            sa.text(
+                "SELECT p.state,p.revision,r.corpus_snapshot_id,r.corpus_snapshot_version,"
+                "r.document_delta_id,r.document_delta_version,r.causal_delta_id,"
+                "r.causal_delta_version,r.package_delta_id,r.package_delta_version,r.outcome,"
+                "r.unresolved_codes,r.product_ready FROM "
+                "workspace.audit_processes p JOIN workspace.audit_report_versions r USING "
+                "(organization_id,workspace_id,audit_process_id) WHERE r.audit_report_id=:report"
+            ),
+            {"report": report.audit_report_id},
+        ).one()
+        action_memberships = connection.execute(
+            sa.text(
+                "SELECT action_request_id,action_request_version FROM "
+                "workspace.audit_report_action_request_memberships WHERE audit_report_id=:report "
+                "AND audit_report_version=1"
+            ),
+            {"report": report.audit_report_id},
+        ).all()
+    assert row == (
+        ProcessState.COMPLETED.value,
+        11,
+        scope.corpus_snapshot_id,
+        scope.corpus_snapshot_version,
+        document_delta.document_delta_id,
+        1,
+        causal_delta.causal_delta_id,
+        1,
+        package_delta.package_readiness_id,
+        1,
+        AuditTerminalOutcome.BLOCKED.value,
+        [
+            "ACT_NOT_COLLECTED",
+            "MATERIAL_CERTIFICATE_MISSING",
+            "SIGNATURES_AND_HANDOVER_UNAVAILABLE",
+        ],
+        False,
+    )
+    assert action_memberships == [(action_request.action_request_id, 1)]
+
+    # The canonical service publishes immutable owner-read projections in the
+    # same transaction.  The Product Application role has scoped SELECT only;
+    # it cannot use this boundary to alter canonical Audit rows.
+    with postgres_environment.application_engine.connect() as connection:
+        assert (
+            connection.scalar(sa.text("SELECT count(*) FROM workspace.audit_projection_versions"))
+            == 0
+        )
+    with postgres_environment.application_engine.begin() as connection:
+        set_scope(connection, tenant)
+        projections = connection.execute(
+            sa.text(
+                "SELECT projection_kind,projection_payload->>'audience',"
+                "projection_payload->'report'->>'outcome' FROM "
+                "workspace.audit_projection_versions WHERE audit_report_id=:report "
+                "ORDER BY projection_kind"
+            ),
+            {"report": report.audit_report_id},
+        ).all()
+        assert projections == [
+            ("customer", "customer", AuditTerminalOutcome.BLOCKED.value),
+            ("pto", "pto", AuditTerminalOutcome.BLOCKED.value),
+        ]
+        pto_actions = connection.scalar(
+            sa.text(
+                "SELECT jsonb_array_length(projection_payload->'action_requests') "
+                "FROM workspace.audit_projection_versions WHERE audit_report_id=:report "
+                "AND projection_kind='pto'"
+            ),
+            {"report": report.audit_report_id},
+        )
+        assert pto_actions == 1
+        with pytest.raises(DBAPIError):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.audit_projection_versions "
+                    "(organization_id,workspace_id,projection_id,version,audit_report_id,"
+                    "audit_report_version,projection_kind,source_fingerprint,projection_payload,"
+                    "projection_fingerprint,state,built_at) VALUES "
+                    "(:o,:w,:projection,1,:report,1,'customer',:digest,'{}'::jsonb,:digest,"
+                    "'current',CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "o": tenant.organization_id,
+                    "w": tenant.workspace_id,
+                    "projection": uuid7(),
+                    "report": report.audit_report_id,
+                    "digest": DIGEST,
+                },
+            )
+
+    other = create_tenant(postgres_environment, tenant.organization_id)
+    activate(postgres_environment, other)
+    with pytest.raises(ValueError, match="not visible"):
+        store.apply_command(
+            audit_context(other),
+            AuditCommand(
+                uuid7(),
+                AuditCommandType.EVALUATE_DOCUMENT_DELTA,
+                scope.audit_process_id,
+                revision,
+                f"audit-process:{scope.audit_process_id}:cross-workspace",
+                "service:synthetic-audit",
+                "audit.process.transition",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+        )
+
+
+def test_audit_action_request_is_immutable_and_blocks_the_exact_process(
+    postgres_environment: PostgreSQLEnvironment,
+) -> None:
+    tenant = create_tenant(postgres_environment)
+    activate(postgres_environment, tenant)
+    scope = _complete_snapshot_scope(postgres_environment, tenant)
+    context = audit_context(tenant)
+    store = PostgresCorpusAuditStore(postgres_environment.audit_engine)
+    store.start_audit_process(context, scope)
+    revision = 1
+    for command_type in (
+        AuditCommandType.START_COLLECTION,
+        AuditCommandType.RECONCILE_CORPUS,
+        AuditCommandType.PUBLISH_CORPUS_SNAPSHOT,
+        AuditCommandType.START_AUDIT,
+    ):
+        outcome = store.apply_command(
+            context,
+            AuditCommand(
+                uuid7(),
+                command_type,
+                scope.audit_process_id,
+                revision,
+                f"audit-process:{scope.audit_process_id}:transition:{revision}",
+                "service:synthetic-audit",
+                "audit.process.transition",
+                uuid7(),
+                uuid7(),
+                DIGEST,
+            ),
+        )
+        assert outcome.accepted
+        revision = outcome.revision
+
+    request = ActionRequest(
+        uuid7(),
+        1,
+        scope,
+        "collect_missing_material_certificate",
+        "role:site-quality",
+        "work-package:synthetic-a",
+        ("locator:synthetic-material",),
+        None,
+        ("ID_READINESS_UNPROVEN",),
+        "service:synthetic-audit",
+        "role:independent-auditor",
+        ActionRequestState.OPEN,
+    )
+    issued = store.issue_action_request(
+        context,
+        AuditCommand(
+            uuid7(),
+            AuditCommandType.ISSUE_ACTION_REQUEST,
+            scope.audit_process_id,
+            revision,
+            f"audit-process:{scope.audit_process_id}:issue-action-request",
+            "service:synthetic-audit",
+            "audit.action.issue",
+            uuid7(),
+            uuid7(),
+            DIGEST,
+        ),
+        request,
+    )
+    assert issued.accepted
+    assert issued.state is ProcessState.BLOCKED
+    with postgres_environment.audit_engine.begin() as connection:
+        set_scope(connection, tenant)
+        row = connection.execute(
+            sa.text(
+                "SELECT action_code,evidence_refs,blocking_impacts,state FROM "
+                "workspace.audit_action_request_versions WHERE action_request_id=:request "
+                "AND version=1"
+            ),
+            {"request": request.action_request_id},
+        ).one()
+        process = connection.execute(
+            sa.text(
+                "SELECT state,revision FROM workspace.audit_processes WHERE audit_process_id=:process"
+            ),
+            {"process": scope.audit_process_id},
+        ).one()
+        with pytest.raises(DBAPIError):
+            connection.execute(
+                sa.text(
+                    "UPDATE workspace.audit_action_request_versions SET action_code='changed' "
+                    "WHERE action_request_id=:request AND version=1"
+                ),
+                {"request": request.action_request_id},
+            )
+    assert row == (
+        "collect_missing_material_certificate",
+        ["locator:synthetic-material"],
+        ["ID_READINESS_UNPROVEN"],
+        ActionRequestState.OPEN.value,
+    )
+    assert process == (ProcessState.BLOCKED.value, revision + 1)
+
+
 def test_storage_inventory_and_exact_reset_preserve_workspace_b_and_platform(
     postgres_environment: PostgreSQLEnvironment,
 ) -> None:
@@ -372,7 +1146,7 @@ def test_storage_inventory_and_exact_reset_preserve_workspace_b_and_platform(
 
 
 def test_disposable_0008_to_0007_to_0008(
-    postgres_environment: PostgreSQLEnvironment, repository_root: object
+    migration_head: str, postgres_environment: PostgreSQLEnvironment, repository_root: object
 ) -> None:
     suffix = hashlib.sha256(os.urandom(16)).hexdigest()[:12]
     database_name = f"asd_g04_test_wp14_{suffix}"
@@ -390,7 +1164,7 @@ def test_disposable_0008_to_0007_to_0008(
         with sa.create_engine(database_url).connect() as connection:
             assert (
                 connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
-                == "0030_professional_assistant"
+                == migration_head
             )
     finally:
         os.environ.pop("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE", None)

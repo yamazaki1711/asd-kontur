@@ -36,7 +36,27 @@ def _project() -> dict[str, object]:
             {
                 "work_package_id": "2a6d844d-e79c-4511-9633-b1106a583ec8",
                 "package": {
-                    "work_type": {"normalized": "устройство монолитной плиты"},
+                    "work_type": {
+                        "raw": "Устройство монолитной плиты",
+                        "normalized": "устройство монолитной плиты",
+                    },
+                    "scope": "zone:A",
+                    "candidate_observation_count": 1,
+                    "quantities": [
+                        {
+                            "raw_value": "12,350",
+                            "raw_unit": "м³",
+                            "source_locator_id": locator,
+                        }
+                    ],
+                    "materials": [
+                        {
+                            "raw_name": "Бетон B25",
+                            "raw_quantity": "12,350",
+                            "raw_unit": "м³",
+                            "source_locator_id": locator,
+                        }
+                    ],
                     "source_locator_ids": [locator],
                 },
             }
@@ -90,6 +110,126 @@ def test_pilot_result_is_deterministic_and_keeps_exact_locator() -> None:
     assert first["normative_notice"] == "Актуальность редакций нормативных документов не проверена"
 
 
+def test_tender_exposes_missing_contract_input_without_inventing_contract_review() -> None:
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=_project(),
+        documents=_documents(),
+        support={},
+    )
+
+    contract_item = next(
+        item for item in result["items"] if item["kind"] == "contract_input_unavailable"
+    )
+    assert contract_item["title"] == "Договор не предоставлен для договорного анализа"
+    assert "не сопоставлялись" in contract_item["description"]
+    assert contract_item["source_locator_ids"] == []
+    assert "Предоставить актуальную редакцию договора" in contract_item["recommended_action"]
+    assert "disagreement_protocol" not in result["available_exports"]
+    assert "contract_changes" not in result["available_exports"]
+
+
+def test_tender_material_gap_does_not_claim_an_unparsed_estimate_omission() -> None:
+    project = _project()
+    project["defects"] = [
+        {
+            "defect_id": "material-comparison-input",
+            "version": 1,
+            "defect_kind": "estimate_material_comparison_input_unavailable",
+            "source_locator_ids": ["f8d343e5-d518-46d0-8d0b-b5a85aa5643e"],
+        }
+    ]
+
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+
+    item = next(entry for entry in result["items"] if entry["kind"] == "defect")
+    assert item["title"] == "Ресурсная часть сметы для сопоставления материалов не извлечена"
+    assert "не считать материал пропущенным" in item["recommended_action"]
+
+
+def test_tender_scope_schedule_keeps_identical_work_names_in_distinct_scopes() -> None:
+    project = _project()
+    packages = project["work_packages"]
+    assert isinstance(packages, list)
+    second = {
+        **packages[0],
+        "work_package_id": "8a6d844d-e79c-4511-9633-b1106a583ec8",
+        "package": {
+            **packages[0]["package"],
+            "scope": "zone:B",
+            "quantities": [
+                {
+                    "raw_value": "8,000",
+                    "raw_unit": "м³",
+                    "source_locator_id": "second-locator",
+                }
+            ],
+            "source_locator_ids": ["second-locator"],
+            "uncertainties": ["SAME_WORK_NAME_DIFFERENT_SCOPE"],
+        },
+    }
+    packages.append(second)
+    project["evidence_index"] = {
+        **project["evidence_index"],
+        "second-locator": {
+            "safe_display_name": "ВОР второй зоны.xlsx",
+            "document_version": 2,
+            "locator_value": "sheet:Зона B!C7",
+        },
+    }
+
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+
+    schedule = result["tender_scope_schedule"]
+    assert len(schedule) == 2
+    assert result["summary"]["candidate_work_observation_groups"] == 2
+    assert "work_packages" not in result["summary"]
+    assert [item["scope"] for item in schedule] == ["zone:A", "zone:B"]
+    assert [item["quantities"][0]["raw_value"] for item in schedule] == ["12,350", "8,000"]
+    assert "SAME_WORK_NAME_DIFFERENT_SCOPE" in schedule[1]["uncertainties"]
+    assert schedule[1]["source_references"] == ["ВОР второй зоны.xlsx, версия 2, sheet:Зона B!C7"]
+
+
+def test_tender_does_not_treat_contract_filename_as_clause_analysis() -> None:
+    documents = [
+        {
+            **_documents()[0],
+            "safe_display_name": "Проект договора строительного подряда.docx",
+            "relative_path": "Исходные данные/Проект договора строительного подряда.docx",
+        }
+    ]
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=_project(),
+        documents=documents,
+        support={},
+    )
+
+    contract_item = next(
+        item for item in result["items"] if item["kind"] == "contract_analysis_pending"
+    )
+    assert "ещё не извлечены" in contract_item["title"]
+    assert "не подтверждает проверку условий" in contract_item["description"]
+
+
 def test_mode_results_are_professionally_distinct() -> None:
     support = {
         "requirements": [
@@ -128,6 +268,22 @@ def test_mode_results_are_professionally_distinct() -> None:
         item["status"] == "cannot_prepare" for item in values[PilotMode.RESTORATION]["items"]
     )
     assert len({value["fingerprint"] for value in values.values()}) == 4
+
+
+def test_audit_does_not_treat_completed_extraction_as_a_conformance_result() -> None:
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.AUDIT,
+        project=_project(),
+        documents=_documents(),
+        support={},
+    )
+
+    document_item = next(item for item in result["items"] if item["kind"] == "audit-input")
+    assert document_item["status"] == "requires_clarification"
+    assert "доступно как вход для аудита" in document_item["description"]
+    assert "не выполнены" in document_item["description"]
 
 
 def test_docx_and_pdf_exports_are_reproducible_and_readable() -> None:
@@ -224,3 +380,31 @@ def test_user_excluded_item_is_not_emitted_as_an_exported_finding() -> None:
     with zipfile.ZipFile(io.BytesIO(docx)) as archive:
         document_xml = archive.read("word/document.xml").decode()
     assert "Расхождение объёма между ВОР и сметой" not in document_xml
+
+
+def test_tender_report_keeps_readable_source_reference_for_each_finding() -> None:
+    project = _project()
+    project["evidence_index"] = {
+        "f8d343e5-d518-46d0-8d0b-b5a85aa5643e": {
+            "safe_display_name": "ВОР.xlsx",
+            "document_version": 2,
+            "locator_value": "sheet:Сводная!B17",
+        }
+    }
+    result = build_pilot_result(
+        workspace_id=WORKSPACE_ID,
+        workspace_name="Пилотный объект",
+        mode=PilotMode.TENDER,
+        project=project,
+        documents=_documents(),
+        support={},
+    )
+    docx = render_export(
+        result=result,
+        kind=PilotExportKind.DISAGREEMENT_PROTOCOL,
+        output_format=PilotExportFormat.DOCX,
+    )
+
+    with zipfile.ZipFile(io.BytesIO(docx)) as archive:
+        document_xml = archive.read("word/document.xml").decode()
+    assert "ВОР.xlsx, версия 2, sheet:Сводная!B17" in document_xml

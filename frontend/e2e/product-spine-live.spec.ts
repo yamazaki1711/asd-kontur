@@ -1,10 +1,68 @@
 import { expect, test } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from "node:fs";
 import { resolve } from "node:path";
 
 const repository = resolve(import.meta.dirname, "../..");
 const statePath = process.env.ASD_E2E_STATE_PATH;
+
+test("platform consultant API persists a model answer and restores a durable dialog", async ({
+  page,
+}) => {
+  test.setTimeout(150_000);
+  if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
+  const state = JSON.parse(readFileSync(statePath, "utf8")) as {
+    synthetic_qwen_answer?: string | null;
+  };
+  await page.goto("/login");
+  await page.getByLabel("Пользователь").fill("synthetic-live-owner");
+  await page.getByLabel("Пароль").fill("Synthetic-Live-Owner-Password-42!");
+  await page.getByRole("button", { name: "Войти" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Выберите режим работы" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Строительный консультант" }),
+  ).toBeVisible();
+  const question =
+    process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1"
+      ? "Какие требования к уходу за бетоном?"
+      : "Что проверяют при входном контроле строительных материалов?";
+  await page.getByLabel("Ваш вопрос").fill(question);
+  const responsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().includes("/construction-consultant/conversations/") &&
+      response.url().endsWith("/questions"),
+    { timeout: 120_000 },
+  );
+  await page.getByRole("button", { name: "Отправить вопрос" }).click();
+  const response = await responsePromise;
+  expect(response.ok(), await response.text()).toBe(true);
+  const answer = page.locator(".construction-consultant-message-assistant");
+  await expect(answer).toBeVisible({ timeout: 120_000 });
+  await expect(answer).not.toHaveText("");
+  if (state.synthetic_qwen_answer) {
+    await expect(answer.locator(":scope > div")).toHaveText(
+      state.synthetic_qwen_answer,
+    );
+  }
+  if (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1") {
+    const sources = answer.locator(".construction-consultant-sources");
+    await expect(sources).toBeVisible();
+    await sources.locator("summary").click();
+    await expect(sources.getByRole("link").first()).toBeVisible();
+  }
+  await page.reload();
+  await expect(
+    page
+      .locator(".construction-consultant-message-user")
+      .getByText(question, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".construction-consultant-message-assistant"),
+  ).toHaveCount(1);
+});
 
 test("live Support ID package exposes finalized AOSR, register, and provenance", async ({
   page,
@@ -64,6 +122,31 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
   await expect(
     page.getByRole("link", { name: "открыть источник" }).first(),
   ).toBeVisible();
+  const packageDownload = page.waitForEvent("download");
+  await page
+    .getByRole("link", { name: "Скачать редактируемый комплект" })
+    .click();
+  const packageFile = await packageDownload;
+  expect(packageFile.suggestedFilename()).toMatch(/\.zip$/);
+  if (process.env.ASD_SUPPORT_OFFICIAL_AOSR_SOURCE) {
+    const packagePath = await packageFile.path();
+    if (!packagePath)
+      throw new Error("downloaded Support package path missing");
+    const members = execFileSync("unzip", ["-Z1", packagePath], {
+      encoding: "utf8",
+    })
+      .trim()
+      .split("\n");
+    expect(members[0]).toBe("01_register_candidate.docx");
+    expect(members).toContain("02_support.aosr_editable.docx");
+  }
+  const artifactRoot = process.env.ASD_E2E_ARTIFACT_ROOT;
+  if (artifactRoot) {
+    mkdirSync(artifactRoot, { recursive: true });
+    await packageFile.saveAs(
+      resolve(artifactRoot, packageFile.suggestedFilename()),
+    );
+  }
   const download = page.waitForEvent("download");
   await page
     .getByRole("link", { name: "Скачать финализированный документ" })
@@ -74,6 +157,7 @@ test("live Support ID package exposes finalized AOSR, register, and provenance",
 test("live PostgreSQL spine survives worker loss and isolated reset", async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   if (!statePath) throw new Error("ASD_E2E_STATE_PATH is required");
   const marker = `/tmp/asd-kontur-spine-worker-${String(process.pid)}.marker`;
   let interrupted: ChildProcess | null = null;
@@ -130,7 +214,11 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await page.getByRole("link", { name: "Обработка", exact: true }).click();
     await expect(page.getByText("Выполняется")).toBeVisible();
     await page.waitForTimeout(5_500);
-    const restarted = worker("drain", undefined, 27);
+    // Two admitted sources now schedule structure reconciliation as an
+    // explicit durable stage. The restarted worker therefore completes 29
+    // jobs after reclaiming the interrupted lease, and the history table
+    // exposes 28 terminal rows in addition to the interrupted attempt.
+    const restarted = worker("drain", undefined, 29);
     expect(await exited(restarted)).toBe(0);
     await expect
       .poll(
@@ -138,7 +226,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
           page.locator("tbody tr").filter({ hasText: "Завершено" }).count(),
         { timeout: 15_000 },
       )
-      .toBe(26);
+      .toBe(28);
 
     await page.getByRole("link", { name: "Документы" }).click();
     await expect(
@@ -156,7 +244,7 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(
       page.getByRole("heading", { name: "Модель объекта" }),
     ).toBeVisible();
-    await page.getByRole("button", { name: "Виды и объёмы работ" }).click();
+    await page.getByRole("button", { name: "Работы и объёмы" }).click();
     await expect(
       page.getByText("Устройство монолитной плиты", { exact: true }),
     ).toBeVisible();
@@ -171,44 +259,98 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
     await expect(page.getByText("Требует подтверждения")).toBeVisible();
     await expect(page.getByText("workspace_fact_candidate")).toHaveCount(0);
 
-    for (const [slug, title, exportLabel] of [
-      ["tender", "Тендерный анализ", "Протокол разногласий"],
-      ["support", "Инженерное сопровождение", "Матрица работ и требований"],
-      ["audit", "Аудит", "Отчёт аудита"],
-      ["restoration", "Восстановление", "План восстановления"],
+    for (const [slug, modeName, title, resultMarker] of [
+      [
+        "tender",
+        "Tender",
+        "Тендерный анализ",
+        "Договор не предоставлен для договорного анализа",
+      ],
+      [
+        "support",
+        "Support",
+        "Инженерное сопровождение",
+        "Матрица работ и требований",
+      ],
+      ["audit", "Audit", "Аудит", "Отчёт аудита"],
+      ["restoration", "Restoration", "Восстановление", "План восстановления"],
     ] as const) {
       await page.goto(`/modes/${slug}/workspaces/${workspaceA}`);
       await expect(page.getByRole("heading", { name: title })).toBeVisible();
       await expect(page.getByText("Доступно частично")).toBeVisible();
-      await page.getByRole("link", { name: "Перейти к результату" }).click();
-      const formButton = page.getByRole("button", {
+      await page.getByRole("link", { name: "Результат режима" }).click();
+      const main = page.getByRole("main");
+      const formButton = main.getByRole("button", {
         name: "Сформировать результат",
       });
-      const exportHeading = page.getByText(exportLabel, { exact: true });
-      await expect(formButton.or(exportHeading)).toBeVisible();
-      if (await formButton.isVisible()) await formButton.click();
+      const resultMarkerText = main.getByText(resultMarker, { exact: true });
+      await expect(formButton.or(resultMarkerText)).toBeVisible();
+      if (await formButton.isVisible()) {
+        const formed = page.waitForResponse(
+          (response) =>
+            response.request().method() === "POST" &&
+            response
+              .url()
+              .endsWith(`/workspaces/${workspaceA}/modes/${modeName}/result`),
+        );
+        await formButton.click();
+        expect((await formed).ok()).toBe(true);
+      }
       await expect(
-        page.getByRole("heading", { name: `Результат: ${title}` }),
+        main.getByRole("heading", { name: `Результат: ${title}` }),
       ).toBeVisible();
-      await expect(exportHeading).toBeVisible();
-      await expect(page.getByText("Актуальность редакций")).toBeVisible();
+      await expect(resultMarkerText).toBeVisible();
+      await expect(
+        main.getByText(
+          "Актуальность редакций нормативных документов не проверена",
+        ),
+      ).toBeVisible();
     }
-    await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+    await page.goto(`/modes/audit/workspaces/${workspaceA}/result`);
+    const auditExportCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response
+          .url()
+          .endsWith(`/workspaces/${workspaceA}/modes/Audit/exports`),
+    );
     await page
       .locator(".export-card")
-      .filter({ hasText: "Протокол разногласий" })
+      .filter({ hasText: "Отчёт аудита" })
       .getByRole("button", { name: "Подготовить DOCX" })
       .click();
-    const protocolDownload = page.waitForEvent("download");
-    await page
-      .getByRole("link", { name: /Скачать Протокол разногласий \(DOCX\)/ })
-      .click();
-    expect((await protocolDownload).suggestedFilename()).toMatch(/\.docx$/);
+    expect((await auditExportCreated).ok()).toBe(true);
+    const auditLink = page.getByRole("link", {
+      name: /Скачать Отчёт аудита \(DOCX\)/,
+    });
+    await expect(auditLink).toBeVisible();
+    const auditDownload = page.waitForEvent("download");
+    await auditLink.click();
+    expect((await auditDownload).suggestedFilename()).toMatch(/\.docx$/);
+    await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
+    await expect(
+      page.getByText("Договор не предоставлен для договорного анализа", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Протокол разногласий", { exact: true }),
+    ).toHaveCount(0);
+    const archiveCreated = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response
+          .url()
+          .endsWith(`/workspaces/${workspaceA}/modes/Tender/exports`),
+    );
     await page.getByRole("button", { name: "Подготовить общий архив" }).click();
+    expect((await archiveCreated).ok()).toBe(true);
+    const archiveLink = page.getByRole("link", {
+      name: /Скачать Архив результатов объекта \(ZIP\)/,
+    });
+    await expect(archiveLink).toBeVisible();
     const archiveDownload = page.waitForEvent("download");
-    await page
-      .getByRole("link", { name: /Скачать Архив результатов объекта \(ZIP\)/ })
-      .click();
+    await archiveLink.click();
     expect((await archiveDownload).suggestedFilename()).toMatch(/\.zip$/);
     for (const viewport of [
       { width: 1440, height: 900 },
@@ -219,8 +361,13 @@ test("live PostgreSQL spine survives worker loss and isolated reset", async ({
       await page.setViewportSize(viewport);
       await page.goto(`/modes/tender/workspaces/${workspaceA}/result`);
       await expect(
-        page.getByText("Протокол разногласий", { exact: true }),
+        page.getByText("Договор не предоставлен для договорного анализа", {
+          exact: true,
+        }),
       ).toBeVisible();
+      await expect(
+        page.getByText("Протокол разногласий", { exact: true }),
+      ).toHaveCount(0);
       expect(
         await page.evaluate(
           () =>

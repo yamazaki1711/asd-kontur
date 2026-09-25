@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from typing import Any, BinaryIO
 from uuid import UUID
 
+import sqlalchemy as sa
+
+from asd_kontur.audit.package_preflight import build_expected_actual_preflight
+from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
+from asd_kontur.audit.report_export import render_audit_report_projection_csv
 from asd_kontur.lifecycle import LifecycleState, PostgresLifecycleRepository
 from asd_kontur.persistence.scope import WorkspaceContext
 from asd_kontur.pilot import (
@@ -18,7 +24,34 @@ from asd_kontur.pilot import (
 )
 from asd_kontur.pilot.readiness import TrialReadinessRepository
 from asd_kontur.pilot.service import PilotContent
+from asd_kontur.restoration import (
+    RestorationRecoveryRepository,
+    build_recovery_plan,
+    render_recovery_plan_csv,
+)
+from asd_kontur.support.package_consistency import assess_id_package_consistency
+from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.analysis_package import build_tender_analysis_archive
+from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
+from asd_kontur.tender.contract_analysis_report import render_tender_contract_analysis_docx
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
+from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
+from asd_kontur.tender.engineering_export import (
+    render_engineering_findings_csv,
+    render_engineering_tender_report_docx,
+    render_engineering_work_schedule_csv,
+)
+from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
+from asd_kontur.tender.facility_work_projection import (
+    render_facility_work_candidate_schedule_csv,
+)
+from asd_kontur.tender.findings_report import render_tender_findings_docx
+from asd_kontur.tender.findings_schedule import render_tender_findings_csv
+from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
+from asd_kontur.tender.structure_identity_schedule import (
+    render_tender_structure_identity_schedule_csv,
+)
 
 from .config import SpineSettings
 from .models import (
@@ -107,6 +140,8 @@ class ProductSpineService:
         self._object_store = object_store
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
+        self._tender_contract_analysis = TenderContractAnalysisRepository(repository.engine)
+        self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
             repository,
             object_store,
@@ -366,10 +401,17 @@ class ProductSpineService:
             source_locator_id=source_locator_id,
         )
 
-    def list_jobs(self, *, owner_identity_id: str, workspace_id: UUID) -> tuple[JobSummary, ...]:
+    def list_jobs(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        effective_only: bool = False,
+    ) -> tuple[JobSummary, ...]:
         return self._repository.list_jobs(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+            effective_only=effective_only,
         )
 
     def progress_events(
@@ -529,12 +571,363 @@ class ProductSpineService:
             chunks(),
         )
 
-    def project_understanding(
+    def tender_contract_analysis(
         self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        return self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def tender_contract_analysis_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the owner-scoped canonical Tender contract projection."""
+
+        view = self.tender_contract_analysis(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_tender_contract_analysis_csv(view)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-contract-analysis-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_contract_analysis_report(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return the canonical contract analysis as an editable Word report."""
+
+        view = self.tender_contract_analysis(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_tender_contract_analysis_docx(view)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            len(data),
+            digest,
+            f"tender-contract-analysis-{workspace_id}.docx",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def project_understanding(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        section: str | None = None,
+        page_offset: int = 0,
+        page_limit: int = 100,
     ) -> dict[str, Any] | None:
+        if section is None:
+            return self._repository.project_understanding_view(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+            )
         return self._repository.project_understanding_view(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
+            section=section,
+            page_offset=page_offset,
+            page_limit=page_limit,
+        )
+
+    def tender_findings_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate finding schedule for the current model."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering.get("works"):
+            data = render_engineering_findings_csv(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "text/csv; charset=utf-8",
+                len(data),
+                digest,
+                f"tender-findings-{workspace_id}.csv",
+                0,
+                len(data),
+                (data,),
+            )
+        materialization = view.get("materialization", {})
+        data = render_tender_findings_csv(
+            view.get("defects", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+            work_packages=view.get("work_packages", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-findings-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_findings_report(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate report for the current Tender findings."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering:
+            data = render_engineering_tender_report_docx(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                len(data),
+                digest,
+                f"tender-engineering-report-{workspace_id}.docx",
+                0,
+                len(data),
+                (data,),
+            )
+        materialization = view.get("materialization", {})
+        data = render_tender_findings_docx(
+            view.get("defects", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+            work_packages=view.get("work_packages", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            len(data),
+            digest,
+            f"tender-findings-{workspace_id}.docx",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_scope_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable work/quantity/material candidate schedule."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering.get("works"):
+            data = render_engineering_work_schedule_csv(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "text/csv; charset=utf-8",
+                len(data),
+                digest,
+                f"tender-work-schedule-{workspace_id}.csv",
+                0,
+                len(data),
+                (data,),
+            )
+        materialization = view.get("materialization", {})
+        data = render_tender_scope_schedule_csv(
+            view.get("work_packages", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-scope-schedule-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_document_coverage_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable active-source coverage schedule for Tender users."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_document_coverage_csv(
+            view.get("semantic_coverage", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-document-coverage-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_structure_identity_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return an editable candidate schedule of cross-document identities."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_structure_identity_schedule_csv(
+            view.get("structure_identity_candidates", []),
+            structure_nodes=view.get("structure_nodes", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+            evidence_index=view.get("evidence_index", {}),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-structure-identity-candidates-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_facility_scope_schedule(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Return a locator-bound work-to-facility candidate schedule."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = view.get("materialization", {})
+        data = render_tender_facility_scope_schedule_csv(
+            view.get("work_packages", []),
+            identity_candidates=view.get("structure_identity_candidates", []),
+            materialization_state=str(materialization.get("state", "not_requested")),
+            coverage_gaps=materialization.get("gaps", []),
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"tender-facility-work-observations-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def tender_analysis_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the current Tender report and schedules as one editable archive."""
+
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        materialization = dict(view.get("materialization") or {})
+        engineering = dict(view.get("project_engineering") or {})
+        professional = bool(engineering.get("works"))
+        common = {
+            "materialization_state": str(materialization.get("state", "not_requested")),
+            "coverage_gaps": materialization.get("gaps", []),
+            "evidence_index": view.get("evidence_index", {}),
+        }
+        data = build_tender_analysis_archive(
+            findings_report=(
+                render_engineering_tender_report_docx(engineering)
+                if professional
+                else render_tender_findings_docx(
+                    view.get("defects", []),
+                    work_packages=view.get("work_packages", []),
+                    **common,
+                )
+            ),
+            findings_schedule=(
+                render_engineering_findings_csv(engineering)
+                if professional
+                else render_tender_findings_csv(
+                    view.get("defects", []),
+                    work_packages=view.get("work_packages", []),
+                    **common,
+                )
+            ),
+            scope_schedule=(
+                render_engineering_work_schedule_csv(engineering)
+                if professional
+                else render_tender_scope_schedule_csv(
+                    view.get("work_packages", []),
+                    **common,
+                )
+            ),
+            structure_identity_schedule=render_tender_structure_identity_schedule_csv(
+                view.get("structure_identity_candidates", []),
+                structure_nodes=view.get("structure_nodes", []),
+                **common,
+            ),
+            facility_scope_schedule=render_tender_facility_scope_schedule_csv(
+                view.get("work_packages", []),
+                identity_candidates=view.get("structure_identity_candidates", []),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
+            ),
+            facility_candidate_schedule=render_facility_work_candidate_schedule_csv(
+                view.get("facility_work_projection", {}),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
+                evidence_index=common["evidence_index"],
+            ),
+            document_coverage_schedule=render_tender_document_coverage_csv(
+                view.get("semantic_coverage", []),
+                materialization_state=common["materialization_state"],
+                coverage_gaps=common["coverage_gaps"],
+            ),
+            materialization=materialization,
+            professional=professional,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"tender-analysis-{workspace_id}.zip",
+            0,
+            len(data),
+            (data,),
         )
 
     def start_project_understanding(
@@ -548,6 +941,23 @@ class ProductSpineService:
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             correlation_id=correlation_id,
+        )
+
+    def start_project_work_reconciliation(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        correlation_id: UUID,
+        batch_size: int = 12,
+        max_batches: int = 4,
+    ) -> tuple[JobSummary, ...]:
+        return self._repository.start_project_work_reconciliation(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=correlation_id,
+            batch_size=batch_size,
+            max_batches=max_batches,
         )
 
     def review_project_candidate(
@@ -574,10 +984,145 @@ class ProductSpineService:
         )
 
     def support_production_view(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
+    ) -> dict[str, Any]:
+        view = self._support_production.view(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
+        )
+        return {**view, "consistency": assess_id_package_consistency(view)}
+
+    def audit_expected_actual_preflight(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> dict[str, Any]:
-        return self._support_production.view(
+        """Expose the package-composition preflight without impersonating Audit.
+
+        Canonical Audit records have their own service role and immutable
+        lifecycle.  This workspace-owner read model is intentionally limited to
+        the same matrix and package data the owner can already inspect.
+        """
+
+        support = self.support_production_view(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return build_expected_actual_preflight(
+            support.get("requirements", ()),
+            matrix=support.get("matrix"),
+            package=support.get("package"),
+            memberships=support.get("memberships", ()),
+        )
+
+    def audit_expected_actual_preflight_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_expected_actual_preflight_csv(preflight)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-expected-actual-preflight-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def latest_audit_report_projection(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Expose the immutable canonical-Audit read model without impersonation."""
+
+        return self._repository.latest_audit_report_projection(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
+    def audit_report_projection_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the immutable Audit read projection without changing the report."""
+
+        projection = self.latest_audit_report_projection(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_audit_report_projection_csv(projection)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-report-projection-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def restoration_recovery_plan(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Return an evidence-constrained recovery plan for the workspace."""
+
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        plan = build_recovery_plan(preflight)
+        snapshot = self._restoration_recovery.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return {
+            **plan,
+            "snapshot": snapshot,
+            "snapshot_is_current": (
+                None if snapshot is None else snapshot["plan_fingerprint"] == semantic_digest(plan)
+            ),
+        }
+
+    def capture_restoration_recovery_plan(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Persist the exact current recovery assessment without changing evidence."""
+
+        preflight = self.audit_expected_actual_preflight(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        plan = build_recovery_plan(preflight)
+        snapshot = self._restoration_recovery.capture(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            plan=plan,
+        )
+        return {
+            **plan,
+            "snapshot": snapshot,
+            "snapshot_is_current": True,
+            "snapshot_duplicate": bool(snapshot["duplicate"]),
+        }
+
+    def restoration_recovery_plan_export(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export the current non-fabricating Restoration plan as editable CSV."""
+
+        plan = self.restoration_recovery_plan(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_recovery_plan_csv(plan)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"restoration-recovery-plan-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
         )
 
     def form_support_id_package(
@@ -587,10 +1132,58 @@ class ProductSpineService:
         workspace_id: UUID,
         work_package_id: UUID,
     ) -> dict[str, Any]:
-        return self._support_production.form_package(
+        view = self._support_production.form_package(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             work_package_id=work_package_id,
+        )
+        return {**view, "consistency": assess_id_package_consistency(view)}
+
+    def support_id_package_export(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
+    ) -> DocumentContent:
+        """Deliver the exact formed ID package with an editable register first."""
+
+        view = self.support_production_view(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
+        )
+        package = view.get("package")
+        registers = view.get("registers", [])
+        if not isinstance(package, dict) or not registers:
+            raise ValueError("id_package_not_formed")
+        latest_register = registers[-1]
+        if not isinstance(latest_register, dict) or not isinstance(
+            latest_register.get("register_manifest"), dict
+        ):
+            raise ValueError("id_package_register_unavailable")
+
+        def read_object(object_key: str) -> bytes:
+            with self._object_store.open(object_key) as source:
+                return source.read()
+
+        data = build_editable_id_package_archive(
+            package=package,
+            register_manifest=latest_register["register_manifest"],
+            memberships=view.get("memberships", []),
+            field_resolutions=view.get("field_resolutions", []),
+            consistency=view.get("consistency"),
+            read_object=read_object,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"id-package-{workspace_id}-v{package.get('version')}.zip",
+            0,
+            len(data),
+            (data,),
         )
 
     def start_support_generation(
@@ -824,9 +1417,26 @@ class ProductSpineService:
             if decision is not None
             else ["PILOT_ACCEPTANCE_NOT_RECORDED"]
         )
+        with self._repository.engine.connect() as connection:
+            consultant_quality = (
+                connection.execute(
+                    sa.text(
+                        "SELECT status,source_commit FROM "
+                        "application.construction_consultant_quality_decisions "
+                        "ORDER BY recorded_at DESC,version DESC LIMIT 1"
+                    )
+                )
+                .mappings()
+                .one_or_none()
+            )
+        consultant_quality_ready = bool(
+            consultant_quality
+            and consultant_quality["status"] == "quality_ready"
+            and consultant_quality["source_commit"] == self._settings.release_commit
+        )
         return {
-            "contract_version": "2.7.0",
-            "slice": "PILOT-USABLE-END-TO-END-01+PROFESSIONAL-ASSISTANT",
+            "contract_version": "2.8.0",
+            "slice": "PROFESSIONAL-ASSISTANT-REASONING-01",
             "implemented": [
                 "interaction.frontend-shell",
                 "interaction.workspace-selector",
@@ -882,9 +1492,14 @@ class ProductSpineService:
                 "assistant.workspace-scoped-conversations",
                 "assistant.local-qwen-streaming",
                 "assistant.knowledge-gateway-context",
+                "assistant.multi-step-reasoning",
+                "assistant.granular-knowledge-tools",
+                "assistant.response-quality-gate",
             ],
             "blockers": sorted(blockers),
             "trial_ready": bool(decision and decision["status"] == "trial_ready"),
+            "construction_consultant_quality_ready": consultant_quality_ready,
+            "domain_harness_ready": False,
             "oks_ready": False,
             "product_ready": False,
             "deployment": {

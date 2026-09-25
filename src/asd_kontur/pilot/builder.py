@@ -36,6 +36,9 @@ def build_pilot_result(
     document_rows = [dict(item) for item in documents]
     source_manifest = _source_manifest(document_rows)
     items = _mode_items(mode, packages, defects, document_rows, support, evidence_index)
+    tender_scope_schedule = (
+        _tender_scope_schedule(packages, evidence_index) if mode is PilotMode.TENDER else []
+    )
     unresolved = sorted(
         {
             str(item["status"])
@@ -66,14 +69,31 @@ def build_pilot_result(
         "project_fields": fields,
         "summary": _summary(mode, items, packages, support),
         "items": items,
+        "tender_scope_schedule": tender_scope_schedule,
         "source_manifest": source_manifest,
         "unresolved_questions": unresolved,
-        "available_exports": [item.value for item in MODE_EXPORTS[mode]],
+        "available_exports": available_exports(mode=mode, items=items),
         "normative_notice": "Актуальность редакций нормативных документов не проверена",
         "status": "draft_with_open_questions" if unresolved else "reviewed_draft",
     }
     payload["fingerprint"] = semantic_digest(payload)
     return payload
+
+
+def available_exports(*, mode: PilotMode, items: Iterable[dict[str, Any]]) -> list[str]:
+    """Expose only outputs whose required source analysis is actually available."""
+
+    exports = [item.value for item in MODE_EXPORTS[mode]]
+    if mode is not PilotMode.TENDER:
+        return exports
+    item_kinds = {str(item.get("kind")) for item in items}
+    if item_kinds.intersection({"contract_input_unavailable", "contract_analysis_pending"}):
+        unavailable = {
+            "disagreement_protocol",
+            "contract_changes",
+        }
+        return [value for value in exports if value not in unavailable]
+    return exports
 
 
 def _source_manifest(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -92,6 +112,75 @@ def _source_manifest(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _tender_scope_schedule(
+    packages: list[dict[str, Any]], evidence_index: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Expose source-scoped work observations without inventing a total.
+
+    The project-understanding layer intentionally keeps same-named work in
+    separate source/scope packages until facility reconciliation supports a
+    merge.  Tender needs that useful schedule for pricing and clarification,
+    but must not turn candidate observations into a project-wide quantity.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for item in packages:
+        package = dict(item.get("package") or {})
+        work_type = dict(package.get("work_type") or {})
+        locator_ids = tuple(str(value) for value in package.get("source_locator_ids") or ())
+        quantities = [
+            {
+                "raw_value": value.get("raw_value"),
+                "raw_unit": value.get("raw_unit"),
+                "normalized_value": value.get("normalized_value"),
+                "normalized_unit": value.get("normalized_unit"),
+                "source_locator_id": value.get("source_locator_id"),
+            }
+            for value in package.get("quantities") or ()
+            if isinstance(value, dict)
+        ]
+        materials = [
+            {
+                "raw_name": value.get("raw_name"),
+                "raw_quantity": value.get("raw_quantity"),
+                "raw_unit": value.get("raw_unit"),
+                "source_locator_id": value.get("source_locator_id"),
+            }
+            for value in package.get("materials") or ()
+            if isinstance(value, dict)
+        ]
+        rows.append(
+            {
+                "work_package_id": str(
+                    item.get("work_package_id") or package.get("work_package_id") or ""
+                ),
+                "work_name": str(
+                    work_type.get("raw") or work_type.get("normalized") or "Работа не определена"
+                ),
+                "normalized_work_name": str(work_type.get("normalized") or ""),
+                "scope": str(package.get("scope") or "scope_not_specified"),
+                "candidate_observation_count": int(package.get("candidate_observation_count") or 0),
+                "quantities": quantities,
+                "materials": materials,
+                "source_locator_ids": list(locator_ids),
+                "source_references": [
+                    _evidence_reference(locator_id, evidence_index.get(locator_id))
+                    for locator_id in locator_ids
+                ],
+                "uncertainties": sorted(str(value) for value in package.get("uncertainties") or ()),
+                "candidate_status": "candidate",
+            }
+        )
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["normalized_work_name"],
+            row["scope"],
+            row["work_package_id"],
+        ),
+    )
+
+
 def _mode_items(
     mode: PilotMode,
     packages: list[dict[str, Any]],
@@ -102,18 +191,7 @@ def _mode_items(
 ) -> list[dict[str, Any]]:
     if mode is PilotMode.TENDER:
         items = [_defect_item(mode, item, evidence_index) for item in defects]
-        items.append(
-            _item(
-                mode,
-                "contract_review",
-                "Условия договора требуют профессиональной проверки",
-                "Положения об ответственности, сроках, приёмке и оплате остаются "
-                "проектом выводов до рассмотрения специалистом.",
-                "requires_clarification",
-                (),
-                "Проверить договор и включить подтверждённые замечания в протокол разногласий.",
-            )
-        )
+        items.append(_contract_input_item(mode, documents))
         return items
     if mode is PilotMode.SUPPORT:
         requirements = [dict(item) for item in support.get("requirements") or []]
@@ -135,14 +213,12 @@ def _mode_items(
         items.extend(
             _item(
                 mode,
-                f"document:{item['document_id']}",
-                f"Проверка документа «{item['safe_display_name']}»",
-                "Документ принят и учтён в составе проверяемого комплекта."
-                if item["extraction_status"] == "complete"
-                else "Содержание документа обработано не полностью.",
-                "conforms" if item["extraction_status"] == "complete" else "requires_clarification",
+                f"audit-input:{item['document_id']}",
+                f"Исходный документ для аудита «{item['safe_display_name']}»",
+                _audit_input_description(item),
+                "requires_clarification",
                 (),
-                "Открыть документ и проверить отмеченные фрагменты.",
+                _audit_input_action(item),
             )
             for item in documents
         )
@@ -182,20 +258,94 @@ def _package_items(mode: PilotMode, packages: list[dict[str, Any]]) -> list[dict
     ]
 
 
+def _contract_input_item(mode: PilotMode, documents: list[dict[str, Any]]) -> dict[str, Any]:
+    """Expose the contract-analysis boundary without inventing contract findings.
+
+    A Tender result used to add a generic professional-review card regardless
+    of whether a contract was admitted.  Document inventory is enough to say
+    whether a contract source appears to be available, but it is not evidence
+    for a clause-level conclusion.  Keep that distinction visible to the user.
+    """
+
+    contract_sources = [document for document in documents if _looks_like_contract_source(document)]
+    if not contract_sources:
+        return _item(
+            mode,
+            "contract_input_unavailable",
+            "Договор не предоставлен для договорного анализа",
+            "В составе принятых исходных документов не обнаружен договор или его проект. "
+            "Анализ ПД и РД продолжается отдельно, но условия ответственности, сроков, "
+            "приёмки и оплаты не сопоставлялись.",
+            "requires_clarification",
+            (),
+            "Предоставить актуальную редакцию договора или проекта договора для отдельного "
+            "сравнения и подготовки предложений по условиям.",
+        )
+
+    names = ", ".join(
+        str(document.get("safe_display_name") or "документ") for document in contract_sources
+    )
+    return _item(
+        mode,
+        "contract_analysis_pending",
+        "Договор предоставлен, но договорные условия ещё не извлечены",
+        "В составе исходных документов обнаружены материалы, похожие на договор: "
+        f"{names}. Их наличие не подтверждает проверку условий ответственности, сроков, "
+        "приёмки и оплаты.",
+        "requires_clarification",
+        (),
+        "Выполнить отдельное извлечение условий договора и сопоставить их с подтверждёнными "
+        "проектными и сметными данными.",
+    )
+
+
+def _looks_like_contract_source(document: dict[str, Any]) -> bool:
+    """Use only supplied document metadata to route, never to infer clauses."""
+
+    reference = " ".join(
+        str(document.get(key) or "") for key in ("safe_display_name", "relative_path")
+    ).casefold()
+    return any(token in reference for token in ("договор", "контракт", "contract"))
+
+
+def _audit_input_description(document: dict[str, Any]) -> str:
+    """Keep extraction/readiness evidence separate from an Audit conclusion."""
+
+    if str(document.get("extraction_status")) == "complete":
+        return (
+            "Содержание документа доступно как вход для аудита. Проверки состава, формы, "
+            "редакции, подписей, приложений и доказательств по этому документу ещё не выполнены."
+        )
+    return (
+        "Содержание документа обработано не полностью; проверки состава, формы, редакции, "
+        "подписей, приложений и доказательств пока невозможны."
+    )
+
+
+def _audit_input_action(document: dict[str, Any]) -> str:
+    if str(document.get("extraction_status")) == "complete":
+        return (
+            "Запустить проверку ожидаемого и фактического состава; не считать извлечение "
+            "результатом аудита."
+        )
+    return (
+        "Восстановить обработку документа и затем выполнить проверку ожидаемого и "
+        "фактического состава."
+    )
+
+
 def _defect_item(
     mode: PilotMode, defect: dict[str, Any], evidence_index: dict[str, dict[str, Any]]
 ) -> dict[str, Any]:
     kind = str(defect.get("defect_kind") or "discrepancy")
     locators = tuple(str(value) for value in defect.get("source_locator_ids") or [])
-    source_labels = [
-        str(evidence_index[value].get("safe_display_name") or value)
-        for value in locators
-        if value in evidence_index
+    source_references = [
+        _evidence_reference(value, evidence_index.get(value)) for value in locators
     ]
     description = _defect_description(kind)
-    if source_labels:
-        description += " Источники: " + ", ".join(source_labels) + "."
-    return _item(
+    if source_references:
+        description += " Источники: " + ", ".join(source_references) + "."
+    item = _item(
         mode,
         f"defect:{defect.get('defect_id')}:{defect.get('version', 1)}",
         _defect_title(kind),
@@ -204,6 +354,22 @@ def _defect_item(
         locators,
         _defect_action(kind),
     )
+    item["source_references"] = source_references
+    return item
+
+
+def _evidence_reference(locator_id: str, evidence: dict[str, Any] | None) -> str:
+    """Render locator provenance for a user-facing result without losing identity."""
+
+    if evidence is None:
+        return f"неразрешённый фрагмент ({locator_id})"
+    document = str(evidence.get("safe_display_name") or "исходный документ")
+    version = evidence.get("document_version")
+    location = str(
+        evidence.get("locator_value") or evidence.get("locator_kind") or "место не указано"
+    )
+    suffix = f", версия {version}" if version is not None else ""
+    return f"{document}{suffix}, {location}"
 
 
 def _item(
@@ -238,7 +404,16 @@ def _summary(
     support: dict[str, Any],
 ) -> dict[str, Any]:
     open_count = sum(item["resolution_status"] == "open" for item in items)
-    common = {"items": len(items), "open_questions": open_count, "work_packages": len(packages)}
+    # Project understanding persists source- and scope-bounded *candidate
+    # observation groups*.  They are deliberately not canonical construction
+    # work packages until facility/scope reconciliation has sufficient evidence.
+    # Calling the count a package count inflated the Tender summary and invited
+    # users to read repeated document observations as commercial scope.
+    common = {
+        "items": len(items),
+        "open_questions": open_count,
+        "candidate_work_observation_groups": len(packages),
+    }
     if mode is PilotMode.SUPPORT:
         readiness = dict(support.get("readiness") or {})
         common.update(
@@ -300,6 +475,13 @@ def _defect_title(kind: str) -> str:
         "quantity_mismatch": "Расхождение объёма между ВОР и сметой",
         "project_work_missing_in_estimate": "Работа проекта не учтена в смете",
         "project_material_missing_in_estimate": "Материал проекта не учтён в смете",
+        "estimate_material_comparison_input_unavailable": (
+            "Ресурсная часть сметы для сопоставления материалов не извлечена"
+        ),
+        "material_quantity_comparison_input_unavailable": (
+            "Недостаточно данных для сверки количества материала"
+        ),
+        "material_quantity_mismatch": "Расхождение количества материала между источниками",
         "estimate_position_unsupported_by_project": "Позиция сметы не подтверждена проектом",
         "incompatible_units": "Несовместимые единицы измерения",
         "ambiguous_source_match": "Неоднозначное сопоставление источников",
@@ -312,6 +494,16 @@ def _defect_title(kind: str) -> str:
 def _defect_description(kind: str) -> str:
     if kind == "quantity_mismatch":
         return "Для одной работы в исходных документах указаны разные объёмы."
+    if kind == "estimate_material_comparison_input_unavailable":
+        return (
+            "В проекте указан материал, но в доступной позиции сметы нет "
+            "извлечённой ресурсной части для проверяемого сопоставления."
+        )
+    if kind == "material_quantity_comparison_input_unavailable":
+        return (
+            "Для сопоставления количества материала в одном из источников не хватает "
+            "проверяемого значения или единицы."
+        )
     if "missing" in kind:
         return "Состав работ или материалов различается между исходными документами."
     return "Сведение нельзя принять без отдельного сопоставления исходных фрагментов."
@@ -321,6 +513,21 @@ def _defect_action(kind: str) -> str:
     if kind == "quantity_mismatch":
         return (
             "Сверить ВОР, смету и проект; зафиксировать согласованный объём новой версией сведения."
+        )
+    if kind == "estimate_material_comparison_input_unavailable":
+        return (
+            "Получить или извлечь ресурсную часть сметной позиции; не считать "
+            "материал пропущенным до сопоставления."
+        )
+    if kind == "material_quantity_comparison_input_unavailable":
+        return (
+            "Получить точные количество и единицу материала в обоих источниках; "
+            "не выводить разницу предположением."
+        )
+    if kind == "material_quantity_mismatch":
+        return (
+            "Сверить ресурсную часть сметы и проектные сведения, затем зафиксировать "
+            "согласованное количество новой версией."
         )
     return "Открыть исходные фрагменты и принять решение специалиста."
 

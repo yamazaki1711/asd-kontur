@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+# ruff: noqa: RUF001 -- Russian engineering identifiers are intentional.
 import io
 import plistlib
 import sys
 import zipfile
 from pathlib import Path
+from threading import Event
 from uuid import UUID
 
 import pytest
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
-from asd_kontur.application_spine.models import semantic_digest
+from asd_kontur.application_spine.models import ClaimedJob, JobKind, JobState, semantic_digest
 from asd_kontur.application_spine.object_store import (
     IntakeError,
     WorkspaceObjectStore,
@@ -18,12 +20,606 @@ from asd_kontur.application_spine.object_store import (
     sanitize_display_name,
     sanitize_relative_path,
 )
-from asd_kontur.application_spine.runtime import _render_launchd, _show_logs
-from asd_kontur.application_spine.worker import verify_bytes_digest
+from asd_kontur.application_spine.postgres import (
+    SpinePersistenceError,
+    SpinePostgresRepository,
+    _semantic_extraction_priority,
+)
+from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
+from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
+from asd_kontur.document_understanding.postgres import _identity_observation_group_key
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_project_understanding_application_projection_keeps_counts_and_selected_section() -> None:
+    view = {
+        "page_roles": [{"page_number": 1}],
+        "work_packages": [{"work_package_id": "work-1"}],
+        "defects": [
+            {"defect_id": "defect-1"},
+            {"defect_id": "defect-2"},
+            {"defect_id": "defect-3"},
+        ],
+        "candidates": {
+            "project_fields": [{"candidate_id": "field-1"}],
+            "work_types": [
+                {"candidate_id": "work-1"},
+                {"candidate_id": "work-2"},
+            ],
+            "quantities": [{"candidate_id": "quantity-1"}],
+            "materials": [{"candidate_id": "material-1"}],
+        },
+        "review_decisions": [
+            {"review_decision_id": "review-work", "candidate_id": "work-2"},
+            {"review_decision_id": "review-material", "candidate_id": "material-1"},
+        ],
+        "structure_nodes": [{"structure_node_id": "node-1"}],
+        "structure_relationships": [{"relationship_candidate_id": "relationship-1"}],
+        "structure_dossiers": [{"structure_node": {"structure_node_id": "node-1"}}],
+        "structure_components": [{"component_key": "component-1"}],
+        "structure_identity_candidates": [{"identity_candidate_id": "identity-1"}],
+        "structure_identity_components": [{"identity_candidate_id": "identity-component-1"}],
+        "structure_identity_dossiers": [
+            {"identity_candidate": {"identity_candidate_id": "identity-component-1"}}
+        ],
+        "structure_identity_reconciliation": {"state": "running"},
+        "excavation_pit_inventory": {"candidate_pits": [{"pit_candidate_id": "pit-1"}]},
+        "facility_work_projection": {"candidate_groups": [{"facility_work_candidate_id": "fw-1"}]},
+        "matrix": {
+            "matrix": {"rows": [{"row": "matrix-1"}, {"row": "matrix-2"}, {"row": "matrix-3"}]}
+        },
+        "normative_profile": {"profile_id": "profile-1"},
+        "intake_summary": {
+            "tender_input_assessment": [
+                {
+                    "category": "design",
+                    "source_locator_ids": [f"locator-{index}" for index in range(12)],
+                }
+            ]
+        },
+        "summary_counts": {"structure_node_count": 7000},
+    }
+
+    structure = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="structure"
+    )
+
+    assert structure["summary_counts"] == {"structure_node_count": 7000}
+    assert structure["structure_identity_candidates"] == []
+    assert structure["structure_identity_components"] == [
+        {"identity_candidate_id": "identity-component-1"}
+    ]
+    assert structure["excavation_pit_inventory"]["candidate_pits"] == [
+        {"pit_candidate_id": "pit-1"}
+    ]
+    assert structure["structure_nodes"] == []
+    assert structure["work_packages"] == []
+    assert structure["facility_work_projection"] == {}
+    assert structure["application_page"]["collection"] == "structure_identity_components"
+    assert structure["matrix"] == {"matrix": {"rows": []}}
+    assert "tender_input_assessment" not in structure["intake_summary"]
+
+    packages = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="packages"
+    )
+    assert packages["facility_work_projection"]["candidate_groups"] == [
+        {"facility_work_candidate_id": "fw-1"}
+    ]
+    assert packages["application_page"]["collection"] == "facility_work_candidate_groups"
+    assert packages["structure_identity_candidates"] == []
+
+    works = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="works", page_offset=1, page_limit=2
+    )
+    assert works["candidates"] == {
+        "work_types": [{"candidate_id": "work-2"}],
+        "quantities": [{"candidate_id": "quantity-1"}],
+    }
+    assert works["review_decisions"] == [
+        {"review_decision_id": "review-work", "candidate_id": "work-2"}
+    ]
+    assert works["facility_work_projection"] == {}
+    assert works["application_page"] == {
+        "collection": "work_types+quantities",
+        "offset": 1,
+        "limit": 2,
+        "returned": 2,
+        "total": 3,
+        "has_previous": True,
+        "has_more": False,
+    }
+
+    materials = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="materials"
+    )
+    assert materials["candidates"] == {"materials": [{"candidate_id": "material-1"}]}
+    assert materials["review_decisions"] == [
+        {"review_decision_id": "review-material", "candidate_id": "material-1"}
+    ]
+
+    matrix = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="matrix", page_offset=1, page_limit=1
+    )
+    assert matrix["matrix"]["matrix"]["rows"] == [{"row": "matrix-2"}]
+    assert matrix["application_page"] == {
+        "collection": "matrix_rows",
+        "offset": 1,
+        "limit": 1,
+        "returned": 1,
+        "total": 3,
+        "has_previous": True,
+        "has_more": True,
+    }
+
+    gaps = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="gaps", page_offset=2, page_limit=2
+    )
+    assert gaps["defects"] == [{"defect_id": "defect-3"}]
+    assert gaps["application_page"]["total"] == 3
+    assert gaps["application_page"]["has_more"] is False
+
+    general = SpinePostgresRepository._project_understanding_application_projection(
+        view, section="general"
+    )
+    assessment = general["intake_summary"]["tender_input_assessment"][0]
+    assert assessment["source_locator_count"] == 12
+    assert assessment["source_locator_ids"] == [f"locator-{index}" for index in range(10)]
+    assert general["candidates"] == {"project_fields": [{"candidate_id": "field-1"}]}
+
+    with pytest.raises(SpinePersistenceError, match="project_understanding_section_invalid"):
+        SpinePostgresRepository._project_understanding_application_projection(
+            view, section="unknown"
+        )
+    with pytest.raises(SpinePersistenceError, match="project_understanding_page_invalid"):
+        SpinePostgresRepository._project_understanding_application_projection(
+            view, section="gaps", page_offset=-1
+        )
+
+
+def test_project_candidate_projection_pages_beyond_first_two_hundred_rows() -> None:
+    view = {
+        "candidates": {
+            "project_fields": [],
+            "work_types": [{"candidate_id": f"work-{ordinal}"} for ordinal in range(205)],
+            "quantities": [{"candidate_id": f"quantity-{ordinal}"} for ordinal in range(3)],
+            "materials": [],
+        },
+        "review_decisions": [],
+        "intake_summary": {},
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="works",
+        page_offset=200,
+        page_limit=8,
+    )
+
+    assert page["candidates"] == {
+        "work_types": [{"candidate_id": f"work-{ordinal}"} for ordinal in range(200, 205)],
+        "quantities": [{"candidate_id": f"quantity-{ordinal}"} for ordinal in range(3)],
+    }
+    assert page["application_page"] == {
+        "collection": "work_types+quantities",
+        "offset": 200,
+        "limit": 8,
+        "returned": 8,
+        "total": 208,
+        "has_previous": True,
+        "has_more": False,
+    }
+
+
+def test_facility_work_projection_pages_groups_without_changing_canonical_coverage() -> None:
+    view = {
+        "candidates": {},
+        "review_decisions": [],
+        "intake_summary": {},
+        "facility_work_projection": {
+            "candidate_groups": [
+                {"facility_work_candidate_id": f"group-{ordinal}"} for ordinal in range(205)
+            ],
+            "coverage": {
+                "total_work_package_count": 900,
+                "consolidated_candidate_group_count": 205,
+            },
+        },
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="packages",
+        page_offset=200,
+        page_limit=5,
+    )
+
+    assert page["facility_work_projection"]["candidate_groups"] == [
+        {"facility_work_candidate_id": f"group-{ordinal}"} for ordinal in range(200, 205)
+    ]
+    assert page["facility_work_projection"]["coverage"] == {
+        "total_work_package_count": 900,
+        "consolidated_candidate_group_count": 205,
+        "returned_candidate_group_count": 5,
+        "total_candidate_group_count": 205,
+        "candidate_group_page_complete": False,
+    }
+    assert page["application_page"] == {
+        "collection": "facility_work_candidate_groups",
+        "offset": 200,
+        "limit": 5,
+        "returned": 5,
+        "total": 205,
+        "has_previous": True,
+        "has_more": False,
+    }
+
+
+def test_structure_projection_selects_relevant_facility_work_beyond_first_page() -> None:
+    groups = [
+        {
+            "facility_work_candidate_id": f"group-{ordinal}",
+            "identity_label": f"КНС-{ordinal}",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Общестроительные работы"},
+        }
+        for ordinal in range(205)
+    ]
+    groups.append(
+        {
+            "facility_work_candidate_id": "target-los-8-1",
+            "identity_label": "ЛОС 8.1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Устройство котлована"},
+        }
+    )
+    view = {
+        "candidates": {},
+        "review_decisions": [],
+        "intake_summary": {},
+        "structure_identity_components": [],
+        "structure_identity_dossiers": [],
+        "excavation_pit_inventory": {},
+        "facility_work_projection": {
+            "candidate_groups": groups,
+            "coverage": {
+                "total_work_package_count": 900,
+                "consolidated_candidate_group_count": len(groups),
+            },
+        },
+    }
+
+    page = SpinePostgresRepository._project_understanding_application_projection(
+        view,
+        section="structure",
+        page_limit=100,
+        facility_query="Какие работы относятся к ЛОС8.1?",
+        facility_limit=20,
+    )
+
+    projection = page["facility_work_projection"]
+    assert [item["facility_work_candidate_id"] for item in projection["candidate_groups"]] == [
+        "target-los-8-1"
+    ]
+    assert projection["selection"] == {
+        "query": "Какие работы относятся к ЛОС8.1?",
+        "selection": "facility_designation_and_lexical_relevance",
+        "total_candidate_group_count": len(groups),
+        "matched_candidate_group_count": 1,
+        "returned_candidate_group_count": 1,
+        "exhaustive_for_query": True,
+        "projection_coverage": {
+            "total_work_package_count": 900,
+            "consolidated_candidate_group_count": len(groups),
+        },
+        "authority": "candidate_association_not_confirmed_scope",
+    }
+
+
+def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001803"),
+        JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+        {},
+        "sha256:" + "1" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claimed = False
+            self.finished: dict[str, object] | None = None
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            if self.claimed:
+                return None
+            self.claimed = True
+            return claimed
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return False
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def finish_job(self, *_args: object, **kwargs: object) -> None:
+            self.finished = kwargs
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+
+    def fail(_claimed: ClaimedJob) -> dict[str, object]:
+        raise TypeError("synthetic programming defect")
+
+    worker._execute = fail  # type: ignore[method-assign]
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.RECONCILIATION_REQUIRED
+    assert outcome.outcome_code == "worker_unexpected_handler_error"
+    assert repository.finished is not None
+    assert repository.finished["terminal_state"] is JobState.RECONCILIATION_REQUIRED
+    assert repository.finished["result_manifest"] == {"exception_type": "TypeError"}
+
+
+def test_independent_classification_recovery_refreshes_model_without_reviving_old_chain() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001804"),
+        JobKind.DOCUMENT_PAGE_CLASSIFICATION,
+        {"classification_recovery_contract": "document-classification-recovery-v1"},
+        "sha256:" + "2" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claimed = False
+            self.recovered = 0
+            self.refreshed = 0
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            if self.claimed:
+                return None
+            self.claimed = True
+            return claimed
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return False
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def finish_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def recover_dependents_from_success(self, *_args: object) -> int:
+            self.recovered += 1
+            return 0
+
+        def schedule_incremental_project_reconciliation(self, *_args: object) -> None:
+            self.refreshed += 1
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+    worker._execute = lambda _claimed: {"decision_count": 1}  # type: ignore[method-assign]
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.SUCCEEDED
+    assert repository.recovered == 0
+    assert repository.refreshed == 1
+
+
+def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
+    """A one-slot worker reaches source-backed structural evidence before estimates."""
+
+    assert _semantic_extraction_priority(("local_estimate",)) == 150
+    assert _semantic_extraction_priority(("project_documentation",)) == 170
+    assert _semantic_extraction_priority(("local_estimate", "drawing_or_scheme")) == 170
+    assert _semantic_extraction_priority(()) == 130
+
+
+def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures() -> None:
+    state = SpinePostgresRepository._semantic_coverage_state
+
+    assert (
+        state(
+            covered_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=2,
+        )
+        == "failed"
+    )
+    assert (
+        state(
+            covered_fragment_count=0,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "not_started"
+    )
+    assert (
+        state(
+            covered_fragment_count=7,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=1,
+        )
+        == "partial"
+    )
+    assert (
+        state(
+            covered_fragment_count=8,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=0,
+        )
+        == "complete"
+    )
+    assert (
+        state(
+            covered_fragment_count=8,
+            expected_fragment_count=8,
+            unresolved_failed_fragment_count=3,
+        )
+        == "complete"
+    )
+
+
+def test_structure_identity_group_key_admits_typographic_aliases_without_merging() -> None:
+    key = _identity_observation_group_key
+    assert key("\u041a\u041d\u0421-4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421 4") == "\u043a\u043d\u04414"
+    assert key("\u041a\u041d\u0421-4") != key("\u041a\u041d\u0421-5")
+
+
+def test_structure_dossiers_keep_cross_source_identity_unresolved() -> None:
+    nodes = [
+        {
+            "structure_node_id": "node-a",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-a",
+        },
+        {
+            "structure_node_id": "node-b",
+            "node_kind": "facility",
+            "raw_name": "Facility-1",
+            "source_locator_id": "locator-b",
+        },
+    ]
+    relationships = [
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "node-a",
+            "object_structure_node_id": None,
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+        {
+            "relationship_kind": "located_in",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": None,
+            "object_structure_node_id": "node-b",
+            "resolution_state": "resolved_same_evidence",
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, relationships)
+
+    assert [item["structure_node"]["structure_node_id"] for item in dossiers] == [
+        "node-a",
+        "node-b",
+    ]
+    assert dossiers[0]["relationships"] == [relationships[0]]
+    assert dossiers[0]["unresolved_relationship_count"] == 1
+    assert dossiers[1]["relationships"] == [relationships[1]]
+    assert dossiers[1]["unresolved_relationship_count"] == 0
+
+
+def test_structure_dossiers_link_work_observations_only_by_exact_locator() -> None:
+    nodes = [
+        {
+            "structure_node_id": "facility-a",
+            "node_kind": "facility",
+            "raw_name": "Facility A",
+            "source_locator_id": "locator-a",
+        }
+    ]
+    work_packages = [
+        {
+            "work_package_id": "work-a",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-a",
+                "source_locator_ids": ["locator-a"],
+            },
+        },
+        {
+            "work_package_id": "work-b",
+            "package": {
+                "work_type": {"raw": "Install pipe"},
+                "scope": "zone-b",
+                "source_locator_ids": ["locator-b"],
+            },
+        },
+    ]
+
+    dossiers = SpinePostgresRepository._structure_dossier_rows([], [], [])
+    assert dossiers == []
+    dossiers = SpinePostgresRepository._structure_dossier_rows(nodes, [], work_packages)
+
+    assert dossiers[0]["work_association_state"] == "exact_shared_source_locator_candidate"
+    assert dossiers[0]["linked_work_observations"] == [
+        {"work_observation_id": "work-a", "work_name": "Install pipe", "scope": "zone-a"}
+    ]
+
+
+def test_structure_components_require_exact_resolved_evidence() -> None:
+    nodes = [
+        {"structure_node_id": "facility", "source_locator_id": "locator-a"},
+        {"structure_node_id": "pit", "source_locator_id": "locator-a"},
+        {"structure_node_id": "same-name-other-source", "source_locator_id": "locator-b"},
+    ]
+    relationships = [
+        {
+            "relationship_candidate_id": "relation-a",
+            "source_locator_id": "locator-a",
+            "subject_structure_node_id": "facility",
+            "object_structure_node_id": "pit",
+            "resolution_state": "resolved_same_evidence",
+        },
+        {
+            "relationship_candidate_id": "relation-b",
+            "source_locator_id": "locator-b",
+            "subject_structure_node_id": "pit",
+            "object_structure_node_id": "same-name-other-source",
+            "resolution_state": "unresolved_source_scoped_identity",
+        },
+    ]
+
+    components = SpinePostgresRepository._structure_component_rows(nodes, relationships)
+
+    assert len(components) == 1
+    assert [item["structure_node_id"] for item in components[0]["nodes"]] == [
+        "facility",
+        "pit",
+    ]
+    assert components[0]["relationships"] == [relationships[0]]
 
 
 def settings(root: Path, **overrides: object) -> SpineSettings:
@@ -71,6 +667,42 @@ def test_release_identity_is_explicit_and_version_pinned(tmp_path: Path) -> None
     assert configured.frontend_build_digest == "sha256:frontend"
     assert configured.openapi_digest == "sha256:openapi"
     assert configured.expected_migration_head == "0027_public_deployment"
+
+
+def test_runtime_migration_supplies_the_required_explicit_database_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+
+    configured = settings(tmp_path)
+    assert _migrate(configured) == 0
+    assert captured == {
+        "revision": "head",
+        "database_url": [f"database_url={configured.database_url}"],
+    }
+
+
+def test_runtime_migration_uses_separately_supplied_protected_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+    protected_url = "postgresql+psycopg://migration-role@localhost/asd"
+
+    def upgrade(configuration: object, revision: str) -> None:
+        captured["revision"] = revision
+        captured["database_url"] = configuration.cmd_opts.x
+
+    monkeypatch.setattr("asd_kontur.application_spine.runtime.command.upgrade", upgrade)
+    monkeypatch.setenv("ASD_MIGRATION_DATABASE_URL", protected_url)
+
+    assert _migrate(settings(tmp_path)) == 0
+    assert captured == {"revision": "head", "database_url": [f"database_url={protected_url}"]}
 
 
 @pytest.mark.parametrize(
@@ -172,6 +804,39 @@ def test_semantic_digest_ignores_mapping_order_but_not_typed_payload() -> None:
     assert semantic_digest({"value": "1"}) != semantic_digest({"value": 1})
 
 
+def test_lease_keepalive_extends_a_long_running_job_lease() -> None:
+    class RecordingRepository:
+        def __init__(self) -> None:
+            self.called = Event()
+
+        def heartbeat_job(self, *_args: object, **_kwargs: object) -> None:
+            self.called.set()
+
+    repository = RecordingRepository()
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001803"),
+        JobKind.OCR_EXTRACTION,
+        {},
+        "sha256:" + "0" * 64,
+        1,
+        1,
+        "none",
+    )
+    keepalive = _LeaseKeepalive(  # type: ignore[arg-type]
+        repository,
+        claimed,
+        worker_identity="synthetic-worker",
+        lease_seconds=1,
+    )
+
+    keepalive.start()
+    assert repository.called.wait(timeout=1)
+    keepalive.stop()
+    keepalive.raise_if_lost()
+
+
 def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     log_root = tmp_path / "logs"
     log_root.mkdir()
@@ -189,9 +854,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["Label"] == "ru.asd-kontur.spine.api"
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
-    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == (
-        "0030_professional_assistant"
-    )
+    assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == ("0033_ntd_memory")
     assistant_plist = plistlib.loads(
         (output / "ru.asd-kontur.spine.assistant-worker.plist").read_bytes()
     )
@@ -205,6 +868,31 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     monkeypatch.delenv("ASD_LOG_ROOT")
     with pytest.raises(ValueError, match="ASD_LOG_ROOT"):
         _render_launchd(tmp_path / "unconfigured", settings(tmp_path))
+
+
+def test_launchd_adds_ntd_worker_only_with_explicit_scoped_connection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    log_root = tmp_path / "logs"
+    log_root.mkdir()
+    monkeypatch.setenv("ASD_LOG_ROOT", str(log_root))
+    pgpass = tmp_path / "ntd-worker.pgpass"
+    pgpass.touch(mode=0o600)
+    output = tmp_path / "launchd"
+    _render_launchd(
+        output,
+        settings(
+            tmp_path,
+            ntd_processing_database_url=("postgresql+psycopg://ntd-worker@127.0.0.1/spine"),
+            ntd_processing_pgpassfile=pgpass,
+        ),
+    )
+
+    ntd_plist = plistlib.loads((output / "ru.asd-kontur.spine.ntd-worker.plist").read_bytes())
+    assert ntd_plist["ProgramArguments"][-1] == "run-ntd-worker"
+    assert ntd_plist["EnvironmentVariables"]["ASD_NTD_PROCESSING_PGPASSFILE"] == str(pgpass)
+    assert ntd_plist["EnvironmentVariables"]["PGPASSFILE"] == str(pgpass)
+    assert not (tmp_path / "launchd" / "ru.asd-kontur.spine.ntd-worker.plist").is_symlink()
 
 
 @pytest.mark.parametrize(

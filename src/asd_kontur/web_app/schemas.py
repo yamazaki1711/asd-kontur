@@ -133,6 +133,12 @@ class JobView(ApiModel):
     started_at: datetime | None
     heartbeat_at: datetime | None
     completed_at: datetime | None
+    lease_expires_at: datetime | None
+    lease_expired: bool
+    progress_current: int | None
+    progress_total: int | None
+    progress_message_code: str | None
+    progress_recorded_at: datetime | None
 
 
 class JobCancellationRequest(ApiModel):
@@ -227,6 +233,41 @@ class AssistantCancelRequest(ApiModel):
     confirmation: Literal["STOP_ASSISTANT_RESPONSE"]
 
 
+class ConstructionConsultantConversationCreate(ApiModel):
+    title: str | None = Field(default=None, min_length=1, max_length=160)
+
+
+class ConstructionConsultantConversationView(ApiModel):
+    conversation_id: UUID
+    title: str
+    created_at: datetime
+    message_count: int
+
+
+class ConstructionConsultantMessageView(ApiModel):
+    message_id: UUID
+    conversation_id: UUID
+    request_id: UUID | None
+    ordinal: int
+    role: Literal["user", "assistant"]
+    content: str
+    sources: list[dict[str, Any]]
+    model_identity: str | None
+    model_profile_version: str | None
+    created_at: datetime
+
+
+class ConstructionConsultantQuestionRequest(ApiModel):
+    request_id: UUID
+    question: str = Field(min_length=2, max_length=8000)
+
+
+class ConstructionConsultantAnswerView(ApiModel):
+    user_message: ConstructionConsultantMessageView
+    assistant_message: ConstructionConsultantMessageView
+    evidence_statuses: list[str]
+
+
 class PilotResultView(ApiModel):
     result_id: UUID
     version: int
@@ -241,6 +282,7 @@ class PilotResultView(ApiModel):
     project_fields: dict[str, Any]
     summary: dict[str, Any]
     items: list[dict[str, Any]]
+    tender_scope_schedule: list[dict[str, Any]] = Field(default_factory=list)
     source_manifest: list[dict[str, Any]]
     unresolved_questions: list[str]
     available_exports: list[str]
@@ -316,6 +358,7 @@ class TrialReadinessView(ApiModel):
 
 
 class ProjectUnderstandingView(ApiModel):
+    materialization: dict[str, Any] = Field(default_factory=dict)
     reconciliation: dict[str, Any]
     project_definition: dict[str, Any]
     page_roles: list[dict[str, Any]]
@@ -325,8 +368,22 @@ class ProjectUnderstandingView(ApiModel):
     defects: list[dict[str, Any]]
     evidence_index: dict[str, dict[str, Any]]
     candidates: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    structure_nodes: list[dict[str, Any]] = Field(default_factory=list)
+    structure_relationships: list[dict[str, Any]] = Field(default_factory=list)
+    structure_dossiers: list[dict[str, Any]] = Field(default_factory=list)
+    structure_components: list[dict[str, Any]] = Field(default_factory=list)
+    structure_identity_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    structure_identity_components: list[dict[str, Any]] = Field(default_factory=list)
+    structure_identity_dossiers: list[dict[str, Any]] = Field(default_factory=list)
+    structure_identity_reconciliation: dict[str, Any] = Field(default_factory=dict)
+    excavation_pit_inventory: dict[str, Any] = Field(default_factory=dict)
+    facility_work_projection: dict[str, Any] = Field(default_factory=dict)
+    project_engineering: dict[str, Any] = Field(default_factory=dict)
     review_decisions: list[dict[str, Any]] = Field(default_factory=list)
     intake_summary: dict[str, Any] = Field(default_factory=dict)
+    semantic_coverage: list[dict[str, Any]] = Field(default_factory=list)
+    summary_counts: dict[str, int] = Field(default_factory=dict)
+    application_page: dict[str, Any] = Field(default_factory=dict)
     authority_layers: dict[str, str]
 
 
@@ -355,6 +412,7 @@ class SupportProductionView(ApiModel):
     workspace_id: UUID
     matrix: dict[str, Any] | None
     requirements: list[dict[str, Any]]
+    available_packages: list[dict[str, Any]] = Field(default_factory=list)
     package: dict[str, Any] | None
     package_history: list[dict[str, Any]] = Field(default_factory=list)
     book_history: list[dict[str, Any]] = Field(default_factory=list)
@@ -365,8 +423,126 @@ class SupportProductionView(ApiModel):
     registers: list[dict[str, Any]] = Field(default_factory=list)
     readiness: dict[str, Any] | None = None
     field_resolutions: list[dict[str, Any]] = Field(default_factory=list)
+    source_field_candidates: list[dict[str, Any]] = Field(default_factory=list)
+    support_process: dict[str, Any] | None = None
+    consistency: dict[str, Any]
     gaps: list[str]
     authority_layers: dict[str, str]
+
+
+class SupportFieldCorrectionRequest(ApiModel):
+    work_package_id: UUID
+    field_key: str = Field(min_length=1, max_length=128)
+    candidate_id: UUID
+    candidate_version: int = Field(ge=1)
+    corrected_value: str = Field(min_length=1, max_length=10000)
+    reason: str = Field(min_length=3, max_length=1000)
+
+
+class SupportFieldConfirmationRequest(ApiModel):
+    work_package_id: UUID
+    field_key: str = Field(min_length=1, max_length=128)
+    candidate_id: UUID
+    candidate_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=8, max_length=256)
+
+
+class SupportFieldCommandView(ApiModel):
+    action: str
+    work_package_id: UUID
+    field_key: str
+    candidate_id: UUID
+    candidate_version: int
+    fact_id: UUID | None = None
+    fact_version: int | None = None
+    outcome: str
+
+
+class SupportScopeConfigureRequest(ApiModel):
+    mode_execution_id: UUID
+    rule_set_version_id: UUID
+    process_definition_version: str = Field(min_length=1, max_length=128)
+    authority_profile_version: str = Field(min_length=1, max_length=128)
+    contract_registry_version: str = Field(min_length=1, max_length=128)
+    policy_versions: list[str] = Field(min_length=1, max_length=64)
+    deliverable_scope: list[str] = Field(min_length=1, max_length=64)
+    classification: str = Field(min_length=1, max_length=128)
+    purpose: str = Field(min_length=1, max_length=512)
+    source_class_allowlist: list[str] = Field(min_length=1, max_length=64)
+    input_manifest_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    professional_grant_id: UUID
+    professional_grant_version: int = Field(ge=1)
+    professional_qualification_ref: str = Field(min_length=1, max_length=512)
+    idempotency_key: str = Field(min_length=8, max_length=200)
+
+
+class SupportScopeConfigurationView(ApiModel):
+    support_process_id: UUID
+    revision: int
+    state: str
+    outcome: str
+    reason_code: str
+
+
+class SupportScopeReadinessView(ApiModel):
+    status: Literal["ready", "blocked", "configured"]
+    gaps: list[str] = Field(default_factory=list)
+    configuration: SupportScopeConfigureRequest | None = None
+
+
+class SupportReleaseReadinessView(ApiModel):
+    ready: bool
+    status: Literal["ready", "blocked"]
+    blockers: list[str]
+    coverage: dict[str, Any]
+    scope: dict[str, Any]
+    command_writer: dict[str, Any]
+
+
+class AuditExpectedActualPreflightView(ApiModel):
+    assessment_kind: Literal["expected_vs_package_preflight"]
+    status: Literal["not_started", "partial"]
+    matrix: dict[str, Any] | None
+    package: dict[str, Any] | None
+    items: list[dict[str, Any]]
+    counts: dict[str, int]
+    gaps: list[str]
+    authority_layers: dict[str, str]
+
+
+class TenderContractAnalysisView(ApiModel):
+    status: str
+    process: dict[str, Any] | None
+    assessment: dict[str, Any] | None
+    clauses: list[dict[str, Any]]
+    issues: list[dict[str, Any]]
+    protocols: list[dict[str, Any]]
+    disagreement_items: list[dict[str, Any]]
+    revised_contracts: list[dict[str, Any]]
+    revised_clauses: list[dict[str, Any]]
+    deliverables: list[dict[str, Any]]
+    gaps: list[str]
+    authority_boundary: str
+
+
+class AuditReportProjectionView(ApiModel):
+    status: Literal["not_published", "partial", "published"]
+    customer: dict[str, Any] | None = None
+    pto: dict[str, Any] | None = None
+    gaps: list[str] = Field(default_factory=list)
+
+
+class RestorationRecoveryPlanView(ApiModel):
+    plan_kind: Literal["id_package_recovery_plan"]
+    status: Literal["partial", "blocked"]
+    basis: dict[str, Any]
+    recoverable_actions: list[dict[str, Any]]
+    blocked_actions: list[dict[str, Any]]
+    global_blockers: list[str]
+    authority_boundary: str
+    snapshot: dict[str, Any] | None = None
+    snapshot_is_current: bool | None = None
+    snapshot_duplicate: bool | None = None
 
 
 class FormIdPackageRequest(ApiModel):
@@ -420,6 +596,7 @@ class KnowledgeStatusView(ApiModel):
     verified_normative_edition_count: int
     verified_normative_provision_count: int
     rule_version_count: int
+    ntd_inventory: dict[str, Any]
     projection_states: dict[str, Any]
     last_verified_backup_at: datetime | None
     semantic_fingerprints: dict[str, Any]
@@ -519,6 +696,8 @@ class CapabilityStatusView(ApiModel):
     implemented: list[str]
     blockers: list[str]
     trial_ready: bool
+    construction_consultant_quality_ready: bool
+    domain_harness_ready: bool
     oks_ready: bool
     product_ready: bool
     deployment: DeploymentStatusView

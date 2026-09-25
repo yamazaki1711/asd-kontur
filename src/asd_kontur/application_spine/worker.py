@@ -1,4 +1,4 @@
-# ruff: noqa: E501
+# ruff: noqa: E501, RUF001
 """Bounded PostgreSQL document worker for the Product Spine job kinds."""
 
 from __future__ import annotations
@@ -8,9 +8,9 @@ import io
 import json
 import signal
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from pathlib import Path
+from threading import Event, Thread
 from typing import BinaryIO
 from uuid import UUID
 
@@ -21,18 +21,21 @@ from sqlalchemy import exc as sa_exc
 from sqlalchemy.orm import Session
 
 from asd_kontur.document_understanding.native import NativeExtractionFailure
-from asd_kontur.document_understanding.ocr import (
-    AppleVisionOcrAdapter,
-    OcrFailure,
-    TesseractOcrAdapter,
-)
+from asd_kontur.document_understanding.ocr import OcrFailure, QwenVisionOcrAdapter
 from asd_kontur.document_understanding.pipeline import (
     IndustrialDocumentUnderstandingPipeline,
     UnderstandingStageFailure,
     translate_stage_error,
 )
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.qwen_semantic import QwenDocumentSemanticAdapter
 from asd_kontur.domain import deterministic_uuid, uuid7
+from asd_kontur.support.editable_aosr import (
+    EDITABLE_AOSR_PROFILE_VERSION,
+    EDITABLE_AOSR_RENDERER_VERSION,
+    build_editable_aosr_template,
+    validate_editable_aosr_template,
+)
 from asd_kontur.support.models import FieldResolution, ResolutionState
 from asd_kontur.support.production import TemplateBackedDocxRenderer
 from asd_kontur.support.template_qualification import (
@@ -68,6 +71,51 @@ class WorkerOutcome:
     outcome_code: str
 
 
+class _LeaseKeepalive:
+    """Extend a durable-job lease while one bounded handler is executing."""
+
+    def __init__(
+        self,
+        repository: SpinePostgresRepository,
+        claimed: ClaimedJob,
+        *,
+        worker_identity: str,
+        lease_seconds: int,
+    ) -> None:
+        self._repository = repository
+        self._claimed = claimed
+        self._worker_identity = worker_identity
+        self._lease_seconds = lease_seconds
+        self._interval_seconds = max(0.1, min(10.0, lease_seconds / 3))
+        self._stopped = Event()
+        self._failure: SpinePersistenceError | None = None
+        self._thread = Thread(target=self._run, name="asd-document-job-lease", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stopped.set()
+        self._thread.join(timeout=self._interval_seconds + 1)
+
+    def raise_if_lost(self) -> None:
+        if self._failure is not None:
+            raise self._failure
+
+    def _run(self) -> None:
+        while not self._stopped.wait(self._interval_seconds):
+            try:
+                self._repository.heartbeat_job(
+                    self._claimed,
+                    worker_identity=self._worker_identity,
+                    lease_seconds=self._lease_seconds,
+                )
+            except SpinePersistenceError as exc:
+                self._failure = exc
+                self._stopped.set()
+                return
+
+
 class DocumentWorker:
     """One-process worker; PostgreSQL leases and fences are the source of truth."""
 
@@ -78,20 +126,30 @@ class DocumentWorker:
         *,
         worker_identity: str,
         lease_seconds: int,
+        qwen_vision_url: str = "http://127.0.0.1:8790/vision",
+        qwen_semantic_url: str | None = "http://127.0.0.1:8790/generate",
+        organization_id: UUID | None = None,
+        workspace_id: UUID | None = None,
     ) -> None:
         if len(worker_identity) < 3:
             raise ValueError("worker identity is required")
+        if (organization_id is None) != (workspace_id is None):
+            raise ValueError("document_worker_scope_incomplete")
         self._repository = repository
         self._object_store = object_store
         self._worker_identity = worker_identity
         self._lease_seconds = lease_seconds
+        self._organization_id = organization_id
+        self._workspace_id = workspace_id
         self._stopping = False
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
-            apple_vision=AppleVisionOcrAdapter(
-                Path(__file__).resolve().parents[3] / "tools/ocr/apple_vision_ocr.swift"
+            qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
+            qwen_semantic=(
+                QwenDocumentSemanticAdapter(qwen_semantic_url)
+                if qwen_semantic_url is not None
+                else None
             ),
-            tesseract=TesseractOcrAdapter(),
         )
 
     def request_stop(self) -> None:
@@ -102,15 +160,28 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
-        for _ in range(1024):
-            if self._repository.reconcile_unclaimable_jobs() == 0:
-                break
-        else:
-            raise SpinePersistenceError("unclaimable_job_reconciliation_bound_exceeded")
+        if self._organization_id is not None and self._workspace_id is not None:
+            self._repository.reconcile_expired_exhausted_jobs(
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
+            )
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
+            organization_id=self._organization_id,
+            workspace_id=self._workspace_id,
         )
+        if claimed is None:
+            # A newly accepted successor reconnects terminal dependents in
+            # ``_execute``. Historical backfill is intentionally a separately
+            # scheduled, bounded maintenance operation: it must never make an
+            # otherwise idle product worker unavailable to claim new work.
+            claimed = self._repository.claim_next_job(
+                worker_identity=self._worker_identity,
+                lease_seconds=self._lease_seconds,
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
+            )
         if claimed is None:
             return None
         self._repository.mark_job_running(claimed, worker_identity=self._worker_identity)
@@ -121,8 +192,16 @@ class DocumentWorker:
                 "job_cancelled_before_effect",
                 {"semantic_effect": False},
             )
+        keepalive = _LeaseKeepalive(
+            self._repository,
+            claimed,
+            worker_identity=self._worker_identity,
+            lease_seconds=self._lease_seconds,
+        )
+        keepalive.start()
         try:
             result = self._execute(claimed)
+            keepalive.raise_if_lost()
         except RetryableJobFailure as exc:
             scheduled = self._repository.retry_job(
                 claimed,
@@ -190,7 +269,35 @@ class DocumentWorker:
                 str(code),
                 {"exception_type": type(exc).__name__},
             )
-        return self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        except Exception as exc:
+            return self._terminal(
+                claimed,
+                JobState.RECONCILIATION_REQUIRED,
+                "worker_unexpected_handler_error",
+                {"exception_type": type(exc).__name__},
+            )
+        finally:
+            keepalive.stop()
+        outcome = self._terminal(claimed, JobState.SUCCEEDED, "job_succeeded", result)
+        independent_classification_recovery = bool(
+            claimed.job_kind is JobKind.DOCUMENT_PAGE_CLASSIFICATION
+            and claimed.input_manifest.get("classification_recovery_contract")
+        )
+        if not independent_classification_recovery:
+            self._repository.recover_dependents_from_success(claimed)
+        if claimed.job_kind in {
+            JobKind.PROJECT_DEFINITION_EXTRACTION,
+            JobKind.DOCUMENT_PAGE_CLASSIFICATION,
+        }:
+            # A workspace-wide reconciliation is a materialized view.  Refresh it
+            # after durable source content or classification becomes effective
+            # instead of leaving partial, useful evidence invisible until the
+            # complete corpus drains.  Independent classification recovery does
+            # not revive the obsolete OCR-dependent intake chain.
+            self._repository.schedule_incremental_project_reconciliation(claimed)
+        elif claimed.job_kind is JobKind.PROJECT_STRUCTURE_RECONCILIATION:
+            self._repository.schedule_post_structure_project_reconciliation(claimed)
+        return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
         self.install_signal_handlers()
@@ -221,6 +328,8 @@ class DocumentWorker:
             JobKind.WORK_PACKAGE_ASSEMBLY,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+            JobKind.PROJECT_WORK_RECONCILIATION,
         }:
             try:
                 with self._open_source(claimed) as source:
@@ -247,6 +356,7 @@ class DocumentWorker:
         output_format = str(manifest.get("format", "DOCX"))
         validation_fingerprint: str | None = None
         print_ready = False
+        editable_companion: tuple[str, str, tuple[str, ...]] | None = None
         try:
             if output_format == "PDF_OVERLAY":
                 with self._object_store.open(str(manifest["font_object_key"])) as source:
@@ -279,6 +389,53 @@ class DocumentWorker:
                 )
                 validation_fingerprint = print_receipt.fingerprint
                 print_ready = print_receipt.result == "print_ready"
+                if manifest.get("editable_companion_profile") == EDITABLE_AOSR_PROFILE_VERSION:
+                    editable_template = build_editable_aosr_template()
+                    editable_template_digest = (
+                        "sha256:" + hashlib.sha256(editable_template).hexdigest()
+                    )
+                    editable_fields = tuple(
+                        item
+                        if item.state is ResolutionState.CONFIRMED
+                        else replace(
+                            item,
+                            state=ResolutionState.CONFIRMED,
+                            normalized_value="",
+                            display_value=(
+                                ""
+                                if item.state is ResolutionState.NOT_APPLICABLE
+                                else f"НЕ УКАЗАНО — требуется заполнить поле {item.field_key}"
+                            ),
+                        )
+                        for item in fields
+                    )
+                    editable = TemplateBackedDocxRenderer().render(
+                        template_bytes=editable_template,
+                        template_digest=editable_template_digest,
+                        fields=editable_fields,
+                        semantic_input={
+                            **dict(manifest["semantic_input"]),
+                            "representation": "editable_aosr_docx",
+                            "profile": EDITABLE_AOSR_PROFILE_VERSION,
+                        },
+                    )
+                    editable_checks = validate_editable_aosr_template(
+                        editable.package_bytes, tokens_expected=False
+                    )
+                    editable_key = (
+                        f"derived/{claimed.organization_id}/{claimed.workspace_id}/generated/"
+                        f"{editable.bytes_digest[7:]}.docx"
+                    )
+                    editable_digest, _ = self._object_store.put_derived(
+                        object_key=editable_key, content=editable.package_bytes
+                    )
+                    if editable_digest != editable.bytes_digest:
+                        raise ValueError("editable_aosr_object_digest_mismatch")
+                    editable_companion = (
+                        editable_key,
+                        editable_digest,
+                        tuple((*editable.structural_checks, *editable_checks)),
+                    )
             else:
                 rendered = TemplateBackedDocxRenderer().render(
                     template_bytes=template_bytes,
@@ -315,6 +472,7 @@ class DocumentWorker:
             validator_profile_version=str(manifest["validator_profile_version"]),
             validation_fingerprint=validation_fingerprint,
             print_ready=print_ready,
+            editable_companion=editable_companion,
         )
         return {
             "generation_run_id": str(run_id),
@@ -460,6 +618,7 @@ class DocumentWorker:
         validator_profile_version: str,
         validation_fingerprint: str | None,
         print_ready: bool,
+        editable_companion: tuple[str, str, tuple[str, ...]] | None,
     ) -> str:
         now = datetime.now(UTC)
         with Session(self._repository.engine) as session, session.begin():
@@ -502,6 +661,28 @@ class DocumentWorker:
                     "now": now,
                 },
             )
+            if editable_companion is not None:
+                editable_object, editable_digest, _editable_checks = editable_companion
+                editable_render_id = deterministic_uuid(
+                    f"support-editable-render:{candidate_id}:{editable_digest}"
+                )
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.support_render_artifacts VALUES "
+                        "(:o,:w,:render,:candidate,:renderer,'DOCX',:object,:bytes,"
+                        "'template_candidate','verified',:now) ON CONFLICT DO NOTHING"
+                    ),
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "render": editable_render_id,
+                        "candidate": candidate_id,
+                        "renderer": EDITABLE_AOSR_RENDERER_VERSION,
+                        "object": editable_object,
+                        "bytes": editable_digest,
+                        "now": now,
+                    },
+                )
             session.execute(
                 sa.text(
                     "INSERT INTO workspace.support_render_artifacts VALUES "

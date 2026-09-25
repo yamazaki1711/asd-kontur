@@ -114,7 +114,10 @@ def test_spine_content_minimal_scale_profile(
 
     assert accepted == file_count
     assert rejected == 0
-    assert enqueued == file_count * 17
+    # Every admitted non-archive source receives the 18 declared processing
+    # stages except workspace reset and ID generation. Structure reconciliation
+    # is a real durable stage, not an incidental job to omit from the denominator.
+    assert enqueued == file_count * 18
 
     first_page_started = time.perf_counter()
     page, cursor = service.list_documents(
@@ -146,12 +149,16 @@ def test_spine_content_minimal_scale_profile(
         object_store,
         worker_identity=f"scale-worker-one-{file_count}",
         lease_seconds=5,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.workspace_id,
     )
     worker_two = DocumentWorker(
         SpinePostgresRepository(postgres_environment.document_worker_engine),
         object_store,
         worker_identity=f"scale-worker-two-{file_count}",
         lease_seconds=5,
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.workspace_id,
     )
     assert worker_one.run_once() is not None
     assert worker_two.run_once() is not None
@@ -176,9 +183,9 @@ def test_spine_content_minimal_scale_profile(
             or 0
         )
     assert document_rows == file_count
-    assert sum(int(value) for value in state_rows.values()) == file_count * 17
+    assert sum(int(value) for value in state_rows.values()) == file_count * 18
     assert int(state_rows.get("succeeded", 0)) == 2
-    assert int(state_rows.get("queued", 0)) == file_count * 17 - 2
+    assert int(state_rows.get("queued", 0)) == file_count * 18 - 2
 
     max_resident_raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     max_resident_bytes = (

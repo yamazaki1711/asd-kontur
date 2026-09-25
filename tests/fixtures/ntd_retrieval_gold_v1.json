@@ -1,0 +1,1895 @@
+{
+  "profile": "ntd-retrieval-gold@2.0.0",
+  "qualification_corpus_profile": "ntd-retrieval-qualification-corpus@2.0.0",
+  "source_policy": "Expected sources are bound to exact qualification-corpus bytes and pages. Owner chat payloads are not included.",
+  "category_denominator": {
+    "exact_designation": 20,
+    "exact_clause_page": 15,
+    "terminology": 15,
+    "semantic_paraphrase": 15,
+    "multi_section": 10,
+    "cross_document": 10,
+    "applicability": 5,
+    "table": 5,
+    "negative": 5
+  },
+  "cases": [
+    {
+      "case_id": "NTD-GOLD-001",
+      "category": "exact_designation",
+      "query": "Есть ли в памяти СП 70?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 70.13330.2012",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-002",
+      "category": "exact_designation",
+      "query": "Открой СП70.13330.2012",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 70.13330.2012",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-003",
+      "category": "exact_designation",
+      "query": "Найди СП 543",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 543.1325800.2024",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-004",
+      "category": "exact_designation",
+      "query": "У тебя есть 543.1325800.2024?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 543.1325800.2024",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-005",
+      "category": "exact_designation",
+      "query": "Покажи СП 45.13330.2017",
+      "relevant_documents": [
+        "sha256:2d1803ad939d4168993fe3e147fea9fe9c9227dac21c7034dfb1bf75409768a0"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 45.13330.2017",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-006",
+      "category": "exact_designation",
+      "query": "Нужна редакция СП45 2017 года",
+      "relevant_documents": [
+        "sha256:2d1803ad939d4168993fe3e147fea9fe9c9227dac21c7034dfb1bf75409768a0"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 45.13330.2017",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-007",
+      "category": "exact_designation",
+      "query": "Открой СП 392.1325800.2018",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 392.1325800.2018",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-008",
+      "category": "exact_designation",
+      "query": "Есть СП392 по исполнительной документации трубопроводов?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 392.1325800.2018",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-009",
+      "category": "exact_designation",
+      "query": "Найди СП 48.13330.2019",
+      "relevant_documents": [
+        "sha256:0cbfe59b5395ac0ed3f90d60e459cb2478cc12e08c0ece5677cbca4d66f1d4ac"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 48.13330.2019",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-010",
+      "category": "exact_designation",
+      "query": "Покажи документ об организации строительства СП48",
+      "relevant_documents": [
+        "sha256:0cbfe59b5395ac0ed3f90d60e459cb2478cc12e08c0ece5677cbca4d66f1d4ac"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 48.13330.2019",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-011",
+      "category": "exact_designation",
+      "query": "Есть ГОСТ 10180-2012?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ 10180-2012",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-012",
+      "category": "exact_designation",
+      "query": "Открой ГОСТ10180",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ 10180-2012",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-013",
+      "category": "exact_designation",
+      "query": "Найди ГОСТ 18105-2018",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ 18105-2018",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-014",
+      "category": "exact_designation",
+      "query": "Покажи ГОСТ18105 по контролю прочности",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ 18105-2018",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-015",
+      "category": "exact_designation",
+      "query": "Открой ГОСТ Р 51872-2024",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ Р 51872-2024",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-016",
+      "category": "exact_designation",
+      "query": "Есть 51872 по исполнительной геодезии?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "ГОСТ Р 51872-2024",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-017",
+      "category": "exact_designation",
+      "query": "Найди инструкцию И 1.13-07",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "И 1.13-07",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-018",
+      "category": "exact_designation",
+      "query": "Открой И1.13-07 по электромонтажным документам",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "И 1.13-07",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-019",
+      "category": "exact_designation",
+      "query": "Открой полный документ «Несущие и ограждающие конструкции»",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 70.13330.2012",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-020",
+      "category": "exact_designation",
+      "query": "Найди свод правил 543.1325800.2024 по строительному контролю",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": "СП 543.1325800.2024",
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-021",
+      "category": "exact_clause_page",
+      "query": "Что сказано в пункте 5.4.1 СП 70 об уходе за бетоном?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "clause_label": "5.4.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-022",
+      "category": "exact_clause_page",
+      "query": "Где СП 70 требует акты освидетельствования скрытых работ?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 12
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "clause_label": "3.5"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-023",
+      "category": "exact_clause_page",
+      "query": "Покажи пункт 3.1 СП 543 о входном контроле материалов.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "clause_label": "3.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-024",
+      "category": "exact_clause_page",
+      "query": "Что такое операционный контроль по пункту 3.11 СП 543?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 11
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "clause_label": "3.11"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-025",
+      "category": "exact_clause_page",
+      "query": "Открой пункт 8.1 СП 543 об исполнительной документации.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 24
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "clause_label": "8.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-026",
+      "category": "exact_clause_page",
+      "query": "Покажи приложение А СП 543 с документацией по видам работ.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 27
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "clause_label": "Приложение А"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-027",
+      "category": "exact_clause_page",
+      "query": "Что требует пункт 5.5 СП 392 при передаче папки ИД?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "clause_label": "5.5"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-028",
+      "category": "exact_clause_page",
+      "query": "Где в СП 392 форма акта ответственных конструкций?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "clause_label": "Форма 1.10"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-029",
+      "category": "exact_clause_page",
+      "query": "Открой таблицу 1 СП 392 с форматами листов.",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 23
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "clause_label": "Таблица 1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-030",
+      "category": "exact_clause_page",
+      "query": "Что требует пункт 4.2.1 ГОСТ 10180 при отборе проб?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "clause_label": "4.2.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-031",
+      "category": "exact_clause_page",
+      "query": "Покажи таблицу 1 ГОСТ 10180 с размерами образцов.",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "clause_label": "Таблица 1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-032",
+      "category": "exact_clause_page",
+      "query": "Дай определение скользящего коэффициента вариации из 3.1.20 ГОСТ 18105.",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "clause_label": "3.1.20"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-033",
+      "category": "exact_clause_page",
+      "query": "Открой таблицу А.1 ГОСТ 18105.",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "clause_label": "Таблица А.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-034",
+      "category": "exact_clause_page",
+      "query": "Что входит в раздел 5 ГОСТ Р 51872?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "clause_label": "5"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-035",
+      "category": "exact_clause_page",
+      "query": "Для чего используется форма 2 по пункту 2.5 инструкции И 1.13-07?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "clause_label": "2.5"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-036",
+      "category": "terminology",
+      "query": "Каким документом регулируется выдерживание и уход за свежеуложенным бетоном?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-037",
+      "category": "terminology",
+      "query": "Где раскрыт входной контроль оборудования, изделий и материалов?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-038",
+      "category": "terminology",
+      "query": "Найди требования к операционному контролю строительно-монтажных работ.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 11
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-039",
+      "category": "terminology",
+      "query": "Где описана передача сформированной книги исполнительной документации по реестру?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-040",
+      "category": "terminology",
+      "query": "Какой источник содержит формы исполнительной документации для магистральных трубопроводов?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-041",
+      "category": "terminology",
+      "query": "Где установлены формы и номинальные размеры бетонных образцов?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-042",
+      "category": "terminology",
+      "query": "Какой документ описывает отбор проб бетонной смеси для контрольных образцов?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-043",
+      "category": "terminology",
+      "query": "Где определён коэффициент вариации прочности бетона?",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-044",
+      "category": "terminology",
+      "query": "Какой документ содержит схемы контроля прочности бетона?",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-045",
+      "category": "terminology",
+      "query": "Где установлен перечень геодезической исполнительной документации?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-046",
+      "category": "terminology",
+      "query": "Какой источник регулирует точность исполнительных геодезических съёмок?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 8
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-047",
+      "category": "terminology",
+      "query": "Где приведён акт технической готовности электромонтажных работ?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 9
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-048",
+      "category": "terminology",
+      "query": "В каком документе описаны формы приёмо-сдаточной документации электромонтажа?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 3
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-049",
+      "category": "terminology",
+      "query": "Какой свод правил посвящён организации строительства?",
+      "relevant_documents": [
+        "sha256:0cbfe59b5395ac0ed3f90d60e459cb2478cc12e08c0ece5677cbca4d66f1d4ac"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-050",
+      "category": "terminology",
+      "query": "В каком документе установлены правила контроля и оценки прочности бетона?",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-051",
+      "category": "semantic_paraphrase",
+      "query": "После укладки бетон нельзя оставлять без защиты от высыхания. Где это установлено?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-052",
+      "category": "semantic_paraphrase",
+      "query": "Как оформить подтверждение работ, которые после следующей операции станут недоступны для осмотра?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 12
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-053",
+      "category": "semantic_paraphrase",
+      "query": "Что проверяют до применения поступивших на стройку изделий и материалов?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-054",
+      "category": "semantic_paraphrase",
+      "query": "Как контролировать соблюдение технологической последовательности непосредственно во время работ?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 11
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-055",
+      "category": "semantic_paraphrase",
+      "query": "Кто и когда формирует документы по факту завершения скрытых строительно-монтажных операций?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 24
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-056",
+      "category": "semantic_paraphrase",
+      "query": "Как передать заказчику собранную папку исполнительных документов с порядковыми номерами?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-057",
+      "category": "semantic_paraphrase",
+      "query": "Какой документ нужен для освидетельствования конструкций, влияющих на безопасность объекта?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-058",
+      "category": "semantic_paraphrase",
+      "query": "Как правильно взять бетонную смесь для изготовления образцов на испытание?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-059",
+      "category": "semantic_paraphrase",
+      "query": "Какие размеры могут иметь кубы для испытания бетона на сжатие?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-060",
+      "category": "semantic_paraphrase",
+      "query": "Как учитывать неоднородность результатов прочности бетона между партиями?",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-061",
+      "category": "semantic_paraphrase",
+      "query": "Какая исполнительная геодезическая документация нужна по объекту?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-062",
+      "category": "semantic_paraphrase",
+      "query": "С какой точностью следует отображать объекты на исполнительной съёмке?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 8
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-063",
+      "category": "semantic_paraphrase",
+      "query": "Каким документом оформить готовность законченных электромонтажных работ к сдаче?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-064",
+      "category": "semantic_paraphrase",
+      "query": "Где искать требования к разработке грунта, основаниям и фундаментам?",
+      "relevant_documents": [
+        "sha256:2d1803ad939d4168993fe3e147fea9fe9c9227dac21c7034dfb1bf75409768a0"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-065",
+      "category": "semantic_paraphrase",
+      "query": "Где искать требования к устройству монолитных железобетонных конструкций?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-066",
+      "category": "multi_section",
+      "query": "Сопоставь требования СП 70 к уходу за бетоном и документированию скрытых работ.",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        },
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 12
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-067",
+      "category": "multi_section",
+      "query": "Какие разделы СП 70 нужны для производства и приёмки бетонных конструкций?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        },
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-068",
+      "category": "multi_section",
+      "query": "Как в СП 543 связаны входной, операционный и приёмочный контроль?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 11
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 27
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-069",
+      "category": "multi_section",
+      "query": "Как СП 543 связывает строительный контроль с формированием исполнительной документации?",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 11
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 24
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-070",
+      "category": "multi_section",
+      "query": "Какие реестр и формы актов предусмотрены СП 392 для комплекта ИД?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 17
+        },
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-071",
+      "category": "multi_section",
+      "query": "Как ГОСТ 10180 связывает отбор смеси, размеры образцов и определение прочности?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-072",
+      "category": "multi_section",
+      "query": "Как ГОСТ 18105 связывает схемы контроля и коэффициент вариации прочности?",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-073",
+      "category": "multi_section",
+      "query": "Как ГОСТ Р 51872 связывает состав документации и точность исполнительной съёмки?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 8
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-074",
+      "category": "multi_section",
+      "query": "Какие документы и формы сопровождают сдачу электромонтажных работ по И 1.13-07?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 5
+        },
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 9
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-075",
+      "category": "multi_section",
+      "query": "Какие разделы СП 392 определяют комплектование, передачу и оформление ИД?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 17
+        },
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 23
+        },
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-076",
+      "category": "cross_document",
+      "query": "Чем различаются предметы регулирования СП 70 и СП 543 для бетонных работ?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-077",
+      "category": "cross_document",
+      "query": "Почему при вопросе о бетонной конструкции недостаточно сослаться только на СП 543?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-078",
+      "category": "cross_document",
+      "query": "Почему не СП 70?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-079",
+      "category": "cross_document",
+      "query": "Сопоставь изготовление бетонных образцов и статистическую оценку прочности.",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-080",
+      "category": "cross_document",
+      "query": "Какие источники нужны одновременно для технологии бетонных работ и контроля прочности?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        },
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-081",
+      "category": "cross_document",
+      "query": "Сопоставь общие требования к ИД и отраслевые формы для трубопровода.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 24
+        },
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 25
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-082",
+      "category": "cross_document",
+      "query": "Как связаны исполнительные геодезические схемы и освидетельствование скрытых конструкций?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 12
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-083",
+      "category": "cross_document",
+      "query": "Какие документы регулируют организацию строительства и строительный контроль?",
+      "relevant_documents": [
+        "sha256:0cbfe59b5395ac0ed3f90d60e459cb2478cc12e08c0ece5677cbca4d66f1d4ac",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-084",
+      "category": "cross_document",
+      "query": "Чем требования к технологии бетонных работ отличаются от требований к строительному контролю?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-085",
+      "category": "cross_document",
+      "query": "Сравни приёмо-сдаточные документы электромонтажа с общими требованиями к исполнительной документации.",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 6
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 24
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-086",
+      "category": "applicability",
+      "query": "Какие нормы из корпуса могут относиться к бетонированию несущей монолитной стены?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        },
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-087",
+      "category": "applicability",
+      "query": "Подходит ли СП 543 как единственный источник технологических требований к уходу за бетоном?",
+      "relevant_documents": [
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 50
+        },
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 10
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-088",
+      "category": "applicability",
+      "query": "Какие документы нужны для контроля прочности бетона по образцам на объекте?",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 7
+        },
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 7
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-089",
+      "category": "applicability",
+      "query": "Применима ли И 1.13-07 к оформлению результатов общестроительных бетонных работ?",
+      "relevant_documents": [
+        "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+          "page_number": 3
+        },
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-090",
+      "category": "applicability",
+      "query": "Применим ли СП 392 к исполнительной документации бетонных работ обычного здания?",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+        "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 1
+        },
+        {
+          "document_digest": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+          "page_number": 39
+        }
+      ],
+      "relevant_clauses": [],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-091",
+      "category": "table",
+      "query": "Найди в таблице ГОСТ 10180 размеры кубов для испытаний.",
+      "relevant_documents": [
+        "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "page_number": 6
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+          "clause_label": "Таблица 1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-092",
+      "category": "table",
+      "query": "Найди коэффициент для схем контроля в таблице А.1 ГОСТ 18105.",
+      "relevant_documents": [
+        "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+          "clause_label": "Таблица А.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-093",
+      "category": "table",
+      "query": "Открой таблицу форматов листов в СП 392.",
+      "relevant_documents": [
+        "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "page_number": 23
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+          "clause_label": "Таблица 1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-094",
+      "category": "table",
+      "query": "Покажи таблицу состава исполнительной документации по видам работ в СП 543.",
+      "relevant_documents": [
+        "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "page_number": 27
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+          "clause_label": "Таблица А.1"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-095",
+      "category": "table",
+      "query": "Где находится таблица перемещения объёмов земляных масс на исполнительной геодезической схеме?",
+      "relevant_documents": [
+        "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd"
+      ],
+      "relevant_pages": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "page_number": 17
+        }
+      ],
+      "relevant_clauses": [
+        {
+          "document_digest": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+          "clause_label": "Рисунок Б.7"
+        }
+      ],
+      "expected_negative": false,
+      "expected_exact_designation": null,
+      "source_basis": "exact qualification-corpus source"
+    },
+    {
+      "case_id": "NTD-GOLD-096",
+      "category": "negative",
+      "query": "Какой класс бетона указан для фундамента демонстрационного объекта?",
+      "relevant_documents": [],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": true,
+      "expected_exact_designation": null,
+      "source_basis": "No answer exists in the qualification corpus; retrieval must abstain."
+    },
+    {
+      "case_id": "NTD-GOLD-097",
+      "category": "negative",
+      "query": "Покажи результаты лабораторных испытаний бетона конкретной захватки.",
+      "relevant_documents": [],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": true,
+      "expected_exact_designation": null,
+      "source_basis": "No answer exists in the qualification corpus; retrieval must abstain."
+    },
+    {
+      "case_id": "NTD-GOLD-098",
+      "category": "negative",
+      "query": "Кто подписал АОСР по работам текущего реального объекта?",
+      "relevant_documents": [],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": true,
+      "expected_exact_designation": null,
+      "source_basis": "No answer exists in the qualification corpus; retrieval must abstain."
+    },
+    {
+      "case_id": "NTD-GOLD-099",
+      "category": "negative",
+      "query": "Какой паспорт качества выдан на бетонную смесь партии Б-17 текущего объекта?",
+      "relevant_documents": [],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": true,
+      "expected_exact_designation": null,
+      "source_basis": "No answer exists in the qualification corpus; retrieval must abstain."
+    },
+    {
+      "case_id": "NTD-GOLD-100",
+      "category": "negative",
+      "query": "Найди в корпусе СП 999.99999.2099.",
+      "relevant_documents": [],
+      "relevant_pages": [],
+      "relevant_clauses": [],
+      "expected_negative": true,
+      "expected_exact_designation": null,
+      "source_basis": "No answer exists in the qualification corpus; retrieval must abstain."
+    }
+  ]
+}

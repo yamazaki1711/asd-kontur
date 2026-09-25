@@ -225,6 +225,7 @@ class NtdProcessingJobRepository:
         output: dict[str, Any],
         started_at: datetime,
         completed_at: datetime,
+        tool_profile_version: str = TOOL_PROFILE_VERSION,
     ) -> NtdJobTerminalResult:
         if state not in {"succeeded", "failed", "reconciliation_required"}:
             raise ValueError("NTD_PROCESSING_TERMINAL_STATE_INVALID")
@@ -247,7 +248,7 @@ class NtdProcessingJobRepository:
             {
                 **terminal_payload,
                 "attempt_id": attempt_id,
-                "tool_profile_version": TOOL_PROFILE_VERSION,
+                "tool_profile_version": tool_profile_version,
             }
         )
         with Session(self._engine) as session, session.begin():
@@ -284,7 +285,7 @@ class NtdProcessingJobRepository:
                     "attempt": job.attempt_number,
                     "generation": job.lease_generation,
                     "processor": lease_owner,
-                    "profile": TOOL_PROFILE_VERSION,
+                    "profile": tool_profile_version,
                     "input": job.input_manifest_digest,
                     "output": output_digest,
                     "status": state,

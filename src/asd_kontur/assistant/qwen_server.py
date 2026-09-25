@@ -8,11 +8,20 @@ application or PostgreSQL clients.
 from __future__ import annotations
 
 import argparse
+import base64
+import io
 import json
 import threading
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
+
+
+def _collect_generated_text(results: Iterable[Any]) -> str:
+    """Join MLX-VLM streaming segments without treating a delta as a full response."""
+
+    return "".join(str(result.text) for result in results)
 
 
 def main() -> None:
@@ -50,17 +59,32 @@ def main() -> None:
             self.wfile.write(payload)
 
         def do_POST(self) -> None:
-            if self.path != "/generate":
+            if self.path not in {"/generate", "/vision"}:
                 self.send_error(404)
                 return
             length = int(self.headers.get("Content-Length", "0"))
-            if length < 2 or length > 2_000_000:
+            ceiling = 16_000_000 if self.path == "/vision" else 2_000_000
+            if length < 2 or length > ceiling:
                 self.send_error(413)
                 return
             try:
                 request = json.loads(self.rfile.read(length))
                 prompt_text = str(request["prompt"])
-                max_tokens = min(1800, max(64, int(request.get("max_tokens", 1200))))
+                generation_ceiling = (
+                    6000 if prompt_text.startswith("Role: qwen3.8-27b-developer-worker@") else 1800
+                )
+                max_tokens = min(generation_ceiling, max(64, int(request.get("max_tokens", 1200))))
+                temperature = float(request.get("temperature", 0.2))
+                if not 0.0 <= temperature <= 0.7:
+                    raise ValueError("temperature outside qualified range")
+                image_bytes: bytes | None = None
+                if self.path == "/vision":
+                    encoded = request["image_base64"]
+                    if not isinstance(encoded, str):
+                        raise ValueError("image encoding invalid")
+                    image_bytes = base64.b64decode(encoded, validate=True)
+                    if not image_bytes or len(image_bytes) > 12 * 1024 * 1024:
+                        raise ValueError("image size invalid")
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 self.send_error(400)
                 return
@@ -68,29 +92,67 @@ def main() -> None:
                 self.send_error(429)
                 return
             try:
+                image: Any = None
+                if image_bytes is not None:
+                    from PIL import Image
+
+                    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
                 prompt = prompt_utils.apply_chat_template(
-                    processor, config, prompt_text, num_images=0
+                    processor,
+                    config,
+                    prompt_text,
+                    num_images=1 if image is not None else 0,
+                    enable_thinking=False,
                 )
+                if self.path == "/vision":
+                    response_text = _collect_generated_text(
+                        mlx_vlm.stream_generate(
+                            model,
+                            processor,
+                            prompt,
+                            image=image,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                        )
+                    )
+                    payload = json.dumps(
+                        {"model": "Qwen3.8-27B", "text": response_text}, ensure_ascii=False
+                    ).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
                 self.send_response(200)
                 self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 self._write({"event": "started", "model": "Qwen3.8-27B"})
                 prior = ""
+                generation_events = 0
                 for result in mlx_vlm.stream_generate(
                     model,
                     processor,
                     prompt,
-                    image=None,
+                    image=image,
                     max_tokens=max_tokens,
-                    temperature=0.0,
+                    temperature=temperature,
                 ):
+                    generation_events += 1
                     current = str(result.text)
                     delta = current[len(prior) :] if current.startswith(prior) else current
                     prior = current
                     if delta:
                         self._write({"event": "delta", "text": delta})
-                self._write({"event": "completed"})
+                self._write(
+                    {
+                        "event": "completed",
+                        "generation_events": generation_events,
+                        "max_tokens": max_tokens,
+                        "limit_reached": generation_events >= max_tokens,
+                    }
+                )
             except (BrokenPipeError, ConnectionResetError):
                 pass
             finally:

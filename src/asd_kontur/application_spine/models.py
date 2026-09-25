@@ -13,6 +13,15 @@ from uuid import UUID
 
 JsonValue = dict[str, Any]
 
+STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION = "source-balanced-v1"
+STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION = "current-membership-v1"
+STRUCTURE_IDENTITY_GROUP_MAX_SIZE = 16
+# A semantic-recovery job is executable only by a worker that implements this
+# exact bounded leaf-recovery contract.  Keeping the value in the shared job
+# model lets both the scheduler and worker reject a release mismatch instead of
+# silently consuming the one permitted recovery attempt with older code.
+ENGINEERING_SEMANTIC_RECOVERY_CONTRACT = "engineering-leaf-recovery-v6"
+
 
 class JobKind(StrEnum):
     DOCUMENT_ADMISSION = "DOCUMENT_ADMISSION"
@@ -31,6 +40,8 @@ class JobKind(StrEnum):
     WORK_PACKAGE_ASSEMBLY = "WORK_PACKAGE_ASSEMBLY"
     REQUIREMENT_MATRIX_ASSEMBLY = "REQUIREMENT_MATRIX_ASSEMBLY"
     PROJECT_UNDERSTANDING_RECONCILIATION = "PROJECT_UNDERSTANDING_RECONCILIATION"
+    PROJECT_STRUCTURE_RECONCILIATION = "PROJECT_STRUCTURE_RECONCILIATION"
+    PROJECT_WORK_RECONCILIATION = "PROJECT_WORK_RECONCILIATION"
     ID_DOCUMENT_GENERATION = "ID_DOCUMENT_GENERATION"
     EVIDENCE_INDEX_UPDATE = "EVIDENCE_INDEX_UPDATE"
     WORKSPACE_RESET_RECONCILIATION = "WORKSPACE_RESET_RECONCILIATION"
@@ -133,6 +144,12 @@ class JobSummary:
     started_at: datetime | None
     heartbeat_at: datetime | None
     completed_at: datetime | None
+    lease_expires_at: datetime | None
+    lease_expired: bool
+    progress_current: int | None
+    progress_total: int | None
+    progress_message_code: str | None
+    progress_recorded_at: datetime | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +234,7 @@ class KnowledgeStatus:
     verified_normative_edition_count: int
     verified_normative_provision_count: int
     rule_version_count: int
+    ntd_inventory: JsonValue
     projection_states: JsonValue
     last_verified_backup_at: datetime | None
     semantic_fingerprints: JsonValue

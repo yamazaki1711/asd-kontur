@@ -34,7 +34,36 @@ class StartSupportProcess:
 
     @property
     def semantic_digest(self) -> str:
-        return digest_of(self)
+        """Return the replay identity without transport or generated aggregate IDs.
+
+        A scope configuration allocates its aggregate and command IDs only after
+        the caller has supplied a semantic request.  Replaying that same request
+        must therefore bind to the original idempotency record rather than
+        conflict because those allocated identifiers differ.
+        """
+
+        return digest_of(
+            {
+                "organization_id": self.scope.organization_id,
+                "workspace_id": self.scope.workspace_id,
+                "mode_execution_id": self.scope.mode_execution_id,
+                "rule_set_version_id": self.scope.rule_set_version_id,
+                "process_definition_version": self.scope.process_definition_version,
+                "authority_profile_version": self.scope.authority_profile_version,
+                "contract_registry_version": self.scope.contract_registry_version,
+                "policy_versions": self.scope.policy_versions,
+                "deliverable_scope": self.scope.deliverable_scope,
+                "classification": self.scope.classification,
+                "purpose": self.scope.purpose,
+                "source_class_allowlist": self.source_class_allowlist,
+                "input_manifest_digest": self.input_manifest_digest,
+                "authority_identity": self.authority.identity_id,
+                "authority_grant": self.authority.grant_id,
+                "authority_grant_version": self.authority.grant_version,
+                "authority_capability": self.authority.capability,
+                "authority_qualification_ref": self.authority.qualification_ref,
+            }
+        )
 
 
 class PostgresSupportProcess:

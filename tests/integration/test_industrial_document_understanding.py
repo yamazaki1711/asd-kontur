@@ -6,7 +6,9 @@ import io
 import json
 import os
 import runpy
+import time
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from uuid import UUID
 
@@ -17,13 +19,45 @@ from fastapi.testclient import TestClient
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
-from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.application_spine.worker import DocumentWorker, WorkerOutcome
+from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.domain import uuid7
+from asd_kontur.knowledge.gateway import GatewayContext
+from asd_kontur.persistence import WorkspaceContext, WorkspaceUnitOfWork
+from asd_kontur.support.scope_commands import (
+    SupportScopeCommandError,
+    SupportScopeCommandService,
+    SupportScopeConfiguration,
+)
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
+from .test_common_domain_kernel import _seed_rule
+from .test_workspace_lifecycle import Tenant
 
 pytestmark = pytest.mark.postgres
+
+
+def _drain_worker_through_bounded_retries(
+    worker: DocumentWorker, *, timeout_seconds: float = 8.0
+) -> tuple[list[WorkerOutcome], dict[str, str]]:
+    """Exercise scheduled retries and return each job's effective observed state."""
+
+    outcomes: list[WorkerOutcome] = []
+    latest_states: dict[str, str] = {}
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        outcome = worker.run_once()
+        if outcome is not None:
+            outcomes.append(outcome)
+            latest_states[outcome.job_id] = outcome.state.value
+            continue
+        if "queued" not in latest_states.values():
+            return outcomes, latest_states
+        if time.monotonic() >= deadline:
+            pytest.fail(f"worker_retry_did_not_settle:{latest_states}")
+        time.sleep(0.1)
 
 
 def _build_synthetic_corpus(root: Path) -> dict[str, object]:
@@ -76,6 +110,28 @@ def _docx() -> bytes:
     return target.getvalue()
 
 
+def _support_qwen_qualification_docx() -> bytes:
+    """One controlled free-text case whose expected engineering values are fixed here."""
+
+    body = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/'
+        'wordprocessingml/2006/main"><w:body>'
+        "<w:p><w:r><w:t>Квалификационная пояснительная записка</w:t></w:r></w:p>"
+        "<w:p><w:r><w:t>На участке У-01 предусмотрено устройство монолитной "
+        "железобетонной фундаментной плиты объёмом 18,4 м³ из бетона класса В25."
+        "</w:t></w:r></w:p><w:p><w:r><w:t>Работы выполняются по синтетическому "
+        "листу КЖ-7 редакции 2. Исполнительные даты, результаты лабораторных "
+        "испытаний и подписи в источнике отсутствуют.</w:t></w:r></w:p>"
+        "</w:body></w:document>"
+    )
+    target = io.BytesIO()
+    with zipfile.ZipFile(target, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr("word/document.xml", body)
+    return target.getvalue()
+
+
 def _vor_csv() -> bytes:
     return (
         "Ведомость объёмов работ;;;;;\n"
@@ -84,10 +140,15 @@ def _vor_csv() -> bytes:
     ).encode()
 
 
-def _login(client: TestClient) -> dict[str, str]:
+def _login(
+    client: TestClient,
+    *,
+    username: str = "understanding-owner",
+    password: str = "Synthetic-Owner-Password-42!",
+) -> dict[str, str]:
     response = client.post(
         "/api/v1/session/login",
-        json={"username": "understanding-owner", "password": "Synthetic-Owner-Password-42!"},
+        json={"username": username, "password": password},
     )
     assert response.status_code == 200
     csrf = client.cookies.get("asd_csrf")
@@ -95,13 +156,388 @@ def _login(client: TestClient) -> dict[str, str]:
     return {"X-CSRF-Token": csrf}
 
 
+def _seed_verified_work_type_catalog(environment: PostgreSQLEnvironment) -> tuple[UUID, UUID]:
+    work_type_id = UUID("71000000-0000-4000-8000-000000000001")
+    catalog_id = UUID("72000000-0000-4000-8000-000000000001")
+    with environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_types (work_type_id,work_type_key,"
+                "identity_namespace_version,created_by_identity_id) VALUES "
+                "(:work,'concrete.slab.install','synthetic-catalog-v1','test:catalog-owner')"
+            ),
+            {"work": work_type_id},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_versions (work_type_id,version,taxonomy_version,"
+                "title,status,evidence_manifest_digest,integrity_digest) VALUES "
+                "(:work,'1.0.0','synthetic-taxonomy-v1','Устройство монолитной плиты','active',"
+                ":evidence,:integrity)"
+            ),
+            {
+                "work": work_type_id,
+                "evidence": "sha256:" + "7" * 64,
+                "integrity": "sha256:" + "8" * 64,
+            },
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_catalog_versions "
+                "(catalog_id,version,source_identity,source_version,source_digest,provenance,status,"
+                "catalog_fingerprint) VALUES (:catalog,1,'synthetic-known-catalog','1.0.0',:source,"
+                "CAST(:provenance AS jsonb),'verified',:fingerprint)"
+            ),
+            {
+                "catalog": catalog_id,
+                "source": "sha256:" + "9" * 64,
+                "provenance": json.dumps({"fixture": "known-work-type"}),
+                "fingerprint": "sha256:" + "a" * 64,
+            },
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO platform.work_type_catalog_entries "
+                "(catalog_id,catalog_version,work_type_id,stable_key,printed_name,normalized_name,"
+                "aliases,parent_work_type_id,applicability,state,provenance,semantic_digest) "
+                "VALUES "
+                "(:catalog,1,:work,'concrete.slab.install','Устройство монолитной плиты',"
+                "'устройство монолитной плиты',"
+                "ARRAY['устройство монолитной железобетонной фундаментной плиты']::text[],"
+                "NULL,CAST('{}' AS jsonb),"
+                "'effective',"
+                "CAST(:provenance AS jsonb),:digest)"
+            ),
+            {
+                "catalog": catalog_id,
+                "work": work_type_id,
+                "provenance": json.dumps({"fixture": "known-work-type"}),
+                "digest": "sha256:" + "b" * 64,
+            },
+        )
+    return work_type_id, catalog_id
+
+
+def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The Tender surface must not fabricate a contract review or cross scopes."""
+
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-owner",
+        password="Synthetic-Contract-Owner-Password-42!",
+        display_name="Synthetic contract-analysis owner",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="contract-analysis-other",
+        password="Synthetic-Contract-Other-Password-42!",
+        display_name="Synthetic contract-analysis other owner",
+    )
+    with TestClient(app) as owner, TestClient(app) as other:
+        owner_csrf = _login(
+            owner,
+            username="contract-analysis-owner",
+            password="Synthetic-Contract-Owner-Password-42!",
+        )
+        other_csrf = _login(
+            other,
+            username="contract-analysis-other",
+            password="Synthetic-Contract-Other-Password-42!",
+        )
+        workspace = owner.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Contract analysis scope"},
+            headers=owner_csrf,
+        )
+        assert workspace.status_code == 201, workspace.text
+        workspace_id = workspace.json()["workspace_id"]
+
+        response = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert response.status_code == 200, response.text
+        value = response.json()
+        assert value == {
+            "status": "not_started",
+            "process": None,
+            "assessment": None,
+            "clauses": [],
+            "issues": [],
+            "protocols": [],
+            "disagreement_items": [],
+            "revised_contracts": [],
+            "revised_clauses": [],
+            "deliverables": [],
+            "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
+            "authority_boundary": "read_only_projection",
+        }
+
+        hidden = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert hidden.status_code == 404, hidden.text
+        assert hidden.json()["error"]["code"] == "workspace_not_found"
+        exported = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
+        assert exported.status_code == 200, exported.text
+        assert exported.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in exported.content.decode("utf-8-sig")
+        report = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx")
+        assert report.status_code == 200, report.text
+        assert report.headers["content-type"] == (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(report.content)) as package:
+            report_xml = package.read("word/document.xml").decode("utf-8")
+        assert "Договорный Tender-процесс не сформирован" in report_xml
+        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in report_xml
+        hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
+        assert hidden_export.status_code == 404, hidden_export.text
+        hidden_report = other.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx"
+        )
+        assert hidden_report.status_code == 404, hidden_report.text
+        assert other_csrf["X-CSRF-Token"]
+
+
+def test_authorized_support_scope_configuration_is_idempotent_and_owner_scoped(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """A configured professional scope unlocks the existing ID-package path."""
+
+    settings = replace(
+        _settings(postgres_environment, tmp_path),
+        support_command_database_url=_database_url(postgres_environment.support_engine),
+    )
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    owner_identity_id = app.state.container.auth.bootstrap_owner(
+        username="support-scope-owner",
+        password="Synthetic-Support-Scope-Owner-Password-42!",
+        display_name="Synthetic Support scope owner",
+    )
+    app.state.container.auth.bootstrap_owner(
+        username="support-scope-other",
+        password="Synthetic-Support-Scope-Other-Password-42!",
+        display_name="Synthetic Support scope other owner",
+    )
+    with TestClient(app) as client, TestClient(app) as other:
+        csrf = _login(
+            client,
+            username="support-scope-owner",
+            password="Synthetic-Support-Scope-Owner-Password-42!",
+        )
+        workspace_response = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Support scope command"},
+            headers=csrf,
+        )
+        assert workspace_response.status_code == 201, workspace_response.text
+        workspace = workspace_response.json()
+        organization_id = UUID(workspace["organization_id"])
+        workspace_id = UUID(workspace["workspace_id"])
+        tenant = Tenant(
+            organization_id,
+            UUID(workspace["construction_object_id"]),
+            workspace_id,
+        )
+        mode_execution_id = uuid7()
+        with WorkspaceUnitOfWork(
+            postgres_environment.application_engine,
+            WorkspaceContext(
+                organization_id,
+                workspace_id,
+                owner_identity_id,
+                "service.synthetic-support-scope-test",
+                uuid7(),
+            ),
+        ) as unit:
+            assert unit.workspaces is not None
+            unit.workspaces.create_mode_execution(
+                mode_execution_id=mode_execution_id,
+                mode="Support",
+                purpose="purpose.synthetic.support-scope",
+                input_manifest_ref="manifest.synthetic.support-scope",
+                policy_assignment_key="policy.synthetic",
+                policy_assignment_version="0.1.0",
+                rule_set_key="rules.synthetic",
+                rule_set_version="0.1.0",
+            )
+        rule_set_version_id, _, _, _ = _seed_rule(postgres_environment, tenant)
+        grant_id = uuid7()
+        with postgres_environment.owner_engine.begin() as connection:
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.support_professional_grants "
+                    "(organization_id,workspace_id,grant_id,grant_version,human_identity_id,"
+                    "capability,professional_qualification_ref,authority_reference,status,"
+                    "effective_from,integrity_digest) "
+                    "VALUES (:o,:w,:grant,1,:owner,"
+                    "'support.scope.configure','qualification:synthetic-support@1',"
+                    "'authority:synthetic-support@1','active',CURRENT_TIMESTAMP,:digest)"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "grant": grant_id,
+                    "owner": owner_identity_id,
+                    "digest": "sha256:" + "b" * 64,
+                },
+            )
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("scope-source.docx", _docx(), "application/octet-stream"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+        with postgres_environment.owner_engine.connect() as connection:
+            manifest_digest = connection.scalar(
+                sa.text(
+                    "SELECT manifest_digest FROM workspace.intake_manifests "
+                    "WHERE organization_id=:o "
+                    "AND workspace_id=:w ORDER BY created_at DESC LIMIT 1"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+        assert isinstance(manifest_digest, str)
+        readiness = client.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert readiness.status_code == 200, readiness.text
+        assert readiness.json()["status"] == "ready"
+        assert readiness.json()["gaps"] == []
+        payload = readiness.json()["configuration"]
+        assert payload["mode_execution_id"] == str(mode_execution_id)
+        assert payload["rule_set_version_id"] == str(rule_set_version_id)
+        assert payload["input_manifest_digest"] == manifest_digest
+        assert payload["professional_grant_id"] == str(grant_id)
+        assert payload["professional_qualification_ref"] == ("qualification:synthetic-support@1")
+        release_readiness = client.get(
+            "/api/v1/admin/support-release-readiness",
+            params={"workspace_id": str(workspace_id)},
+        )
+        assert release_readiness.status_code == 200, release_readiness.text
+        release_payload = release_readiness.json()
+        assert release_payload["ready"] is False
+        assert release_payload["command_writer"] == {
+            "configured": True,
+            "role_valid": True,
+            "reason": "ready",
+        }
+        assert "SUPPORT_PROFESSIONAL_CATALOG_APPROVAL_UNAVAILABLE" in release_payload["blockers"]
+        assert release_payload["coverage"]["canonical_work_types"] == len(
+            release_payload["coverage"]["canonical_work_type_keys"]
+        )
+        assert release_payload["coverage"]["production_catalog_work_type_keys"] == []
+        assert release_payload["coverage"]["professionally_approved_work_type_keys"] == []
+        assert release_payload["coverage"]["package_capable_work_types"] == 4
+        assert release_payload["coverage"]["isolated_qualified_work_types"] == 4
+        assert release_payload["coverage"]["browser_e2e_work_types"] == 1
+        tampered_contract = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={
+                **payload,
+                "rule_set_version_id": str(uuid7()),
+                "idempotency_key": "support-scope-tampered-contract-01",
+            },
+            headers=csrf,
+        )
+        assert tampered_contract.status_code == 409, tampered_contract.text
+        assert tampered_contract.json()["error"]["code"] == ("support_scope_contract_mismatch")
+        first = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=csrf,
+        )
+        second = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=csrf,
+        )
+        assert first.status_code == second.status_code == 201
+        assert first.json()["outcome"] == "accepted_completed"
+        assert second.json()["outcome"] == "duplicate_completed"
+        assert first.json()["support_process_id"] == second.json()["support_process_id"]
+        assert first.json()["revision"] == second.json()["revision"] == 1
+        assert first.json()["state"] == "scope_configured"
+        configured = client.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert configured.status_code == 200, configured.text
+        assert configured.json() == {
+            "status": "configured",
+            "gaps": [],
+            "configuration": None,
+        }
+        conflicting = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={**payload, "purpose": "changed semantic Support scope"},
+            headers=csrf,
+        )
+        assert conflicting.status_code == 409, conflicting.text
+        assert conflicting.json()["error"]["code"] == "SUPPORT_IDEMPOTENCY_CONFLICT"
+        missing_manifest = client.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json={
+                **payload,
+                "input_manifest_digest": "sha256:" + "f" * 64,
+                "idempotency_key": "support-scope-configuration-missing-manifest-01",
+            },
+            headers=csrf,
+        )
+        assert missing_manifest.status_code == 404, missing_manifest.text
+        assert missing_manifest.json()["error"]["code"] == "support_input_manifest_not_found"
+        with pytest.raises(SupportScopeCommandError, match="support_command_role_invalid"):
+            SupportScopeCommandService(
+                postgres_environment.application_engine,
+                postgres_environment.application_engine,
+            ).configure(
+                owner_identity_id=owner_identity_id,
+                workspace_id=workspace_id,
+                correlation_id=uuid7(),
+                configuration=SupportScopeConfiguration(
+                    mode_execution_id=UUID(payload["mode_execution_id"]),
+                    rule_set_version_id=UUID(payload["rule_set_version_id"]),
+                    process_definition_version=payload["process_definition_version"],
+                    authority_profile_version=payload["authority_profile_version"],
+                    contract_registry_version=payload["contract_registry_version"],
+                    policy_versions=tuple(payload["policy_versions"]),
+                    deliverable_scope=tuple(payload["deliverable_scope"]),
+                    classification=payload["classification"],
+                    purpose="wrong writer role must fail closed",
+                    source_class_allowlist=tuple(payload["source_class_allowlist"]),
+                    input_manifest_digest=payload["input_manifest_digest"],
+                    professional_grant_id=UUID(payload["professional_grant_id"]),
+                    professional_grant_version=payload["professional_grant_version"],
+                    professional_qualification_ref=payload["professional_qualification_ref"],
+                    idempotency_key="support-scope-configuration-wrong-role-01",
+                ),
+            )
+        production = client.get(f"/api/v1/workspaces/{workspace_id}/support/id-production")
+        assert production.status_code == 200, production.text
+        assert (
+            production.json()["support_process"]["support_process_id"]
+            == first.json()["support_process_id"]
+        )
+        other_csrf = _login(
+            other,
+            username="support-scope-other",
+            password="Synthetic-Support-Scope-Other-Password-42!",
+        )
+        hidden = other.post(
+            f"/api/v1/workspaces/{workspace_id}/support/processes",
+            json=payload,
+            headers=other_csrf,
+        )
+        assert hidden.status_code == 404, hidden.text
+        assert hidden.json()["error"]["code"] == "workspace_not_found"
+        hidden_readiness = other.get(f"/api/v1/workspaces/{workspace_id}/support/scope-readiness")
+        assert hidden_readiness.status_code == 404, hidden_readiness.text
+        assert hidden_readiness.json()["error"]["code"] == "workspace_not_found"
+
+
 def test_browser_to_evidence_project_understanding_is_workspace_scoped(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
 ) -> None:
+    work_type_id, catalog_id = _seed_verified_work_type_catalog(postgres_environment)
     settings = _settings(postgres_environment, tmp_path)
     app = create_app(engine=postgres_environment.application_engine, settings=settings)
-    app.state.container.auth.bootstrap_owner(
+    owner_identity_id = app.state.container.auth.bootstrap_owner(
         username="understanding-owner",
         password="Synthetic-Owner-Password-42!",
         display_name="Synthetic understanding owner",
@@ -146,12 +582,173 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             ),
             worker_identity="synthetic-understanding-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace_a["organization_id"]),
+            workspace_id=UUID(workspace_a["workspace_id"]),
+            qwen_semantic_url=None,  # This fixture exercises native DOCX/CSV extraction.
         )
-        outcomes = []
-        while outcome := worker.run_once():
-            outcomes.append(outcome)
-        assert len(outcomes) == 34
-        assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
+        outcomes, latest_states = _drain_worker_through_bounded_retries(worker)
+        # The exact number of internal materialization jobs is not a product
+        # contract. The assertions below verify the required persisted view,
+        # evidence navigation and workspace isolation instead.
+        assert outcomes
+        assert set(latest_states.values()) == {"succeeded"}
+
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            current = (
+                connection.execute(
+                    sa.text(
+                        "SELECT reconciliation_id,version,project_definition_id,"
+                        "open_defect_count FROM workspace.project_understanding_reconciliations "
+                        "WHERE organization_id=:o "
+                        "AND workspace_id=:w ORDER BY recorded_at DESC,reconciliation_id DESC "
+                        "LIMIT 1"
+                    ),
+                    {"o": workspace_a["organization_id"], "w": workspace_a["workspace_id"]},
+                )
+                .mappings()
+                .one()
+            )
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM "
+                        "workspace.project_reconciliation_work_package_memberships "
+                        "WHERE organization_id=:o AND workspace_id=:w AND reconciliation_id=:r "
+                        "AND reconciliation_version=:v"
+                    ),
+                    {
+                        "o": workspace_a["organization_id"],
+                        "w": workspace_a["workspace_id"],
+                        "r": current["reconciliation_id"],
+                        "v": current["version"],
+                    },
+                )
+                == 1
+            )
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM "
+                        "workspace.project_reconciliation_defect_memberships "
+                        "WHERE organization_id=:o AND workspace_id=:w AND reconciliation_id=:r "
+                        "AND reconciliation_version=:v"
+                    ),
+                    {
+                        "o": workspace_a["organization_id"],
+                        "w": workspace_a["workspace_id"],
+                        "r": current["reconciliation_id"],
+                        "v": current["version"],
+                    },
+                )
+                == current["open_defect_count"]
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.construction_work_package_versions "
+                    "(organization_id,workspace_id,work_package_id,version,project_definition_id,"
+                    "project_definition_version,work_type_key,work_type_version,package,fingerprint,"
+                    "created_at) VALUES (:o,:w,:package,1,:project,1,'historical.unbound','1.0.0',"
+                    "CAST(:document AS jsonb),:fingerprint,CURRENT_TIMESTAMP)"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "package": UUID("73000000-0000-4000-8000-000000000001"),
+                    "project": current["project_definition_id"],
+                    "document": json.dumps({"label": "historical unbound package"}),
+                    "fingerprint": "sha256:" + "c" * 64,
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.project_reconciliation_defects "
+                    "(organization_id,workspace_id,defect_id,version,defect_kind,"
+                    "subject_identity,related_identity,source_locator_ids,parameters,blocking,"
+                    "status,defect_digest,extraction_profile_version) VALUES "
+                    "(:o,:w,:defect,1,'ambiguous_source_match','historical-unbound',NULL,"
+                    "ARRAY[]::uuid[],CAST('{}' AS jsonb),false,'open',:digest,"
+                    "'superseded-synthetic-profile@1')"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "defect": UUID("74000000-0000-4000-8000-000000000001"),
+                    "digest": "sha256:" + "d" * 64,
+                },
+            )
+
+        expired_job_id = uuid7()
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                    "priority,created_at,eligible_at,started_at,heartbeat_at,attempt_count,max_attempts,"
+                    "retry_policy_version,lease_owner,lease_generation,lease_expires_at,"
+                    "cancellation_state,provenance,correlation_id,created_by_identity_id) SELECT "
+                    "organization_id,workspace_id,:job,subject_document_id,job_kind,input_manifest,"
+                    "input_digest,:idempotency,'running',priority,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,"
+                    "CURRENT_TIMESTAMP,CURRENT_TIMESTAMP-interval '2 minutes',1,1,"
+                    "retry_policy_version,'synthetic-crashed-worker',1,"
+                    "CURRENT_TIMESTAMP-interval '1 minute','none',provenance,:correlation,"
+                    "created_by_identity_id FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "AND workspace_id=:w ORDER BY created_at,job_id LIMIT 1"
+                ),
+                {
+                    "job": expired_job_id,
+                    "idempotency": f"synthetic-expired:{expired_job_id}",
+                    "correlation": uuid7(),
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                },
+            )
+        repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+        assert (
+            repository.reconcile_expired_exhausted_jobs(
+                organization_id=UUID(str(workspace_a["organization_id"])),
+                workspace_id=UUID(str(workspace_a["workspace_id"])),
+            )
+            == 1
+        )
+        with postgres_environment.document_worker_engine.begin() as connection:
+            connection.execute(
+                sa.select(
+                    sa.func.set_config(
+                        "asd.organization_id", str(workspace_a["organization_id"]), True
+                    ),
+                    sa.func.set_config("asd.workspace_id", workspace_a["workspace_id"], True),
+                )
+            ).one()
+            exhausted = connection.execute(
+                sa.text(
+                    "SELECT state,typed_failure_code,result_receipt_id FROM workspace.durable_jobs "
+                    "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "job": expired_job_id,
+                },
+            ).one()
+            assert exhausted.state == "reconciliation_required"
+            assert exhausted.typed_failure_code == "worker_lease_expired_after_attempt_exhaustion"
+            assert exhausted.result_receipt_id is not None
 
         response = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding"
@@ -159,6 +756,24 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert response.status_code == 200, response.text
         view = response.json()
         assert view["reconciliation"]["terminal_status"] == "partial"
+        assert len(view["defects"]) == view["reconciliation"]["open_defect_count"]
+        assert all(item["subject_identity"] != "historical-unbound" for item in view["defects"])
+        paged_gaps = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding",
+            params={"section": "gaps", "page_offset": 0, "page_limit": 1},
+        )
+        assert paged_gaps.status_code == 200, paged_gaps.text
+        paged_gaps_value = paged_gaps.json()
+        assert len(paged_gaps_value["defects"]) == 1
+        assert paged_gaps_value["application_page"] == {
+            "collection": "defects",
+            "offset": 0,
+            "limit": 1,
+            "returned": 1,
+            "total": len(view["defects"]),
+            "has_previous": False,
+            "has_more": len(view["defects"]) > 1,
+        }
         assert view["project_definition"]["definition"]["fields"]["object_name"]["raw_value"] == (
             "Производственный корпус"
         )
@@ -166,11 +781,64 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             "Выпуск строительных материалов"
         )
         assert len(view["work_packages"]) == 1
+        assert view["facility_work_projection"]["candidate_groups"] == []
+        assert view["structure_identity_components"] == []
+        assert view["structure_identity_dossiers"] == []
+        assert view["facility_work_projection"]["coverage"] == {
+            "total_work_package_count": 1,
+            "exact_identity_package_count": 0,
+            "explicit_label_identity_package_count": 0,
+            "ambiguous_identity_package_count": 0,
+            "unassociated_package_count": 1,
+            "consolidated_candidate_group_count": 0,
+            "complete": False,
+            "candidate_authority": "candidate_only",
+            "association_rule": ("exact_shared_source_locator_or_explicit_unique_identity_label"),
+        }
         package = view["work_packages"][0]["package"]
         assert package["work_type"]["raw"] == "Устройство монолитной плиты"
+        assert package["work_type"]["mapping_status"] == "resolved"
+        assert package["work_type"]["canonical_work_type_id"] == str(work_type_id)
+        assert package["work_type"]["canonical_work_type_key"] == "concrete.slab.install"
+        assert package["work_type"]["catalog_bindings"] == [
+            {
+                "catalog_id": str(catalog_id),
+                "catalog_version": 1,
+                "catalog_fingerprint": "sha256:" + "a" * 64,
+            }
+        ]
         assert package["quantities"][0]["raw_value"] == "+12,350"
         assert package["quantities"][0]["raw_unit"] == "м³"
         assert package["materials"][0]["raw_name"] == "Бетон В25"
+        assert package["uncertainties"] == []
+        consultant = ProfessionalAssistantKnowledgeQuery(postgres_environment.application_engine)
+        work_context = consultant.execute(
+            "consultant.get_work_packages",
+            {"mode": "Tender", "query": "монолитная плита", "limit": 20},
+            GatewayContext(
+                owner_identity_id,
+                "consultant.get_work_packages.invoke",
+                "integration-test",
+                uuid7(),
+                UUID(str(workspace_a["organization_id"])),
+                UUID(str(workspace_a["workspace_id"])),
+            ),
+        )
+        assert work_context.result["value"]["selection_coverage"] == {
+            "query": "монолитная плита",
+            "selection": "lexical_relevance",
+            "total_observation_count": 1,
+            "matched_observation_count": 1,
+            "returned_observation_count": 1,
+            "exhaustive_for_query": True,
+            "authority": "candidate_observations_not_confirmed_work_packages",
+        }
+        assert (
+            work_context.result["value"]["work_packages"][0]["package"]["work_type"]["raw"]
+            == "Устройство монолитной плиты"
+        )
+        assert len(work_context.evidence_pack.evidence) == 1
+        assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}
         denominator = view["normative_profile"]["corpus_denominator"]
@@ -183,9 +851,134 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert "ACTIVE_PD_RD_RULE_VERSION_UNAVAILABLE" in gap_codes
         assert view["authority_layers"]["normative_authority"] == "verified_subset_only"
         assert view["normative_profile"]["completeness_status"] == "blocked"
+        support_view = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-production"
+        )
+        assert support_view.status_code == 200, support_view.text
+        assert support_view.json()["support_process"] is None
+        assert "SUPPORT_PROCESS_NOT_CONFIGURED" in support_view.json()["gaps"]
+        unsafe_package = client.post(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/support/id-packages",
+            json={"work_package_id": view["work_packages"][0]["work_package_id"]},
+            headers=csrf,
+        )
+        assert unsafe_package.status_code == 409, unsafe_package.text
+        assert unsafe_package.json()["error"]["code"] == "support_process_not_configured"
+        tender_inputs = {
+            item["category"]: item for item in view["intake_summary"]["tender_input_assessment"]
+        }
+        assert tender_inputs["design_or_working_documentation"]["state"] == "available"
+        assert tender_inputs["quantity_or_estimate"]["state"] == "available"
+        assert tender_inputs["draft_contract"]["state"] == "not_detected_in_classified_sources"
+        assert "Contract changes" in tender_inputs["draft_contract"]["practical_limitation"]
         assert view["page_roles"]
         assert len(view["candidates"]["project_fields"]) == 3
+        project_candidate_ids = [
+            UUID(str(item["candidate_id"])) for item in view["candidates"]["project_fields"]
+        ]
+        with postgres_environment.owner_engine.connect() as connection:
+            bridged = connection.execute(
+                sa.text(
+                    "SELECT count(DISTINCT version.candidate_id) candidate_count,"
+                    "count(DISTINCT evidence.candidate_id) evidence_count,"
+                    "count(DISTINCT validation.candidate_id) validation_count FROM "
+                    "workspace.candidate_versions version LEFT JOIN "
+                    "workspace.candidate_field_evidence evidence ON "
+                    "evidence.organization_id=version.organization_id AND "
+                    "evidence.workspace_id=version.workspace_id AND "
+                    "evidence.candidate_id=version.candidate_id AND "
+                    "evidence.candidate_version=version.candidate_version LEFT JOIN "
+                    "workspace.vlm_validation_runs validation ON "
+                    "validation.organization_id=version.organization_id AND "
+                    "validation.workspace_id=version.workspace_id AND "
+                    "validation.candidate_id=version.candidate_id AND "
+                    "validation.candidate_version=version.candidate_version WHERE "
+                    "version.organization_id=:o AND version.workspace_id=:w AND "
+                    "version.candidate_id=ANY(:candidates)"
+                ),
+                {
+                    "o": workspace_a["organization_id"],
+                    "w": workspace_a["workspace_id"],
+                    "candidates": project_candidate_ids,
+                },
+            ).one()
+        assert tuple(bridged) == (3, 3, 3)
         assert len(view["candidates"]["quantities"]) == 1
+        tender_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.csv"
+        )
+        assert tender_schedule.status_code == 200, tender_schedule.text
+        assert tender_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert tender_schedule.headers["content-disposition"].startswith("attachment;")
+        assert "source_references" in tender_schedule.content.decode("utf-8-sig")
+        tender_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-scope-schedule.csv"
+        )
+        assert tender_scope_schedule.status_code == 200, tender_scope_schedule.text
+        assert tender_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        scope_csv = tender_scope_schedule.content.decode("utf-8-sig")
+        assert "work_package_id" in scope_csv
+        assert "Устройство монолитной плиты" in scope_csv
+        assert "candidate" in scope_csv
+        tender_coverage = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-document-coverage.csv"
+        )
+        assert tender_coverage.status_code == 200, tender_coverage.text
+        assert tender_coverage.headers["content-type"] == "text/csv; charset=utf-8"
+        coverage_csv = tender_coverage.content.decode("utf-8-sig")
+        assert "native_extraction_status" in coverage_csv
+        assert "semantic_coverage_state" in coverage_csv
+        identity_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-structure-identity-candidates.csv"
+        )
+        assert identity_schedule.status_code == 200, identity_schedule.text
+        assert identity_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        identity_csv = identity_schedule.content.decode("utf-8-sig")
+        assert "automatic_merge" in identity_csv
+        assert "member_raw_name" in identity_csv
+        facility_scope_schedule = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-facility-work-observations.csv"
+        )
+        assert facility_scope_schedule.status_code == 200, facility_scope_schedule.text
+        assert facility_scope_schedule.headers["content-type"] == "text/csv; charset=utf-8"
+        assert "association_state" in facility_scope_schedule.content.decode("utf-8-sig")
+        tender_archive = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-analysis.zip"
+        )
+        assert tender_archive.status_code == 200, tender_archive.text
+        assert tender_archive.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(tender_archive.content)) as exported:
+            assert exported.namelist() == [
+                "01_tender_engineering_report.docx",
+                "02_engineering_findings_and_actions.csv",
+                "03_project_work_quantity_material_schedule.csv",
+                "04_structure_identity_candidates.csv",
+                "05_facility_work_observation_candidates.csv",
+                "06_facility_work_candidate_groups.csv",
+                "07_document_processing_coverage.csv",
+                "08_delivery_manifest.json",
+                "99_analysis_status.txt",
+            ]
+            assert "candidate_status" in exported.read(
+                "06_facility_work_candidate_groups.csv"
+            ).decode("utf-8-sig")
+        tender_report = client.get(
+            f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
+            "tender-findings.docx"
+        )
+        assert tender_report.status_code == 200, tender_report.text
+        assert (
+            tender_report.headers["content-type"]
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(tender_report.content)) as report:
+            assert "word/document.xml" in report.namelist()
         object_locator = view["project_definition"]["definition"]["fields"]["object_name"][
             "source_locator_id"
         ]
@@ -233,8 +1026,15 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         )
         assert first_run.status_code == second_run.status_code == 202
         assert first_run.json()["job_id"] == second_run.json()["job_id"]
-        outcome = worker.run_once()
-        assert outcome is not None and outcome.state.value == "succeeded"
+        project_run_id = UUID(first_run.json()["job_id"])
+        post_review_outcomes = []
+        while outcome := worker.run_once():
+            post_review_outcomes.append(outcome)
+            if outcome.job_id == str(project_run_id):
+                break
+        assert post_review_outcomes
+        assert post_review_outcomes[-1].job_id == str(project_run_id)
+        assert post_review_outcomes[-1].state.value == "succeeded"
         revised = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding"
         ).json()
@@ -310,12 +1110,13 @@ def test_zip_intake_retains_container_and_registers_members(
             ),
             worker_identity="synthetic-archive-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
+            qwen_semantic_url=None,  # Archive members are native DOCX/CSV fixtures.
         )
-        outcomes = []
-        while outcome := worker.run_once():
-            outcomes.append(outcome)
+        outcomes, latest_states = _drain_worker_through_bounded_retries(worker)
         assert outcomes
-        assert {outcome.state.value for outcome in outcomes} == {"succeeded"}
+        assert set(latest_states.values()) == {"succeeded"}
 
 
 def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
@@ -402,6 +1203,9 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
             ),
             worker_identity="qualified-corpus-worker",
             lease_seconds=5,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace_id),
+            qwen_semantic_url=None,
         )
         outcomes = []
         for _ in range(1000):
@@ -521,6 +1325,15 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
                 == "Актуальность редакций нормативных документов не проверена"
             )
 
+        tender_scope_schedule = pilot_results["Tender"]["tender_scope_schedule"]
+        assert isinstance(tender_scope_schedule, list)
+        assert len(tender_scope_schedule) == len(view["work_packages"])
+        assert all(item["candidate_status"] == "candidate" for item in tender_scope_schedule)
+        assert all(item["source_locator_ids"] for item in tender_scope_schedule)
+        assert all(item["source_references"] for item in tender_scope_schedule), (
+            "Every Tender scope observation must retain a readable evidence pointer"
+        )
+
         audit_items = pilot_results["Audit"]["items"]
         assert isinstance(audit_items, list)
         first_audit_item = audit_items[0]
@@ -538,9 +1351,31 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
         assert audit_review.status_code == 201, audit_review.text
         assert audit_review.json()["reviewed_item_count"] == 1
 
+        audit_projection_export = client.get(
+            f"/api/v1/workspaces/{workspace_id}/audit/reports/latest.csv"
+        )
+        assert audit_projection_export.status_code == 200, audit_projection_export.text
+        assert audit_projection_export.headers["content-type"] == "text/csv; charset=utf-8"
+        audit_projection_csv = audit_projection_export.content.decode("utf-8-sig")
+        assert "record_kind" in audit_projection_csv
+        assert "CANONICAL_AUDIT_REPORT_NOT_PUBLISHED" in audit_projection_csv
+
+        for kind, output_format in (
+            ("disagreement_protocol", "docx"),
+            ("contract_changes", "pdf"),
+        ):
+            blocked_contract_export = client.post(
+                f"/api/v1/workspaces/{workspace_id}/modes/Tender/exports",
+                json={"export_kind": kind, "output_format": output_format},
+                headers=csrf,
+            )
+            assert blocked_contract_export.status_code == 409, blocked_contract_export.text
+            assert (
+                blocked_contract_export.json()["error"]["code"]
+                == "pilot_contract_analysis_required"
+            )
+
         export_cases = (
-            ("Tender", "disagreement_protocol", "docx"),
-            ("Tender", "contract_changes", "pdf"),
             ("Support", "requirement_matrix", "pdf"),
             ("Support", "id_package", "zip"),
             ("Support", "register", "docx"),
@@ -739,3 +1574,163 @@ def test_qualified_synthetic_corpus_reaches_reviewable_project_model(
                     )
                     == 0
                 )
+
+
+@pytest.mark.skipif(
+    not os.environ.get("ASD_LOCAL_QWEN_ACCEPTANCE_URL"),
+    reason="ASD_LOCAL_QWEN_ACCEPTANCE_URL enables the sequential local-model acceptance",
+)
+def test_local_qwen_free_text_support_work_is_persisted_with_exact_evidence(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    """The production-shaped worker must persist useful local-Qwen engineering evidence."""
+
+    _seed_verified_work_type_catalog(postgres_environment)
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="understanding-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Synthetic understanding owner",
+    )
+    with TestClient(app) as client:
+        csrf = _login(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Квалификация Support через локальный Qwen"},
+            headers=csrf,
+        ).json()
+        uploaded = client.post(
+            f"/api/v1/workspaces/{workspace['workspace_id']}/documents",
+            files=[
+                (
+                    "files",
+                    (
+                        "support-source.docx",
+                        _support_qwen_qualification_docx(),
+                        "application/octet-stream",
+                    ),
+                )
+            ],
+            headers=csrf,
+        )
+        assert uploaded.status_code == 202, uploaded.text
+        worker = DocumentWorker(
+            SpinePostgresRepository(postgres_environment.document_worker_engine),
+            WorkspaceObjectStore(
+                settings.object_store_root,
+                chunk_bytes=settings.upload_chunk_bytes,
+                max_file_bytes=settings.max_file_bytes,
+            ),
+            worker_identity="local-qwen-support-qualification-worker",
+            lease_seconds=900,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=UUID(workspace["workspace_id"]),
+            qwen_semantic_url=str(os.environ["ASD_LOCAL_QWEN_ACCEPTANCE_URL"]),
+        )
+        outcomes, states = _drain_worker_through_bounded_retries(worker, timeout_seconds=1_800)
+        assert outcomes
+        assert set(states.values()) == {"succeeded"}, {
+            "states": states,
+            "outcomes": [
+                (outcome.job_id, outcome.state.value, outcome.outcome_code)
+                for outcome in outcomes
+                if outcome.state.value != "succeeded"
+            ],
+        }
+
+        view = client.get(f"/api/v1/workspaces/{workspace['workspace_id']}/project-understanding")
+        assert view.status_code == 200, view.text
+        payload = view.json()
+        with postgres_environment.owner_engine.connect() as connection:
+            accepted = (
+                connection.execute(
+                    sa.text(
+                        "SELECT source_version_id,batch_digest,source_locator_ids,"
+                        "terminal_status,"
+                        "output_digest,output_manifest FROM "
+                        "workspace.engineering_extraction_batches "
+                        "WHERE organization_id=:o AND workspace_id=:w AND "
+                        "terminal_status='accepted'"
+                    ),
+                    {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                )
+                .mappings()
+                .all()
+            )
+            materialization_diagnostics = {
+                "jobs": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT job_id,job_kind,state,input_digest,provenance,"
+                            "result_receipt_id "
+                            "FROM workspace.durable_jobs WHERE organization_id=:o AND "
+                            "workspace_id=:w ORDER BY created_at,job_id"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "stage_results": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT job_id,stage_kind,terminal_status,profile_version,"
+                            "source_version_id "
+                            "FROM workspace.project_understanding_stage_results WHERE "
+                            "organization_id=:o AND workspace_id=:w ORDER BY "
+                            "recorded_at,stage_result_id"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "works": [
+                    dict(item)
+                    for item in connection.execute(
+                        sa.text(
+                            "SELECT candidate_id,raw_name,normalized_name,source_version_id,"
+                            "extraction_profile_version FROM workspace.work_type_candidates "
+                            "WHERE organization_id=:o AND workspace_id=:w ORDER BY "
+                            "candidate_id,version"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    .mappings()
+                    .all()
+                ],
+                "package_count": int(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT count(*) FROM workspace.construction_work_package_versions "
+                            "WHERE organization_id=:o AND workspace_id=:w"
+                        ),
+                        {"o": workspace["organization_id"], "w": workspace["workspace_id"]},
+                    )
+                    or 0
+                ),
+            }
+        assert accepted
+        assert all(item["source_locator_ids"] for item in accepted)
+        assert all(str(item["output_digest"]).startswith("sha256:") for item in accepted)
+        supported_work = [
+            item
+            for item in payload["work_packages"]
+            if item["package"]["work_type"].get("canonical_work_type_key")
+            == "concrete.slab.install"
+        ]
+        assert supported_work, {
+            "work_packages": payload["work_packages"],
+            "accepted_manifests": [item["output_manifest"] for item in accepted],
+            "materialization": materialization_diagnostics,
+        }
+        quantities = payload["candidates"]["quantities"]
+        assert any(item["value"] == "18,4" and item["raw_unit"] == "м³" for item in quantities), (
+            quantities
+        )
+        materials = payload["candidates"]["materials"]
+        assert any("В25" in item["value"] for item in materials), materials

@@ -11,7 +11,7 @@ from asd_kontur.application_spine.object_store import WorkspaceObjectStore
 from asd_kontur.application_spine.postgres import SpinePostgresRepository
 from asd_kontur.support.production_postgres import SupportProductionRepository
 
-from .builder import build_pilot_result
+from .builder import available_exports, build_pilot_result
 from .models import (
     MODE_EXPORTS,
     PilotExportFormat,
@@ -81,15 +81,16 @@ class PilotResultService:
         )
         if value is None:
             raise PilotResultError("pilot_result_not_found")
-        return value
+        return _with_effective_exports(value, mode=mode)
 
     def get_result(
         self, *, owner_identity_id: str, workspace_id: UUID, mode: PilotMode
     ) -> dict[str, Any] | None:
         organization_id = self._spine.resolve_scope(owner_identity_id, workspace_id)
-        return self._repository.latest_result(
+        result = self._repository.latest_result(
             organization_id=organization_id, workspace_id=workspace_id, mode=mode
         )
+        return None if result is None else _with_effective_exports(result, mode=mode)
 
     def review_item(
         self,
@@ -133,6 +134,7 @@ class PilotResultService:
             raise PilotResultError("pilot_result_not_found")
         if kind is not PilotExportKind.WORKSPACE_RESULTS and kind not in MODE_EXPORTS[mode]:
             raise PilotResultError("pilot_export_kind_not_available_for_mode")
+        _require_contract_analysis(result=result, mode=mode, kind=kind)
         additional = self._support_files(organization_id, workspace_id)
         if kind is PilotExportKind.WORKSPACE_RESULTS:
             if output_format is not PilotExportFormat.ZIP:
@@ -250,6 +252,38 @@ class PilotResultService:
             suffix = "pdf" if str(item["output_format"]).lower().startswith("pdf") else "docx"
             files.append((f"support/finalized-document-{ordinal}.{suffix}", content))
         return tuple(files)
+
+
+def _require_contract_analysis(
+    *, result: dict[str, Any], mode: PilotMode, kind: PilotExportKind
+) -> None:
+    """Reject contractual drafts when the result proves their input is absent.
+
+    Tender design findings remain exportable without a contract.  A protocol of
+    disagreements or contract amendments, however, needs the actual current
+    contract terms; a DOCX title must not turn an unavailable input into a
+    contractual conclusion.
+    """
+
+    if mode is not PilotMode.TENDER or kind not in {
+        PilotExportKind.DISAGREEMENT_PROTOCOL,
+        PilotExportKind.CONTRACT_CHANGES,
+    }:
+        return
+    kinds = {str(item.get("kind")) for item in result.get("items") or []}
+    if "contract_input_unavailable" in kinds:
+        raise PilotResultError("pilot_contract_input_required")
+    if "contract_analysis_pending" in kinds:
+        raise PilotResultError("pilot_contract_analysis_required")
+
+
+def _with_effective_exports(result: dict[str, Any], *, mode: PilotMode) -> dict[str, Any]:
+    """Correct legacy result projections without rewriting immutable result history."""
+
+    return {
+        **result,
+        "available_exports": available_exports(mode=mode, items=result.get("items") or ()),
+    }
 
 
 def _media_type(value: PilotExportFormat) -> str:

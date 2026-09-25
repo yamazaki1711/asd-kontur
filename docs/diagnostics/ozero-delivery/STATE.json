@@ -1,0 +1,72 @@
+{
+  "recorded_at": "2026-09-23T16:54:00+12:00",
+  "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+  "release": {
+    "api": "c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f",
+    "document_worker": "c4d7afff7fa8861a74deecedc84133a259ff2a6d",
+    "assistant_worker": "c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f",
+    "database_migration": "0063_structure_group_receipts",
+    "health": "ready"
+  },
+  "corpus": {
+    "active_source_versions": 22,
+    "page_denominator": 2529,
+    "classified_active_sources": 22,
+    "semantic_profile": "qwen-engineering-extraction-v15",
+    "semantic_fragments": {"covered": 133407, "expected": 133407, "unresolved_failed": 0}
+  },
+  "classification_recovery": {
+    "contract": "document-classification-recovery-v1",
+    "scheduled": 9,
+    "succeeded": 9,
+    "failed": 0,
+    "historical_ocr_dependencies_reused": 0
+  },
+  "candidate_projection": {
+    "project_fields": 8086,
+    "works": 6396,
+    "quantities": 2718,
+    "materials": 962,
+    "work_packages": 5564,
+    "defects": 1662,
+    "structure_nodes": 7629,
+    "structure_relationships": 2325,
+    "structure_identity_candidates": 256,
+    "structure_identity_components": 251,
+    "explicit_facility_associated_pit_candidates": 4,
+    "pit_observation_count": 259,
+    "identity_excavation_pit_candidate_count": 1,
+    "identity_rejected_non_pit_count": 1,
+    "non_pit_observation_count": 141,
+    "generic_unresolved_pit_like_observations": 113,
+    "unresolved_pit_like_observations": 254,
+    "exact_pit_total_supported": false,
+    "authority": "candidate_only"
+  },
+  "consultant_acceptance": {
+    "conversation_id": "01a0c2d6-1fa8-77fe-9610-88cbe924e502",
+    "accepted_inventory_turn": "01a0c2f6-1594-7958-9ab8-9c817c9df74e",
+    "accepted_source_followup_turn": "01a0c2f8-d53e-727b-b299-a3b79823cc93",
+    "source_pages": [47, 118, 119, 122],
+    "deterministic_quality": "PASS",
+    "model_quality": "PASS",
+    "exact_total_claimed": false
+  },
+  "active_jobs": [],
+  "acceptance": {
+    "classification_coverage": "PASS_22_OF_22",
+    "semantic_input_coverage": "PASS_133407_OF_133407",
+    "candidate_inventory_consultation": "PASS",
+    "exact_excavation_pit_inventory": "OPEN",
+    "browser_source_navigation": "UNVERIFIED_NO_ATTACHABLE_BROWSER",
+    "complete_package_tender_accepted": false,
+    "product_ready": false
+  },
+  "deployment": {
+    "api_release_dir": "/Users/oleg/.asd-kontur/public-demo/releases/20260923-c83b3a3-pit-inventory",
+    "api_readiness": "HTTP 200 on loopback /healthz",
+    "assistant_worker_release_dir": "/Users/oleg/.asd-kontur/public-demo/releases/20260923-c83b3a3-assistant-pit-inventory",
+    "live_scoped_projection": "259 observations; 4 explicit candidates; exact total unsupported"
+  },
+  "next_executable_action": "Add a versioned, bounded Qwen classification for the 113 generic unresolved pit-like observations, then reconcile only accepted source-backed instance candidates and refresh the project view."
+}
