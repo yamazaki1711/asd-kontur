@@ -37,6 +37,11 @@ from asd_kontur.tender.contract_analysis_export import render_tender_contract_an
 from asd_kontur.tender.contract_analysis_report import render_tender_contract_analysis_docx
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
+from asd_kontur.tender.engineering_export import (
+    render_engineering_findings_csv,
+    render_engineering_tender_report_docx,
+    render_engineering_work_schedule_csv,
+)
 from asd_kontur.tender.facility_scope_schedule import render_tender_facility_scope_schedule_csv
 from asd_kontur.tender.facility_work_projection import (
     render_facility_work_candidate_schedule_csv,
@@ -645,6 +650,19 @@ class ProductSpineService:
         )
         if view is None:
             raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering:
+            data = render_engineering_findings_csv(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "text/csv; charset=utf-8",
+                len(data),
+                digest,
+                f"tender-findings-{workspace_id}.csv",
+                0,
+                len(data),
+                (data,),
+            )
         materialization = view.get("materialization", {})
         data = render_tender_findings_csv(
             view.get("defects", []),
@@ -674,6 +692,19 @@ class ProductSpineService:
         )
         if view is None:
             raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering:
+            data = render_engineering_tender_report_docx(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                len(data),
+                digest,
+                f"tender-engineering-report-{workspace_id}.docx",
+                0,
+                len(data),
+                (data,),
+            )
         materialization = view.get("materialization", {})
         data = render_tender_findings_docx(
             view.get("defects", []),
@@ -703,6 +734,19 @@ class ProductSpineService:
         )
         if view is None:
             raise ValueError("project_understanding_no_result")
+        engineering = dict(view.get("project_engineering") or {})
+        if engineering:
+            data = render_engineering_work_schedule_csv(engineering)
+            digest = "sha256:" + hashlib.sha256(data).hexdigest()
+            return DocumentContent(
+                "text/csv; charset=utf-8",
+                len(data),
+                digest,
+                f"tender-work-schedule-{workspace_id}.csv",
+                0,
+                len(data),
+                (data,),
+            )
         materialization = view.get("materialization", {})
         data = render_tender_scope_schedule_csv(
             view.get("work_packages", []),
@@ -816,25 +860,38 @@ class ProductSpineService:
         if view is None:
             raise ValueError("project_understanding_no_result")
         materialization = dict(view.get("materialization") or {})
+        engineering = dict(view.get("project_engineering") or {})
         common = {
             "materialization_state": str(materialization.get("state", "not_requested")),
             "coverage_gaps": materialization.get("gaps", []),
             "evidence_index": view.get("evidence_index", {}),
         }
         data = build_tender_analysis_archive(
-            findings_report=render_tender_findings_docx(
-                view.get("defects", []),
-                work_packages=view.get("work_packages", []),
-                **common,
+            findings_report=(
+                render_engineering_tender_report_docx(engineering)
+                if engineering
+                else render_tender_findings_docx(
+                    view.get("defects", []),
+                    work_packages=view.get("work_packages", []),
+                    **common,
+                )
             ),
-            findings_schedule=render_tender_findings_csv(
-                view.get("defects", []),
-                work_packages=view.get("work_packages", []),
-                **common,
+            findings_schedule=(
+                render_engineering_findings_csv(engineering)
+                if engineering
+                else render_tender_findings_csv(
+                    view.get("defects", []),
+                    work_packages=view.get("work_packages", []),
+                    **common,
+                )
             ),
-            scope_schedule=render_tender_scope_schedule_csv(
-                view.get("work_packages", []),
-                **common,
+            scope_schedule=(
+                render_engineering_work_schedule_csv(engineering)
+                if engineering
+                else render_tender_scope_schedule_csv(
+                    view.get("work_packages", []),
+                    **common,
+                )
             ),
             structure_identity_schedule=render_tender_structure_identity_schedule_csv(
                 view.get("structure_identity_candidates", []),
@@ -859,6 +916,7 @@ class ProductSpineService:
                 coverage_gaps=common["coverage_gaps"],
             ),
             materialization=materialization,
+            professional=bool(engineering),
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(

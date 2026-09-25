@@ -4962,6 +4962,444 @@ function PilotResultItem({
   );
 }
 
+function ProjectSourceLinks({
+  locatorIds,
+  workspaceId,
+  modeSlug,
+}: {
+  locatorIds: unknown;
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const values = Array.isArray(locatorIds) ? locatorIds.map(String) : [];
+  if (!values.length) return <span>Источник требует уточнения</span>;
+  return (
+    <span>
+      {values.slice(0, 4).map((locator, index) => (
+        <span key={locator}>
+          {index > 0 ? ", " : ""}
+          <Link
+            to={workspaceRouteFromSlug(
+              modeSlug,
+              workspaceId,
+              `/evidence/locators/${locator}`,
+            )}
+          >
+            открыть источник
+          </Link>
+        </span>
+      ))}
+      {values.length > 4 ? ` и ещё ${String(values.length - 4)}` : ""}
+    </span>
+  );
+}
+
+function ProjectEngineeringResult({
+  model,
+  section,
+  workspaceId,
+  modeSlug,
+}: {
+  model: Record<string, unknown>;
+  section: string;
+  workspaceId: string;
+  modeSlug?: string | undefined;
+}) {
+  const project = (model.project ?? {}) as Record<string, unknown>;
+  const summary = (model.summary ?? {}) as Record<string, unknown>;
+  const facilities = Array.isArray(model.facilities)
+    ? (model.facilities as Record<string, unknown>[])
+    : [];
+  const facilityCards = Array.isArray(model.facility_cards)
+    ? (model.facility_cards as Record<string, unknown>[])
+    : [];
+  const pits = (model.pits ?? {}) as Record<string, unknown>;
+  const establishedPits = Array.isArray(pits.established)
+    ? (pits.established as Record<string, unknown>[])
+    : [];
+  const unresolvedPits = Array.isArray(pits.requires_clarification)
+    ? (pits.requires_clarification as Record<string, unknown>[])
+    : [];
+  const works = Array.isArray(model.works)
+    ? (model.works as Record<string, unknown>[])
+    : [];
+  const unclassified = Array.isArray(model.unclassified_works)
+    ? (model.unclassified_works as Record<string, unknown>[])
+    : [];
+  const materials = Array.isArray(model.materials)
+    ? (model.materials as Record<string, unknown>[])
+    : [];
+  const comparisons = Array.isArray(model.quantity_comparisons)
+    ? (model.quantity_comparisons as Record<string, unknown>[])
+    : [];
+  const issues = Array.isArray(model.issues)
+    ? (model.issues as Record<string, unknown>[])
+    : [];
+  const risks = Array.isArray(model.risks)
+    ? (model.risks as Record<string, unknown>[])
+    : [];
+  const questions = Array.isArray(model.customer_questions)
+    ? (model.customer_questions as Record<string, unknown>[])
+    : [];
+  const requirements = (model.requirements ?? {}) as Record<string, unknown>;
+  const name = (project.name ?? {}) as Record<string, unknown>;
+  const purpose = (project.purpose ?? {}) as Record<string, unknown>;
+
+  if (!Object.keys(model).length) return null;
+  if (section === "general") {
+    return (
+      <>
+        <section className="panel">
+          <div className="entity-heading">
+            <div>
+              <p className="eyebrow">Объект</p>
+              <h2>{displayValue(name.value, "Наименование уточняется")}</h2>
+              <p>
+                {displayValue(purpose.value, "Назначение объекта уточняется")}
+              </p>
+            </div>
+            <StatusPill tone="warning">
+              {displayValue(project.status, "Сформировано частично")}
+            </StatusPill>
+          </div>
+          <div className="metrics">
+            <Metric
+              label="Сооружения и участки"
+              value={Number(summary.facility_count ?? 0)}
+            />
+            <Metric
+              label="Установленные котлованы"
+              value={Number(summary.established_pit_count ?? 0)}
+            />
+            <Metric
+              label="Виды и места работ"
+              value={Number(summary.work_scope_count ?? 0)}
+            />
+            <Metric
+              label="Инженерные вопросы"
+              value={Number(summary.issue_count ?? 0)}
+            />
+          </div>
+          <p>
+            {displayValue(
+              pits.professional_answer,
+              "Инвентаризация котлованов не завершена.",
+            )}
+          </p>
+        </section>
+        <section className="panel">
+          <h2>Состав объекта</h2>
+          <div className="card-grid">
+            {facilities.slice(0, 24).map((facility) => (
+              <article
+                className="entity-card"
+                key={displayValue(facility.facility_id)}
+              >
+                <h3>{displayValue(facility.name, "Сооружение")}</h3>
+                <p>{displayValue(facility.kind)}</p>
+                <small>{displayValue(facility.status)}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      </>
+    );
+  }
+  if (section === "structure") {
+    return (
+      <>
+        <section className="panel">
+          <h2>Котлованы и конструкции</h2>
+          <p>{displayValue(pits.professional_answer)}</p>
+          <div className="card-grid">
+            {establishedPits.map((pit) => (
+              <article className="entity-card" key={displayValue(pit.pit_id)}>
+                <h3>{displayValue(pit.name)}</h3>
+                <p>
+                  Связанное сооружение:{" "}
+                  {displayValue(pit.related_facility, "требует уточнения")}
+                </p>
+                <ProjectSourceLinks
+                  locatorIds={pit.source_locator_ids}
+                  workspaceId={workspaceId}
+                  modeSlug={modeSlug}
+                />
+              </article>
+            ))}
+          </div>
+          {unresolvedPits.length > 0 && (
+            <>
+              <h3>Что требуется уточнить</h3>
+              <ul>
+                {unresolvedPits.slice(0, 30).map((pit, index) => (
+                  <li key={`${displayValue(pit.description)}-${String(index)}`}>
+                    {displayValue(pit.description)} — {displayValue(pit.reason)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+        <section className="panel">
+          <h2>Карточки сооружений</h2>
+          <div className="card-grid">
+            {facilityCards.slice(0, 30).map((card) => {
+              const facility = (card.facility ?? {}) as Record<string, unknown>;
+              const cardWorks = Array.isArray(card.works) ? card.works : [];
+              const cardPits = Array.isArray(card.pits) ? card.pits : [];
+              return (
+                <article
+                  className="entity-card"
+                  key={displayValue(facility.facility_id)}
+                >
+                  <h3>{displayValue(facility.name)}</h3>
+                  <p>Котлованы: {String(cardPits.length)}</p>
+                  <p>Работы: {String(cardWorks.length)}</p>
+                  <p>
+                    {(Array.isArray(card.missing_information)
+                      ? card.missing_information
+                      : []
+                    )
+                      .map(String)
+                      .join("; ")}
+                  </p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      </>
+    );
+  }
+  if (section === "works" || section === "packages") {
+    return (
+      <section className="panel">
+        <h2>Работы по сооружениям</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Сооружение / место</th>
+                <th>Работа</th>
+                <th>Объёмы по документам</th>
+                <th>Материалы</th>
+                <th>Источник</th>
+              </tr>
+            </thead>
+            <tbody>
+              {works.map((work) => (
+                <tr key={displayValue(work.work_scope_id)}>
+                  <td>
+                    {displayValue(work.facility, "Место требует уточнения")}
+                  </td>
+                  <td>
+                    <strong>{displayValue(work.work_name)}</strong>
+                    <small>
+                      {(Array.isArray(work.project_wording)
+                        ? work.project_wording
+                        : []
+                      )
+                        .map(String)
+                        .slice(0, 3)
+                        .join("; ")}
+                    </small>
+                  </td>
+                  <td>
+                    {Object.entries(
+                      (work.quantities_by_document ?? {}) as Record<
+                        string,
+                        unknown
+                      >,
+                    ).map(([role, values]) => (
+                      <p key={role}>
+                        <strong>{role}:</strong>{" "}
+                        {(Array.isArray(values) ? values : [])
+                          .map((value) => {
+                            const row = value as Record<string, unknown>;
+                            return `${displayValue(row.value)} ${displayValue(row.unit)}`;
+                          })
+                          .join(", ") || "не найдено"}
+                      </p>
+                    ))}
+                  </td>
+                  <td>
+                    {Object.entries(
+                      (work.materials_by_document ?? {}) as Record<
+                        string,
+                        unknown
+                      >,
+                    ).map(([role, values]) => (
+                      <p key={role}>
+                        <strong>{role}:</strong>{" "}
+                        {(Array.isArray(values) ? values : [])
+                          .map((value) =>
+                            displayValue(
+                              (value as Record<string, unknown>).name,
+                            ),
+                          )
+                          .join(", ") || "не найдено"}
+                      </p>
+                    ))}
+                  </td>
+                  <td>
+                    <ProjectSourceLinks
+                      locatorIds={work.source_locator_ids}
+                      workspaceId={workspaceId}
+                      modeSlug={modeSlug}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {unclassified.length > 0 && (
+          <details>
+            <summary>
+              Не удалось однозначно классифицировать (
+              {String(
+                Number(summary.unclassified_work_count ?? unclassified.length),
+              )}
+              )
+            </summary>
+            <ul>
+              {unclassified.slice(0, 100).map((work, index) => (
+                <li key={`${displayValue(work.candidate_id)}-${String(index)}`}>
+                  {displayValue(work.project_wording)} —{" "}
+                  {displayValue(work.document_role)}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
+    );
+  }
+  if (section === "materials") {
+    return (
+      <section className="panel">
+        <h2>Материалы по работам</h2>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Сооружение</th>
+                <th>Работа</th>
+                <th>Документ</th>
+                <th>Материал</th>
+                <th>Количество</th>
+              </tr>
+            </thead>
+            <tbody>
+              {materials.map((material, index) => (
+                <tr
+                  key={`${displayValue(material.work_scope_id)}-${String(index)}`}
+                >
+                  <td>{displayValue(material.facility)}</td>
+                  <td>{displayValue(material.work)}</td>
+                  <td>{displayValue(material.document_role)}</td>
+                  <td>{displayValue(material.name)}</td>
+                  <td>
+                    {displayValue(material.quantity, "не найдено")}{" "}
+                    {displayValue(material.unit)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
+  }
+  if (section === "matrix") {
+    return (
+      <section className="panel">
+        <h2>Требования к работам</h2>
+        <p>{displayValue(requirements.professional_summary)}</p>
+        <GapList
+          gaps={(Array.isArray(requirements.unresolved)
+            ? requirements.unresolved
+            : []
+          ).map(String)}
+        />
+      </section>
+    );
+  }
+  return (
+    <>
+      <section className="panel">
+        <h2>Расхождения объёмов</h2>
+        {comparisons.length ? (
+          <div className="card-grid">
+            {comparisons.map((comparison) => (
+              <article
+                className="entity-card"
+                key={displayValue(comparison.comparison_id)}
+              >
+                <h3>{displayValue(comparison.work)}</h3>
+                <p>{displayValue(comparison.facility)}</p>
+                <strong>{displayValue(comparison.conclusion)}</strong>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>
+            Сопоставимые значения по разным ролям документов пока не
+            установлены.
+          </p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Технические вопросы и действия</h2>
+        {issues.length ? (
+          <div className="card-grid">
+            {issues.map((issue) => (
+              <article
+                className="entity-card"
+                key={displayValue(issue.issue_id)}
+              >
+                <h3>{displayValue(issue.kind)}</h3>
+                <p>
+                  {displayValue(issue.location)} · {displayValue(issue.subject)}
+                </p>
+                <p>{displayValue(issue.description)}</p>
+                <strong>{displayValue(issue.recommended_action)}</strong>
+                <p>
+                  <ProjectSourceLinks
+                    locatorIds={issue.source_locator_ids}
+                    workspaceId={workspaceId}
+                    modeSlug={modeSlug}
+                  />
+                </p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>
+            Профессиональные расхождения пока не установлены. Технические ошибки
+            обработки сюда не включаются.
+          </p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Риски Подрядчика и вопросы Заказчику</h2>
+        <ul>
+          {questions.map((question) => (
+            <li key={displayValue(question.action_id)}>
+              {displayValue(question.question)}
+            </li>
+          ))}
+        </ul>
+        {risks.length === 0 && (
+          <p>
+            Риски будут сформированы из установленных инженерных расхождений.
+          </p>
+        )}
+      </section>
+    </>
+  );
+}
+
 function ProjectUnderstandingPage() {
   const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
@@ -5188,6 +5626,8 @@ function ProjectUnderstandingPage() {
             string,
             number
           >;
+          const projectEngineering = (value.project_engineering ??
+            {}) as Record<string, unknown>;
           const applicationPage = (value.application_page ?? {}) as Record<
             string,
             unknown
@@ -5217,185 +5657,370 @@ function ProjectUnderstandingPage() {
           };
           return (
             <>
-              <div className="metrics">
-                <Metric
-                  label="Сведений-кандидатов"
-                  value={summaryCounts.project_field_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Структур-кандидатов"
-                  value={summaryCounts.structure_node_count ?? 0}
-                />
-                <Metric
-                  label="Связей-кандидатов"
-                  value={summaryCounts.structure_relationship_count ?? 0}
-                />
-                <Metric
-                  label="Ограниченных групп Qwen"
-                  value={summaryCounts.structure_identity_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Групп после пересечения наблюдений"
-                  value={summaryCounts.structure_identity_component_count ?? 0}
-                />
-                <Metric
-                  label="Котлованов с явной привязкой"
-                  value={summaryCounts.excavation_pit_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Работ-кандидатов"
-                  value={summaryCounts.work_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Работ с группой объекта по общему источнику"
-                  value={Number(
-                    facilityWorkCoverage.exact_identity_package_count ?? 0,
-                  )}
-                />
-                <Metric
-                  label="Работ с группой объекта по явному уникальному обозначению"
-                  value={Number(
-                    facilityWorkCoverage.explicit_label_identity_package_count ??
-                      0,
-                  )}
-                />
-                <Metric
-                  label="Количеств-кандидатов"
-                  value={summaryCounts.quantity_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Материалов-кандидатов"
-                  value={summaryCounts.material_candidate_count ?? 0}
-                />
-                <Metric
-                  label="Классифицировано страниц"
-                  value={summaryCounts.page_role_count ?? 0}
-                />
-              </div>
-              {materializationState !== "complete" && (
-                <InfoNotice>
-                  {materializationMessages[materializationState] ??
-                    "Состояние формирования модели требует проверки."}
-                  {typeof materialization.failure_code === "string" &&
-                    ` Причина: ${materialization.failure_code}.`}
-                </InfoNotice>
-              )}
-              {semanticCoverage.length > 0 && (
-                <InfoNotice>
-                  Семантическая обработка сохраняет результаты по фрагментам:{" "}
-                  {semanticCoverage
-                    .map((item) => {
-                      const accepted = Number(
-                        item.accepted_fragment_count ?? 0,
-                      );
-                      const expected = Number(
-                        item.expected_fragment_count ?? 0,
-                      );
-                      const failed = Number(item.failed_fragment_count ?? 0);
-                      const unresolved = Number(
-                        item.unresolved_failed_fragment_count ?? 0,
-                      );
-                      const recovered = Number(
-                        item.recovered_failed_fragment_count ?? 0,
-                      );
-                      const profile = displayValue(
-                        item.profile_version,
-                        "профиль",
-                      );
-                      const documentName = displayValue(
-                        item.safe_display_name,
-                        "документ",
-                      );
-                      const pages = Number(item.page_count ?? 0);
-                      const coverageState = humanizeStatus(
-                        displayValue(item.state, "unknown"),
-                      );
-                      const pageLabel =
-                        pages > 0 ? `, ${pages.toString()} стр.` : "";
-                      const unresolvedLabel =
-                        unresolved > 0
-                          ? `, требуется восстановление: ${unresolved.toString()} фрагм.`
-                          : "";
-                      const recoveredLabel =
-                        recovered > 0
-                          ? `, восстановленные исторические попытки: ${recovered.toString()} фрагм.`
-                          : "";
-                      const legacyFailureLabel =
-                        failed > 0 && unresolved === 0 && recovered === 0
-                          ? `, неуспешные попытки: ${failed.toString()} фрагм.`
-                          : "";
-                      return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel}; состояние: ${coverageState} (${profile})`;
-                    })
-                    .join("; ")}
-                  . Это покрытие извлечения-кандидата, а не подтверждённые
-                  факты.
-                </InfoNotice>
-              )}
-              {section === "general" && tenderInputAssessment.length > 0 && (
-                <section className="panel">
-                  <h2>Исходные данные для Tender-анализа</h2>
-                  <p>
-                    Оценка описывает доступность исходных документов для
-                    отдельных проверок. Отсутствие договора не отменяет анализ
-                    проектных решений, но ограничивает договорные выводы.
-                  </p>
-                  <TenderInputAssessmentTable
-                    items={tenderInputAssessment}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
+              <ProjectEngineeringResult
+                model={projectEngineering}
+                section={section}
+                workspaceId={workspaceId}
+                modeSlug={mode}
+              />
+              <details className="panel technical-details">
+                <summary>Обработка и техническая диагностика</summary>
+                <div className="metrics">
+                  <Metric
+                    label="Сведений-кандидатов"
+                    value={summaryCounts.project_field_candidate_count ?? 0}
                   />
-                </section>
-              )}
-              {section === "general" && (
-                <div className="split">
+                  <Metric
+                    label="Структур-кандидатов"
+                    value={summaryCounts.structure_node_count ?? 0}
+                  />
+                  <Metric
+                    label="Связей-кандидатов"
+                    value={summaryCounts.structure_relationship_count ?? 0}
+                  />
+                  <Metric
+                    label="Ограниченных групп Qwen"
+                    value={
+                      summaryCounts.structure_identity_candidate_count ?? 0
+                    }
+                  />
+                  <Metric
+                    label="Групп после пересечения наблюдений"
+                    value={
+                      summaryCounts.structure_identity_component_count ?? 0
+                    }
+                  />
+                  <Metric
+                    label="Котлованов с явной привязкой"
+                    value={summaryCounts.excavation_pit_candidate_count ?? 0}
+                  />
+                  <Metric
+                    label="Работ-кандидатов"
+                    value={summaryCounts.work_candidate_count ?? 0}
+                  />
+                  <Metric
+                    label="Работ с группой объекта по общему источнику"
+                    value={Number(
+                      facilityWorkCoverage.exact_identity_package_count ?? 0,
+                    )}
+                  />
+                  <Metric
+                    label="Работ с группой объекта по явному уникальному обозначению"
+                    value={Number(
+                      facilityWorkCoverage.explicit_label_identity_package_count ??
+                        0,
+                    )}
+                  />
+                  <Metric
+                    label="Количеств-кандидатов"
+                    value={summaryCounts.quantity_candidate_count ?? 0}
+                  />
+                  <Metric
+                    label="Материалов-кандидатов"
+                    value={summaryCounts.material_candidate_count ?? 0}
+                  />
+                  <Metric
+                    label="Классифицировано страниц"
+                    value={summaryCounts.page_role_count ?? 0}
+                  />
+                </div>
+                {materializationState !== "complete" && (
+                  <InfoNotice>
+                    {materializationMessages[materializationState] ??
+                      "Состояние формирования модели требует проверки."}
+                    {typeof materialization.failure_code === "string" &&
+                      ` Причина: ${materialization.failure_code}.`}
+                  </InfoNotice>
+                )}
+                {semanticCoverage.length > 0 && (
+                  <InfoNotice>
+                    Семантическая обработка сохраняет результаты по фрагментам:{" "}
+                    {semanticCoverage
+                      .map((item) => {
+                        const accepted = Number(
+                          item.accepted_fragment_count ?? 0,
+                        );
+                        const expected = Number(
+                          item.expected_fragment_count ?? 0,
+                        );
+                        const failed = Number(item.failed_fragment_count ?? 0);
+                        const unresolved = Number(
+                          item.unresolved_failed_fragment_count ?? 0,
+                        );
+                        const recovered = Number(
+                          item.recovered_failed_fragment_count ?? 0,
+                        );
+                        const profile = displayValue(
+                          item.profile_version,
+                          "профиль",
+                        );
+                        const documentName = displayValue(
+                          item.safe_display_name,
+                          "документ",
+                        );
+                        const pages = Number(item.page_count ?? 0);
+                        const coverageState = humanizeStatus(
+                          displayValue(item.state, "unknown"),
+                        );
+                        const pageLabel =
+                          pages > 0 ? `, ${pages.toString()} стр.` : "";
+                        const unresolvedLabel =
+                          unresolved > 0
+                            ? `, требуется восстановление: ${unresolved.toString()} фрагм.`
+                            : "";
+                        const recoveredLabel =
+                          recovered > 0
+                            ? `, восстановленные исторические попытки: ${recovered.toString()} фрагм.`
+                            : "";
+                        const legacyFailureLabel =
+                          failed > 0 && unresolved === 0 && recovered === 0
+                            ? `, неуспешные попытки: ${failed.toString()} фрагм.`
+                            : "";
+                        return `${documentName}${pageLabel}: ${accepted.toString()}/${expected.toString()} фрагментов${unresolvedLabel}${recoveredLabel}${legacyFailureLabel}; состояние: ${coverageState} (${profile})`;
+                      })
+                      .join("; ")}
+                    . Это покрытие извлечения-кандидата, а не подтверждённые
+                    факты.
+                  </InfoNotice>
+                )}
+                {section === "general" && tenderInputAssessment.length > 0 && (
                   <section className="panel">
-                    <div className="entity-heading">
-                      <h2>Описание объекта</h2>
-                      <StatusPill tone="warning">
-                        Сформировано частично
-                      </StatusPill>
-                    </div>
-                    <EvidenceObject
-                      value={definition.fields ?? {}}
+                    <h2>Исходные данные для Tender-анализа</h2>
+                    <p>
+                      Оценка описывает доступность исходных документов для
+                      отдельных проверок. Отсутствие договора не отменяет анализ
+                      проектных решений, но ограничивает договорные выводы.
+                    </p>
+                    <TenderInputAssessmentTable
+                      items={tenderInputAssessment}
                       workspaceId={workspaceId}
                       modeSlug={mode}
-                      evidenceIndex={evidenceIndex}
                     />
-                    {Object.keys(definition.candidate_fields ?? {}).length >
-                      0 && (
-                      <>
-                        <h3>Согласованные сведения-кандидаты</h3>
-                        <InfoNotice>
-                          Эти значения повторяются в нескольких независимых
-                          исходных версиях, но ещё не являются подтверждёнными
-                          фактами проекта.
-                        </InfoNotice>
-                        <EvidenceObject
-                          value={definition.candidate_fields ?? {}}
+                  </section>
+                )}
+                {section === "general" && (
+                  <div className="split">
+                    <section className="panel">
+                      <div className="entity-heading">
+                        <h2>Описание объекта</h2>
+                        <StatusPill tone="warning">
+                          Сформировано частично
+                        </StatusPill>
+                      </div>
+                      <EvidenceObject
+                        value={definition.fields ?? {}}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                        evidenceIndex={evidenceIndex}
+                      />
+                      {Object.keys(definition.candidate_fields ?? {}).length >
+                        0 && (
+                        <>
+                          <h3>Согласованные сведения-кандидаты</h3>
+                          <InfoNotice>
+                            Эти значения повторяются в нескольких независимых
+                            исходных версиях, но ещё не являются подтверждёнными
+                            фактами проекта.
+                          </InfoNotice>
+                          <EvidenceObject
+                            value={definition.candidate_fields ?? {}}
+                            workspaceId={workspaceId}
+                            modeSlug={mode}
+                            evidenceIndex={evidenceIndex}
+                          />
+                        </>
+                      )}
+                      <h3>Недостающие сведения</h3>
+                      <GapList
+                        gaps={(definition.gaps ?? []).map(humanizeGap)}
+                      />
+                    </section>
+                    <section className="panel">
+                      <h2>Сведения, требующие решения</h2>
+                      <InfoNotice>
+                        Исходных наблюдений:{" "}
+                        {(
+                          summaryCounts.project_field_candidate_count ?? 0
+                        ).toString()}
+                        . В рабочем представлении показаны согласованные
+                        значения и конфликты модели; полный массив исходных
+                        наблюдений не пересылается при каждом обновлении
+                        страницы.
+                      </InfoNotice>
+                      {projectFieldCandidates.length > 0 && (
+                        <CandidateReviewTable
+                          kind="project_field"
+                          candidates={projectFieldCandidates}
+                          decisions={decisions}
                           workspaceId={workspaceId}
                           modeSlug={mode}
-                          evidenceIndex={evidenceIndex}
+                          onReview={(payload) => review.mutate(payload)}
+                          pending={review.isPending}
                         />
-                      </>
-                    )}
-                    <h3>Недостающие сведения</h3>
-                    <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
-                  </section>
+                      )}
+                    </section>
+                  </div>
+                )}
+                {section === "general" && (
+                  <ProjectModelPageControls
+                    page={applicationPage}
+                    onPrevious={() =>
+                      setPageOffset(Math.max(0, pageOffset - pageLimit))
+                    }
+                    onNext={() => setPageOffset(pageOffset + pageLimit)}
+                  />
+                )}
+                {section === "structure" && (
                   <section className="panel">
-                    <h2>Сведения, требующие решения</h2>
+                    <h2>Структура объекта</h2>
+                    <p>
+                      Части объекта, зоны, уровни и фронты работ отображаются
+                      только при наличии точного исходного фрагмента.
+                      Неразрешённые пространственные сведения остаются пробелом.
+                    </p>
                     <InfoNotice>
-                      Исходных наблюдений:{" "}
+                      Междокументное сопоставление:{" "}
+                      {humanizeStatus(
+                        displayValue(
+                          structureIdentityReconciliation.state,
+                          "not_started",
+                        ),
+                      )}
+                      {Number(
+                        structureIdentityReconciliation.progress_total ?? 0,
+                      ) > 0 &&
+                        `; обработано групп: ${Number(
+                          structureIdentityReconciliation.progress_current ?? 0,
+                        ).toString()}/${Number(
+                          structureIdentityReconciliation.progress_total ?? 0,
+                        ).toString()}`}
+                      . Сопоставленные группы остаются кандидатами до
+                      профессионального решения. Группы с одним общим исходным
+                      наблюдением объединяются транзитивно без сравнения
+                      названий:{" "}
                       {(
-                        summaryCounts.project_field_candidate_count ?? 0
+                        summaryCounts.structure_identity_candidate_count ?? 0
+                      ).toString()}{" "}
+                      →{" "}
+                      {(
+                        summaryCounts.structure_identity_component_count ?? 0
                       ).toString()}
-                      . В рабочем представлении показаны согласованные значения
-                      и конфликты модели; полный массив исходных наблюдений не
-                      пересылается при каждом обновлении страницы.
+                      .
                     </InfoNotice>
-                    {projectFieldCandidates.length > 0 && (
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-structure-identity-candidates.csv`}
+                    >
+                      Скачать ведомость междокументных групп-кандидатов
+                    </a>
+                    <h3>Котлованы с явной привязкой к объекту</h3>
+                    <p>
+                      Показаны только исходные формулировки вида «котлован для
+                      ЛОС/КНС». Это установленное подмножество кандидатов, а не
+                      итоговое количество котлованов проекта.
+                    </p>
+                    <InfoNotice>
+                      Явно привязанных кандидатов:{" "}
+                      {Number(
+                        excavationPitCoverage.candidate_pit_count ?? 0,
+                      ).toString()}
+                      ; неразрешённых наблюдений о котлованах:{" "}
+                      {Number(
+                        excavationPitCoverage.unresolved_observation_count ?? 0,
+                      ).toString()}
+                      . Точный общий итог: не подтверждён.
+                    </InfoNotice>
+                    {excavationPitCandidates.length > 0 && (
+                      <div className="card-grid">
+                        {excavationPitCandidates.map((candidate) => {
+                          const locators = Array.isArray(
+                            candidate.source_locator_ids,
+                          )
+                            ? candidate.source_locator_ids.map(String)
+                            : [];
+                          return (
+                            <article
+                              className="candidate-row"
+                              key={displayValue(candidate.pit_candidate_id)}
+                            >
+                              <strong>
+                                {displayValue(
+                                  candidate.display_name,
+                                  "Котлован-кандидат",
+                                )}
+                              </strong>
+                              <p>
+                                Связанный объект:{" "}
+                                {displayValue(
+                                  candidate.associated_facility_designation,
+                                  "не разрешён",
+                                )}
+                              </p>
+                              <small>
+                                Наблюдений в источниках:{" "}
+                                {Number(
+                                  candidate.observation_count ?? 0,
+                                ).toString()}
+                                . Статус: кандидат, не подтверждённый факт.
+                              </small>
+                              {locators.map((locator) => (
+                                <Link
+                                  key={locator}
+                                  to={workspaceRouteFromSlug(
+                                    mode,
+                                    workspaceId,
+                                    `/evidence/locators/${locator}`,
+                                  )}
+                                >
+                                  Открыть исходный фрагмент
+                                </Link>
+                              ))}
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <StructureCandidateList
+                      nodes={structureNodes}
+                      relationships={structureRelationships}
+                      dossiers={structureDossiers}
+                      components={structureComponents}
+                      identityCandidates={structureIdentityComponents}
+                      identityDossiers={structureIdentityDossiers}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                    />
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
+                    />
+                    <h3>Классифицированные страницы</h3>
+                    <p>
+                      Учтено решений по страницам:{" "}
+                      {(summaryCounts.page_role_count ?? 0).toString()}.
+                      Покрытие каждого документа показано выше.
+                    </p>
+                  </section>
+                )}
+                {section === "works" && (
+                  <section className="panel">
+                    <h2>Виды и объёмы работ</h2>
+                    <InfoNotice>
+                      Извлечено наблюдений работ:{" "}
+                      {(summaryCounts.work_candidate_count ?? 0).toString()};
+                      количеств:{" "}
+                      {(summaryCounts.quantity_candidate_count ?? 0).toString()}
+                      . Интерактивно показана страница исходных наблюдений; их
+                      доказанные связи с группами объектов доступны во вкладке
+                      «Пакеты работ». Значения остаются кандидатами.
+                    </InfoNotice>
+                    {workCandidates.length > 0 && (
                       <CandidateReviewTable
-                        kind="project_field"
-                        candidates={projectFieldCandidates}
+                        kind="work_type"
+                        candidates={workCandidates}
                         decisions={decisions}
                         workspaceId={workspaceId}
                         modeSlug={mode}
@@ -5403,415 +6028,250 @@ function ProjectUnderstandingPage() {
                         pending={review.isPending}
                       />
                     )}
+                    {quantityCandidates.length > 0 && (
+                      <CandidateReviewTable
+                        kind="quantity"
+                        candidates={quantityCandidates}
+                        decisions={decisions}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                        onReview={(payload) => review.mutate(payload)}
+                        pending={review.isPending}
+                      />
+                    )}
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
+                    />
                   </section>
-                </div>
-              )}
-              {section === "general" && (
-                <ProjectModelPageControls
-                  page={applicationPage}
-                  onPrevious={() =>
-                    setPageOffset(Math.max(0, pageOffset - pageLimit))
-                  }
-                  onNext={() => setPageOffset(pageOffset + pageLimit)}
-                />
-              )}
-              {section === "structure" && (
-                <section className="panel">
-                  <h2>Структура объекта</h2>
-                  <p>
-                    Части объекта, зоны, уровни и фронты работ отображаются
-                    только при наличии точного исходного фрагмента.
-                    Неразрешённые пространственные сведения остаются пробелом.
-                  </p>
-                  <InfoNotice>
-                    Междокументное сопоставление:{" "}
-                    {humanizeStatus(
-                      displayValue(
-                        structureIdentityReconciliation.state,
-                        "not_started",
-                      ),
+                )}
+                {section === "materials" && (
+                  <section className="panel">
+                    <h2>Материалы и изделия</h2>
+                    <InfoNotice>
+                      Извлечено наблюдений материалов:{" "}
+                      {(summaryCounts.material_candidate_count ?? 0).toString()}
+                      . Интерактивно показана страница исходных наблюдений;
+                      доказанные связи материалов с группами объектов и работ
+                      доступны во вкладке «Пакеты работ». Общий итог не
+                      рассчитывается из неоднозначных наблюдений.
+                    </InfoNotice>
+                    {materialCandidates.length > 0 && (
+                      <CandidateReviewTable
+                        kind="material"
+                        candidates={materialCandidates}
+                        decisions={decisions}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                        onReview={(payload) => review.mutate(payload)}
+                        pending={review.isPending}
+                      />
                     )}
-                    {Number(
-                      structureIdentityReconciliation.progress_total ?? 0,
-                    ) > 0 &&
-                      `; обработано групп: ${Number(
-                        structureIdentityReconciliation.progress_current ?? 0,
-                      ).toString()}/${Number(
-                        structureIdentityReconciliation.progress_total ?? 0,
-                      ).toString()}`}
-                    . Сопоставленные группы остаются кандидатами до
-                    профессионального решения. Группы с одним общим исходным
-                    наблюдением объединяются транзитивно без сравнения названий:{" "}
-                    {(
-                      summaryCounts.structure_identity_candidate_count ?? 0
-                    ).toString()}{" "}
-                    →{" "}
-                    {(
-                      summaryCounts.structure_identity_component_count ?? 0
-                    ).toString()}
-                    .
-                  </InfoNotice>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-structure-identity-candidates.csv`}
-                  >
-                    Скачать ведомость междокументных групп-кандидатов
-                  </a>
-                  <h3>Котлованы с явной привязкой к объекту</h3>
-                  <p>
-                    Показаны только исходные формулировки вида «котлован для
-                    ЛОС/КНС». Это установленное подмножество кандидатов, а не
-                    итоговое количество котлованов проекта.
-                  </p>
-                  <InfoNotice>
-                    Явно привязанных кандидатов:{" "}
-                    {Number(
-                      excavationPitCoverage.candidate_pit_count ?? 0,
-                    ).toString()}
-                    ; неразрешённых наблюдений о котлованах:{" "}
-                    {Number(
-                      excavationPitCoverage.unresolved_observation_count ?? 0,
-                    ).toString()}
-                    . Точный общий итог: не подтверждён.
-                  </InfoNotice>
-                  {excavationPitCandidates.length > 0 && (
-                    <div className="card-grid">
-                      {excavationPitCandidates.map((candidate) => {
-                        const locators = Array.isArray(
-                          candidate.source_locator_ids,
-                        )
-                          ? candidate.source_locator_ids.map(String)
-                          : [];
-                        return (
-                          <article
-                            className="candidate-row"
-                            key={displayValue(candidate.pit_candidate_id)}
-                          >
-                            <strong>
-                              {displayValue(
-                                candidate.display_name,
-                                "Котлован-кандидат",
-                              )}
-                            </strong>
-                            <p>
-                              Связанный объект:{" "}
-                              {displayValue(
-                                candidate.associated_facility_designation,
-                                "не разрешён",
-                              )}
-                            </p>
-                            <small>
-                              Наблюдений в источниках:{" "}
-                              {Number(
-                                candidate.observation_count ?? 0,
-                              ).toString()}
-                              . Статус: кандидат, не подтверждённый факт.
-                            </small>
-                            {locators.map((locator) => (
-                              <Link
-                                key={locator}
-                                to={workspaceRouteFromSlug(
-                                  mode,
-                                  workspaceId,
-                                  `/evidence/locators/${locator}`,
-                                )}
-                              >
-                                Открыть исходный фрагмент
-                              </Link>
-                            ))}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <StructureCandidateList
-                    nodes={structureNodes}
-                    relationships={structureRelationships}
-                    dossiers={structureDossiers}
-                    components={structureComponents}
-                    identityCandidates={structureIdentityComponents}
-                    identityDossiers={structureIdentityDossiers}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
-                  />
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                  <h3>Классифицированные страницы</h3>
-                  <p>
-                    Учтено решений по страницам:{" "}
-                    {(summaryCounts.page_role_count ?? 0).toString()}. Покрытие
-                    каждого документа показано выше.
-                  </p>
-                </section>
-              )}
-              {section === "works" && (
-                <section className="panel">
-                  <h2>Виды и объёмы работ</h2>
-                  <InfoNotice>
-                    Извлечено наблюдений работ:{" "}
-                    {(summaryCounts.work_candidate_count ?? 0).toString()};
-                    количеств:{" "}
-                    {(summaryCounts.quantity_candidate_count ?? 0).toString()}.
-                    Интерактивно показана страница исходных наблюдений; их
-                    доказанные связи с группами объектов доступны во вкладке
-                    «Пакеты работ». Значения остаются кандидатами.
-                  </InfoNotice>
-                  {workCandidates.length > 0 && (
-                    <CandidateReviewTable
-                      kind="work_type"
-                      candidates={workCandidates}
-                      decisions={decisions}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                      onReview={(payload) => review.mutate(payload)}
-                      pending={review.isPending}
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
                     />
-                  )}
-                  {quantityCandidates.length > 0 && (
-                    <CandidateReviewTable
-                      kind="quantity"
-                      candidates={quantityCandidates}
-                      decisions={decisions}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                      onReview={(payload) => review.mutate(payload)}
-                      pending={review.isPending}
-                    />
-                  )}
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                </section>
-              )}
-              {section === "materials" && (
-                <section className="panel">
-                  <h2>Материалы и изделия</h2>
-                  <InfoNotice>
-                    Извлечено наблюдений материалов:{" "}
-                    {(summaryCounts.material_candidate_count ?? 0).toString()}.
-                    Интерактивно показана страница исходных наблюдений;
-                    доказанные связи материалов с группами объектов и работ
-                    доступны во вкладке «Пакеты работ». Общий итог не
-                    рассчитывается из неоднозначных наблюдений.
-                  </InfoNotice>
-                  {materialCandidates.length > 0 && (
-                    <CandidateReviewTable
-                      kind="material"
-                      candidates={materialCandidates}
-                      decisions={decisions}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                      onReview={(payload) => review.mutate(payload)}
-                      pending={review.isPending}
-                    />
-                  )}
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                </section>
-              )}
-              {section === "packages" && (
-                <section className="panel">
-                  <h2>Исходные наблюдения по работам</h2>
-                  <p>
-                    Повторные наблюдения объединяются только в пределах одного
-                    источника и явно указанной области. Одинаковые названия в
-                    разных областях не суммируются и остаются отдельными до
-                    инженерской сверки.
-                  </p>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-scope-schedule.csv`}
-                  >
-                    Скачать редактируемую ведомость работ и ресурсов
-                  </a>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
-                  >
-                    Скачать покрытие документов
-                  </a>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-facility-work-observations.csv`}
-                  >
-                    Скачать связь наблюдений работ с группами объектов
-                  </a>
-                  <InfoNotice>
-                    По точному общему исходному фрагменту связано с одной
-                    группой объекта:{" "}
-                    {Number(
-                      facilityWorkCoverage.exact_identity_package_count ?? 0,
-                    ).toString()}{" "}
-                    из{" "}
-                    {Number(
-                      facilityWorkCoverage.total_work_package_count ?? 0,
-                    ).toString()}{" "}
-                    наблюдений; по явному уникальному обозначению объекта в
-                    наименовании работы:{" "}
-                    {Number(
-                      facilityWorkCoverage.explicit_label_identity_package_count ??
-                        0,
-                    ).toString()}
-                    ; неоднозначных:{" "}
-                    {Number(
-                      facilityWorkCoverage.ambiguous_identity_package_count ??
-                        0,
-                    ).toString()}
-                    ; без доказанной связи:{" "}
-                    {Number(
-                      facilityWorkCoverage.unassociated_package_count ?? 0,
-                    ).toString()}
-                    . Это кандидаты связи, а не подтверждённые назначения работ
-                    объектам.
-                  </InfoNotice>
-                  <FacilityWorkCandidateList
-                    items={facilityWorkCandidateGroups}
-                    workspaceId={workspaceId}
-                    modeSlug={mode}
-                  />
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                  {value.work_packages.length ? (
-                    <WorkPackageList
-                      items={value.work_packages}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                      evidenceIndex={evidenceIndex}
-                    />
-                  ) : (summaryCounts.work_package_count ?? 0) > 0 ? (
-                    <p className="empty-state">
-                      Полный массив исходных наблюдений доступен в выгружаемой
-                      ведомости; интерактивно показаны только связанные группы.
+                  </section>
+                )}
+                {section === "packages" && (
+                  <section className="panel">
+                    <h2>Исходные наблюдения по работам</h2>
+                    <p>
+                      Повторные наблюдения объединяются только в пределах одного
+                      источника и явно указанной области. Одинаковые названия в
+                      разных областях не суммируются и остаются отдельными до
+                      инженерской сверки.
                     </p>
-                  ) : (
-                    <p className="empty-state">
-                      Наблюдения по работам ещё не извлечены.
-                    </p>
-                  )}
-                </section>
-              )}
-              {section === "matrix" && (
-                <section className="panel">
-                  <h2>Матрица требований</h2>
-                  {matrixRows.length ? (
-                    <EvidenceObject value={{ rows: matrixRows }} />
-                  ) : (
-                    <p className="empty-state">Матрица ещё не сформирована.</p>
-                  )}
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                  {profile ? (
-                    <>
-                      <h3>Нормативные основания</h3>
-                      <p>
-                        Учитываются только положения подтверждённых редакций.
-                        Неуточнённые основания показаны отдельно.
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-scope-schedule.csv`}
+                    >
+                      Скачать редактируемую ведомость работ и ресурсов
+                    </a>
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                    >
+                      Скачать покрытие документов
+                    </a>
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-facility-work-observations.csv`}
+                    >
+                      Скачать связь наблюдений работ с группами объектов
+                    </a>
+                    <InfoNotice>
+                      По точному общему исходному фрагменту связано с одной
+                      группой объекта:{" "}
+                      {Number(
+                        facilityWorkCoverage.exact_identity_package_count ?? 0,
+                      ).toString()}{" "}
+                      из{" "}
+                      {Number(
+                        facilityWorkCoverage.total_work_package_count ?? 0,
+                      ).toString()}{" "}
+                      наблюдений; по явному уникальному обозначению объекта в
+                      наименовании работы:{" "}
+                      {Number(
+                        facilityWorkCoverage.explicit_label_identity_package_count ??
+                          0,
+                      ).toString()}
+                      ; неоднозначных:{" "}
+                      {Number(
+                        facilityWorkCoverage.ambiguous_identity_package_count ??
+                          0,
+                      ).toString()}
+                      ; без доказанной связи:{" "}
+                      {Number(
+                        facilityWorkCoverage.unassociated_package_count ?? 0,
+                      ).toString()}
+                      . Это кандидаты связи, а не подтверждённые назначения
+                      работ объектам.
+                    </InfoNotice>
+                    <FacilityWorkCandidateList
+                      items={facilityWorkCandidateGroups}
+                      workspaceId={workspaceId}
+                      modeSlug={mode}
+                    />
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
+                    />
+                    {value.work_packages.length ? (
+                      <WorkPackageList
+                        items={value.work_packages}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                        evidenceIndex={evidenceIndex}
+                      />
+                    ) : (summaryCounts.work_package_count ?? 0) > 0 ? (
+                      <p className="empty-state">
+                        Полный массив исходных наблюдений доступен в выгружаемой
+                        ведомости; интерактивно показаны только связанные
+                        группы.
                       </p>
-                      <NormativeRequirementList
-                        title="Требуемые разделы ПД"
-                        values={profile.required_pd_sections}
-                      />
-                      <NormativeRequirementList
-                        title="Ожидаемые комплекты РД"
-                        values={profile.expected_rd_sets}
-                      />
-                      <GapList
-                        gaps={profileGaps.map(
-                          (item) => item.code ?? "NORMATIVE_GAP",
-                        )}
-                      />
-                    </>
-                  ) : (
-                    <p className="empty-state">
-                      Подтверждённые нормативные основания для этой модели ещё
-                      не определены.
-                    </p>
-                  )}
-                </section>
-              )}
-              {section === "gaps" && (
-                <section className="panel">
-                  <h2>Расхождения и пробелы</h2>
-                  <a
-                    className="button-link"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-analysis.zip`}
-                  >
-                    Скачать Tender-пакет анализа
-                  </a>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
-                  >
-                    Скачать редактируемый график наблюдений
-                  </a>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.docx`}
-                  >
-                    Скачать редактируемый Tender-отчёт
-                  </a>
-                  <a
-                    className="button-link secondary"
-                    href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
-                  >
-                    Скачать покрытие документов
-                  </a>
-                  {value.defects.length ? (
-                    <TenderFindingList
-                      defects={value.defects}
-                      workspaceId={workspaceId}
-                      modeSlug={mode}
-                    />
-                  ) : materializationState === "complete" ? (
-                    <p>
-                      По сформированной модели открытые расхождения не
-                      зарегистрированы.
-                    </p>
-                  ) : (
-                    <p>
-                      Анализ расхождений ещё не завершён; отсутствие записей не
-                      означает, что документы не содержат расхождений.
-                    </p>
-                  )}
-                  <ProjectModelPageControls
-                    page={applicationPage}
-                    onPrevious={() =>
-                      setPageOffset(Math.max(0, pageOffset - pageLimit))
-                    }
-                    onNext={() => setPageOffset(pageOffset + pageLimit)}
-                  />
-                  <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
-                  <GapList
-                    gaps={profileGaps.map(
-                      (item) => item.code ?? "NORMATIVE_GAP",
+                    ) : (
+                      <p className="empty-state">
+                        Наблюдения по работам ещё не извлечены.
+                      </p>
                     )}
-                  />
-                </section>
-              )}
+                  </section>
+                )}
+                {section === "matrix" && (
+                  <section className="panel">
+                    <h2>Матрица требований</h2>
+                    {matrixRows.length ? (
+                      <EvidenceObject value={{ rows: matrixRows }} />
+                    ) : (
+                      <p className="empty-state">
+                        Матрица ещё не сформирована.
+                      </p>
+                    )}
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
+                    />
+                    {profile ? (
+                      <>
+                        <h3>Нормативные основания</h3>
+                        <p>
+                          Учитываются только положения подтверждённых редакций.
+                          Неуточнённые основания показаны отдельно.
+                        </p>
+                        <NormativeRequirementList
+                          title="Требуемые разделы ПД"
+                          values={profile.required_pd_sections}
+                        />
+                        <NormativeRequirementList
+                          title="Ожидаемые комплекты РД"
+                          values={profile.expected_rd_sets}
+                        />
+                        <GapList
+                          gaps={profileGaps.map(
+                            (item) => item.code ?? "NORMATIVE_GAP",
+                          )}
+                        />
+                      </>
+                    ) : (
+                      <p className="empty-state">
+                        Подтверждённые нормативные основания для этой модели ещё
+                        не определены.
+                      </p>
+                    )}
+                  </section>
+                )}
+                {section === "gaps" && (
+                  <section className="panel">
+                    <h2>Расхождения и пробелы</h2>
+                    <a
+                      className="button-link"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-analysis.zip`}
+                    >
+                      Скачать Tender-пакет анализа
+                    </a>
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.csv`}
+                    >
+                      Скачать редактируемый график наблюдений
+                    </a>
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-findings.docx`}
+                    >
+                      Скачать редактируемый Tender-отчёт
+                    </a>
+                    <a
+                      className="button-link secondary"
+                      href={`/api/v1/workspaces/${workspaceId}/project-understanding/tender-document-coverage.csv`}
+                    >
+                      Скачать покрытие документов
+                    </a>
+                    {value.defects.length ? (
+                      <TenderFindingList
+                        defects={value.defects}
+                        workspaceId={workspaceId}
+                        modeSlug={mode}
+                      />
+                    ) : materializationState === "complete" ? (
+                      <p>
+                        По сформированной модели открытые расхождения не
+                        зарегистрированы.
+                      </p>
+                    ) : (
+                      <p>
+                        Анализ расхождений ещё не завершён; отсутствие записей
+                        не означает, что документы не содержат расхождений.
+                      </p>
+                    )}
+                    <ProjectModelPageControls
+                      page={applicationPage}
+                      onPrevious={() =>
+                        setPageOffset(Math.max(0, pageOffset - pageLimit))
+                      }
+                      onNext={() => setPageOffset(pageOffset + pageLimit)}
+                    />
+                    <GapList gaps={(definition.gaps ?? []).map(humanizeGap)} />
+                    <GapList
+                      gaps={profileGaps.map(
+                        (item) => item.code ?? "NORMATIVE_GAP",
+                      )}
+                    />
+                  </section>
+                )}
+              </details>
             </>
           );
         }}

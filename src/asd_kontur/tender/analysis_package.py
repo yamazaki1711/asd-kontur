@@ -22,6 +22,7 @@ def build_tender_analysis_archive(
     facility_candidate_schedule: bytes,
     document_coverage_schedule: bytes,
     materialization: Mapping[str, Any],
+    professional: bool = False,
 ) -> bytes:
     """Return a stable editable Tender deliverable without changing findings.
 
@@ -33,9 +34,24 @@ def build_tender_analysis_archive(
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
         entries = (
-            ("01_tender_findings_report.docx", findings_report),
-            ("02_tender_findings_schedule.csv", findings_schedule),
-            ("03_tender_work_resource_schedule.csv", scope_schedule),
+            (
+                "01_tender_engineering_report.docx"
+                if professional
+                else "01_tender_findings_report.docx",
+                findings_report,
+            ),
+            (
+                "02_engineering_findings_and_actions.csv"
+                if professional
+                else "02_tender_findings_schedule.csv",
+                findings_schedule,
+            ),
+            (
+                "03_project_work_quantity_material_schedule.csv"
+                if professional
+                else "03_tender_work_resource_schedule.csv",
+                scope_schedule,
+            ),
             ("04_structure_identity_candidates.csv", structure_identity_schedule),
             ("05_facility_work_observation_candidates.csv", facility_scope_schedule),
             ("06_facility_work_candidate_groups.csv", facility_candidate_schedule),
@@ -45,7 +61,7 @@ def build_tender_analysis_archive(
         for name, payload in (
             *entries,
             ("08_delivery_manifest.json", manifest),
-            ("99_analysis_status.txt", _status_text(materialization)),
+            ("99_analysis_status.txt", _status_text(materialization, professional=professional)),
         ):
             info = zipfile.ZipInfo(name, _FIXED_ZIP_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
@@ -83,9 +99,19 @@ def _delivery_manifest(
     )
 
 
-def _status_text(materialization: Mapping[str, Any]) -> bytes:
+def _status_text(materialization: Mapping[str, Any], *, professional: bool = False) -> bytes:
     state = str(materialization.get("state") or "not_requested")
     gaps = sorted(str(value) for value in materialization.get("gaps") or ())
+    if professional:
+        lines = [
+            "Tender engineering analysis",
+            f"Project-model materialization state: {state}",
+            "The report presents construction entities, work scopes, quantities, materials, "
+            "comparisons, issues, risks and actions currently established by the project model.",
+            "Incomplete or ambiguous source information remains explicitly marked in the report.",
+            "Coverage gaps: " + ("; ".join(gaps) if gaps else "none recorded"),
+        ]
+        return ("\n".join(lines) + "\n").encode("utf-8")
     lines = [
         "Tender analysis candidate export",
         f"Project-model materialization state: {state}",

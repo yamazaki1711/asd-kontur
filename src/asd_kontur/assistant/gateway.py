@@ -701,6 +701,26 @@ class ProfessionalAssistantKnowledgeQuery:
             *work_package_source_items,
             *discrepancy_source_items,
         ][:30]
+        engineering = dict((model_view or {}).get("project_engineering") or {})
+        assistant_engineering = {
+            key: engineering.get(key)
+            for key in (
+                "model_version",
+                "project",
+                "facilities",
+                "facility_cards",
+                "pits",
+                "works",
+                "quantity_comparisons",
+                "materials",
+                "requirements",
+                "issues",
+                "risks",
+                "customer_questions",
+                "summary",
+            )
+            if key in engineering
+        }
         return {
             "workspace_id": str(workspace_id),
             "name": str(workspace["display_name"]),
@@ -717,6 +737,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "facility_work_candidate_groups": _public_value(facility_work_candidate_groups),
             "facility_work_selection": _public_value(facility_work_selection),
             "facility_work_coverage": _public_value(facility_work_coverage),
+            "project_engineering": _public_value(assistant_engineering),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "semantic_coverage": _public_value(
                 list((model_view or {}).get("semantic_coverage", []))
@@ -1639,6 +1660,43 @@ class ProfessionalAssistantKnowledgeQuery:
             )
             or {}
         )
+        engineering = dict(view.get("project_engineering") or {})
+        if kind == "excavation_pit" and engineering:
+            pits = dict(engineering.get("pits") or {})
+            established = [
+                dict(item) for item in pits.get("established") or () if isinstance(item, Mapping)
+            ]
+            unresolved = [
+                dict(item)
+                for item in pits.get("requires_clarification") or ()
+                if isinstance(item, Mapping)
+            ]
+            locator_ids = {
+                str(locator_id)
+                for item in [*established, *unresolved]
+                for locator_id in item.get("source_locator_ids") or ()
+            }
+            evidence_index = dict(view.get("evidence_index") or {})
+            sources = [
+                self._workspace_item(row, workspace_id, mode)["source"]
+                for locator_id in sorted(locator_ids)
+                if isinstance((row := evidence_index.get(locator_id)), Mapping)
+            ]
+            return (
+                {
+                    "answer": pits.get("professional_answer"),
+                    "established_count": int(pits.get("established_count") or 0),
+                    "count_is_final": bool(pits.get("is_final")),
+                    "pits": _public_value(established[:limit]),
+                    "requires_clarification": _public_value(unresolved[:limit]),
+                    "returned_pit_count": min(len(established), limit),
+                    "total_established_pit_count": len(established),
+                    "returned_unresolved_group_count": min(len(unresolved), limit),
+                    "total_unresolved_group_count": len(unresolved),
+                    "professional_scope": "project_excavation_pit_inventory",
+                },
+                sources,
+            )
         pit_inventory = dict(view.get("excavation_pit_inventory", {}))
         explicit_pit_inventory = kind == "excavation_pit"
         identity_values = (

@@ -29,6 +29,7 @@ from asd_kontur.tender.facility_work_projection import (
     build_facility_work_candidate_projection,
     select_facility_work_candidates,
 )
+from asd_kontur.tender.project_engineering import build_project_engineering_model
 from asd_kontur.tender.structure_identity_components import (
     build_structure_identity_components,
 )
@@ -3228,6 +3229,30 @@ class SpinePostgresRepository:
                     session, organization_id=organization_id, workspace_id=workspace_id
                 ),
             )
+            project_source_context = self._project_source_context(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=self._response_locator_ids(
+                    candidates,
+                    structure_nodes,
+                    structure_identity_components,
+                    excavation_pit_inventory,
+                    [_jsonable_row(row) for row in defects],
+                ),
+            )
+            project_engineering = build_project_engineering_model(
+                workspace_id=str(workspace_id),
+                project_definition=_jsonable_row(project),
+                candidates=candidates,
+                structure_nodes=structure_nodes,
+                identity_components=structure_identity_components,
+                pit_inventory=excavation_pit_inventory,
+                defects=[_jsonable_row(row) for row in defects],
+                matrix=_jsonable_row(matrix),
+                normative_profile=_jsonable_row(profile) if profile is not None else None,
+                source_context=project_source_context,
+            )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -3295,6 +3320,7 @@ class SpinePostgresRepository:
                     "candidate_groups": facility_work_projection["candidate_groups"],
                     "coverage": facility_work_projection["coverage"],
                 },
+                "project_engineering": project_engineering,
                 "review_decisions": review_decisions,
                 "intake_summary": intake_summary,
                 "semantic_coverage": semantic_coverage,
@@ -3361,6 +3387,12 @@ class SpinePostgresRepository:
         }:
             raise SpinePersistenceError("project_understanding_section_invalid")
         result = dict(view)
+        result["project_engineering"] = _application_engineering_projection(
+            dict(view.get("project_engineering") or {}),
+            section=section,
+            page_offset=page_offset,
+            page_limit=page_limit,
+        )
         result["page_roles"] = []
         result["work_packages"] = []
         result["defects"] = []
@@ -4603,17 +4635,20 @@ class SpinePostgresRepository:
             "ELSE 'project-definition-extraction-v0.1' END",
             "work_types": profile_scope
             + "SELECT candidate.candidate_id,candidate.version,candidate.normalized_name AS label,candidate.raw_name AS value,"
-            "candidate.source_version_id,candidate.source_locator_id,candidate.canonical_mapping_status AS status,"
-            "candidate.extraction_profile_version "
+            "candidate.source_version_id,candidate.source_locator_id,candidate.scope_key,"
+            "candidate.source_role,candidate.canonical_work_type_id,"
+            "candidate.canonical_mapping_status AS status,candidate.extraction_profile_version "
             "FROM workspace.work_type_candidates candidate JOIN selected_profiles selected "
             "ON selected.source_version_id=candidate.source_version_id WHERE candidate.organization_id=:o "
             "AND candidate.workspace_id=:w AND candidate.extraction_profile_version=CASE WHEN "
             "selected.semantic_profile LIKE 'qwen-engineering-extraction-%' THEN selected.semantic_profile "
             "ELSE 'work-quantity-material-extraction-v0.1' END",
             "quantities": profile_scope
-            + "SELECT q.candidate_id,q.version,w.normalized_name AS label,q.raw_value AS value,"
-            "q.parsed_value AS normalized_value,w.source_version_id,q.source_locator_id,q.status,q.raw_unit,"
-            "q.normalized_unit,w.extraction_profile_version FROM workspace.quantity_candidates q "
+            + "SELECT q.candidate_id,q.version,q.work_candidate_id,w.normalized_name AS label,"
+            "q.raw_value AS value,COALESCE(q.normalized_value,q.parsed_value) AS normalized_value,"
+            "w.source_version_id,q.source_locator_id,q.status,"
+            "q.raw_unit,q.normalized_unit,q.scope_key,w.extraction_profile_version "
+            "FROM workspace.quantity_candidates q "
             "JOIN workspace.work_type_candidates w "
             "ON w.organization_id=q.organization_id AND w.workspace_id=q.workspace_id AND "
             "w.candidate_id=q.work_candidate_id AND w.version=q.work_candidate_version JOIN selected_profiles selected "
@@ -4622,9 +4657,10 @@ class SpinePostgresRepository:
             "'qwen-engineering-extraction-%' THEN selected.semantic_profile ELSE "
             "'work-quantity-material-extraction-v0.1' END",
             "materials": profile_scope
-            + "SELECT m.candidate_id,m.version,w.normalized_name AS label,m.raw_name AS value,"
-            "m.parsed_quantity AS normalized_value,w.source_version_id,m.source_locator_id,m.status,"
-            "m.raw_quantity,m.raw_unit,m.normalized_unit,w.extraction_profile_version "
+            + "SELECT m.candidate_id,m.version,m.work_candidate_id,w.normalized_name AS label,"
+            "m.raw_name AS value,m.normalized_name,m.parsed_quantity AS normalized_value,"
+            "w.source_version_id,m.source_locator_id,m.status,m.raw_quantity,m.raw_unit,"
+            "m.normalized_unit,w.extraction_profile_version "
             "FROM workspace.material_candidates m JOIN "
             "workspace.work_type_candidates w ON w.organization_id=m.organization_id AND "
             "w.workspace_id=m.workspace_id AND w.candidate_id=m.work_candidate_id AND "
@@ -4947,6 +4983,29 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             ),
         )
+        project_source_context = cls._project_source_context(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            locator_ids=cls._response_locator_ids(
+                candidates,
+                structure_nodes,
+                structure_identity_components,
+                excavation_pit_inventory,
+            ),
+        )
+        project_engineering = build_project_engineering_model(
+            workspace_id=str(workspace_id),
+            project_definition={"definition": {"fields": {}, "gaps": []}},
+            candidates=candidates,
+            structure_nodes=structure_nodes,
+            identity_components=structure_identity_components,
+            pit_inventory=excavation_pit_inventory,
+            defects=[],
+            matrix={"matrix": {"rows": []}},
+            normative_profile=None,
+            source_context=project_source_context,
+        )
         view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -4985,6 +5044,7 @@ class SpinePostgresRepository:
             ),
             "structure_identity_dossiers": structure_identity_dossiers,
             "excavation_pit_inventory": excavation_pit_inventory,
+            "project_engineering": project_engineering,
             "facility_work_projection": {
                 "candidate_groups": [],
                 "coverage": {
@@ -5384,6 +5444,38 @@ class SpinePostgresRepository:
                 "sl.organization_id=:organization AND sl.workspace_id=:workspace "
                 "AND sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[])) ORDER BY "
                 "sl.source_locator_id,v.version DESC,e.version DESC NULLS LAST"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "locator_ids": locator_ids,
+            },
+        ).mappings()
+        return {str(row["source_locator_id"]): _jsonable_row(row) for row in rows}
+
+    @staticmethod
+    def _project_source_context(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        locator_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Resolve product source labels without loading document bodies."""
+
+        if not locator_ids:
+            return {}
+        rows = session.execute(
+            sa.text(
+                "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
+                "sl.source_version_id,sl.locator_kind,sl.locator_value,"
+                "v.document_id,v.version AS document_version,v.safe_display_name "
+                "FROM workspace.source_locators sl JOIN workspace.document_versions v ON "
+                "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
+                "v.source_version_id=sl.source_version_id WHERE "
+                "sl.organization_id=:organization AND sl.workspace_id=:workspace AND "
+                "sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[])) ORDER BY "
+                "sl.source_locator_id,v.version DESC"
             ),
             {
                 "organization": organization_id,
@@ -6122,6 +6214,126 @@ def _json(value: object) -> str:
     import json
 
     return json.dumps(value, default=str, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _application_engineering_projection(
+    model: dict[str, Any], *, section: str, page_offset: int, page_limit: int
+) -> dict[str, Any]:
+    """Bound the project-first UI result without changing engineering counts."""
+
+    def bounded_locators(value: Mapping[str, Any], limit: int = 12) -> dict[str, Any]:
+        row = dict(value)
+        row["source_locator_ids"] = list(row.get("source_locator_ids") or ())[:limit]
+        if "sources" in row:
+            row["sources"] = list(row.get("sources") or ())[:limit]
+        return row
+
+    project = dict(model.get("project") or {})
+    for key in ("name", "purpose", "composition"):
+        if isinstance(project.get(key), Mapping):
+            project[key] = bounded_locators(dict(project[key]))
+
+    facilities = [
+        {
+            **bounded_locators(dict(value)),
+            "aliases": list(dict(value).get("aliases") or ())[:12],
+            "member_structure_node_ids": list(dict(value).get("member_structure_node_ids") or ())[
+                :12
+            ],
+        }
+        for value in model.get("facilities") or ()
+    ]
+    works: list[dict[str, Any]] = []
+    for raw in model.get("works") or ():
+        row = bounded_locators(dict(raw))
+        row["project_wording"] = list(row.get("project_wording") or ())[:20]
+        row["quantities_by_document"] = {
+            str(role): list(values or ())[:20]
+            for role, values in dict(row.get("quantities_by_document") or {}).items()
+        }
+        row["materials_by_document"] = {
+            str(role): list(values or ())[:20]
+            for role, values in dict(row.get("materials_by_document") or {}).items()
+        }
+        works.append(row)
+    work_summary_by_id = {
+        str(row.get("work_scope_id")): {
+            "work_scope_id": row.get("work_scope_id"),
+            "facility": row.get("facility"),
+            "family_key": row.get("family_key"),
+            "work_name": row.get("work_name"),
+            "status": row.get("status"),
+        }
+        for row in works
+    }
+    pit_model = dict(model.get("pits") or {})
+    pit_model["established"] = [
+        bounded_locators(dict(value)) for value in pit_model.get("established") or ()
+    ]
+    pit_model["requires_clarification"] = [
+        bounded_locators(dict(value)) for value in pit_model.get("requires_clarification") or ()
+    ][:50]
+    unresolved = dict(model.get("unresolved") or {})
+    unresolved_work_count = len(unresolved.get("works") or ())
+    unresolved["works"] = (
+        list(unresolved.get("works") or ())[page_offset : page_offset + page_limit]
+        if section == "works"
+        else []
+    )
+    unresolved["work_description_count"] = unresolved_work_count
+    cards: list[dict[str, Any]] = []
+    for raw in model.get("facility_cards") or ():
+        card = dict(raw)
+        facility = dict(card.get("facility") or {})
+        facility_id = str(facility.get("facility_id") or "")
+        card["facility"] = next(
+            (value for value in facilities if str(value.get("facility_id")) == facility_id),
+            bounded_locators(facility),
+        )
+        card["pits"] = [bounded_locators(dict(value)) for value in card.get("pits") or ()]
+        card["works"] = [
+            work_summary_by_id.get(str(dict(value).get("work_scope_id")), {})
+            for value in card.get("works") or ()
+        ]
+        for key in ("sheet_piling", "reinforced_concrete", "pipelines"):
+            card[key] = [
+                work_summary_by_id.get(str(dict(value).get("work_scope_id")), {})
+                for value in card.get(key) or ()
+            ]
+        card["materials"] = list(card.get("materials") or ())[:20]
+        card["comparisons"] = [
+            bounded_locators(dict(value)) for value in card.get("comparisons") or ()
+        ][:20]
+        card["issues"] = [bounded_locators(dict(value)) for value in card.get("issues") or ()][:20]
+        card["documents"] = list(card.get("documents") or ())[:20]
+        cards.append(card)
+    projected = {
+        **model,
+        "project": project,
+        "facilities": facilities,
+        "facility_cards": cards,
+        "pits": pit_model,
+        "unresolved": unresolved,
+        "works": works,
+        "quantity_comparisons": [
+            bounded_locators(dict(value)) for value in model.get("quantity_comparisons") or ()
+        ],
+        "issues": [bounded_locators(dict(value)) for value in model.get("issues") or ()],
+        "customer_questions": [
+            bounded_locators(dict(value)) for value in model.get("customer_questions") or ()
+        ],
+        "unclassified_works": (
+            list(model.get("unclassified_works") or ())[page_offset : page_offset + page_limit]
+            if section == "works"
+            else []
+        ),
+        "materials": (
+            list(model.get("materials") or ())[page_offset : page_offset + page_limit]
+            if section == "materials"
+            else []
+        ),
+    }
+    return projected
 
 
 def _jsonable_row(row: Any) -> dict[str, Any]:

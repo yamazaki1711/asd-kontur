@@ -2627,6 +2627,11 @@
             "title": "Facility Work Projection",
             "type": "object"
           },
+          "project_engineering": {
+            "additionalProperties": true,
+            "title": "Project Engineering",
+            "type": "object"
+          },
           "intake_summary": {
             "additionalProperties": true,
             "title": "Intake Summary",
