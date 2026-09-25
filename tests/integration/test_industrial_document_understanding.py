@@ -955,9 +955,9 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         assert tender_archive.headers["content-type"] == "application/zip"
         with zipfile.ZipFile(io.BytesIO(tender_archive.content)) as exported:
             assert exported.namelist() == [
-                "01_tender_findings_report.docx",
-                "02_tender_findings_schedule.csv",
-                "03_tender_work_resource_schedule.csv",
+                "01_tender_engineering_report.docx",
+                "02_engineering_findings_and_actions.csv",
+                "03_project_work_quantity_material_schedule.csv",
                 "04_structure_identity_candidates.csv",
                 "05_facility_work_observation_candidates.csv",
                 "06_facility_work_candidate_groups.csv",
