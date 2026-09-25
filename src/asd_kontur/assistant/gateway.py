@@ -298,6 +298,15 @@ class ProfessionalAssistantKnowledgeQuery:
                     *workspace.get("overview_source_items", []),
                 ],
             }[tool]
+            seen_source_ids: set[str] = set()
+            selected_sources = [
+                item
+                for item in selected_sources
+                if not (
+                    (source_id := str(item.get("source", {}).get("source_id", "")))
+                    and (source_id in seen_source_ids or seen_source_ids.add(source_id))
+                )
+            ]
             result = self._plain_tool_result(
                 tool,
                 selected,
