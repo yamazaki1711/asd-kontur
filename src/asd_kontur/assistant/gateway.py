@@ -299,14 +299,15 @@ class ProfessionalAssistantKnowledgeQuery:
                 ],
             }[tool]
             seen_source_ids: set[str] = set()
-            selected_sources = [
-                item
-                for item in selected_sources
-                if not (
-                    (source_id := str(item.get("source", {}).get("source_id", "")))
-                    and (source_id in seen_source_ids or seen_source_ids.add(source_id))
-                )
-            ]
+            deduplicated_sources: list[dict[str, Any]] = []
+            for item in selected_sources:
+                source_id = str(item.get("source", {}).get("source_id", ""))
+                if source_id and source_id in seen_source_ids:
+                    continue
+                if source_id:
+                    seen_source_ids.add(source_id)
+                deduplicated_sources.append(item)
+            selected_sources = deduplicated_sources
             result = self._plain_tool_result(
                 tool,
                 selected,
