@@ -112,3 +112,74 @@ def test_inventory_prompt_preserves_all_candidates_as_structured_json() -> None:
     assert prompt.index("Котлован К-30") < prompt.index("xxxxxxxxxx")
     assert "yyyyyyyyyy" not in prompt
     assert "zzzzzzzzzz" not in prompt
+
+
+def test_professional_pit_inventory_survives_prompt_projection() -> None:
+    prompt = _tool_results_for_prompt(
+        [
+            {
+                "step_sequence": 1,
+                "tool": "consultant.get_project_entity_inventory",
+                "reason": "Project pit inventory.",
+                "response": {
+                    "contract": "construction-consultant-tools@2.8.0",
+                    "outcome": "found",
+                    "value": {
+                        "answer": (
+                            "Подтверждены 2 отдельных котлована. Ещё одна группа требует уточнения."
+                        ),
+                        "established_count": 2,
+                        "count_is_final": False,
+                        "pits": [
+                            {
+                                "name": "котлован для ЛОС-3",
+                                "related_facility": "ЛОС-3",
+                                "source_locator_ids": ["source-a"],
+                            },
+                            {
+                                "name": "котлован для КНС-7",
+                                "related_facility": "КНС-7",
+                                "source_locator_ids": ["source-b"],
+                            },
+                        ],
+                        "requires_clarification": [
+                            {
+                                "description": "Котлованы под колодцы",
+                                "reason": "Количество не указано поштучно",
+                                "source_locator_ids": ["source-c"],
+                            }
+                        ],
+                        "returned_pit_count": 2,
+                        "total_established_pit_count": 2,
+                        "returned_unresolved_group_count": 1,
+                        "total_unresolved_group_count": 1,
+                        "professional_scope": "project_excavation_pit_inventory",
+                    },
+                    "sources": [
+                        {
+                            "source_id": source_id,
+                            "source_version_id": "version-1",
+                            "title": "ПОС",
+                            "locator_label": "лист 4",
+                            "page": 4,
+                            "fragment": "Размер котлована",
+                        }
+                        for source_id in ("source-a", "source-b", "source-c")
+                    ],
+                    "gaps": [],
+                },
+            }
+        ]
+    )
+
+    inventory = json.loads(prompt)[0]
+    assert inventory["result"]["prompt_projection"] == "project-pit-inventory-v1"
+    assert inventory["result"]["value"]["established_count"] == 2
+    assert [item["name"] for item in inventory["result"]["value"]["pits"]] == [
+        "котлован для ЛОС-3",
+        "котлован для КНС-7",
+    ]
+    assert (
+        inventory["result"]["value"]["requires_clarification"][0]["description"]
+        == "Котлованы под колодцы"
+    )

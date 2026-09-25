@@ -1,3 +1,5 @@
+# ruff: noqa: RUF001 -- Cyrillic construction fixture is intentional.
+
 from __future__ import annotations
 
 import json
@@ -265,7 +267,7 @@ def test_answer_repair_retries_one_malformed_model_response(monkeypatch: Any) ->
                 "value": {
                     "candidate_entity_count": 1,
                     "candidate_entities": [
-                        {"canonical_label": "Котлован А"}  # noqa: RUF001
+                        {"canonical_label": "Котлован А"}
                     ],
                     "coverage": {"exact_total_supported": False},
                 },
@@ -379,7 +381,7 @@ def test_inventory_candidate_count_cannot_be_published_as_project_total() -> Non
         }
     ]
     answer = SynthesizedAnswer(
-        "В проекте подтверждено наличие 4 котлованов. Точный итог пока не доказан.",  # noqa: RUF001
+        "В проекте подтверждено наличие 4 котлованов. Точный итог пока не доказан.",
         "workspace_conclusion",
         False,
         (source_id,),
@@ -425,6 +427,67 @@ def test_inventory_candidate_subset_wording_remains_publishable() -> None:
     assert checked == {"passed": True, "problems": []}
 
 
+def test_professional_pit_inventory_requires_complete_professional_enumeration() -> None:
+    source_id = "55555555-5555-4555-8555-555555555555"
+    receipts = [
+        {
+            "tool": "consultant.get_project_entity_inventory",
+            "response": {
+                "value": {
+                    "professional_scope": "project_excavation_pit_inventory",
+                    "established_count": 2,
+                    "count_is_final": False,
+                    "returned_pit_count": 2,
+                    "total_established_pit_count": 2,
+                    "pits": [
+                        {"name": "Котлован для ЛОС-3"},
+                        {"name": "Котлован для КНС-7"},
+                    ],
+                },
+                "sources": [{"source_id": source_id}],
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "Подтверждены два котлована: котлован для ЛОС-3. Окончательное количество не установлено.",
+        "workspace_conclusion",
+        False,
+        (source_id,),
+        "Проверяется инвентарь.",
+        ("котлованы",),
+    )
+
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Перечисли котлованы.",
+    )
+
+    assert checked["passed"] is False
+    assert checked["problems"] == ["workspace_inventory_candidates_incomplete"]
+
+    complete = SynthesizedAnswer(
+        (
+            "Подтверждены два отдельных котлована: котлован для ЛОС-3 и котлован для КНС-7. "
+            "Окончательное количество по проекту пока не установлено."
+        ),
+        "workspace_conclusion",
+        False,
+        (source_id,),
+        "Проверяется инвентарь.",
+        ("котлованы",),
+    )
+    checked = _with_inventory_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Перечисли котлованы.",
+    )
+
+    assert checked == {"passed": True, "problems": []}
+
+
 def test_exhaustive_inventory_answer_must_name_every_returned_candidate() -> None:
     receipts = [
         {
@@ -434,7 +497,7 @@ def test_exhaustive_inventory_answer_must_name_every_returned_candidate() -> Non
                     "candidate_entity_count": 2,
                     "candidate_entities": [
                         {"canonical_label": "Котлован для ЛОС -4"},
-                        {"canonical_label": "Котлован для КНС 8.1"},  # noqa: RUF001
+                        {"canonical_label": "Котлован для КНС 8.1"},
                     ],
                     "coverage": {
                         "exact_total_supported": False,

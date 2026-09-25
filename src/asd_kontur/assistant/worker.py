@@ -576,10 +576,12 @@ def _synthesis_prompt(
 оговоркой. Никогда не предлагайте загрузить документ, если inventory сообщает, что bytes присутствуют.
 Полнотекстовое совпадение не доказывает применимость: для вывода о применимости учитывайте предмет
 регулирования, конструкцию и вид работ либо задайте уточняющий вопрос.
-Если структурированный инвентарь содержит candidate_entities, перечислите подтверждённый им
-кандидатный поднабор и используйте его существенные source_id. Если exact_total_supported=false,
-не называйте число проектным итогом: явно скажите, что точный общий итог пока не доказан, и укажите
-границу установленного поднабора. Не заменяйте найденный кандидатный поднабор общим отказом.
+Если инвентарь котлованов содержит professional_scope=project_excavation_pit_inventory, используйте
+его готовый профессиональный вывод, перечислите все pits и отдельно объясните группы
+requires_clarification. Это уже результат модели проекта: не называйте его кандидатным поднабором
+и не утверждайте, что реестр пуст. При count_is_final=false прямо скажите, что окончательное общее
+количество пока не установлено. Для старого инвентаря candidate_entities сохраняйте его границу:
+при exact_total_supported=false не называйте число окончательным проектным итогом.
 Для намерения general_engineering допустимо использовать устойчивые общие строительные знания и
 давать ограниченные конвенциональные числовые оценки, если вы явно указываете допущения. Помечайте
 такой ответ как оценку (estimate) и чётко разделяйте её от фактических испытаний или приёмки.
@@ -646,13 +648,13 @@ def _repair_prompt(
     source_ids = [str(item["source_id"]) for item in _deduplicated_sources(receipts)]
     return f"""Исправьте только перечисленные дефекты проекта ответа. Используйте только факты и
 источники из приведённых результатов инструментов; не добавляйте сведения извне. Не меняйте
-установленные сведения. Если структурированный инвентарь содержит candidate_entities, перечислите
-этот установленный кандидатный поднабор и используйте существенные source_id. При
-exact_total_supported=false прямо укажите, что точный проектный итог не доказан; не превращайте
-число кандидатов в окончательный итог и не заменяйте найденные кандидаты общим отказом. Запрещено
-писать «всего N», «подтверждено наличие N», «в проекте N» или эквивалентное утверждение общего
-количества. Формулируйте число только как размер установленного кандидатного поднабора. Если дефект
-нельзя исправить из приведённых результатов, дайте точное сообщение о границе данных.
+установленные сведения. Если инвентарь содержит
+professional_scope=project_excavation_pit_inventory, используйте его professional answer,
+перечислите все pits и назовите группы requires_clarification нормальным профессиональным языком.
+Не называйте эти результаты кандидатами и не пишите, что структурированный реестр пуст. При
+count_is_final=false не превращайте established_count в окончательный итог проекта. Для старого
+инвентаря candidate_entities сохраните прежнюю границу exact_total_supported. Если дефект нельзя
+исправить из приведённых результатов, дайте точное сообщение о границе данных.
 Ответ должен быть законченным естественным русским текстом: не обрывайте последнюю фразу,
 не оставляйте незавершённое предложение и завершите его точкой.
 Не раскрывайте пользователю внутренние status keys, schema keys, названия инструментов или
@@ -711,20 +713,43 @@ def _with_inventory_checks(
         value = response.get("value")
         if not isinstance(value, dict):
             continue
-        raw_count = value.get("candidate_entity_count", 0)
+        professional_pits = value.get("professional_scope") == "project_excavation_pit_inventory"
+        raw_count = (
+            value.get("established_count", 0)
+            if professional_pits
+            else value.get("candidate_entity_count", 0)
+        )
         if isinstance(raw_count, int) and raw_count > 0:
             candidate_count += raw_count
-        for candidate in value.get("candidate_entities", []):
+        inventory_items = (
+            value.get("pits", []) if professional_pits else value.get("candidate_entities", [])
+        )
+        for candidate in inventory_items:
             if not isinstance(candidate, dict):
                 continue
-            label = candidate.get("canonical_label") or candidate.get("display_name")
+            label = (
+                candidate.get("name")
+                or candidate.get("canonical_label")
+                or candidate.get("display_name")
+            )
             if isinstance(label, str) and label.strip():
                 returned_candidate_labels.append(label)
-        coverage = value.get("coverage")
-        if isinstance(coverage, dict) and coverage.get("exact_total_supported") is False:
-            exact_total_supported = False
-        if isinstance(coverage, dict) and coverage.get("candidate_page_complete") is True:
-            candidate_page_complete = True
+        if professional_pits:
+            if value.get("count_is_final") is False:
+                exact_total_supported = False
+            returned_count = value.get("returned_pit_count")
+            total_count = value.get("total_established_pit_count")
+            candidate_page_complete = bool(
+                isinstance(returned_count, int)
+                and isinstance(total_count, int)
+                and returned_count == total_count
+            )
+        else:
+            coverage = value.get("coverage")
+            if isinstance(coverage, dict) and coverage.get("exact_total_supported") is False:
+                exact_total_supported = False
+            if isinstance(coverage, dict) and coverage.get("candidate_page_complete") is True:
+                candidate_page_complete = True
         for source in response.get("sources", []):
             if isinstance(source, dict) and source.get("source_id"):
                 inventory_source_ids.add(str(source["source_id"]))
@@ -848,6 +873,8 @@ def _inventory_prompt_record(receipt: dict[str, Any]) -> dict[str, Any]:
     value = response.get("value") if isinstance(response, dict) else None
     if not isinstance(value, dict):
         value = {}
+    if value.get("professional_scope") == "project_excavation_pit_inventory":
+        return _professional_pit_inventory_prompt_record(receipt, value)
     raw_candidates = value.get("candidate_entities", [])
     candidates = [
         _inventory_prompt_candidate(item) for item in raw_candidates if isinstance(item, dict)
@@ -883,6 +910,74 @@ def _inventory_prompt_record(receipt: dict[str, Any]) -> dict[str, Any]:
         "evidence": sources,
         "evidence_coverage": {
             "available_source_count": len(response.get("sources", [])),
+            "returned_source_count": len(sources),
+        },
+    }
+
+
+def _professional_pit_inventory_prompt_record(
+    receipt: dict[str, Any], value: dict[str, Any]
+) -> dict[str, Any]:
+    """Keep the project pit result intact and in professional vocabulary."""
+
+    def compact_item(item: Any, *, unresolved: bool = False) -> dict[str, Any] | None:
+        if not isinstance(item, dict):
+            return None
+        fields = (
+            ("description", "related_facility", "reason", "source_locator_ids")
+            if unresolved
+            else (
+                "name",
+                "related_facility",
+                "known_parameters",
+                "related_works",
+                "status",
+                "source_locator_ids",
+            )
+        )
+        selected = {key: item[key] for key in fields if item.get(key) not in (None, "", [], ())}
+        selected["source_ids"] = [
+            str(source_id) for source_id in item.get("source_locator_ids", []) if source_id
+        ]
+        return selected
+
+    pits = [item for raw in value.get("pits", []) if (item := compact_item(raw)) is not None]
+    unresolved = [
+        item
+        for raw in value.get("requires_clarification", [])
+        if (item := compact_item(raw, unresolved=True)) is not None
+    ]
+    compact_value = {
+        key: value[key]
+        for key in (
+            "answer",
+            "established_count",
+            "count_is_final",
+            "returned_pit_count",
+            "total_established_pit_count",
+            "returned_unresolved_group_count",
+            "total_unresolved_group_count",
+            "professional_scope",
+        )
+        if key in value
+    }
+    compact_value["pits"] = pits
+    compact_value["requires_clarification"] = unresolved
+    sources = _inventory_prompt_sources(receipt["response"], pits)
+    return {
+        "step": receipt["step_sequence"],
+        "tool": receipt["tool"],
+        "reason": receipt["reason"],
+        "result": {
+            "contract": receipt["response"].get("contract"),
+            "outcome": receipt["response"].get("outcome"),
+            "value": compact_value,
+            "gaps": receipt["response"].get("gaps", []),
+            "prompt_projection": "project-pit-inventory-v1",
+        },
+        "evidence": sources,
+        "evidence_coverage": {
+            "available_source_count": len(receipt["response"].get("sources", [])),
             "returned_source_count": len(sources),
         },
     }
@@ -953,6 +1048,18 @@ def _minimal_inventory_prompt_record(record: dict[str, Any]) -> dict[str, Any]:
     """Drop optional display detail while retaining every candidate and source ID."""
 
     value = record["result"]["value"]
+    if value.get("professional_scope") == "project_excavation_pit_inventory":
+        return {
+            **record,
+            "evidence": [
+                {key: source[key] for key in ("source_id", "title", "locator", "page")}
+                for source in record["evidence"][:8]
+            ],
+            "evidence_coverage": {
+                **record["evidence_coverage"],
+                "projection_reduced_to_fit": True,
+            },
+        }
     candidates = []
     for item in value.get("candidate_entities", []):
         candidate = {
