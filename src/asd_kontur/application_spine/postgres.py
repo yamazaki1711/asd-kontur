@@ -4263,7 +4263,11 @@ class SpinePostgresRepository:
                 return ()
 
             locator_ids = sorted(
-                {str(row["source_locator_id"]) for row in unresolved if row.get("source_locator_id")}
+                {
+                    str(row["source_locator_id"])
+                    for row in unresolved
+                    if row.get("source_locator_id")
+                }
             )
             source_context = self._project_source_context(
                 session,

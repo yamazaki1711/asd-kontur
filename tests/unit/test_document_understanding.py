@@ -91,8 +91,7 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
         == "industrial-document-understanding-v0.2"
     )
     assert (
-        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION)
-        == "qwen-project-work-reconciliation-v1"
+        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == "qwen-project-work-reconciliation-v1"
     )
 
 

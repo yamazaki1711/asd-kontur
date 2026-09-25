@@ -819,8 +819,7 @@ def _with_structured_project_fact_checks(
 
     normalized_question = " ".join(question.casefold().replace("ё", "е").split())
     asks_for_waling = any(
-        marker in normalized_question
-        for marker in ("распределительн", "обвязочн", "пояс", "балк")
+        marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")
     )
     if not asks_for_waling:
         return checks
@@ -863,7 +862,9 @@ def _with_structured_project_fact_checks(
         return checks
 
     normalized_answer = answer.answer.casefold().replace("ё", "е").replace(",", ".")
-    omitted = any(term.casefold().replace("ё", "е") not in normalized_answer for term in required_terms)
+    omitted = any(
+        term.casefold().replace("ё", "е") not in normalized_answer for term in required_terms
+    )
     omitted = omitted or any(
         value.replace(",", ".") not in normalized_answer
         or (unit and unit.casefold() not in normalized_answer)

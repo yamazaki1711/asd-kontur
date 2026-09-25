@@ -77,9 +77,7 @@ def upgrade() -> None:
     op.execute(
         "ALTER TABLE workspace.project_work_reconciliation_results ENABLE ROW LEVEL SECURITY"
     )
-    op.execute(
-        "ALTER TABLE workspace.project_work_reconciliation_results FORCE ROW LEVEL SECURITY"
-    )
+    op.execute("ALTER TABLE workspace.project_work_reconciliation_results FORCE ROW LEVEL SECURITY")
     op.execute(
         "CREATE POLICY project_work_reconciliation_results_scope ON "
         "workspace.project_work_reconciliation_results USING ("

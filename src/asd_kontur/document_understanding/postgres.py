@@ -448,11 +448,16 @@ class IndustrialUnderstandingRepository:
                         "workspace.project_work_reconciliation_results WHERE "
                         "organization_id=:o AND workspace_id=:w AND job_id=:job"
                     ),
-                    {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+                    {
+                        "o": claimed.organization_id,
+                        "w": claimed.workspace_id,
+                        "job": claimed.job_id,
+                    },
                 ).one()
-                if str(existing.input_digest) != claimed.input_digest or str(
-                    existing.result_digest
-                ) != result_digest:
+                if (
+                    str(existing.input_digest) != claimed.input_digest
+                    or str(existing.result_digest) != result_digest
+                ):
                     raise ValueError("project_work_reconciliation_result_conflict")
 
     def load_project_work_reconciliation_result(
