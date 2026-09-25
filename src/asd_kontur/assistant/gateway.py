@@ -241,6 +241,7 @@ class ProfessionalAssistantKnowledgeQuery:
                     "facility_work_coverage": workspace.get("facility_work_coverage", {}),
                 },
                 "consultant.get_work_packages": {
+                    "project_engineering": workspace.get("project_engineering", {}),
                     "work_packages": workspace["work_packages"],
                     "selection_coverage": workspace["work_package_selection"],
                     "facility_work_candidate_groups": workspace.get(
@@ -253,9 +254,26 @@ class ProfessionalAssistantKnowledgeQuery:
                 "consultant.get_requirement_matrix": {
                     "requirement_matrix": workspace["requirement_matrix"]
                 },
-                "consultant.get_discrepancies": {"discrepancies": workspace["discrepancies"]},
+                "consultant.get_discrepancies": {
+                    "engineering_issues": workspace.get("project_engineering", {}).get(
+                        "issues", []
+                    ),
+                    "scope_comparisons": workspace.get("project_engineering", {}).get(
+                        "scope_comparisons", []
+                    ),
+                    "discrepancies": workspace["discrepancies"],
+                },
                 "consultant.get_mode_result": {"mode_result": workspace["mode_result"]},
                 "consultant.get_information_gaps": {
+                    "engineering_questions": workspace.get("project_engineering", {}).get(
+                        "customer_questions", []
+                    ),
+                    "unresolved_pits": workspace.get("project_engineering", {})
+                    .get("pits", {})
+                    .get("unresolved_groups", []),
+                    "classification": workspace.get("project_engineering", {}).get(
+                        "classification", {}
+                    ),
                     "project_definition": workspace["project_definition"],
                     "discrepancies": workspace["discrepancies"],
                     "mode_result": workspace["mode_result"],
@@ -265,11 +283,20 @@ class ProfessionalAssistantKnowledgeQuery:
             }[tool]
             selected_sources = {
                 "consultant.get_workspace_overview": workspace.get("overview_source_items", []),
-                "consultant.get_work_packages": workspace.get("work_package_source_items", []),
+                "consultant.get_work_packages": [
+                    *workspace.get("work_package_source_items", []),
+                    *workspace.get("overview_source_items", []),
+                ],
                 "consultant.get_requirement_matrix": workspace.get("work_package_source_items", []),
-                "consultant.get_discrepancies": workspace.get("discrepancy_source_items", []),
+                "consultant.get_discrepancies": [
+                    *workspace.get("discrepancy_source_items", []),
+                    *workspace.get("overview_source_items", []),
+                ],
                 "consultant.get_mode_result": workspace.get("overview_source_items", []),
-                "consultant.get_information_gaps": workspace.get("gap_source_items", []),
+                "consultant.get_information_gaps": [
+                    *workspace.get("gap_source_items", []),
+                    *workspace.get("overview_source_items", []),
+                ],
             }[tool]
             result = self._plain_tool_result(
                 tool,

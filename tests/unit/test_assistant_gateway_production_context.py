@@ -324,6 +324,22 @@ def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -
     assert response.result["value"]["project_engineering"] == model
     assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
 
+    work_response = query.execute(
+        "consultant.get_work_packages",
+        {"mode": "Tender", "query": "шпунт", "limit": 20},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert work_response.result["value"]["project_engineering"] == model
+    assert work_response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
 
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
     groups = [
