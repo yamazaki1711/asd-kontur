@@ -4985,7 +4985,7 @@ function ProjectSourceLinks({
               `/evidence/locators/${locator}`,
             )}
           >
-            открыть источник
+            Открыть исходный фрагмент
           </Link>
         </span>
       ))}
@@ -5254,23 +5254,36 @@ function ProjectEngineeringResult({
           </table>
         </div>
         {unclassified.length > 0 && (
-          <details>
-            <summary>
+          <section className="technical-section">
+            <h3>
               Не удалось однозначно классифицировать (
               {String(
                 Number(summary.unclassified_work_count ?? unclassified.length),
               )}
               )
-            </summary>
+            </h3>
+            <p>
+              Эти работы остаются в составе проекта, но их вид или место
+              выполнения требует уточнения.
+            </p>
             <ul>
               {unclassified.slice(0, 100).map((work, index) => (
                 <li key={`${displayValue(work.candidate_id)}-${String(index)}`}>
-                  {displayValue(work.project_wording)} —{" "}
-                  {displayValue(work.document_role)}
+                  <p>
+                    <strong>{displayValue(work.project_wording)}</strong> —{" "}
+                    {displayValue(work.document_role)}
+                  </p>
+                  <ProjectSourceLinks
+                    locatorIds={
+                      work.source_locator_id ? [work.source_locator_id] : []
+                    }
+                    workspaceId={workspaceId}
+                    modeSlug={modeSlug}
+                  />
                 </li>
               ))}
             </ul>
-          </details>
+          </section>
         )}
       </section>
     );
@@ -7062,7 +7075,7 @@ function CandidateReviewRow({
     <article className="candidate-row">
       <div>
         <strong>{displayValue(candidate.label, "Сведение")}</strong>
-        <p>{displayValue(candidate.value)}</p>
+        <p>Техническая запись: {displayValue(candidate.value)}</p>
         <small>
           {humanizeStatus(displayValue(candidate.status, "candidate"))}
         </small>
