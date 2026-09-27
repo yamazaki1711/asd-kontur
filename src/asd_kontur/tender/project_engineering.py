@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v5"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v6"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -78,7 +78,20 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "excavation",
         "Разработка котлованов и земляные работы",
-        ("котлован", "разработк грунт", "доработк грунт", "землян", "выемк грунт"),
+        (
+            "котлован",
+            "разработк грунт",
+            "доработк грунт",
+            "землян",
+            "выемк грунт",
+            "объем выемк",
+            "отрывк транше",
+            "разработк транше",
+            "устройств транше",
+            "срезк загрязнен грунт",
+            "выемк загрязнен грунт",
+            "откопк",
+        ),
     ),
     (
         "reinforcement",
@@ -89,6 +102,17 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "formwork",
         "Опалубочные работы",
         ("опалуб",),
+    ),
+    (
+        "waterproofing",
+        "Гидроизоляция",
+        (
+            "гидроизоляц",
+            "водоизоляц",
+            "изоляц поверхност колодц",
+            "битумн мастик",
+            "нанесен праймер битумн",
+        ),
     ),
     (
         "pit_preparation",
@@ -117,6 +141,17 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("кладк стен", "кладк перегород", "возведен стен", "кирпич и блок"),
     ),
     (
+        "electrical",
+        "Электромонтажные работы",
+        (
+            "электромонтаж",
+            "электротехническ установ",
+            "прокладк кабел",
+            "монтаж силов кабел",
+            "монтаж светильник",
+        ),
+    ),
+    (
         "pipeline",
         "Трубопроводы и сети",
         (
@@ -134,7 +169,14 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "pile_foundation",
         "Свайные работы",
-        ("свайн работ", "устройств свай", "погружен свай", "забивк свай"),
+        (
+            "свайн работ",
+            "устройств свай",
+            "погружен свай",
+            "забивк свай",
+            "закручиван винтов свай",
+            "выкручиван винтов свай",
+        ),
     ),
     (
         "chambers_wells",
@@ -163,17 +205,6 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ("металлоконструк", "стальн конструкц", "металлическ конструкц"),
     ),
     (
-        "waterproofing",
-        "Гидроизоляция",
-        (
-            "гидроизоляц",
-            "водоизоляц",
-            "изоляц поверхност колодц",
-            "битумн мастик",
-            "нанесен праймер битумн",
-        ),
-    ),
-    (
         "temporary_works",
         "Временные сооружения и крепления",
         (
@@ -187,12 +218,22 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "soil_disposal",
         "Погрузка и вывоз грунта",
-        ("вывоз грунт", "вывоз излишк грунт", "погрузк грунт"),
+        (
+            "вывоз грунт",
+            "вывоз излишк грунт",
+            "вывоз загрязнен грунт",
+            "погрузк грунт",
+        ),
     ),
     (
         "transportation",
         "Перевозка строительных грузов и материалов",
         ("перевозк", "транспортирован"),
+    ),
+    (
+        "loading_unloading",
+        "Погрузочно-разгрузочные работы",
+        ("погрузочн разгрузочн работ", "погрузо разгрузочн работ"),
     ),
     (
         "waste_management",
@@ -215,7 +256,15 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
         "landscaping",
         "Благоустройство и озеленение",
-        ("благоустройств", "озеленен", "газон", "растительн земл"),
+        (
+            "благоустройств",
+            "озеленен",
+            "газон",
+            "растительн земл",
+            "посев трав",
+            "засев грунт многолетн трав",
+            "внесен удобрен",
+        ),
     ),
     (
         "roadworks",
@@ -230,11 +279,6 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         ),
     ),
     (
-        "electrical",
-        "Электромонтажные работы",
-        ("электромонтаж", "электротехническ установ", "прокладк кабел"),
-    ),
-    (
         "communications",
         "Сети связи и автоматизации",
         ("сет связ", "слаботочн сет", "кабел связ"),
@@ -245,8 +289,11 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "монтаж технологическ оборудован",
             "монтаж оборудован",
+            "монтаж насосн оборудован",
             "установк корпус",
+            "установк емкост",
             "монтаж кнс",
+            "монтаж лос",
             "монтаж очистн сооружен",
         ),
     ),
@@ -260,6 +307,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "Испытания и проверка",
         (
             "испытан на герметичн",
+            "испытан очистн сооружен герметичн",
             "промывк систем",
             "гидравлическ испытан",
             "испытан трубопровод",
@@ -616,7 +664,12 @@ def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
     stems = tuple(value for value in phrase.split() if value)
     if not stems:
         return False
-    pattern = r"\b" + r"\w*\s+\w*".join(re.escape(value) for value in stems) + r"\w*\b"
+    # Allow at most two descriptive words between engineering stems.  Project
+    # wording commonly inserts a material or condition (for example,
+    # ``вывоз загрязненного грунта``), but an unbounded gap would turn this
+    # conservative classifier into document-level keyword matching.
+    separator = r"\w*(?:\s+\w+){0,2}\s+\w*"
+    pattern = r"\b" + separator.join(re.escape(value) for value in stems) + r"\w*\b"
     return re.search(pattern, normalized) is not None
 
 
