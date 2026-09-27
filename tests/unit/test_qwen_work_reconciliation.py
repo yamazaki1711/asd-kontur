@@ -55,6 +55,51 @@ def test_qwen_work_reconciliation_preserves_exact_rows_and_allowed_scope(
     ]
 
 
+def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
+    monkeypatch: Any,
+) -> None:
+    long_tail = "конец полного описания после прежней границы"
+    wording = "Устройство специальной конструкции " + ("очень подробно " * 70) + long_tail
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert long_tail in prompt
+        assert "locator-before" in prompt
+        assert "КНС 4" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-long",
+                        "status": "UNCLASSIFIED",
+                        "family_key": None,
+                        "operation": None,
+                        "facility": None,
+                        "confidence": "0.55",
+                        "reason": "Семейство не установлено без догадки.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "candidate-long",
+                "wording": wording,
+                "nearby_context": "КНС 4. Рабочий чертёж.",
+                "nearby_context_locator_ids": ["locator-before", "locator-current"],
+            }
+        ],
+        work_families={"temporary_works": "Временные сооружения"},
+        facilities=["КНС 4"],
+    )
+
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v4"
+
+
 def test_qwen_work_reconciliation_rejects_incomplete_or_invented_output(
     monkeypatch: Any,
 ) -> None:

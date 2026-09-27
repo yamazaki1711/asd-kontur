@@ -13,8 +13,12 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v3"
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@3.0.0"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v4"
+PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
+    "qwen-project-work-reconciliation-v3",
+    PROJECT_WORK_RECONCILIATION_PROFILE,
+)
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@4.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _POTENTIAL_WORK_AT_START = re.compile(
     r"^(?:перевоз\w*|транспортирован\w*|погруз\w*|разгруз\w*|испытан\w*|"
@@ -144,13 +148,14 @@ def _prompt(
     safe_rows = [
         {
             "candidate_id": str(row["candidate_id"]),
-            "wording": str(row.get("wording") or "")[:700],
+            "wording": str(row.get("wording") or ""),
             "document_role": str(row.get("document_role") or "не определена"),
             "document": str(row.get("document") or "")[:180],
             "page": row.get("page"),
             "scope": str(row.get("scope") or "")[:240],
             "facility_hints": list(row.get("facility_hints") or ())[:6],
-            "nearby_context": str(row.get("nearby_context") or "")[:900],
+            "nearby_context": str(row.get("nearby_context") or ""),
+            "nearby_context_locator_ids": list(row.get("nearby_context_locator_ids") or ()),
         }
         for row in rows
     ]

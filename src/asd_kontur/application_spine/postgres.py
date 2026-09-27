@@ -32,11 +32,13 @@ from asd_kontur.tender.facility_work_projection import (
 from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
+    facility_designation,
     non_work_reason,
     work_family_catalog,
     work_reconciliation_priority,
 )
 from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES,
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 from asd_kontur.tender.structure_identity_components import (
@@ -4258,7 +4260,18 @@ class SpinePostgresRepository:
                     continue
                 existing = prior.get(candidate_id)
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
-                    continue
+                    existing_profile = str(existing.get("profile_version") or "")
+                    existing_status = str(existing.get("status") or "")
+                    if existing_profile == PROJECT_WORK_RECONCILIATION_PROFILE:
+                        continue
+                    # A prior negative decision or a work already tied to a
+                    # facility remains compatible.  V4 revisits only unresolved
+                    # rows and matched work whose former bounded context could
+                    # not establish a location.
+                    if existing_status == "NOT_A_WORK" or (
+                        existing_status == "MATCHED" and existing.get("facility")
+                    ):
+                        continue
                 row["wording"] = wording
                 unresolved.append(row)
             if not unresolved:
@@ -4277,18 +4290,12 @@ class SpinePostgresRepository:
                 workspace_id=workspace_id,
                 locator_ids=locator_ids,
             )
-            nearby_context = {
-                str(row["source_locator_id"]): str(row["raw_text"] or "")[:1200]
-                for row in session.execute(
-                    sa.text(
-                        "SELECT DISTINCT ON (source_locator_id) source_locator_id,raw_text FROM "
-                        "workspace.native_layout_element_versions WHERE organization_id=:o AND "
-                        "workspace_id=:w AND source_locator_id=ANY(CAST(:locators AS uuid[])) "
-                        "ORDER BY source_locator_id,version DESC"
-                    ),
-                    {"o": organization_id, "w": workspace_id, "locators": locator_ids},
-                ).mappings()
-            }
+            nearby_context = self._project_work_neighbor_context(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=locator_ids,
+            )
             source_rows = {
                 str(row["source_version_id"]): dict(row)
                 for row in session.execute(
@@ -4315,10 +4322,10 @@ class SpinePostgresRepository:
             components = build_structure_identity_components(identity_candidates)
             facilities = sorted(
                 {
-                    str(item.get("canonical_label") or "").strip()
+                    designation
                     for item in components
                     if str(item.get("identity_kind") or "") in {"facility", "local_area"}
-                    and str(item.get("canonical_label") or "").strip()
+                    and (designation := facility_designation(item.get("canonical_label")))
                 }
             )
 
@@ -4328,7 +4335,11 @@ class SpinePostgresRepository:
                 locator_value = context.get("locator_value")
                 page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
                 wording = str(row["wording"])
-                context_text = nearby_context.get(str(row.get("source_locator_id") or ""), "")
+                context_window = nearby_context.get(
+                    str(row.get("source_locator_id") or ""),
+                    {"text": "", "source_locator_ids": []},
+                )
+                context_text = str(context_window["text"])
                 contextual_scope = f"{wording} {context_text}".casefold()
                 hints = [value for value in facilities if value.casefold() in contextual_scope]
                 prepared.append(
@@ -4342,6 +4353,7 @@ class SpinePostgresRepository:
                         "scope": str(row.get("scope_key") or ""),
                         "facility_hints": hints,
                         "nearby_context": context_text,
+                        "nearby_context_locator_ids": list(context_window["source_locator_ids"]),
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
                     }
@@ -4974,18 +4986,20 @@ class SpinePostgresRepository:
 
         rows = session.execute(
             sa.text(
-                "SELECT job.input_manifest,result.result_manifest,result.recorded_at FROM "
+                "SELECT job.input_manifest,result.profile_version,result.result_manifest,"
+                "result.recorded_at FROM "
                 "workspace.project_work_reconciliation_results result JOIN "
                 "workspace.durable_jobs job ON job.organization_id=result.organization_id AND "
                 "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
                 "result.organization_id=:o AND result.workspace_id=:w AND "
-                "result.profile_version=:profile AND job.job_kind='PROJECT_WORK_RECONCILIATION' "
+                "result.profile_version=ANY(CAST(:profiles AS text[])) AND "
+                "job.job_kind='PROJECT_WORK_RECONCILIATION' "
                 "AND job.state='succeeded' ORDER BY result.recorded_at,result.job_id"
             ),
             {
                 "o": organization_id,
                 "w": workspace_id,
-                "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
             },
         ).mappings()
         resolved: dict[str, dict[str, Any]] = {}
@@ -5008,9 +5022,74 @@ class SpinePostgresRepository:
                 resolved[candidate_id] = {
                     **dict(item),
                     "candidate_version": versions[candidate_id],
+                    "profile_version": str(row["profile_version"]),
                     "recorded_at": row["recorded_at"],
                 }
         return resolved
+
+    @staticmethod
+    def _project_work_neighbor_context(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        locator_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Return a traceable local reading-order window for each work row.
+
+        The work wording itself is always preserved in full.  Nearby text is a
+        bounded interpretation aid: at most three elements on either side,
+        with every contributing locator retained in the job manifest.
+        """
+
+        if not locator_ids:
+            return {}
+        rows = session.execute(
+            sa.text(
+                "WITH latest AS (SELECT DISTINCT ON (element_id) element_id,source_locator_id,"
+                "source_version_id,page_number,reading_order,raw_text FROM "
+                "workspace.native_layout_element_versions WHERE organization_id=:o AND "
+                "workspace_id=:w ORDER BY element_id,version DESC), targets AS (SELECT DISTINCT ON "
+                "(source_locator_id) source_locator_id AS target_locator_id,source_version_id,"
+                "page_number,reading_order FROM latest WHERE source_locator_id=ANY(CAST(:locators "
+                "AS uuid[])) ORDER BY source_locator_id,reading_order) SELECT "
+                "target.target_locator_id,neighbor.source_locator_id AS context_locator_id,"
+                "neighbor.reading_order,neighbor.raw_text FROM targets target JOIN latest neighbor "
+                "ON neighbor.source_version_id=target.source_version_id AND "
+                "neighbor.page_number=target.page_number AND neighbor.reading_order BETWEEN "
+                "GREATEST(1,target.reading_order-3) AND target.reading_order+3 ORDER BY "
+                "target.target_locator_id,neighbor.reading_order,neighbor.source_locator_id"
+            ),
+            {"o": organization_id, "w": workspace_id, "locators": locator_ids},
+        ).mappings()
+        grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in rows:
+            grouped[str(row["target_locator_id"])].append(dict(row))
+        result: dict[str, dict[str, Any]] = {}
+        for locator_id, context_rows in grouped.items():
+            parts: list[str] = []
+            used_locator_ids: list[str] = []
+            seen_text: set[str] = set()
+            current_length = 0
+            for context_row in context_rows:
+                text = " ".join(str(context_row.get("raw_text") or "").split())
+                if not text or text in seen_text:
+                    continue
+                seen_text.add(text)
+                remaining = 2800 - current_length
+                if remaining <= 0:
+                    break
+                part = text[:remaining]
+                parts.append(part)
+                context_locator_id = str(context_row["context_locator_id"])
+                if context_locator_id not in used_locator_ids:
+                    used_locator_ids.append(context_locator_id)
+                current_length += len(part) + 1
+            result[locator_id] = {
+                "text": "\n".join(parts),
+                "source_locator_ids": used_locator_ids,
+            }
+        return result
 
     @staticmethod
     def _project_review_rows(

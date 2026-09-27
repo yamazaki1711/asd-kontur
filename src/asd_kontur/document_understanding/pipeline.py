@@ -821,7 +821,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.REQUIREMENT_MATRIX_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: PROJECT_RECONCILIATION_PROFILE_VERSION,
         JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
-        JobKind.PROJECT_WORK_RECONCILIATION: "qwen-project-work-reconciliation-v3",
+        JobKind.PROJECT_WORK_RECONCILIATION: "qwen-project-work-reconciliation-v4",
     }[kind]
 
 
