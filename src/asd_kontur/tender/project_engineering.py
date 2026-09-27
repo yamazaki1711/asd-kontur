@@ -2247,14 +2247,21 @@ def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decim
         if raw is None or not unit:
             continue
         try:
-            unique.add((Decimal(str(raw).replace(",", ".")), unit))
+            quantity = Decimal(str(raw).replace(",", "."))
         except InvalidOperation:
             continue
+        scaled = re.fullmatch(r"(?P<factor>100|1000)\s*(?P<unit>м[23]|м|шт)", unit)
+        if scaled is not None:
+            quantity *= Decimal(scaled.group("factor"))
+            unit = scaled.group("unit")
+        unique.add((quantity, unit))
     return next(iter(unique)) if len(unique) == 1 else None
 
 
 def _normalized_unit(value: object) -> str:
-    return str(value or "").strip().casefold().rstrip(".")
+    normalized = " ".join(str(value or "").replace("\xa0", " ").strip().casefold().split())
+    normalized = normalized.rstrip(".")
+    return {"m2": "м2", "m3": "м3"}.get(normalized, normalized)
 
 
 def _duration_unit(value: object) -> bool:

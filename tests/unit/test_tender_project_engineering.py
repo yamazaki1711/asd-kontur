@@ -7,11 +7,23 @@ from decimal import Decimal
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
     _comparison_row,
+    _one_comparable_quantity,
     build_project_engineering_model,
     classify_work_family,
     non_work_reason,
     work_reconciliation_priority,
 )
+
+
+def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
+    value = _one_comparable_quantity(
+        (
+            {"value": "0.8275", "unit": "1000 м3"},
+            {"value": "827.5", "unit": "м3"},
+        )
+    )
+
+    assert value == (Decimal("827.5000"), "м3")
 
 
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
