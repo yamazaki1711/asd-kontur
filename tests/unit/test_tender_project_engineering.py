@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
+    _comparison_row,
     build_project_engineering_model,
     classify_work_family,
     non_work_reason,
@@ -158,7 +161,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v7"
+    assert model["model_version"] == "project-engineering-model-v9"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -452,6 +455,98 @@ def test_same_family_operations_remain_distinct_engineering_scopes() -> None:
     assert by_name["Разработка котлована"]["quantities_by_document"]["РД"][0]["value"] == ("450")
 
 
+def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "pit-work",
+                    "version": 2,
+                    "value": "Разработка котлована КНС-2",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "work-locator",
+                    "source_role": "working_documentation",
+                }
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "pit-volume",
+                    "work_candidate_id": "pit-work",
+                    "value": "450",
+                    "normalized_value": "450",
+                    "unit": "м3",
+                    "source_locator_id": "volume-locator",
+                },
+                {
+                    "candidate_id": "pit-depth",
+                    "work_candidate_id": "pit-work",
+                    "value": "5",
+                    "normalized_value": "5",
+                    "unit": "м",
+                    "source_locator_id": "depth-locator",
+                },
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-2",
+                "candidate_labels": ["КНС-2"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": [],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("work-locator", "КР.pdf", 3),
+                _source("volume-locator", "КР.pdf", 3),
+                _source("depth-locator", "КР.pdf", 3),
+            ]
+        ),
+        work_resolutions={
+            "pit-work": {
+                "candidate_version": 2,
+                "status": "MATCHED",
+                "family_key": "excavation",
+                "operation": "Разработка котлована",
+                "facility": "КНС 2",
+                "quantity_reviews": [
+                    {
+                        "quantity_candidate_id": "pit-volume",
+                        "status": "WORK_QUANTITY",
+                        "reason": "Объём разработки грунта.",
+                    },
+                    {
+                        "quantity_candidate_id": "pit-depth",
+                        "status": "DIMENSION",
+                        "reason": "Глубина котлована.",
+                    },
+                ],
+            }
+        },
+    )
+
+    work = model["works"][0]
+    assert [(value["value"], value["unit"]) for value in work["quantities_by_document"]["РД"]] == [
+        ("450", "м3")
+    ]
+    assert {value["status"] for value in work["quantity_interpretations"]} == {
+        "WORK_QUANTITY",
+        "DIMENSION",
+    }
+    assert model["summary"]["reviewed_quantity_observation_count"] == 2
+    assert model["summary"]["accepted_work_quantity_observation_count"] == 1
+
+
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
     assert non_work_reason("4-100-060") == "Сметный шифр без описания строительной операции"
     assert non_work_reason("Щиты настила, толщина 25 мм") == (
@@ -499,9 +594,26 @@ def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> 
     assert comparison["left"] == {"document_role": "РД", "value": "438", "unit": "т"}
     assert comparison["right"] == {"document_role": "ВОР", "value": "361", "unit": "т"}
     assert comparison["difference"] == "77"
+    assert comparison["comparison_kind"] == "quantity"
+    assert comparison["classification"] == "QUANTITY_DIFFERENCE"
     assert model["issues"][0]["kind"] == "Расхождение объёмов"
     assert all(item["issue_id"] != "technical" for item in model["issues"])
     assert model["customer_questions"][0]["question"].startswith("Запросить у Заказчика")
+
+
+def test_duration_comparison_is_not_presented_as_construction_quantity() -> None:
+    comparison = _comparison_row(
+        {"work_scope_id": "scope", "facility": "ЛОС 4", "work_name": "Строительство ЛОС"},
+        "ПД",
+        "Смета",
+        (Decimal("4.5"), "месяцев"),
+        (Decimal("3"), "месяца"),
+        Decimal("1.5"),
+        "Разница ПД ↔ Смета: 1.5 месяца",
+    )
+
+    assert comparison["comparison_kind"] == "duration"
+    assert comparison["professional_status"] == "Различается продолжительность"
 
 
 def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None:

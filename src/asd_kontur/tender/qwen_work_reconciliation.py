@@ -13,13 +13,24 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v4"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v5"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
+    "qwen-project-work-reconciliation-v4",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@4.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@5.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
+_QUANTITY_STATUSES = frozenset(
+    {
+        "WORK_QUANTITY",
+        "DIMENSION",
+        "DURATION",
+        "RESOURCE_OR_RATE",
+        "UNRELATED",
+        "AMBIGUOUS",
+    }
+)
 _POTENTIAL_WORK_AT_START = re.compile(
     r"^(?:перевоз\w*|транспортирован\w*|погруз\w*|разгруз\w*|испытан\w*|"
     r"монтаж\w*|демонтаж\w*|геодез\w*|пусконалад\w*)\b",
@@ -41,6 +52,9 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_confidence_invalid",
         "qwen_work_reconciliation_facility_invalid",
         "qwen_work_reconciliation_potential_work_excluded",
+        "qwen_work_reconciliation_quantity_output_unexpected",
+        "qwen_work_reconciliation_quantity_output_incomplete",
+        "qwen_work_reconciliation_quantity_output_invalid",
         "qwen_semantic_response_incomplete",
         "qwen_semantic_response_output_exhausted",
     }
@@ -94,12 +108,21 @@ class QwenProjectWorkReconciler:
         single_retry_available: bool = True,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
         input_ids = tuple(str(row["candidate_id"]) for row in rows)
+        quantity_ids_by_work = {
+            str(row["candidate_id"]): tuple(
+                str(value.get("quantity_candidate_id") or "")
+                for value in row.get("quantity_observations") or ()
+                if isinstance(value, Mapping)
+            )
+            for row in rows
+        }
         try:
+            quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             raw = _complete(
                 self._endpoint,
                 _prompt(rows, work_families, facilities),
                 self._timeout_seconds,
-                max_tokens=max(900, min(3_200, len(rows) * 170)),
+                max_tokens=max(900, min(3_200, len(rows) * 170 + quantity_count * 90)),
             )
             return (
                 _parse(
@@ -109,6 +132,7 @@ class QwenProjectWorkReconciler:
                         str(row["candidate_id"]): str(row.get("wording") or "").casefold()
                         for row in rows
                     },
+                    quantity_ids_by_work=quantity_ids_by_work,
                     work_families=work_families,
                     facilities=facilities,
                 ),
@@ -161,6 +185,17 @@ def _prompt(
             "deterministic_family_hint": row.get("deterministic_family_hint"),
             "nearby_context": str(row.get("nearby_context") or ""),
             "nearby_context_locator_ids": list(row.get("nearby_context_locator_ids") or ()),
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": str(value.get("quantity_candidate_id") or ""),
+                    "value": value.get("value"),
+                    "unit": value.get("unit"),
+                    "source_locator_id": value.get("source_locator_id"),
+                    "nearby_context": str(value.get("nearby_context") or ""),
+                }
+                for value in row.get("quantity_observations") or ()
+                if isinstance(value, Mapping)
+            ],
         }
         for row in rows
     ]
@@ -179,10 +214,16 @@ def _prompt(
 {{"observations":[{{"candidate_id":"...","status":"MATCHED|AMBIGUOUS|UNCLASSIFIED|NOT_A_WORK",
 "family_key":"ключ или null","operation":"краткое профессиональное название или null",
 "facility":"одно допустимое сооружение или null","confidence":"0.00..1.00",
-"reason":"краткая инженерная причина"}}]}}
+"reason":"краткая инженерная причина","quantity_reviews":[{{
+"quantity_candidate_id":"...","status":"WORK_QUANTITY|DIMENSION|DURATION|RESOURCE_OR_RATE|UNRELATED|AMBIGUOUS",
+"reason":"что именно означает значение в данном фрагменте"}}]}}]}}
 Верните ровно одну запись для каждого candidate_id, без новых идентификаторов. MATCHED требует один
 family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_key. Facility допустим только при
 явной привязке из текста или контекста; нахождение в одном документе недостаточно.
+Верните ровно одну quantity_reviews для каждого переданного quantity_candidate_id. WORK_QUANTITY
+означает объём именно этой строительной операции. Размер, отметка, мощность, расход, процент,
+продолжительность, цена и ресурс нормы не являются объёмом работы. Если табличная связь нарушена
+или значение нельзя отнести без догадки, используйте AMBIGUOUS, а не WORK_QUANTITY.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
 контекст ему не противоречит; сооружение всё равно требует явной привязки.
 """
@@ -193,6 +234,7 @@ def _parse(
     *,
     input_ids: tuple[str, ...],
     wording_by_id: Mapping[str, str],
+    quantity_ids_by_work: Mapping[str, tuple[str, ...]],
     work_families: Mapping[str, str],
     facilities: tuple[str, ...],
 ) -> list[dict[str, Any]]:
@@ -222,6 +264,7 @@ def _parse(
         operation = str(value.get("operation") or "").strip() or None
         facility = str(value.get("facility") or "").strip() or None
         reason = " ".join(str(value.get("reason") or "").split())
+        raw_quantity_reviews = value.get("quantity_reviews")
         try:
             confidence = Decimal(str(value.get("confidence")))
         except (InvalidOperation, TypeError) as exc:
@@ -247,7 +290,9 @@ def _parse(
                 f"{reason} Привязка к сооружению не принята: близость упоминаний без явной "
                 "инженерной связи недостаточна."
             )
-        observations[candidate_id] = {
+        quantity_ids = quantity_ids_by_work.get(candidate_id, ())
+        quantity_reviews = _parse_quantity_reviews(raw_quantity_reviews, quantity_ids)
+        observation: dict[str, Any] = {
             "candidate_id": candidate_id,
             "status": status,
             "family_key": family_key,
@@ -256,6 +301,41 @@ def _parse(
             "confidence": format(confidence, "f"),
             "reason": reason[:500],
         }
+        if quantity_ids:
+            observation["quantity_reviews"] = quantity_reviews
+        observations[candidate_id] = observation
     if set(observations) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_incomplete_output")
     return [observations[candidate_id] for candidate_id in input_ids]
+
+
+def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dict[str, str]]:
+    if not input_ids:
+        if raw not in (None, []):
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_unexpected")
+        return []
+    if not isinstance(raw, list) or len(raw) != len(input_ids):
+        raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
+    allowed_ids = set(input_ids)
+    reviews: dict[str, dict[str, str]] = {}
+    for value in raw:
+        if not isinstance(value, dict):
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        candidate_id = str(value.get("quantity_candidate_id") or "")
+        status = str(value.get("status") or "")
+        reason = " ".join(str(value.get("reason") or "").split())
+        if (
+            candidate_id not in allowed_ids
+            or candidate_id in reviews
+            or status not in _QUANTITY_STATUSES
+            or not reason
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        reviews[candidate_id] = {
+            "quantity_candidate_id": candidate_id,
+            "status": status,
+            "reason": reason[:500],
+        }
+    if set(reviews) != allowed_ids:
+        raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
+    return [reviews[candidate_id] for candidate_id in input_ids]

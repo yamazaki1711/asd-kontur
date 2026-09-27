@@ -97,7 +97,73 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v4"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v5"
+
+
+def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        assert "quantity-volume" in prompt
+        assert "quantity-depth" in prompt
+        assert max_tokens >= 900
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-excavation",
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка котлована",
+                        "facility": "КНС-4",
+                        "confidence": "0.94",
+                        "reason": "Операция и сооружение указаны явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-volume",
+                                "status": "WORK_QUANTITY",
+                                "reason": "Значение указано как объём разработки грунта.",
+                            },
+                            {
+                                "quantity_candidate_id": "quantity-depth",
+                                "status": "DIMENSION",
+                                "reason": "Значение является глубиной котлована.",
+                            },
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "candidate-excavation",
+                "wording": "Разработка котлована КНС-4",
+                "quantity_observations": [
+                    {"quantity_candidate_id": "quantity-volume", "value": "827.5", "unit": "м3"},
+                    {"quantity_candidate_id": "quantity-depth", "value": "5", "unit": "м"},
+                ],
+            }
+        ],
+        work_families={"excavation": "Разработка котлованов и земляные работы"},
+        facilities=["КНС-4"],
+    )
+
+    assert result["observations"][0]["quantity_reviews"] == [
+        {
+            "quantity_candidate_id": "quantity-volume",
+            "status": "WORK_QUANTITY",
+            "reason": "Значение указано как объём разработки грунта.",
+        },
+        {
+            "quantity_candidate_id": "quantity-depth",
+            "status": "DIMENSION",
+            "reason": "Значение является глубиной котлована.",
+        },
+    ]
 
 
 def test_qwen_work_reconciliation_rejects_incomplete_or_invented_output(

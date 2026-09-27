@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v7"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v9"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -505,6 +505,17 @@ def build_project_engineering_model(
         ],
         "pits": list(pits["requires_clarification"]),
         "works": list(work_model["unclassified"]),
+        "quantities": [
+            {
+                "work_scope_id": work.get("work_scope_id"),
+                "facility": work.get("facility"),
+                "work": work.get("work_name"),
+                **dict(value),
+            }
+            for work in work_model["works"]
+            for value in work.get("quantity_interpretations") or ()
+            if value.get("status") == "AMBIGUOUS"
+        ],
         "requirements": list(requirements["unresolved"]),
     }
     model = {
@@ -542,7 +553,22 @@ def build_project_engineering_model(
             "facility_assigned_work_observation_count": work_model["classification"][
                 "facility_assigned_observation_count"
             ],
+            "reviewed_quantity_observation_count": work_model["classification"][
+                "reviewed_quantity_observation_count"
+            ],
+            "accepted_work_quantity_observation_count": work_model["classification"][
+                "accepted_work_quantity_observation_count"
+            ],
+            "ambiguous_quantity_observation_count": work_model["classification"][
+                "ambiguous_quantity_observation_count"
+            ],
             "quantity_comparison_count": len(comparisons),
+            "construction_quantity_comparison_count": len(
+                [value for value in comparisons if value.get("comparison_kind") == "quantity"]
+            ),
+            "duration_comparison_count": len(
+                [value for value in comparisons if value.get("comparison_kind") == "duration"]
+            ),
             "scope_comparison_count": len(scope_comparisons),
             "issue_count": len(issues),
             "risk_count": len(risks),
@@ -1166,6 +1192,34 @@ def _work_schedule(
                     "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
                 )
         role = _professional_document_role(row.get("source_role"), context.get("safe_display_name"))
+        linked_quantities = quantity_by_work.get(candidate_id, ())
+        quantity_reviews = {
+            str(value.get("quantity_candidate_id") or ""): dict(value)
+            for value in resolution.get("quantity_reviews") or ()
+            if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+        }
+        accepted_quantities: list[dict[str, Any]] = []
+        quantity_interpretations: list[dict[str, Any]] = []
+        for raw_quantity in linked_quantities:
+            quantity = dict(raw_quantity)
+            quantity_id = str(quantity.get("candidate_id") or "")
+            review = quantity_reviews.get(quantity_id)
+            if review is None or review.get("status") == "WORK_QUANTITY":
+                accepted_quantities.append(quantity)
+            if review is not None:
+                quantity_interpretations.append(
+                    {
+                        "quantity_candidate_id": quantity_id,
+                        "value": quantity.get("normalized_value", quantity.get("value")),
+                        "unit": quantity.get(
+                            "normalized_unit",
+                            quantity.get("unit", quantity.get("raw_unit")),
+                        ),
+                        "status": review.get("status"),
+                        "reason": review.get("reason"),
+                        "source_locator_id": quantity.get("source_locator_id"),
+                    }
+                )
         observation = {
             "candidate_id": candidate_id,
             "project_wording": name,
@@ -1177,7 +1231,8 @@ def _work_schedule(
             "source_version_id": source_version_id,
             "source_locator_id": locator_id,
             "source": _source_ref(locator_id, source_context),
-            "quantities": _unique_values(quantity_by_work.get(candidate_id, ()), "quantity"),
+            "quantities": _unique_values(accepted_quantities, "quantity"),
+            "quantity_interpretations": quantity_interpretations,
             "materials": _unique_values(material_by_work.get(candidate_id, ()), "material"),
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
@@ -1255,10 +1310,12 @@ def _work_schedule(
         quantities_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         materials_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         sources_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        grouped_quantity_interpretations: list[dict[str, Any]] = []
         for observation in observations:
             role = str(observation["document_role"])
             quantities_by_role[role].extend(observation["quantities"])
             materials_by_role[role].extend(observation["materials"])
+            grouped_quantity_interpretations.extend(observation["quantity_interpretations"])
             if observation.get("source"):
                 sources_by_role[role].append(dict(observation["source"]))
         quantities_by_role = {
@@ -1288,6 +1345,7 @@ def _work_schedule(
             ),
             "quantities_by_document": quantities_by_role,
             "materials_by_document": materials_by_role,
+            "quantity_interpretations": _deduplicate_dicts(grouped_quantity_interpretations),
             "document_roles": sorted({str(item["document_role"]) for item in observations}),
             "sources_by_document": sources_by_role,
             "sources": [item["source"] for item in observations if item.get("source")],
@@ -1322,6 +1380,11 @@ def _work_schedule(
     assigned_count = len(
         [value for value in exact_observations.values() if value.get("facility_id")]
     )
+    all_quantity_interpretations = [
+        dict(review)
+        for observation in exact_observations.values()
+        for review in observation.get("quantity_interpretations") or ()
+    ]
     total_count = classified_count + len(unclassified) + len(excluded)
     return {
         "works": schedules,
@@ -1338,6 +1401,21 @@ def _work_schedule(
             ),
             "facility_assigned_observation_count": assigned_count,
             "facility_unassigned_observation_count": classified_count - assigned_count,
+            "reviewed_quantity_observation_count": len(all_quantity_interpretations),
+            "accepted_work_quantity_observation_count": len(
+                [
+                    value
+                    for value in all_quantity_interpretations
+                    if value.get("status") == "WORK_QUANTITY"
+                ]
+            ),
+            "ambiguous_quantity_observation_count": len(
+                [
+                    value
+                    for value in all_quantity_interpretations
+                    if value.get("status") == "AMBIGUOUS"
+                ]
+            ),
             "policy": (
                 "Упорядоченные инженерные термины и явные обозначения; одинаковые слова "
                 "без контекста не объединяют разные работы или сооружения."
@@ -1482,6 +1560,16 @@ def _comparison_row(
     difference: Decimal | None,
     conclusion: str,
 ) -> dict[str, Any]:
+    comparison_kind = (
+        "duration" if _duration_unit(left[1]) and _duration_unit(right[1]) else "quantity"
+    )
+    classification = (
+        "UNIT_MISMATCH"
+        if difference is None
+        else "MATCH"
+        if difference == 0
+        else "QUANTITY_DIFFERENCE"
+    )
     return {
         "comparison_id": semantic_digest(
             {
@@ -1498,6 +1586,17 @@ def _comparison_row(
         "left": {"document_role": left_role, "value": _decimal_text(left[0]), "unit": left[1]},
         "right": {"document_role": right_role, "value": _decimal_text(right[0]), "unit": right[1]},
         "difference": _decimal_text(difference) if difference is not None else None,
+        "comparison_kind": comparison_kind,
+        "classification": classification,
+        "professional_status": {
+            "MATCH": "Значения совпадают",
+            "QUANTITY_DIFFERENCE": (
+                "Различается продолжительность"
+                if comparison_kind == "duration"
+                else "Различается объём"
+            ),
+            "UNIT_MISMATCH": "Единицы не позволяют прямое сравнение",
+        }[classification],
         "conclusion": conclusion,
         "source_locator_ids": list(work.get("source_locator_ids") or ()),
     }
@@ -1727,17 +1826,25 @@ def _issues(
             comparison.get("conclusion")
         ):
             continue
+        comparison_kind = str(comparison.get("comparison_kind") or "quantity")
         issues.append(
             {
                 "issue_id": str(comparison["comparison_id"]),
-                "kind": "Расхождение объёмов"
-                if comparison.get("difference") is not None
-                else "Несопоставимые единицы",
+                "kind": (
+                    "Расхождение продолжительности"
+                    if comparison_kind == "duration"
+                    else "Расхождение объёмов"
+                    if comparison.get("difference") is not None
+                    else "Несопоставимые единицы"
+                ),
                 "location": comparison.get("facility"),
                 "subject": comparison.get("work"),
                 "description": comparison.get("conclusion"),
                 "practical_consequence": (
-                    "Объём и стоимость работ требуют согласования до подачи предложения."
+                    "Продолжительность работ и календарные условия требуют согласования "
+                    "до подачи предложения."
+                    if comparison_kind == "duration"
+                    else "Объём и стоимость работ требуют согласования до подачи предложения."
                 ),
                 "recommended_action": (
                     "Запросить у Заказчика подтверждение применяемого объёма и документа-основания."
@@ -2103,12 +2210,12 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
         if kind == "quantity":
             payload = {
                 "value": row.get("normalized_value", row.get("value")),
-                "unit": row.get("normalized_unit", row.get("raw_unit")),
+                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
                 "source_locator_id": row.get("source_locator_id"),
             }
             rendered = {
                 "value": row.get("normalized_value", row.get("value")),
-                "unit": row.get("normalized_unit", row.get("raw_unit")),
+                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
                 "raw_value": row.get("value", row.get("raw_value")),
                 "raw_unit": row.get("raw_unit"),
                 "source_locator_id": row.get("source_locator_id"),
@@ -2117,13 +2224,13 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
             payload = {
                 "name": row.get("normalized_name", row.get("value")),
                 "quantity": row.get("normalized_value", row.get("raw_quantity")),
-                "unit": row.get("normalized_unit", row.get("raw_unit")),
+                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
                 "source_locator_id": row.get("source_locator_id"),
             }
             rendered = {
                 "name": row.get("value", row.get("raw_name")),
                 "quantity": row.get("normalized_value", row.get("raw_quantity")),
-                "unit": row.get("normalized_unit", row.get("raw_unit")),
+                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
                 "source_locator_id": row.get("source_locator_id"),
             }
         result.setdefault(semantic_digest(payload), rendered)
@@ -2148,6 +2255,11 @@ def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decim
 
 def _normalized_unit(value: object) -> str:
     return str(value or "").strip().casefold().rstrip(".")
+
+
+def _duration_unit(value: object) -> bool:
+    normalized = _normalized_unit(value)
+    return normalized.startswith(("месяц", "мес", "день", "дн", "недел", "год"))
 
 
 def _source_ref(

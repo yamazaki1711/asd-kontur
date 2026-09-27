@@ -23,7 +23,9 @@ from asd_kontur.application_spine.object_store import (
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
     SpinePostgresRepository,
+    _merged_quantity_reviews,
     _semantic_extraction_priority,
+    _unreviewed_work_quantities,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
@@ -32,6 +34,44 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_quantity_review_chunks_resume_without_silently_accepting_deferred_values() -> None:
+    quantities = [
+        {"candidate_id": f"quantity-{index}", "value": index} for index in range(10)
+    ]
+    first_result = {
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": f"quantity-{index}",
+                "status": "WORK_QUANTITY",
+            }
+            for index in range(8)
+        ]
+    }
+
+    remaining = _unreviewed_work_quantities(quantities, first_result)
+
+    assert [value["candidate_id"] for value in remaining] == ["quantity-8", "quantity-9"]
+
+
+def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:
+    combined = _merged_quantity_reviews(
+        (
+            {"quantity_candidate_id": "quantity-1", "status": "AMBIGUOUS"},
+            {"quantity_candidate_id": "quantity-2", "status": "DIMENSION"},
+        ),
+        (
+            {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"},
+            {"quantity_candidate_id": "quantity-3", "status": "DURATION"},
+        ),
+    )
+
+    assert combined == [
+        {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"},
+        {"quantity_candidate_id": "quantity-2", "status": "DIMENSION"},
+        {"quantity_candidate_id": "quantity-3", "status": "DURATION"},
+    ]
 
 
 def test_project_understanding_application_projection_keeps_counts_and_selected_section() -> None:
