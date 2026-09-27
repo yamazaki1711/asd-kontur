@@ -183,6 +183,10 @@ def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> N
         "waste_management",
         "Обращение со строительными отходами",
     )
+    assert classify_work_family("Доработка грунта вручную") == (
+        "excavation",
+        "Разработка котлованов и земляные работы",
+    )
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:
