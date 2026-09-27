@@ -158,6 +158,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
+    assert model["model_version"] == "project-engineering-model-v3"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -189,6 +190,25 @@ def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> N
         "excavation",
         "Разработка котлованов и земляные работы",
     )
+
+
+def test_common_project_operations_use_reusable_construction_families() -> None:
+    expected = {
+        "Гидравлическое погружение иглофильтров": "dewatering",
+        "Засыпка вручную траншей местным грунтом": "backfill",
+        "Укладка труб на песчаную подушку": "pipeline",
+        "Устройство дополнительных колодцев": "chambers_wells",
+        "Нанесение праймера битумного": "waterproofing",
+        "Установка бортовых камней": "roadworks",
+        "Прокладка и монтаж сетей связи": "communications",
+        "Лабораторный контроль качества очистки стоков": "testing",
+        "Вертикальная планировка участка": "site_preparation",
+    }
+
+    for wording, family_key in expected.items():
+        result = classify_work_family(wording)
+        assert result is not None
+        assert result[0] == family_key
 
 
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
