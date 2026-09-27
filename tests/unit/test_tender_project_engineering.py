@@ -158,7 +158,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v4"
+    assert model["model_version"] == "project-engineering-model-v5"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -292,6 +292,48 @@ def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording(
     assert sheet_row["project_wording"] == ["Шпунт Л5-УМ, сталь С255"]
     assert sheet_row["quantities_by_document"] == {}
     assert sheet_row["sources_by_document"]["ПД"][0]["document"] == "Спецификация.pdf"
+
+
+def test_contextual_resolution_can_refine_broad_deterministic_family() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "collector-demolition",
+                    "version": 3,
+                    "value": "Демонтаж существующего железобетонного коллектора",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict([_source("work", "ПОС.pdf", 12)]),
+        work_resolutions={
+            "collector-demolition": {
+                "candidate_version": 3,
+                "status": "MATCHED",
+                "family_key": "demolition",
+                "operation": "Демонтаж железобетонного коллектора",
+                "facility": None,
+                "reason": "Операция является демонтажем существующего сооружения.",
+            }
+        },
+    )
+
+    assert model["works"][0]["family_key"] == "demolition"
+    assert model["works"][0]["work_name"] == "Демонтаж железобетонного коллектора"
 
 
 def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> None:

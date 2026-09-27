@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v4"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v5"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -1073,24 +1073,27 @@ def _work_schedule(
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
         }
-        if family is None:
-            if resolution.get("status") == "MATCHED":
-                family_key = str(resolution.get("family_key") or "")
-                family_name = work_family_catalog().get(family_key)
-                if family_name:
-                    operation_name = str(resolution.get("operation") or family_name)
-                    family = (family_key, family_name)
-            elif resolution.get("status") == "NOT_A_WORK":
-                excluded.append(
-                    {
-                        **observation,
-                        "exclusion_reason": str(
-                            resolution.get("reason")
-                            or "Локальная модель определила, что строка не является работой"
-                        ),
-                    }
-                )
-                continue
+        if resolution.get("status") == "MATCHED":
+            # Contextual local-Qwen interpretation may refine a broad
+            # deterministic term (for example, a concrete phrase describing
+            # pile construction, or pipeline wording describing demolition).
+            # The family remains restricted to the canonical catalog.
+            family_key = str(resolution.get("family_key") or "")
+            family_name = work_family_catalog().get(family_key)
+            if family_name:
+                operation_name = str(resolution.get("operation") or family_name)
+                family = (family_key, family_name)
+        elif resolution.get("status") == "NOT_A_WORK":
+            excluded.append(
+                {
+                    **observation,
+                    "exclusion_reason": str(
+                        resolution.get("reason")
+                        or "Локальная модель определила, что строка не является работой"
+                    ),
+                }
+            )
+            continue
         if family is None:
             if name:
                 reason = non_work_reason(name)
