@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v6"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v7"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -686,6 +686,62 @@ def professional_work_name(family_key: str, wording: object) -> str:
         if "демонтаж" in normalized or "разбор" in normalized:
             return "Демонтаж распределительного/обвязочного пояса"
         return "Устройство распределительного/обвязочного пояса"
+    if family_key == "excavation":
+        if "загрязнен" in normalized:
+            return "Выемка загрязнённого грунта"
+        if "транше" in normalized:
+            return "Разработка траншей"
+        if "котлован" in normalized:
+            return "Разработка котлована"
+        return "Разработка грунта"
+    if family_key == "backfill":
+        if "транше" in normalized:
+            return "Обратная засыпка траншей"
+        if "котлован" in normalized or "пазух" in normalized:
+            return "Обратная засыпка котлованов и пазух"
+        return "Обратная засыпка"
+    if family_key == "soil_disposal":
+        return "Погрузка грунта" if "погруз" in normalized else "Вывоз грунта"
+    if family_key == "pipeline":
+        if "демонтаж" in normalized or "разбор" in normalized:
+            return "Демонтаж трубопровода"
+        if "основан" in normalized or "подушк" in normalized:
+            return "Устройство основания под трубопровод"
+        if "подключ" in normalized or "врезк" in normalized:
+            return "Подключение трубопровода"
+        return "Монтаж трубопровода"
+    if family_key == "pile_foundation":
+        if "выкручив" in normalized or "извлеч" in normalized or "демонтаж" in normalized:
+            return "Извлечение/демонтаж свай"
+        if "винтов" in normalized:
+            return "Устройство винтовых свай"
+        return "Устройство свай"
+    if family_key == "reinforced_concrete":
+        if "сборн" in normalized and ("монтаж" in normalized or "установ" in normalized):
+            return "Монтаж сборных железобетонных конструкций"
+        if "бетонирован" in normalized or "бетонн работ" in normalized:
+            return "Бетонирование"
+        return "Железобетонные конструкции"
+    if family_key == "equipment_installation":
+        if "насосн" in normalized:
+            return "Монтаж насосного оборудования"
+        if "емкост" in normalized or "корпус" in normalized:
+            return "Монтаж технологической ёмкости"
+        if "кнс" in normalized:
+            return "Монтаж КНС"
+        if "лос" in normalized or "очистн сооружен" in normalized:
+            return "Монтаж ЛОС"
+        return "Монтаж технологического оборудования"
+    if family_key == "testing":
+        if "герметич" in normalized:
+            return "Испытание на герметичность"
+        if "промыв" in normalized:
+            return "Промывка системы"
+        if "отбор" in normalized and "проб" in normalized:
+            return "Отбор проб"
+        if "лабораторн" in normalized:
+            return "Лабораторный контроль"
+        return "Испытания и проверка"
     return next(title for key, title, _terms in _WORK_FAMILIES if key == family_key)
 
 

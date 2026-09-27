@@ -158,7 +158,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v6"
+    assert model["model_version"] == "project-engineering-model-v7"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -378,6 +378,78 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         assert result[0] == family_key
 
     assert classify_work_family("Вывоз после приемки со склада готового оборудования") is None
+
+
+def test_same_family_operations_remain_distinct_engineering_scopes() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "trench",
+                    "version": 1,
+                    "value": "Разработка траншеи для КНС-2",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "trench-locator",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "pit",
+                    "version": 1,
+                    "value": "Разработка котлована КНС-2",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "pit-locator",
+                    "source_role": "working_documentation",
+                },
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "trench-quantity",
+                    "work_candidate_id": "trench",
+                    "value": "120",
+                    "normalized_value": "120",
+                    "unit": "м3",
+                    "source_locator_id": "trench-locator",
+                },
+                {
+                    "candidate_id": "pit-quantity",
+                    "work_candidate_id": "pit",
+                    "value": "450",
+                    "normalized_value": "450",
+                    "unit": "м3",
+                    "source_locator_id": "pit-locator",
+                },
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-2",
+                "candidate_labels": ["КНС-2"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": [],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("trench-locator", "КР.pdf", 3),
+                _source("pit-locator", "КР.pdf", 4),
+            ]
+        ),
+    )
+
+    by_name = {row["work_name"]: row for row in model["works"]}
+    assert set(by_name) == {"Разработка траншей", "Разработка котлована"}
+    assert by_name["Разработка траншей"]["quantities_by_document"]["РД"][0]["value"] == ("120")
+    assert by_name["Разработка котлована"]["quantities_by_document"]["РД"][0]["value"] == ("450")
 
 
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
