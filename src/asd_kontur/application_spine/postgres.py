@@ -3266,6 +3266,7 @@ class SpinePostgresRepository:
                 normative_profile=_jsonable_row(profile) if profile is not None else None,
                 source_context=project_source_context,
                 work_resolutions=work_resolutions,
+                structure_relationships=structure_relationships,
             )
             review_decisions = self._project_review_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
@@ -5339,6 +5340,7 @@ class SpinePostgresRepository:
             normative_profile=None,
             source_context=project_source_context,
             work_resolutions=work_resolutions,
+            structure_relationships=structure_relationships,
         )
         view: dict[str, Any] = {
             "materialization": cls._project_understanding_materialization(

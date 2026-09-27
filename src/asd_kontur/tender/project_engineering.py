@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v3"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v4"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -387,6 +387,7 @@ def build_project_engineering_model(
     normative_profile: Mapping[str, Any] | None,
     source_context: Mapping[str, Mapping[str, Any]],
     work_resolutions: Mapping[str, Mapping[str, Any]] | None = None,
+    structure_relationships: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Return the project-first model consumed by UI, report and assistant."""
 
@@ -418,6 +419,7 @@ def build_project_engineering_model(
         candidates.get("materials", ()),
         facilities,
         node_to_facility,
+        structure_relationships,
         source_context,
         work_resolutions or {},
     )
@@ -429,7 +431,7 @@ def build_project_engineering_model(
         )
     )
     scope_comparisons = _scope_comparisons(work_model["works"])
-    sheet_pile_schedule = _sheet_pile_schedule(work_model["works"])
+    sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
     issues = _issues(
         defects,
         comparisons,
@@ -922,10 +924,10 @@ def _work_schedule(
     materials: Iterable[Mapping[str, Any]],
     facilities: Iterable[Mapping[str, Any]],
     node_to_facility: Mapping[str, str],
+    structure_relationships: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
     work_resolutions: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    del node_to_facility  # Exact relationship assignment can extend the locator rule later.
     work_rows = [dict(raw) for raw in works]
     facility_by_designation = {
         str(item.get("designation")): dict(item) for item in facilities if item.get("designation")
@@ -946,6 +948,24 @@ def _work_schedule(
                     facility_ids_by_page[
                         (str(context.get("source_version_id") or ""), int(page))
                     ].add(facility_id)
+    # A resolved structural relationship on the exact same source fragment is
+    # an engineering link, not mere document co-occurrence.  It lets work rows
+    # inherit a facility only when the relationship has one unambiguous
+    # facility endpoint; conflicting endpoints remain unresolved.
+    relationship_facilities_by_locator: dict[str, set[str]] = defaultdict(set)
+    for raw_relationship in structure_relationships:
+        relationship = dict(raw_relationship)
+        facility_ids: set[str] = set()
+        for endpoint in ("subject_structure_node_id", "object_structure_node_id"):
+            related_facility_id = node_to_facility.get(str(relationship.get(endpoint) or ""))
+            if related_facility_id is not None:
+                facility_ids.add(related_facility_id)
+        locator_id = str(relationship.get("source_locator_id") or "")
+        if locator_id and len(facility_ids) == 1:
+            relationship_facilities_by_locator[locator_id].update(facility_ids)
+    for locator_id, facility_ids in relationship_facilities_by_locator.items():
+        if len(facility_ids) == 1:
+            facility_ids_by_locator[locator_id].update(facility_ids)
     # A unique explicit designation elsewhere on the same drawing/estimate page
     # is a stronger engineering basis than document co-occurrence.  Pages that
     # mention several facilities remain unassigned.
@@ -992,7 +1012,11 @@ def _work_schedule(
             if len(exact_facilities) == 1:
                 facility = facility_by_id[next(iter(exact_facilities))]
                 designation = str(facility.get("designation") or facility.get("name") or "")
-                assignment_basis = "Работа и сооружение указаны в одном исходном фрагменте"
+                assignment_basis = (
+                    "Работа связана с сооружением явным отношением в исходном фрагменте"
+                    if locator_id in relationship_facilities_by_locator
+                    else "Работа и сооружение указаны в одном исходном фрагменте"
+                )
         context = dict(source_context.get(locator_id) or {})
         if facility is None:
             locator_value = context.get("locator_value")
@@ -1427,7 +1451,10 @@ def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any
     return _deduplicate_dicts(result)
 
 
-def _sheet_pile_schedule(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _sheet_pile_schedule(
+    works: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     """Return a professional sheet-pile/waling schedule without false totals."""
 
     result: list[dict[str, Any]] = []
@@ -1476,6 +1503,25 @@ def _sheet_pile_schedule(works: Iterable[Mapping[str, Any]]) -> list[dict[str, A
                 and value.get("source_locator_id")
             }
         )
+        profile_wording = _ordered_unique(
+            str(value.get("name") or "")
+            for values in materials.values()
+            for value in values or ()
+            if _sheet_pile_profiles(_normalized(value.get("name")))
+        )
+        profile_sources_by_document = {
+            role: _source_refs(
+                [
+                    str(value.get("source_locator_id"))
+                    for value in values or ()
+                    if _sheet_pile_profiles(_normalized(value.get("name")))
+                    and value.get("source_locator_id")
+                ],
+                source_context,
+            )
+            for role, values in materials.items()
+            if any(_sheet_pile_profiles(_normalized(value.get("name"))) for value in values or ())
+        }
         if unassigned_profile_observation:
             # The profile observation is useful, but the extractor associated it
             # with a non-sheet-pile work.  Keep the exact material observation and
@@ -1516,14 +1562,14 @@ def _sheet_pile_schedule(works: Iterable[Mapping[str, Any]]) -> list[dict[str, A
                 "commercial_quantities": commercial_roles,
                 "waling_beams": beams,
                 "steel": steel,
-                "project_wording": wording,
+                "project_wording": profile_wording if unassigned_profile_observation else wording,
                 "source_locator_ids": (
                     profile_locator_ids
                     if unassigned_profile_observation
                     else list(row.get("source_locator_ids") or ())
                 ),
                 "sources_by_document": (
-                    {}
+                    profile_sources_by_document
                     if unassigned_profile_observation
                     else dict(row.get("sources_by_document") or {})
                 ),
@@ -2095,8 +2141,9 @@ def _consolidate_quantity_mentions(values: Iterable[Mapping[str, Any]]) -> list[
 
 def _sheet_pile_profiles(normalized: str) -> list[str]:
     profiles: list[str] = []
-    for match in re.finditer(r"\bл5(?:ум|\s*10)?\b", normalized):
-        value = match.group(0).upper().replace(" ", "-")
+    for match in re.finditer(r"\bл5(?:\s*ум|\s*10)?\b", normalized):
+        compact = match.group(0).upper().replace(" ", "")
+        value = "Л5УМ" if compact == "Л5УМ" else "Л5-10" if compact == "Л510" else "Л5"
         profiles.append(value)
     return _ordered_unique(profiles)
 

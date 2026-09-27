@@ -158,7 +158,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v3"
+    assert model["model_version"] == "project-engineering-model-v4"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -175,6 +175,123 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     assert model["work_classification"]["excluded_non_work_observation_count"] == 1
     assert model["scope_comparisons"][0]["classification"] == "MATCH"
     assert model["sheet_pile_schedule"][0]["operation"] == "Погружение шпунта"
+
+
+def test_exact_structural_relationship_assigns_work_without_document_wide_guessing() -> None:
+    source_context = dict(
+        [
+            _source("facility-a", "КР.pdf", 1),
+            _source("facility-b", "КР.pdf", 2),
+            _source("related-work", "КР.pdf", 17),
+            _source("unrelated-work", "КР.pdf", 18),
+        ]
+    )
+    identity_components = [
+        {
+            "identity_kind": "facility",
+            "canonical_label": "КНС-4",
+            "candidate_labels": ["КНС-4", "КНС 4"],
+            "member_structure_node_ids": ["facility-node"],
+            "source_locator_ids": ["facility-a", "facility-b"],
+        }
+    ]
+    candidates = {
+        "project_fields": [],
+        "work_types": [
+            {
+                "candidate_id": "related",
+                "version": 1,
+                "value": "Прокладка трубопровода",
+                "source_version_id": "source-related-work",
+                "source_locator_id": "related-work",
+                "source_role": "working_documentation",
+            },
+            {
+                "candidate_id": "unrelated",
+                "version": 1,
+                "value": "Прокладка трубопровода",
+                "source_version_id": "source-unrelated-work",
+                "source_locator_id": "unrelated-work",
+                "source_role": "working_documentation",
+            },
+        ],
+        "quantities": [],
+        "materials": [],
+    }
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates=candidates,
+        structure_nodes=[],
+        identity_components=identity_components,
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=source_context,
+        structure_relationships=[
+            {
+                "relationship_kind": "serves",
+                "subject_structure_node_id": "pipeline-node",
+                "object_structure_node_id": "facility-node",
+                "source_locator_id": "related-work",
+            }
+        ],
+    )
+
+    related = next(row for row in model["works"] if row["facility_id"] is not None)
+    unrelated = next(row for row in model["works"] if row["facility_id"] is None)
+    assert related["facility"] == "КНС 4"
+    assert related["status"].startswith("Работа связана с сооружением")
+    assert unrelated["facility"] == "Место выполнения не установлено"
+
+
+def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "excavation",
+                    "version": 1,
+                    "value": "Разработка грунта",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [],
+            "materials": [
+                {
+                    "candidate_id": "sheet-material",
+                    "work_candidate_id": "excavation",
+                    "value": "Шпунт Л5-УМ, сталь С255",
+                    "normalized_name": "шпунт л5 ум сталь с255",
+                    "source_locator_id": "material",
+                }
+            ],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("work", "ПОС.pdf", 10),
+                _source("material", "Спецификация.pdf", 4),
+            ]
+        ),
+    )
+
+    sheet_row = model["sheet_pile_schedule"][0]
+    assert sheet_row["profiles"] == ["Л5УМ"]
+    assert sheet_row["project_wording"] == ["Шпунт Л5-УМ, сталь С255"]
+    assert sheet_row["quantities_by_document"] == {}
+    assert sheet_row["sources_by_document"]["ПД"][0]["document"] == "Спецификация.pdf"
 
 
 def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> None:
