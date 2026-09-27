@@ -199,6 +199,44 @@ def test_qwen_work_reconciliation_allows_component_with_mounting_attribute(
     assert result["observations"][0]["status"] == "NOT_A_WORK"
 
 
+def test_qwen_work_reconciliation_discards_weak_facility_proximity_but_keeps_work(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "asd_kontur.tender.qwen_work_reconciliation._complete",
+        lambda *_args, **_kwargs: json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-a",
+                        "status": "MATCHED",
+                        "family_key": "demolition",
+                        "operation": "Демонтаж трубы",
+                        "facility": "ЛОС 8.1",
+                        "confidence": "0.82",
+                        "reason": (
+                            "ЛОС 8.1 упомянута в том же абзаце, и близость объектов "
+                            "позволяет связать работу."
+                        ),
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [{"candidate_id": "candidate-a", "wording": "Демонтаж трубы"}],
+        work_families={"demolition": "Демонтажные работы"},
+        facilities=["ЛОС 8.1"],
+    )
+
+    observation = result["observations"][0]
+    assert observation["status"] == "MATCHED"
+    assert observation["facility"] is None
+    assert "Привязка к сооружению не принята" in observation["reason"]
+
+
 def test_qwen_work_reconciliation_subdivides_only_a_malformed_batch(
     monkeypatch: Any,
 ) -> None:

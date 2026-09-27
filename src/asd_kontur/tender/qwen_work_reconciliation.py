@@ -25,6 +25,10 @@ _POTENTIAL_WORK_AT_START = re.compile(
     r"монтаж\w*|демонтаж\w*|геодез\w*|пусконалад\w*)\b",
     re.IGNORECASE,
 )
+_WEAK_FACILITY_REASON = re.compile(
+    r"(?:близост|в том же (?:абзац|контекст)|контекст.*упомина|косвен|предполож|вероятн)",
+    re.IGNORECASE,
+)
 _RECOVERABLE_RESPONSE_FAILURES = frozenset(
     {
         "qwen_work_reconciliation_invalid_json",
@@ -237,6 +241,12 @@ def _parse(
             raise QwenSemanticFailure("qwen_work_reconciliation_potential_work_excluded")
         if facility is not None and facility not in allowed_facilities:
             raise QwenSemanticFailure("qwen_work_reconciliation_facility_invalid")
+        if facility is not None and _WEAK_FACILITY_REASON.search(reason):
+            facility = None
+            reason = (
+                f"{reason} Привязка к сооружению не принята: близость упоминаний без явной "
+                "инженерной связи недостаточна."
+            )
         observations[candidate_id] = {
             "candidate_id": candidate_id,
             "status": status,
