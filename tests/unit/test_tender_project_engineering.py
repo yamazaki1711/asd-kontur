@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from asd_kontur.application_spine.postgres import _application_engineering_projection
-from asd_kontur.tender.project_engineering import build_project_engineering_model
+from asd_kontur.tender.project_engineering import (
+    build_project_engineering_model,
+    classify_work_family,
+)
 
 
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
@@ -169,6 +172,17 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     assert model["work_classification"]["excluded_non_work_observation_count"] == 1
     assert model["scope_comparisons"][0]["classification"] == "MATCH"
     assert model["sheet_pile_schedule"][0]["operation"] == "Погружение шпунта"
+
+
+def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> None:
+    assert classify_work_family("Перевозка строительных грузов") == (
+        "transportation",
+        "Перевозка строительных грузов и материалов",
+    )
+    assert classify_work_family("Сбор и размещение строительных отходов") == (
+        "waste_management",
+        "Обращение со строительными отходами",
+    )
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:

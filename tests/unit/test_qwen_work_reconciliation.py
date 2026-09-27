@@ -84,3 +84,34 @@ def test_qwen_work_reconciliation_rejects_incomplete_or_invented_output(
             work_families={"backfill": "Обратная засыпка и уплотнение"},
             facilities=[],
         )
+
+
+def test_qwen_work_reconciliation_cannot_hide_potential_commercial_work(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "asd_kontur.tender.qwen_work_reconciliation._complete",
+        lambda *_args, **_kwargs: json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-a",
+                        "status": "NOT_A_WORK",
+                        "family_key": None,
+                        "operation": None,
+                        "facility": None,
+                        "confidence": "0.95",
+                        "reason": "Недостаточно контекста.",
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="potential_work_excluded"):
+        QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+            [{"candidate_id": "candidate-a", "wording": "Геодезическая разбивка"}],
+            work_families={"surveying": "Геодезические работы"},
+            facilities=[],
+        )

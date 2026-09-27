@@ -56,7 +56,7 @@ def upgrade() -> None:
             organization_id uuid NOT NULL,
             workspace_id uuid NOT NULL,
             job_id uuid NOT NULL,
-            profile_version text NOT NULL CHECK (profile_version='qwen-project-work-reconciliation-v1'),
+            profile_version text NOT NULL CHECK (profile_version='qwen-project-work-reconciliation-v2'),
             input_digest text NOT NULL CHECK (input_digest ~ '^sha256:[a-f0-9]{64}$'),
             result_manifest jsonb NOT NULL,
             result_digest text NOT NULL CHECK (result_digest ~ '^sha256:[a-f0-9]{64}$'),

@@ -12,9 +12,20 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v1"
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@1.0.0"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v2"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@2.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
+_POTENTIAL_WORK_MARKERS = (
+    "перевоз",
+    "транспортирован",
+    "погруз",
+    "разгруз",
+    "испытан",
+    "монтаж",
+    "демонтаж",
+    "геодез",
+    "пусконалад",
+)
 
 
 class QwenProjectWorkReconciler:
@@ -50,6 +61,10 @@ class QwenProjectWorkReconciler:
         observations = _parse(
             raw,
             input_ids=tuple(input_ids),
+            wording_by_id={
+                str(row.get("candidate_id") or ""): str(row.get("wording") or "").casefold()
+                for row in input_rows
+            },
             work_families=work_families,
             facilities=allowed_facilities,
         )
@@ -104,6 +119,7 @@ def _parse(
     raw: str,
     *,
     input_ids: tuple[str, ...],
+    wording_by_id: Mapping[str, str],
     work_families: Mapping[str, str],
     facilities: tuple[str, ...],
 ) -> list[dict[str, Any]]:
@@ -146,6 +162,10 @@ def _parse(
                 raise QwenSemanticFailure("qwen_work_reconciliation_family_invalid")
         elif family_key is not None:
             raise QwenSemanticFailure("qwen_work_reconciliation_unresolved_family_invalid")
+        if status == "NOT_A_WORK" and any(
+            marker in wording_by_id.get(candidate_id, "") for marker in _POTENTIAL_WORK_MARKERS
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_potential_work_excluded")
         if facility is not None and facility not in allowed_facilities:
             raise QwenSemanticFailure("qwen_work_reconciliation_facility_invalid")
         observations[candidate_id] = {
