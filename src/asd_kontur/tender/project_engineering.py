@@ -17,7 +17,8 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v9"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v10"
+_QUANTITY_AWARE_WORK_PROFILE = "qwen-project-work-reconciliation-v5"
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
@@ -514,7 +515,7 @@ def build_project_engineering_model(
             }
             for work in work_model["works"]
             for value in work.get("quantity_interpretations") or ()
-            if value.get("status") == "AMBIGUOUS"
+            if value.get("status") in {"AMBIGUOUS", "UNREVIEWED"}
         ],
         "requirements": list(requirements["unresolved"]),
     }
@@ -561,6 +562,9 @@ def build_project_engineering_model(
             ],
             "ambiguous_quantity_observation_count": work_model["classification"][
                 "ambiguous_quantity_observation_count"
+            ],
+            "pending_quantity_observation_count": work_model["classification"][
+                "pending_quantity_observation_count"
             ],
             "quantity_comparison_count": len(comparisons),
             "construction_quantity_comparison_count": len(
@@ -1200,10 +1204,18 @@ def _work_schedule(
         }
         accepted_quantities: list[dict[str, Any]] = []
         quantity_interpretations: list[dict[str, Any]] = []
+        quantity_aware_resolution = (
+            resolution.get("profile_version") == _QUANTITY_AWARE_WORK_PROFILE
+        )
         for raw_quantity in linked_quantities:
             quantity = dict(raw_quantity)
             quantity_id = str(quantity.get("candidate_id") or "")
             review = quantity_reviews.get(quantity_id)
+            if review is None and quantity_aware_resolution:
+                review = {
+                    "status": "UNREVIEWED",
+                    "reason": ("Значение ещё не проверено как объём этой строительной операции."),
+                }
             if review is None or review.get("status") == "WORK_QUANTITY":
                 accepted_quantities.append(quantity)
             if review is not None:
@@ -1346,6 +1358,20 @@ def _work_schedule(
             "quantities_by_document": quantities_by_role,
             "materials_by_document": materials_by_role,
             "quantity_interpretations": _deduplicate_dicts(grouped_quantity_interpretations),
+            "quantity_validation_status": (
+                "Все связанные значения проверены по смыслу"
+                if grouped_quantity_interpretations
+                and all(
+                    value.get("status") != "UNREVIEWED"
+                    for value in grouped_quantity_interpretations
+                )
+                else "Часть связанных значений ещё требует смысловой проверки"
+                if any(
+                    value.get("status") == "UNREVIEWED"
+                    for value in grouped_quantity_interpretations
+                )
+                else "Значения получены прежним профилем и ещё не проверены по смыслу"
+            ),
             "document_roles": sorted({str(item["document_role"]) for item in observations}),
             "sources_by_document": sources_by_role,
             "sources": [item["source"] for item in observations if item.get("source")],
@@ -1401,7 +1427,13 @@ def _work_schedule(
             ),
             "facility_assigned_observation_count": assigned_count,
             "facility_unassigned_observation_count": classified_count - assigned_count,
-            "reviewed_quantity_observation_count": len(all_quantity_interpretations),
+            "reviewed_quantity_observation_count": len(
+                [
+                    value
+                    for value in all_quantity_interpretations
+                    if value.get("status") != "UNREVIEWED"
+                ]
+            ),
             "accepted_work_quantity_observation_count": len(
                 [
                     value
@@ -1414,6 +1446,13 @@ def _work_schedule(
                     value
                     for value in all_quantity_interpretations
                     if value.get("status") == "AMBIGUOUS"
+                ]
+            ),
+            "pending_quantity_observation_count": len(
+                [
+                    value
+                    for value in all_quantity_interpretations
+                    if value.get("status") == "UNREVIEWED"
                 ]
             ),
             "policy": (

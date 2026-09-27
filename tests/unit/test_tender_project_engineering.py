@@ -173,7 +173,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v9"
+    assert model["model_version"] == "project-engineering-model-v10"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -500,6 +500,14 @@ def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
                     "unit": "м",
                     "source_locator_id": "depth-locator",
                 },
+                {
+                    "candidate_id": "pit-width",
+                    "work_candidate_id": "pit-work",
+                    "value": "12",
+                    "normalized_value": "12",
+                    "unit": "м",
+                    "source_locator_id": "width-locator",
+                },
             ],
             "materials": [],
         },
@@ -522,11 +530,13 @@ def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
                 _source("work-locator", "КР.pdf", 3),
                 _source("volume-locator", "КР.pdf", 3),
                 _source("depth-locator", "КР.pdf", 3),
+                _source("width-locator", "КР.pdf", 3),
             ]
         ),
         work_resolutions={
             "pit-work": {
                 "candidate_version": 2,
+                "profile_version": "qwen-project-work-reconciliation-v5",
                 "status": "MATCHED",
                 "family_key": "excavation",
                 "operation": "Разработка котлована",
@@ -554,9 +564,14 @@ def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
     assert {value["status"] for value in work["quantity_interpretations"]} == {
         "WORK_QUANTITY",
         "DIMENSION",
+        "UNREVIEWED",
     }
     assert model["summary"]["reviewed_quantity_observation_count"] == 2
     assert model["summary"]["accepted_work_quantity_observation_count"] == 1
+    assert model["summary"]["pending_quantity_observation_count"] == 1
+    assert work["quantity_validation_status"] == (
+        "Часть связанных значений ещё требует смысловой проверки"
+    )
 
 
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
