@@ -12,8 +12,8 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v2"
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@2.0.0"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v3"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@3.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _POTENTIAL_WORK_MARKERS = (
     "перевоз",

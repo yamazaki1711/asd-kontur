@@ -4275,6 +4275,18 @@ class SpinePostgresRepository:
                 workspace_id=workspace_id,
                 locator_ids=locator_ids,
             )
+            nearby_context = {
+                str(row["source_locator_id"]): str(row["raw_text"] or "")[:1200]
+                for row in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (source_locator_id) source_locator_id,raw_text FROM "
+                        "workspace.native_layout_element_versions WHERE organization_id=:o AND "
+                        "workspace_id=:w AND source_locator_id=ANY(CAST(:locators AS uuid[])) "
+                        "ORDER BY source_locator_id,version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "locators": locator_ids},
+                ).mappings()
+            }
             source_rows = {
                 str(row["source_version_id"]): dict(row)
                 for row in session.execute(
@@ -4314,7 +4326,9 @@ class SpinePostgresRepository:
                 locator_value = context.get("locator_value")
                 page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
                 wording = str(row["wording"])
-                hints = [value for value in facilities if value.casefold() in wording.casefold()]
+                context_text = nearby_context.get(str(row.get("source_locator_id") or ""), "")
+                contextual_scope = f"{wording} {context_text}".casefold()
+                hints = [value for value in facilities if value.casefold() in contextual_scope]
                 prepared.append(
                     {
                         "candidate_id": str(row["candidate_id"]),
@@ -4325,7 +4339,7 @@ class SpinePostgresRepository:
                         "page": page,
                         "scope": str(row.get("scope_key") or ""),
                         "facility_hints": hints,
-                        "nearby_context": "",
+                        "nearby_context": context_text,
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
                     }

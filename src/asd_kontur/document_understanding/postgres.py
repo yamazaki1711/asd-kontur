@@ -418,7 +418,7 @@ class IndustrialUnderstandingRepository:
     ) -> None:
         """Persist one validated semantic work batch without rewriting extraction."""
 
-        if profile_version != "qwen-project-work-reconciliation-v2":
+        if profile_version != "qwen-project-work-reconciliation-v3":
             raise ValueError("project_work_reconciliation_profile_invalid")
         result_digest = semantic_digest(output_manifest)
         with self._session(claimed) as session:
