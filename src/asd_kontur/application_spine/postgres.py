@@ -4251,11 +4251,13 @@ class SpinePostgresRepository:
                 candidate_id = str(row.get("candidate_id") or "")
                 version = int(row.get("version") or 0)
                 wording = str(row.get("value") or row.get("label") or "").strip()
+                deterministic_family = classify_work_family(wording)
+                explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
                 if (
                     not candidate_id
                     or not wording
-                    or classify_work_family(wording) is not None
                     or non_work_reason(wording) is not None
+                    or (deterministic_family is not None and explicit_facility is not None)
                 ):
                     continue
                 existing = prior.get(candidate_id)
@@ -4273,6 +4275,9 @@ class SpinePostgresRepository:
                     ):
                         continue
                 row["wording"] = wording
+                row["deterministic_family_hint"] = (
+                    deterministic_family[0] if deterministic_family is not None else None
+                )
                 unresolved.append(row)
             if not unresolved:
                 return ()
@@ -4352,6 +4357,7 @@ class SpinePostgresRepository:
                         "page": page,
                         "scope": str(row.get("scope_key") or ""),
                         "facility_hints": hints,
+                        "deterministic_family_hint": row.get("deterministic_family_hint"),
                         "nearby_context": context_text,
                         "nearby_context_locator_ids": list(context_window["source_locator_ids"]),
                         "source_version_id": str(row.get("source_version_id") or ""),
@@ -4367,6 +4373,7 @@ class SpinePostgresRepository:
                     document_role=row["document_role"],
                     nearby_context=row["nearby_context"],
                     has_facility_hint=bool(row["facility_hints"]),
+                    family_key=row.get("deterministic_family_hint"),
                 )
 
             batches: list[list[dict[str, Any]]] = []

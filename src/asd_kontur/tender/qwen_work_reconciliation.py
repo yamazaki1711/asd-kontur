@@ -154,6 +154,7 @@ def _prompt(
             "page": row.get("page"),
             "scope": str(row.get("scope") or "")[:240],
             "facility_hints": list(row.get("facility_hints") or ())[:6],
+            "deterministic_family_hint": row.get("deterministic_family_hint"),
             "nearby_context": str(row.get("nearby_context") or ""),
             "nearby_context_locator_ids": list(row.get("nearby_context_locator_ids") or ()),
         }
@@ -178,6 +179,8 @@ def _prompt(
 Верните ровно одну запись для каждого candidate_id, без новых идентификаторов. MATCHED требует один
 family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_key. Facility допустим только при
 явной привязке из текста или контекста; нахождение в одном документе недостаточно.
+deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
+контекст ему не противоречит; сооружение всё равно требует явной привязки.
 """
 
 

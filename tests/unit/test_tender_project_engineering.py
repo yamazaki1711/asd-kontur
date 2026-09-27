@@ -351,6 +351,22 @@ def test_reconciliation_prioritizes_descriptive_construction_operations() -> Non
     assert operation > resource
 
 
+def test_reconciliation_prioritizes_critical_known_family_for_location_resolution() -> None:
+    sheet_pile = work_reconciliation_priority(
+        "Устройство ограждения",
+        document_role="project_documentation",
+        nearby_context="Котлован сооружения",
+        family_key="sheet_piling",
+    )
+    generic = work_reconciliation_priority(
+        "Устройство ограждения",
+        document_role="project_documentation",
+        nearby_context="Котлован сооружения",
+    )
+
+    assert sheet_pile > generic
+
+
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:
     model = _model()
 

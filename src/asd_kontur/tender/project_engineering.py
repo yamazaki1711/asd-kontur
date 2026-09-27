@@ -566,6 +566,7 @@ def work_reconciliation_priority(
     document_role: object = None,
     nearby_context: object = None,
     has_facility_hint: bool = False,
+    family_key: object = None,
 ) -> tuple[int, int, int]:
     """Prioritize bounded semantic work by likely professional value.
 
@@ -583,9 +584,21 @@ def work_reconciliation_priority(
         any(marker in context for marker in _CONSTRUCTION_OPERATION_MARKERS)
     )
     commercial_score = int(role in {"bill of quantities", "local estimate", "object estimate"})
+    priority_family_score = {
+        "sheet_piling": 4,
+        "waling_beam": 4,
+        "bracing": 4,
+        "excavation": 2,
+        "reinforced_concrete": 2,
+        "pipeline": 2,
+        "waterproofing": 2,
+    }.get(str(family_key or ""), 0)
     descriptive_score = min(len(wording.split()), 12)
     return (
-        operation_score * 20 + contextual_score * 8 + commercial_score * 3,
+        operation_score * 20
+        + contextual_score * 8
+        + priority_family_score * 6
+        + commercial_score * 3,
         descriptive_score,
         len(wording),
     )
