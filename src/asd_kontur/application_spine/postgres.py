@@ -34,6 +34,7 @@ from asd_kontur.tender.project_engineering import (
     classify_work_family,
     non_work_reason,
     work_family_catalog,
+    work_reconciliation_priority,
 )
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
@@ -4347,35 +4348,60 @@ class SpinePostgresRepository:
             frequency: dict[str, int] = defaultdict(int)
             for row in prepared:
                 frequency[" ".join(str(row["wording"]).casefold().split())] += 1
-            prepared.sort(
-                key=lambda row: (
-                    -frequency[" ".join(str(row["wording"]).casefold().split())],
-                    str(row["source_version_id"]),
-                    int(row.get("page") or 0),
-                    str(row["candidate_id"]),
+            for row in prepared:
+                row["semantic_priority"] = work_reconciliation_priority(
+                    row["wording"],
+                    document_role=row["document_role"],
+                    nearby_context=row["nearby_context"],
+                    has_facility_hint=bool(row["facility_hints"]),
                 )
-            )
 
             batches: list[list[dict[str, Any]]] = []
             by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in prepared:
                 by_source[str(row["source_version_id"])].append(row)
+            for rows in by_source.values():
+                rows.sort(
+                    key=lambda row: (
+                        tuple(-value for value in row["semantic_priority"]),
+                        -frequency[" ".join(str(row["wording"]).casefold().split())],
+                        int(row.get("page") or 0),
+                        str(row["candidate_id"]),
+                    )
+                )
+            selected_sources: set[str] = set()
             while len(batches) < max_batches:
-                available = [rows for rows in by_source.values() if rows]
+                available = [(source_id, rows) for source_id, rows in by_source.items() if rows]
                 if not available:
                     break
-                rows = max(
+                fresh_sources = [item for item in available if item[0] not in selected_sources]
+                if fresh_sources:
+                    available = fresh_sources
+                else:
+                    selected_sources.clear()
+                source_id, rows = max(
                     available,
-                    key=lambda values: (
-                        max(
-                            frequency[" ".join(str(row["wording"]).casefold().split())]
-                            for row in values
-                        ),
-                        len(values),
+                    key=lambda item: (
+                        item[1][0]["semantic_priority"],
+                        len(item[1]),
+                        item[0],
                     ),
                 )
-                batches.append(rows[:batch_size])
-                del rows[:batch_size]
+                batch: list[dict[str, Any]] = []
+                deferred: list[dict[str, Any]] = []
+                seen_wordings: set[str] = set()
+                while rows and len(batch) < batch_size:
+                    row = rows.pop(0)
+                    wording_key = " ".join(str(row["wording"]).casefold().split())
+                    if wording_key in seen_wordings:
+                        deferred.append(row)
+                        continue
+                    seen_wordings.add(wording_key)
+                    row.pop("semantic_priority", None)
+                    batch.append(row)
+                rows.extend(deferred)
+                batches.append(batch)
+                selected_sources.add(source_id)
 
             scheduled: list[JobSummary] = []
             for batch in batches:

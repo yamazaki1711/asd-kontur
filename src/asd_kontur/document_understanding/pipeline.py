@@ -776,11 +776,14 @@ class IndustrialDocumentUnderstandingPipeline:
         )
         if reusable is not None:
             return reusable
-        result = self._qwen_semantic.reconcile_project_works(
-            [dict(row) for row in rows if isinstance(row, dict)],
-            work_families={str(key): str(value) for key, value in families.items()},
-            facilities=[str(value) for value in facilities],
-        )
+        try:
+            result = self._qwen_semantic.reconcile_project_works(
+                [dict(row) for row in rows if isinstance(row, dict)],
+                work_families={str(key): str(value) for key, value in families.items()},
+                facilities=[str(value) for value in facilities],
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
         self._repository.record_project_work_reconciliation_result(
             claimed,
             profile_version=profile_version,

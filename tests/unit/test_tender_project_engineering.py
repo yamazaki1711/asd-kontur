@@ -6,6 +6,8 @@ from asd_kontur.application_spine.postgres import _application_engineering_proje
 from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
+    non_work_reason,
+    work_reconciliation_priority,
 )
 
 
@@ -187,6 +189,29 @@ def test_transport_and_waste_operations_remain_visible_as_commercial_work() -> N
         "excavation",
         "Разработка котлованов и земляные работы",
     )
+
+
+def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
+    assert non_work_reason("4-100-060") == "Сметный шифр без описания строительной операции"
+    assert non_work_reason("Щиты настила, толщина 25 мм") == (
+        "Описание материала, а не строительной операции"
+    )
+
+
+def test_reconciliation_prioritizes_descriptive_construction_operations() -> None:
+    operation = work_reconciliation_priority(
+        "Укладка труб на песчаную подушку",
+        document_role="working_documentation",
+        nearby_context="КНС-4. Монтаж трубопровода",
+        has_facility_hint=True,
+    )
+    resource = work_reconciliation_priority(
+        "Техническое обслуживание",
+        document_role="project_documentation",
+        nearby_context="Общие данные",
+    )
+
+    assert operation > resource
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:

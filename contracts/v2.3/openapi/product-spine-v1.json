@@ -7317,6 +7317,69 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/project-understanding/work-reconciliation-runs": {
+      "post": {
+        "operationId": "start_project_work_reconciliation_api_v1_workspaces__workspace_id__project_understanding_work_reconciliation_runs_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobView"
+                  },
+                  "title": "Response Start Project Work Reconciliation Api V1 Workspaces  Workspace Id  Project Understanding Work Reconciliation Runs Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Start Project Work Reconciliation",
+        "tags": [
+          "project-understanding"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/restoration/recovery-plan": {
       "get": {
         "operationId": "restoration_recovery_plan_api_v1_workspaces__workspace_id__restoration_recovery_plan_get",

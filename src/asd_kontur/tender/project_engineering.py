@@ -295,6 +295,32 @@ _NON_WORK_OBSERVATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ),
 )
 
+_CONSTRUCTION_OPERATION_MARKERS = (
+    "устройств",
+    "монтаж",
+    "демонтаж",
+    "разработк",
+    "укладк",
+    "погруж",
+    "извлеч",
+    "армирован",
+    "бетонирован",
+    "засыпк",
+    "уплотнен",
+    "испытан",
+    "прокладк",
+    "сварк",
+    "изоляц",
+    "вывоз",
+    "погруз",
+    "планировк",
+    "заливк",
+    "окраск",
+    "бурен",
+    "забивк",
+    "восстановлен",
+)
+
 _PROFESSIONAL_DEFECT_KINDS = frozenset(
     {
         "project_work_missing_in_estimate",
@@ -487,12 +513,45 @@ def non_work_reason(value: object) -> str | None:
     normalized = _normalized(value)
     for reason, exact_values in _NON_WORK_OBSERVATIONS:
         if normalized in exact_values or any(
-            normalized.startswith(f"{item} ") for item in exact_values if len(item) > 8
+            normalized.startswith((f"{item} ", f"{item},", f"{item}."))
+            for item in exact_values
+            if len(item) > 8
         ):
             return reason
-    if re.fullmatch(r"\d+(?:[.-]\d+){2,}", normalized):
+    if re.fullmatch(r"\d+(?:[.,\s]\d+){2,}", normalized):
         return "Сметный шифр без описания строительной операции"
     return None
+
+
+def work_reconciliation_priority(
+    value: object,
+    *,
+    document_role: object = None,
+    nearby_context: object = None,
+    has_facility_hint: bool = False,
+) -> tuple[int, int, int]:
+    """Prioritize bounded semantic work by likely professional value.
+
+    This does not classify a row.  It only keeps scarce local-Qwen slots from
+    being consumed first by terse resource labels when descriptive construction
+    operations from several project sources are waiting.  Validation and the
+    model remain responsible for the actual interpretation.
+    """
+
+    wording = _normalized(value)
+    context = _normalized(nearby_context)
+    role = _normalized(document_role)
+    operation_score = sum(marker in wording for marker in _CONSTRUCTION_OPERATION_MARKERS)
+    contextual_score = int(has_facility_hint) + int(
+        any(marker in context for marker in _CONSTRUCTION_OPERATION_MARKERS)
+    )
+    commercial_score = int(role in {"bill of quantities", "local estimate", "object estimate"})
+    descriptive_score = min(len(wording.split()), 12)
+    return (
+        operation_score * 20 + contextual_score * 8 + commercial_score * 3,
+        descriptive_score,
+        len(wording),
+    )
 
 
 def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:

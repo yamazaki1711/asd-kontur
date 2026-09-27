@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Iterable, Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -15,16 +16,26 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v3"
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@3.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
-_POTENTIAL_WORK_MARKERS = (
-    "перевоз",
-    "транспортирован",
-    "погруз",
-    "разгруз",
-    "испытан",
-    "монтаж",
-    "демонтаж",
-    "геодез",
-    "пусконалад",
+_POTENTIAL_WORK_AT_START = re.compile(
+    r"^(?:перевоз\w*|транспортирован\w*|погруз\w*|разгруз\w*|испытан\w*|"
+    r"монтаж\w*|демонтаж\w*|геодез\w*|пусконалад\w*)\b",
+    re.IGNORECASE,
+)
+_RECOVERABLE_RESPONSE_FAILURES = frozenset(
+    {
+        "qwen_work_reconciliation_invalid_json",
+        "qwen_work_reconciliation_invalid_shape",
+        "qwen_work_reconciliation_incomplete_output",
+        "qwen_work_reconciliation_identity_invalid",
+        "qwen_work_reconciliation_observation_invalid",
+        "qwen_work_reconciliation_family_invalid",
+        "qwen_work_reconciliation_unresolved_family_invalid",
+        "qwen_work_reconciliation_confidence_invalid",
+        "qwen_work_reconciliation_facility_invalid",
+        "qwen_work_reconciliation_potential_work_excluded",
+        "qwen_semantic_response_incomplete",
+        "qwen_semantic_response_output_exhausted",
+    }
 )
 
 
@@ -51,20 +62,8 @@ class QwenProjectWorkReconciler:
         if any(not value for value in input_ids) or len(set(input_ids)) != len(input_ids):
             raise QwenSemanticFailure("qwen_work_reconciliation_input_identity_invalid")
         allowed_facilities = tuple(dict.fromkeys(str(value) for value in facilities if value))
-        prompt = _prompt(input_rows, work_families, allowed_facilities)
-        raw = _complete(
-            self._endpoint,
-            prompt,
-            self._timeout_seconds,
-            max_tokens=max(900, min(3_200, len(input_rows) * 170)),
-        )
-        observations = _parse(
-            raw,
-            input_ids=tuple(input_ids),
-            wording_by_id={
-                str(row.get("candidate_id") or ""): str(row.get("wording") or "").casefold()
-                for row in input_rows
-            },
+        observations, call_count, recovery_codes = self._reconcile_rows(
+            input_rows,
             work_families=work_families,
             facilities=allowed_facilities,
         )
@@ -72,9 +71,71 @@ class QwenProjectWorkReconciler:
             "contract": WORK_RECONCILIATION_CONTRACT,
             "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
             "observations": observations,
+            "inference_call_count": call_count,
+            "recovery_codes": recovery_codes,
         }
         manifest["result_digest"] = semantic_digest(manifest)
         return manifest
+
+    def _reconcile_rows(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        work_families: Mapping[str, str],
+        facilities: tuple[str, ...],
+        single_retry_available: bool = True,
+    ) -> tuple[list[dict[str, Any]], int, list[str]]:
+        input_ids = tuple(str(row["candidate_id"]) for row in rows)
+        try:
+            raw = _complete(
+                self._endpoint,
+                _prompt(rows, work_families, facilities),
+                self._timeout_seconds,
+                max_tokens=max(900, min(3_200, len(rows) * 170)),
+            )
+            return (
+                _parse(
+                    raw,
+                    input_ids=input_ids,
+                    wording_by_id={
+                        str(row["candidate_id"]): str(row.get("wording") or "").casefold()
+                        for row in rows
+                    },
+                    work_families=work_families,
+                    facilities=facilities,
+                ),
+                1,
+                [],
+            )
+        except QwenSemanticFailure as exc:
+            if exc.code not in _RECOVERABLE_RESPONSE_FAILURES:
+                raise
+            if len(rows) == 1:
+                if not single_retry_available:
+                    raise
+                observations, call_count, codes = self._reconcile_rows(
+                    rows,
+                    work_families=work_families,
+                    facilities=facilities,
+                    single_retry_available=False,
+                )
+                return observations, call_count + 1, [exc.code, *codes]
+            midpoint = len(rows) // 2
+            left, left_calls, left_codes = self._reconcile_rows(
+                rows[:midpoint],
+                work_families=work_families,
+                facilities=facilities,
+            )
+            right, right_calls, right_codes = self._reconcile_rows(
+                rows[midpoint:],
+                work_families=work_families,
+                facilities=facilities,
+            )
+            return (
+                [*left, *right],
+                1 + left_calls + right_calls,
+                [exc.code, *left_codes, *right_codes],
+            )
 
 
 def _prompt(
@@ -162,8 +223,8 @@ def _parse(
                 raise QwenSemanticFailure("qwen_work_reconciliation_family_invalid")
         elif family_key is not None:
             raise QwenSemanticFailure("qwen_work_reconciliation_unresolved_family_invalid")
-        if status == "NOT_A_WORK" and any(
-            marker in wording_by_id.get(candidate_id, "") for marker in _POTENTIAL_WORK_MARKERS
+        if status == "NOT_A_WORK" and _POTENTIAL_WORK_AT_START.search(
+            wording_by_id.get(candidate_id, "").strip()
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_potential_work_excluded")
         if facility is not None and facility not in allowed_facilities:
