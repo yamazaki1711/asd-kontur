@@ -37,9 +37,7 @@ WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
 
 
 def test_quantity_review_chunks_resume_without_silently_accepting_deferred_values() -> None:
-    quantities = [
-        {"candidate_id": f"quantity-{index}", "value": index} for index in range(10)
-    ]
+    quantities = [{"candidate_id": f"quantity-{index}", "value": index} for index in range(10)]
     first_result = {
         "quantity_reviews": [
             {
