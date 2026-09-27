@@ -837,7 +837,17 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
             work_context.result["value"]["work_packages"][0]["package"]["work_type"]["raw"]
             == "Устройство монолитной плиты"
         )
-        assert len(work_context.evidence_pack.evidence) == 1
+        # The project-first work tool may bind the work, quantity and material
+        # locators that support the returned scope. It must return useful
+        # workspace-local sources, not preserve the former single-link shape.
+        assert work_context.evidence_pack.evidence
+        assert len({item.evidence_link_id for item in work_context.evidence_pack.evidence}) == len(
+            work_context.evidence_pack.evidence
+        )
+        assert all(
+            f"/workspaces/{workspace_a['workspace_id']}/evidence/locators/" in item.access_reference
+            for item in work_context.evidence_pack.evidence
+        )
         assert "WORK_TYPE_CATALOG_UNAVAILABLE" not in view["matrix"]["matrix"]["rows"][0]["gaps"]
         assert view["matrix"]["matrix"]["complete"] is False
         gap_codes = {item["code"] for item in view["normative_profile"]["gaps"]}
