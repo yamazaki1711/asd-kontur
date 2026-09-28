@@ -113,6 +113,41 @@ def test_semantic_work_consensus_rejects_conflict_and_one_source_repetition() ->
     assert _semantic_work_consensus(works, conflict) == {}
 
 
+def test_semantic_work_consensus_reuses_exact_non_work_decision() -> None:
+    works = [
+        {
+            "candidate_id": "reviewed",
+            "version": 2,
+            "source_version_id": "source-a",
+            "value": "Промывка коалесцентного модуля",
+        },
+        {
+            "candidate_id": "unreviewed",
+            "version": 1,
+            "source_version_id": "source-b",
+            "value": "Промывка коалесцентного модуля",
+        },
+    ]
+
+    consensus = _semantic_work_consensus(
+        works,
+        {
+            "reviewed": {
+                "candidate_version": 2,
+                "status": "NOT_A_WORK",
+                "reason": "Операция относится к эксплуатации оборудования.",
+            }
+        },
+    )
+
+    assert consensus["промывка коалесцентного модуля"] == {
+        "status": "NOT_A_WORK",
+        "reason": (
+            "Точное описание ранее определено как не относящееся к работам текущего строительства."
+        ),
+    }
+
+
 def test_facility_designations_preserve_multiple_explicit_project_scopes() -> None:
     assert facility_designations("КНС-4, ЛОС 8.1 и 2-КНС") == (
         "КНС 2",
@@ -970,7 +1005,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v42"
+    assert model["model_version"] == "project-engineering-model-v43"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

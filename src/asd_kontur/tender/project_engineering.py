@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v42"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v43"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1572,7 +1572,7 @@ def _semantic_work_consensus(
     scopes and is assigned from each row's own source context.
     """
 
-    reviewed: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
+    reviewed: dict[str, list[tuple[str, str, str, str, str]]] = defaultdict(list)
     for raw in works:
         row = dict(raw)
         candidate_id = str(row.get("candidate_id") or "")
@@ -1591,21 +1591,34 @@ def _semantic_work_consensus(
                 str(resolution.get("family_key") or ""),
                 str(resolution.get("operation") or ""),
                 str(row.get("source_version_id") or ""),
+                str(resolution.get("reason") or ""),
             )
         )
 
     consensus: dict[str, dict[str, Any]] = {}
     catalog = work_family_catalog()
     for normalized_name, values in reviewed.items():
-        if {status for status, _family, _operation, _source in values} != {"MATCHED"}:
-            continue
-        independent_sources = {source for _status, _family, _operation, source in values if source}
+        statuses = {status for status, _family, _operation, _source, _reason in values}
+        independent_sources = {
+            source for _status, _family, _operation, source, _reason in values if source
+        }
         specific_exact_wording = len(re.findall(r"[0-9a-zа-яё]+", normalized_name)) >= 3
         if len(independent_sources) < 2 and not specific_exact_wording:
             continue
+        if statuses == {"NOT_A_WORK"}:
+            consensus[normalized_name] = {
+                "status": "NOT_A_WORK",
+                "reason": (
+                    "Точное описание ранее определено как не относящееся к работам "
+                    "текущего строительства."
+                ),
+            }
+            continue
+        if statuses != {"MATCHED"}:
+            continue
         meanings = {
             (family, professional_work_name(family, operation or normalized_name))
-            for _status, family, operation, _source in values
+            for _status, family, operation, _source, _reason in values
             if family in catalog
         }
         if len(meanings) != 1:
