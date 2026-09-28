@@ -2201,6 +2201,8 @@ def _resolution_establishes_page_scope(resolution: Mapping[str, Any]) -> bool:
         for marker in (
             "заголовок",
             "заголовке",
+            "ведомость объемов",
+            "ведомости объемов",
             "раздел смет",
             "раздел прокладк",
             "контекст явно указывает на раздел",

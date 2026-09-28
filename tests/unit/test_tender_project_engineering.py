@@ -18,6 +18,7 @@ from asd_kontur.tender.project_engineering import (
     _one_comparable_quantity,
     _pits,
     _professional_material_values,
+    _resolution_establishes_page_scope,
     _scope_comparisons,
     _semantic_work_consensus,
     build_project_engineering_model,
@@ -32,6 +33,24 @@ from asd_kontur.tender.project_engineering import (
     professional_work_name,
     work_reconciliation_priority,
 )
+
+
+def test_explicit_vor_heading_resolution_establishes_page_scope() -> None:
+    assert _resolution_establishes_page_scope(
+        {
+            "confidence": "0.90",
+            "reason": (
+                "Контекст относится к ведомости объемов работ ЛОС 8.1, "
+                "что обеспечивает явную привязку к сооружению."
+            ),
+        }
+    )
+    assert not _resolution_establishes_page_scope(
+        {
+            "confidence": "0.95",
+            "reason": "Сооружение вероятно упоминается рядом с этой работой.",
+        }
+    )
 
 
 def test_semantic_work_consensus_reuses_meaning_but_never_facility() -> None:
