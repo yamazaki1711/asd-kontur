@@ -5635,7 +5635,8 @@ function ProjectEngineeringResult({
                             const row = value as Record<string, unknown>;
                             return [
                               displayValue(row.name),
-                              row.quantity === null || row.quantity === undefined
+                              row.quantity === null ||
+                              row.quantity === undefined
                                 ? ""
                                 : displayValue(row.quantity) +
                                   " " +
