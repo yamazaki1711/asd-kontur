@@ -439,6 +439,44 @@ def test_query_focused_projection_keeps_professional_quantity_comparison() -> No
     assert comparison["source_locator_ids"] == ["design-light", "estimate-light"]
 
 
+def test_query_focused_projection_keeps_professional_questions_and_risks() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "customer_questions": [
+                {
+                    "question": "Просим подтвердить включение армирования в ВОР.",
+                    "location": "КНС 8.1",
+                    "source_locator_ids": ["question-source"],
+                }
+            ],
+            "risks": [
+                {
+                    "risk": "Армирование может остаться нерасценённым.",
+                    "mitigation": "Получить отдельную позицию ВОР.",
+                    "location": "КНС 8.1",
+                }
+            ],
+        },
+        query="Какие вопросы Заказчику и риски есть по КНС 8.1?",
+        limit=20,
+    )
+
+    assert projected["customer_questions"] == [
+        {
+            "question": "Просим подтвердить включение армирования в ВОР.",
+            "location": "КНС 8.1",
+            "source_locator_ids": ["question-source"],
+        }
+    ]
+    assert projected["risks"] == [
+        {
+            "risk": "Армирование может остаться нерасценённым.",
+            "mitigation": "Получить отдельную позицию ВОР.",
+            "location": "КНС 8.1",
+        }
+    ]
+
+
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
     groups = [
         {

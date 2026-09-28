@@ -256,6 +256,7 @@ class ProfessionalAssistantKnowledgeQuery:
                     "requirement_matrix": workspace["requirement_matrix"]
                 },
                 "consultant.get_discrepancies": {
+                    "project_engineering": workspace.get("project_engineering", {}),
                     "engineering_issues": workspace.get("project_engineering", {}).get(
                         "issues", []
                     ),
@@ -266,6 +267,7 @@ class ProfessionalAssistantKnowledgeQuery:
                 },
                 "consultant.get_mode_result": {"mode_result": workspace["mode_result"]},
                 "consultant.get_information_gaps": {
+                    "project_engineering": workspace.get("project_engineering", {}),
                     "engineering_questions": workspace.get("project_engineering", {}).get(
                         "customer_questions", []
                     ),
@@ -2291,6 +2293,9 @@ def _assistant_engineering_for_query(
                 "classification",
                 "professional_status",
                 "conclusion",
+                "question",
+                "risk",
+                "mitigation",
                 "scope_match_basis",
                 "design_value",
                 "commercial_value",

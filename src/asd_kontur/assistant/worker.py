@@ -184,6 +184,8 @@ class AssistantWorker:
                 "workspace_inventory_unproven_total_claimed",
                 "workspace_structured_fact_omitted",
                 "workspace_structured_fact_contradicted",
+                "workspace_customer_question_omitted",
+                "workspace_contractor_risk_omitted",
             }
             if (deterministic["passed"] and not model_checks["passed"]) or (
                 not deterministic["passed"] and repairable_deterministic
