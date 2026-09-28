@@ -97,6 +97,17 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         any(marker in normalized for marker in discrepancy_markers)
         and sum(marker in normalized for marker in document_role_markers) >= 2
     )
+    asks_for_missing_commercial_work = (
+        "работ" in normalized
+        and any(marker in normalized for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(marker in normalized for marker in ("вор", "смет", "коммерч"))
+    )
+    asks_for_material_discrepancies = "материал" in normalized and any(
+        marker in normalized for marker in (*discrepancy_markers, "расход")
+    )
+    asks_for_technical_contradictions = "техническ" in normalized and any(
+        marker in normalized for marker in ("противореч", "расхожд", "ошиб")
+    )
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -156,7 +167,12 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
             ),
         )
     if not (
-        asks_for_customer_questions or asks_for_contractor_risks or asks_for_document_discrepancies
+        asks_for_customer_questions
+        or asks_for_contractor_risks
+        or asks_for_document_discrepancies
+        or asks_for_missing_commercial_work
+        or asks_for_material_discrepancies
+        or asks_for_technical_contradictions
     ):
         return None
     return SearchPlan(
@@ -1331,6 +1347,11 @@ def _append_prepared_project_result(
         bool(re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized))
         and "работ" in normalized
     )
+    asks_for_missing_commercial_work = (
+        "работ" in normalized
+        and any(marker in normalized for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(marker in normalized for marker in ("вор", "смет", "коммерч"))
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
@@ -1536,6 +1557,30 @@ def _append_prepared_project_result(
                         selected_source_ids.append(source_id)
                         break
             headings_and_rows.append(("Числовые сопоставления:", comparison_rows))
+            if asks_for_missing_commercial_work:
+                missing_rows = []
+                for item in engineering.get("scope_comparisons") or ():
+                    if (
+                        not isinstance(item, dict)
+                        or item.get("classification") != "WORK_MISSING_IN_COMMERCIAL"
+                    ):
+                        continue
+                    facility = str(item.get("facility") or "Место требует уточнения").strip()
+                    work = str(item.get("work") or "Работа требует уточнения").strip()
+                    conclusion = str(item.get("conclusion") or "").strip()
+                    missing_rows.append(
+                        f"{facility} — {work}: {conclusion}"
+                        if conclusion
+                        else f"{facility} — {work}."
+                    )
+                    for source_id in item.get("source_locator_ids") or ():
+                        source_id = str(source_id)
+                        if source_id in available_source_ids and source_id not in selected_source_ids:
+                            selected_source_ids.append(source_id)
+                            break
+                headings_and_rows.append(
+                    ("Работы, не найденные в ВОР/смете:", missing_rows)
+                )
         break
     sections = [
         heading + "\n" + "\n".join(f"— {row}" for row in rows)

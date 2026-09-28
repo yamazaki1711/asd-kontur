@@ -34,6 +34,19 @@ def test_prepared_project_discrepancy_question_uses_direct_professional_result()
     assert plan.steps[-1].arguments["limit"] == 10
 
 
+def test_missing_work_material_and_technical_questions_use_prepared_project_result() -> None:
+    questions = (
+        "Какие работы есть в проекте, но отсутствуют в ВОР или смете?",
+        "Какие материалы расходятся между документами?",
+        "Какие технические противоречия найдены?",
+    )
+
+    for question in questions:
+        plan = _direct_project_result_plan(question)
+        assert plan is not None
+        assert plan.steps[0].tool == "consultant.get_discrepancies"
+
+
 def test_customer_questions_and_contractor_risks_use_prepared_project_result() -> None:
     questions = _direct_project_result_plan("Какие вопросы надо направить Заказчику?")
     risks = _direct_project_result_plan("Какие риски выявлены для Подрядчика?")
@@ -947,6 +960,65 @@ def test_requested_missing_commercial_work_keeps_facility_and_work() -> None:
         receipts=receipts,
         question="Какие работы отсутствуют в ВОР или смете?",
     ) == {"passed": True, "problems": []}
+
+
+def test_prepared_missing_commercial_work_answer_lists_each_scoped_work() -> None:
+    answer = SynthesizedAnswer(
+        "В коммерческом составе установлены пробелы.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Неучтённые работы.",
+        (),
+    )
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "issues": [],
+                        "quantity_comparisons": [],
+                        "scope_comparisons": [
+                            {
+                                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                                "facility": "КНС 4",
+                                "work": "Монтаж распределительного пояса",
+                                "conclusion": (
+                                    "Работа установлена в РД, но позиция не найдена в ВОР."
+                                ),
+                                "source_locator_ids": ["source-a"],
+                            },
+                            {
+                                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                                "facility": "ЛОС 8.1",
+                                "work": "Устройство гидроизоляции",
+                                "conclusion": (
+                                    "Работа установлена в РД, но позиция не найдена в смете."
+                                ),
+                                "source_locator_ids": ["source-b"],
+                            },
+                        ],
+                    }
+                },
+                "sources": [
+                    {"source_id": "source-a"},
+                    {"source_id": "source-b"},
+                ],
+            },
+        }
+    ]
+
+    completed = _append_prepared_project_result(
+        answer,
+        receipts,
+        "Какие работы есть в проекте, но отсутствуют в ВОР или смете?",
+    )
+
+    assert "Работы, не найденные в ВОР/смете:" in completed.answer
+    assert "КНС 4 — Монтаж распределительного пояса" in completed.answer
+    assert "ЛОС 8.1 — Устройство гидроизоляции" in completed.answer
+    assert completed.used_source_ids == ("source-a", "source-b")
 
 
 def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
