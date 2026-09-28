@@ -14,6 +14,7 @@ from asd_kontur.tender.project_engineering import (
     _issues,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
+    _professional_material_values,
     _scope_comparisons,
     build_project_engineering_model,
     classify_work_family,
@@ -83,6 +84,27 @@ def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:
     assert comparisons[0]["right"]["document_role"] == "Смета"
     assert comparisons[0]["classification"] == "MATCH"
     assert comparisons[0]["conclusion"] == "Значения ВОР и сметы совпадают"
+
+
+def test_page_text_profile_corrects_split_line_material_without_changing_source_record() -> None:
+    values = _professional_material_values(
+        [
+            {
+                "name": "Профили фасонные для шпунтовых свай Л5-10",
+                "quantity": "9.597828",
+                "unit": "т",
+                "source_locator_id": "material-row",
+            }
+        ],
+        {
+            "material-row": {
+                "page_sheet_pile_profiles": ["Л5УМ"],
+            }
+        },
+    )
+
+    assert values[0]["name"] == "Профили фасонные для шпунтовых свай Л5-УМ"
+    assert values[0]["source_name"] == "Профили фасонные для шпунтовых свай Л5-10"
 
 
 def test_pit_inherits_relevant_work_only_for_one_established_pit_per_facility() -> None:
@@ -613,7 +635,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v33"
+    assert model["model_version"] == "project-engineering-model-v34"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

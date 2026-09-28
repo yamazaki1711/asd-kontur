@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v33"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v34"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1687,7 +1687,10 @@ def _work_schedule(
             "source": _source_ref(locator_id, source_context),
             "quantities": _unique_values(accepted_quantities, "quantity"),
             "quantity_interpretations": quantity_interpretations,
-            "materials": _unique_values(material_by_work.get(candidate_id, ()), "material"),
+            "materials": _professional_material_values(
+                _unique_values(material_by_work.get(candidate_id, ()), "material"),
+                source_context,
+            ),
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
         }
@@ -2456,15 +2459,25 @@ def _sheet_pile_schedule(
         )
         if row.get("family_key") not in relevant_families and not unassigned_profile_observation:
             continue
-        profiles = _sheet_pile_profiles(normalized)
+        profiles = _ordered_unique(
+            [
+                *_sheet_pile_profiles(_normalized(" ".join(wording))),
+                *(
+                    profile
+                    for values in materials.values()
+                    for value in values or ()
+                    for profile in _material_sheet_pile_profiles(value, source_context)
+                ),
+            ]
+        )
         profiles_by_document = {
-            role: _sheet_pile_profiles(
-                _normalized(" ".join(str(value.get("name") or "") for value in values or ()))
+            role: _ordered_unique(
+                profile
+                for value in values or ()
+                for profile in _material_sheet_pile_profiles(value, source_context)
             )
             for role, values in materials.items()
-            if _sheet_pile_profiles(
-                _normalized(" ".join(str(value.get("name") or "") for value in values or ()))
-            )
+            if any(_material_sheet_pile_profiles(value, source_context) for value in values or ())
         }
         beams = _ordered_unique(
             match.group(0).upper() for match in re.finditer(r"\b(?:30ш2|35ш2)\b", normalized)
@@ -2482,7 +2495,7 @@ def _sheet_pile_schedule(
                 str(value.get("source_locator_id"))
                 for values in materials.values()
                 for value in values or ()
-                if _sheet_pile_profiles(_normalized(value.get("name")))
+                if _material_sheet_pile_profiles(value, source_context)
                 and value.get("source_locator_id")
             }
         )
@@ -2490,20 +2503,20 @@ def _sheet_pile_schedule(
             str(value.get("name") or "")
             for values in materials.values()
             for value in values or ()
-            if _sheet_pile_profiles(_normalized(value.get("name")))
+            if _material_sheet_pile_profiles(value, source_context)
         )
         profile_sources_by_document = {
             role: _source_refs(
                 [
                     str(value.get("source_locator_id"))
                     for value in values or ()
-                    if _sheet_pile_profiles(_normalized(value.get("name")))
+                    if _material_sheet_pile_profiles(value, source_context)
                     and value.get("source_locator_id")
                 ],
                 source_context,
             )
             for role, values in materials.items()
-            if any(_sheet_pile_profiles(_normalized(value.get("name"))) for value in values or ())
+            if any(_material_sheet_pile_profiles(value, source_context) for value in values or ())
         }
         if unassigned_profile_observation:
             # The profile observation is useful, but the extractor associated it
@@ -3559,6 +3572,52 @@ def _sheet_pile_profiles(normalized: str) -> list[str]:
         value = "Л5УМ" if compact == "Л5УМ" else "Л5-10" if compact == "Л510" else "Л5"
         profiles.append(value)
     return _ordered_unique(profiles)
+
+
+def _material_sheet_pile_profiles(
+    material: Mapping[str, Any],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[str]:
+    context = source_context.get(str(material.get("source_locator_id") or ""), {})
+    page_profiles = [str(value) for value in context.get("page_sheet_pile_profiles") or ()]
+    if page_profiles:
+        return _ordered_unique(page_profiles)
+    return _sheet_pile_profiles(_normalized(material.get("name")))
+
+
+def _professional_material_values(
+    materials: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for raw in materials:
+        material = dict(raw)
+        original = str(material.get("name") or "")
+        context = source_context.get(str(material.get("source_locator_id") or ""), {})
+        page_profiles = [str(value) for value in context.get("page_sheet_pile_profiles") or ()]
+        if len(page_profiles) == 1 and _sheet_pile_profiles(_normalized(original)):
+            material["source_name"] = original
+            material["name"] = re.sub(
+                r"л5(?:\s*-\s*(?:ум|10)|\s*(?:ум|10))?",
+                "Л5-УМ" if page_profiles[0] == "Л5УМ" else page_profiles[0],
+                original,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+        elif len(page_profiles) == 1 and _normalized(original).startswith("ум из стали"):
+            material["source_name"] = original
+            material["name"] = f"Шпунт Л5-УМ {original[2:].strip()}"
+        elif (
+            len(page_profiles) == 1
+            and "профили фасонные" in _normalized(original)
+            and "шпунтов" in _normalized(original)
+        ):
+            material["source_name"] = original
+            material["name"] = (
+                f"{original} {'Л5-УМ' if page_profiles[0] == 'Л5УМ' else page_profiles[0]}"
+            )
+        result.append(material)
+    return result
 
 
 def _normalized(value: object) -> str:
