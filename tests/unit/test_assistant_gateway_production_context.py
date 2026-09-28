@@ -475,6 +475,7 @@ def test_query_focused_projection_keeps_professional_questions_and_risks() -> No
             "question": "Просим подтвердить включение армирования в ВОР.",
             "location": "КНС 8.1",
             "source_locator_ids": ["question-source"],
+            "source_refs": ["question-source"],
         }
     ]
     assert projected["risks"] == [
@@ -545,6 +546,7 @@ def test_project_wide_material_difference_query_returns_prepared_comparisons() -
             "description": "Морозостойкость: проект F200, ВОР F150.",
             "classification": "MATERIAL_DIFFERENCE",
             "source_locator_ids": ["design", "commercial"],
+            "source_refs": ["design", "commercial"],
         }
     ]
 
@@ -710,6 +712,7 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
             "name": "шпунтовое ограждение котлована",
             "relationship": "Обслуживает сооружение",
             "source_locator_ids": ["enclosure"],
+            "source_refs": ["enclosure"],
         }
     ]
     assert dossier["connections"][0]["name"] == "ЛОС 4"
@@ -718,6 +721,7 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
             "label": "Производительность КНС-4",
             "value": "155 л/с",
             "source_locator_ids": ["capacity"],
+            "source_refs": ["capacity"],
         }
     ]
     assert dossier["work_names"] == [
