@@ -5198,6 +5198,9 @@ function ProjectEngineeringResult({
                 ? card.comparisons
                 : [];
               const cardIssues = Array.isArray(card.issues) ? card.issues : [];
+              const cardDocuments = Array.isArray(card.documents)
+                ? card.documents
+                : [];
               return (
                 <article
                   className="entity-card"
@@ -5238,6 +5241,127 @@ function ProjectEngineeringResult({
                       .map(String)
                       .join("; ")}
                   </p>
+                  <details>
+                    <summary>Открыть инженерную карточку</summary>
+                    <h4>Котлованы и конструкции</h4>
+                    {cardPits.length ? (
+                      <ul>
+                        {cardPits.map((value, index) => {
+                          const pit = value as Record<string, unknown>;
+                          return (
+                            <li
+                              key={`${displayValue(pit.pit_id)}-${String(index)}`}
+                            >
+                              <strong>{displayValue(pit.name)}</strong>
+                              {Array.isArray(pit.known_parameters) &&
+                              pit.known_parameters.length
+                                ? ` — ${pit.known_parameters.map(String).join("; ")}`
+                                : ""}
+                              <ProjectSourceLinks
+                                locatorIds={pit.source_locator_ids}
+                                workspaceId={workspaceId}
+                                modeSlug={modeSlug}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>
+                        Котлован для сооружения не установлен или не
+                        предусмотрен.
+                      </p>
+                    )}
+                    <h4>Работы, объёмы и материалы</h4>
+                    <ul>
+                      {cardWorks.map((value, index) => {
+                        const work = value as Record<string, unknown>;
+                        const quantityText = Object.entries(
+                          (work.quantities_by_document ?? {}) as Record<
+                            string,
+                            unknown
+                          >,
+                        )
+                          .map(
+                            ([role, values]) =>
+                              `${role}: ${
+                                (Array.isArray(values) ? values : [])
+                                  .map((item) => {
+                                    const row = item as Record<string, unknown>;
+                                    return `${displayValue(row.value)} ${displayValue(row.unit)}`;
+                                  })
+                                  .join(", ") || "не найдено"
+                              }`,
+                          )
+                          .join("; ");
+                        return (
+                          <li
+                            key={`${displayValue(work.work_scope_id)}-${String(index)}`}
+                          >
+                            <strong>{displayValue(work.work_name)}</strong>
+                            {quantityText
+                              ? ` — ${quantityText}`
+                              : " — объём не найден"}
+                            <ProjectSourceLinks
+                              locatorIds={work.source_locator_ids}
+                              workspaceId={workspaceId}
+                              modeSlug={modeSlug}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <h4>Расхождения и вопросы</h4>
+                    {cardIssues.length ? (
+                      <ul>
+                        {cardIssues.map((value, index) => {
+                          const issue = value as Record<string, unknown>;
+                          return (
+                            <li
+                              key={`${displayValue(issue.issue_id)}-${String(index)}`}
+                            >
+                              <strong>{displayValue(issue.kind)}</strong>:{" "}
+                              {displayValue(issue.description)}
+                              <p>{displayValue(issue.recommended_action)}</p>
+                              <ProjectSourceLinks
+                                locatorIds={issue.source_locator_ids}
+                                workspaceId={workspaceId}
+                                modeSlug={modeSlug}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>
+                        Установленные расхождения для сооружения отсутствуют.
+                      </p>
+                    )}
+                    <h4>Документы</h4>
+                    <ul>
+                      {cardDocuments.slice(0, 30).map((value, index) => {
+                        const document = value as Record<string, unknown>;
+                        return (
+                          <li
+                            key={`${displayValue(document.source_locator_id)}-${String(index)}`}
+                          >
+                            {displayValue(document.document)} · версия{" "}
+                            {displayValue(document.version)} · стр./лист{" "}
+                            {displayValue(document.page)}
+                            <ProjectSourceLinks
+                              locatorIds={
+                                document.source_locator_id
+                                  ? [document.source_locator_id]
+                                  : []
+                              }
+                              workspaceId={workspaceId}
+                              modeSlug={modeSlug}
+                            />
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </details>
                 </article>
               );
             })}
@@ -5251,8 +5375,13 @@ function ProjectEngineeringResult({
       <section className="panel">
         <h2>Работы по сооружениям</h2>
         <p>
-          Определено {displayValue(workClassification.classified_percent, "0")}%
-          исходных описаний работ;{" "}
+          Определено{" "}
+          {displayValue(
+            workClassification.construction_scope_classified_percent ??
+              workClassification.classified_percent,
+            "0",
+          )}
+          % описаний, относящихся к текущему строительству;{" "}
           {displayValue(workClassification.unclassified_observation_count, "0")}{" "}
           описаний ещё требуют инженерной классификации.
         </p>
