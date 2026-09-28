@@ -44,6 +44,22 @@ def test_customer_questions_and_contractor_risks_use_prepared_project_result() -
     assert questions.steps[-1].arguments["query"] != risks.steps[-1].arguments["query"]
 
 
+def test_sheet_pile_schedule_uses_direct_prepared_project_result() -> None:
+    plan = _direct_project_result_plan(
+        "Покажи все шпунтовые работы по сооружениям, включая пояса и профили."
+    )
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == [
+        "consultant.get_work_packages",
+        "consultant.get_discrepancies",
+    ]
+    assert plan.steps[0].arguments == {
+        "query": "шпунтовые работы распределительные пояса",
+        "limit": 20,
+    }
+
+
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 
@@ -94,6 +110,63 @@ def test_prepared_discrepancies_complete_qwen_narrative_without_inventing_values
     assert "КНС 8.1 — Прокладка кабеля: ПД: 30 м; ВОР/Смета: 60 м." in completed.answer
     assert "ЛОС 8.1 — Бетон В25: Проект F200, коммерческие документы F150." in completed.answer
     assert completed.used_source_ids == ("source-cable", "source-concrete")
+
+
+def test_prepared_sheet_pile_schedule_completes_qwen_narrative_with_exact_values() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Шпунтовые работы предусмотрены для двух сооружений.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Проверен шпунт.",
+            ("ОЗЕРО",),
+        ),
+        [
+            {
+                "tool": "consultant.get_work_packages",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "sheet_pile_answer_facts": [
+                                {
+                                    "facility": "КНС 4",
+                                    "pit": "котлован для КНС4",
+                                    "operation": "Погружение шпунта",
+                                    "profiles": ["Л5"],
+                                    "quantities_by_document": {
+                                        "ВОР": [{"value": "95.028", "unit": "т"}]
+                                    },
+                                    "source_refs": ["source-driving"],
+                                },
+                                {
+                                    "facility": "КНС 8.1",
+                                    "pit": "котлован для КНС8.1",
+                                    "operation": "Устройство распределительного пояса",
+                                    "waling_beams": ["30Ш2", "35Ш2"],
+                                    "quantities_by_document": {
+                                        "ВОР": [{"value": "9.841", "unit": "т"}]
+                                    },
+                                    "source_refs": ["source-belt"],
+                                },
+                            ]
+                        }
+                    },
+                    "sources": [
+                        {"source_id": "source-driving"},
+                        {"source_id": "source-belt"},
+                    ],
+                },
+            }
+        ],
+        "Покажи все шпунтовые работы по сооружениям, включая пояса и профили.",
+    )
+
+    assert "КНС 4; котлован для КНС4; Погружение шпунта" in completed.answer
+    assert "профиль Л5; ВОР: 95.028 т" in completed.answer
+    assert "КНС 8.1; котлован для КНС8.1; Устройство распределительного пояса" in completed.answer
+    assert "балки 30Ш2, 35Ш2; ВОР: 9.841 т" in completed.answer
+    assert completed.used_source_ids == ("source-driving", "source-belt")
 
 
 def test_general_discrepancy_answer_does_not_require_unasked_sheet_pile_belts() -> None:

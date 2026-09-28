@@ -2407,6 +2407,7 @@ def _assistant_engineering_for_query(
                     "quantities_by_document",
                     "materials_by_document",
                     "uncertainty",
+                    "source_refs",
                 )
                 if compact_row(row).get(key) not in (None, "", [], {})
             }

@@ -97,6 +97,28 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         any(marker in normalized for marker in discrepancy_markers)
         and sum(marker in normalized for marker in document_role_markers) >= 2
     )
+    asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
+        marker in normalized
+        for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
+    )
+    if asks_for_sheet_pile_schedule:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_work_packages",
+                    {"query": "шпунтовые работы распределительные пояса", "limit": 20},
+                    "Использовать подготовленный перечень шпунтовых работ по сооружениям.",
+                ),
+                PlannedToolCall(
+                    "consultant.get_discrepancies",
+                    {},
+                    "Добавить установленные расхождения по шпунтовому объёму и профилям.",
+                ),
+            ),
+        )
     if not (
         asks_for_customer_questions or asks_for_contractor_risks or asks_for_document_discrepancies
     ):
@@ -1223,11 +1245,70 @@ def _append_prepared_project_result(
     normalized = " ".join(question.casefold().replace("ё", "е").split())
     asks_for_customer_questions = "вопрос" in normalized and "заказчик" in normalized
     asks_for_contractor_risks = "риск" in normalized and "подрядчик" in normalized
+    asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
+        marker in normalized
+        for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
         str(item["source_id"]) for item in _deduplicated_sources(receipts) if item.get("source_id")
     }
+    if asks_for_sheet_pile_schedule:
+        schedule_rows: list[str] = []
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_work_packages":
+                continue
+            response = receipt.get("response")
+            value = response.get("value") if isinstance(response, dict) else None
+            engineering = value.get("project_engineering") if isinstance(value, dict) else None
+            if not isinstance(engineering, dict):
+                continue
+            for item in engineering.get("sheet_pile_answer_facts") or ():
+                if not isinstance(item, dict):
+                    continue
+                facility = str(item.get("facility") or "Место требует уточнения")
+                pit = str(item.get("pit") or "котлован не установлен")
+                operation = str(item.get("operation") or "Шпунтовые работы")
+                details: list[str] = []
+                profiles = [str(value) for value in item.get("profiles") or () if value]
+                if profiles:
+                    details.append("профиль " + ", ".join(profiles))
+                steel = [str(value) for value in item.get("steel") or () if value]
+                if steel:
+                    details.append("сталь " + ", ".join(steel))
+                beams = [str(value) for value in item.get("waling_beams") or () if value]
+                if beams:
+                    details.append("балки " + ", ".join(beams))
+                quantities = item.get("quantities_by_document")
+                if isinstance(quantities, dict):
+                    for role, rows in quantities.items():
+                        values = [
+                            " ".join(
+                                part
+                                for part in (
+                                    str(row.get("value") or "").strip(),
+                                    str(row.get("unit") or "").strip(),
+                                )
+                                if part
+                            )
+                            for row in rows
+                            if isinstance(row, dict) and row.get("value") is not None
+                        ]
+                        if values:
+                            details.append(f"{role}: {', '.join(values)}")
+                uncertainty = str(item.get("uncertainty") or "").strip()
+                if uncertainty:
+                    details.append(uncertainty)
+                suffix = "; ".join(details) if details else "объём требует уточнения"
+                schedule_rows.append(f"{facility}; {pit}; {operation}: {suffix}.")
+                for source_id in item.get("source_refs") or ():
+                    source_id = str(source_id)
+                    if source_id in available_source_ids and source_id not in selected_source_ids:
+                        selected_source_ids.append(source_id)
+            break
+        if schedule_rows:
+            headings_and_rows.append(("Шпунтовые работы по сооружениям:", schedule_rows))
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_discrepancies":
             continue
