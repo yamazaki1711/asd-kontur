@@ -1005,7 +1005,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v45"
+    assert model["model_version"] == "project-engineering-model-v46"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2253,7 +2253,9 @@ def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> 
     assert comparison["classification"] == "QUANTITY_DIFFERENCE"
     assert model["issues"][0]["kind"] == "Расхождение объёмов"
     assert all(item["issue_id"] != "technical" for item in model["issues"])
-    assert model["customer_questions"][0]["question"].startswith("Запросить у Заказчика")
+    assert model["customer_questions"][0]["question"].startswith(
+        "Просим включить недостающий объём 77 т"
+    )
 
 
 def test_duration_comparison_is_not_presented_as_construction_quantity() -> None:
@@ -2314,8 +2316,44 @@ def test_identical_vor_and_estimate_difference_is_one_professional_issue() -> No
 
     assert len(comparisons) == 2
     assert len(issues) == 1
-    assert issues[0]["description"] == "Разница ПД ↔ ВОР/Смета: -30 м"
+    assert issues[0]["description"] == (
+        "ПД: 30 м; ВОР/Смета: 60 м. Коммерческий объём превышает проектный на 30 м."
+    )
+    assert "лишний коммерческий объём 30 м" in issues[0]["practical_consequence"]
+    assert "проектное основание объёма 60 м" in issues[0]["recommended_action"]
     assert issues[0]["source_locator_ids"] == ["design", "estimate", "vor"]
+
+
+def test_design_quantity_above_commercial_is_described_as_unpriced_scope() -> None:
+    comparison = _comparison_row(
+        {
+            "work_scope_id": "sheet-pile-los-4",
+            "facility": "ЛОС 4",
+            "work_name": "Погружение шпунта",
+            "source_locator_ids": ["design", "vor"],
+        },
+        "РД",
+        "ВОР",
+        (Decimal("438"), "т"),
+        (Decimal("361"), "т"),
+        Decimal("77"),
+        "Разница РД ↔ ВОР: 77 т",
+    )
+
+    issue = _issues(
+        defects=[],
+        comparisons=[comparison],
+        scope_comparisons=[],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )[0]
+
+    assert issue["description"] == (
+        "РД: 438 т; ВОР: 361 т. В коммерческих документах учтено на 77 т меньше, чем в проекте."
+    )
+    assert "может остаться нерасценённым" in issue["practical_consequence"]
+    assert "включить недостающий объём 77 т" in issue["recommended_action"]
 
 
 def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_class() -> None:

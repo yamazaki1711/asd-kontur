@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v45"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v46"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -3119,6 +3119,11 @@ def _issues(
         ):
             continue
         comparison_kind = str(comparison.get("comparison_kind") or "quantity")
+        description = str(comparison.get("conclusion") or "")
+        consequence = "Объём и стоимость работ требуют согласования до подачи предложения."
+        action = "Запросить у Заказчика подтверждение применяемого объёма и документа-основания."
+        if comparison_kind == "quantity" and comparison.get("difference") is not None:
+            description, consequence, action = _quantity_difference_professional_text(comparison)
         issues.append(
             {
                 "issue_id": str(comparison["comparison_id"]),
@@ -3131,16 +3136,14 @@ def _issues(
                 ),
                 "location": comparison.get("facility"),
                 "subject": comparison.get("work"),
-                "description": comparison.get("conclusion"),
+                "description": description,
                 "practical_consequence": (
                     "Продолжительность работ и календарные условия требуют согласования "
                     "до подачи предложения."
                     if comparison_kind == "duration"
-                    else "Объём и стоимость работ требуют согласования до подачи предложения."
+                    else consequence
                 ),
-                "recommended_action": (
-                    "Запросить у Заказчика подтверждение применяемого объёма и документа-основания."
-                ),
+                "recommended_action": (action),
                 "source_locator_ids": list(comparison.get("source_locator_ids") or ()),
                 "sources": _source_refs(comparison.get("source_locator_ids") or (), source_context),
                 "status": "Установленное расхождение"
@@ -3404,6 +3407,37 @@ def _professional_quantity_issue_comparisons(
         )
         passthrough.append(base)
     return passthrough
+
+
+def _quantity_difference_professional_text(
+    comparison: Mapping[str, Any],
+) -> tuple[str, str, str]:
+    left = dict(comparison.get("left") or {})
+    right = dict(comparison.get("right") or {})
+    difference = Decimal(str(comparison.get("difference") or "0"))
+    magnitude = _decimal_text(abs(difference))
+    unit = str(left.get("unit") or right.get("unit") or "").strip()
+    amount = f"{magnitude} {unit}".strip()
+    left_role = str(left.get("document_role") or "проект")
+    right_role = str(right.get("document_role") or "коммерческие документы")
+    left_value = f"{left.get('value')} {unit}".strip()
+    right_value = f"{right.get('value')} {unit}".strip()
+    description = f"{left_role}: {left_value}; {right_role}: {right_value}. "
+    if difference > 0:
+        return (
+            description + f"В коммерческих документах учтено на {amount} меньше, чем в проекте.",
+            f"Объём {amount} может остаться нерасценённым и привести к росту "
+            "объёма работ после заключения договора.",
+            f"Просим включить недостающий объём {amount} в {right_role} либо "
+            f"подтвердить изменение проектного объёма {left_role}.",
+        )
+    return (
+        description + f"Коммерческий объём превышает проектный на {amount}.",
+        f"Без подтверждённого проектного основания лишний коммерческий объём {amount} "
+        "создаёт риск спора о составе и стоимости работ.",
+        f"Просим подтвердить проектное основание объёма {right_value} в {right_role} "
+        f"либо привести его в соответствие с {left_role} ({left_value}).",
+    )
 
 
 def _commercial_sheet_pile_scope_summary(
