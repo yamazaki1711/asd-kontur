@@ -1383,9 +1383,7 @@ def _pits(
             for scope_code in scope_codes:
                 commercial_designations.update(commercial_designations_by_scope[scope_code])
             commercial_scope_designation = (
-                next(iter(commercial_designations))
-                if len(commercial_designations) == 1
-                else None
+                next(iter(commercial_designations)) if len(commercial_designations) == 1 else None
             )
             # An explicitly counted group of pits for wells/chambers under one
             # commercial facility is a real minimum inventory even when the
