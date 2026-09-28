@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v26"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v27"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2611,6 +2611,7 @@ def _issues(
                 "status": "Требуется пообъектная увязка проектных и сметных обозначений",
             }
         )
+    commercial_sheet_pile_scope = _commercial_sheet_pile_scope_summary(sheet_pile_schedule)
     work_rows = [dict(row) for row in works]
     commercial_unassigned: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for work in work_rows:
@@ -2658,14 +2659,27 @@ def _issues(
                 "description": (
                     "Проектное решение привязано к сооружению, а найденные позиции ВОР/сметы "
                     "не содержат однозначной разбивки по сооружениям."
+                    + (
+                        f" Найденный коммерческий объём: {commercial_sheet_pile_scope}."
+                        if commercial_sheet_pile_scope
+                        else ""
+                    )
                 ),
                 "practical_consequence": (
                     "Нельзя воспроизводимо подтвердить полноту и цену этого объёма "
                     "для отдельного сооружения."
                 ),
                 "recommended_action": (
-                    "Запросить у Заказчика ведомость распределения объёмов по сооружениям "
-                    "и подтвердить состав работ для данного сооружения."
+                    (
+                        "Просим предоставить пообъектную разбивку найденных коммерческих "
+                        f"объёмов ({commercial_sheet_pile_scope}) и подтвердить состав "
+                        "шпунтовых работ для данного сооружения."
+                    )
+                    if commercial_sheet_pile_scope
+                    else (
+                        "Запросить у Заказчика ведомость распределения объёмов по сооружениям "
+                        "и подтвердить состав работ для данного сооружения."
+                    )
                 ),
                 "source_locator_ids": locators,
                 "sources": _source_refs(locators, source_context),
@@ -2698,6 +2712,28 @@ def _issues(
             }
         )
     return _deduplicate_dicts(issues)
+
+
+def _commercial_sheet_pile_scope_summary(
+    schedule: Iterable[Mapping[str, Any]],
+) -> str:
+    """Describe safely consolidated commercial quantities without allocating them."""
+
+    values: list[str] = []
+    for raw in schedule:
+        row = dict(raw)
+        if row.get("facility_id") is not None:
+            continue
+        operation = str(row.get("operation") or "Шпунтовые работы")
+        commercial = dict(row.get("commercial_quantities") or {})
+        for role in sorted(commercial):
+            for quantity in commercial[role] or ():
+                value = quantity.get("value")
+                unit = str(quantity.get("unit") or "").strip()
+                if value is None or not unit:
+                    continue
+                values.append(f"{operation} — {value} {unit} ({role})")
+    return "; ".join(dict.fromkeys(values))
 
 
 def _requirements(matrix: Mapping[str, Any], profile: Mapping[str, Any] | None) -> dict[str, Any]:

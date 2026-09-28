@@ -9,6 +9,7 @@ from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
     _comparison_row,
     _display_quantity,
+    _issues,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
     _scope_comparisons,
@@ -268,6 +269,55 @@ def test_sheet_pile_schedule_consolidates_repeated_commercial_scope_without_summ
     ]
 
 
+def test_sheet_pile_allocation_question_names_known_commercial_quantities() -> None:
+    issues = _issues(
+        defects=[],
+        comparisons=[],
+        scope_comparisons=[],
+        sheet_pile_schedule=[
+            {
+                "facility_id": None,
+                "operation": "Погружение шпунта",
+                "commercial_quantities": {"Смета": [{"value": "95.028", "unit": "т"}]},
+            },
+            {
+                "facility_id": None,
+                "operation": "Извлечение шпунта",
+                "commercial_quantities": {"Смета": [{"value": "104.869", "unit": "т"}]},
+            },
+        ],
+        works=[
+            {
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "family_key": "sheet_piling",
+                "work_name": "Устройство шпунтового ограждения",
+                "quantities_by_document": {"РД": []},
+                "materials_by_document": {},
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                "facility_id": None,
+                "facility": "Место выполнения не установлено",
+                "family_key": "sheet_piling",
+                "work_name": "Погружение шпунта",
+                "quantities_by_document": {"Смета": [{"value": "95.028", "unit": "т"}]},
+                "materials_by_document": {},
+                "source_locator_ids": ["estimate-locator"],
+            },
+        ],
+        source_context={},
+    )
+
+    allocation = next(
+        issue
+        for issue in issues
+        if issue["kind"] == "Коммерческий объём не распределён по сооружениям"
+    )
+    assert "Погружение шпунта — 95.028 т (Смета)" in allocation["recommended_action"]
+    assert "Извлечение шпунта — 104.869 т (Смета)" in allocation["recommended_action"]
+
+
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
     return locator, {
         "source_version_id": f"source-{locator}",
@@ -441,7 +491,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v26"
+    assert model["model_version"] == "project-engineering-model-v27"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
