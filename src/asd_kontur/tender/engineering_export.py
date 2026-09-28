@@ -227,15 +227,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         _heading("7. Расхождения ПД/РД/спецификаций/ВОР/сметы"),
         _simple_table(
             ("Место", "Работа", "Сравнение", "Вывод"),
-            [
-                (
-                    str(row.get("facility") or ""),
-                    str(row.get("work") or ""),
-                    f"{_operand(row.get('left'))}; {_operand(row.get('right'))}",
-                    str(row.get("conclusion") or ""),
-                )
-                for row in model.get("quantity_comparisons") or ()
-            ],
+            _engineering_comparison_rows(model),
             empty="Сопоставимые значения по ролям документов пока не установлены.",
         ),
         _heading("8. Возможные неучтённые работы"),
@@ -302,6 +294,28 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         "</w:sectPr></w:body></w:document>"
     )
     return _docx_package(document.encode())
+
+
+def _engineering_comparison_rows(model: Mapping[str, Any]) -> list[tuple[str, str, str, str]]:
+    rows = [
+        (
+            str(row.get("facility") or ""),
+            str(row.get("work") or ""),
+            f"{_operand(row.get('left'))}; {_operand(row.get('right'))}",
+            str(row.get("conclusion") or ""),
+        )
+        for row in model.get("quantity_comparisons") or ()
+    ]
+    rows.extend(
+        (
+            str(row.get("facility") or ""),
+            str(row.get("work") or ""),
+            str(row.get("material") or "Материал"),
+            str(row.get("description") or ""),
+        )
+        for row in model.get("material_comparisons") or ()
+    )
+    return rows
 
 
 def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> bytes:

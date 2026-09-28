@@ -62,6 +62,14 @@ def _model() -> dict[str, object]:
                 "conclusion": "Разница РД ↔ ВОР: 2.5 т",
             }
         ],
+        "material_comparisons": [
+            {
+                "facility": "КНС 7",
+                "work": "Железобетонные конструкции",
+                "material": "Бетон В25",
+                "description": "морозостойкость: проект F200, коммерческие документы F150.",
+            }
+        ],
         "scope_comparisons": [
             {
                 "classification": "UNRESOLVED_SCOPE_MATCH",
@@ -131,6 +139,8 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "В комплекте есть ПД и смета; ВОР не найдена." in xml
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
+    assert "Бетон В25" in xml
+    assert "проект F200, коммерческие документы F150" in xml
     assert "Фундаментная плита, Напорный трубопровод" in xml
     assert "Производительность КНС-7: 42 л/с" in xml
     assert "Возможные неучтённые работы" in xml
