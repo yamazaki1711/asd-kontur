@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v43"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v44"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -31,6 +31,11 @@ _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
         "excavation",
         "soil_disposal",
         "pipeline",
+        "pit_preparation",
+        "chambers_wells",
+        "electrical",
+        "gabion_erosion_protection",
+        "waste_management",
         "pile_foundation",
         "reinforced_concrete",
         "equipment_installation",
