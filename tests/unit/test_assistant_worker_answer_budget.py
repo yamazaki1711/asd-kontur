@@ -5,6 +5,7 @@ import json
 from asd_kontur.assistant.reasoning import SynthesizedAnswer
 from asd_kontur.assistant.worker import (
     _answer_budget,
+    _direct_project_result_plan,
     _tool_results_for_prompt,
     _with_structured_project_fact_checks,
 )
@@ -16,6 +17,29 @@ def test_explicit_normative_question_has_budget_for_complete_evidence_bound_answ
 
 def test_unqualified_short_question_keeps_compact_answer_budget() -> None:
     assert _answer_budget("Что это?", []) == 520
+
+
+def test_prepared_project_discrepancy_question_uses_direct_professional_result() -> None:
+    plan = _direct_project_result_plan(
+        "Какие расхождения между проектом, ВОР и сметой установлены?"
+    )
+
+    assert plan is not None
+    assert plan.intent == "workspace"
+    assert [step.tool for step in plan.steps] == ["consultant.get_discrepancies"]
+
+
+def test_customer_questions_and_contractor_risks_use_prepared_project_result() -> None:
+    questions = _direct_project_result_plan("Какие вопросы надо направить Заказчику?")
+    risks = _direct_project_result_plan("Какие риски выявлены для Подрядчика?")
+
+    assert questions is not None
+    assert risks is not None
+    assert questions.steps == risks.steps
+
+
+def test_general_engineering_question_still_requires_model_planning() -> None:
+    assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 
 
 def test_prompt_budget_keeps_evidence_identity_after_long_metadata() -> None:

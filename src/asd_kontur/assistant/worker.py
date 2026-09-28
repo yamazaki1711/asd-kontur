@@ -75,6 +75,46 @@ class _QwenStreamInterrupted(Exception):
     """The loopback inference stream ended without a terminal response."""
 
 
+def _direct_project_result_plan(question: str) -> SearchPlan | None:
+    """Route exact prepared-result questions without model planning or adequacy calls.
+
+    The route is deliberately narrow. Qwen still writes the professional answer
+    from the prepared project result, and the normal source and structured-fact
+    validation remains in force. Questions needing interpretation continue
+    through the model planner.
+    """
+
+    normalized = " ".join(question.casefold().replace("ё", "е").split())
+    asks_for_customer_questions = "вопрос" in normalized and any(
+        marker in normalized for marker in ("заказчик", "заказчику")
+    )
+    asks_for_contractor_risks = "риск" in normalized and any(
+        marker in normalized for marker in ("подрядчик", "подрядчика")
+    )
+    discrepancy_markers = ("расхожд", "противореч", "отлич", "не совпад", "сравн")
+    document_role_markers = ("проект", "пд", "рд", "спецификац", "вор", "смет")
+    asks_for_document_discrepancies = (
+        any(marker in normalized for marker in discrepancy_markers)
+        and sum(marker in normalized for marker in document_role_markers) >= 2
+    )
+    if not (
+        asks_for_customer_questions or asks_for_contractor_risks or asks_for_document_discrepancies
+    ):
+        return None
+    return SearchPlan(
+        intent="workspace",
+        needs_clarification=False,
+        clarifying_question=None,
+        steps=(
+            PlannedToolCall(
+                "consultant.get_discrepancies",
+                {},
+                "Использовать подготовленные инженерные расхождения, вопросы и риски проекта.",
+            ),
+        ),
+    )
+
+
 class AssistantWorker:
     def __init__(
         self,
@@ -111,7 +151,8 @@ class AssistantWorker:
         try:
             history = compact_history(self._repository.history_for_prompt(claimed))
             dialogue_state = self._repository.dialogue_state(claimed)
-            plan = self._plan(claimed, history, dialogue_state)
+            direct_plan = _direct_project_result_plan(claimed.question)
+            plan = direct_plan or self._plan(claimed, history, dialogue_state)
             receipts: list[dict[str, Any]] = []
             answer: SynthesizedAnswer
             model_checks: dict[str, Any]
@@ -129,7 +170,7 @@ class AssistantWorker:
                 for step in plan.steps:
                     receipts.append(self._execute_tool(claimed, step, len(receipts) + 1))
                 pending_answer: SynthesizedAnswer | None = None
-                while receipts and len(receipts) < MAX_TOOL_STEPS:
+                while direct_plan is None and receipts and len(receipts) < MAX_TOOL_STEPS:
                     adequacy = self._adequacy(claimed, plan, receipts, history, dialogue_state)
                     if adequacy.sufficient:
                         break
