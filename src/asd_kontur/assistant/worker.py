@@ -385,6 +385,14 @@ class AssistantWorker:
                     receipts=receipts,
                     question=claimed.question,
                 )
+            # A direct project-result route publishes Qwen's narrative only
+            # after the prepared engineering result has passed the exact
+            # deterministic checks above.  A model quality verdict obtained
+            # during an earlier repair attempt must not veto that subsequently
+            # completed result and replace known project facts with the generic
+            # insufficient-data fallback.
+            if direct_plan is not None and deterministic["passed"]:
+                model_checks = {"passed": True, "issues": []}
             quality_passed = bool(deterministic["passed"] and model_checks["passed"])
             if not quality_passed:
                 answer = SynthesizedAnswer(

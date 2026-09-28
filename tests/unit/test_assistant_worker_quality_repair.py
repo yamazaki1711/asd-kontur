@@ -112,6 +112,102 @@ def test_quality_check_fails_closed_for_non_protocol_response(monkeypatch: Any) 
     }
 
 
+def test_prepared_project_result_is_not_vetoed_by_stale_repair_model_verdict(
+    monkeypatch: Any,
+) -> None:
+    repository = _RecordingRepository()
+    worker = AssistantWorker(
+        cast(AssistantRepository, repository),
+        cast(ProfessionalAssistantKnowledgeQuery, object()),
+        identity="test-worker",
+    )
+    source_id = "22222222-2222-4222-8222-222222222222"
+    receipt = {
+        "step_sequence": 1,
+        "tool": "consultant.get_discrepancies",
+        "arguments": {},
+        "reason": "Prepared project discrepancies.",
+        "response": {
+            "outcome": "found",
+            "value": {
+                "project_engineering": {
+                    "issues": [
+                        {
+                            "location": "КНС 4",
+                            "subject": "Шпунтовое ограждение",
+                            "description": "В РД указано 438 т, в ВОР — 361 т.",
+                            "source_refs": [source_id],
+                        }
+                    ],
+                    "quantity_comparisons": [],
+                    "material_comparisons": [],
+                }
+            },
+            "sources": [{"source_id": source_id, "title": "Controlled source"}],
+        },
+    }
+    monkeypatch.setattr(worker, "_execute_tool", lambda *_args, **_kwargs: receipt)
+    monkeypatch.setattr(
+        worker,
+        "_synthesize",
+        lambda *_args, **_kwargs: SynthesizedAnswer(
+            "Обнаружено расхождение.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Расхождения проекта.",
+            (),
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_repair_answer",
+        lambda *_args, **_kwargs: SynthesizedAnswer(
+            "Обнаружено расхождение.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Расхождения проекта.",
+            (),
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_model_quality_check",
+        lambda *_args, **_kwargs: {"passed": False, "issues": ["model_omitted_fact"]},
+    )
+    checks = iter(
+        (
+            {"passed": False, "problems": ["workspace_structured_fact_omitted"]},
+            {"passed": True, "problems": []},
+            {"passed": True, "problems": []},
+        )
+    )
+    monkeypatch.setattr(
+        "asd_kontur.assistant.worker.validate_answer",
+        lambda *_args, **_kwargs: next(checks),
+    )
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "Какие расхождения между проектом и ВОР установлены?",
+        "owner-a",
+        1,
+        1,
+    )
+
+    worker._run(claimed)
+
+    assert repository.failed is None
+    assert repository.completed is not None
+    assert "КНС 4" in repository.completed["content"]
+    assert "438 т" in repository.completed["content"]
+    assert repository.completed["quality_receipt"]["passed"] is True
+
+
 def test_inventory_candidates_cannot_be_replaced_by_generic_insufficient_answer() -> None:
     source_id = "11111111-1111-4111-8111-111111111111"
     receipts = [
