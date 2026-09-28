@@ -1275,8 +1275,10 @@ def _append_prepared_project_result(
                 location = str(item.get("facility") or "Место требует уточнения").strip()
                 work = str(item.get("work") or "Работа требует уточнения").strip()
                 status = str(item.get("professional_status") or "Различается объём").strip()
-                left = item.get("left") if isinstance(item.get("left"), dict) else {}
-                right = item.get("right") if isinstance(item.get("right"), dict) else {}
+                raw_left = item.get("left")
+                raw_right = item.get("right")
+                left: dict[str, Any] = raw_left if isinstance(raw_left, dict) else {}
+                right: dict[str, Any] = raw_right if isinstance(raw_right, dict) else {}
                 left_text = " ".join(
                     str(left.get(key) or "").strip() for key in ("document_role", "value", "unit")
                 ).strip()
