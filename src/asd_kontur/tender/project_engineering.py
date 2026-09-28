@@ -2318,8 +2318,39 @@ def _validated_scope_quantity_comparisons(
             )
         )
         for comparison in _comparisons([work]):
+            if not work.get("facility_id") and not _isolated_unassigned_comparison(
+                work, comparison
+            ):
+                continue
             result.append({**comparison, "scope_match_basis": basis})
     return result
+
+
+def _isolated_unassigned_comparison(work: Mapping[str, Any], comparison: Mapping[str, Any]) -> bool:
+    """Reject project-wide pseudo-comparisons when a location is unresolved.
+
+    A validated semantic operation can safely connect one design row to one
+    commercial row even before its facility is known.  It cannot make a scope
+    out of several occurrences collected across unrelated drawings, VOR
+    sections or estimate chapters.  Those rows remain visible in the work and
+    quantity schedules until their location is established.
+    """
+
+    left_role = str(dict(comparison.get("left") or {}).get("document_role") or "")
+    right_role = str(dict(comparison.get("right") or {}).get("document_role") or "")
+    if not left_role or not right_role:
+        return False
+    # Two commercial rows with no facility can describe different estimate
+    # chapters even when their normalized operation is identical.  A VOR ↔
+    # estimate finding therefore requires a resolved location/scope.
+    if {left_role, right_role}.issubset({"ВОР", "Смета"}):
+        return False
+    sources = dict(work.get("sources_by_document") or {})
+    wordings = dict(work.get("project_wording_by_document") or {})
+    return all(
+        len(list(sources.get(role) or ())) == 1 and len(list(wordings.get(role) or ())) == 1
+        for role in (left_role, right_role)
+    )
 
 
 def _exact_cross_role_work_wording(work: Mapping[str, Any]) -> str | None:
@@ -3456,6 +3487,29 @@ def _quantity_difference_professional_text(
     left_value = f"{left.get('value')} {unit}".strip()
     right_value = f"{right.get('value')} {unit}".strip()
     description = f"{left_role}: {left_value}; {right_role}: {right_value}. "
+    design_roles = {"ПД", "РД", "Спецификация"}
+    commercial_roles = {"ВОР", "Смета", "ВОР/Смета"}
+    if left_role in {"ВОР", "Смета"} and right_role in {"ВОР", "Смета"}:
+        right_location = {"Смета": "смете", "ВОР": "ВОР"}.get(right_role, right_role)
+        left_object = {"Смета": "смету", "ВОР": "ВОР"}.get(left_role, left_role)
+        right_object = {"Смета": "смету", "ВОР": "ВОР"}.get(right_role, right_role)
+        if difference > 0:
+            relation = f"В {right_location} учтено на {amount} меньше, чем в {left_role}."
+        else:
+            relation = f"В {right_location} учтено на {amount} больше, чем в {left_role}."
+        return (
+            description + relation,
+            "Различие между коммерческими документами создаёт неопределённость "
+            "объёма для расчёта предложения и последующего закрытия работ.",
+            f"Просим подтвердить согласованный объём и привести {left_object} и "
+            f"{right_object} к одному значению.",
+        )
+    if left_role not in design_roles or right_role not in commercial_roles:
+        return (
+            description + f"Документы различаются на {amount}.",
+            "Различие объёмов требует определения применяемого документа-основания.",
+            "Просим подтвердить применяемый объём и документ-основание для расчёта предложения.",
+        )
     if difference > 0:
         return (
             description + f"В коммерческих документах учтено на {amount} меньше, чем в проекте.",

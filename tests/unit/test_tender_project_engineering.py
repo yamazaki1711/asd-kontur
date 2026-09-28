@@ -11,6 +11,7 @@ from asd_kontur.tender.project_engineering import (
     _comparisons,
     _display_quantity,
     _document_composition,
+    _isolated_unassigned_comparison,
     _issues,
     _material_comparisons,
     _material_sheet_pile_profiles,
@@ -2451,6 +2452,67 @@ def test_design_quantity_above_commercial_is_described_as_unpriced_scope() -> No
     )
     assert "может остаться нерасценённым" in issue["practical_consequence"]
     assert "включить недостающий объём 77 т" in issue["recommended_action"]
+
+
+def test_vor_estimate_difference_is_not_described_as_project_difference() -> None:
+    comparison = _comparison_row(
+        {
+            "work_scope_id": "commercial-excavation",
+            "facility": "ЛОС 4",
+            "work_name": "Разработка котлована",
+            "source_locator_ids": ["vor", "estimate"],
+        },
+        "ВОР",
+        "Смета",
+        (Decimal("174.0204"), "м3"),
+        (Decimal("4.365"), "м3"),
+        Decimal("169.6554"),
+        "Разница ВОР ↔ Смета: 169.6554 м3",
+    )
+
+    issue = _issues(
+        defects=[],
+        comparisons=[comparison],
+        scope_comparisons=[],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )[0]
+
+    assert issue["description"] == (
+        "ВОР: 174.0204 м3; Смета: 4.365 м3. В смете учтено на 169.6554 м3 меньше, чем в ВОР."
+    )
+    assert "между коммерческими документами" in issue["practical_consequence"]
+    assert "привести ВОР и смету к одному значению" in issue["recommended_action"]
+    assert "проект" not in issue["description"].casefold()
+
+
+def test_unassigned_comparison_requires_one_source_context_per_side() -> None:
+    comparison = {
+        "left": {"document_role": "ПД"},
+        "right": {"document_role": "Смета"},
+    }
+    isolated = {
+        "sources_by_document": {"ПД": [{"page": 1}], "Смета": [{"page": 2}]},
+        "project_wording_by_document": {
+            "ПД": ["Разработка котлована"],
+            "Смета": ["Разработка котлована"],
+        },
+    }
+    project_wide = {
+        **isolated,
+        "sources_by_document": {
+            "ПД": [{"page": 1}, {"page": 17}],
+            "Смета": [{"page": 2}],
+        },
+    }
+
+    assert _isolated_unassigned_comparison(isolated, comparison)
+    assert not _isolated_unassigned_comparison(project_wide, comparison)
+    assert not _isolated_unassigned_comparison(
+        isolated,
+        {"left": {"document_role": "ВОР"}, "right": {"document_role": "Смета"}},
+    )
 
 
 def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_class() -> None:
