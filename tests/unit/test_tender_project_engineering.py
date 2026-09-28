@@ -433,7 +433,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v16"
+    assert model["model_version"] == "project-engineering-model-v17"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -1127,6 +1127,46 @@ def test_established_facilities_exclude_equipment_model_designations() -> None:
             },
         ]
     ) == ("КНС 4",)
+
+
+def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "pipeline-model-mark",
+                    "version": 1,
+                    "value": "Монтаж трубопровода для ЛОС 8",
+                    "source_version_id": "source-work",
+                    "source_locator_id": "work-locator",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "ЛОС 8.1",
+                "candidate_labels": ["ЛОС 8.1"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": ["facility-a", "facility-b"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict([_source("work-locator", "Общие данные.pdf", 2)]),
+    )
+
+    assert model["works"][0]["facility_id"] is None
+    assert model["works"][0]["facility"] == "Место выполнения не установлено"
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:

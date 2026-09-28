@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v16"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v17"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1389,7 +1389,12 @@ def _work_schedule(
             "project_wording": name,
             "normalized_work_name": normalized_name,
             "facility_id": facility.get("facility_id") if facility else None,
-            "facility": designation,
+            # Keep facility labels authoritative to the established project
+            # inventory.  An unmatched facility-shaped token can be an
+            # equipment model or a partial designation; showing it as the
+            # work location would create a facility that the project model
+            # does not actually contain.
+            "facility": designation if facility else None,
             "facility_assignment_basis": assignment_basis if facility else None,
             "document_role": role,
             "source_version_id": source_version_id,
