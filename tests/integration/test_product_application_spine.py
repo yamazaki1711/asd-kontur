@@ -2104,3 +2104,97 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                 )
             )
         assert "incremental_source_job_id" in str(claim_definition)
+
+
+def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="foreground-yield-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Foreground yield owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "foreground-yield-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Foreground yield workspace"},
+            headers=_csrf(client),
+        ).json()
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = str(
+            connection.scalar(
+                sa.text(
+                    "SELECT created_by_identity_id FROM workspace.workspaces "
+                    "WHERE workspace_id=:workspace"
+                ),
+                {"workspace": workspace_id},
+            )
+        )
+        manifest = {"synthetic": "foreground-yield"}
+        job_id = uuid4()
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                "job_kind,input_manifest,input_digest,idempotency_key,state,priority,max_attempts,"
+                "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                "(:organization,:workspace,:job,'PROJECT_WORK_RECONCILIATION',"
+                "CAST(:manifest AS jsonb),:digest,:key,'queued',100,3,'synthetic',"
+                "CAST(:provenance AS jsonb),:correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": job_id,
+                "manifest": json.dumps(manifest),
+                "digest": semantic_digest(manifest),
+                "key": "synthetic-foreground-yield",
+                "provenance": json.dumps({"contract": "synthetic"}),
+                "correlation": uuid4(),
+                "owner": owner,
+            },
+        )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    first = repository.claim_next_job(
+        worker_identity="foreground-yield-worker",
+        lease_seconds=30,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+    )
+    assert first is not None
+    assert first.attempt_number == 1
+    repository.yield_job_for_foreground(first, worker_identity="foreground-yield-worker")
+
+    with postgres_environment.owner_engine.connect() as connection:
+        row = connection.execute(
+            sa.text(
+                "SELECT state,attempt_count,max_attempts FROM workspace.durable_jobs "
+                "WHERE job_id=:job"
+            ),
+            {"job": job_id},
+        ).one()
+        attempts = connection.scalars(
+            sa.text(
+                "SELECT attempt_number FROM workspace.durable_job_attempts "
+                "WHERE job_id=:job ORDER BY attempt_number"
+            ),
+            {"job": job_id},
+        ).all()
+    assert tuple(row) == ("queued", 1, 4)
+    assert attempts == [1]
+
+    second = repository.claim_next_job(
+        worker_identity="foreground-yield-worker",
+        lease_seconds=30,
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+    )
+    assert second is not None
+    assert second.job_id == job_id
+    assert second.attempt_number == 2

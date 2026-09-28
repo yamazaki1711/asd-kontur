@@ -203,8 +203,9 @@ class DocumentWorker:
             workspace_id=claimed.workspace_id,
         ):
             # An unscoped worker cannot know the workspace before claiming.  At
-            # that safe boundary, return the untouched lease without consuming
-            # an attempt so the foreground consultant gets the single Qwen slot.
+            # that safe boundary, return the untouched lease while preserving
+            # its remaining retry budget so the foreground consultant gets the
+            # single Qwen slot.
             self._repository.yield_job_for_foreground(
                 claimed,
                 worker_identity=self._worker_identity,

@@ -1264,10 +1264,10 @@ class SpinePostgresRepository:
     ) -> None:
         """Return an untouched lease when foreground consultation owns Qwen.
 
-        Claiming increments ``attempt_count``. Because no handler or inference
-        has run at this boundary, restore that count while fencing the exact
-        lease generation. The durable job remains queued and retains all prior
-        receipts and lineage.
+        Claiming appends an immutable attempt and increments ``attempt_count``.
+        Never reuse that number: instead increase ``max_attempts`` by one so the
+        untouched lease does not consume the job's remaining execution budget.
+        The durable job remains queued and retains all receipts and lineage.
         """
 
         if not 0 <= delay_seconds <= 30:
@@ -1279,7 +1279,7 @@ class SpinePostgresRepository:
                     session.execute(
                         sa.text(
                             "UPDATE workspace.durable_jobs SET state='queued',"
-                            "attempt_count=GREATEST(attempt_count-1,0),"
+                            "max_attempts=max_attempts+1,"
                             "eligible_at=CURRENT_TIMESTAMP+make_interval(secs=>:delay),"
                             "lease_owner=NULL,lease_expires_at=NULL WHERE "
                             "organization_id=:organization AND workspace_id=:workspace AND "
