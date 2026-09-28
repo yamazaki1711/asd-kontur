@@ -834,12 +834,17 @@ def _with_structured_project_fact_checks(
     asks_for_contractor_risks = "риск" in normalized_question and any(
         marker in normalized_question for marker in ("подряд", "проект")
     )
+    asks_for_comparisons = any(
+        marker in normalized_question
+        for marker in ("расхожд", "сравн", "разниц", "совпад", "вор", "смет")
+    ) and any(marker in normalized_question for marker in ("объ", "колич", "пд", "рд", "работ"))
     if not any(
         (
             asks_for_sheet_pile,
             asks_for_waling,
             asks_for_customer_questions,
             asks_for_contractor_risks,
+            asks_for_comparisons,
         )
     ):
         return checks
@@ -848,6 +853,8 @@ def _with_structured_project_fact_checks(
     required_quantities: set[tuple[str, str]] = set()
     required_customer_questions: set[str] = set()
     required_contractor_risks: set[str] = set()
+    required_comparison_terms: set[str] = set()
+    required_comparison_quantities: set[tuple[str, str]] = set()
     for receipt in receipts:
         if receipt.get("tool") not in {
             "consultant.get_workspace_overview",
@@ -897,12 +904,34 @@ def _with_structured_project_fact_checks(
             for item in engineering.get("risks") or ():
                 if isinstance(item, dict) and str(item.get("risk") or "").strip():
                     required_contractor_risks.add(str(item["risk"]).strip())
+        if asks_for_comparisons:
+            for item in engineering.get("quantity_comparisons") or ():
+                if not isinstance(item, dict):
+                    continue
+                for key in ("work", "professional_status"):
+                    if str(item.get(key) or "").strip():
+                        required_comparison_terms.add(str(item[key]).strip())
+                for side in ("left", "right"):
+                    value = item.get(side)
+                    if not isinstance(value, dict):
+                        continue
+                    if str(value.get("document_role") or "").strip():
+                        required_comparison_terms.add(str(value["document_role"]).strip())
+                    if value.get("value") not in (None, ""):
+                        required_comparison_quantities.add(
+                            (
+                                str(value["value"]).strip(),
+                                str(value.get("unit") or "").strip(),
+                            )
+                        )
     if not any(
         (
             required_terms,
             required_quantities,
             required_customer_questions,
             required_contractor_risks,
+            required_comparison_terms,
+            required_comparison_quantities,
         )
     ):
         return checks
@@ -925,6 +954,14 @@ def _with_structured_project_fact_checks(
         _inventory_text_key(value) not in normalized_answer_key
         for value in required_contractor_risks
     )
+    comparison_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key
+        for value in required_comparison_terms
+    ) or any(
+        value.replace(",", ".") not in normalized_answer
+        or (unit and unit.casefold().rstrip(".") not in normalized_answer)
+        for value, unit in required_comparison_quantities
+    )
     contradicted = bool(
         re.search(
             r"(?:профил\w*|объ[её]м\w*|масс\w*)[^.]{0,80}"
@@ -940,6 +977,8 @@ def _with_structured_project_fact_checks(
         problems.append("workspace_customer_question_omitted")
     if contractor_risk_omitted:
         problems.append("workspace_contractor_risk_omitted")
+    if comparison_omitted:
+        problems.append("workspace_structured_fact_omitted")
     if contradicted:
         problems.append("workspace_structured_fact_contradicted")
     problems = list(dict.fromkeys(problems))

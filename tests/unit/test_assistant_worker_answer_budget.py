@@ -245,6 +245,64 @@ def test_broad_sheet_pile_scope_requires_associated_belt_quantity_and_beams() ->
     assert checks == {"passed": True, "problems": []}
 
 
+def test_requested_project_comparison_cannot_omit_validated_values() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "quantity_comparisons": [
+                            {
+                                "work": "Демонтаж светильников",
+                                "professional_status": "Значения совпадают",
+                                "left": {"document_role": "ПД", "value": "3", "unit": "шт"},
+                                "right": {
+                                    "document_role": "Смета",
+                                    "value": "3",
+                                    "unit": "шт",
+                                },
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "Расхождений не найдено.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Сравнение объёмов.",
+        (),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Какие объёмы расходятся между ПД и сметой?",
+    )
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+    complete = SynthesizedAnswer(
+        "Для работы «Демонтаж светильников» ПД и Смета содержат 3 шт.; значения совпадают.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Сравнение объёмов.",
+        (),
+    )
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Какие объёмы расходятся между ПД и сметой?",
+    )
+    assert checks == {"passed": True, "problems": []}
+
+
 def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
     receipts = [
         {
