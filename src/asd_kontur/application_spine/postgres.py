@@ -4245,6 +4245,7 @@ class SpinePostgresRepository:
         correlation_id: UUID,
         batch_size: int = 12,
         max_batches: int = 4,
+        _resolved_organization_id: UUID | None = None,
     ) -> tuple[JobSummary, ...]:
         """Queue bounded Qwen interpretation of still-unclassified work rows.
 
@@ -4255,7 +4256,16 @@ class SpinePostgresRepository:
 
         if not 1 <= batch_size <= 16 or not 1 <= max_batches <= 20:
             raise SpinePersistenceError("project_work_reconciliation_batch_invalid")
-        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        # The public command resolves and verifies the owner/workspace pair.
+        # A worker-side refill already owns a fenced job carrying that exact
+        # scope and cannot call the application-role resolver.  Reuse only the
+        # claimed scope in that internal path; service/API callers never pass
+        # this value.
+        organization_id = (
+            _resolved_organization_id
+            if _resolved_organization_id is not None
+            else self.resolve_scope(owner_identity_id, workspace_id)
+        )
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
             candidates = self._project_candidate_rows(
@@ -4656,6 +4666,7 @@ class SpinePostgresRepository:
             correlation_id=claimed.job_id,
             batch_size=batch_size,
             max_batches=max_batches,
+            _resolved_organization_id=claimed.organization_id,
         )
 
     def _ensure_structure_reconciliation_job(
@@ -6074,7 +6085,7 @@ class SpinePostgresRepository:
                 "sl.organization_id=:organization AND sl.workspace_id=:workspace AND "
                 "sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[]))), pages AS ("
                 "SELECT DISTINCT source_version_id,(locator_value->>'page')::bigint AS page_number "
-                "FROM requested WHERE locator_value ? 'page'), page_text AS (SELECT "
+                "FROM requested WHERE locator_value ? 'page'), page_text AS MATERIALIZED (SELECT "
                 "pages.source_version_id,pages.page_number,lower(string_agg(COALESCE(element.raw_text,''),"
                 "' ' ORDER BY element.reading_order)) AS content FROM pages "
                 "LEFT JOIN workspace.native_layout_element_versions element ON "
@@ -6082,24 +6093,43 @@ class SpinePostgresRepository:
                 "element.source_version_id=pages.source_version_id AND "
                 "element.page_number=pages.page_number GROUP BY pages.source_version_id,"
                 "pages.page_number), page_roles AS (SELECT source_version_id,page_number,"
-                "content LIKE '%ведомость объемов работ%' AS page_is_bill_of_quantities,CASE "
+                "COALESCE(content,'') LIKE "
+                "'%ведомость объемов работ%' AS page_is_bill_of_quantities,CASE "
                 "WHEN content ~ 'л5\\s*-?\\s*ум' OR (content ~ "
                 "'профили фасонные.*л5\\s*-' AND content LIKE '%ум из стали%') "
                 "THEN ARRAY['\u041b5\u0423\u041c']::text[] "
                 "WHEN content ~ 'л5\\s*-\\s*10' THEN ARRAY['Л5-10']::text[] "
                 "WHEN content ~ '(^|[^[:alnum:]])л5([^[:alnum:]]|$)' THEN ARRAY['Л5']::text[] "
-                "ELSE ARRAY[]::text[] END AS page_sheet_pile_profiles FROM page_text) "
+                "ELSE ARRAY[]::text[] END AS page_sheet_pile_profiles FROM page_text), "
+                "commercial_headers AS MATERIALIZED (SELECT "
+                "source_version_id,page_number,(regexp_match(content,'(лср|вор)\\s*"
+                "([0-9]{2}-[0-9]{2}-[0-9]{2})'))[2] AS scope_code,substring(content FROM "
+                "GREATEST(strpos(content,'локальный сметный расчет'),strpos(content,"
+                "'ведомость объемов работ'),1) FOR 900) AS scope_header FROM page_text WHERE "
+                "content LIKE '%локальн%сметн%расчет%' OR content LIKE "
+                "'%ведомость объемов работ%'), page_commercial_scopes AS (SELECT "
+                "pages.source_version_id,pages.page_number,scope.scope_code,scope.scope_header "
+                "FROM pages LEFT JOIN LATERAL (SELECT header.scope_code,header.scope_header FROM "
+                "commercial_headers header WHERE header.source_version_id=pages.source_version_id "
+                "AND header.page_number<=pages.page_number AND header.page_number>=pages.page_number-40 "
+                "AND header.scope_code IS NOT NULL ORDER BY header.page_number DESC LIMIT 1) scope "
+                "ON true) "
                 "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
                 "sl.source_version_id,sl.locator_kind,sl.locator_value,"
                 "v.document_id,v.version AS document_version,v.safe_display_name,"
                 "COALESCE(page_roles.page_is_bill_of_quantities,false) AS "
                 "page_is_bill_of_quantities,COALESCE(page_roles.page_sheet_pile_profiles,"
-                "ARRAY[]::text[]) AS page_sheet_pile_profiles FROM requested sl "
+                "ARRAY[]::text[]) AS page_sheet_pile_profiles,commercial_scope.scope_code AS "
+                "page_commercial_scope_code,commercial_scope.scope_header AS "
+                "page_commercial_scope_header FROM requested sl "
                 "JOIN workspace.document_versions v ON "
                 "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
                 "v.source_version_id=sl.source_version_id LEFT JOIN page_roles ON "
                 "page_roles.source_version_id=sl.source_version_id AND page_roles.page_number="
-                "(sl.locator_value->>'page')::bigint ORDER BY sl.source_locator_id,v.version DESC"
+                "(sl.locator_value->>'page')::bigint LEFT JOIN page_commercial_scopes "
+                "commercial_scope ON commercial_scope.source_version_id=sl.source_version_id AND "
+                "commercial_scope.page_number=(sl.locator_value->>'page')::bigint ORDER BY "
+                "sl.source_locator_id,v.version DESC"
             ),
             {
                 "organization": organization_id,

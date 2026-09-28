@@ -18,6 +18,7 @@ from asd_kontur.tender.project_engineering import (
     _scope_comparisons,
     build_project_engineering_model,
     classify_work_family,
+    commercial_scope_facility_designation,
     construction_scope_exclusion_reason,
     document_comparison_side,
     established_facility_designations,
@@ -37,6 +38,98 @@ def test_facility_designations_preserve_multiple_explicit_project_scopes() -> No
     )
     assert facility_designation("Работы КНС-4") == "КНС 4"
     assert facility_designation("КНС-4 и ЛОС 8.1") is None
+
+
+def test_commercial_scope_heading_distinguishes_station_from_served_los() -> None:
+    assert commercial_scope_facility_designation("Строительство КНС для ЛОС4") == "КНС 4"
+    assert commercial_scope_facility_designation("Строительство КНС8.1") == "КНС 8.1"
+
+
+def test_vor_and_estimate_sections_assign_identical_work_to_distinct_facilities() -> None:
+    source_context = dict(
+        [
+            _source("facility-4", "КР2. КНС4.pdf", 1),
+            _source("facility-4b", "КР2. КНС4.pdf", 2),
+            _source("facility-8-1", "КР1. КНС8.1.pdf", 1),
+            _source("facility-8-1b", "КР1. КНС8.1.pdf", 2),
+            _source("vor-4", "Сводный ВОР.pdf", 32),
+            _source("estimate-4", "Локальные сметы.pdf", 64),
+            _source("vor-8-1", "Сводный ВОР.pdf", 36),
+            _source("estimate-8-1", "Локальные сметы.pdf", 77),
+        ]
+    )
+    source_context["vor-4"].update(
+        page_is_bill_of_quantities=True,
+        page_commercial_scope_code="02-01-16",
+        page_commercial_scope_header="ведомость объемов работ № вор 02-01-16",
+    )
+    source_context["estimate-4"].update(
+        page_commercial_scope_code="02-01-16",
+        page_commercial_scope_header=(
+            "локальный сметный расчет № лср 02-01-16 строительство кнс для лос4"
+        ),
+    )
+    source_context["vor-8-1"].update(
+        page_is_bill_of_quantities=True,
+        page_commercial_scope_code="02-01-17",
+        page_commercial_scope_header="ведомость объемов работ № вор 02-01-17",
+    )
+    source_context["estimate-8-1"].update(
+        page_commercial_scope_code="02-01-17",
+        page_commercial_scope_header=(
+            "локальный сметный расчет № лср 02-01-17 строительство кнс8.1"
+        ),
+    )
+    identity_components = [
+        {
+            "identity_kind": "facility",
+            "canonical_label": "КНС 4",
+            "candidate_labels": ["КНС 4"],
+            "member_structure_node_ids": ["facility-4-node"],
+            "source_locator_ids": ["facility-4", "facility-4b"],
+        },
+        {
+            "identity_kind": "facility",
+            "canonical_label": "КНС 8.1",
+            "candidate_labels": ["КНС 8.1"],
+            "member_structure_node_ids": ["facility-8-1-node"],
+            "source_locator_ids": ["facility-8-1", "facility-8-1b"],
+        },
+    ]
+    work_types = []
+    for locator in ("vor-4", "estimate-4", "vor-8-1", "estimate-8-1"):
+        work_types.append(
+            {
+                "candidate_id": locator,
+                "version": 1,
+                "value": "Погружение шпунта",
+                "label": "погружение шпунта",
+                "source_version_id": source_context[locator]["source_version_id"],
+                "source_locator_id": locator,
+                "source_role": "local_estimate",
+            }
+        )
+    model = build_project_engineering_model(
+        workspace_id="workspace-commercial-sections",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": work_types,
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=identity_components,
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=source_context,
+    )
+
+    sheet_pile_works = [row for row in model["works"] if row["family_key"] == "sheet_piling"]
+    assert {row["facility"] for row in sheet_pile_works} == {"КНС 4", "КНС 8.1"}
+    assert all("02-01-1" in row["status"] for row in sheet_pile_works)
 
 
 def test_document_composition_recognizes_vor_embedded_in_estimate_pdf() -> None:
@@ -635,7 +728,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v34"
+    assert model["model_version"] == "project-engineering-model-v35"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

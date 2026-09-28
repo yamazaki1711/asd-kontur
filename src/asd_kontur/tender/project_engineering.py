@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v34"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v35"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -768,6 +768,26 @@ def facility_designations(value: object) -> tuple[str, ...]:
     return tuple(sorted(normalized))
 
 
+def commercial_scope_facility_designation(value: object) -> str | None:
+    """Resolve one facility named by a VOR/local-estimate section heading.
+
+    Commercial documents commonly name a pumping station after the treatment
+    facility it serves.  The served facility and the station are different, so the generic
+    designation parser must not attach that scope to the LOS.  A heading that
+    names more than one actual facility otherwise remains unresolved.
+    """
+
+    text = str(value or "")
+    served_los = re.search(
+        r"\bкнс\s+для\s+лос\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
+        text,
+        re.IGNORECASE,
+    )
+    if served_los is not None:
+        return f"КНС {served_los.group('number').replace(',', '.').casefold()}"
+    return facility_designation(text)
+
+
 def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> bool:
     expected = _normalized(designation).replace("№", "")
     for alias in aliases:
@@ -1478,6 +1498,15 @@ def _work_schedule(
         str(item.get("designation")): dict(item) for item in facilities if item.get("designation")
     }
     facility_by_id = {str(item.get("facility_id")): dict(item) for item in facilities}
+    commercial_facilities_by_scope: dict[str, set[str]] = defaultdict(set)
+    for scope_context in source_context.values():
+        scope_code = str(scope_context.get("page_commercial_scope_code") or "").strip()
+        designation = commercial_scope_facility_designation(
+            scope_context.get("page_commercial_scope_header")
+        )
+        facility = facility_by_designation.get(designation or "")
+        if scope_code and facility is not None:
+            commercial_facilities_by_scope[scope_code].add(str(facility["facility_id"]))
     facility_ids_by_locator: dict[str, set[str]] = defaultdict(set)
     facility_ids_by_page: dict[tuple[str, int], set[str]] = defaultdict(set)
     for item in facilities:
@@ -1616,6 +1645,16 @@ def _work_schedule(
                 assignment_basis = (
                     "Работа отнесена к сооружению, однозначно указанному в названии "
                     "исходного документа"
+                )
+        if facility is None:
+            scope_code = str(context.get("page_commercial_scope_code") or "").strip()
+            commercial_facility_ids = commercial_facilities_by_scope.get(scope_code, set())
+            if len(commercial_facility_ids) == 1:
+                facility = facility_by_id[next(iter(commercial_facility_ids))]
+                designation = str(facility.get("designation") or facility.get("name") or "")
+                assignment_basis = (
+                    "Работа отнесена к сооружению по наименованию соответствующей "
+                    f"ВОР/локальной сметы {scope_code}"
                 )
         if facility is None and resolution.get("facility"):
             semantic_designation = str(resolution["facility"])
