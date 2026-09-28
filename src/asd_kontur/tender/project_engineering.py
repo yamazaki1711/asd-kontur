@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v41"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v42"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2758,10 +2758,22 @@ def _sheet_pile_schedule(
             # with a non-sheet-pile work.  Keep the exact material observation and
             # its locator without inheriting unrelated excavation quantities.
             quantities = {}
+            schedule_materials = {
+                role: [
+                    value
+                    for value in values or ()
+                    if _material_sheet_pile_profiles(value, source_context)
+                ]
+                for role, values in materials.items()
+                if any(
+                    _material_sheet_pile_profiles(value, source_context) for value in values or ()
+                )
+            }
         else:
             quantities = {
                 role: _consolidate_quantity_mentions(values) for role, values in quantities.items()
             }
+            schedule_materials = materials
         project_roles = {
             key: value for key, value in quantities.items() if key in {"ПД", "РД", "Спецификация"}
         }
@@ -2793,7 +2805,7 @@ def _sheet_pile_schedule(
                 # Keep supplied material rows separate from work quantities.
                 # A material mass may be useful to procurement while still
                 # being unsafe to publish as the measured scope of the work.
-                "materials_by_document": materials,
+                "materials_by_document": schedule_materials,
                 "project_quantities": project_roles,
                 "commercial_quantities": commercial_roles,
                 "waling_beams": beams,

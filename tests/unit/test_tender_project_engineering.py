@@ -970,7 +970,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v41"
+    assert model["model_version"] == "project-engineering-model-v42"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -1154,7 +1154,14 @@ def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording(
                     "value": "Шпунт Л5-УМ, сталь С255",
                     "normalized_name": "шпунт л5 ум сталь с255",
                     "source_locator_id": "material",
-                }
+                },
+                {
+                    "candidate_id": "unrelated-material",
+                    "work_candidate_id": "excavation",
+                    "value": "Песок природный",
+                    "normalized_name": "песок природный",
+                    "source_locator_id": "unrelated-material",
+                },
             ],
         },
         structure_nodes=[],
@@ -1167,6 +1174,7 @@ def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording(
             [
                 _source("work", "ПОС.pdf", 10),
                 _source("material", "Спецификация.pdf", 4),
+                _source("unrelated-material", "Спецификация.pdf", 5),
             ]
         ),
     )
@@ -1175,6 +1183,9 @@ def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording(
     assert sheet_row["profiles"] == ["Л5УМ"]
     assert sheet_row["project_wording"] == ["Шпунт Л5-УМ, сталь С255"]
     assert sheet_row["quantities_by_document"] == {}
+    assert [
+        value["name"] for values in sheet_row["materials_by_document"].values() for value in values
+    ] == ["Шпунт Л5-УМ, сталь С255"]
     assert sheet_row["sources_by_document"]["ПД"][0]["document"] == "Спецификация.pdf"
 
 
