@@ -11,6 +11,7 @@ import signal
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Iterable, Mapping
 from http.client import IncompleteRead, RemoteDisconnected
 from typing import Any
 from uuid import uuid4
@@ -1237,21 +1238,25 @@ def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> di
     if tool == "consultant.get_discrepancies":
         projected = {
             **common,
-            "issues": engineering.get("issues") or [],
-            "quantity_comparisons": [
+            "issues": _compact_engineering_rows(engineering.get("issues") or []),
+            "quantity_comparisons": _compact_engineering_rows(
                 item
                 for item in engineering.get("quantity_comparisons") or []
                 if isinstance(item, dict) and item.get("classification") != "MATCH"
-            ],
-            "material_comparisons": engineering.get("material_comparisons") or [],
-            "scope_comparisons": [
+            ),
+            "material_comparisons": _compact_engineering_rows(
+                engineering.get("material_comparisons") or []
+            ),
+            "scope_comparisons": _compact_engineering_rows(
                 item
                 for item in engineering.get("scope_comparisons") or []
                 if isinstance(item, dict)
                 and item.get("classification") == "WORK_MISSING_IN_COMMERCIAL"
-            ],
-            "customer_questions": engineering.get("customer_questions") or [],
-            "risks": engineering.get("risks") or [],
+            ),
+            "customer_questions": _compact_engineering_rows(
+                engineering.get("customer_questions") or []
+            ),
+            "risks": _compact_engineering_rows(engineering.get("risks") or []),
         }
     elif tool == "consultant.get_information_gaps":
         projected = {
@@ -1278,6 +1283,14 @@ def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> di
     return {key: item for key, item in response.items() if key != "value"} | {
         "value": {"project_engineering": projected}
     }
+
+
+def _compact_engineering_rows(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {key: value for key, value in dict(row).items() if key != "sources"}
+        for row in rows
+        if isinstance(row, Mapping)
+    ]
 
 
 def _inventory_prompt_record(receipt: dict[str, Any]) -> dict[str, Any]:
