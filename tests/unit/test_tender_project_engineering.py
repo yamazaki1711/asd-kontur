@@ -401,6 +401,12 @@ def _model() -> dict[str, object]:
                 "source_version_id": "source-a",
                 "source_locator_id": "facility",
             },
+            {
+                "label": "Производительность КНС-2",
+                "value": "75 л/с",
+                "source_version_id": "source-a",
+                "source_locator_id": "facility",
+            },
         ],
         "work_types": [
             {
@@ -528,7 +534,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v30"
+    assert model["model_version"] == "project-engineering-model-v31"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -545,6 +551,23 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     assert model["work_classification"]["excluded_non_work_observation_count"] == 1
     assert model["scope_comparisons"][0]["classification"] == "MATCH"
     assert model["sheet_pile_schedule"][0]["operation"] == "Погружение шпунта"
+    assert model["facility_cards"][0]["characteristics"] == [
+        {
+            "label": "Производительность КНС-2",
+            "value": "75 л/с",
+            "source_locator_ids": ["facility"],
+            "sources": [
+                {
+                    "document": "КР. Лист 8.pdf",
+                    "version": 2,
+                    "page": 8,
+                    "source_version_id": "source-facility",
+                    "source_locator_id": "facility",
+                }
+            ],
+            "status": "Установлено по явно указанному сооружению",
+        }
+    ]
 
 
 def test_exact_structural_relationship_assigns_work_without_document_wide_guessing() -> None:

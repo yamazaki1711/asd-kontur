@@ -141,6 +141,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         _simple_table(
             (
                 "Сооружение",
+                "Основные характеристики",
                 "Котлованы",
                 "Конструкции и подключения",
                 "Основные работы",
@@ -149,6 +150,11 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             [
                 (
                     str(dict(row.get("facility") or {}).get("name") or ""),
+                    "; ".join(
+                        f"{value.get('label')}: {value.get('value')}"
+                        for value in row.get("characteristics") or ()
+                    )
+                    or "не установлены",
                     ", ".join(str(value.get("name") or "") for value in row.get("pits") or ())
                     or "не установлен / не предусмотрен",
                     ", ".join(

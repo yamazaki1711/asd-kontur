@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v30"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v31"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -647,6 +647,7 @@ def build_project_engineering_model(
         work_model["works"],
         comparisons,
         issues,
+        candidates.get("project_fields", ()),
         structure_relationships,
         source_context,
     )
@@ -2921,6 +2922,7 @@ def _facility_cards(
     works: Iterable[Mapping[str, Any]],
     comparisons: Iterable[Mapping[str, Any]],
     issues: Iterable[Mapping[str, Any]],
+    project_fields: Iterable[Mapping[str, Any]],
     structure_relationships: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -2939,6 +2941,11 @@ def _facility_cards(
     structures_by_facility, connections_by_facility = _facility_structure_links(
         facilities,
         structure_relationships,
+        source_context,
+    )
+    characteristics_by_facility = _facility_characteristics(
+        facilities,
+        project_fields,
         source_context,
     )
     cards: list[dict[str, Any]] = []
@@ -2974,6 +2981,7 @@ def _facility_cards(
                 "pits": facility_pits,
                 "structures": facility_structures,
                 "connections": facility_connections,
+                "characteristics": characteristics_by_facility.get(facility_id, []),
                 "works": facility_works,
                 "sheet_piling": [
                     work for work in facility_works if work.get("family_key") == "sheet_piling"
@@ -3013,6 +3021,63 @@ def _facility_cards(
             }
         )
     return cards
+
+
+def _facility_characteristics(
+    facilities: Iterable[Mapping[str, Any]],
+    project_fields: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Attach fields whose label explicitly names exactly one facility.
+
+    A value on the same page is not enough: specification pages often contain
+    several LOS/KNS variants.  Requiring the designation in the field label
+    gives the professional dossier useful pump composition, capacity and head
+    values without leaking one installation's parameter into another.
+    """
+
+    facility_by_designation = {
+        str(value.get("designation")): dict(value)
+        for value in facilities
+        if value.get("designation")
+    }
+    grouped: dict[str, dict[tuple[str, str], dict[str, Any]]] = defaultdict(dict)
+    for raw in project_fields:
+        row = dict(raw)
+        label = str(row.get("label") or "").strip()
+        value = str(row.get("value") or "").strip()
+        designations = [
+            designation
+            for designation in facility_designations(label)
+            if designation in facility_by_designation
+        ]
+        if len(designations) != 1 or not label or not value:
+            continue
+        facility = facility_by_designation[designations[0]]
+        facility_id = str(facility.get("facility_id") or "")
+        locator_id = str(row.get("source_locator_id") or "")
+        key = (_normalized(label), _normalized(value))
+        characteristic = grouped[facility_id].setdefault(
+            key,
+            {
+                "label": label,
+                "value": value,
+                "source_locator_ids": [],
+                "sources": [],
+                "status": "Установлено по явно указанному сооружению",
+            },
+        )
+        if locator_id:
+            characteristic["source_locator_ids"] = sorted(
+                {*characteristic["source_locator_ids"], locator_id}
+            )
+            characteristic["sources"] = _source_refs(
+                characteristic["source_locator_ids"], source_context
+            )
+    return {
+        facility_id: sorted(values.values(), key=lambda value: _normalized(value["label"]))
+        for facility_id, values in grouped.items()
+    }
 
 
 _CONSTRUCTION_COMPONENT = re.compile(

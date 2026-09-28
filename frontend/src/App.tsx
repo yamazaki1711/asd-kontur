@@ -5197,6 +5197,9 @@ function ProjectEngineeringResult({
               const cardConnections = Array.isArray(card.connections)
                 ? card.connections
                 : [];
+              const cardCharacteristics = Array.isArray(card.characteristics)
+                ? card.characteristics
+                : [];
               const cardMaterials = Array.isArray(card.materials)
                 ? card.materials
                 : [];
@@ -5250,6 +5253,34 @@ function ProjectEngineeringResult({
                   </p>
                   <details>
                     <summary>Открыть инженерную карточку</summary>
+                    {cardCharacteristics.length > 0 && (
+                      <>
+                        <h4>Основные характеристики</h4>
+                        <ul>
+                          {cardCharacteristics.map((value, index) => {
+                            const characteristic = value as Record<
+                              string,
+                              unknown
+                            >;
+                            return (
+                              <li
+                                key={`${displayValue(characteristic.label)}-${String(index)}`}
+                              >
+                                <strong>
+                                  {displayValue(characteristic.label)}:
+                                </strong>{" "}
+                                {displayValue(characteristic.value)}
+                                <ProjectSourceLinks
+                                  locatorIds={characteristic.source_locator_ids}
+                                  workspaceId={workspaceId}
+                                  modeSlug={modeSlug}
+                                />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
+                    )}
                     <h4>Котлованы и конструкции</h4>
                     {cardPits.length ? (
                       <ul>

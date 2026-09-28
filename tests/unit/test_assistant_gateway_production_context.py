@@ -503,6 +503,13 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
                             "source_locator_ids": ["connection"],
                         }
                     ],
+                    "characteristics": [
+                        {
+                            "label": "Производительность КНС-4",
+                            "value": "155 л/с",
+                            "source_locator_ids": ["capacity"],
+                        }
+                    ],
                     "works": [
                         {"work_name": "Погружение шпунта"},
                         {"work_name": "Устройство распределительного пояса"},
@@ -525,6 +532,13 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
         }
     ]
     assert dossier["connections"][0]["name"] == "ЛОС 4"
+    assert dossier["characteristics"] == [
+        {
+            "label": "Производительность КНС-4",
+            "value": "155 л/с",
+            "source_locator_ids": ["capacity"],
+        }
+    ]
     assert dossier["work_names"] == [
         "Погружение шпунта",
         "Устройство распределительного пояса",

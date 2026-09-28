@@ -25,6 +25,7 @@ def _model() -> dict[str, object]:
         "facility_cards": [
             {
                 "facility": {"name": "КНС 7"},
+                "characteristics": [{"label": "Производительность КНС-7", "value": "42 л/с"}],
                 "pits": [{"name": "Котлован КНС 7"}],
                 "structures": [{"name": "Фундаментная плита"}],
                 "connections": [{"name": "Напорный трубопровод"}],
@@ -127,6 +128,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
     assert "Фундаментная плита, Напорный трубопровод" in xml
+    assert "Производительность КНС-7: 42 л/с" in xml
     assert "Возможные неучтённые работы" in xml
     assert "доказанные неучтённые работы не выявлены" in xml
     assert "Требуется распределить коммерческий объём: 1 поз." in xml

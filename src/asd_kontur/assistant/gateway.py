@@ -2279,6 +2279,8 @@ def _assistant_engineering_for_query(
             for key in (
                 "facility",
                 "name",
+                "label",
+                "value",
                 "pit",
                 "operation",
                 "work",
@@ -2415,6 +2417,11 @@ def _assistant_engineering_for_query(
                 "connections": [
                     compact_row(value)
                     for value in card.get("connections") or ()
+                    if isinstance(value, Mapping)
+                ][:12],
+                "characteristics": [
+                    compact_row(value)
+                    for value in card.get("characteristics") or ()
                     if isinstance(value, Mapping)
                 ][:12],
                 "work_names": [
