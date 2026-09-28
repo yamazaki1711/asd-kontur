@@ -7,6 +7,7 @@ import io
 import zipfile
 
 from asd_kontur.tender.engineering_export import (
+    render_engineering_disagreement_protocol_docx,
     render_engineering_findings_csv,
     render_engineering_tender_report_docx,
     render_engineering_work_schedule_csv,
@@ -119,3 +120,14 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Нормативные вопросы" in xml
     assert "Неопределённости / недостающие данные" in xml
     assert "Вопросы Заказчику" in xml
+
+
+def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None:
+    payload = render_engineering_disagreement_protocol_docx(_model())
+
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        assert document.testzip() is None
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Протокол разногласий" in xml
+    assert "Позиция Заказчика" in xml
+    assert "Запросить подтверждение объёма" in xml

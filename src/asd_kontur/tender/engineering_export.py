@@ -281,6 +281,56 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     return _docx_package(document.encode())
 
 
+def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> bytes:
+    """Render an editable contractor disagreement protocol from real findings."""
+
+    project = dict(model.get("project") or {})
+    name = dict(project.get("name") or {}).get("value") or "Наименование уточняется"
+    issues = [dict(value) for value in model.get("issues") or () if isinstance(value, Mapping)]
+    body = [
+        _heading("Протокол разногласий к исходным данным Тендера", level=1),
+        _paragraph(str(name)),
+        _paragraph(
+            "Рабочий редактируемый документ. Позиции сформированы из установленных "
+            "инженерных вопросов проекта; графа Заказчика оставлена для согласования."
+        ),
+        _simple_table(
+            (
+                "№",
+                "Место / сооружение",
+                "Предмет разногласия",
+                "Выявленное расхождение или неопределённость",
+                "Последствие для Подрядчика",
+                "Предложение / запрос Подрядчика",
+                "Позиция Заказчика",
+                "Источники",
+            ),
+            [
+                (
+                    str(index),
+                    str(row.get("location") or "Требует уточнения"),
+                    str(row.get("subject") or row.get("kind") or ""),
+                    str(row.get("description") or ""),
+                    str(row.get("practical_consequence") or ""),
+                    str(row.get("recommended_action") or ""),
+                    "",
+                    "; ".join(str(value) for value in row.get("source_locator_ids") or ()),
+                )
+                for index, row in enumerate(issues, start=1)
+            ],
+            empty="Инженерные разногласия пока не установлены.",
+        ),
+    ]
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        "<w:body>" + "".join(body) + '<w:sectPr><w:pgSz w:w="16838" w:h="11906" '
+        'w:orient="landscape"/><w:pgMar w:top="850" w:right="850" w:bottom="850" '
+        'w:left="850"/></w:sectPr></w:body></w:document>'
+    )
+    return _docx_package(document.encode())
+
+
 def _scope_comparison_uncertainties(rows: object) -> list[str]:
     counts: dict[str, int] = {}
     for raw in rows if isinstance(rows, (list, tuple)) else ():

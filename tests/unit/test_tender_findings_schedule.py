@@ -294,6 +294,32 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
     )
 
 
+def test_professional_archive_places_disagreement_protocol_before_internal_schedules() -> None:
+    archive = build_tender_analysis_archive(
+        findings_report=b"engineering-report",
+        findings_schedule=b"findings-csv",
+        scope_schedule=b"scope-csv",
+        structure_identity_schedule=b"identity-csv",
+        facility_scope_schedule=b"facility-work-csv",
+        facility_candidate_schedule=b"facility-candidate-csv",
+        document_coverage_schedule=b"coverage-csv",
+        materialization={"state": "partial", "gaps": []},
+        professional=True,
+        disagreement_protocol=b"protocol-docx",
+    )
+
+    with zipfile.ZipFile(io.BytesIO(archive)) as exported:
+        assert exported.namelist()[:5] == [
+            "01_tender_engineering_report.docx",
+            "02_engineering_findings_and_actions.csv",
+            "03_project_work_quantity_material_schedule.csv",
+            "04_disagreement_protocol_candidate.docx",
+            "05_structure_identity_candidates.csv",
+        ]
+        assert exported.read("04_disagreement_protocol_candidate.docx") == b"protocol-docx"
+        assert "09_delivery_manifest.json" in exported.namelist()
+
+
 def test_structure_identity_schedule_keeps_each_source_observation_unmerged() -> None:
     content = render_tender_structure_identity_schedule_csv(
         (

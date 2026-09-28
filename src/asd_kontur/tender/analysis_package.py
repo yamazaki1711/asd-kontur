@@ -23,6 +23,7 @@ def build_tender_analysis_archive(
     document_coverage_schedule: bytes,
     materialization: Mapping[str, Any],
     professional: bool = False,
+    disagreement_protocol: bytes | None = None,
 ) -> bytes:
     """Return a stable editable Tender deliverable without changing findings.
 
@@ -33,6 +34,11 @@ def build_tender_analysis_archive(
 
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
+        professional_entries = (
+            (("04_disagreement_protocol_candidate.docx", disagreement_protocol),)
+            if professional and disagreement_protocol
+            else ()
+        )
         entries = (
             (
                 "01_tender_engineering_report.docx"
@@ -52,15 +58,39 @@ def build_tender_analysis_archive(
                 else "03_tender_work_resource_schedule.csv",
                 scope_schedule,
             ),
-            ("04_structure_identity_candidates.csv", structure_identity_schedule),
-            ("05_facility_work_observation_candidates.csv", facility_scope_schedule),
-            ("06_facility_work_candidate_groups.csv", facility_candidate_schedule),
-            ("07_document_processing_coverage.csv", document_coverage_schedule),
+            *professional_entries,
+            (
+                "05_structure_identity_candidates.csv"
+                if professional
+                else "04_structure_identity_candidates.csv",
+                structure_identity_schedule,
+            ),
+            (
+                "06_facility_work_observation_candidates.csv"
+                if professional
+                else "05_facility_work_observation_candidates.csv",
+                facility_scope_schedule,
+            ),
+            (
+                "07_facility_work_candidate_groups.csv"
+                if professional
+                else "06_facility_work_candidate_groups.csv",
+                facility_candidate_schedule,
+            ),
+            (
+                "08_document_processing_coverage.csv"
+                if professional
+                else "07_document_processing_coverage.csv",
+                document_coverage_schedule,
+            ),
         )
         manifest = _delivery_manifest(entries, materialization)
         for name, payload in (
             *entries,
-            ("08_delivery_manifest.json", manifest),
+            (
+                "09_delivery_manifest.json" if professional else "08_delivery_manifest.json",
+                manifest,
+            ),
             ("99_analysis_status.txt", _status_text(materialization, professional=professional)),
         ):
             info = zipfile.ZipInfo(name, _FIXED_ZIP_TIME)

@@ -38,6 +38,7 @@ from asd_kontur.tender.contract_analysis_report import render_tender_contract_an
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.coverage_schedule import render_tender_document_coverage_csv
 from asd_kontur.tender.engineering_export import (
+    render_engineering_disagreement_protocol_docx,
     render_engineering_findings_csv,
     render_engineering_tender_report_docx,
     render_engineering_work_schedule_csv,
@@ -918,6 +919,11 @@ class ProductSpineService:
             ),
             materialization=materialization,
             professional=professional,
+            disagreement_protocol=(
+                render_engineering_disagreement_protocol_docx(engineering)
+                if professional and engineering.get("issues")
+                else None
+            ),
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(

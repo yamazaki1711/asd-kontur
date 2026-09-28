@@ -968,15 +968,16 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
                 "01_tender_engineering_report.docx",
                 "02_engineering_findings_and_actions.csv",
                 "03_project_work_quantity_material_schedule.csv",
-                "04_structure_identity_candidates.csv",
-                "05_facility_work_observation_candidates.csv",
-                "06_facility_work_candidate_groups.csv",
-                "07_document_processing_coverage.csv",
-                "08_delivery_manifest.json",
+                "04_disagreement_protocol_candidate.docx",
+                "05_structure_identity_candidates.csv",
+                "06_facility_work_observation_candidates.csv",
+                "07_facility_work_candidate_groups.csv",
+                "08_document_processing_coverage.csv",
+                "09_delivery_manifest.json",
                 "99_analysis_status.txt",
             ]
             assert "candidate_status" in exported.read(
-                "06_facility_work_candidate_groups.csv"
+                "07_facility_work_candidate_groups.csv"
             ).decode("utf-8-sig")
         tender_report = client.get(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/project-understanding/"
