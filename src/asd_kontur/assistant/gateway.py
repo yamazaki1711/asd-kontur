@@ -2374,6 +2374,11 @@ def _assistant_engineering_for_query(
         locator_ids = [str(value) for value in row.get("source_locator_ids") or () if value]
         if locator_ids:
             result["source_locator_ids"] = locator_ids[:12]
+            # ``_public_value`` hides internal ``*_ids`` fields. Keep an
+            # intentional citation binding under a public-neutral key so Qwen
+            # and deterministic completion can attach the professional result
+            # to the exact source index without exposing candidate internals.
+            result["source_refs"] = locator_ids[:12]
         wording = [str(value) for value in row.get("project_wording") or () if value]
         if wording:
             result["project_wording"] = wording[:4]

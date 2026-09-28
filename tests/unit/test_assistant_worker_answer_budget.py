@@ -5,6 +5,7 @@ import json
 from asd_kontur.assistant.reasoning import SynthesizedAnswer
 from asd_kontur.assistant.worker import (
     _answer_budget,
+    _append_prepared_project_result,
     _direct_project_result_plan,
     _tool_results_for_prompt,
     _with_structured_project_fact_checks,
@@ -45,6 +46,113 @@ def test_customer_questions_and_contractor_risks_use_prepared_project_result() -
 
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
+
+
+def test_prepared_discrepancies_complete_qwen_narrative_without_inventing_values() -> None:
+    answer = SynthesizedAnswer(
+        "Установлены расхождения по шпунту.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Проверены расхождения.",
+        ("ОЗЕРО",),
+    )
+    completed = _append_prepared_project_result(
+        answer,
+        [
+            {
+                "tool": "consultant.get_discrepancies",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "issues": [
+                                {
+                                    "location": "КНС 8.1",
+                                    "subject": "Прокладка кабеля",
+                                    "description": "ПД: 30 м; ВОР/Смета: 60 м.",
+                                    "source_locator_ids": ["source-cable"],
+                                },
+                                {
+                                    "location": "ЛОС 8.1",
+                                    "subject": "Бетон В25",
+                                    "description": "Проект F200, коммерческие документы F150.",
+                                    "source_locator_ids": ["source-concrete"],
+                                },
+                            ]
+                        }
+                    },
+                    "sources": [
+                        {"source_id": "source-cable"},
+                        {"source_id": "source-concrete"},
+                    ],
+                },
+            }
+        ],
+        "Какие расхождения между проектом, ВОР и сметой установлены?",
+    )
+
+    assert "КНС 8.1 — Прокладка кабеля: ПД: 30 м; ВОР/Смета: 60 м." in completed.answer
+    assert "ЛОС 8.1 — Бетон В25: Проект F200, коммерческие документы F150." in completed.answer
+    assert completed.used_source_ids == ("source-cable", "source-concrete")
+
+
+def test_general_discrepancy_answer_does_not_require_unasked_sheet_pile_belts() -> None:
+    receipt = {
+        "tool": "consultant.get_discrepancies",
+        "response": {
+            "value": {
+                "project_engineering": {
+                    "sheet_pile_answer_facts": [
+                        {
+                            "operation": "Устройство распределительного пояса",
+                            "waling_beams": ["30Ш2", "35Ш2"],
+                            "quantities_by_document": {"ВОР": [{"value": "9.841", "unit": "т"}]},
+                        }
+                    ],
+                    "issues": [
+                        {
+                            "location": "КНС 8.1",
+                            "subject": "Прокладка кабеля",
+                            "description": "ПД: 30 м; ВОР/Смета: 60 м.",
+                        }
+                    ],
+                    "quantity_comparisons": [
+                        {
+                            "classification": "QUANTITY_DIFFERENCE",
+                            "work": "Прокладка кабеля",
+                            "professional_status": "Различается объём",
+                            "left": {"document_role": "ПД", "value": "30", "unit": "м"},
+                            "right": {"document_role": "ВОР", "value": "60", "unit": "м"},
+                        }
+                    ],
+                }
+            },
+            "sources": [],
+        },
+    }
+    answer = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Установлены расхождения.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Расхождения.",
+            (),
+        ),
+        [receipt],
+        "Какие расхождения между проектом, ВОР и сметой установлены?",
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=[receipt],
+        question="Какие расхождения между проектом, ВОР и сметой установлены?",
+    )
+
+    assert checks["passed"]
+    assert "30Ш2" not in answer.answer
+    assert "9.841" not in answer.answer
 
 
 def test_prompt_budget_keeps_evidence_identity_after_long_metadata() -> None:

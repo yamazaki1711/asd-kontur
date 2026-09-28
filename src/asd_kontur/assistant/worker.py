@@ -267,6 +267,36 @@ class AssistantWorker:
                     question=claimed.question,
                 )
                 model_checks = self._model_quality_check(claimed, answer, receipts)
+            structured_completion_problems = {
+                "workspace_structured_fact_omitted",
+                "workspace_customer_question_omitted",
+                "workspace_contractor_risk_omitted",
+            }
+            if (
+                direct_plan is not None
+                and not deterministic["passed"]
+                and set(deterministic["problems"]) <= structured_completion_problems
+            ):
+                answer = _append_prepared_project_result(answer, receipts, claimed.question)
+                deterministic = validate_answer(
+                    answer,
+                    intent=plan.intent,
+                    tool_names=tuple(item["tool"] for item in receipts),
+                    sources=available_sources,
+                    question=claimed.question,
+                )
+                deterministic = _with_inventory_checks(
+                    deterministic,
+                    answer=answer,
+                    receipts=receipts,
+                    question=claimed.question,
+                )
+                deterministic = _with_structured_project_fact_checks(
+                    deterministic,
+                    answer=answer,
+                    receipts=receipts,
+                    question=claimed.question,
+                )
             quality_passed = bool(deterministic["passed"] and model_checks["passed"])
             if not quality_passed:
                 answer = SynthesizedAnswer(
@@ -958,41 +988,44 @@ def _with_structured_project_fact_checks(
         engineering = value.get("project_engineering") if isinstance(value, dict) else None
         if not isinstance(engineering, dict):
             continue
-        for raw in engineering.get("sheet_pile_answer_facts") or ():
-            if not isinstance(raw, dict):
-                continue
-            operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
-            operation_is_waling = any(marker in operation for marker in ("пояс", "обвяз", "балк"))
-            beams = [str(beam).strip() for beam in raw.get("waling_beams") or ()]
-            if asks_for_sheet_pile_identity:
-                required_terms.update(
-                    str(value).strip()
-                    for key in ("profiles", "steel")
-                    for value in raw.get(key) or ()
-                    if str(value).strip()
-                )
-            if not operation_is_waling and not any(beams):
-                continue
-            required_terms.update(beam for beam in beams if beam)
-            # A quantity on the generic enclosure row can describe the sheet
-            # pile itself rather than its belt.  Require quantities only from
-            # an explicitly identified belt/beam operation, while preserving
-            # beam profiles that the engineering model associates with the
-            # broader enclosure row.
-            if not operation_is_waling:
-                continue
-            quantities = raw.get("quantities_by_document")
-            if not isinstance(quantities, dict):
-                continue
-            for rows in quantities.values():
-                if not isinstance(rows, list):
+        if asks_for_sheet_pile or asks_for_waling:
+            for raw in engineering.get("sheet_pile_answer_facts") or ():
+                if not isinstance(raw, dict):
                     continue
-                for item in rows:
-                    if not isinstance(item, dict) or item.get("value") in (None, ""):
-                        continue
-                    required_quantities.add(
-                        (str(item["value"]).strip(), str(item.get("unit") or "").strip())
+                operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
+                operation_is_waling = any(
+                    marker in operation for marker in ("пояс", "обвяз", "балк")
+                )
+                beams = [str(beam).strip() for beam in raw.get("waling_beams") or ()]
+                if asks_for_sheet_pile_identity:
+                    required_terms.update(
+                        str(value).strip()
+                        for key in ("profiles", "steel")
+                        for value in raw.get(key) or ()
+                        if str(value).strip()
                     )
+                if not operation_is_waling and not any(beams):
+                    continue
+                required_terms.update(beam for beam in beams if beam)
+                # A quantity on the generic enclosure row can describe the sheet
+                # pile itself rather than its belt.  Require quantities only from
+                # an explicitly identified belt/beam operation, while preserving
+                # beam profiles that the engineering model associates with the
+                # broader enclosure row.
+                if not operation_is_waling:
+                    continue
+                quantities = raw.get("quantities_by_document")
+                if not isinstance(quantities, dict):
+                    continue
+                for rows in quantities.values():
+                    if not isinstance(rows, list):
+                        continue
+                    for item in rows:
+                        if not isinstance(item, dict) or item.get("value") in (None, ""):
+                            continue
+                        required_quantities.add(
+                            (str(item["value"]).strip(), str(item.get("unit") or "").strip())
+                        )
         if asks_for_customer_questions:
             for item in engineering.get("customer_questions") or ():
                 if isinstance(item, dict) and str(item.get("question") or "").strip():
@@ -1180,6 +1213,101 @@ def _with_structured_project_fact_checks(
 
 def _inventory_text_key(value: str) -> str:
     return "".join(character for character in value.casefold() if character.isalnum())
+
+
+def _append_prepared_project_result(
+    answer: SynthesizedAnswer, receipts: list[dict[str, Any]], question: str
+) -> SynthesizedAnswer:
+    """Complete a Qwen narrative with exact prepared project facts it omitted."""
+
+    normalized = " ".join(question.casefold().replace("ё", "е").split())
+    asks_for_customer_questions = "вопрос" in normalized and "заказчик" in normalized
+    asks_for_contractor_risks = "риск" in normalized and "подрядчик" in normalized
+    headings_and_rows: list[tuple[str, list[str]]] = []
+    selected_source_ids = list(answer.used_source_ids)
+    available_source_ids = {
+        str(item["source_id"]) for item in _deduplicated_sources(receipts) if item.get("source_id")
+    }
+    for receipt in receipts:
+        if receipt.get("tool") != "consultant.get_discrepancies":
+            continue
+        response = receipt.get("response")
+        value = response.get("value") if isinstance(response, dict) else None
+        engineering = value.get("project_engineering") if isinstance(value, dict) else None
+        if not isinstance(engineering, dict):
+            continue
+        if asks_for_customer_questions:
+            rows = [
+                str(item.get("question") or "").strip()
+                for item in engineering.get("customer_questions") or ()
+                if isinstance(item, dict) and str(item.get("question") or "").strip()
+            ]
+            headings_and_rows.append(("Полный перечень вопросов Заказчику:", rows))
+        elif asks_for_contractor_risks:
+            rows = [
+                f"{item.get('location')}: {item.get('risk')}"
+                for item in engineering.get("risks") or ()
+                if isinstance(item, dict) and str(item.get("risk") or "").strip()
+            ]
+            headings_and_rows.append(("Полный перечень установленных рисков:", rows))
+        else:
+            rows = []
+            for item in engineering.get("issues") or ():
+                if not isinstance(item, dict):
+                    continue
+                location = str(item.get("location") or "Место требует уточнения").strip()
+                subject = str(item.get("subject") or "").strip()
+                description = str(item.get("description") or "").strip()
+                if not description:
+                    continue
+                prefix = f"{location} — {subject}" if subject else location
+                rows.append(f"{prefix}: {description}")
+                for source_id in item.get("source_refs") or item.get("source_locator_ids") or ():
+                    source_id = str(source_id)
+                    if source_id in available_source_ids and source_id not in selected_source_ids:
+                        selected_source_ids.append(source_id)
+                        break
+            headings_and_rows.append(("Полный перечень установленных расхождений:", rows))
+            comparison_rows = []
+            for item in engineering.get("quantity_comparisons") or ():
+                if not isinstance(item, dict) or item.get("classification") == "MATCH":
+                    continue
+                location = str(item.get("facility") or "Место требует уточнения").strip()
+                work = str(item.get("work") or "Работа требует уточнения").strip()
+                status = str(item.get("professional_status") or "Различается объём").strip()
+                left = item.get("left") if isinstance(item.get("left"), dict) else {}
+                right = item.get("right") if isinstance(item.get("right"), dict) else {}
+                left_text = " ".join(
+                    str(left.get(key) or "").strip() for key in ("document_role", "value", "unit")
+                ).strip()
+                right_text = " ".join(
+                    str(right.get(key) or "").strip() for key in ("document_role", "value", "unit")
+                ).strip()
+                comparison_rows.append(
+                    f"{location} — {work} ({status}): {left_text}; {right_text}."
+                )
+                for source_id in item.get("source_refs") or item.get("source_locator_ids") or ():
+                    source_id = str(source_id)
+                    if source_id in available_source_ids and source_id not in selected_source_ids:
+                        selected_source_ids.append(source_id)
+                        break
+            headings_and_rows.append(("Числовые сопоставления:", comparison_rows))
+        break
+    sections = [
+        heading + "\n" + "\n".join(f"— {row}" for row in rows)
+        for heading, rows in headings_and_rows
+        if rows
+    ]
+    if not sections:
+        return answer
+    return SynthesizedAnswer(
+        answer=answer.answer.rstrip() + "\n\n" + "\n\n".join(sections),
+        answer_type=answer.answer_type,
+        needs_clarification=answer.needs_clarification,
+        used_source_ids=tuple(selected_source_ids[:8]),
+        dialogue_summary=answer.dialogue_summary,
+        active_subjects=answer.active_subjects,
+    )
 
 
 def _claims_unproven_inventory_total(answer: str, candidate_count: int) -> bool:
