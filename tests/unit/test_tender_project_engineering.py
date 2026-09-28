@@ -146,6 +146,7 @@ def _model() -> dict[str, object]:
         "work_types": [
             {
                 "candidate_id": "work-rd",
+                "version": 1,
                 "value": "Погружение шпунтовых свай КНС-2",
                 "label": "погружение шпунтовых свай кнс 2",
                 "source_version_id": "source-rd",
@@ -155,6 +156,7 @@ def _model() -> dict[str, object]:
             },
             {
                 "candidate_id": "work-vor",
+                "version": 1,
                 "value": "Погружение шпунтовых свай КНС-2",
                 "label": "погружение шпунтовых свай кнс 2",
                 "source_version_id": "source-vor",
@@ -237,13 +239,37 @@ def _model() -> dict[str, object]:
         matrix={"matrix": {"rows": []}},
         normative_profile=None,
         source_context=source_context,
+        work_resolutions={
+            "work-rd": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунта",
+                "facility": "КНС 2",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "quantity-rd", "status": "WORK_QUANTITY"}
+                ],
+            },
+            "work-vor": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунта",
+                "facility": "КНС 2",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "quantity-vor", "status": "WORK_QUANTITY"}
+                ],
+            },
+        },
     )
 
 
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v12"
+    assert model["model_version"] == "project-engineering-model-v13"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -529,6 +555,28 @@ def test_same_family_operations_remain_distinct_engineering_scopes() -> None:
                 _source("pit-locator", "КР.pdf", 4),
             ]
         ),
+        work_resolutions={
+            "trench": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "excavation",
+                "operation": "Разработка траншей",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "trench-quantity", "status": "WORK_QUANTITY"}
+                ],
+            },
+            "pit": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "excavation",
+                "operation": "Разработка котлована",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "pit-quantity", "status": "WORK_QUANTITY"}
+                ],
+            },
+        },
     )
 
     by_name = {row["work_name"]: row for row in model["works"]}

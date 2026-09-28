@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v12"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v13"
 _QUANTITY_AWARE_WORK_PROFILE = "qwen-project-work-reconciliation-v5"
 
 _FACILITY_CODE = re.compile(
@@ -472,16 +472,7 @@ def build_project_engineering_model(
         source_context,
         work_resolutions or {},
     )
-    comparisons = _deduplicate_dicts(
-        [
-            *_exact_work_comparisons(
-                candidates.get("work_types", ()),
-                candidates.get("quantities", ()),
-                source_context,
-            ),
-            *_validated_scope_quantity_comparisons(work_model["works"]),
-        ]
-    )
+    comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
     scope_comparisons = _scope_comparisons(work_model["works"])
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
     issues = _issues(
@@ -1210,41 +1201,41 @@ def _work_schedule(
                 )
         role = _professional_document_role(row.get("source_role"), context.get("safe_display_name"))
         linked_quantities = quantity_by_work.get(candidate_id, ())
-        quantity_reviews = {
-            str(value.get("quantity_candidate_id") or ""): dict(value)
-            for value in resolution.get("quantity_reviews") or ()
-            if isinstance(value, Mapping) and value.get("quantity_candidate_id")
-        }
+        quantity_reviews = (
+            {
+                str(value.get("quantity_candidate_id") or ""): dict(value)
+                for value in resolution.get("quantity_reviews") or ()
+                if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+            }
+            if resolution.get("profile_version") == _QUANTITY_AWARE_WORK_PROFILE
+            else {}
+        )
         accepted_quantities: list[dict[str, Any]] = []
         quantity_interpretations: list[dict[str, Any]] = []
-        quantity_aware_resolution = (
-            resolution.get("profile_version") == _QUANTITY_AWARE_WORK_PROFILE
-        )
         for raw_quantity in linked_quantities:
             quantity = dict(raw_quantity)
             quantity_id = str(quantity.get("candidate_id") or "")
             review = quantity_reviews.get(quantity_id)
-            if review is None and quantity_aware_resolution:
+            if review is None:
                 review = {
                     "status": "UNREVIEWED",
                     "reason": ("Значение ещё не проверено как объём этой строительной операции."),
                 }
-            if review is None or review.get("status") == "WORK_QUANTITY":
+            if review.get("status") in {"WORK_QUANTITY", "DURATION"}:
                 accepted_quantities.append(quantity)
-            if review is not None:
-                quantity_interpretations.append(
-                    {
-                        "quantity_candidate_id": quantity_id,
-                        "value": quantity.get("normalized_value", quantity.get("value")),
-                        "unit": quantity.get(
-                            "normalized_unit",
-                            quantity.get("unit", quantity.get("raw_unit")),
-                        ),
-                        "status": review.get("status"),
-                        "reason": review.get("reason"),
-                        "source_locator_id": quantity.get("source_locator_id"),
-                    }
-                )
+            quantity_interpretations.append(
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "value": quantity.get("normalized_value", quantity.get("value")),
+                    "unit": quantity.get(
+                        "normalized_unit",
+                        quantity.get("unit", quantity.get("raw_unit")),
+                    ),
+                    "status": review.get("status"),
+                    "reason": review.get("reason"),
+                    "source_locator_id": quantity.get("source_locator_id"),
+                }
+            )
         observation = {
             "candidate_id": candidate_id,
             "project_wording": name,
