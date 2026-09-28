@@ -8,6 +8,7 @@ from asd_kontur.application_spine.postgres import _application_engineering_proje
 from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
     _comparison_row,
+    _display_quantity,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
     _scope_comparisons,
@@ -189,6 +190,12 @@ def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
     )
 
     assert value == (Decimal("827.5000"), "м3")
+
+
+def test_quantity_schedule_renders_scaled_estimate_units_as_physical_totals() -> None:
+    assert _display_quantity("2.15", "10 м3") == ("21.5", "м3")
+    assert _display_quantity("0.96", "100 шт") == ("96", "шт")
+    assert _display_quantity("95.028", "т") == ("95.028", "т")
 
 
 def test_sheet_pile_schedule_consolidates_repeated_commercial_scope_without_summing() -> None:
@@ -433,7 +440,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v20"
+    assert model["model_version"] == "project-engineering-model-v21"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

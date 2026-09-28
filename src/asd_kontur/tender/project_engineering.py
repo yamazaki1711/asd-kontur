@@ -2735,16 +2735,19 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
     for raw in values:
         row = dict(raw)
         if kind == "quantity":
+            raw_value = row.get("normalized_value", row.get("value"))
+            raw_unit = row.get("normalized_unit", row.get("unit", row.get("raw_unit")))
+            display_value, display_unit = _display_quantity(raw_value, raw_unit)
             payload = {
-                "value": row.get("normalized_value", row.get("value")),
-                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
+                "value": display_value,
+                "unit": display_unit,
                 "source_locator_id": row.get("source_locator_id"),
             }
             rendered = {
-                "value": row.get("normalized_value", row.get("value")),
-                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
-                "raw_value": row.get("value", row.get("raw_value")),
-                "raw_unit": row.get("raw_unit"),
+                "value": display_value,
+                "unit": display_unit,
+                "raw_value": row.get("value", row.get("raw_value", raw_value)),
+                "raw_unit": row.get("raw_unit", raw_unit),
                 "source_locator_id": row.get("source_locator_id"),
             }
         else:
@@ -2777,12 +2780,26 @@ def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decim
             quantity = Decimal(str(raw).replace(",", "."))
         except InvalidOperation:
             continue
-        scaled = re.fullmatch(r"(?P<factor>100|1000)\s*(?P<unit>м[23]|м|шт)", unit)
+        scaled = re.fullmatch(r"(?P<factor>10|100|1000)\s*(?P<unit>м[23]|м|шт)", unit)
         if scaled is not None:
             quantity *= Decimal(scaled.group("factor"))
             unit = scaled.group("unit")
         unique.add((quantity, unit))
     return next(iter(unique)) if len(unique) == 1 else None
+
+
+def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
+    """Render scaled estimate units as physical totals without losing raw fields."""
+
+    unit = _normalized_unit(unit_value)
+    scaled = re.fullmatch(r"(?P<factor>10|100|1000)\s*(?P<unit>м[23]|м|шт)", unit)
+    if scaled is None or value is None:
+        return value, unit
+    try:
+        quantity = Decimal(str(value).replace(",", ".")) * Decimal(scaled.group("factor"))
+    except InvalidOperation:
+        return value, unit
+    return _decimal_text(quantity), scaled.group("unit")
 
 
 def _normalized_unit(value: object) -> str:
