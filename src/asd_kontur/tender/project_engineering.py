@@ -630,6 +630,38 @@ def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> 
     return False
 
 
+def established_facility_designations(
+    identity_components: Iterable[Mapping[str, Any]],
+) -> tuple[str, ...]:
+    """Return corroborated project facilities, excluding equipment model marks.
+
+    A facility-shaped token can describe a pump-station product model.  It is
+    not a project facility merely because that token was extracted.  The
+    professional inventory requires an explicit alias and at least two source
+    locators, matching the same rule used by facility cards.
+    """
+
+    established: set[str] = set()
+    for raw in identity_components:
+        component = dict(raw)
+        if str(component.get("identity_kind") or "") not in {"facility", "local_area"}:
+            continue
+        label = str(component.get("canonical_label") or "").strip()
+        designation = facility_designation(label)
+        aliases = [
+            str(value).strip()
+            for value in component.get("candidate_labels") or (label,)
+            if str(value).strip()
+        ]
+        if (
+            designation
+            and len({str(value) for value in component.get("source_locator_ids") or ()}) >= 2
+            and _explicit_designation_alias(designation, aliases)
+        ):
+            established.add(designation)
+    return tuple(sorted(established))
+
+
 def classify_work_family(value: object) -> tuple[str, str] | None:
     normalized = _normalized(value)
     for key, title, terms in _WORK_FAMILIES:

@@ -14,6 +14,7 @@ from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
     document_comparison_side,
+    established_facility_designations,
     facility_designation,
     facility_designations,
     non_work_reason,
@@ -1107,6 +1108,25 @@ def test_reconciliation_prioritizes_scoped_design_commercial_pair() -> None:
     assert document_comparison_side("project_documentation", "КР.pdf") == "design"
     assert document_comparison_side("project_documentation", "005.2-2025-СМ4.pdf") == "commercial"
     assert document_comparison_side("bill_of_quantities", "ВОР.xlsx") == "commercial"
+
+
+def test_established_facilities_exclude_equipment_model_designations() -> None:
+    assert established_facility_designations(
+        [
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-4",
+                "candidate_labels": ["КНС-4"],
+                "source_locator_ids": ["facility-a", "facility-b"],
+            },
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-270/12С/3,0-9,1/4,82",
+                "candidate_labels": ["КНС-270/12С/3,0-9,1/4,82"],
+                "source_locator_ids": ["equipment-row"],
+            },
+        ]
+    ) == ("КНС 4",)
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:

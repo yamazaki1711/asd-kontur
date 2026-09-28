@@ -33,6 +33,7 @@ from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
     document_comparison_side,
+    established_facility_designations,
     facility_designation,
     facility_designations,
     non_work_reason,
@@ -4344,14 +4345,7 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
             components = build_structure_identity_components(identity_candidates)
-            facilities = sorted(
-                {
-                    designation
-                    for item in components
-                    if str(item.get("identity_kind") or "") in {"facility", "local_area"}
-                    and (designation := facility_designation(item.get("canonical_label")))
-                }
-            )
+            facilities = list(established_facility_designations(components))
 
             prepared: list[dict[str, Any]] = []
             for row in unresolved:
