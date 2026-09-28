@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from asd_kontur.tender.qwen_work_reconciliation import QwenProjectWorkReconciler
+from asd_kontur.tender.qwen_work_reconciliation import (
+    QwenProjectWorkReconciler,
+    potential_work_description,
+)
 
 
 def test_qwen_work_reconciliation_preserves_exact_rows_and_allowed_scope(
@@ -94,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v7"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v8"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -288,6 +291,13 @@ def test_qwen_work_reconciliation_cannot_hide_potential_commercial_work(
             ),
         }
     ]
+
+
+def test_explicit_installation_and_excluded_commercial_work_remain_work_candidates() -> None:
+    assert potential_work_description("установка трубопровода откачки из нержавеющей стали")
+    assert potential_work_description("Электромонтажные работы по прокладке кабеля")
+    assert potential_work_description("Шеф-монтажные работы")
+    assert not potential_work_description("Напорный трубопровод с задвижками")
 
 
 def test_qwen_work_reconciliation_allows_component_with_mounting_attribute(

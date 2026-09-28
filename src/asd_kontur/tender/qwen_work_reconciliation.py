@@ -13,15 +13,16 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v7"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v8"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
     "qwen-project-work-reconciliation-v5",
     "qwen-project-work-reconciliation-v6",
+    "qwen-project-work-reconciliation-v7",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@7.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@8.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -35,7 +36,8 @@ _QUANTITY_STATUSES = frozenset(
 )
 _POTENTIAL_WORK_AT_START = re.compile(
     r"^(?:перевоз\w*|транспортирован\w*|погруз\w*|разгруз\w*|испытан\w*|"
-    r"монтаж\w*|демонтаж\w*|геодез\w*|пусконалад\w*)\b",
+    r"монтаж\w*|демонтаж\w*|установ\w*|устройств\w*|проклад\w*|"
+    r"[\w-]*монтажн\w*\s+работ\w*|геодез\w*|пусконалад\w*)\b",
     re.IGNORECASE,
 )
 _WEAK_FACILITY_REASON = re.compile(
@@ -269,7 +271,16 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 или значение нельзя отнести без догадки, используйте AMBIGUOUS, а не WORK_QUANTITY.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
 контекст ему не противоречит; сооружение всё равно требует явной привязки.
+Явная строительная работа, исключённая из ВОР, сметы, договора или цены предложения, остаётся
+работой: используйте MATCHED либо AMBIGUOUS и отразите коммерческое исключение в reason. Нельзя
+помечать такую работу NOT_A_WORK только потому, что она не включена в предложение.
 """
+
+
+def potential_work_description(wording: str) -> bool:
+    """Return whether a source wording explicitly starts as a construction operation."""
+
+    return bool(_POTENTIAL_WORK_AT_START.search(wording.strip()))
 
 
 def _parse(
@@ -321,8 +332,8 @@ def _parse(
                 raise QwenSemanticFailure("qwen_work_reconciliation_family_invalid")
         elif family_key is not None:
             raise QwenSemanticFailure("qwen_work_reconciliation_unresolved_family_invalid")
-        if status == "NOT_A_WORK" and _POTENTIAL_WORK_AT_START.search(
-            wording_by_id.get(candidate_id, "").strip()
+        if status == "NOT_A_WORK" and potential_work_description(
+            wording_by_id.get(candidate_id, "")
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_potential_work_excluded")
         if facility is not None and facility not in allowed_facilities:

@@ -44,6 +44,7 @@ from asd_kontur.tender.project_engineering import (
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES,
     PROJECT_WORK_RECONCILIATION_PROFILE,
+    potential_work_description,
 )
 from asd_kontur.tender.structure_identity_components import (
     build_structure_identity_components,
@@ -4371,7 +4372,9 @@ class SpinePostgresRepository:
                     # facility remains compatible.  V5 revisits a semantically
                     # settled work only for quantity observations that have not
                     # yet received a validated meaning decision.
-                    if existing_status == "NOT_A_WORK" or (
+                    if (
+                        existing_status == "NOT_A_WORK" and not potential_work_description(wording)
+                    ) or (
                         existing_status == "MATCHED"
                         and existing.get("facility")
                         and not linked_quantities
