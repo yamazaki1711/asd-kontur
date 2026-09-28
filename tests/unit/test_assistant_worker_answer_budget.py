@@ -158,6 +158,54 @@ def test_prepared_information_gaps_use_professional_language() -> None:
     assert completed.used_source_ids == ("gap-source",)
 
 
+def test_ntd_project_question_uses_prepared_requirement_state() -> None:
+    plan = _direct_project_result_plan("Какие требования НТД необходимо проверить?")
+
+    assert plan is not None
+    assert plan.intent == "normative"
+    assert [step.tool for step in plan.steps] == ["consultant.get_information_gaps"]
+
+
+def test_prepared_ntd_state_does_not_invent_applicability() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Нормы следует проверить.",
+            "workspace_conclusion",
+            False,
+            (),
+            "НТД проекта.",
+            (),
+        ),
+        [
+            {
+                "tool": "consultant.get_information_gaps",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "requirements": {
+                                "applicable": [],
+                                "professional_summary": (
+                                    "Применимые нормы для работ проекта требуют уточнения."
+                                ),
+                                "unresolved": [
+                                    "Для проверки редакций НТД требуется дата применимости проекта."
+                                ],
+                            }
+                        }
+                    },
+                    "sources": [],
+                },
+            }
+        ],
+        "Какие требования НТД необходимо проверить?",
+    )
+
+    assert "Нормативные требования, которые нужно проверить:" in completed.answer
+    assert "Применимые нормы для работ проекта требуют уточнения" in completed.answer
+    assert "требуется дата применимости проекта" in completed.answer
+    assert "СП 70" not in completed.answer
+
+
 def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
     answer = SynthesizedAnswer(
         "На КНС-4 выполняются строительные работы.",

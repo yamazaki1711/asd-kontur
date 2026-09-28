@@ -117,6 +117,9 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
             "что не установлено по проекту",
         )
     )
+    asks_for_ntd_requirements = any(
+        marker in normalized for marker in ("нтд", "норматив", "требования сп")
+    ) and any(marker in normalized for marker in ("требован", "провер", "применим"))
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -185,6 +188,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                     "consultant.get_information_gaps",
                     {},
                     "Использовать подготовленный перечень неустановленных данных проекта.",
+                ),
+            ),
+        )
+    if asks_for_ntd_requirements:
+        return SearchPlan(
+            intent="normative",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_information_gaps",
+                    {},
+                    "Использовать подготовленное состояние применимых требований проекта.",
                 ),
             ),
         )
@@ -1408,6 +1424,9 @@ def _append_prepared_project_result(
             "что не установлено по проекту",
         )
     )
+    asks_for_ntd_requirements = any(
+        marker in normalized for marker in ("нтд", "норматив", "требования сп")
+    ) and any(marker in normalized for marker in ("требован", "провер", "применим"))
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
@@ -1628,6 +1647,51 @@ def _append_prepared_project_result(
             break
         if gap_rows:
             headings_and_rows.append(("Что ещё не удалось определить:", gap_rows))
+    if asks_for_ntd_requirements:
+        requirement_rows: list[str] = []
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_information_gaps":
+                continue
+            response = receipt.get("response")
+            if not isinstance(response, dict):
+                continue
+            value = response.get("value")
+            engineering = value.get("project_engineering") if isinstance(value, dict) else None
+            if not isinstance(engineering, dict):
+                continue
+            requirements = engineering.get("requirements")
+            if not isinstance(requirements, dict):
+                continue
+            summary = str(requirements.get("professional_summary") or "").strip()
+            if summary:
+                requirement_rows.append(summary)
+            for item in requirements.get("applicable") or ():
+                if not isinstance(item, dict):
+                    continue
+                designation = str(
+                    item.get("designation") or item.get("title") or "Требование НТД"
+                ).strip()
+                requirement = str(item.get("requirement") or item.get("conclusion") or "").strip()
+                requirement_rows.append(
+                    f"{designation}: {requirement}" if requirement else designation
+                )
+            for item in requirements.get("unresolved") or ():
+                text = str(item).strip()
+                if text:
+                    requirement_rows.append(text)
+            for source in response.get("sources") or ():
+                if not isinstance(source, dict) or not source.get("source_id"):
+                    continue
+                source_id = str(source["source_id"])
+                if source_id in available_source_ids and source_id not in selected_source_ids:
+                    selected_source_ids.append(source_id)
+                if len(selected_source_ids) >= 8:
+                    break
+            break
+        if requirement_rows:
+            headings_and_rows.append(
+                ("Нормативные требования, которые нужно проверить:", requirement_rows)
+            )
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_discrepancies":
             continue
