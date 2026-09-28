@@ -467,6 +467,57 @@ def test_requested_facility_work_inventory_cannot_be_silently_shortened() -> Non
     ) == {"passed": True, "problems": []}
 
 
+def test_requested_missing_commercial_work_keeps_facility_and_work() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "scope_comparisons": [
+                            {
+                                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                                "facility": "Участок 17",
+                                "work": "Устройство шпунтового ограждения",
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "В коммерческих документах есть пробел.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Неучтённые работы.",
+        (),
+    )
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Какие работы отсутствуют в ВОР или смете?",
+    )
+    assert checks["passed"] is False
+
+    complete = SynthesizedAnswer(
+        "На участке 17 в ВОР/смете отсутствует устройство шпунтового ограждения.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Неучтённые работы.",
+        (),
+    )
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Какие работы отсутствуют в ВОР или смете?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
     receipts = [
         {

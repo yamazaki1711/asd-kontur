@@ -591,6 +591,46 @@ def test_unresolved_question_returns_professional_bounded_project_gaps() -> None
     assert projected["requirements"]["unresolved"] == ["Не установлена редакция СП."]
 
 
+def test_missing_commercial_work_query_returns_established_omission_not_arbitrary_rows() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "scope_comparisons": [
+                {
+                    "classification": "UNRESOLVED_SCOPE_MATCH",
+                    "facility": "Участок 4",
+                    "work": "Разработка грунта",
+                },
+                {
+                    "classification": "WORK_MISSING_IN_COMMERCIAL",
+                    "facility": "Участок 17",
+                    "work": "Устройство шпунтового ограждения",
+                    "professional_status": "Возможная неучтённая работа",
+                    "conclusion": "Работа не найдена в ВОР и смете.",
+                },
+            ],
+            "issues": [
+                {
+                    "kind": "Возможная неучтённая работа",
+                    "location": "Участок 17",
+                    "subject": "Устройство шпунтового ограждения",
+                    "description": "Работа не найдена в ВОР и смете.",
+                },
+                {
+                    "kind": "Различие характеристик материала",
+                    "location": "Участок 8",
+                },
+            ],
+        },
+        query="Какие работы есть в проекте, но отсутствуют в ВОР или смете?",
+        limit=20,
+    )
+
+    assert [row["work"] for row in projected["scope_comparisons"]] == [
+        "Устройство шпунтового ограждения"
+    ]
+    assert [row["location"] for row in projected["issues"]] == ["Участок 17"]
+
+
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {

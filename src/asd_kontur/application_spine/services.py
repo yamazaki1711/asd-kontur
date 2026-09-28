@@ -94,10 +94,12 @@ class DocumentContent:
 
 
 MODE_PURPOSES: dict[ModeName, str] = {
-    ModeName.TENDER: "Evidence-bound tender completeness, feasibility and risk analysis.",
-    ModeName.SUPPORT: "Work control, evidence and executive-document readiness support.",
-    ModeName.AUDIT: "Expected-versus-actual construction document audit.",
-    ModeName.RESTORATION: "Evidence-constrained recovery planning without fabrication.",
+    ModeName.TENDER: (
+        "Construction scope, quantity, material, discrepancy and contractor-risk analysis."
+    ),
+    ModeName.SUPPORT: "Construction work control and complete as-built package preparation.",
+    ModeName.AUDIT: "Construction-document completeness, consistency and correction audit.",
+    ModeName.RESTORATION: "Safe reconstruction of missing as-built documents without fabrication.",
 }
 
 MODE_REQUIRED_CAPABILITIES: dict[ModeName, tuple[str, ...]] = {

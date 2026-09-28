@@ -2267,6 +2267,11 @@ def _assistant_engineering_for_query(
             "не хватает",
         )
     )
+    asks_missing_commercial_work = (
+        "работ" in normalized_query
+        and any(marker in normalized_query for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(marker in normalized_query for marker in ("вор", "смет", "коммерч"))
+    )
 
     def relevant(row: Mapping[str, Any]) -> bool:
         if not tokens and not facility_markers:
@@ -2527,7 +2532,28 @@ def _assistant_engineering_for_query(
         "works",
         "materials",
     ):
-        if asks_material_differences and key in {"issues", "material_comparisons"}:
+        if asks_missing_commercial_work and key == "scope_comparisons":
+            source_rows = [
+                row
+                for row in engineering.get(key) or ()
+                if isinstance(row, Mapping)
+                and row.get("classification") == "WORK_MISSING_IN_COMMERCIAL"
+            ]
+            rows = [compact_row(row) for row in source_rows[: min(limit, 20)]]
+        elif asks_missing_commercial_work and key == "issues":
+            source_rows = [
+                row
+                for row in engineering.get(key) or ()
+                if isinstance(row, Mapping)
+                and "неучтен"
+                in "".join(
+                    character
+                    for character in str(row.get("kind") or "").casefold().replace("ё", "е")
+                    if character.isalnum()
+                )
+            ]
+            rows = [compact_row(row) for row in source_rows[: min(limit, 20)]]
+        elif asks_material_differences and key in {"issues", "material_comparisons"}:
             source_rows = [row for row in engineering.get(key) or () if isinstance(row, Mapping)]
             rows = [compact_row(row) for row in source_rows[: min(limit, 12)]]
         else:
