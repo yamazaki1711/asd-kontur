@@ -5038,6 +5038,22 @@ function ProjectEngineeringResult({
   const scopeComparisons = Array.isArray(model.scope_comparisons)
     ? (model.scope_comparisons as Record<string, unknown>[])
     : [];
+  const unresolvedScopeComparisons = scopeComparisons.filter(
+    (comparison) => comparison.classification !== "MATCH",
+  );
+  const unresolvedScopeSummary = Object.entries(
+    unresolvedScopeComparisons.reduce<Record<string, number>>(
+      (counts, comparison) => {
+        const label = displayValue(
+          comparison.professional_status,
+          "Сопоставление требует уточнения",
+        );
+        counts[label] = (counts[label] ?? 0) + 1;
+        return counts;
+      },
+      {},
+    ),
+  );
   const sheetPileSchedule = Array.isArray(model.sheet_pile_schedule)
     ? (model.sheet_pile_schedule as Record<string, unknown>[])
     : [];
@@ -5834,22 +5850,36 @@ function ProjectEngineeringResult({
       <section className="panel">
         <h2>Сопоставление проектного и коммерческого состава</h2>
         <div className="card-grid">
-          {scopeComparisons
-            .filter((comparison) => comparison.classification !== "MATCH")
-            .map((comparison) => (
-              <article
-                className="entity-card"
-                key={displayValue(comparison.scope_comparison_id)}
-              >
-                <h3>{displayValue(comparison.professional_status)}</h3>
-                <p>
-                  {displayValue(comparison.facility)} ·{" "}
-                  {displayValue(comparison.work)}
-                </p>
-                <p>{displayValue(comparison.conclusion)}</p>
-              </article>
-            ))}
+          {unresolvedScopeSummary.map(([label, count]) => (
+            <article className="entity-card" key={label}>
+              <h3>{label}</h3>
+              <p>{String(count)} поз.</p>
+            </article>
+          ))}
         </div>
+        {unresolvedScopeComparisons.length > 0 && (
+          <details className="technical-section">
+            <summary>
+              Показать все позиции, требующие инженерного сопоставления (
+              {String(unresolvedScopeComparisons.length)})
+            </summary>
+            <div className="card-grid">
+              {unresolvedScopeComparisons.map((comparison) => (
+                <article
+                  className="entity-card"
+                  key={displayValue(comparison.scope_comparison_id)}
+                >
+                  <h3>{displayValue(comparison.professional_status)}</h3>
+                  <p>
+                    {displayValue(comparison.facility)} ·{" "}
+                    {displayValue(comparison.work)}
+                  </p>
+                  <p>{displayValue(comparison.conclusion)}</p>
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
       </section>
       <section className="panel">
         <h2>Технические вопросы и действия</h2>
