@@ -5041,6 +5041,9 @@ function ProjectEngineeringResult({
   const unresolvedScopeComparisons = scopeComparisons.filter(
     (comparison) => comparison.classification !== "MATCH",
   );
+  const missingCommercialWorks = scopeComparisons.filter(
+    (comparison) => comparison.classification === "WORK_MISSING_IN_COMMERCIAL",
+  );
   const unresolvedScopeSummary = Object.entries(
     unresolvedScopeComparisons.reduce<Record<string, number>>(
       (counts, comparison) => {
@@ -5844,6 +5847,35 @@ function ProjectEngineeringResult({
           <p>
             Сопоставимые значения по разным ролям документов пока не
             установлены.
+          </p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Возможные неучтённые работы</h2>
+        {missingCommercialWorks.length ? (
+          <div className="card-grid">
+            {missingCommercialWorks.map((comparison) => (
+              <article
+                className="entity-card"
+                key={displayValue(comparison.scope_comparison_id)}
+              >
+                <h3>{displayValue(comparison.work)}</h3>
+                <p>{displayValue(comparison.facility)}</p>
+                <p>{displayValue(comparison.conclusion)}</p>
+                <StatusPill tone="warning">
+                  {displayValue(comparison.professional_status)}
+                </StatusPill>
+                <ProjectSourceLinks
+                  locatorIds={comparison.source_locator_ids}
+                  workspaceId={workspaceId}
+                  modeSlug={modeSlug}
+                />
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>
+            В установленном объёме доказанные неучтённые работы не выявлены.
           </p>
         )}
       </section>
