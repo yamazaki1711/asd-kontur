@@ -226,9 +226,13 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                     str(row.get("conclusion") or ""),
                 )
                 for row in model.get("scope_comparisons") or ()
-                if row.get("classification") != "MATCH"
+                if row.get("classification")
+                in {"WORK_MISSING_IN_COMMERCIAL", "COMMERCIAL_ONLY_WORK"}
             ],
-            empty="В установленном объёме возможные неучтённые работы не выявлены.",
+            empty=(
+                "В установленном объёме доказанные неучтённые работы не выявлены; "
+                "незавершённые сопоставления перечислены в разделе 13."
+            ),
         ),
         _heading("9. Технические противоречия"),
         _issue_table(model.get("issues") or ()),
@@ -254,7 +258,8 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 str(value.get("reason") or value.get("description") or "")
                 for value in pits.get("requires_clarification") or ()
             ]
-            + [str(value) for value in project.get("missing_information") or ()],
+            + [str(value) for value in project.get("missing_information") or ()]
+            + _scope_comparison_uncertainties(model.get("scope_comparisons") or ()),
             empty="Неопределённости не установлены.",
         ),
         _heading("Список исходных документов"),
@@ -274,6 +279,16 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         "</w:sectPr></w:body></w:document>"
     )
     return _docx_package(document.encode())
+
+
+def _scope_comparison_uncertainties(rows: object) -> list[str]:
+    counts: dict[str, int] = {}
+    for raw in rows if isinstance(rows, (list, tuple)) else ():
+        if not isinstance(raw, Mapping) or raw.get("classification") != "UNRESOLVED_SCOPE_MATCH":
+            continue
+        status = str(raw.get("professional_status") or "Сопоставление объёма требует уточнения")
+        counts[status] = counts.get(status, 0) + 1
+    return [f"{status}: {count} поз." for status, count in sorted(counts.items())]
 
 
 def _heading(value: str, *, level: int = 2) -> str:

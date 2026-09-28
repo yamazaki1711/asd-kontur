@@ -114,6 +114,8 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
     assert "Возможные неучтённые работы" in xml
+    assert "доказанные неучтённые работы не выявлены" in xml
+    assert "Требуется распределить коммерческий объём: 1 поз." in xml
     assert "Нормативные вопросы" in xml
     assert "Неопределённости / недостающие данные" in xml
     assert "Вопросы Заказчику" in xml
