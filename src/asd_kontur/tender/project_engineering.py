@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v44"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v45"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -3113,7 +3113,7 @@ def _issues(
                 "status": "Установленное расхождение маркировки",
             }
         )
-    for comparison in comparisons:
+    for comparison in _professional_quantity_issue_comparisons(comparisons):
         if comparison.get("difference") in {None, "0"} and "различаются" not in str(
             comparison.get("conclusion")
         ):
@@ -3334,6 +3334,76 @@ def _issues(
             }
         )
     return _deduplicate_dicts(issues)
+
+
+def _professional_quantity_issue_comparisons(
+    comparisons: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collapse duplicate design-to-commercial findings, not their source comparisons.
+
+    VOR and estimate frequently carry the same commercial quantity.  The
+    comparison schedule must retain both checks, while the engineer should see
+    one issue when both commercial documents agree with each other and differ
+    from the same design value.
+    """
+
+    rows = [dict(value) for value in comparisons]
+    groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+    passthrough: list[dict[str, Any]] = []
+    for row in rows:
+        left = dict(row.get("left") or {})
+        right = dict(row.get("right") or {})
+        if row.get("classification") != "QUANTITY_DIFFERENCE" or str(
+            right.get("document_role") or ""
+        ) not in {"ВОР", "Смета"}:
+            passthrough.append(row)
+            continue
+        key = (
+            str(row.get("work_scope_id") or ""),
+            str(row.get("facility") or ""),
+            str(row.get("work") or ""),
+            str(row.get("comparison_kind") or "quantity"),
+            str(left.get("document_role") or ""),
+            str(left.get("value") or ""),
+            str(left.get("unit") or ""),
+            str(right.get("value") or ""),
+            str(right.get("unit") or ""),
+            str(row.get("difference") or ""),
+        )
+        groups[key].append(row)
+
+    for grouped in groups.values():
+        roles = {
+            str(dict(value.get("right") or {}).get("document_role") or "") for value in grouped
+        }
+        if len(grouped) == 1 or roles != {"ВОР", "Смета"}:
+            passthrough.extend(grouped)
+            continue
+        base = dict(grouped[0])
+        left = dict(base.get("left") or {})
+        right = dict(base.get("right") or {})
+        right["document_role"] = "ВОР/Смета"
+        base["right"] = right
+        unit = str(left.get("unit") or right.get("unit") or "").strip()
+        base["comparison_id"] = semantic_digest(
+            {
+                "kind": "consolidated_quantity_issue",
+                "comparison_ids": sorted(str(value.get("comparison_id")) for value in grouped),
+            }
+        )
+        base["conclusion"] = (
+            f"Разница {left.get('document_role')} ↔ ВОР/Смета: "
+            f"{base.get('difference')}{f' {unit}' if unit else ''}"
+        )
+        base["source_locator_ids"] = sorted(
+            {
+                str(locator_id)
+                for value in grouped
+                for locator_id in value.get("source_locator_ids") or ()
+            }
+        )
+        passthrough.append(base)
+    return passthrough
 
 
 def _commercial_sheet_pile_scope_summary(

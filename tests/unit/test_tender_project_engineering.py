@@ -1005,7 +1005,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v44"
+    assert model["model_version"] == "project-engineering-model-v45"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2269,6 +2269,53 @@ def test_duration_comparison_is_not_presented_as_construction_quantity() -> None
 
     assert comparison["comparison_kind"] == "duration"
     assert comparison["professional_status"] == "Различается продолжительность"
+
+
+def test_identical_vor_and_estimate_difference_is_one_professional_issue() -> None:
+    comparisons = [
+        _comparison_row(
+            {
+                "work_scope_id": "cable-kns-8-1",
+                "facility": "КНС 8.1",
+                "work_name": "Прокладка кабеля",
+                "source_locator_ids": ["design", "vor"],
+            },
+            "ПД",
+            "ВОР",
+            (Decimal("30"), "м"),
+            (Decimal("60"), "м"),
+            Decimal("-30"),
+            "Разница ПД ↔ ВОР: -30 м",
+        ),
+        _comparison_row(
+            {
+                "work_scope_id": "cable-kns-8-1",
+                "facility": "КНС 8.1",
+                "work_name": "Прокладка кабеля",
+                "source_locator_ids": ["design", "estimate"],
+            },
+            "ПД",
+            "Смета",
+            (Decimal("30"), "м"),
+            (Decimal("60"), "м"),
+            Decimal("-30"),
+            "Разница ПД ↔ Смета: -30 м",
+        ),
+    ]
+
+    issues = _issues(
+        defects=[],
+        comparisons=comparisons,
+        scope_comparisons=[],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )
+
+    assert len(comparisons) == 2
+    assert len(issues) == 1
+    assert issues[0]["description"] == "Разница ПД ↔ ВОР/Смета: -30 м"
+    assert issues[0]["source_locator_ids"] == ["design", "estimate", "vor"]
 
 
 def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_class() -> None:
