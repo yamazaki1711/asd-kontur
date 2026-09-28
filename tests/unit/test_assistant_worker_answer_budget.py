@@ -358,6 +358,55 @@ def test_requested_project_comparison_cannot_omit_validated_values() -> None:
     assert checks == {"passed": True, "problems": []}
 
 
+def test_discrepancy_question_requires_differences_without_forcing_matches() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "quantity_comparisons": [
+                            {
+                                "work": "Прокладка кабеля",
+                                "classification": "QUANTITY_DIFFERENCE",
+                                "professional_status": "Различается объём",
+                                "left": {"document_role": "ПД", "value": "30", "unit": "м"},
+                                "right": {"document_role": "ВОР", "value": "60", "unit": "м"},
+                            },
+                            {
+                                "work": "Погружение шпунта",
+                                "classification": "MATCH",
+                                "professional_status": "Значения совпадают",
+                                "left": {"document_role": "ВОР", "value": "95.028", "unit": "т"},
+                                "right": {
+                                    "document_role": "Смета",
+                                    "value": "95.028",
+                                    "unit": "т",
+                                },
+                            },
+                        ]
+                    }
+                },
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Прокладка кабеля: ПД содержит 30 м, а ВОР — 60 м. Различается объём.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Расхождение объёма.",
+        (),
+    )
+
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+        question="Какие объёмы расходятся между ПД и ВОР?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_requested_material_difference_cannot_omit_known_grades() -> None:
     receipts = [
         {

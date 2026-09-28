@@ -844,6 +844,9 @@ def _with_structured_project_fact_checks(
         marker in normalized_question
         for marker in ("расхожд", "сравн", "разниц", "совпад", "вор", "смет")
     ) and any(marker in normalized_question for marker in ("объ", "колич", "пд", "рд", "работ"))
+    asks_for_discrepancies = any(
+        marker in normalized_question for marker in ("расхожд", "расход", "разниц")
+    )
     asks_for_material_differences = "материал" in normalized_question and any(
         marker in normalized_question
         for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
@@ -939,7 +942,18 @@ def _with_structured_project_fact_checks(
                 if isinstance(item, dict) and str(item.get("risk") or "").strip():
                     required_contractor_risks.add(str(item["risk"]).strip())
         if asks_for_comparisons:
-            for item in engineering.get("quantity_comparisons") or ():
+            comparison_items = [
+                item
+                for item in engineering.get("quantity_comparisons") or ()
+                if isinstance(item, dict)
+            ]
+            if asks_for_discrepancies:
+                discrepant_items = [
+                    item for item in comparison_items if item.get("classification") != "MATCH"
+                ]
+                if discrepant_items:
+                    comparison_items = discrepant_items
+            for item in comparison_items:
                 if not isinstance(item, dict):
                     continue
                 for key in ("work", "professional_status"):
