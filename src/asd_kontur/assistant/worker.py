@@ -842,9 +842,7 @@ def _with_structured_project_fact_checks(
             if not isinstance(raw, dict):
                 continue
             operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
-            operation_is_waling = any(
-                marker in operation for marker in ("пояс", "обвяз", "балк")
-            )
+            operation_is_waling = any(marker in operation for marker in ("пояс", "обвяз", "балк"))
             beams = [str(beam).strip() for beam in raw.get("waling_beams") or ()]
             if not operation_is_waling and not any(beams):
                 continue
