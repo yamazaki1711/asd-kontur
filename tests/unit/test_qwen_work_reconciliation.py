@@ -100,6 +100,46 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
     assert result["profile_version"] == "qwen-project-work-reconciliation-v6"
 
 
+def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {"candidate_id": f"candidate-{index}", "wording": f"Монтаж конструкции {index}"}
+        for index in range(12)
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        assert max_tokens == 2_880
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "UNCLASSIFIED",
+                        "family_key": None,
+                        "operation": None,
+                        "facility": None,
+                        "confidence": "0.5",
+                        "reason": "Недостаточно контекста для классификации.",
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"structural_steel": "Металлоконструкции"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 1
+    assert result["recovery_codes"] == []
+
+
 def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
     monkeypatch: Any,
 ) -> None:

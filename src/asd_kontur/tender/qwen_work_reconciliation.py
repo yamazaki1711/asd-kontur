@@ -123,7 +123,12 @@ class QwenProjectWorkReconciler:
                 self._endpoint,
                 _prompt(rows, work_families, facilities),
                 self._timeout_seconds,
-                max_tokens=max(900, min(3_200, len(rows) * 170 + quantity_count * 90)),
+                # Real twelve-row OZERO batches repeatedly exhausted the old
+                # 170-token-per-row allowance even when every observation was
+                # valid.  Budget the complete required JSON shape while
+                # retaining the bounded 3,200-token ceiling and recursive
+                # split recovery for genuinely verbose or malformed output.
+                max_tokens=max(900, min(3_200, len(rows) * 240 + quantity_count * 100)),
             )
             return (
                 _parse(
