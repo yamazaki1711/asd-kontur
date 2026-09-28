@@ -5029,6 +5029,9 @@ function ProjectEngineeringResult({
   const materials = Array.isArray(model.materials)
     ? (model.materials as Record<string, unknown>[])
     : [];
+  const materialComparisons = Array.isArray(model.material_comparisons)
+    ? (model.material_comparisons as Record<string, unknown>[])
+    : [];
   const comparisons = Array.isArray(model.quantity_comparisons)
     ? (model.quantity_comparisons as Record<string, unknown>[])
     : [];
@@ -5700,6 +5703,34 @@ function ProjectEngineeringResult({
   if (section === "materials") {
     return (
       <section className="panel">
+        <h2>Расхождения характеристик материалов</h2>
+        {materialComparisons.length ? (
+          <div className="card-grid">
+            {materialComparisons.map((comparison) => (
+              <article
+                className="entity-card"
+                key={displayValue(comparison.material_comparison_id)}
+              >
+                <h3>{displayValue(comparison.material)}</h3>
+                <p>
+                  {displayValue(comparison.facility)} ·{" "}
+                  {displayValue(comparison.work)}
+                </p>
+                <strong>{displayValue(comparison.description)}</strong>
+                <ProjectSourceLinks
+                  locatorIds={comparison.source_locator_ids}
+                  workspaceId={workspaceId}
+                  modeSlug={modeSlug}
+                />
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>
+            Сопоставимые характеристики материалов по разным документам пока не
+            установлены.
+          </p>
+        )}
         <h2>Материалы по работам</h2>
         <div className="table-wrap">
           <table>
