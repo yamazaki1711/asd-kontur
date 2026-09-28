@@ -245,6 +245,83 @@ def test_broad_sheet_pile_scope_requires_associated_belt_quantity_and_beams() ->
     assert checks == {"passed": True, "problems": []}
 
 
+def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "customer_questions": [
+                            {"question": "Просим распределить объём шпунта по сооружениям."},
+                            {"question": "Просим подтвердить профиль Л5УМ для КНС-4."},
+                        ],
+                        "risks": [
+                            {"risk": "Часть шпунтовых работ может остаться нерасценённой."},
+                            {"risk": "Замена профиля может изменить массу ограждения."},
+                        ],
+                    }
+                }
+            },
+        }
+    ]
+    shortened = SynthesizedAnswer(
+        "Следует уточнить объём шпунта.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Вопросы и риски проекта.",
+        ("шпунт",),
+    )
+
+    question_checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=shortened,
+        receipts=receipts,
+        question="Какие вопросы надо направить Заказчику?",
+    )
+    risk_checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=shortened,
+        receipts=receipts,
+        question="Какие риски для Подрядчика выявлены по проекту?",
+    )
+
+    assert "workspace_customer_question_omitted" in question_checks["problems"]
+    assert "workspace_contractor_risk_omitted" in risk_checks["problems"]
+
+    complete_questions = SynthesizedAnswer(
+        "Просим распределить объём шпунта по сооружениям. "
+        "Просим подтвердить профиль Л5УМ для КНС-4.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Вопросы Заказчику.",
+        ("шпунт",),
+    )
+    complete_risks = SynthesizedAnswer(
+        "Часть шпунтовых работ может остаться нерасценённой. "
+        "Замена профиля может изменить массу ограждения.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Риски Подрядчика.",
+        ("шпунт",),
+    )
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete_questions,
+        receipts=receipts,
+        question="Какие вопросы надо направить Заказчику?",
+    ) == {"passed": True, "problems": []}
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete_risks,
+        receipts=receipts,
+        question="Какие риски для Подрядчика выявлены по проекту?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_inventory_prompt_preserves_all_candidates_as_structured_json() -> None:
     candidates = [
         {

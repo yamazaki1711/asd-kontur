@@ -684,6 +684,9 @@ count_is_final=false не превращайте established_count в оконч
 workspace_structured_fact_contradicted, обязательно перенесите в ответ все прямо запрошенные
 значения из sheet_pile_answer_facts (включая объём и профили балок) и не утверждайте, что они
 отсутствуют. Не добавляйте значения, которых нет в этих структурированных данных.
+Если среди дефектов есть workspace_customer_question_omitted, перечислите без пропусков все
+формулировки из customer_questions. Если есть workspace_contractor_risk_omitted, перечислите без
+пропусков все формулировки risk из risks. Не заменяйте проектные вопросы и риски общими советами.
 Допустимые source_id: {json.dumps(source_ids, ensure_ascii=False)}
 Результаты инструментов: {_tool_results_for_prompt(receipts)}
 """
@@ -818,19 +821,39 @@ def _with_structured_project_fact_checks(
     """
 
     normalized_question = " ".join(question.casefold().replace("ё", "е").split())
-    asks_for_sheet_pile = "шпунт" in normalized_question or "sheet pile" in normalized_question
+    mentions_sheet_pile = "шпунт" in normalized_question or "sheet pile" in normalized_question
+    asks_for_sheet_pile = mentions_sheet_pile and any(
+        marker in normalized_question for marker in ("все", "работ", "предусмотр", "покаж", "scope")
+    )
     asks_for_waling = any(
         marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")
     )
-    if not asks_for_sheet_pile and not asks_for_waling:
+    asks_for_customer_questions = "вопрос" in normalized_question and any(
+        marker in normalized_question for marker in ("заказчик", "направ", "уточн")
+    )
+    asks_for_contractor_risks = "риск" in normalized_question and any(
+        marker in normalized_question for marker in ("подряд", "проект")
+    )
+    if not any(
+        (
+            asks_for_sheet_pile,
+            asks_for_waling,
+            asks_for_customer_questions,
+            asks_for_contractor_risks,
+        )
+    ):
         return checks
 
     required_terms: set[str] = set()
     required_quantities: set[tuple[str, str]] = set()
+    required_customer_questions: set[str] = set()
+    required_contractor_risks: set[str] = set()
     for receipt in receipts:
         if receipt.get("tool") not in {
             "consultant.get_workspace_overview",
             "consultant.get_work_packages",
+            "consultant.get_discrepancies",
+            "consultant.get_information_gaps",
         }:
             continue
         response = receipt.get("response")
@@ -866,17 +889,41 @@ def _with_structured_project_fact_checks(
                     required_quantities.add(
                         (str(item["value"]).strip(), str(item.get("unit") or "").strip())
                     )
-    if not required_terms and not required_quantities:
+        if asks_for_customer_questions:
+            for item in engineering.get("customer_questions") or ():
+                if isinstance(item, dict) and str(item.get("question") or "").strip():
+                    required_customer_questions.add(str(item["question"]).strip())
+        if asks_for_contractor_risks:
+            for item in engineering.get("risks") or ():
+                if isinstance(item, dict) and str(item.get("risk") or "").strip():
+                    required_contractor_risks.add(str(item["risk"]).strip())
+    if not any(
+        (
+            required_terms,
+            required_quantities,
+            required_customer_questions,
+            required_contractor_risks,
+        )
+    ):
         return checks
 
     normalized_answer = answer.answer.casefold().replace("ё", "е").replace(",", ".")
-    omitted = any(
+    sheet_pile_fact_omitted = any(
         term.casefold().replace("ё", "е") not in normalized_answer for term in required_terms
     )
-    omitted = omitted or any(
+    sheet_pile_fact_omitted = sheet_pile_fact_omitted or any(
         value.replace(",", ".") not in normalized_answer
         or (unit and unit.casefold() not in normalized_answer)
         for value, unit in required_quantities
+    )
+    normalized_answer_key = _inventory_text_key(answer.answer)
+    customer_question_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key
+        for value in required_customer_questions
+    )
+    contractor_risk_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key
+        for value in required_contractor_risks
     )
     contradicted = bool(
         re.search(
@@ -887,8 +934,12 @@ def _with_structured_project_fact_checks(
         )
     )
     problems = list(checks.get("problems", []))
-    if omitted:
+    if sheet_pile_fact_omitted:
         problems.append("workspace_structured_fact_omitted")
+    if customer_question_omitted:
+        problems.append("workspace_customer_question_omitted")
+    if contractor_risk_omitted:
+        problems.append("workspace_contractor_risk_omitted")
     if contradicted:
         problems.append("workspace_structured_fact_contradicted")
     problems = list(dict.fromkeys(problems))
