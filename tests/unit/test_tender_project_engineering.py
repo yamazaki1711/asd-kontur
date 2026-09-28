@@ -16,6 +16,7 @@ from asd_kontur.tender.project_engineering import (
     _one_comparable_quantity,
     _professional_material_values,
     _scope_comparisons,
+    _semantic_work_consensus,
     build_project_engineering_model,
     classify_work_family,
     commercial_scope_facility_designation,
@@ -28,6 +29,86 @@ from asd_kontur.tender.project_engineering import (
     professional_work_name,
     work_reconciliation_priority,
 )
+
+
+def test_semantic_work_consensus_reuses_meaning_but_never_facility() -> None:
+    works = [
+        {
+            "candidate_id": "reviewed-a",
+            "version": 1,
+            "source_version_id": "source-a",
+            "value": "Вибропогружение шпунта",
+        },
+        {
+            "candidate_id": "reviewed-b",
+            "version": 1,
+            "source_version_id": "source-b",
+            "value": "Вибропогружение шпунта",
+        },
+        {
+            "candidate_id": "unreviewed-c",
+            "version": 1,
+            "source_version_id": "source-c",
+            "value": "Вибропогружение шпунта",
+        },
+    ]
+    resolutions = {
+        "reviewed-a": {
+            "candidate_version": 1,
+            "status": "MATCHED",
+            "family_key": "sheet_piling",
+            "operation": "Погружение шпунта",
+            "facility": "Участок 4",
+        },
+        "reviewed-b": {
+            "candidate_version": 1,
+            "status": "MATCHED",
+            "family_key": "sheet_piling",
+            "operation": "Погружение шпунта",
+            "facility": "Участок 9",
+        },
+    }
+
+    consensus = _semantic_work_consensus(works, resolutions)
+
+    reused = consensus["вибропогружение шпунта"]
+    assert reused["family_key"] == "sheet_piling"
+    assert reused["operation"] == "Погружение шпунта"
+    assert "facility" not in reused
+
+
+def test_semantic_work_consensus_rejects_conflict_and_one_source_repetition() -> None:
+    works = [
+        {
+            "candidate_id": "a",
+            "version": 1,
+            "source_version_id": "same-source",
+            "value": "Монтаж элемента",
+        },
+        {
+            "candidate_id": "b",
+            "version": 1,
+            "source_version_id": "same-source",
+            "value": "Монтаж элемента",
+        },
+    ]
+    one_source = {
+        candidate: {
+            "candidate_version": 1,
+            "status": "MATCHED",
+            "family_key": "structural_steel",
+            "operation": "Монтаж металлоконструкций",
+        }
+        for candidate in ("a", "b")
+    }
+    assert _semantic_work_consensus(works, one_source) == {}
+
+    works[1]["source_version_id"] = "other-source"
+    conflict = {
+        **one_source,
+        "b": {**one_source["b"], "status": "AMBIGUOUS"},
+    }
+    assert _semantic_work_consensus(works, conflict) == {}
 
 
 def test_facility_designations_preserve_multiple_explicit_project_scopes() -> None:
@@ -887,7 +968,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v38"
+    assert model["model_version"] == "project-engineering-model-v39"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

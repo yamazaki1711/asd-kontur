@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v38"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v39"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1483,6 +1483,75 @@ def _russian_group_word(value: int) -> str:
     return "групп"
 
 
+def _semantic_work_consensus(
+    works: Iterable[Mapping[str, Any]],
+    work_resolutions: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Reuse only cross-document agreement for an identical work wording.
+
+    Qwen often sees the same schedule description in a drawing, VOR and local
+    estimate.  Repeating inference for every occurrence wastes the foreground
+    model slot.  Family/operation meaning is reusable when independent active
+    source versions agree, or when one reviewed wording is exact and specific
+    (at least three words), and no reviewed occurrence conflicts.  The facility
+    is deliberately excluded: same-named work at two structures must remain two
+    scopes and is assigned from each row's own source context.
+    """
+
+    reviewed: dict[str, list[tuple[str, str, str, str]]] = defaultdict(list)
+    for raw in works:
+        row = dict(raw)
+        candidate_id = str(row.get("candidate_id") or "")
+        resolution = dict(work_resolutions.get(candidate_id) or {})
+        if not resolution or int(resolution.get("candidate_version") or 0) != int(
+            row.get("version") or 0
+        ):
+            continue
+        wording = str(row.get("value") or row.get("raw_name") or "").strip()
+        normalized_name = _normalized(row.get("label") or row.get("normalized_name") or wording)
+        if not normalized_name:
+            continue
+        reviewed[normalized_name].append(
+            (
+                str(resolution.get("status") or ""),
+                str(resolution.get("family_key") or ""),
+                str(resolution.get("operation") or ""),
+                str(row.get("source_version_id") or ""),
+            )
+        )
+
+    consensus: dict[str, dict[str, Any]] = {}
+    catalog = work_family_catalog()
+    for normalized_name, values in reviewed.items():
+        if {status for status, _family, _operation, _source in values} != {"MATCHED"}:
+            continue
+        independent_sources = {source for _status, _family, _operation, source in values if source}
+        specific_exact_wording = len(re.findall(r"[0-9a-zа-яё]+", normalized_name)) >= 3
+        if len(independent_sources) < 2 and not specific_exact_wording:
+            continue
+        meanings = {
+            (family, professional_work_name(family, operation or normalized_name))
+            for _status, family, operation, _source in values
+            if family in catalog
+        }
+        if len(meanings) != 1:
+            continue
+        family, operation = next(iter(meanings))
+        consensus[normalized_name] = {
+            "status": "MATCHED",
+            "family_key": family,
+            "operation": operation,
+            "reason": (
+                "Значение точного описания совпало в независимых исходных "
+                "документах; место работы определяется отдельно."
+                if len(independent_sources) >= 2
+                else "Точное специфичное описание ранее классифицировано; "
+                "место работы определяется отдельно по текущему источнику."
+            ),
+        }
+    return consensus
+
+
 def _work_schedule(
     works: Iterable[Mapping[str, Any]],
     quantities: Iterable[Mapping[str, Any]],
@@ -1494,6 +1563,7 @@ def _work_schedule(
     work_resolutions: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     work_rows = [dict(raw) for raw in works]
+    semantic_consensus = _semantic_work_consensus(work_rows, work_resolutions)
     facility_by_designation = {
         str(item.get("designation")): dict(item) for item in facilities if item.get("designation")
     }
@@ -1607,6 +1677,8 @@ def _work_schedule(
         resolution = dict(work_resolutions.get(candidate_id) or {})
         if int(resolution.get("candidate_version") or 0) != int(row.get("version") or 0):
             resolution = {}
+        if not resolution and family is None:
+            resolution = dict(semantic_consensus.get(_normalized(normalized_name)) or {})
         designation = facility_designation(f"{name} {row.get('scope_key') or ''}")
         facility = facility_by_designation.get(designation or "")
         assignment_basis = "Явное обозначение сооружения в описании работы"
