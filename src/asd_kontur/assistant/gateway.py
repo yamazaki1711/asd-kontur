@@ -2256,6 +2256,17 @@ def _assistant_engineering_for_query(
         marker in normalized_query
         for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
     )
+    asks_unresolved = any(
+        marker in normalized_query
+        for marker in (
+            "не удалось определ",
+            "не установ",
+            "неопредел",
+            "остал",
+            "требует уточ",
+            "не хватает",
+        )
+    )
 
     def relevant(row: Mapping[str, Any]) -> bool:
         if not tokens and not facility_markers:
@@ -2299,6 +2310,9 @@ def _assistant_engineering_for_query(
                 "location",
                 "subject",
                 "description",
+                "reason",
+                "stated_count",
+                "minimum_count",
                 "practical_consequence",
                 "recommended_action",
                 "status",
@@ -2408,13 +2422,37 @@ def _assistant_engineering_for_query(
         }
     pits = engineering.get("pits")
     if isinstance(pits, Mapping) and (
-        "котл" in normalized_query or "pit" in normalized_query or not query
+        "котл" in normalized_query or "pit" in normalized_query or asks_unresolved or not query
     ):
         result["pits"] = {
             "professional_answer": pits.get("professional_answer"),
             "established_count": pits.get("established_count"),
             "is_final": pits.get("is_final"),
         }
+        if asks_unresolved:
+            result["pits"]["requires_clarification"] = [
+                compact_row(row)
+                for row in pits.get("requires_clarification") or ()
+                if isinstance(row, Mapping)
+            ][:12]
+    if asks_unresolved:
+        work_classification = engineering.get("work_classification")
+        if isinstance(work_classification, Mapping):
+            result["unresolved_work_scope"] = {
+                key: work_classification.get(key)
+                for key in (
+                    "unclassified_observation_count",
+                    "construction_scope_observation_count",
+                    "construction_scope_classified_percent",
+                    "facility_unassigned_observation_count",
+                    "pending_quantity_observation_count",
+                )
+            }
+        unresolved = engineering.get("unresolved")
+        if isinstance(unresolved, Mapping):
+            result["unresolved_project_information"] = {
+                "facility_designations": list(unresolved.get("facility_designations") or ())[:12],
+            }
     if sheet_pile_query:
         # This schedule is already a compact professional result.  It must be
         # serialized before generic work rows so direct facts cannot be evicted.
@@ -2427,11 +2465,7 @@ def _assistant_engineering_for_query(
         card
         for card in engineering.get("facility_cards") or ()
         if isinstance(card, Mapping)
-        and (
-            relevant(dict(card.get("facility") or {}))
-            if facility_markers
-            else relevant(card)
-        )
+        and (relevant(dict(card.get("facility") or {})) if facility_markers else relevant(card))
     ]
     if facility_cards:
         result["facility_dossiers"] = [
@@ -2513,8 +2547,8 @@ def _assistant_engineering_for_query(
         if selected:
             result[key] = selected[:12]
     requirements = engineering.get("requirements")
-    if isinstance(requirements, Mapping) and any(
-        marker in normalized_query for marker in ("нтд", "норм", "требован")
+    if isinstance(requirements, Mapping) and (
+        asks_unresolved or any(marker in normalized_query for marker in ("нтд", "норм", "требован"))
     ):
         result["requirements"] = dict(requirements)
     return result

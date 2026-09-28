@@ -549,6 +549,48 @@ def test_project_wide_material_difference_query_returns_prepared_comparisons() -
     ]
 
 
+def test_unresolved_question_returns_professional_bounded_project_gaps() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "pits": {
+                "professional_answer": "Подтверждено 9 котлованов; итог требует уточнения.",
+                "established_count": 9,
+                "is_final": False,
+                "requires_clarification": [
+                    {
+                        "description": "Рабочий и приёмный котлованы перехода",
+                        "reason": "Число переходов не установлено.",
+                        "minimum_count": 2,
+                        "source_locator_ids": ["pit-source"],
+                    }
+                ],
+            },
+            "work_classification": {
+                "unclassified_observation_count": 17,
+                "construction_scope_observation_count": 120,
+                "construction_scope_classified_percent": 85.8,
+                "facility_unassigned_observation_count": 9,
+                "pending_quantity_observation_count": 4,
+            },
+            "unresolved": {"facility_designations": ["Участок без номера"]},
+            "requirements": {
+                "professional_summary": "Применимость нормы требует уточнения.",
+                "unresolved": ["Не установлена редакция СП."],
+            },
+        },
+        query="Что ещё не удалось определить?",
+        limit=20,
+    )
+
+    assert projected["pits"]["established_count"] == 9
+    assert projected["pits"]["requires_clarification"][0]["minimum_count"] == 2
+    assert projected["unresolved_work_scope"]["unclassified_observation_count"] == 17
+    assert projected["unresolved_project_information"]["facility_designations"] == [
+        "Участок без номера"
+    ]
+    assert projected["requirements"]["unresolved"] == ["Не установлена редакция СП."]
+
+
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {
