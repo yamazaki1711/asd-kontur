@@ -108,6 +108,15 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
     asks_for_technical_contradictions = "техническ" in normalized and any(
         marker in normalized for marker in ("противореч", "расхожд", "ошиб")
     )
+    asks_for_unresolved_information = any(
+        marker in normalized
+        for marker in (
+            "что еще не удалось определить",
+            "что осталось неяс",
+            "какие данные не удалось определить",
+            "что не установлено по проекту",
+        )
+    )
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -163,6 +172,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                     "consultant.get_work_packages",
                     {"query": question, "limit": 20},
                     "Использовать подготовленное инженерное досье указанного сооружения.",
+                ),
+            ),
+        )
+    if asks_for_unresolved_information:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_information_gaps",
+                    {},
+                    "Использовать подготовленный перечень неустановленных данных проекта.",
                 ),
             ),
         )
@@ -1377,6 +1399,15 @@ def _append_prepared_project_result(
         and any(marker in normalized for marker in ("отсутств", "не учт", "неучт", "пропущ"))
         and any(marker in normalized for marker in ("вор", "смет", "коммерч"))
     )
+    asks_for_unresolved_information = any(
+        marker in normalized
+        for marker in (
+            "что еще не удалось определить",
+            "что осталось неяс",
+            "какие данные не удалось определить",
+            "что не установлено по проекту",
+        )
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
@@ -1516,6 +1547,87 @@ def _append_prepared_project_result(
             break
         if dossier_rows:
             headings_and_rows.append(("Работы сооружения:", dossier_rows))
+    if asks_for_unresolved_information:
+        gap_rows: list[str] = []
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_information_gaps":
+                continue
+            response = receipt.get("response")
+            if not isinstance(response, dict):
+                continue
+            value = response.get("value")
+            engineering = value.get("project_engineering") if isinstance(value, dict) else None
+            if not isinstance(engineering, dict):
+                continue
+            pits = engineering.get("pits")
+            if isinstance(pits, dict) and not pits.get("is_final", True):
+                pit_answer = str(pits.get("professional_answer") or "").strip()
+                if pit_answer:
+                    gap_rows.append("Котлованы: " + pit_answer)
+                for item in pits.get("requires_clarification") or ():
+                    if not isinstance(item, dict):
+                        continue
+                    description = str(item.get("description") or "Группа котлованов").strip()
+                    reason = str(item.get("reason") or "требует уточнения").strip()
+                    gap_rows.append(f"{description}: {reason}")
+            work_scope = engineering.get("unresolved_work_scope")
+            if isinstance(work_scope, dict):
+                unclassified = int(work_scope.get("unclassified_observation_count") or 0)
+                total = int(work_scope.get("construction_scope_observation_count") or 0)
+                unassigned = int(work_scope.get("facility_unassigned_observation_count") or 0)
+                pending_quantities = int(work_scope.get("pending_quantity_observation_count") or 0)
+                if unclassified:
+                    gap_rows.append(
+                        f"Не удалось однозначно определить вид {unclassified} из {total} "
+                        "описаний строительных работ."
+                    )
+                if unassigned:
+                    gap_rows.append(
+                        f"Место выполнения не установлено для {unassigned} описаний работ."
+                    )
+                if pending_quantities:
+                    gap_rows.append(
+                        f"Назначение {pending_quantities} числовых значений требует уточнения."
+                    )
+            project_information = engineering.get("unresolved_project_information")
+            if isinstance(project_information, dict):
+                for item in project_information.get("facility_designations") or ():
+                    if isinstance(item, dict):
+                        label = str(
+                            item.get("name")
+                            or item.get("designation")
+                            or item.get("canonical_label")
+                            or "Сооружение"
+                        ).strip()
+                    else:
+                        label = str(item).strip()
+                    if label:
+                        gap_rows.append(f"Неоднозначное обозначение сооружения: {label}.")
+            requirements = engineering.get("requirements")
+            if isinstance(requirements, dict):
+                summary = str(requirements.get("professional_summary") or "").strip()
+                if summary:
+                    gap_rows.append("Нормативные требования: " + summary)
+                for item in requirements.get("unresolved") or ():
+                    text = str(item).strip()
+                    if text:
+                        gap_rows.append("НТД: " + text)
+            composition = engineering.get("document_composition")
+            if isinstance(composition, dict):
+                summary = str(composition.get("professional_summary") or "").strip()
+                if summary:
+                    gap_rows.append("Состав документов: " + summary)
+            for source in response.get("sources") or ():
+                if not isinstance(source, dict) or not source.get("source_id"):
+                    continue
+                source_id = str(source["source_id"])
+                if source_id in available_source_ids and source_id not in selected_source_ids:
+                    selected_source_ids.append(source_id)
+                if len(selected_source_ids) >= 8:
+                    break
+            break
+        if gap_rows:
+            headings_and_rows.append(("Что ещё не удалось определить:", gap_rows))
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_discrepancies":
             continue

@@ -94,6 +94,70 @@ def test_facility_work_question_uses_prepared_engineering_dossier() -> None:
     }
 
 
+def test_unresolved_project_question_uses_prepared_information_gaps() -> None:
+    plan = _direct_project_result_plan("Что ещё не удалось определить?")
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_information_gaps"]
+
+
+def test_prepared_information_gaps_use_professional_language() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "В проекте остаются вопросы.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Неустановленные данные.",
+            (),
+        ),
+        [
+            {
+                "tool": "consultant.get_information_gaps",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "pits": {
+                                "professional_answer": (
+                                    "Подтверждено 9 котлованов; окончательное количество "
+                                    "не установлено."
+                                ),
+                                "is_final": False,
+                                "requires_clarification": [
+                                    {
+                                        "description": "Рабочий и приёмный котлованы",
+                                        "reason": "Число переходов не установлено.",
+                                    }
+                                ],
+                            },
+                            "unresolved_work_scope": {
+                                "unclassified_observation_count": 17,
+                                "construction_scope_observation_count": 120,
+                                "facility_unassigned_observation_count": 9,
+                                "pending_quantity_observation_count": 4,
+                            },
+                            "requirements": {
+                                "professional_summary": "Применимость нормы требует уточнения.",
+                                "unresolved": ["Не установлена редакция СП."],
+                            },
+                        }
+                    },
+                    "sources": [{"source_id": "gap-source"}],
+                },
+            }
+        ],
+        "Что ещё не удалось определить?",
+    )
+
+    assert "Что ещё не удалось определить:" in completed.answer
+    assert "Подтверждено 9 котлованов" in completed.answer
+    assert "17 из 120 описаний строительных работ" in completed.answer
+    assert "Место выполнения не установлено для 9" in completed.answer
+    assert "Не установлена редакция СП" in completed.answer
+    assert "exact_total_supported" not in completed.answer
+    assert completed.used_source_ids == ("gap-source",)
+
+
 def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
     answer = SynthesizedAnswer(
         "На КНС-4 выполняются строительные работы.",
