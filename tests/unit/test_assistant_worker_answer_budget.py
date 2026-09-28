@@ -146,6 +146,13 @@ def test_facility_work_question_uses_prepared_engineering_dossier() -> None:
     }
 
 
+def test_facility_pit_question_uses_facility_dossier_not_project_inventory() -> None:
+    plan = _direct_project_result_plan("Какие котлованы относятся к КНС-4?")
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_work_packages"]
+
+
 def test_unresolved_project_question_uses_prepared_information_gaps() -> None:
     plan = _direct_project_result_plan("Что ещё не удалось определить?")
 
@@ -278,11 +285,19 @@ def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
                             "facility_dossiers": [
                                 {
                                     "facility": {"name": "КНС 4"},
+                                    "pits": [{"name": "Котлован для КНС 4"}],
+                                    "structures": [{"name": "Фундаментная плита КНС 4"}],
+                                    "characteristics": [
+                                        {"professional_summary": "Отметка дна −4,200 м"}
+                                    ],
                                     "work_names": [
                                         "Разработка котлована",
                                         "Устройство шпунтового ограждения",
                                     ],
                                     "work_count": 2,
+                                    "missing_information": [
+                                        "Не установлена проектная длина шпунта"
+                                    ],
                                 }
                             ]
                         }
@@ -296,8 +311,13 @@ def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
 
     assert completed.answer.startswith("Работы сооружения:")
     assert "КНС 4: 2 видов работ" in completed.answer
+    assert "Котлованы: Котлован для КНС 4" in completed.answer
+    assert "Конструкции: Фундаментная плита КНС 4" in completed.answer
+    assert "Характеристики: Отметка дна −4,200 м" in completed.answer
+    assert "Основные работы: Разработка котлована" in completed.answer
     assert "Разработка котлована" in completed.answer
     assert "Устройство шпунтового ограждения" in completed.answer
+    assert "Требует уточнения: Не установлена проектная длина шпунта" in completed.answer
     assert completed.used_source_ids == ("facility-source",)
 
 

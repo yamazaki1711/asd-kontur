@@ -147,6 +147,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         marker in normalized
         for marker in ("работ", "стро", "котлован", "шпунт", "объём", "объем", "материал")
     )
+    if asks_for_facility_dossier:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_work_packages",
+                    {"query": question, "limit": 20},
+                    "Использовать подготовленное инженерное досье указанного сооружения.",
+                ),
+            ),
+        )
     if asks_for_pit_inventory:
         return SearchPlan(
             intent="workspace",
@@ -188,19 +201,6 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                     "consultant.get_discrepancies",
                     {},
                     "Добавить установленные расхождения по шпунтовому объёму и профилям.",
-                ),
-            ),
-        )
-    if asks_for_facility_dossier:
-        return SearchPlan(
-            intent="workspace",
-            needs_clarification=False,
-            clarifying_question=None,
-            steps=(
-                PlannedToolCall(
-                    "consultant.get_work_packages",
-                    {"query": question, "limit": 20},
-                    "Использовать подготовленное инженерное досье указанного сооружения.",
                 ),
             ),
         )
@@ -1432,9 +1432,11 @@ def _append_prepared_project_result(
         marker in normalized
         for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
     )
-    asks_for_facility_dossier = (
-        bool(re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized))
-        and "работ" in normalized
+    asks_for_facility_dossier = bool(
+        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
+    ) and any(
+        marker in normalized
+        for marker in ("работ", "стро", "котлован", "шпунт", "объём", "объем", "материал")
     )
     asks_for_missing_commercial_work = (
         "работ" in normalized
@@ -1650,7 +1652,45 @@ def _append_prepared_project_result(
                     f"{facility_name}: {int(dossier.get('work_count') or len(work_names))} "
                     "видов работ."
                 )
-                dossier_rows.extend(work_names)
+                pits = [
+                    str(item.get("name") or item.get("designation") or "Котлован").strip()
+                    for item in dossier.get("pits") or ()
+                    if isinstance(item, dict)
+                ]
+                if pits:
+                    dossier_rows.append("Котлованы: " + ", ".join(pits) + ".")
+                structures = [
+                    str(item.get("name") or item.get("designation") or "Конструкция").strip()
+                    for item in dossier.get("structures") or ()
+                    if isinstance(item, dict)
+                ]
+                if structures:
+                    dossier_rows.append("Конструкции: " + ", ".join(structures) + ".")
+                characteristics = [
+                    str(
+                        item.get("professional_summary")
+                        or item.get("value")
+                        or item.get("name")
+                        or item.get("designation")
+                        or ""
+                    ).strip()
+                    for item in dossier.get("characteristics") or ()
+                    if isinstance(item, dict)
+                ]
+                characteristics = [value for value in characteristics if value]
+                if characteristics:
+                    dossier_rows.append("Характеристики: " + "; ".join(characteristics) + ".")
+                if work_names:
+                    dossier_rows.append("Основные работы: " + ", ".join(work_names) + ".")
+                missing_information = [
+                    str(value).strip()
+                    for value in dossier.get("missing_information") or ()
+                    if str(value).strip()
+                ]
+                if missing_information:
+                    dossier_rows.append(
+                        "Требует уточнения: " + "; ".join(missing_information) + "."
+                    )
             for source in dossier_response.get("sources") or ():
                 if not isinstance(source, dict) or not source.get("source_id"):
                     continue
