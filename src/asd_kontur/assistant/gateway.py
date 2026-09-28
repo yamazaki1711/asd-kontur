@@ -2278,6 +2278,7 @@ def _assistant_engineering_for_query(
             key: row.get(key)
             for key in (
                 "facility",
+                "name",
                 "pit",
                 "operation",
                 "work",
@@ -2307,6 +2308,7 @@ def _assistant_engineering_for_query(
                 "waling_beams",
                 "uncertainty",
                 "material",
+                "relationship",
                 "grade",
                 "dimensions",
             )
@@ -2386,6 +2388,46 @@ def _assistant_engineering_for_query(
             compact_row(row)
             for row in engineering.get("sheet_pile_schedule") or ()
             if isinstance(row, Mapping)
+        ]
+    facility_cards = [
+        card
+        for card in engineering.get("facility_cards") or ()
+        if isinstance(card, Mapping) and relevant(card)
+    ]
+    if facility_cards:
+        result["facility_dossiers"] = [
+            {
+                "facility": {
+                    key: facility.get(key)
+                    for key in ("name", "designation", "kind", "status")
+                    if facility.get(key) not in (None, "")
+                },
+                "pits": [
+                    compact_row(value)
+                    for value in card.get("pits") or ()
+                    if isinstance(value, Mapping)
+                ][:8],
+                "structures": [
+                    compact_row(value)
+                    for value in card.get("structures") or ()
+                    if isinstance(value, Mapping)
+                ][:12],
+                "connections": [
+                    compact_row(value)
+                    for value in card.get("connections") or ()
+                    if isinstance(value, Mapping)
+                ][:12],
+                "work_names": [
+                    str(value.get("work_name"))
+                    for value in card.get("works") or ()
+                    if isinstance(value, Mapping) and value.get("work_name")
+                ][:20],
+                "missing_information": [
+                    str(value) for value in card.get("missing_information") or ()
+                ][:8],
+            }
+            for card in facility_cards[:6]
+            for facility in (dict(card.get("facility") or {}),)
         ]
     for key in ("issues", "scope_comparisons", "quantity_comparisons", "works", "materials"):
         rows = selected_rows(key, max_rows=min(limit, 12))

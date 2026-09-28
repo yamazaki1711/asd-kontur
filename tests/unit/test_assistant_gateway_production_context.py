@@ -477,6 +477,60 @@ def test_query_focused_projection_keeps_professional_questions_and_risks() -> No
     ]
 
 
+def test_facility_query_keeps_structures_connections_and_work_names() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "facility_cards": [
+                {
+                    "facility": {
+                        "name": "КНС 4",
+                        "designation": "КНС 4",
+                        "kind": "Сооружение",
+                        "status": "Установлено",
+                    },
+                    "pits": [{"name": "котлован для КНС 4", "source_locator_ids": ["pit"]}],
+                    "structures": [
+                        {
+                            "name": "шпунтовое ограждение котлована",
+                            "relationship": "Обслуживает сооружение",
+                            "source_locator_ids": ["enclosure"],
+                        }
+                    ],
+                    "connections": [
+                        {
+                            "name": "ЛОС 4",
+                            "relationship": "Связано с сооружением",
+                            "source_locator_ids": ["connection"],
+                        }
+                    ],
+                    "works": [
+                        {"work_name": "Погружение шпунта"},
+                        {"work_name": "Устройство распределительного пояса"},
+                    ],
+                    "missing_information": ["Коммерческий объём не распределён"],
+                }
+            ]
+        },
+        query="Какие конструкции и работы относятся к КНС-4?",
+        limit=20,
+    )
+
+    dossier = projected["facility_dossiers"][0]
+    assert dossier["facility"]["name"] == "КНС 4"
+    assert dossier["structures"] == [
+        {
+            "name": "шпунтовое ограждение котлована",
+            "relationship": "Обслуживает сооружение",
+            "source_locator_ids": ["enclosure"],
+        }
+    ]
+    assert dossier["connections"][0]["name"] == "ЛОС 4"
+    assert dossier["work_names"] == [
+        "Погружение шпунта",
+        "Устройство распределительного пояса",
+    ]
+
+
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
     groups = [
         {
