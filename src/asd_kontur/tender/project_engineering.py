@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v37"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v38"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2644,6 +2644,10 @@ def _sheet_pile_schedule(
                 "profiles_by_document": profiles_by_document,
                 "pile_length": lengths,
                 "quantities_by_document": quantities,
+                # Keep supplied material rows separate from work quantities.
+                # A material mass may be useful to procurement while still
+                # being unsafe to publish as the measured scope of the work.
+                "materials_by_document": materials,
                 "project_quantities": project_roles,
                 "commercial_quantities": commercial_roles,
                 "waling_beams": beams,
@@ -2700,6 +2704,7 @@ def _merge_sheet_pile_rows(values: Iterable[Mapping[str, Any]]) -> list[dict[str
                 **row,
                 "operation": canonical_operation,
                 "quantities_by_document": {},
+                "materials_by_document": {},
                 "project_quantities": {},
                 "commercial_quantities": {},
                 "profiles": [],
@@ -2732,6 +2737,10 @@ def _merge_sheet_pile_rows(values: Iterable[Mapping[str, Any]]) -> list[dict[str
         for role, quantities in dict(row.get("quantities_by_document") or {}).items():
             current["quantities_by_document"][role] = _merge_consolidated_quantity_mentions(
                 [*current["quantities_by_document"].get(role, ()), *(quantities or ())]
+            )
+        for role, materials in dict(row.get("materials_by_document") or {}).items():
+            current["materials_by_document"][role] = _deduplicate_dicts(
+                [*current["materials_by_document"].get(role, ()), *(materials or ())]
             )
         current["project_quantities"] = {
             role: quantities

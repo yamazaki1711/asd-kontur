@@ -5564,6 +5564,7 @@ function ProjectEngineeringResult({
                 <th>Операция</th>
                 <th>Профиль / сталь</th>
                 <th>Объёмы по документам</th>
+                <th>Материалы по документам</th>
                 <th>Ограничение</th>
                 <th>Источник</th>
               </tr>
@@ -5610,6 +5611,33 @@ function ProjectEngineeringResult({
                             );
                           })
                           .join(", ") || "не найдено"}
+                      </p>
+                    ))}
+                  </td>
+                  <td>
+                    {Object.entries(
+                      (scope.materials_by_document ?? {}) as Record<
+                        string,
+                        unknown
+                      >,
+                    ).map(([role, values]) => (
+                      <p key={role}>
+                        <strong>{role}:</strong>{" "}
+                        {(Array.isArray(values) ? values : [])
+                          .map((value) => {
+                            const row = value as Record<string, unknown>;
+                            return [
+                              displayValue(row.name),
+                              row.quantity === null || row.quantity === undefined
+                                ? ""
+                                : displayValue(row.quantity) +
+                                  " " +
+                                  displayValue(row.unit),
+                            ]
+                              .filter(Boolean)
+                              .join(" — ");
+                          })
+                          .join("; ") || "не найдено"}
                       </p>
                     ))}
                   </td>

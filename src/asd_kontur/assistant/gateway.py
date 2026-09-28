@@ -2325,6 +2325,21 @@ def _assistant_engineering_for_query(
         quantities = compact_quantities(row.get("quantities_by_document"))
         if quantities:
             result["quantities_by_document"] = quantities
+        materials = row.get("materials_by_document")
+        if isinstance(materials, Mapping):
+            result["materials_by_document"] = {
+                str(role): [
+                    {
+                        key: item.get(key)
+                        for key in ("name", "quantity", "unit")
+                        if item.get(key) not in (None, "")
+                    }
+                    for item in values
+                    if isinstance(item, Mapping)
+                ]
+                for role, values in materials.items()
+                if isinstance(values, list) and values
+            }
         for side in ("left", "right"):
             value = row.get(side)
             if isinstance(value, Mapping):
@@ -2362,6 +2377,7 @@ def _assistant_engineering_for_query(
                     "steel",
                     "waling_beams",
                     "quantities_by_document",
+                    "materials_by_document",
                     "uncertainty",
                 )
                 if compact_row(row).get(key) not in (None, "", [], {})

@@ -288,6 +288,9 @@ def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -
                         }
                     ]
                 },
+                "materials_by_document": {
+                    "ВОР": [{"name": "Двутавр", "quantity": "9.841", "unit": "т"}]
+                },
                 "source_locator_ids": ["locator-a"],
             }
         ],
@@ -384,6 +387,9 @@ def test_query_focused_engineering_projection_preserves_waling_facts_before_verb
                         }
                     ]
                 },
+                "materials_by_document": {
+                    "ВОР": [{"name": "Двутавр", "quantity": "9.841", "unit": "т"}]
+                },
                 "source_locator_ids": ["waling-a", "waling-b"],
             }
         ],
@@ -402,6 +408,9 @@ def test_query_focused_engineering_projection_preserves_waling_facts_before_verb
     assert row["waling_beams"] == ["30Ш2", "35Ш2"]
     assert row["quantities_by_document"]["Смета"] == [
         {"value": "9.841", "unit": "т", "occurrence_count": 2}
+    ]
+    assert row["materials_by_document"]["ВОР"] == [
+        {"name": "Двутавр", "quantity": "9.841", "unit": "т"}
     ]
     assert row["source_locator_ids"] == ["waling-a", "waling-b"]
 
