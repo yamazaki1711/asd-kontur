@@ -33,6 +33,7 @@ from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
     facility_designation,
+    facility_designations,
     non_work_reason,
     work_family_catalog,
     work_reconciliation_priority,
@@ -4390,8 +4391,11 @@ class SpinePostgresRepository:
                             ),
                         }
                     )
-                contextual_scope = f"{wording} {context_text}".casefold()
-                hints = [value for value in facilities if value.casefold() in contextual_scope]
+                contextual_scope = (
+                    f"{wording} {context_text} {context.get('safe_display_name') or ''}"
+                )
+                explicit_context_facilities = set(facility_designations(contextual_scope))
+                hints = [value for value in facilities if value in explicit_context_facilities]
                 prepared.append(
                     {
                         "candidate_id": str(row["candidate_id"]),
@@ -5088,15 +5092,16 @@ class SpinePostgresRepository:
                     continue
                 candidate_version = versions[candidate_id]
                 current = resolved.get(candidate_id)
-                prior_quantity_reviews: Iterable[Mapping[str, Any]] = ()
-                if (
+                same_candidate_version = (
                     current is not None
                     and int(current.get("candidate_version") or 0) == candidate_version
-                    and str(current.get("profile_version") or "")
-                    == PROJECT_WORK_RECONCILIATION_PROFILE
-                    and str(row["profile_version"]) == PROJECT_WORK_RECONCILIATION_PROFILE
-                ):
-                    prior_quantity_reviews = current.get("quantity_reviews") or ()
+                )
+                compatible_current = (
+                    current if same_candidate_version and current is not None else {}
+                )
+                prior_quantity_reviews: Iterable[Mapping[str, Any]] = (
+                    compatible_current.get("quantity_reviews") or ()
+                )
                 quantity_reviews = _merged_quantity_reviews(
                     prior_quantity_reviews,
                     item.get("quantity_reviews") or (),
@@ -5107,6 +5112,15 @@ class SpinePostgresRepository:
                     "profile_version": str(row["profile_version"]),
                     "recorded_at": row["recorded_at"],
                 }
+                if (
+                    same_candidate_version
+                    and not combined.get("facility")
+                    and compatible_current.get("facility")
+                ):
+                    # A later bounded pass may exist only to review another
+                    # quantity.  It must not erase an already accepted,
+                    # source-context facility assignment for the same input.
+                    combined["facility"] = compatible_current["facility"]
                 if quantity_reviews:
                     combined["quantity_reviews"] = quantity_reviews
                 resolved[candidate_id] = combined

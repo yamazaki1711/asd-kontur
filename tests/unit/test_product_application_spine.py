@@ -72,6 +72,72 @@ def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:
     ]
 
 
+def test_work_resolution_profile_upgrade_preserves_facility_and_quantity_reviews() -> None:
+    rows = [
+        {
+            "input_manifest": {
+                "work_observations": [{"candidate_id": "work-1", "candidate_version": 3}]
+            },
+            "profile_version": "qwen-project-work-reconciliation-v5",
+            "result_manifest": {
+                "observations": [
+                    {
+                        "candidate_id": "work-1",
+                        "status": "MATCHED",
+                        "family_key": "sheet_piling",
+                        "facility": "КНС 4",
+                        "quantity_reviews": [
+                            {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"}
+                        ],
+                    }
+                ]
+            },
+            "recorded_at": "2026-09-28T00:00:00Z",
+        },
+        {
+            "input_manifest": {
+                "work_observations": [{"candidate_id": "work-1", "candidate_version": 3}]
+            },
+            "profile_version": "qwen-project-work-reconciliation-v6",
+            "result_manifest": {
+                "observations": [
+                    {
+                        "candidate_id": "work-1",
+                        "status": "MATCHED",
+                        "family_key": "sheet_piling",
+                        "facility": None,
+                        "quantity_reviews": [
+                            {"quantity_candidate_id": "quantity-2", "status": "DIMENSION"}
+                        ],
+                    }
+                ]
+            },
+            "recorded_at": "2026-09-28T00:01:00Z",
+        },
+    ]
+
+    class Result:
+        def mappings(self) -> list[dict[str, object]]:
+            return rows
+
+    class Session:
+        def execute(self, *_args: object, **_kwargs: object) -> Result:
+            return Result()
+
+    resolved = SpinePostgresRepository._project_work_resolution_rows(
+        Session(),  # type: ignore[arg-type]
+        organization_id=ORGANIZATION_ID,
+        workspace_id=WORKSPACE_ID,
+    )["work-1"]
+
+    assert resolved["profile_version"] == "qwen-project-work-reconciliation-v6"
+    assert resolved["facility"] == "КНС 4"
+    assert resolved["quantity_reviews"] == [
+        {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"},
+        {"quantity_candidate_id": "quantity-2", "status": "DIMENSION"},
+    ]
+
+
 def test_project_understanding_application_projection_keeps_counts_and_selected_section() -> None:
     view = {
         "page_roles": [{"page_number": 1}],

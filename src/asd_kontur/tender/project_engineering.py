@@ -18,14 +18,19 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 
 PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v13"
-_QUANTITY_AWARE_WORK_PROFILE = "qwen-project-work-reconciliation-v5"
+_QUANTITY_AWARE_WORK_PROFILES = frozenset(
+    {
+        "qwen-project-work-reconciliation-v5",
+        "qwen-project-work-reconciliation-v6",
+    }
+)
 
 _FACILITY_CODE = re.compile(
     r"\b(?P<kind>лос|кнс)\s*[-№nº]*\s*(?P<number>\d+(?:[.,]\d+)?[а-я]?)\b",
     re.IGNORECASE,
 )
 _REVERSED_FACILITY_CODE = re.compile(
-    r"\b(?P<number>\d+(?:[.,]\d+)?[а-я]?)\s*(?P<kind>лос|кнс)\b",
+    r"\b(?P<number>\d+(?:[.,]\d+)?[а-я]?)\s*[-№nº]*\s*(?P<kind>лос|кнс)\b",
     re.IGNORECASE,
 )
 
@@ -580,6 +585,13 @@ def build_project_engineering_model(
 def facility_designation(value: object) -> str | None:
     """Return one exact LOS/KNS designation, rejecting compound/range labels."""
 
+    normalized = facility_designations(value)
+    return normalized[0] if len(normalized) == 1 else None
+
+
+def facility_designations(value: object) -> tuple[str, ...]:
+    """Return every explicit LOS/KNS designation without merging their scopes."""
+
     text = str(value or "")
     matches = list(_FACILITY_CODE.finditer(text))
     normalized = {
@@ -590,7 +602,7 @@ def facility_designation(value: object) -> str | None:
         f"{match.group('kind').upper()} {match.group('number').replace(',', '.').casefold()}"
         for match in _REVERSED_FACILITY_CODE.finditer(text)
     )
-    return next(iter(normalized)) if len(normalized) == 1 else None
+    return tuple(sorted(normalized))
 
 
 def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> bool:
@@ -1207,7 +1219,7 @@ def _work_schedule(
                 for value in resolution.get("quantity_reviews") or ()
                 if isinstance(value, Mapping) and value.get("quantity_candidate_id")
             }
-            if resolution.get("profile_version") == _QUANTITY_AWARE_WORK_PROFILE
+            if resolution.get("profile_version") in _QUANTITY_AWARE_WORK_PROFILES
             else {}
         )
         accepted_quantities: list[dict[str, Any]] = []

@@ -11,9 +11,21 @@ from asd_kontur.tender.project_engineering import (
     _one_comparable_quantity,
     build_project_engineering_model,
     classify_work_family,
+    facility_designation,
+    facility_designations,
     non_work_reason,
     work_reconciliation_priority,
 )
+
+
+def test_facility_designations_preserve_multiple_explicit_project_scopes() -> None:
+    assert facility_designations("КНС-4, ЛОС 8.1 и 2-КНС") == (
+        "КНС 2",
+        "КНС 4",
+        "ЛОС 8.1",
+    )
+    assert facility_designation("Работы КНС-4") == "КНС 4"
+    assert facility_designation("КНС-4 и ЛОС 8.1") is None
 
 
 def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
