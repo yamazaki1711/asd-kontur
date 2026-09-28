@@ -208,6 +208,74 @@ def test_prepared_project_result_is_not_vetoed_by_stale_repair_model_verdict(
     assert repository.completed["quality_receipt"]["passed"] is True
 
 
+def test_prepared_project_result_survives_malformed_qwen_narrative(
+    monkeypatch: Any,
+) -> None:
+    repository = _RecordingRepository()
+    worker = AssistantWorker(
+        cast(AssistantRepository, repository),
+        cast(ProfessionalAssistantKnowledgeQuery, object()),
+        identity="test-worker",
+    )
+    source_id = "33333333-3333-4333-8333-333333333333"
+    receipt = {
+        "step_sequence": 1,
+        "tool": "consultant.get_discrepancies",
+        "arguments": {},
+        "reason": "Prepared project discrepancies.",
+        "response": {
+            "outcome": "found",
+            "value": {
+                "project_engineering": {
+                    "issues": [
+                        {
+                            "location": "КНС 8.1",
+                            "subject": "Шпунтовое ограждение",
+                            "description": "В проекте указан Л5УМ, в ВОР — Л5-10.",
+                            "source_refs": [source_id],
+                        }
+                    ],
+                    "quantity_comparisons": [],
+                    "material_comparisons": [],
+                }
+            },
+            "sources": [{"source_id": source_id, "title": "Controlled source"}],
+        },
+    }
+    monkeypatch.setattr(worker, "_execute_tool", lambda *_args, **_kwargs: receipt)
+    monkeypatch.setattr(
+        worker,
+        "_synthesize",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("assistant_answer_unknown_source")
+        ),
+    )
+    monkeypatch.setattr(
+        worker,
+        "_model_quality_check",
+        lambda *_args, **_kwargs: {"passed": True, "issues": []},
+    )
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "Какие расхождения между РД и ВОР установлены?",
+        "owner-a",
+        1,
+        1,
+    )
+
+    worker._run(claimed)
+
+    assert repository.failed is None
+    assert repository.completed is not None
+    assert "КНС 8.1" in repository.completed["content"]
+    assert "Л5УМ" in repository.completed["content"]
+    assert repository.completed["quality_receipt"]["passed"] is True
+
+
 def test_inventory_candidates_cannot_be_replaced_by_generic_insufficient_answer() -> None:
     source_id = "11111111-1111-4111-8111-111111111111"
     receipts = [

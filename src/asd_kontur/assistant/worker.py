@@ -282,7 +282,32 @@ class AssistantWorker:
                             self._execute_tool(claimed, adequacy.additional_step, len(receipts) + 1)
                         )
                 if pending_answer is None:
-                    answer = self._synthesize(claimed, plan, receipts, history, dialogue_state)
+                    try:
+                        answer = self._synthesize(
+                            claimed,
+                            plan,
+                            receipts,
+                            history,
+                            dialogue_state,
+                        )
+                    except (ValueError, json.JSONDecodeError):
+                        if direct_plan is None:
+                            raise
+                        # The prepared project-result routes already have a
+                        # deterministic, source-scoped professional result.
+                        # Qwen is still called first for the narrative, but a
+                        # malformed response or an invented source identifier
+                        # must not turn known project facts into a terminal
+                        # assistant failure.  The normal answer/source checks
+                        # below remain the publication gate.
+                        answer = SynthesizedAnswer(
+                            "По подготовленной модели проекта установлено:",
+                            "workspace_conclusion",
+                            False,
+                            (),
+                            (dialogue_state or {}).get("summary", claimed.question)[:1000],
+                            tuple((dialogue_state or {}).get("active_subjects", ())),
+                        )
                     if direct_plan is not None:
                         # Qwen owns the professional narrative, while exact
                         # exhaustive inventories and prepared schedules remain
@@ -1575,12 +1600,13 @@ def _append_prepared_project_result(
                     )
                     for source_id in item.get("source_locator_ids") or ():
                         source_id = str(source_id)
-                        if source_id in available_source_ids and source_id not in selected_source_ids:
+                        if (
+                            source_id in available_source_ids
+                            and source_id not in selected_source_ids
+                        ):
                             selected_source_ids.append(source_id)
                             break
-                headings_and_rows.append(
-                    ("Работы, не найденные в ВОР/смете:", missing_rows)
-                )
+                headings_and_rows.append(("Работы, не найденные в ВОР/смете:", missing_rows))
         break
     sections = [
         heading + "\n" + "\n".join(f"— {row}" for row in rows)
