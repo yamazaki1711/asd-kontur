@@ -433,7 +433,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v19"
+    assert model["model_version"] == "project-engineering-model-v20"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -1270,6 +1270,82 @@ def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None
 
     assert model["works"][0]["facility_id"] is None
     assert model["works"][0]["facility"] == "Место выполнения не установлено"
+
+
+def test_validated_facility_heading_scopes_sibling_work_on_same_page() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "pipeline-heading-work",
+                    "version": 1,
+                    "value": "Прокладка трубопровода",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "pipeline-work",
+                    "source_role": "local_estimate",
+                },
+                {
+                    "candidate_id": "pipeline-base-work",
+                    "version": 1,
+                    "value": "Устройство основания под трубопровод",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "base-work",
+                    "source_role": "local_estimate",
+                },
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-4",
+                "candidate_labels": ["КНС-4"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": ["facility-a", "facility-b"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={
+            "pipeline-work": {
+                "source_version_id": "source-estimate",
+                "document_version": 1,
+                "safe_display_name": "Смета трубопровода.pdf",
+                "locator_value": {"page": 18},
+            },
+            "base-work": {
+                "source_version_id": "source-estimate",
+                "document_version": 1,
+                "safe_display_name": "Смета трубопровода.pdf",
+                "locator_value": {"page": 18},
+            },
+        },
+        work_resolutions={
+            "pipeline-heading-work": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v6",
+                "status": "MATCHED",
+                "family_key": "pipeline",
+                "operation": "Прокладка трубопровода",
+                "facility": "КНС 4",
+                "confidence": "0.95",
+                "reason": "Заголовок сметы явно относится к КНС 4.",
+            }
+        },
+    )
+
+    assert {(work["facility"], work["work_name"]) for work in model["works"]} == {
+        ("КНС 4", "Монтаж трубопровода"),
+        ("КНС 4", "Устройство основания под трубопровод"),
+    }
+    assert all("единственному" in work["status"] for work in model["works"])
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:

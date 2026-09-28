@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v19"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v20"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1321,6 +1321,30 @@ def _work_schedule(
             facility_ids_by_page[(str(context.get("source_version_id") or ""), int(page))].add(
                 str(facility["facility_id"])
             )
+    # A validated semantic resolution can establish the heading/sheet scope
+    # for neighbouring schedule rows that do not repeat the facility name.
+    # Propagate only when the page resolves to one established facility;
+    # mixed-facility summary sheets remain deliberately unassigned.
+    for row in work_rows:
+        candidate_id = str(row.get("candidate_id") or "")
+        resolution = dict(work_resolutions.get(candidate_id) or {})
+        if (
+            resolution.get("status") != "MATCHED"
+            or int(resolution.get("candidate_version") or 0) != int(row.get("version") or 0)
+            or not resolution.get("facility")
+            or not _resolution_establishes_page_scope(resolution)
+        ):
+            continue
+        semantic_facility = facility_by_designation.get(str(resolution["facility"]))
+        context = source_context.get(str(row.get("source_locator_id") or ""))
+        if semantic_facility is None or not isinstance(context, Mapping):
+            continue
+        locator_value = context.get("locator_value")
+        page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
+        if page is not None:
+            facility_ids_by_page[(str(context.get("source_version_id") or ""), int(page))].add(
+                str(semantic_facility["facility_id"])
+            )
     quantity_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
     material_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for raw in quantities:
@@ -1691,6 +1715,24 @@ def _work_schedule(
             ),
         },
     }
+
+
+def _resolution_establishes_page_scope(resolution: Mapping[str, Any]) -> bool:
+    try:
+        confidence = Decimal(str(resolution.get("confidence") or "0"))
+    except InvalidOperation:
+        return False
+    reason = _normalized(resolution.get("reason"))
+    return confidence >= Decimal("0.9") and any(
+        marker in reason
+        for marker in (
+            "заголовок",
+            "заголовке",
+            "раздел смет",
+            "раздел прокладк",
+            "контекст явно указывает на раздел",
+        )
+    )
 
 
 def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
