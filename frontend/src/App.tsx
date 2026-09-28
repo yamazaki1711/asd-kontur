@@ -5122,20 +5122,54 @@ function ProjectEngineeringResult({
           <h2>Котлованы и конструкции</h2>
           <p>{displayValue(pits.professional_answer)}</p>
           <div className="card-grid">
-            {establishedPits.map((pit) => (
-              <article className="entity-card" key={displayValue(pit.pit_id)}>
-                <h3>{displayValue(pit.name)}</h3>
-                <p>
-                  Связанное сооружение:{" "}
-                  {displayValue(pit.related_facility, "требует уточнения")}
-                </p>
-                <ProjectSourceLinks
-                  locatorIds={pit.source_locator_ids}
-                  workspaceId={workspaceId}
-                  modeSlug={modeSlug}
-                />
-              </article>
-            ))}
+            {establishedPits.map((pit) => {
+              const pitWorks = Array.isArray(pit.related_works)
+                ? (pit.related_works as Record<string, unknown>[])
+                : [];
+              return (
+                <article className="entity-card" key={displayValue(pit.pit_id)}>
+                  <h3>{displayValue(pit.name)}</h3>
+                  <p>
+                    Связанное сооружение:{" "}
+                    {displayValue(pit.related_facility, "требует уточнения")}
+                  </p>
+                  <p>
+                    <strong>Работы котлована:</strong>{" "}
+                    {pitWorks.length === 0 && "не установлены"}
+                  </p>
+                  {pitWorks.length > 0 && (
+                    <ul>
+                      {pitWorks.map((work) => {
+                        const quantities = Object.entries(
+                          (work.quantities_by_document ?? {}) as Record<
+                            string,
+                            unknown
+                          >,
+                        ).flatMap(([role, values]) =>
+                          (Array.isArray(values) ? values : []).map((value) => {
+                            const row = value as Record<string, unknown>;
+                            return `${role}: ${displayValue(row.value)} ${displayValue(row.unit)}`;
+                          }),
+                        );
+                        return (
+                          <li key={displayValue(work.work_scope_id)}>
+                            {displayValue(work.work)}
+                            {quantities.length > 0
+                              ? ` — ${quantities.join(", ")}`
+                              : ""}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  <ProjectSourceLinks
+                    locatorIds={pit.source_locator_ids}
+                    workspaceId={workspaceId}
+                    modeSlug={modeSlug}
+                  />
+                </article>
+              );
+            })}
           </div>
           {unresolvedPits.length > 0 && (
             <>
