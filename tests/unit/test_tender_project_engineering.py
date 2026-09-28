@@ -441,7 +441,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v23"
+    assert model["model_version"] == "project-engineering-model-v25"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -703,6 +703,11 @@ def test_professional_work_names_keep_materially_different_operations_separate()
         ("pit_preparation", "Песчаное основание под трубопровод"): (
             "Устройство песчаного основания"
         ),
+        ("pipeline", "Гидравлические испытания трубопровода"): ("Испытание трубопровода"),
+        ("pipeline", "Промывка трубопровода перед вводом"): ("Очистка/промывка трубопровода"),
+        ("pipeline", "Восстановление участка трубопровода"): ("Восстановление/ремонт трубопровода"),
+        ("pipeline", "Вскрытие демонтируемого трубопровода"): "Вскрытие трубопровода",
+        ("pipeline", "Изоляция стального трубопровода"): "Изоляция трубопровода",
     }
 
     for (family_key, wording), work_name in expected.items():
@@ -801,6 +806,55 @@ def test_same_family_operations_remain_distinct_engineering_scopes() -> None:
     assert set(by_name) == {"Разработка траншей", "Разработка котлована"}
     assert by_name["Разработка траншей"]["quantities_by_document"]["РД"][0]["value"] == ("120")
     assert by_name["Разработка котлована"]["quantities_by_document"]["РД"][0]["value"] == ("450")
+
+
+def test_unassigned_generic_operations_do_not_form_one_project_wide_scope() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "steel-pipeline",
+                    "version": 1,
+                    "value": "Монтаж трубопровода из стальных труб",
+                    "source_version_id": "source-a",
+                    "source_locator_id": "steel-pipeline-locator",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "polymer-pipeline",
+                    "version": 1,
+                    "value": "Монтаж полиэтиленового трубопровода",
+                    "source_version_id": "source-b",
+                    "source_locator_id": "polymer-pipeline-locator",
+                    "source_role": "bill_of_quantities",
+                },
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("steel-pipeline-locator", "РД.pdf", 4),
+                _source("polymer-pipeline-locator", "ВОР.xlsx", 8),
+            ]
+        ),
+    )
+
+    assert len(model["works"]) == 2
+    assert {work["work_name"] for work in model["works"]} == {"Монтаж трубопровода"}
+    assert {tuple(work["project_wording"]) for work in model["works"]} == {
+        ("Монтаж полиэтиленового трубопровода",),
+        ("Монтаж трубопровода из стальных труб",),
+    }
 
 
 def test_facility_specific_document_title_assigns_same_named_works_to_distinct_facilities() -> None:

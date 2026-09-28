@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v23"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v25"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -35,6 +35,18 @@ _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
         "reinforced_concrete",
         "equipment_installation",
         "testing",
+    }
+)
+_UNSCOPED_GENERIC_OPERATIONS = frozenset(
+    {
+        "Монтаж трубопровода",
+        "Железобетонные конструкции",
+        "Колодцы, камеры и технологические сооружения",
+        "Электромонтажные работы",
+        "Дорожные работы",
+        "Подготовка основания",
+        "Подготовка строительной площадки",
+        "Монтаж технологического оборудования",
     }
 )
 
@@ -914,6 +926,16 @@ def professional_work_name(family_key: str, wording: object) -> str:
     if family_key == "pipeline":
         if "демонтаж" in normalized or "разбор" in normalized:
             return "Демонтаж трубопровода"
+        if "испытан" in normalized or "опрессов" in normalized:
+            return "Испытание трубопровода"
+        if "промыв" in normalized or "очистк" in normalized:
+            return "Очистка/промывка трубопровода"
+        if "восстанов" in normalized or "ремонт" in normalized or "санац" in normalized:
+            return "Восстановление/ремонт трубопровода"
+        if "вскрыт" in normalized:
+            return "Вскрытие трубопровода"
+        if "изоляц" in normalized:
+            return "Изоляция трубопровода"
         if "основан" in normalized or "подушк" in normalized:
             return "Устройство основания под трубопровод"
         if "подключ" in normalized or "врезк" in normalized:
@@ -1642,19 +1664,38 @@ def _work_schedule(
             },
         )
 
-    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for observation in exact_observations.values():
         facility_key = str(observation.get("facility_id") or "unassigned")
+        # A broad operation such as ``Монтаж трубопровода`` is not an
+        # engineering scope by itself.  Without a facility, merging all such
+        # rows creates a project-wide pseudo-package and can attach unrelated
+        # quantities to one schedule line.  Preserve the original operation
+        # wording until a real location/scope relationship is established.
+        # Specific operations (for example ``Демонтаж светильников``) may
+        # still reconcile across roles through the validated semantic result.
+        unassigned_scope = (
+            _normalized(observation.get("project_wording"))
+            if facility_key == "unassigned"
+            and str(observation["operation_name"]) in _UNSCOPED_GENERIC_OPERATIONS
+            else ""
+        )
         grouped[
             (
                 facility_key,
                 str(observation["family_key"]),
                 str(observation["operation_name"]),
+                unassigned_scope,
             )
         ].append(observation)
     schedules: list[dict[str, Any]] = []
     material_rows: list[dict[str, Any]] = []
-    for (facility_key, family_key, operation_name), observations in sorted(grouped.items()):
+    for (
+        facility_key,
+        family_key,
+        operation_name,
+        _unassigned_scope,
+    ), observations in sorted(grouped.items()):
         observations.sort(
             key=lambda item: (
                 str(item.get("document_role")),
