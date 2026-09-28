@@ -849,9 +849,9 @@ def test_operation_sections_do_not_inflate_the_current_construction_schedule() -
     assert model["works"] == []
     assert model["unclassified_works"] == []
     assert len(model["excluded_non_work_observations"]) == 1
-    assert "текущего строительства" in model["excluded_non_work_observations"][0][
-        "exclusion_reason"
-    ]
+    assert (
+        "текущего строительства" in model["excluded_non_work_observations"][0]["exclusion_reason"]
+    )
     assert model["work_classification"]["construction_scope_observation_count"] == 0
     assert model["work_classification"]["construction_scope_classified_percent"] == 0.0
 
@@ -878,9 +878,7 @@ def test_professional_work_names_keep_materially_different_operations_separate()
         ("pipeline", "Восстановление участка трубопровода"): ("Восстановление/ремонт трубопровода"),
         ("pipeline", "Вскрытие демонтируемого трубопровода"): "Вскрытие трубопровода",
         ("pipeline", "Изоляция стального трубопровода"): "Изоляция трубопровода",
-        ("gabion_erosion_protection", "Монтаж габионов"): (
-            "Устройство габионных конструкций"
-        ),
+        ("gabion_erosion_protection", "Монтаж габионов"): ("Устройство габионных конструкций"),
     }
 
     for (family_key, wording), work_name in expected.items():

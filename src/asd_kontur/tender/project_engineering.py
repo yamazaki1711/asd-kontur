@@ -1689,9 +1689,7 @@ def _work_schedule(
             excluded.append(
                 {
                     **observation,
-                    "exclusion_reason": (
-                        deterministic_non_work_reason or scope_exclusion_reason
-                    ),
+                    "exclusion_reason": (deterministic_non_work_reason or scope_exclusion_reason),
                 }
             )
             continue
