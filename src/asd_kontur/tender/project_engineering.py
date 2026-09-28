@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v32"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v33"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -628,7 +628,7 @@ def build_project_engineering_model(
     pits = _attach_pit_work_scopes(pits, work_model["works"])
     comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
     documents = _documents(source_context)
-    document_composition = _document_composition(documents)
+    document_composition = _document_composition(documents, source_context=source_context)
     scope_comparisons = _scope_comparisons(
         work_model["works"],
         unclassified_works=work_model["unclassified"],
@@ -1626,7 +1626,13 @@ def _work_schedule(
                 assignment_basis = (
                     "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
                 )
-        role = _professional_document_role(row.get("source_role"), context.get("safe_display_name"))
+        role = (
+            "ВОР"
+            if context.get("page_is_bill_of_quantities") is True
+            else _professional_document_role(
+                row.get("source_role"), context.get("safe_display_name")
+            )
+        )
         linked_quantities = quantity_by_work.get(candidate_id, ())
         quantity_reviews = (
             {
@@ -2023,6 +2029,31 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                     _comparison_row(
                         work, design_role, commercial_role, left, right, difference, conclusion
                     )
+                )
+        vor = _one_comparable_quantity(quantities.get("ВОР") or ())
+        estimate = _one_comparable_quantity(quantities.get("Смета") or ())
+        if vor is not None and estimate is not None:
+            if vor[1] != estimate[1]:
+                comparisons.append(
+                    _comparison_row(
+                        work,
+                        "ВОР",
+                        "Смета",
+                        vor,
+                        estimate,
+                        None,
+                        "Единицы ВОР и сметы различаются",
+                    )
+                )
+            else:
+                difference = vor[0] - estimate[0]
+                conclusion = (
+                    "Значения ВОР и сметы совпадают"
+                    if difference == 0
+                    else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {vor[1]}"
+                )
+                comparisons.append(
+                    _comparison_row(work, "ВОР", "Смета", vor, estimate, difference, conclusion)
                 )
     return comparisons
 
@@ -3223,10 +3254,21 @@ def _documents(source_context: Mapping[str, Mapping[str, Any]]) -> list[dict[str
     return sorted(unique.values(), key=lambda value: (value["document_role"], value["name"]))
 
 
-def _document_composition(documents: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+def _document_composition(
+    documents: Iterable[Mapping[str, Any]],
+    *,
+    source_context: Mapping[str, Mapping[str, Any]] | None = None,
+) -> dict[str, Any]:
     role_counts = Counter(
         str(value.get("document_role") or "Роль не установлена") for value in documents
     )
+    embedded_vor_documents = {
+        str(value.get("source_version_id") or "")
+        for value in (source_context or {}).values()
+        if value.get("page_is_bill_of_quantities") is True
+    }
+    if embedded_vor_documents:
+        role_counts["ВОР"] = len(embedded_vor_documents)
     expected_roles = ("ПД", "РД", "Спецификация", "ВОР", "Смета", "Договор")
     available_roles = [role for role in expected_roles if role_counts.get(role)]
     missing_roles = [role for role in expected_roles if not role_counts.get(role)]
@@ -3238,10 +3280,16 @@ def _document_composition(documents: Iterable[Mapping[str, Any]]) -> dict[str, A
             if present
             else (f"роль требует уточнения — {unidentified}")
         )
+    if embedded_vor_documents:
+        present = present.replace(
+            f"ВОР — {len(embedded_vor_documents)}",
+            f"ВОР в составе сметных файлов — {len(embedded_vor_documents)}",
+        )
     return {
         "role_counts": dict(sorted(role_counts.items())),
         "available_roles": available_roles,
         "missing_roles": missing_roles,
+        "embedded_vor_document_count": len(embedded_vor_documents),
         "professional_summary": (
             "В предоставленном комплекте установлены: "
             f"{present or 'профессиональные роли не установлены'}. "

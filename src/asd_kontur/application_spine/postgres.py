@@ -6070,15 +6070,26 @@ class SpinePostgresRepository:
             return {}
         rows = session.execute(
             sa.text(
-                "SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
-                "sl.source_version_id,sl.locator_kind,sl.locator_value,"
-                "v.document_id,v.version AS document_version,v.safe_display_name "
-                "FROM workspace.source_locators sl JOIN workspace.document_versions v ON "
-                "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
-                "v.source_version_id=sl.source_version_id WHERE "
+                "WITH requested AS (SELECT sl.* FROM workspace.source_locators sl WHERE "
                 "sl.organization_id=:organization AND sl.workspace_id=:workspace AND "
-                "sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[])) ORDER BY "
-                "sl.source_locator_id,v.version DESC"
+                "sl.source_locator_id = ANY(CAST(:locator_ids AS uuid[]))), pages AS ("
+                "SELECT DISTINCT source_version_id,(locator_value->>'page')::bigint AS page_number "
+                "FROM requested WHERE locator_value ? 'page'), page_roles AS (SELECT "
+                "pages.source_version_id,pages.page_number,bool_or(lower(COALESCE(element.raw_text,'')) "
+                "LIKE '%ведомость объемов работ%') AS page_is_bill_of_quantities FROM pages "
+                "LEFT JOIN workspace.native_layout_element_versions element ON "
+                "element.organization_id=:organization AND element.workspace_id=:workspace AND "
+                "element.source_version_id=pages.source_version_id AND "
+                "element.page_number=pages.page_number GROUP BY pages.source_version_id,"
+                "pages.page_number) SELECT DISTINCT ON (sl.source_locator_id) sl.source_locator_id,"
+                "sl.source_version_id,sl.locator_kind,sl.locator_value,"
+                "v.document_id,v.version AS document_version,v.safe_display_name,"
+                "COALESCE(page_roles.page_is_bill_of_quantities,false) AS "
+                "page_is_bill_of_quantities FROM requested sl JOIN workspace.document_versions v ON "
+                "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
+                "v.source_version_id=sl.source_version_id LEFT JOIN page_roles ON "
+                "page_roles.source_version_id=sl.source_version_id AND page_roles.page_number="
+                "(sl.locator_value->>'page')::bigint ORDER BY sl.source_locator_id,v.version DESC"
             ),
             {
                 "organization": organization_id,

@@ -8,7 +8,9 @@ from asd_kontur.application_spine.postgres import _application_engineering_proje
 from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
     _comparison_row,
+    _comparisons,
     _display_quantity,
+    _document_composition,
     _issues,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
@@ -34,6 +36,53 @@ def test_facility_designations_preserve_multiple_explicit_project_scopes() -> No
     )
     assert facility_designation("Работы КНС-4") == "КНС 4"
     assert facility_designation("КНС-4 и ЛОС 8.1") is None
+
+
+def test_document_composition_recognizes_vor_embedded_in_estimate_pdf() -> None:
+    composition = _document_composition(
+        [
+            {
+                "document_role": "ПД",
+                "source_version_id": "project-version",
+            },
+            {
+                "document_role": "Смета",
+                "source_version_id": "estimate-version",
+            },
+        ],
+        source_context={
+            "vor-page": {
+                "source_version_id": "estimate-version",
+                "page_is_bill_of_quantities": True,
+            }
+        },
+    )
+
+    assert composition["available_roles"] == ["ПД", "ВОР", "Смета"]
+    assert composition["embedded_vor_document_count"] == 1
+    assert "ВОР в составе сметных файлов — 1" in composition["professional_summary"]
+
+
+def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:
+    comparisons = _comparisons(
+        [
+            {
+                "work_scope_id": "sheet-driving",
+                "facility": "Место выполнения не установлено",
+                "work_name": "Погружение шпунта",
+                "quantities_by_document": {
+                    "ВОР": [{"value": "95.028", "unit": "т"}],
+                    "Смета": [{"value": "95.028", "unit": "т"}],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["left"]["document_role"] == "ВОР"
+    assert comparisons[0]["right"]["document_role"] == "Смета"
+    assert comparisons[0]["classification"] == "MATCH"
+    assert comparisons[0]["conclusion"] == "Значения ВОР и сметы совпадают"
 
 
 def test_pit_inherits_relevant_work_only_for_one_established_pit_per_facility() -> None:
@@ -564,7 +613,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v32"
+    assert model["model_version"] == "project-engineering-model-v33"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
