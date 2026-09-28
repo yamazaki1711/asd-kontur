@@ -32,7 +32,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
-        raise RuntimeError("Unresolved-work reconciliation downgrade requires a disposable database")
+        raise RuntimeError(
+            "Unresolved-work reconciliation downgrade requires a disposable database"
+        )
     if (
         op.get_bind()
         .exec_driver_sql(
