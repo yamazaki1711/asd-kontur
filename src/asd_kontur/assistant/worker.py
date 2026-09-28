@@ -1485,7 +1485,10 @@ def _append_prepared_project_result(
                 continue
             project = engineering.get("project")
             if isinstance(project, dict):
-                name = str(project.get("name") or "").strip()
+                name = project.get("name")
+                if isinstance(name, dict):
+                    name = name.get("value")
+                name = str(name or "").strip()
                 if name:
                     overview_rows.append("Объект: " + name)
                 purpose = project.get("purpose")

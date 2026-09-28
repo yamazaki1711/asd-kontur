@@ -109,7 +109,10 @@ def test_prepared_project_overview_lists_all_facilities() -> None:
                     "value": {
                         "project_engineering": {
                             "project": {
-                                "name": "Контролируемый объект",
+                                "name": {
+                                    "value": "Контролируемый объект",
+                                    "status": "Установлено по нескольким документам",
+                                },
                                 "purpose": {"value": "Строительство очистных сооружений"},
                                 "composition": {"value": "КНС 2, ЛОС 7"},
                             },
