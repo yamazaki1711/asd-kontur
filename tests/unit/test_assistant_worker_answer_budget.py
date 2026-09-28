@@ -115,7 +115,7 @@ def test_prepared_discrepancies_complete_qwen_narrative_without_inventing_values
 def test_prepared_sheet_pile_schedule_completes_qwen_narrative_with_exact_values() -> None:
     completed = _append_prepared_project_result(
         SynthesizedAnswer(
-            "Шпунтовые работы предусмотрены для двух сооружений.",
+            "Для КНС 8.1 профиль не детализирован.",
             "workspace_conclusion",
             False,
             (),
@@ -163,6 +163,7 @@ def test_prepared_sheet_pile_schedule_completes_qwen_narrative_with_exact_values
     )
 
     assert "КНС 4; котлован для КНС4; Погружение шпунта" in completed.answer
+    assert "не детализирован" not in completed.answer
     assert "профиль Л5; ВОР: 95.028 т" in completed.answer
     assert "КНС 8.1; котлован для КНС8.1; Устройство распределительного пояса" in completed.answer
     assert "балки 30Ш2, 35Ш2; ВОР: 9.841 т" in completed.answer

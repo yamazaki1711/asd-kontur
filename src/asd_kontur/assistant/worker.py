@@ -1299,7 +1299,7 @@ def _append_prepared_project_result(
                             details.append(f"{role}: {', '.join(values)}")
                 uncertainty = str(item.get("uncertainty") or "").strip()
                 if uncertainty:
-                    details.append(uncertainty)
+                    details.append(uncertainty.rstrip("."))
                 suffix = "; ".join(details) if details else "объём требует уточнения"
                 schedule_rows.append(f"{facility}; {pit}; {operation}: {suffix}.")
                 for source_id in item.get("source_refs") or ():
@@ -1383,8 +1383,14 @@ def _append_prepared_project_result(
     ]
     if not sections:
         return answer
+    prepared_result = "\n\n".join(sections)
+    published_answer = (
+        prepared_result
+        if asks_for_sheet_pile_schedule
+        else answer.answer.rstrip() + "\n\n" + prepared_result
+    )
     return SynthesizedAnswer(
-        answer=answer.answer.rstrip() + "\n\n" + "\n\n".join(sections),
+        answer=published_answer,
         answer_type=answer.answer_type,
         needs_clarification=answer.needs_clarification,
         used_source_ids=tuple(selected_source_ids[:8]),
