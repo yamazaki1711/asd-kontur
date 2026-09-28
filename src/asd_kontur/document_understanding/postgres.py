@@ -30,6 +30,7 @@ from asd_kontur.ntd.pd_rd import (
     evaluate_pd_rd_requirements,
     load_spds_corpus_denominator,
 )
+from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
 from .models import (
     PIT_OBSERVATION_GROUP_MAX_SIZE,
@@ -418,7 +419,7 @@ class IndustrialUnderstandingRepository:
     ) -> None:
         """Persist one validated semantic work batch without rewriting extraction."""
 
-        if profile_version != "qwen-project-work-reconciliation-v5":
+        if profile_version != PROJECT_WORK_RECONCILIATION_PROFILE:
             raise ValueError("project_work_reconciliation_profile_invalid")
         result_digest = semantic_digest(output_manifest)
         with self._session(claimed) as session:
