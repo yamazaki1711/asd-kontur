@@ -433,7 +433,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v17"
+    assert model["model_version"] == "project-engineering-model-v18"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -948,7 +948,7 @@ def test_reviewed_synonyms_compare_only_within_same_facility_and_operation() -> 
                     "value": "Забивка стального шпунта для КНС-2",
                     "source_version_id": "source-estimate",
                     "source_locator_id": "estimate-work",
-                    "source_role": "estimate",
+                    "source_role": "local_estimate",
                 },
             ],
             "quantities": [
@@ -1031,6 +1031,96 @@ def test_reviewed_synonyms_compare_only_within_same_facility_and_operation() -> 
         "unit": "т",
     }
     assert comparisons[0]["difference"] == "77"
+
+
+def test_exact_cross_document_operation_compares_without_inventing_facility() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "design-light-removal",
+                    "version": 1,
+                    "value": "Демонтаж светильников",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "design-work",
+                    "source_role": "project_documentation",
+                },
+                {
+                    "candidate_id": "estimate-light-removal",
+                    "version": 1,
+                    "value": "Демонтаж: светильников для люминесцентных ламп",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "estimate-work",
+                    "source_role": "local_estimate",
+                },
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "design-count",
+                    "work_candidate_id": "design-light-removal",
+                    "normalized_value": "3",
+                    "normalized_unit": "шт.",
+                    "source_locator_id": "design-quantity",
+                },
+                {
+                    "candidate_id": "estimate-count",
+                    "work_candidate_id": "estimate-light-removal",
+                    "normalized_value": "0.03",
+                    "normalized_unit": "100 шт",
+                    "source_locator_id": "estimate-quantity",
+                },
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("design-work", "Проект.pdf", 4),
+                _source("estimate-work", "Смета.pdf", 8),
+                _source("design-quantity", "Проект.pdf", 4),
+                _source("estimate-quantity", "Смета.pdf", 8),
+            ]
+        ),
+        work_resolutions={
+            "design-light-removal": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v6",
+                "status": "MATCHED",
+                "family_key": "demolition",
+                "operation": "Демонтаж светильников",
+                "facility": None,
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "design-count", "status": "WORK_QUANTITY"}
+                ],
+            },
+            "estimate-light-removal": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v6",
+                "status": "MATCHED",
+                "family_key": "demolition",
+                "operation": "Демонтаж светильников",
+                "facility": None,
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "estimate-count", "status": "WORK_QUANTITY"}
+                ],
+            },
+        },
+    )
+
+    assert len(model["quantity_comparisons"]) == 1
+    comparison = model["quantity_comparisons"][0]
+    assert comparison["left"] == {"document_role": "ПД", "value": "3", "unit": "шт"}
+    assert comparison["right"] == {"document_role": "Смета", "value": "3", "unit": "шт"}
+    assert comparison["classification"] == "MATCH"
+    assert "к одной операции" in comparison["scope_match_basis"]
 
 
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:

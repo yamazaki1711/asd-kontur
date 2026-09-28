@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v17"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v18"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1492,12 +1492,17 @@ def _work_schedule(
         quantities_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         materials_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
         sources_by_role: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        wording_by_role: dict[str, set[str]] = defaultdict(set)
+        semantic_status_by_role: dict[str, set[str]] = defaultdict(set)
         grouped_quantity_interpretations: list[dict[str, Any]] = []
         for observation in observations:
             role = str(observation["document_role"])
             quantities_by_role[role].extend(observation["quantities"])
             materials_by_role[role].extend(observation["materials"])
             grouped_quantity_interpretations.extend(observation["quantity_interpretations"])
+            wording_by_role[role].add(str(observation["project_wording"]))
+            if observation.get("semantic_resolution_status"):
+                semantic_status_by_role[role].add(str(observation["semantic_resolution_status"]))
             if observation.get("source"):
                 sources_by_role[role].append(dict(observation["source"]))
         quantities_by_role = {
@@ -1525,6 +1530,12 @@ def _work_schedule(
             "project_wording": sorted(
                 {str(item["project_wording"]) for item in observations if item["project_wording"]}
             ),
+            "project_wording_by_document": {
+                role: sorted(values) for role, values in sorted(wording_by_role.items())
+            },
+            "semantic_resolution_by_document": {
+                role: sorted(values) for role, values in sorted(semantic_status_by_role.items())
+            },
             "quantities_by_document": quantities_by_role,
             "materials_by_document": materials_by_role,
             "quantity_interpretations": _deduplicate_dicts(grouped_quantity_interpretations),
@@ -1692,22 +1703,69 @@ def _validated_scope_quantity_comparisons(
     """
 
     result: list[dict[str, Any]] = []
-    eligible = [
-        dict(work)
-        for work in works
-        if work.get("facility_id") and work.get("quantities_semantically_validated") is True
-    ]
-    for comparison in _comparisons(eligible):
-        result.append(
-            {
-                **comparison,
-                "scope_match_basis": (
-                    "Совпадают сооружение, вид работы и строительная операция; "
-                    "связанные числовые значения проверены по смыслу."
-                ),
-            }
+    for raw in works:
+        work = dict(raw)
+        if work.get("quantities_semantically_validated") is not True:
+            continue
+        exact_cross_role_wording = _exact_cross_role_work_wording(work)
+        semantic_cross_role_operation = _semantic_cross_role_work_operation(work)
+        if (
+            not work.get("facility_id")
+            and exact_cross_role_wording is None
+            and semantic_cross_role_operation is None
+        ):
+            continue
+        basis = (
+            "Совпадают сооружение, вид работы и строительная операция; "
+            "связанные числовые значения проверены по смыслу."
+            if work.get("facility_id")
+            else (
+                "В проектном и коммерческом документах дословно совпадает операция "
+                f"«{exact_cross_role_wording}»; связанные числовые значения проверены по смыслу."
+            )
+            if exact_cross_role_wording is not None
+            else (
+                "Локальная модель отнесла проектную и коммерческую позиции к одной "
+                f"операции «{semantic_cross_role_operation}»; связанные числовые "
+                "значения проверены по смыслу."
+            )
         )
+        for comparison in _comparisons([work]):
+            result.append({**comparison, "scope_match_basis": basis})
     return result
+
+
+def _exact_cross_role_work_wording(work: Mapping[str, Any]) -> str | None:
+    by_role = dict(work.get("project_wording_by_document") or {})
+    design = {
+        _normalized(value): str(value)
+        for role in ("ПД", "РД", "Спецификация")
+        for value in by_role.get(role) or ()
+        if _normalized(value)
+    }
+    commercial = {
+        _normalized(value)
+        for role in ("ВОР", "Смета")
+        for value in by_role.get(role) or ()
+        if _normalized(value)
+    }
+    matches = sorted(set(design).intersection(commercial))
+    return design[matches[0]] if len(matches) == 1 else None
+
+
+def _semantic_cross_role_work_operation(work: Mapping[str, Any]) -> str | None:
+    statuses = dict(work.get("semantic_resolution_by_document") or {})
+    design_matched = any(
+        "MATCHED" in set(statuses.get(role) or ()) for role in ("ПД", "РД", "Спецификация")
+    )
+    commercial_matched = any(
+        "MATCHED" in set(statuses.get(role) or ()) for role in ("ВОР", "Смета")
+    )
+    operation = str(work.get("work_name") or "").strip()
+    family = str(work.get("work_family") or "").strip()
+    if design_matched and commercial_matched and operation and operation != family:
+        return operation
+    return None
 
 
 def _exact_work_comparisons(
