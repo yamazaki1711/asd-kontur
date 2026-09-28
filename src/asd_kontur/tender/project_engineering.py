@@ -1186,6 +1186,16 @@ def _work_schedule(
                 assignment_basis = (
                     "Работа отнесена к единственному явно обозначенному сооружению на листе"
                 )
+        if facility is None:
+            document_designation = facility_designation(context.get("safe_display_name"))
+            document_facility = facility_by_designation.get(document_designation or "")
+            if document_facility is not None:
+                facility = document_facility
+                designation = document_designation
+                assignment_basis = (
+                    "Работа отнесена к сооружению, однозначно указанному в названии "
+                    "исходного документа"
+                )
         if facility is None and resolution.get("facility"):
             semantic_designation = str(resolution["facility"])
             semantic_facility = facility_by_designation.get(semantic_designation)

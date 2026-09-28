@@ -467,6 +467,77 @@ def test_same_family_operations_remain_distinct_engineering_scopes() -> None:
     assert by_name["Разработка котлована"]["quantities_by_document"]["РД"][0]["value"] == ("450")
 
 
+def test_facility_specific_document_title_assigns_same_named_works_to_distinct_facilities() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "work-kns-2",
+                    "version": 1,
+                    "value": "Разработка котлована",
+                    "source_version_id": "source-kns-2",
+                    "source_locator_id": "work-kns-2-locator",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "work-kns-4",
+                    "version": 1,
+                    "value": "Разработка котлована",
+                    "source_version_id": "source-kns-4",
+                    "source_locator_id": "work-kns-4-locator",
+                    "source_role": "working_documentation",
+                },
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-2",
+                "candidate_labels": ["КНС-2"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": ["kns-2-a", "kns-2-b"],
+            },
+            {
+                "identity_kind": "facility",
+                "canonical_label": "КНС-4",
+                "candidate_labels": ["КНС-4"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": ["kns-4-a", "kns-4-b"],
+            },
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={
+            "work-kns-2-locator": {
+                "source_version_id": "source-kns-2",
+                "document_version": 1,
+                "safe_display_name": "КНС-2. Конструктивные решения.pdf",
+                "locator_value": {"page": 12},
+            },
+            "work-kns-4-locator": {
+                "source_version_id": "source-kns-4",
+                "document_version": 1,
+                "safe_display_name": "КНС-4. Конструктивные решения.pdf",
+                "locator_value": {"page": 12},
+            },
+        },
+    )
+
+    assert {(value["facility"], value["work_name"]) for value in model["works"]} == {
+        ("КНС 2", "Разработка котлована"),
+        ("КНС 4", "Разработка котлована"),
+    }
+    assert all("названии исходного документа" in value["status"] for value in model["works"])
+
+
 def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
     model = build_project_engineering_model(
         workspace_id="workspace-alpha",
