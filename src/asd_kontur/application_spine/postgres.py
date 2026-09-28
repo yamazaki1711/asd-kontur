@@ -32,6 +32,7 @@ from asd_kontur.tender.facility_work_projection import (
 from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
+    construction_scope_exclusion_reason,
     document_comparison_side,
     established_facility_designations,
     facility_designation,
@@ -4374,6 +4375,8 @@ class SpinePostgresRepository:
             prepared: list[dict[str, Any]] = []
             for row in unresolved:
                 context = source_context.get(str(row.get("source_locator_id") or ""), {})
+                if construction_scope_exclusion_reason(context.get("safe_display_name")):
+                    continue
                 locator_value = context.get("locator_value")
                 page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
                 wording = str(row["wording"])
