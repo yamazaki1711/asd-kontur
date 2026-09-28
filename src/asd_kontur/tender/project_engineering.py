@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v11"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v12"
 _QUANTITY_AWARE_WORK_PROFILE = "qwen-project-work-reconciliation-v5"
 
 _FACILITY_CODE = re.compile(
@@ -473,11 +473,14 @@ def build_project_engineering_model(
         work_resolutions or {},
     )
     comparisons = _deduplicate_dicts(
-        _exact_work_comparisons(
-            candidates.get("work_types", ()),
-            candidates.get("quantities", ()),
-            source_context,
-        )
+        [
+            *_exact_work_comparisons(
+                candidates.get("work_types", ()),
+                candidates.get("quantities", ()),
+                source_context,
+            ),
+            *_validated_scope_quantity_comparisons(work_model["works"]),
+        ]
     )
     scope_comparisons = _scope_comparisons(work_model["works"])
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
@@ -1368,6 +1371,10 @@ def _work_schedule(
             "quantities_by_document": quantities_by_role,
             "materials_by_document": materials_by_role,
             "quantity_interpretations": _deduplicate_dicts(grouped_quantity_interpretations),
+            "quantities_semantically_validated": bool(grouped_quantity_interpretations)
+            and all(
+                value.get("status") != "UNREVIEWED" for value in grouped_quantity_interpretations
+            ),
             "quantity_validation_status": (
                 "Все связанные значения проверены по смыслу"
                 if grouped_quantity_interpretations
@@ -1513,6 +1520,37 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                     )
                 )
     return comparisons
+
+
+def _validated_scope_quantity_comparisons(
+    works: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare differently worded rows only after engineering scope is established.
+
+    The work schedule already groups observations by facility, canonical family,
+    and interpreted operation.  That grouping is safe for comparison only when
+    it has a real facility and every linked numeric observation has passed the
+    quantity-meaning contract.  Unassigned or partly reviewed rows remain in
+    the schedule but cannot create a Tender discrepancy.
+    """
+
+    result: list[dict[str, Any]] = []
+    eligible = [
+        dict(work)
+        for work in works
+        if work.get("facility_id") and work.get("quantities_semantically_validated") is True
+    ]
+    for comparison in _comparisons(eligible):
+        result.append(
+            {
+                **comparison,
+                "scope_match_basis": (
+                    "Совпадают сооружение, вид работы и строительная операция; "
+                    "связанные числовые значения проверены по смыслу."
+                ),
+            }
+        )
+    return result
 
 
 def _exact_work_comparisons(

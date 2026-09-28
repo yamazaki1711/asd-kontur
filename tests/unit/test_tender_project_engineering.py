@@ -243,7 +243,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v11"
+    assert model["model_version"] == "project-engineering-model-v12"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -713,6 +713,112 @@ def test_quantity_meaning_review_keeps_dimensions_out_of_work_volume() -> None:
     assert work["quantity_validation_status"] == (
         "Часть связанных значений ещё требует смысловой проверки"
     )
+
+
+def test_reviewed_synonyms_compare_only_within_same_facility_and_operation() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "design-driving",
+                    "version": 1,
+                    "value": "Погружение шпунтовых свай КНС-2",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "design-work",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "estimate-driving",
+                    "version": 1,
+                    "value": "Забивка стального шпунта для КНС-2",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "estimate-work",
+                    "source_role": "estimate",
+                },
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "design-mass",
+                    "work_candidate_id": "design-driving",
+                    "normalized_value": "438",
+                    "normalized_unit": "т",
+                    "source_locator_id": "design-quantity",
+                },
+                {
+                    "candidate_id": "estimate-mass",
+                    "work_candidate_id": "estimate-driving",
+                    "normalized_value": "361",
+                    "normalized_unit": "т",
+                    "source_locator_id": "estimate-quantity",
+                },
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_candidate_id": "scope-comparison-facility-kns-2",
+                "identity_kind": "facility",
+                "canonical_label": "КНС-2",
+                "candidate_labels": ["КНС-2"],
+                "member_structure_node_ids": [],
+                "source_locator_ids": ["design-work", "estimate-work"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("design-work", "КР.pdf", 11),
+                _source("estimate-work", "Смета.pdf", 7),
+                _source("design-quantity", "КР.pdf", 11),
+                _source("estimate-quantity", "Смета.pdf", 7),
+            ]
+        ),
+        work_resolutions={
+            "design-driving": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунта",
+                "facility": "КНС 2",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "design-mass", "status": "WORK_QUANTITY"}
+                ],
+            },
+            "estimate-driving": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунта",
+                "facility": "КНС 2",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "estimate-mass", "status": "WORK_QUANTITY"}
+                ],
+            },
+        },
+    )
+
+    comparisons = [
+        value for value in model["quantity_comparisons"] if value.get("scope_match_basis")
+    ]
+    assert len(comparisons) == 1, model["works"]
+    assert comparisons[0]["facility"] == "КНС 2"
+    assert comparisons[0]["work"] == "Погружение шпунта"
+    assert comparisons[0]["left"] == {"document_role": "РД", "value": "438", "unit": "т"}
+    assert comparisons[0]["right"] == {
+        "document_role": "Смета",
+        "value": "361",
+        "unit": "т",
+    }
+    assert comparisons[0]["difference"] == "77"
 
 
 def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None:
