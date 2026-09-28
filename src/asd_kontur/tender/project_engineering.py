@@ -667,6 +667,7 @@ def work_reconciliation_priority(
     nearby_context: object = None,
     has_facility_hint: bool = False,
     family_key: object = None,
+    comparison_ready_scope: bool = False,
 ) -> tuple[int, int, int]:
     """Prioritize bounded semantic work by likely professional value.
 
@@ -692,16 +693,51 @@ def work_reconciliation_priority(
         "pipeline": 2,
         "waterproofing": 2,
     }.get(str(family_key or ""), 0)
+    comparison_score = 90 if comparison_ready_scope else 0
     descriptive_score = min(len(wording.split()), 12)
     return (
         operation_score * 20
         + facility_score
         + contextual_score * 8
         + priority_family_score * 6
-        + commercial_score * 3,
+        + commercial_score * 3
+        + comparison_score,
+        # A scoped design/commercial pair can produce a professional Tender
+        # comparison once its quantity meanings are checked.  Prefer it over
+        # another isolated classification, without changing either row's
+        # semantic decision or authority.
         descriptive_score,
         len(wording),
     )
+
+
+def document_comparison_side(source_role: object, display_name: object) -> str | None:
+    """Return the professional comparison side for one project source."""
+
+    name = _normalized(display_name)
+    role = str(source_role or "")
+    if (
+        "вор" in name
+        or "ведомост объем" in name
+        or "ведомост объём" in name
+        or role == "bill_of_quantities"
+    ):
+        return "commercial"
+    if (
+        "смет" in name
+        or re.search(r"(?:^|\s)см\d", name)
+        or role in {"local_estimate", "object_estimate", "consolidated_estimate"}
+    ):
+        return "commercial"
+    if role in {
+        "project_documentation",
+        "working_documentation",
+        "specification",
+        "explanatory_note",
+        "drawing_or_scheme",
+    }:
+        return "design"
+    return None
 
 
 def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:

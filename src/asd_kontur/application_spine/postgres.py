@@ -32,6 +32,7 @@ from asd_kontur.tender.facility_work_projection import (
 from asd_kontur.tender.project_engineering import (
     build_project_engineering_model,
     classify_work_family,
+    document_comparison_side,
     facility_designation,
     facility_designations,
     non_work_reason,
@@ -4420,13 +4421,29 @@ class SpinePostgresRepository:
             frequency: dict[str, int] = defaultdict(int)
             for row in prepared:
                 frequency[" ".join(str(row["wording"]).casefold().split())] += 1
+            comparison_sides: dict[tuple[str, str], set[str]] = defaultdict(set)
             for row in prepared:
+                hints = list(row.get("facility_hints") or ())
+                family_key = str(row.get("deterministic_family_hint") or "")
+                side = document_comparison_side(row.get("document_role"), row.get("document"))
+                if len(hints) == 1 and family_key and side is not None:
+                    comparison_sides[(str(hints[0]), family_key)].add(side)
+            for row in prepared:
+                hints = list(row.get("facility_hints") or ())
+                family_key = str(row.get("deterministic_family_hint") or "")
+                comparison_ready_scope = (
+                    len(hints) == 1
+                    and family_key != ""
+                    and comparison_sides.get((str(hints[0]), family_key))
+                    == {"design", "commercial"}
+                )
                 priority = work_reconciliation_priority(
                     row["wording"],
                     document_role=row["document_role"],
                     nearby_context=row["nearby_context"],
                     has_facility_hint=bool(row["facility_hints"]),
                     family_key=row.get("deterministic_family_hint"),
+                    comparison_ready_scope=comparison_ready_scope,
                 )
                 row["semantic_priority"] = (
                     priority[0] + min(len(row.get("quantity_observations") or ()), 4) * 5,

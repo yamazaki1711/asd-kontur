@@ -13,6 +13,7 @@ from asd_kontur.tender.project_engineering import (
     _scope_comparisons,
     build_project_engineering_model,
     classify_work_family,
+    document_comparison_side,
     facility_designation,
     facility_designations,
     non_work_reason,
@@ -1085,6 +1086,27 @@ def test_reconciliation_prioritizes_explicit_facility_context_over_unscoped_quan
     )
 
     assert scoped > unscoped
+
+
+def test_reconciliation_prioritizes_scoped_design_commercial_pair() -> None:
+    comparison_scope = work_reconciliation_priority(
+        "Устройство основания",
+        document_role="project_documentation",
+        nearby_context="КНС-4",
+        has_facility_hint=True,
+        comparison_ready_scope=True,
+    )
+    isolated_scope = work_reconciliation_priority(
+        "Устройство основания",
+        document_role="project_documentation",
+        nearby_context="КНС-4",
+        has_facility_hint=True,
+    )
+
+    assert comparison_scope > isolated_scope
+    assert document_comparison_side("project_documentation", "КР.pdf") == "design"
+    assert document_comparison_side("project_documentation", "005.2-2025-СМ4.pdf") == "commercial"
+    assert document_comparison_side("bill_of_quantities", "ВОР.xlsx") == "commercial"
 
 
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:
