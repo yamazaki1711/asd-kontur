@@ -1307,6 +1307,14 @@ def _pits(
         for value in facilities
         if value.get("designation")
     }
+    commercial_designations_by_scope: dict[str, set[str]] = defaultdict(set)
+    for context in source_context.values():
+        scope_code = str(context.get("page_commercial_scope_code") or "").strip()
+        scope_designation = commercial_scope_facility_designation(
+            context.get("page_commercial_scope_header")
+        )
+        if scope_code and scope_designation in facilities_by_designation:
+            commercial_designations_by_scope[scope_code].add(str(scope_designation))
     established_by_facility: dict[str, dict[str, Any]] = {}
     established_counted_groups: list[dict[str, Any]] = []
     clarification: list[dict[str, Any]] = []
@@ -1352,7 +1360,7 @@ def _pits(
             stated_count_match = re.search(r"\b(\d+)\s*шт", _normalized(description))
             stated_count = int(stated_count_match.group(1)) if stated_count_match else None
             locator_ids = sorted(str(value) for value in pit.get("source_locator_ids") or ())
-            commercial_designations = {
+            direct_commercial_designations = {
                 value
                 for locator_id in locator_ids
                 for context in (source_context.get(locator_id),)
@@ -1364,6 +1372,21 @@ def _pits(
                 )
                 if value in facilities_by_designation
             }
+            scope_codes = {
+                str(context.get("page_commercial_scope_code") or "").strip()
+                for locator_id in locator_ids
+                for context in (source_context.get(locator_id),)
+                if isinstance(context, Mapping)
+                and str(context.get("page_commercial_scope_code") or "").strip()
+            }
+            commercial_designations = set(direct_commercial_designations)
+            for scope_code in scope_codes:
+                commercial_designations.update(commercial_designations_by_scope[scope_code])
+            commercial_scope_designation = (
+                next(iter(commercial_designations))
+                if len(commercial_designations) == 1
+                else None
+            )
             # An explicitly counted group of pits for wells/chambers under one
             # commercial facility is a real minimum inventory even when the
             # estimate does not give individual marks.  Keep it as an aggregate
@@ -1420,18 +1443,30 @@ def _pits(
                 )
             elif any("котлованы" in _normalized(value) for value in aliases):
                 reason = (
-                    "Указана группа котлованов без количества, поштучных марок и "
+                    f"Коммерческий раздел относится к {commercial_scope_designation}, но "
+                    "группа котлованов не содержит количества и поштучных марок."
+                    if commercial_scope_designation
+                    else "Указана группа котлованов без количества, поштучных марок и "
                     "однозначной привязки к сооружениям."
                 )
             else:
                 reason = (
-                    "Упоминание отдельного котлована не содержит марки сооружения; "
+                    f"Упоминание находится в коммерческом разделе {commercial_scope_designation}, "
+                    "но не содержит отдельной марки; нельзя исключить повтор уже установленного "
+                    "котлована."
+                    if commercial_scope_designation
+                    else "Упоминание отдельного котлована не содержит марки сооружения; "
                     "нельзя исключить повторное упоминание уже установленного котлована."
                 )
             clarification.append(
                 {
                     "description": description,
-                    "related_facility": pit.get("associated_facility_designation"),
+                    "related_facility": (
+                        designation
+                        if designation in facilities_by_designation
+                        else commercial_scope_designation
+                        or pit.get("associated_facility_designation")
+                    ),
                     "reason": reason,
                     "stated_count": stated_count,
                     "minimum_count": 2 if paired_working_receiving else stated_count,

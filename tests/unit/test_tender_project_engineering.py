@@ -2614,6 +2614,53 @@ def test_counted_well_pit_group_contributes_to_minimum_without_fabricated_member
     assert "поштучных марок" in result["professional_answer"]
 
 
+def test_uncounted_pit_group_inherits_facility_from_matching_commercial_scope() -> None:
+    source_context = dict(
+        [
+            _source("pit-group", "Сводный ВОР.pdf", 29),
+            _source("estimate-heading", "Локальные сметы.pdf", 56),
+        ]
+    )
+    source_context["pit-group"].update(
+        page_commercial_scope_code="02-01-15",
+        page_commercial_scope_header="ВОР 02-01-15",
+    )
+    source_context["estimate-heading"].update(
+        page_commercial_scope_code="02-01-15",
+        page_commercial_scope_header=(
+            "Локальный сметный расчёт ЛСР 02-01-15. Строительство ЛОС 8.1"
+        ),
+    )
+    facilities = [
+        {
+            "facility_id": "facility-8-1",
+            "designation": "ЛОС 8.1",
+            "name": "ЛОС 8.1",
+        }
+    ]
+
+    result = _pits(
+        {
+            "candidate_pits": [
+                {
+                    "display_name": "Котлованы с креплениями инвентарными щитами",
+                    "aliases": ["Котлованы с креплениями инвентарными щитами"],
+                    "source_locator_ids": ["pit-group"],
+                }
+            ],
+            "coverage": {"disposition_counts": {"ambiguous": 1}},
+        },
+        facilities,
+        source_context,
+    )
+
+    assert result["established_count"] == 0
+    assert result["unresolved_group_count"] == 1
+    unresolved = result["requires_clarification"][0]
+    assert unresolved["related_facility"] == "ЛОС 8.1"
+    assert unresolved["reason"].startswith("Коммерческий раздел относится к ЛОС 8.1")
+
+
 def test_model_ids_are_workspace_scoped_and_repeatable() -> None:
     first = _model()
     second = _model()
