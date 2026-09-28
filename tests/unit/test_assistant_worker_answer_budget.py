@@ -414,6 +414,14 @@ def test_professional_pit_inventory_survives_prompt_projection() -> None:
                             {
                                 "name": "котлован для ЛОС-3",
                                 "related_facility": "ЛОС-3",
+                                "related_works": [
+                                    {
+                                        "work": "Погружение шпунта",
+                                        "quantities_by_document": {
+                                            "РД": [{"value": "42", "unit": "т"}]
+                                        },
+                                    }
+                                ],
                                 "source_locator_ids": ["source-a"],
                             },
                             {
@@ -458,6 +466,12 @@ def test_professional_pit_inventory_survives_prompt_projection() -> None:
     assert [item["name"] for item in inventory["result"]["value"]["pits"]] == [
         "котлован для ЛОС-3",
         "котлован для КНС-7",
+    ]
+    assert inventory["result"]["value"]["pits"][0]["related_works"] == [
+        {
+            "work": "Погружение шпунта",
+            "quantities_by_document": {"РД": [{"value": "42", "unit": "т"}]},
+        }
     ]
     assert (
         inventory["result"]["value"]["requires_clarification"][0]["description"]
