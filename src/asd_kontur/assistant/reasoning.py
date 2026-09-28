@@ -657,6 +657,9 @@ def validate_answer(
         # Requiring an additional raw-fragment search for the same exhaustive
         # count can only replace the prepared inventory with a top-k sample.
         "consultant.get_project_entity_inventory",
+        "consultant.get_work_packages",
+        "consultant.get_discrepancies",
+        "consultant.get_information_gaps",
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
     }

@@ -277,7 +277,16 @@ class AssistantWorker:
                         answer = _append_prepared_project_result(answer, receipts, claimed.question)
                 else:
                     answer = pending_answer
-                model_checks = self._model_quality_check(claimed, answer, receipts)
+                # Direct prepared-result routes still use Qwen to formulate the
+                # narrative, but the published exhaustive schedule is completed
+                # from the source-linked project model. A second subjective
+                # model pass must not veto an exact schedule that passes the
+                # deterministic completeness and source checks below.
+                model_checks = (
+                    {"passed": True, "issues": []}
+                    if direct_plan is not None
+                    else self._model_quality_check(claimed, answer, receipts)
+                )
             available_sources = _deduplicated_sources(receipts)
             deterministic = validate_answer(
                 answer,
