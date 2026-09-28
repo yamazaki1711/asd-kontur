@@ -5191,6 +5191,12 @@ function ProjectEngineeringResult({
               const facility = (card.facility ?? {}) as Record<string, unknown>;
               const cardWorks = Array.isArray(card.works) ? card.works : [];
               const cardPits = Array.isArray(card.pits) ? card.pits : [];
+              const cardStructures = Array.isArray(card.structures)
+                ? card.structures
+                : [];
+              const cardConnections = Array.isArray(card.connections)
+                ? card.connections
+                : [];
               const cardMaterials = Array.isArray(card.materials)
                 ? card.materials
                 : [];
@@ -5208,6 +5214,7 @@ function ProjectEngineeringResult({
                 >
                   <h3>{displayValue(facility.name)}</h3>
                   <p>Котлованы: {String(cardPits.length)}</p>
+                  <p>Конструкции: {String(cardStructures.length)}</p>
                   <p>Работы: {String(cardWorks.length)}</p>
                   <p>
                     {cardWorks
@@ -5271,6 +5278,49 @@ function ProjectEngineeringResult({
                         Котлован для сооружения не установлен или не
                         предусмотрен.
                       </p>
+                    )}
+                    {cardStructures.length > 0 && (
+                      <ul>
+                        {cardStructures.map((value, index) => {
+                          const structure = value as Record<string, unknown>;
+                          return (
+                            <li
+                              key={`${displayValue(structure.name)}-${String(index)}`}
+                            >
+                              <strong>{displayValue(structure.name)}</strong> —{" "}
+                              {displayValue(structure.relationship)}
+                              <ProjectSourceLinks
+                                locatorIds={structure.source_locator_ids}
+                                workspaceId={workspaceId}
+                                modeSlug={modeSlug}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {cardConnections.length > 0 && (
+                      <>
+                        <h4>Связи и подключения</h4>
+                        <ul>
+                          {cardConnections.map((value, index) => {
+                            const connection = value as Record<string, unknown>;
+                            return (
+                              <li
+                                key={`${displayValue(connection.name)}-${String(index)}`}
+                              >
+                                <strong>{displayValue(connection.name)}</strong> —{" "}
+                                {displayValue(connection.relationship)}
+                                <ProjectSourceLinks
+                                  locatorIds={connection.source_locator_ids}
+                                  workspaceId={workspaceId}
+                                  modeSlug={modeSlug}
+                                />
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </>
                     )}
                     <h4>Работы, объёмы и материалы</h4>
                     <ul>

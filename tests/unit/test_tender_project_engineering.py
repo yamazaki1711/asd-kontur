@@ -528,7 +528,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v29"
+    assert model["model_version"] == "project-engineering-model-v30"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -602,9 +602,12 @@ def test_exact_structural_relationship_assigns_work_without_document_wide_guessi
         structure_relationships=[
             {
                 "relationship_kind": "serves",
+                "subject_raw_name": "Напорный трубопровод",
+                "object_raw_name": "КНС-4",
                 "subject_structure_node_id": "pipeline-node",
                 "object_structure_node_id": "facility-node",
                 "source_locator_id": "related-work",
+                "resolution_state": "resolved_same_evidence",
             }
         ],
     )
@@ -614,6 +617,23 @@ def test_exact_structural_relationship_assigns_work_without_document_wide_guessi
     assert related["facility"] == "КНС 4"
     assert related["status"].startswith("Работа связана с сооружением")
     assert unrelated["facility"] == "Место выполнения не установлено"
+    assert model["facility_cards"][0]["structures"] == [
+        {
+            "name": "Напорный трубопровод",
+            "relationship": "Обслуживает сооружение",
+            "source_locator_ids": ["related-work"],
+            "sources": [
+                {
+                    "document": "КР.pdf",
+                    "version": 2,
+                    "page": 17,
+                    "source_version_id": "source-related-work",
+                    "source_locator_id": "related-work",
+                }
+            ],
+            "status": "Установлено по явной связи в исходном документе",
+        }
+    ]
 
 
 def test_unassigned_sheet_pile_material_does_not_inherit_unrelated_work_wording() -> None:

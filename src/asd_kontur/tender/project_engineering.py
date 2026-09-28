@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v29"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v30"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -647,6 +647,7 @@ def build_project_engineering_model(
         work_model["works"],
         comparisons,
         issues,
+        structure_relationships,
         source_context,
     )
     documents = _documents(source_context)
@@ -2920,6 +2921,7 @@ def _facility_cards(
     works: Iterable[Mapping[str, Any]],
     comparisons: Iterable[Mapping[str, Any]],
     issues: Iterable[Mapping[str, Any]],
+    structure_relationships: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
     pit_by_facility: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -2934,6 +2936,11 @@ def _facility_cards(
         comparisons_by_facility[str(comparison.get("facility") or "")].append(dict(comparison))
     for issue in issues:
         issues_by_facility[str(issue.get("location") or "")].append(dict(issue))
+    structures_by_facility, connections_by_facility = _facility_structure_links(
+        facilities,
+        structure_relationships,
+        source_context,
+    )
     cards: list[dict[str, Any]] = []
     for raw in facilities:
         facility = dict(raw)
@@ -2945,7 +2952,8 @@ def _facility_cards(
                 "facility": facility,
                 "purpose": None,
                 "pits": pit_by_facility.get(facility_id, []),
-                "structures": [],
+                "structures": structures_by_facility.get(facility_id, []),
+                "connections": connections_by_facility.get(facility_id, []),
                 "works": facility_works,
                 "sheet_piling": [
                     work for work in facility_works if work.get("family_key") == "sheet_piling"
@@ -2975,12 +2983,119 @@ def _facility_cards(
                             "Котлован не установлен или не предусмотрен",
                         ),
                         (not facility_works, "Работы не привязаны к сооружению"),
+                        (
+                            not structures_by_facility.get(facility_id),
+                            "Состав конструкций требует дальнейшей привязки",
+                        ),
                     )
                     if condition
                 ],
             }
         )
     return cards
+
+
+_CONSTRUCTION_COMPONENT = re.compile(
+    r"(?:фундамент|плит[аы]|стен[аы]|перекрыти|резервуар|камер[аы]|колод(?:ец|цы)|"
+    r"труб(?:а|опровод)|коллектор|сет[ьи]|шпунтов\w*\s+ограждени|ограждени\w*\s+котлован|"
+    r"свайн\w*\s+фундамент|основани|лоток|выпуск|экран|павильон|здани|сооружени)",
+    re.IGNORECASE,
+)
+
+
+def _facility_structure_links(
+    facilities: Iterable[Mapping[str, Any]],
+    relationships: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], dict[str, list[dict[str, Any]]]]:
+    """Expose only explicit, same-fragment facility components and interfaces.
+
+    Structure extraction contains many broad geographical and functional
+    relationships.  A facility dossier must not turn document co-occurrence
+    into containment.  This projection therefore accepts only relationships
+    resolved on the same source fragment, with exactly one established
+    facility endpoint and a recognisable construction component at the other
+    endpoint.  Inter-facility relationships remain separate connections.
+    """
+
+    facility_rows = [dict(value) for value in facilities]
+    node_to_facility: dict[str, dict[str, Any]] = {}
+    for facility in facility_rows:
+        for node_id in facility.get("member_structure_node_ids") or ():
+            node_to_facility.setdefault(str(node_id), facility)
+    structures: dict[str, dict[tuple[str, str], dict[str, Any]]] = defaultdict(dict)
+    connections: dict[str, dict[tuple[str, str], dict[str, Any]]] = defaultdict(dict)
+    for raw in relationships:
+        relationship = dict(raw)
+        if relationship.get("resolution_state") != "resolved_same_evidence":
+            continue
+        subject = node_to_facility.get(str(relationship.get("subject_structure_node_id") or ""))
+        object_ = node_to_facility.get(str(relationship.get("object_structure_node_id") or ""))
+        if bool(subject) == bool(object_):
+            continue
+        facility = subject or object_
+        if facility is None:
+            continue
+        facility_is_subject = subject is not None
+        other_name = str(
+            relationship.get("object_raw_name")
+            if facility_is_subject
+            else relationship.get("subject_raw_name") or ""
+        ).strip()
+        if not other_name:
+            continue
+        relationship_kind = str(relationship.get("relationship_kind") or "")
+        other_designation = facility_designation(other_name)
+        target = structures
+        professional_relation: str | None = None
+        if other_designation and other_designation != facility.get("designation"):
+            if relationship_kind not in {"connects_to", "serves", "depends_on"}:
+                continue
+            target = connections
+            professional_relation = {
+                "connects_to": "Связано с сооружением",
+                "serves": "Функциональная связь",
+                "depends_on": "Зависит от сооружения",
+            }[relationship_kind]
+        elif relationship_kind == "contains" and facility_is_subject:
+            professional_relation = "Входит в состав сооружения"
+        elif relationship_kind == "located_in" and not facility_is_subject:
+            professional_relation = "Расположено в границах сооружения"
+        elif relationship_kind == "serves" and not facility_is_subject:
+            professional_relation = "Обслуживает сооружение"
+        elif relationship_kind == "connects_to" and _CONSTRUCTION_COMPONENT.search(other_name):
+            target = connections
+            professional_relation = "Подключение / технологический интерфейс"
+        else:
+            continue
+        if target is structures and not _CONSTRUCTION_COMPONENT.search(other_name):
+            continue
+        locator_id = str(relationship.get("source_locator_id") or "")
+        facility_id = str(facility.get("facility_id") or "")
+        key = (_normalized(other_name), professional_relation)
+        row = target[facility_id].setdefault(
+            key,
+            {
+                "name": other_name,
+                "relationship": professional_relation,
+                "source_locator_ids": [],
+                "sources": [],
+                "status": "Установлено по явной связи в исходном документе",
+            },
+        )
+        if locator_id:
+            row["source_locator_ids"] = sorted({*row["source_locator_ids"], locator_id})
+            row["sources"] = _source_refs(row["source_locator_ids"], source_context)
+    return (
+        {
+            facility_id: sorted(values.values(), key=lambda value: _normalized(value["name"]))
+            for facility_id, values in structures.items()
+        },
+        {
+            facility_id: sorted(values.values(), key=lambda value: _normalized(value["name"]))
+            for facility_id, values in connections.items()
+        },
+    )
 
 
 def _documents(source_context: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
