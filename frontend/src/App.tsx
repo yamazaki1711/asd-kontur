@@ -5601,7 +5601,12 @@ function ProjectEngineeringResult({
             <tbody>
               {sheetPileSchedule.map((scope) => (
                 <tr key={displayValue(scope.sheet_pile_scope_id)}>
-                  <td>{displayValue(scope.facility, "Требует привязки")}</td>
+                  <td>
+                    <strong>
+                      {displayValue(scope.facility, "Требует привязки")}
+                    </strong>
+                    <small>{displayValue(scope.pit)}</small>
+                  </td>
                   <td>{displayValue(scope.operation)}</td>
                   <td>
                     {[

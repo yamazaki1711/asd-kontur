@@ -1005,7 +1005,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v46"
+    assert model["model_version"] == "project-engineering-model-v47"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -1022,6 +1022,9 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     assert model["work_classification"]["excluded_non_work_observation_count"] == 1
     assert model["scope_comparisons"][0]["classification"] == "MATCH"
     assert model["sheet_pile_schedule"][0]["operation"] == "Погружение шпунта"
+    assert model["sheet_pile_schedule"][0]["pit"] == (
+        "приёмный котлован для КНС-2; рабочий котлован для КНС-2"
+    )
     assert model["facility_cards"][0]["characteristics"] == [
         {
             "label": "Производительность КНС-2",

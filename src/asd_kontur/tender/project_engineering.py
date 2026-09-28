@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v46"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v47"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -639,7 +639,7 @@ def build_project_engineering_model(
         unclassified_works=work_model["unclassified"],
         available_document_roles=document_composition["available_roles"],
     )
-    sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
+    sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context, pits=pits)
     material_comparisons = _material_comparisons(work_model["works"], source_context)
     issues = _issues(
         defects,
@@ -2693,10 +2693,18 @@ def _commercial_document_phrase(available_roles: Iterable[str]) -> str:
 def _sheet_pile_schedule(
     works: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
+    *,
+    pits: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Return a professional sheet-pile/waling schedule without false totals."""
 
     result: list[dict[str, Any]] = []
+    pits_by_facility: dict[str, list[str]] = defaultdict(list)
+    for pit in (pits or {}).get("established") or ():
+        facility_id = str(pit.get("related_facility_id") or "")
+        pit_name = str(pit.get("name") or "").strip()
+        if facility_id and pit_name:
+            pits_by_facility[facility_id].append(pit_name)
     relevant_families = {"sheet_piling", "waling_beam", "bracing"}
     for raw in works:
         row = dict(raw)
@@ -2807,7 +2815,9 @@ def _sheet_pile_schedule(
                 "facility_id": row.get("facility_id"),
                 "family_key": row.get("family_key"),
                 "pit": (
-                    f"Котлован {row.get('facility')}"
+                    "; ".join(_ordered_unique(pits_by_facility[str(row["facility_id"])]))
+                    if row.get("facility_id") and pits_by_facility.get(str(row["facility_id"]))
+                    else f"Котлован {row.get('facility')} — марка требует уточнения"
                     if row.get("facility_id")
                     else "Требует привязки"
                 ),

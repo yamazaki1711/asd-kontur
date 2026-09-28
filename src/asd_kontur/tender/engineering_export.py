@@ -197,7 +197,14 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             ("Сооружение / котлован", "Операция", "Объёмы по документам", "Ограничение"),
             [
                 (
-                    str(row.get("facility") or "Требует привязки"),
+                    " — ".join(
+                        value
+                        for value in (
+                            str(row.get("facility") or "Требует привязки"),
+                            str(row.get("pit") or ""),
+                        )
+                        if value
+                    ),
                     str(row.get("operation") or ""),
                     _role_values(row.get("quantities_by_document")),
                     str(row.get("uncertainty") or ""),

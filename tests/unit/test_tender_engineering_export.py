@@ -82,6 +82,7 @@ def _model() -> dict[str, object]:
         "sheet_pile_schedule": [
             {
                 "facility": "КНС 7",
+                "pit": "котлован для КНС 7",
                 "operation": "Погружение шпунта",
                 "quantities_by_document": {"РД": [{"value": "18.5", "unit": "т"}]},
                 "uncertainty": "Требуется распределить коммерческий объём.",
@@ -139,6 +140,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "В комплекте есть ПД и смета; ВОР не найдена." in xml
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
+    assert "КНС 7 — котлован для КНС 7" in xml
     assert "Бетон В25" in xml
     assert "проект F200, коммерческие документы F150" in xml
     assert "Фундаментная плита, Напорный трубопровод" in xml
