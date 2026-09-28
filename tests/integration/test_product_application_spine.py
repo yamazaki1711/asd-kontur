@@ -20,6 +20,8 @@ from asd_kontur.application_spine.postgres import (
     SpinePostgresRepository,
 )
 from asd_kontur.application_spine.worker import DocumentWorker
+from asd_kontur.assistant.models import AssistantMode
+from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.document_understanding.models import StructureIdentityCandidate
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.web_app import create_app
@@ -2175,6 +2177,37 @@ def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(
         delay_seconds=0,
     )
 
+    assistant_repository = AssistantRepository(postgres_environment.document_worker_engine)
+    conversation = assistant_repository.create_conversation(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        owner_identity_id=owner,
+        title="Foreground claim admission",
+    )
+    turn = assistant_repository.enqueue_turn(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        conversation_id=conversation.conversation_id,
+        mode=AssistantMode.TENDER,
+        question="Какие работы предусмотрены проектом?",
+        owner_identity_id=owner,
+        project_ref=None,
+        platform_memory_fingerprint="sha256:" + "0" * 64,
+    )
+
+    # A queued foreground consultation keeps the yielded background job out of
+    # the claim set.  In particular, repeated worker loops must not consume a
+    # second immutable attempt before the turn reaches a terminal state.
+    assert (
+        repository.claim_next_job(
+            worker_identity="foreground-yield-worker",
+            lease_seconds=30,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        is None
+    )
+
     with postgres_environment.owner_engine.connect() as connection:
         row = connection.execute(
             sa.text(
@@ -2192,6 +2225,13 @@ def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(
         ).all()
     assert tuple(row) == ("queued", 1, 4)
     assert attempts == [1]
+
+    assistant_repository.cancel(
+        organization_id,
+        workspace_id,
+        turn.turn_id,
+        owner,
+    )
 
     second = repository.claim_next_job(
         worker_identity="foreground-yield-worker",

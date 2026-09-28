@@ -1261,7 +1261,7 @@ class SpinePostgresRepository:
             )
 
     def yield_job_for_foreground(
-        self, claimed: ClaimedJob, *, worker_identity: str, delay_seconds: int = 1
+        self, claimed: ClaimedJob, *, worker_identity: str, delay_seconds: int = 30
     ) -> None:
         """Return an untouched lease when foreground consultation owns Qwen.
 
