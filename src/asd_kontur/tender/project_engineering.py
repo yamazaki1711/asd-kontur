@@ -2378,8 +2378,7 @@ def _scope_comparisons(
                     status = "MATCH"
                     professional_status = "Коммерческая операция имеет проектное основание"
                     conclusion = (
-                        "Операция относится к установленному проектному объёму этого "
-                        "сооружения."
+                        "Операция относится к установленному проектному объёму этого сооружения."
                     )
                 elif possible_design:
                     status = "UNRESOLVED_SCOPE_MATCH"
