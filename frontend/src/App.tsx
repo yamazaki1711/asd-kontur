@@ -5309,8 +5309,8 @@ function ProjectEngineeringResult({
                               <li
                                 key={`${displayValue(connection.name)}-${String(index)}`}
                               >
-                                <strong>{displayValue(connection.name)}</strong> —{" "}
-                                {displayValue(connection.relationship)}
+                                <strong>{displayValue(connection.name)}</strong>{" "}
+                                — {displayValue(connection.relationship)}
                                 <ProjectSourceLinks
                                   locatorIds={connection.source_locator_ids}
                                   workspaceId={workspaceId}
