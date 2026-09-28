@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v47"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v49"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -3200,50 +3200,60 @@ def _issues(
             }
         )
 
-    design_profiles: dict[str, set[str]] = defaultdict(set)
-    commercial_profiles: dict[str, set[str]] = defaultdict(set)
-    profile_locators: set[str] = set()
-    for row in sheet_pile_schedule:
-        for role, values in dict(row.get("profiles_by_document") or {}).items():
-            target = commercial_profiles if role in {"ВОР", "Смета"} else design_profiles
-            target[str(role)].update(str(value) for value in values or ())
+    profile_rows_by_facility: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for raw in sheet_pile_schedule:
+        row = dict(raw)
+        if row.get("facility_id") and row.get("profiles_by_document"):
+            profile_rows_by_facility[str(row["facility_id"])].append(row)
+    role_order = {"ПД": 0, "РД": 1, "Спецификация": 2, "ВОР": 3, "Смета": 4}
+    for facility_rows in profile_rows_by_facility.values():
+        profiles_by_role: dict[str, set[str]] = defaultdict(set)
+        profile_locators: set[str] = set()
+        for row in facility_rows:
+            for role, values in dict(row.get("profiles_by_document") or {}).items():
+                profiles_by_role[str(role)].update(str(value) for value in values or ())
             profile_locators.update(str(value) for value in row.get("source_locator_ids") or ())
-    design_values = sorted({value for values in design_profiles.values() for value in values})
-    commercial_values = sorted(
-        {value for values in commercial_profiles.values() for value in values}
-    )
-    if design_values and commercial_values and set(design_values) != set(commercial_values):
+        distinct_profile_sets = {
+            tuple(sorted(values)) for values in profiles_by_role.values() if values
+        }
+        if len(profiles_by_role) < 2 or len(distinct_profile_sets) < 2:
+            continue
+        facility = str(facility_rows[0].get("facility") or "Место требует уточнения")
+        role_descriptions = [
+            f"{role}: {', '.join(sorted(profiles_by_role[role]))}"
+            for role in sorted(profiles_by_role, key=lambda value: role_order.get(value, 99))
+        ]
         locators = sorted(profile_locators)
         issues.append(
             {
                 "issue_id": semantic_digest(
                     {
-                        "kind": "sheet_pile_profile_scope_unresolved",
-                        "design_profiles": design_values,
-                        "commercial_profiles": commercial_values,
+                        "kind": "sheet_pile_profile_difference",
+                        "facility": facility,
+                        "profiles_by_role": {
+                            role: sorted(values) for role, values in profiles_by_role.items()
+                        },
                         "locators": locators,
                     }
                 ),
                 "kind": "Профиль шпунта требует согласования",
-                "location": "Шпунтовые ограждения проекта",
+                "location": facility,
                 "subject": "Профиль шпунта",
                 "description": (
-                    f"В проектных разделах найдено обозначение {', '.join(design_values)}, "
-                    f"а в сметных позициях — {', '.join(commercial_values)}. Коммерческие "
-                    "позиции не распределены по сооружениям, поэтому это пока не доказанная "
-                    "замена, а существенная неопределённость соответствия."
+                    f"Для {facility} в документах указаны разные профили: "
+                    f"{'; '.join(role_descriptions)}."
                 ),
                 "practical_consequence": (
-                    "Без пообъектной увязки профиля нельзя подтвердить массу, стоимость, "
-                    "возможность повторного использования и соответствие расчётному решению."
+                    "Разные профили могут изменить массу, стоимость и соответствие "
+                    "принятому расчётному решению."
                 ),
                 "recommended_action": (
-                    "Просим подтвердить применяемый профиль шпунта по каждому котловану и "
-                    "увязать обозначения Л5УМ, Л5 и Л5-10 с расчётами и сметными позициями."
+                    f"Просим подтвердить применяемый профиль шпунта для {facility} и "
+                    "привести проект, ВОР и смету к одному обозначению."
                 ),
                 "source_locator_ids": locators,
                 "sources": _source_refs(locators, source_context),
-                "status": "Требуется пообъектная увязка проектных и сметных обозначений",
+                "status": "Установлено различие обозначений в документах сооружения",
             }
         )
     commercial_sheet_pile_scope = _commercial_sheet_pile_scope_summary(sheet_pile_schedule)
@@ -4132,11 +4142,20 @@ def _material_sheet_pile_profiles(
     material: Mapping[str, Any],
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> list[str]:
+    explicit_profiles = _sheet_pile_profiles(_normalized(material.get("name")))
+    if explicit_profiles:
+        return explicit_profiles
+    normalized_name = _normalized(material.get("name"))
     context = source_context.get(str(material.get("source_locator_id") or ""), {})
     page_profiles = [str(value) for value in context.get("page_sheet_pile_profiles") or ()]
-    if page_profiles:
+    incomplete_sheet_pile_material = (
+        normalized_name.startswith("ум из стали")
+        or "шпунт" in normalized_name
+        or ("профили фасонные" in normalized_name and "свай" in normalized_name)
+    )
+    if page_profiles and incomplete_sheet_pile_material:
         return _ordered_unique(page_profiles)
-    return _sheet_pile_profiles(_normalized(material.get("name")))
+    return []
 
 
 def _professional_material_values(
@@ -4149,15 +4168,13 @@ def _professional_material_values(
         original = str(material.get("name") or "")
         context = source_context.get(str(material.get("source_locator_id") or ""), {})
         page_profiles = [str(value) for value in context.get("page_sheet_pile_profiles") or ()]
-        if len(page_profiles) == 1 and _sheet_pile_profiles(_normalized(original)):
-            material["source_name"] = original
-            material["name"] = re.sub(
-                r"л5(?:\s*-\s*(?:ум|10)|\s*(?:ум|10))?",
-                "Л5-УМ" if page_profiles[0] == "Л5УМ" else page_profiles[0],
-                original,
-                count=1,
-                flags=re.IGNORECASE,
-            )
+        explicit_profiles = _sheet_pile_profiles(_normalized(original))
+        if explicit_profiles:
+            if page_profiles and set(explicit_profiles) != set(page_profiles):
+                material["page_context_profiles"] = _ordered_unique(page_profiles)
+                material["profile_context_note"] = (
+                    "Профиль в строке материала отличается от обозначения в контексте листа."
+                )
         elif len(page_profiles) == 1 and _normalized(original).startswith("ум из стали"):
             material["source_name"] = original
             material["name"] = f"Шпунт Л5-УМ {original[2:].strip()}"

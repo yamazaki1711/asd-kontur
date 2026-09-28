@@ -13,6 +13,7 @@ from asd_kontur.tender.project_engineering import (
     _document_composition,
     _issues,
     _material_comparisons,
+    _material_sheet_pile_profiles,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
     _pits,
@@ -297,7 +298,7 @@ def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:
     assert comparisons[0]["conclusion"] == "Значения ВОР и сметы совпадают"
 
 
-def test_page_text_profile_corrects_split_line_material_without_changing_source_record() -> None:
+def test_explicit_material_profile_is_not_overwritten_by_page_context() -> None:
     values = _professional_material_values(
         [
             {
@@ -314,8 +315,74 @@ def test_page_text_profile_corrects_split_line_material_without_changing_source_
         },
     )
 
-    assert values[0]["name"] == "Профили фасонные для шпунтовых свай Л5-УМ"
-    assert values[0]["source_name"] == "Профили фасонные для шпунтовых свай Л5-10"
+    assert values[0]["name"] == "Профили фасонные для шпунтовых свай Л5-10"
+    assert values[0]["page_context_profiles"] == ["Л5УМ"]
+    assert "отличается" in values[0]["profile_context_note"]
+
+
+def test_page_text_profile_repairs_only_genuinely_split_material_wording() -> None:
+    values = _professional_material_values(
+        [
+            {
+                "name": "УМ из стали марки С255",
+                "source_locator_id": "material-row",
+            }
+        ],
+        {"material-row": {"page_sheet_pile_profiles": ["Л5УМ"]}},
+    )
+
+    assert values[0]["name"] == "Шпунт Л5-УМ из стали марки С255"
+    assert values[0]["source_name"] == "УМ из стали марки С255"
+
+
+def test_page_profile_is_not_attached_to_unrelated_waling_material() -> None:
+    assert (
+        _material_sheet_pile_profiles(
+            {
+                "name": "Двутавры с параллельными гранями полок № 20Ш-50Ш",
+                "source_locator_id": "waling-row",
+            },
+            {"waling-row": {"page_sheet_pile_profiles": ["Л5УМ"]}},
+        )
+        == []
+    )
+
+
+def test_sheet_pile_profile_difference_is_reported_for_each_facility() -> None:
+    issues = _issues(
+        defects=[],
+        comparisons=[],
+        scope_comparisons=[],
+        sheet_pile_schedule=[
+            {
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "profiles_by_document": {"ВОР": ["Л5"]},
+                "source_locator_ids": ["vor-kns-4"],
+            },
+            {
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "profiles_by_document": {"Смета": ["Л5УМ"]},
+                "source_locator_ids": ["estimate-kns-4"],
+            },
+            {
+                "facility_id": "kns-8-1",
+                "facility": "КНС 8.1",
+                "profiles_by_document": {"ВОР": ["Л5-10"], "Смета": ["Л5-10"]},
+                "source_locator_ids": ["commercial-kns-8-1"],
+            },
+        ],
+        works=[],
+        source_context={},
+    )
+
+    profile_issue = next(issue for issue in issues if issue["subject"] == "Профиль шпунта")
+    assert profile_issue["location"] == "КНС 4"
+    assert profile_issue["description"] == (
+        "Для КНС 4 в документах указаны разные профили: ВОР: Л5; Смета: Л5УМ."
+    )
+    assert all(issue["location"] != "КНС 8.1" for issue in issues)
 
 
 def test_pit_inherits_relevant_work_only_for_one_established_pit_per_facility() -> None:
@@ -1005,7 +1072,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v47"
+    assert model["model_version"] == "project-engineering-model-v49"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
