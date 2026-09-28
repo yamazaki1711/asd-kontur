@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v25"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v26"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2204,9 +2204,22 @@ def _scope_comparisons(
             else:
                 continue
         elif commercial:
-            status = "MATCH"
-            professional_status = "Состав сопоставлен"
-            conclusion = "Проектная и коммерческая позиции найдены в одном инженерном объёме."
+            exact_operation = _exact_cross_role_work_wording(row)
+            semantic_operation = _semantic_cross_role_work_operation(row)
+            bounded_semantic_match = (
+                semantic_operation is not None and len(row.get("project_wording") or ()) <= 2
+            )
+            if row.get("facility_id") or exact_operation or bounded_semantic_match:
+                status = "MATCH"
+                professional_status = "Состав сопоставлен"
+                conclusion = "Проектная и коммерческая позиции найдены в одном инженерном объёме."
+            else:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Требуется связать проектную и коммерческую позиции"
+                conclusion = (
+                    "Проектные и коммерческие позиции относятся к одному виду работ, "
+                    "но место и границы объёма ещё не позволяют считать их одной работой."
+                )
         else:
             possible = commercial_by_family.get(str(row.get("family_key") or ""), [])
             if possible:

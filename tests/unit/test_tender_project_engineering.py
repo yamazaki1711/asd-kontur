@@ -441,7 +441,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v25"
+    assert model["model_version"] == "project-engineering-model-v26"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -855,6 +855,55 @@ def test_unassigned_generic_operations_do_not_form_one_project_wide_scope() -> N
         ("Монтаж полиэтиленового трубопровода",),
         ("Монтаж трубопровода из стальных труб",),
     }
+
+
+def test_broad_unassigned_family_is_not_reported_as_a_commercial_match() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "design-backfill",
+                    "version": 1,
+                    "value": "Засыпка котлована песком",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "design-backfill-locator",
+                    "source_role": "working_documentation",
+                },
+                {
+                    "candidate_id": "commercial-backfill",
+                    "version": 1,
+                    "value": "Обратная засыпка пазух",
+                    "source_version_id": "source-vor",
+                    "source_locator_id": "commercial-backfill-locator",
+                    "source_role": "bill_of_quantities",
+                },
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("design-backfill-locator", "РД.pdf", 4),
+                _source("commercial-backfill-locator", "ВОР.xlsx", 8),
+            ]
+        ),
+    )
+
+    assert len(model["scope_comparisons"]) == 1
+    comparison = model["scope_comparisons"][0]
+    assert comparison["classification"] == "UNRESOLVED_SCOPE_MATCH"
+    assert comparison["professional_status"] == (
+        "Требуется связать проектную и коммерческую позиции"
+    )
 
 
 def test_facility_specific_document_title_assigns_same_named_works_to_distinct_facilities() -> None:
