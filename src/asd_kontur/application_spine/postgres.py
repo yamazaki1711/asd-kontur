@@ -116,6 +116,21 @@ def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
     )
 
 
+def _deterministic_scope_requires_semantic_review(
+    *,
+    deterministic_family: tuple[str, str] | None,
+    explicit_facility: str | None,
+    linked_quantities: Iterable[Mapping[str, Any]],
+) -> bool:
+    """Keep known scopes out of Qwen unless their numbers still need meaning."""
+
+    return not (
+        deterministic_family is not None
+        and explicit_facility is not None
+        and not tuple(linked_quantities)
+    )
+
+
 class SpinePersistenceError(RuntimeError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -4265,7 +4280,6 @@ class SpinePostgresRepository:
                     not candidate_id
                     or not wording
                     or non_work_reason(wording) is not None
-                    or (deterministic_family is not None and explicit_facility is not None)
                 ):
                     continue
                 existing = prior.get(candidate_id)
@@ -4286,6 +4300,20 @@ class SpinePostgresRepository:
                         and not linked_quantities
                     ):
                         continue
+                # A deterministically classified row with an explicit facility
+                # does not need Qwen to identify the work scope.  Its linked
+                # numeric observations may still need semantic interpretation,
+                # however: skipping the whole row here left the safest
+                # facility-level design/commercial comparisons permanently
+                # in the UNREVIEWED state.  Queue only the outstanding numeric
+                # meaning work and let the current profile preserve the known
+                # family/facility through its supplied hints.
+                if not _deterministic_scope_requires_semantic_review(
+                    deterministic_family=deterministic_family,
+                    explicit_facility=explicit_facility,
+                    linked_quantities=linked_quantities,
+                ):
+                    continue
                 row["wording"] = wording
                 row["deterministic_family_hint"] = (
                     deterministic_family[0] if deterministic_family is not None else None

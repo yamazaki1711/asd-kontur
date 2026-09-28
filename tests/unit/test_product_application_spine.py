@@ -23,6 +23,7 @@ from asd_kontur.application_spine.object_store import (
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
     SpinePostgresRepository,
+    _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
     _semantic_extraction_priority,
     _unreviewed_work_quantities,
@@ -34,6 +35,26 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
+    family = ("pipeline", "Трубопроводы и сети")
+
+    assert _deterministic_scope_requires_semantic_review(
+        deterministic_family=family,
+        explicit_facility="ЛОС 4",
+        linked_quantities=[{"candidate_id": "quantity-1"}],
+    )
+    assert not _deterministic_scope_requires_semantic_review(
+        deterministic_family=family,
+        explicit_facility="ЛОС 4",
+        linked_quantities=[],
+    )
+    assert _deterministic_scope_requires_semantic_review(
+        deterministic_family=family,
+        explicit_facility=None,
+        linked_quantities=[],
+    )
 
 
 def test_quantity_review_chunks_resume_without_silently_accepting_deferred_values() -> None:
