@@ -94,6 +94,38 @@ def test_prompt_budget_prioritizes_structured_sheet_pile_facts_over_verbose_over
     assert "30Ш2" in prompt
     assert "35Ш2" in prompt
     assert "waling-source" in prompt
+
+
+def test_discrepancy_prompt_keeps_professional_issues_ahead_of_verbose_model() -> None:
+    prompt = _tool_results_for_prompt(
+        [
+            {
+                "step_sequence": 1,
+                "tool": "consultant.get_discrepancies",
+                "reason": "Расхождения проекта.",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "works": [{"payload": "x" * 30_000}],
+                            "issues": [
+                                {
+                                    "location": "КНС 8.1",
+                                    "subject": "Прокладка кабеля",
+                                    "description": "ПД: 30 м; ВОР/Смета: 60 м.",
+                                }
+                            ],
+                            "quantity_comparisons": [],
+                        }
+                    },
+                    "sources": [],
+                },
+            }
+        ]
+    )
+
+    assert "КНС 8.1" in prompt
+    assert "ПД: 30 м; ВОР/Смета: 60 м" in prompt
+    assert "xxxxxxxxxx" not in prompt
     assert len(prompt) <= 14_000
 
 
@@ -404,6 +436,81 @@ def test_discrepancy_question_requires_differences_without_forcing_matches() -> 
         answer=answer,
         receipts=receipts,
         question="Какие объёмы расходятся между ПД и ВОР?",
+    ) == {"passed": True, "problems": []}
+
+
+def test_project_discrepancy_question_requires_material_profile_and_omission_facts() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "issues": [
+                            {
+                                "kind": "Профиль шпунта требует согласования",
+                                "location": "КНС 8.1",
+                                "subject": "Профиль шпунта",
+                                "description": "ПД: Л5УМ; ВОР: Л5-10; Смета: Л5УМ.",
+                            },
+                            {
+                                "kind": "Возможная неучтённая работа",
+                                "location": "ЛОС 8.1",
+                                "subject": "Устройство шпунтового ограждения",
+                                "description": "Работа отсутствует в ВОР и смете.",
+                            },
+                            {
+                                "kind": "Различие характеристик материала",
+                                "location": "ЛОС 8.1",
+                                "subject": "Бетон В25",
+                                "description": "Проект F200, коммерческие документы F150.",
+                            },
+                        ],
+                        "material_comparisons": [
+                            {
+                                "material": "Бетон В25",
+                                "description": "Проект F200, коммерческие документы F150.",
+                            }
+                        ],
+                        "quantity_comparisons": [],
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "По КНС 8.1 есть вопрос по профилю шпунта.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Расхождения.",
+        (),
+    )
+    complete = SynthesizedAnswer(
+        (
+            "КНС 8.1: ПД — Л5УМ, ВОР — Л5-10. ЛОС 8.1: устройство шпунтового "
+            "ограждения отсутствует в коммерческих документах; бетон В25 имеет F200 "
+            "в проекте и F150 в коммерческих документах."
+        ),
+        "workspace_conclusion",
+        False,
+        (),
+        "Расхождения.",
+        (),
+    )
+
+    question = "Какие реальные расхождения между проектом, ВОР и сметой установлены?"
+    assert not _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question=question,
+    )["passed"]
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question=question,
     ) == {"passed": True, "problems": []}
 
 

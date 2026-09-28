@@ -840,16 +840,28 @@ def _with_structured_project_fact_checks(
     asks_for_contractor_risks = "риск" in normalized_question and any(
         marker in normalized_question for marker in ("подряд", "проект")
     )
-    asks_for_comparisons = any(
+    asks_for_project_discrepancies = any(
+        marker in normalized_question for marker in ("расхожд", "разниц", "противореч")
+    ) and any(
         marker in normalized_question
-        for marker in ("расхожд", "сравн", "разниц", "совпад", "вор", "смет")
-    ) and any(marker in normalized_question for marker in ("объ", "колич", "пд", "рд", "работ"))
+        for marker in ("проект", "документ", "вор", "смет", "пд", "рд")
+    )
+    asks_for_comparisons = asks_for_project_discrepancies or (
+        any(
+            marker in normalized_question
+            for marker in ("расхожд", "сравн", "разниц", "совпад", "вор", "смет")
+        )
+        and any(marker in normalized_question for marker in ("объ", "колич", "пд", "рд", "работ"))
+    )
     asks_for_discrepancies = any(
         marker in normalized_question for marker in ("расхожд", "расход", "разниц")
     )
-    asks_for_material_differences = "материал" in normalized_question and any(
-        marker in normalized_question
-        for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
+    asks_for_material_differences = asks_for_project_discrepancies or (
+        "материал" in normalized_question
+        and any(
+            marker in normalized_question
+            for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
+        )
     )
     asks_for_facility_works = "работ" in normalized_question and bool(
         re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
@@ -885,6 +897,7 @@ def _with_structured_project_fact_checks(
     required_facility_work_names: set[str] = set()
     required_facility_work_counts: set[int] = set()
     required_missing_work_terms: set[str] = set()
+    required_issue_terms: set[str] = set()
     for receipt in receipts:
         if receipt.get("tool") not in {
             "consultant.get_workspace_overview",
@@ -987,6 +1000,23 @@ def _with_structured_project_fact_checks(
                 required_material_terms.update(
                     re.findall(r"\b(?:F|W)\d+\b", str(item.get("description") or ""), re.I)
                 )
+        if asks_for_project_discrepancies:
+            for item in engineering.get("issues") or ():
+                if not isinstance(item, dict):
+                    continue
+                location = str(item.get("location") or "").strip()
+                subject = str(item.get("subject") or "").strip()
+                if location:
+                    required_issue_terms.add(location)
+                if "неучт" in str(item.get("kind") or "").casefold() and subject:
+                    required_issue_terms.add(subject)
+                required_issue_terms.update(
+                    re.findall(
+                        r"\b(?:Л5(?:-?10|УМ)?|[ВB]\s*\d+|F\d+)\b",
+                        str(item.get("description") or ""),
+                        re.I,
+                    )
+                )
         if asks_for_facility_works:
             for dossier in engineering.get("facility_dossiers") or ():
                 if not isinstance(dossier, dict):
@@ -1025,6 +1055,7 @@ def _with_structured_project_fact_checks(
             required_facility_work_names,
             required_facility_work_counts,
             required_missing_work_terms,
+            required_issue_terms,
         )
     ):
         return checks
@@ -1058,6 +1089,9 @@ def _with_structured_project_fact_checks(
     material_difference_omitted = any(
         _inventory_text_key(value) not in normalized_answer_key for value in required_material_terms
     )
+    issue_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key for value in required_issue_terms
+    )
     facility_work_omitted = any(
         _inventory_text_key(value) not in normalized_answer_key
         for value in required_facility_work_names
@@ -1085,7 +1119,7 @@ def _with_structured_project_fact_checks(
         problems.append("workspace_contractor_risk_omitted")
     if comparison_omitted:
         problems.append("workspace_structured_fact_omitted")
-    if material_difference_omitted:
+    if material_difference_omitted or issue_omitted:
         problems.append("workspace_structured_fact_omitted")
     if facility_work_omitted:
         problems.append("workspace_structured_fact_omitted")
@@ -1168,6 +1202,8 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         while source_index and len(json.dumps(source_index, ensure_ascii=False)) > source_budget:
             source_index.pop()
         result = {key: value for key, value in response.items() if key != "sources"}
+        if structured_project_tool:
+            result = _structured_project_prompt_result(str(receipt.get("tool")), result)
         available = min(9_000 if structured_project_tool else 5_000, remaining)
         source_text = json.dumps(source_index, ensure_ascii=False, default=str)
         result_text = json.dumps(result, ensure_ascii=False, default=str)
@@ -1185,6 +1221,63 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         remaining -= len(record_text)
         bounded.append(record)
     return json.dumps(bounded, ensure_ascii=False)
+
+
+def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> dict[str, Any]:
+    """Keep professional results ahead of verbose model internals in the prompt."""
+
+    value = response.get("value")
+    engineering = value.get("project_engineering") if isinstance(value, dict) else None
+    if not isinstance(engineering, dict):
+        return response
+    common = {
+        "model_version": engineering.get("model_version"),
+        "summary": engineering.get("summary"),
+    }
+    if tool == "consultant.get_discrepancies":
+        projected = {
+            **common,
+            "issues": engineering.get("issues") or [],
+            "quantity_comparisons": [
+                item
+                for item in engineering.get("quantity_comparisons") or []
+                if isinstance(item, dict) and item.get("classification") != "MATCH"
+            ],
+            "material_comparisons": engineering.get("material_comparisons") or [],
+            "scope_comparisons": [
+                item
+                for item in engineering.get("scope_comparisons") or []
+                if isinstance(item, dict)
+                and item.get("classification") == "WORK_MISSING_IN_COMMERCIAL"
+            ],
+            "customer_questions": engineering.get("customer_questions") or [],
+            "risks": engineering.get("risks") or [],
+        }
+    elif tool == "consultant.get_information_gaps":
+        projected = {
+            **common,
+            "pits": engineering.get("pits"),
+            "unresolved": engineering.get("unresolved"),
+            "requirements": engineering.get("requirements"),
+        }
+    elif tool == "consultant.get_work_packages":
+        projected = {
+            **common,
+            "facility_dossiers": engineering.get("facility_dossiers") or [],
+            "sheet_pile_answer_facts": engineering.get("sheet_pile_answer_facts") or [],
+            "works": engineering.get("works") or [],
+        }
+    else:
+        projected = {
+            **common,
+            "project": engineering.get("project"),
+            "pits": engineering.get("pits"),
+            "facilities": engineering.get("facilities") or [],
+            "issues": engineering.get("issues") or [],
+        }
+    return {key: item for key, item in response.items() if key != "value"} | {
+        "value": {"project_engineering": projected}
+    }
 
 
 def _inventory_prompt_record(receipt: dict[str, Any]) -> dict[str, Any]:
