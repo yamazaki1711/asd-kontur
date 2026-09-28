@@ -168,10 +168,24 @@ class AssistantWorker:
             if claimed is None:
                 time.sleep(0.3)
                 continue
+            if not self._qwen_runtime_available():
+                self._repository.defer_for_busy_runtime(claimed)
+                time.sleep(1.0)
+                continue
             self._run(claimed)
 
     def _request_stop(self) -> None:
         self._stopping = True
+
+    def _qwen_runtime_available(self) -> bool:
+        health_url = self._qwen_url.rsplit("/", 1)[0] + "/health"
+        request = urllib.request.Request(health_url, method="GET")
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(request, timeout=1.0) as response:
+                return int(response.status) == 200
+        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+            return False
 
     def _run(self, claimed: ClaimedTurn) -> None:
         self._repository.start(claimed)

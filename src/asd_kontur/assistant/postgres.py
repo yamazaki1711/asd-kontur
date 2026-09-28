@@ -370,6 +370,46 @@ class AssistantRepository:
             int(row["lease_generation"]),
         )
 
+    def defer_for_busy_runtime(self, claimed: ClaimedTurn) -> None:
+        """Return an untouched turn to the queue while local Qwen is occupied."""
+
+        with Session(self._engine) as session, session.begin():
+            _scope(session, claimed.organization_id, claimed.workspace_id)
+            changed = int(
+                getattr(
+                    session.execute(
+                        sa.text(
+                            "UPDATE workspace.assistant_turns SET state='queued',"
+                            "max_attempts=max_attempts+1,lease_owner=NULL,lease_expires_at=NULL,"
+                            "heartbeat_at=CURRENT_TIMESTAMP WHERE organization_id=:o AND "
+                            "workspace_id=:w AND turn_id=:turn AND state='leased' AND "
+                            "lease_generation=:generation"
+                        ),
+                        {
+                            "o": claimed.organization_id,
+                            "w": claimed.workspace_id,
+                            "turn": claimed.turn_id,
+                            "generation": claimed.lease_generation,
+                        },
+                    ),
+                    "rowcount",
+                    0,
+                )
+            )
+            if changed != 1:
+                raise AssistantPersistenceError("assistant_lease_fence_rejected")
+            self._append_event(
+                session,
+                claimed.organization_id,
+                claimed.workspace_id,
+                claimed.turn_id,
+                "queued",
+                {
+                    "state": "queued",
+                    "message": "Локальная модель завершает текущую инженерную задачу.",
+                },
+            )
+
     def start(self, claimed: ClaimedTurn) -> None:
         self._state_update(claimed, "running", None)
 
