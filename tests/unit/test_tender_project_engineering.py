@@ -433,7 +433,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v18"
+    assert model["model_version"] == "project-engineering-model-v19"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -645,6 +645,13 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Испытание очистного сооружения на герметичность": "testing",
         "Монтаж силовых кабелей вручную": "electrical",
         "Посев многолетних трав": "landscaping",
+        "Корчевка пней на строительной площадке": "site_preparation",
+        "Устройство насыпи из ранее разработанного грунта": "site_preparation",
+        "Заполнение полости бетоном В7,5": "reinforced_concrete",
+        "Затирка цементным раствором швов колодца": "chambers_wells",
+        "Монтаж лестницы КЛ-1": "structural_steel",
+        "Восстановление асфальтобетонного покрытия": "roadworks",
+        "Вывоз строительного мусора": "waste_management",
     }
 
     for wording, family_key in expected.items():
@@ -1127,6 +1134,12 @@ def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None
     assert non_work_reason("4-100-060") == "Сметный шифр без описания строительной операции"
     assert non_work_reason("Щиты настила, толщина 25 мм") == (
         "Описание материала, а не строительной операции"
+    )
+    assert non_work_reason("Техническое обслуживание оборудования") == (
+        "Эксплуатационная операция, а не строительная работа"
+    )
+    assert non_work_reason("Предварительное отстаивание сточных вод") == (
+        "Эксплуатационная операция, а не строительная работа"
     )
 
 
