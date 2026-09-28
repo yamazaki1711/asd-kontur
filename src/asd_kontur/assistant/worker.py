@@ -818,10 +818,11 @@ def _with_structured_project_fact_checks(
     """
 
     normalized_question = " ".join(question.casefold().replace("ё", "е").split())
+    asks_for_sheet_pile = "шпунт" in normalized_question or "sheet pile" in normalized_question
     asks_for_waling = any(
         marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")
     )
-    if not asks_for_waling:
+    if not asks_for_sheet_pile and not asks_for_waling:
         return checks
 
     required_terms: set[str] = set()
@@ -841,11 +842,20 @@ def _with_structured_project_fact_checks(
             if not isinstance(raw, dict):
                 continue
             operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
-            if not any(marker in operation for marker in ("пояс", "обвяз", "балк")):
+            operation_is_waling = any(
+                marker in operation for marker in ("пояс", "обвяз", "балк")
+            )
+            beams = [str(beam).strip() for beam in raw.get("waling_beams") or ()]
+            if not operation_is_waling and not any(beams):
                 continue
-            for beam in raw.get("waling_beams") or ():
-                if str(beam).strip():
-                    required_terms.add(str(beam).strip())
+            required_terms.update(beam for beam in beams if beam)
+            # A quantity on the generic enclosure row can describe the sheet
+            # pile itself rather than its belt.  Require quantities only from
+            # an explicitly identified belt/beam operation, while preserving
+            # beam profiles that the engineering model associates with the
+            # broader enclosure row.
+            if not operation_is_waling:
+                continue
             quantities = raw.get("quantities_by_document")
             if not isinstance(quantities, dict):
                 continue

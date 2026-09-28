@@ -179,6 +179,72 @@ def test_requested_structured_waling_facts_pass_when_answered() -> None:
     assert checks == {"passed": True, "problems": []}
 
 
+def test_broad_sheet_pile_scope_requires_associated_belt_quantity_and_beams() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_work_packages",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "sheet_pile_answer_facts": [
+                            {
+                                "operation": "Устройство шпунтового ограждения",
+                                "waling_beams": ["30Ш2", "35Ш2"],
+                                "quantities_by_document": {
+                                    "Смета": [{"value": "95.028", "unit": "т"}]
+                                },
+                            },
+                            {
+                                "operation": "Устройство распределительного пояса",
+                                "waling_beams": [],
+                                "quantities_by_document": {
+                                    "Смета": [{"value": "9.841", "unit": "т"}]
+                                },
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "Предусмотрено погружение и извлечение шпунта.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Шпунтовые работы.",
+        ("шпунт",),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Покажи все шпунтовые работы и где они выполняются.",
+    )
+
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+    complete = SynthesizedAnswer(
+        "Помимо погружения и извлечения шпунта, по смете предусмотрено 9,841 т "
+        "распределительных поясов из балок 30Ш2 и 35Ш2.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Шпунтовые работы.",
+        ("шпунт", "распределительный пояс"),
+    )
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Покажи все шпунтовые работы и где они выполняются.",
+    )
+
+    assert checks == {"passed": True, "problems": []}
+
+
 def test_inventory_prompt_preserves_all_candidates_as_structured_json() -> None:
     candidates = [
         {
