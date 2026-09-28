@@ -357,6 +357,90 @@ def test_unclassified_commercial_row_at_another_facility_does_not_block_omission
     assert formwork["classification"] == "WORK_MISSING_IN_COMMERCIAL"
 
 
+def test_same_family_commercial_work_at_other_facilities_does_not_cover_design_scope() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-enclosure-area-a",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work_name": "Устройство шпунтового ограждения",
+                "document_roles": ["ПД"],
+                "source_locator_ids": ["design-a"],
+            },
+            {
+                "work_scope_id": "commercial-enclosure-area-b",
+                "facility_id": "area-b",
+                "facility": "Участок Б",
+                "family_key": "sheet_piling",
+                "work_name": "Погружение шпунта",
+                "document_roles": ["ВОР", "Смета"],
+                "source_locator_ids": ["commercial-b"],
+            },
+            {
+                "work_scope_id": "commercial-concrete-area-a",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "reinforced_concrete",
+                "work_name": "Бетонирование стен",
+                "document_roles": ["ВОР"],
+                "source_locator_ids": ["commercial-a"],
+            },
+        ],
+        available_document_roles=["ПД", "ВОР", "Смета"],
+    )
+
+    enclosure = next(
+        value
+        for value in comparisons
+        if value["facility"] == "Участок А" and value["family_key"] == "sheet_piling"
+    )
+    assert enclosure["classification"] == "WORK_MISSING_IN_COMMERCIAL"
+    assert enclosure["facility"] == "Участок А"
+
+
+def test_unallocated_same_family_commercial_work_keeps_design_scope_unresolved() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-enclosure-area-a",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work_name": "Устройство шпунтового ограждения",
+                "document_roles": ["ПД"],
+                "source_locator_ids": ["design-a"],
+            },
+            {
+                "work_scope_id": "commercial-enclosure-unallocated",
+                "facility_id": None,
+                "facility": "Место выполнения не установлено",
+                "family_key": "sheet_piling",
+                "work_name": "Погружение шпунта",
+                "document_roles": ["ВОР"],
+                "source_locator_ids": ["commercial-unallocated"],
+            },
+            {
+                "work_scope_id": "commercial-concrete-area-a",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "reinforced_concrete",
+                "work_name": "Бетонирование стен",
+                "document_roles": ["ВОР"],
+                "source_locator_ids": ["commercial-a"],
+            },
+        ]
+    )
+
+    enclosure = next(
+        value
+        for value in comparisons
+        if value["facility"] == "Участок А" and value["family_key"] == "sheet_piling"
+    )
+    assert enclosure["classification"] == "UNRESOLVED_SCOPE_MATCH"
+
+
 def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
     comparisons = _scope_comparisons(
         [
@@ -549,6 +633,40 @@ def test_facility_reclamation_omission_becomes_a_customer_action() -> None:
     assert "Рекультивация" in issue["recommended_action"]
 
 
+def test_sheet_pile_omission_becomes_an_issue_but_embedded_operations_do_not() -> None:
+    issues = _issues(
+        defects=[],
+        comparisons=[],
+        scope_comparisons=[
+            {
+                "scope_comparison_id": "sheet-pile-gap",
+                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work": "Устройство шпунтового ограждения",
+                "conclusion": "Работа не найдена в предоставленной ВОР.",
+                "source_locator_ids": ["sheet-pile-design"],
+            },
+            {
+                "scope_comparison_id": "formwork-gap",
+                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "formwork",
+                "work": "Опалубочные работы",
+                "conclusion": "Отдельная строка не найдена в предоставленной ВОР.",
+                "source_locator_ids": ["formwork-design"],
+            },
+        ],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )
+
+    assert [issue["subject"] for issue in issues] == ["Устройство шпунтового ограждения"]
+
+
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
     return locator, {
         "source_version_id": f"source-{locator}",
@@ -728,7 +846,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v35"
+    assert model["model_version"] == "project-engineering-model-v36"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
