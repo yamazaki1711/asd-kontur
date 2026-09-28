@@ -590,9 +590,24 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
                     "works": [
                         {"work_name": "Погружение шпунта"},
                         {"work_name": "Устройство распределительного пояса"},
+                        {"work_name": "Погружение шпунта"},
                     ],
                     "missing_information": ["Коммерческий объём не распределён"],
-                }
+                },
+                {
+                    "facility": {
+                        "name": "КНС 8.1",
+                        "designation": "КНС 8.1",
+                        "kind": "Сооружение",
+                        "status": "Установлено",
+                    },
+                    "pits": [],
+                    "structures": [],
+                    "connections": [],
+                    "characteristics": [],
+                    "works": [{"work_name": "Разработка котлована"}],
+                    "missing_information": [],
+                },
             ],
         },
         query="Какие конструкции и работы относятся к КНС-4?",
@@ -600,6 +615,7 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     )
 
     dossier = projected["facility_dossiers"][0]
+    assert len(projected["facility_dossiers"]) == 1
     assert projected["document_composition"]["missing_roles"] == [
         "РД",
         "Спецификация",
@@ -626,6 +642,7 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
         "Погружение шпунта",
         "Устройство распределительного пояса",
     ]
+    assert dossier["work_count"] == 2
 
 
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:

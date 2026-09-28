@@ -2262,9 +2262,9 @@ def _assistant_engineering_for_query(
             return True
         text = json.dumps(row, ensure_ascii=False, default=str).casefold().replace("ё", "е")
         compact = text.replace(" ", "").replace("-", "")
-        return any(token in text for token in tokens) or any(
-            marker.replace("-", "") in compact for marker in facility_markers
-        )
+        if facility_markers:
+            return any(marker.replace("-", "") in compact for marker in facility_markers)
+        return any(token in text for token in tokens)
 
     def compact_quantities(value: Any) -> dict[str, list[dict[str, Any]]]:
         if not isinstance(value, Mapping):
@@ -2426,7 +2426,12 @@ def _assistant_engineering_for_query(
     facility_cards = [
         card
         for card in engineering.get("facility_cards") or ()
-        if isinstance(card, Mapping) and relevant(card)
+        if isinstance(card, Mapping)
+        and (
+            relevant(dict(card.get("facility") or {}))
+            if facility_markers
+            else relevant(card)
+        )
     ]
     if facility_cards:
         result["facility_dossiers"] = [
@@ -2457,10 +2462,22 @@ def _assistant_engineering_for_query(
                     if isinstance(value, Mapping)
                 ][:12],
                 "work_names": [
-                    str(value.get("work_name"))
-                    for value in card.get("works") or ()
-                    if isinstance(value, Mapping) and value.get("work_name")
-                ][:20],
+                    value
+                    for value in sorted(
+                        {
+                            str(item.get("work_name"))
+                            for item in card.get("works") or ()
+                            if isinstance(item, Mapping) and item.get("work_name")
+                        }
+                    )
+                ][:100],
+                "work_count": len(
+                    {
+                        str(value.get("work_name"))
+                        for value in card.get("works") or ()
+                        if isinstance(value, Mapping) and value.get("work_name")
+                    }
+                ),
                 "missing_information": [
                     str(value) for value in card.get("missing_information") or ()
                 ][:8],
