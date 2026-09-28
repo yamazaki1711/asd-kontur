@@ -406,6 +406,39 @@ def test_query_focused_engineering_projection_preserves_waling_facts_before_verb
     assert row["source_locator_ids"] == ["waling-a", "waling-b"]
 
 
+def test_query_focused_projection_keeps_professional_quantity_comparison() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "model_version": "project-engineering-model-v18",
+            "quantity_comparisons": [
+                {
+                    "facility": "Место выполнения не установлено",
+                    "work": "Демонтаж светильников",
+                    "classification": "MATCH",
+                    "professional_status": "Значения совпадают",
+                    "conclusion": "Значения совпадают",
+                    "left": {"document_role": "ПД", "value": "3", "unit": "шт"},
+                    "right": {"document_role": "Смета", "value": "3", "unit": "шт"},
+                    "scope_match_basis": "Операция сопоставлена по смыслу.",
+                    "source_locator_ids": ["design-light", "estimate-light"],
+                }
+            ],
+        },
+        query="Какие объёмы демонтажа светильников расходятся с ПД?",
+        limit=20,
+    )
+
+    comparison = projected["quantity_comparisons"][0]
+    assert comparison["left"] == {"document_role": "ПД", "value": "3", "unit": "шт"}
+    assert comparison["right"] == {
+        "document_role": "Смета",
+        "value": "3",
+        "unit": "шт",
+    }
+    assert comparison["professional_status"] == "Значения совпадают"
+    assert comparison["source_locator_ids"] == ["design-light", "estimate-light"]
+
+
 def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
     groups = [
         {

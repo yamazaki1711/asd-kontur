@@ -2278,6 +2278,7 @@ def _assistant_engineering_for_query(
                 "facility",
                 "pit",
                 "operation",
+                "work",
                 "work_name",
                 "kind",
                 "location",
@@ -2287,6 +2288,10 @@ def _assistant_engineering_for_query(
                 "recommended_action",
                 "status",
                 "comparison_state",
+                "classification",
+                "professional_status",
+                "conclusion",
+                "scope_match_basis",
                 "design_value",
                 "commercial_value",
                 "difference",
@@ -2305,6 +2310,14 @@ def _assistant_engineering_for_query(
         quantities = compact_quantities(row.get("quantities_by_document"))
         if quantities:
             result["quantities_by_document"] = quantities
+        for side in ("left", "right"):
+            value = row.get(side)
+            if isinstance(value, Mapping):
+                result[side] = {
+                    key: value.get(key)
+                    for key in ("document_role", "value", "unit")
+                    if value.get(key) is not None
+                }
         locator_ids = [str(value) for value in row.get("source_locator_ids") or () if value]
         if locator_ids:
             result["source_locator_ids"] = locator_ids[:12]
