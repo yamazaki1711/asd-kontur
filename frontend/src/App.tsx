@@ -5493,19 +5493,51 @@ function ProjectEngineeringResult({
   return (
     <>
       <section className="panel">
-        <h2>Расхождения объёмов</h2>
+        <h2>Сравнение объёмов по документам</h2>
         {comparisons.length ? (
           <div className="card-grid">
-            {comparisons.map((comparison) => (
-              <article
-                className="entity-card"
-                key={displayValue(comparison.comparison_id)}
-              >
-                <h3>{displayValue(comparison.work)}</h3>
-                <p>{displayValue(comparison.facility)}</p>
-                <strong>{displayValue(comparison.conclusion)}</strong>
-              </article>
-            ))}
+            {comparisons.map((comparison) => {
+              const left = (comparison.left ?? {}) as Record<string, unknown>;
+              const right = (comparison.right ?? {}) as Record<
+                string,
+                unknown
+              >;
+              return (
+                <article
+                  className="entity-card"
+                  key={displayValue(comparison.comparison_id)}
+                >
+                  <h3>{displayValue(comparison.work)}</h3>
+                  <p>{displayValue(comparison.facility)}</p>
+                  <p>
+                    <strong>{displayValue(left.document_role)}:</strong>{" "}
+                    {displayValue(left.value)} {displayValue(left.unit)}
+                  </p>
+                  <p>
+                    <strong>{displayValue(right.document_role)}:</strong>{" "}
+                    {displayValue(right.value)} {displayValue(right.unit)}
+                  </p>
+                  <StatusPill
+                    tone={
+                      comparison.classification === "MATCH"
+                        ? "default"
+                        : "warning"
+                    }
+                  >
+                    {displayValue(
+                      comparison.professional_status,
+                      displayValue(comparison.conclusion),
+                    )}
+                  </StatusPill>
+                  <p>{displayValue(comparison.conclusion)}</p>
+                  <ProjectSourceLinks
+                    locatorIds={comparison.source_locator_ids}
+                    workspaceId={workspaceId}
+                    modeSlug={modeSlug}
+                  />
+                </article>
+              );
+            })}
           </div>
         ) : (
           <p>
