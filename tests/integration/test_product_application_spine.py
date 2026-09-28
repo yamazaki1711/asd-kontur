@@ -2169,7 +2169,11 @@ def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(
     )
     assert first is not None
     assert first.attempt_number == 1
-    repository.yield_job_for_foreground(first, worker_identity="foreground-yield-worker")
+    repository.yield_job_for_foreground(
+        first,
+        worker_identity="foreground-yield-worker",
+        delay_seconds=0,
+    )
 
     with postgres_environment.owner_engine.connect() as connection:
         row = connection.execute(
