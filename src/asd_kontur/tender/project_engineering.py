@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v13"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v14"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -478,7 +478,9 @@ def build_project_engineering_model(
         work_resolutions or {},
     )
     comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
-    scope_comparisons = _scope_comparisons(work_model["works"])
+    scope_comparisons = _scope_comparisons(
+        work_model["works"], unclassified_works=work_model["unclassified"]
+    )
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
     issues = _issues(
         defects,
@@ -1692,7 +1694,11 @@ def _comparison_row(
     }
 
 
-def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _scope_comparisons(
+    works: Iterable[Mapping[str, Any]],
+    *,
+    unclassified_works: Iterable[Mapping[str, Any]] = (),
+) -> list[dict[str, Any]]:
     """Classify design/commercial coverage for the same engineering family.
 
     This does not call a design item omitted merely because its exact wording is
@@ -1703,6 +1709,11 @@ def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any
     rows = [dict(value) for value in works]
     design_roles = {"ПД", "РД", "Спецификация"}
     commercial_roles = {"ВОР", "Смета"}
+    unresolved_commercial = [
+        dict(row)
+        for row in unclassified_works
+        if str(row.get("document_role") or "") in commercial_roles
+    ]
     commercial_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         roles = set(str(value) for value in row.get("document_roles") or ())
@@ -1717,22 +1728,33 @@ def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any
         if not design:
             if commercial:
                 status = "COMMERCIAL_ONLY_WORK"
+                professional_status = "Коммерческая позиция без установленного основания"
                 conclusion = "Коммерческая позиция пока не связана с проектным объёмом."
             else:
                 continue
         elif commercial:
             status = "MATCH"
+            professional_status = "Состав сопоставлен"
             conclusion = "Проектная и коммерческая позиции найдены в одном инженерном объёме."
         else:
             possible = commercial_by_family.get(str(row.get("family_key") or ""), [])
             if possible:
                 status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Требуется распределить коммерческий объём"
                 conclusion = (
                     "Коммерческие позиции этого вида найдены, но их нельзя однозначно "
                     "распределить по сооружениям."
                 )
+            elif unresolved_commercial:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Сопоставление коммерческого состава не завершено"
+                conclusion = (
+                    "Сопоставление пока не завершено: в ВОР/смете остаются описания работ, "
+                    "которые ещё не удалось однозначно классифицировать."
+                )
             else:
                 status = "WORK_MISSING_IN_COMMERCIAL"
+                professional_status = "Возможная неучтённая работа"
                 conclusion = (
                     "Работа установлена в проектных документах, но соответствующая позиция "
                     "не найдена в имеющихся ВОР/сметах."
@@ -1746,12 +1768,7 @@ def _scope_comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any
                     }
                 ),
                 "classification": status,
-                "professional_status": {
-                    "MATCH": "Состав сопоставлен",
-                    "WORK_MISSING_IN_COMMERCIAL": "Возможная неучтённая работа",
-                    "COMMERCIAL_ONLY_WORK": "Коммерческая позиция без установленного основания",
-                    "UNRESOLVED_SCOPE_MATCH": "Требуется распределить коммерческий объём",
-                }[status],
+                "professional_status": professional_status,
                 "facility": row.get("facility"),
                 "facility_id": row.get("facility_id"),
                 "family_key": row.get("family_key"),

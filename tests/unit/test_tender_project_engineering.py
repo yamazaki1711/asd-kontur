@@ -9,6 +9,7 @@ from asd_kontur.tender.project_engineering import (
     _comparison_row,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
+    _scope_comparisons,
     build_project_engineering_model,
     classify_work_family,
     facility_designation,
@@ -26,6 +27,61 @@ def test_facility_designations_preserve_multiple_explicit_project_scopes() -> No
     )
     assert facility_designation("Работы КНС-4") == "КНС 4"
     assert facility_designation("КНС-4 и ЛОС 8.1") is None
+
+
+def test_project_work_is_not_called_omitted_while_commercial_rows_are_unclassified() -> None:
+    works = [
+        {
+            "work_scope_id": "design-formwork",
+            "facility_id": "kns-4",
+            "facility": "КНС 4",
+            "family_key": "formwork",
+            "work_name": "Опалубочные работы",
+            "document_roles": ["РД"],
+            "source_locator_ids": ["design-locator"],
+        }
+    ]
+
+    comparisons = _scope_comparisons(
+        works,
+        unclassified_works=[
+            {
+                "project_wording": "Неоднозначная позиция коммерческого документа",
+                "document_role": "Смета",
+            }
+        ],
+    )
+
+    assert comparisons[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
+    assert "ещё не удалось однозначно классифицировать" in comparisons[0]["conclusion"]
+
+
+def test_project_work_is_called_omitted_only_after_commercial_scope_is_classified() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-formwork",
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "family_key": "formwork",
+                "work_name": "Опалубочные работы",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                "work_scope_id": "commercial-concrete",
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "family_key": "concrete",
+                "work_name": "Бетонирование",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-locator"],
+            },
+        ]
+    )
+
+    formwork = next(value for value in comparisons if value["family_key"] == "formwork")
+    assert formwork["classification"] == "WORK_MISSING_IN_COMMERCIAL"
 
 
 def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
@@ -281,7 +337,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v13"
+    assert model["model_version"] == "project-engineering-model-v14"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
