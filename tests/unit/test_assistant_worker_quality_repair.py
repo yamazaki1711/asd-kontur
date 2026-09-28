@@ -703,7 +703,7 @@ def test_full_metadata_plan_executes_required_workspace_content_search(monkeypat
         uuid4(),
         uuid4(),
         AssistantMode.TENDER,
-        "Какие сооружения входят в состав этого проекта?",
+        "На каких листах показаны сооружения проекта?",
         "owner-a",
         1,
         1,

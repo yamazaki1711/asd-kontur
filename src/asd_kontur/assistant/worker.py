@@ -120,6 +120,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
     asks_for_ntd_requirements = any(
         marker in normalized for marker in ("нтд", "норматив", "требования сп")
     ) and any(marker in normalized for marker in ("требован", "провер", "применим"))
+    asks_for_project_composition = any(
+        marker in normalized
+        for marker in (
+            "что это за проект",
+            "что строится",
+            "описание проекта",
+            "состав объекта",
+            "какие сооружения",
+            "какие объекты",
+            "какие лос",
+            "какие кнс",
+        )
+    )
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -144,6 +157,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                     "consultant.get_project_entity_inventory",
                     {"kind": "excavation_pit", "limit": 30},
                     "Использовать подготовленный профессиональный инвентарь котлованов проекта.",
+                ),
+            ),
+        )
+    if asks_for_project_composition:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_workspace_overview",
+                    {},
+                    "Использовать подготовленное описание и полный состав объекта.",
                 ),
             ),
         )
@@ -1427,11 +1453,78 @@ def _append_prepared_project_result(
     asks_for_ntd_requirements = any(
         marker in normalized for marker in ("нтд", "норматив", "требования сп")
     ) and any(marker in normalized for marker in ("требован", "провер", "применим"))
+    asks_for_project_composition = any(
+        marker in normalized
+        for marker in (
+            "что это за проект",
+            "что строится",
+            "описание проекта",
+            "состав объекта",
+            "какие сооружения",
+            "какие объекты",
+            "какие лос",
+            "какие кнс",
+        )
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
         str(item["source_id"]) for item in _deduplicated_sources(receipts) if item.get("source_id")
     }
+    if asks_for_project_composition:
+        overview_rows: list[str] = []
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_workspace_overview":
+                continue
+            response = receipt.get("response")
+            if not isinstance(response, dict):
+                continue
+            value = response.get("value")
+            engineering = value.get("project_engineering") if isinstance(value, dict) else None
+            if not isinstance(engineering, dict):
+                continue
+            project = engineering.get("project")
+            if isinstance(project, dict):
+                name = str(project.get("name") or "").strip()
+                if name:
+                    overview_rows.append("Объект: " + name)
+                purpose = project.get("purpose")
+                if isinstance(purpose, dict):
+                    purpose = purpose.get("value")
+                purpose_text = str(purpose or "").strip()
+                if purpose_text:
+                    overview_rows.append("Назначение: " + purpose_text)
+                composition = project.get("composition")
+                if isinstance(composition, dict):
+                    composition = composition.get("value")
+                composition_text = str(composition or "").strip()
+                if composition_text:
+                    overview_rows.append("Состав объекта: " + composition_text)
+            facilities = [
+                item
+                for item in engineering.get("facility_inventory") or ()
+                if isinstance(item, dict)
+            ]
+            if facilities:
+                overview_rows.append(
+                    "Сооружения и участки: "
+                    + ", ".join(
+                        str(item.get("designation") or item.get("name") or "Сооружение")
+                        for item in facilities
+                    )
+                    + "."
+                )
+            for source in response.get("sources") or ():
+                if not isinstance(source, dict) or not source.get("source_id"):
+                    continue
+                source_id = str(source["source_id"])
+                if source_id in available_source_ids and source_id not in selected_source_ids:
+                    selected_source_ids.append(source_id)
+                if len(selected_source_ids) >= 8:
+                    break
+            break
+        if overview_rows:
+            headings_and_rows.append(("Краткое описание проекта:", overview_rows))
     if asks_for_pit_inventory:
         for receipt in receipts:
             if receipt.get("tool") != "consultant.get_project_entity_inventory":

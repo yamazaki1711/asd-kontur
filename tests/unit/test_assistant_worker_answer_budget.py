@@ -83,6 +83,55 @@ def test_pit_inventory_uses_direct_prepared_project_result() -> None:
     assert plan.steps[0].arguments == {"kind": "excavation_pit", "limit": 30}
 
 
+def test_project_composition_uses_direct_prepared_overview() -> None:
+    plan = _direct_project_result_plan(
+        "Что это за проект и какие сооружения входят в состав объекта?"
+    )
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_workspace_overview"]
+
+
+def test_prepared_project_overview_lists_all_facilities() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Это строительный проект.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Состав проекта.",
+            (),
+        ),
+        [
+            {
+                "tool": "consultant.get_workspace_overview",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "project": {
+                                "name": "Контролируемый объект",
+                                "purpose": {"value": "Строительство очистных сооружений"},
+                                "composition": {"value": "КНС 2, ЛОС 7"},
+                            },
+                            "facility_inventory": [
+                                {"designation": "КНС 2"},
+                                {"designation": "ЛОС 7"},
+                            ],
+                        }
+                    },
+                    "sources": [{"source_id": "overview-source"}],
+                },
+            }
+        ],
+        "Что это за проект и какие сооружения входят в состав объекта?",
+    )
+
+    assert "Краткое описание проекта:" in completed.answer
+    assert "Объект: Контролируемый объект" in completed.answer
+    assert "Сооружения и участки: КНС 2, ЛОС 7" in completed.answer
+    assert completed.used_source_ids == ("overview-source",)
+
+
 def test_facility_work_question_uses_prepared_engineering_dossier() -> None:
     plan = _direct_project_result_plan("Какие работы выполняются на КНС-4?")
 

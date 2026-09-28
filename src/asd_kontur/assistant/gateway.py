@@ -2267,6 +2267,19 @@ def _assistant_engineering_for_query(
             "не хватает",
         )
     )
+    asks_project_composition = any(
+        marker in normalized_query
+        for marker in (
+            "что это за проект",
+            "что строится",
+            "описание проекта",
+            "состав объекта",
+            "какие сооружения",
+            "какие объекты",
+            "какие лос",
+            "какие кнс",
+        )
+    )
     asks_missing_commercial_work = (
         "работ" in normalized_query
         and any(marker in normalized_query for marker in ("отсутств", "не учт", "неучт", "пропущ"))
@@ -2423,8 +2436,20 @@ def _assistant_engineering_for_query(
     project = engineering.get("project")
     if isinstance(project, Mapping):
         result["project"] = {
-            key: value for key, value in project.items() if key in {"name", "purpose", "status"}
+            key: value
+            for key, value in project.items()
+            if key in {"name", "purpose", "composition", "status", "missing_information"}
         }
+    if asks_project_composition:
+        result["facility_inventory"] = [
+            {
+                key: row.get(key)
+                for key in ("name", "designation", "kind", "status", "source_locator_ids")
+                if row.get(key) not in (None, "", [], {})
+            }
+            for row in engineering.get("facilities") or ()
+            if isinstance(row, Mapping) and not row.get("is_alias_group")
+        ][:50]
     document_composition = engineering.get("document_composition")
     if isinstance(document_composition, Mapping):
         result["document_composition"] = {

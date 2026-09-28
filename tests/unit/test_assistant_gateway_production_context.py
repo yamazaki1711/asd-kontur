@@ -593,6 +593,31 @@ def test_unresolved_question_returns_professional_bounded_project_gaps() -> None
     assert projected["requirements"]["unresolved"] == ["Не установлена редакция СП."]
 
 
+def test_project_composition_query_returns_complete_facility_inventory() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "project": {
+                "name": "Контролируемый объект",
+                "purpose": {"value": "Строительство очистных сооружений"},
+                "composition": {"value": "КНС 2, ЛОС 7"},
+            },
+            "facilities": [
+                {"name": "КНС 2", "designation": "КНС 2", "is_alias_group": False},
+                {"name": "ЛОС 7", "designation": "ЛОС 7", "is_alias_group": False},
+                {"name": "КНС-2", "designation": "КНС 2", "is_alias_group": True},
+            ],
+        },
+        query="Что это за проект и какие сооружения входят в состав объекта?",
+        limit=20,
+    )
+
+    assert projected["project"]["composition"]["value"] == "КНС 2, ЛОС 7"
+    assert [row["designation"] for row in projected["facility_inventory"]] == [
+        "КНС 2",
+        "ЛОС 7",
+    ]
+
+
 def test_missing_commercial_work_query_returns_established_omission_not_arbitrary_rows() -> None:
     projected = _assistant_engineering_for_query(
         {
