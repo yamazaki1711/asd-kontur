@@ -37,6 +37,7 @@ def _model() -> dict[str, object]:
                 "materials_by_document": {"РД": [{"name": "Шпунт Л5-УМ, сталь С255"}]},
                 "status": "Привязано к сооружению",
                 "source_locator_ids": ["locator-a"],
+                "sources": [{"document": "КР.pdf", "version": 2, "page": 17}],
             }
         ],
         "quantity_comparisons": [
@@ -76,6 +77,7 @@ def _model() -> dict[str, object]:
                 "recommended_action": "Запросить подтверждение объёма.",
                 "status": "Установленное расхождение",
                 "source_locator_ids": ["locator-a"],
+                "sources": [{"document": "КР.pdf", "version": 2, "page": 17}],
             }
         ],
         "customer_questions": [{"question": "Какой объём применять?"}],
@@ -102,6 +104,7 @@ def test_work_and_finding_schedules_are_editable_professional_outputs() -> None:
     assert rd_row["Материалы"] == "Шпунт Л5-УМ, сталь С255"
     assert finding_rows[0]["Вывод"] == "Разница РД ↔ ВОР: 2.5 т"
     assert finding_rows[0]["Действие / вопрос Заказчику"] == "Запросить подтверждение объёма."
+    assert finding_rows[0]["Источники / source_references"] == ("КР.pdf, версия 2, стр./лист 17")
 
 
 def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -> None:
@@ -131,3 +134,4 @@ def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None
     assert "Протокол разногласий" in xml
     assert "Позиция Заказчика" in xml
     assert "Запросить подтверждение объёма" in xml
+    assert "КР.pdf, версия 2, стр./лист 17" in xml

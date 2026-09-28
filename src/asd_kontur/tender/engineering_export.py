@@ -62,9 +62,7 @@ def render_engineering_work_schedule_csv(model: Mapping[str, Any]) -> bytes:
                             str(value.get("name") or "") for value in material_values
                         ),
                         "Статус": row.get("status") or "",
-                        "Источники": "; ".join(
-                            str(value) for value in row.get("source_locator_ids") or ()
-                        ),
+                        "Источники": _source_labels(row),
                         "work_package_id": row.get("work_package_id") or "",
                         "candidate_status": "candidate",
                         "source_references": "; ".join(
@@ -106,9 +104,7 @@ def render_engineering_findings_csv(model: Mapping[str, Any]) -> bytes:
                 "Практическое последствие": row.get("practical_consequence") or "",
                 "Действие / вопрос Заказчику": row.get("recommended_action") or "",
                 "Статус": row.get("status") or "",
-                "Источники / source_references": "; ".join(
-                    str(value) for value in row.get("source_locator_ids") or ()
-                ),
+                "Источники / source_references": _source_labels(row),
             }
         )
     return ("\ufeff" + output.getvalue()).encode("utf-8")
@@ -314,7 +310,7 @@ def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> b
                     str(row.get("practical_consequence") or ""),
                     str(row.get("recommended_action") or ""),
                     "",
-                    "; ".join(str(value) for value in row.get("source_locator_ids") or ()),
+                    _source_labels(row),
                 )
                 for index, row in enumerate(issues, start=1)
             ],
@@ -403,12 +399,36 @@ def _issue_table(values: object) -> str:
             str(row.get("kind") or "Инженерный вопрос"),
             str(row.get("description") or ""),
             str(row.get("recommended_action") or ""),
+            _source_labels(row),
         )
         for value in items
         if isinstance(value, Mapping)
         for row in (dict(value),)
     ]
-    return _simple_table(("Место", "Вопрос", "Вывод", "Действие"), rows, empty="Не установлены.")
+    return _simple_table(
+        ("Место", "Вопрос", "Вывод", "Действие", "Источники"),
+        rows,
+        empty="Не установлены.",
+    )
+
+
+def _source_labels(row: Mapping[str, Any]) -> str:
+    labels: list[str] = []
+    for raw in row.get("sources") or ():
+        if not isinstance(raw, Mapping):
+            continue
+        document = str(raw.get("document") or "Документ")
+        version = raw.get("version")
+        page = raw.get("page")
+        label = document
+        if version not in (None, ""):
+            label += f", версия {version}"
+        if page not in (None, ""):
+            label += f", стр./лист {page}"
+        labels.append(label)
+    if labels:
+        return "; ".join(dict.fromkeys(labels))
+    return "; ".join(str(value) for value in row.get("source_locator_ids") or ())
 
 
 def _bullet_list(values: list[str], *, empty: str) -> str:
