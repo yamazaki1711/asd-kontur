@@ -639,6 +639,7 @@ def validate_answer(
         problems.append("insufficient_without_next_question")
     workspace_tools = {
         "consultant.get_workspace_overview",
+        "consultant.get_project_entity_inventory",
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
         "consultant.get_work_packages",
@@ -651,6 +652,11 @@ def validate_answer(
     if intent == "workspace" and not workspace_tools.intersection(tool_names):
         problems.append("workspace_answer_without_workspace_tool")
     content_tools = {
+        # The entity inventory is not metadata: it is the persisted,
+        # source-linked project result assembled from the workspace documents.
+        # Requiring an additional raw-fragment search for the same exhaustive
+        # count can only replace the prepared inventory with a top-k sample.
+        "consultant.get_project_entity_inventory",
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
     }

@@ -248,6 +248,16 @@ class AssistantWorker:
                         )
                 if pending_answer is None:
                     answer = self._synthesize(claimed, plan, receipts, history, dialogue_state)
+                    if direct_plan is not None:
+                        # Qwen owns the professional narrative, while exact
+                        # exhaustive inventories and prepared schedules remain
+                        # deterministic project facts.  Attach those facts
+                        # before quality validation so a fluent but incomplete
+                        # model answer cannot suppress information already
+                        # available in the application model.
+                        answer = _append_prepared_project_result(
+                            answer, receipts, claimed.question
+                        )
                 else:
                     answer = pending_answer
                 model_checks = self._model_quality_check(claimed, answer, receipts)
