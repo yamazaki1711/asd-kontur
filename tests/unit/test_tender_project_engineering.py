@@ -762,6 +762,13 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Рытье траншеи экскаватором": "excavation",
         "Установка задвижек стальных диаметром 250 мм": "pipeline",
         "Погрузка порубочного материала в автотранспорт": "site_preparation",
+        "Монтаж водопонизительных насосов": "dewatering",
+        "Укрепление стенок траншеи инвентарными щитами": "bracing",
+        "Утрамбовка грунта вокруг колодца": "compaction",
+        "Подсыпка песком средней крупности": "pit_preparation",
+        "Монтаж габионов для защиты откоса": "gabion_erosion_protection",
+        "Геодезические работы по разбивке осей": "surveying",
+        "Удаление кустарников на строительной площадке": "site_preparation",
     }
 
     for wording, family_key in expected.items():
@@ -828,6 +835,9 @@ def test_professional_work_names_keep_materially_different_operations_separate()
         ("pipeline", "Восстановление участка трубопровода"): ("Восстановление/ремонт трубопровода"),
         ("pipeline", "Вскрытие демонтируемого трубопровода"): "Вскрытие трубопровода",
         ("pipeline", "Изоляция стального трубопровода"): "Изоляция трубопровода",
+        ("gabion_erosion_protection", "Монтаж габионов"): (
+            "Устройство габионных конструкций"
+        ),
     }
 
     for (family_key, wording), work_name in expected.items():
