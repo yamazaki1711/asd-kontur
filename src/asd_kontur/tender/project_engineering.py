@@ -2652,6 +2652,7 @@ def _issues(
         "reinforcement",
         "waterproofing",
         "backfill",
+        "reclamation",
     }
     for comparison in scope_comparisons:
         if comparison.get("classification") != "WORK_MISSING_IN_COMMERCIAL":

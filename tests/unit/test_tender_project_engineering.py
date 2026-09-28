@@ -355,6 +355,36 @@ def test_sheet_pile_allocation_question_names_known_commercial_quantities() -> N
     assert "Извлечение шпунта — 104.869 т (Смета)" in allocation["recommended_action"]
 
 
+def test_facility_reclamation_omission_becomes_a_customer_action() -> None:
+    issues = _issues(
+        defects=[],
+        comparisons=[],
+        scope_comparisons=[
+            {
+                "scope_comparison_id": "reclamation-gap",
+                "classification": "WORK_MISSING_IN_COMMERCIAL",
+                "facility_id": "kns-8-1",
+                "facility": "КНС 8.1",
+                "family_key": "reclamation",
+                "work": "Рекультивация",
+                "conclusion": (
+                    "Работа установлена в проектных документах, но соответствующая "
+                    "позиция не найдена в имеющихся ВОР/сметах."
+                ),
+                "source_locator_ids": ["design-reclamation"],
+            }
+        ],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )
+
+    issue = issues[0]
+    assert issue["kind"] == "Возможная неучтённая работа"
+    assert issue["location"] == "КНС 8.1"
+    assert "Рекультивация" in issue["recommended_action"]
+
+
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
     return locator, {
         "source_version_id": f"source-{locator}",
