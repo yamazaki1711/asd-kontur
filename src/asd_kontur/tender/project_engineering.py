@@ -3033,8 +3033,8 @@ def _facility_structure_links(
         object_ = node_to_facility.get(str(relationship.get("object_structure_node_id") or ""))
         if bool(subject) == bool(object_):
             continue
-        facility = subject or object_
-        if facility is None:
+        related_facility = subject or object_
+        if related_facility is None:
             continue
         facility_is_subject = subject is not None
         other_name = str(
@@ -3048,7 +3048,7 @@ def _facility_structure_links(
         other_designation = facility_designation(other_name)
         target = structures
         professional_relation: str | None = None
-        if other_designation and other_designation != facility.get("designation"):
+        if other_designation and other_designation != related_facility.get("designation"):
             if relationship_kind not in {"connects_to", "serves", "depends_on"}:
                 continue
             target = connections
@@ -3071,7 +3071,7 @@ def _facility_structure_links(
         if target is structures and not _CONSTRUCTION_COMPONENT.search(other_name):
             continue
         locator_id = str(relationship.get("source_locator_id") or "")
-        facility_id = str(facility.get("facility_id") or "")
+        facility_id = str(related_facility.get("facility_id") or "")
         key = (_normalized(other_name), professional_relation)
         row = target[facility_id].setdefault(
             key,
