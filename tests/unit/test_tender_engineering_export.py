@@ -22,7 +22,16 @@ def _model() -> dict[str, object]:
         },
         "pits": {"professional_answer": "Установлено два котлована."},
         "facilities": [{"name": "КНС 7", "kind": "Сооружение", "status": "Установлено"}],
-        "facility_cards": [],
+        "facility_cards": [
+            {
+                "facility": {"name": "КНС 7"},
+                "pits": [{"name": "Котлован КНС 7"}],
+                "structures": [{"name": "Фундаментная плита"}],
+                "connections": [{"name": "Напорный трубопровод"}],
+                "works": [{"work_name": "Погружение шпунта"}],
+                "missing_information": ["Профиль шпунта требует уточнения"],
+            }
+        ],
         "works": [
             {
                 "work_scope_id": "work-1",
@@ -117,6 +126,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Общая характеристика проекта" in xml
     assert "Испытательный комплекс" in xml
     assert "Разница РД ↔ ВОР: 2.5 т" in xml
+    assert "Фундаментная плита, Напорный трубопровод" in xml
     assert "Возможные неучтённые работы" in xml
     assert "доказанные неучтённые работы не выявлены" in xml
     assert "Требуется распределить коммерческий объём: 1 поз." in xml

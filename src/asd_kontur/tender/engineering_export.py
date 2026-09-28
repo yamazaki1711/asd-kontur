@@ -139,12 +139,26 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         ),
         _heading("3. Сооружения"),
         _simple_table(
-            ("Сооружение", "Котлованы", "Основные работы", "Нерешённые вопросы"),
+            (
+                "Сооружение",
+                "Котлованы",
+                "Конструкции и подключения",
+                "Основные работы",
+                "Нерешённые вопросы",
+            ),
             [
                 (
                     str(dict(row.get("facility") or {}).get("name") or ""),
                     ", ".join(str(value.get("name") or "") for value in row.get("pits") or ())
                     or "не установлен / не предусмотрен",
+                    ", ".join(
+                        str(value.get("name") or "")
+                        for value in [
+                            *(row.get("structures") or ()),
+                            *(row.get("connections") or ()),
+                        ]
+                    )
+                    or "требуют привязки",
                     ", ".join(str(value.get("work_name") or "") for value in row.get("works") or ())
                     or "требуют привязки",
                     "; ".join(str(value) for value in row.get("missing_information") or ()),
