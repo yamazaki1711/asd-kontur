@@ -4276,11 +4276,7 @@ class SpinePostgresRepository:
                 deterministic_family = classify_work_family(wording)
                 linked_quantities = quantities_by_work.get(candidate_id, [])
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
-                if (
-                    not candidate_id
-                    or not wording
-                    or non_work_reason(wording) is not None
-                ):
+                if not candidate_id or not wording or non_work_reason(wording) is not None:
                     continue
                 existing = prior.get(candidate_id)
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
