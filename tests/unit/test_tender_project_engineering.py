@@ -440,7 +440,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v21"
+    assert model["model_version"] == "project-engineering-model-v22"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -667,6 +667,14 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Вырубка": "site_preparation",
         "Вывоз леса": "site_preparation",
         "Дноуглубительные работы": "excavation",
+        "Установка круглых стеклокомпозитных колодцев для ЛОС": "chambers_wells",
+        "Погрузка в автотранспортное средство: мусор строительный": "waste_management",
+        "Покрытие кабеля, проложенного в траншее, лентой сигнальной": "electrical",
+        "Монтаж системы наружного электроосвещения": "electrical",
+        "Устройство дополнительного слоя основания из щебеночно-песчаной смеси": "roadworks",
+        "Рытье траншеи экскаватором": "excavation",
+        "Установка задвижек стальных диаметром 250 мм": "pipeline",
+        "Погрузка порубочного материала в автотранспорт": "site_preparation",
     }
 
     for wording, family_key in expected.items():
