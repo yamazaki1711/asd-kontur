@@ -1311,9 +1311,7 @@ def _append_prepared_project_result(
                 for item in value.get("requires_clarification") or ()
                 if isinstance(item, dict) and (item.get("description") or item.get("reason"))
             )
-            headings_and_rows.append(
-                ("Инвентарь котлованов:", [row for row in rows if row])
-            )
+            headings_and_rows.append(("Инвентарь котлованов:", [row for row in rows if row]))
             for source in response.get("sources") or ():
                 if not isinstance(source, dict) or not source.get("source_id"):
                     continue
