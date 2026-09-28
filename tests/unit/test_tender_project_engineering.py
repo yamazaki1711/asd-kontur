@@ -2661,6 +2661,58 @@ def test_uncounted_pit_group_inherits_facility_from_matching_commercial_scope() 
     assert unresolved["reason"].startswith("Коммерческий раздел относится к ЛОС 8.1")
 
 
+def test_uncounted_generic_pit_row_is_alias_of_unique_counted_group_in_same_scope() -> None:
+    source_context = dict(
+        [
+            _source("counted", "Сводный ВОР.pdf", 20),
+            _source("generic", "Сводный ВОР.pdf", 21),
+        ]
+    )
+    for locator_id in ("counted", "generic"):
+        source_context[locator_id].update(
+            page_commercial_scope_code="02-01-17",
+            page_commercial_scope_header="ВОР 02-01-17. Строительство ЛОС 7",
+        )
+    facilities = [
+        {
+            "facility_id": "facility-7",
+            "designation": "ЛОС 7",
+            "name": "ЛОС 7",
+        }
+    ]
+
+    result = _pits(
+        {
+            "candidate_pits": [
+                {
+                    "display_name": "Котлованы под колодцы D2000 (1 шт)",
+                    "aliases": ["Котлованы под колодцы D2000 (1 шт)"],
+                    "source_locator_ids": ["counted"],
+                },
+                {
+                    "display_name": "Котлованы под колодцы",
+                    "aliases": ["Котлованы под колодцы"],
+                    "source_locator_ids": ["generic"],
+                },
+            ],
+            "coverage": {"disposition_counts": {"ambiguous": 1}},
+        },
+        facilities,
+        source_context,
+    )
+
+    assert result["established_count"] == 1
+    assert result["unresolved_group_count"] == 0
+    assert result["is_final"] is True
+    established = result["established"][0]
+    assert established["aliases"] == [
+        "Котлованы под колодцы",
+        "Котлованы под колодцы D2000 (1 шт)",
+    ]
+    assert established["source_locator_ids"] == ["counted", "generic"]
+    assert "повторное общее обозначение" in established["status"]
+
+
 def test_model_ids_are_workspace_scoped_and_repeatable() -> None:
     first = _model()
     second = _model()

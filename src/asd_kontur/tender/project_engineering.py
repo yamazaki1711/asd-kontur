@@ -1472,6 +1472,49 @@ def _pits(
                     "source_locator_ids": locator_ids,
                 }
             )
+    # A commercial schedule can repeat one counted group first with its
+    # diameter/count and later as a generic heading.  When both mentions belong
+    # to the same established facility and their construction subject is the
+    # same, retain the generic wording as an alias instead of presenting it as
+    # another unresolved group.  The rule deliberately requires one unique
+    # counted match; it never merges groups across facilities or invents
+    # individual pit identities.
+    remaining_clarification: list[dict[str, Any]] = []
+    for unresolved_group in clarification:
+        if unresolved_group.get("stated_count") is not None:
+            remaining_clarification.append(unresolved_group)
+            continue
+        related_facility = str(unresolved_group.get("related_facility") or "").strip()
+        subject = _pit_group_subject(unresolved_group.get("description"))
+        matching_counted_groups = [
+            group
+            for group in established_counted_groups
+            if str(group.get("related_facility") or "").strip() == related_facility
+            and _pit_group_subject(group.get("name")) == subject
+        ]
+        if not subject or len(matching_counted_groups) != 1:
+            remaining_clarification.append(unresolved_group)
+            continue
+        counted_group = matching_counted_groups[0]
+        description = str(unresolved_group.get("description") or "").strip()
+        counted_group["aliases"] = sorted(
+            {
+                *(str(value) for value in counted_group.get("aliases") or ()),
+                *([description] if description else []),
+            }
+        )
+        counted_group["source_locator_ids"] = sorted(
+            {
+                *(str(value) for value in counted_group.get("source_locator_ids") or ()),
+                *(str(value) for value in unresolved_group.get("source_locator_ids") or ()),
+            }
+        )
+        counted_group["sources"] = _source_refs(counted_group["source_locator_ids"], source_context)
+        counted_group["status"] = (
+            "Группа установлена по явному количеству в коммерческом разделе; "
+            "повторное общее обозначение учтено как алиас, поштучные марки не указаны"
+        )
+    clarification = remaining_clarification
     coverage = dict(pit_inventory.get("coverage") or {})
     ambiguous_count = int(dict(coverage.get("disposition_counts") or {}).get("ambiguous", 0))
     unresolved_count = len(clarification)
@@ -1533,6 +1576,16 @@ def _pits(
             + "Поэтому окончательное количество по имеющимся данным пока не установлено."
         ),
     }
+
+
+def _pit_group_subject(value: object) -> str:
+    """Return a stable construction subject for repeated commercial pit rows."""
+
+    normalized = _normalized(value)
+    normalized = re.sub(r"\b(?:d|д)\s*\d+(?:[.,]\d+)?\b", " ", normalized)
+    normalized = re.sub(r"\b\d+(?:[.,]\d+)?\s*шт\b", " ", normalized)
+    normalized = re.sub(r"[()\[\],.;:]", " ", normalized)
+    return " ".join(normalized.split())
 
 
 def _attach_pit_work_scopes(
