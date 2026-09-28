@@ -667,9 +667,8 @@ def work_reconciliation_priority(
     context = _normalized(nearby_context)
     role = _normalized(document_role)
     operation_score = sum(marker in wording for marker in _CONSTRUCTION_OPERATION_MARKERS)
-    contextual_score = int(has_facility_hint) + int(
-        any(marker in context for marker in _CONSTRUCTION_OPERATION_MARKERS)
-    )
+    facility_score = 48 if has_facility_hint else 0
+    contextual_score = int(any(marker in context for marker in _CONSTRUCTION_OPERATION_MARKERS))
     commercial_score = int(role in {"bill of quantities", "local estimate", "object estimate"})
     priority_family_score = {
         "sheet_piling": 4,
@@ -683,6 +682,7 @@ def work_reconciliation_priority(
     descriptive_score = min(len(wording.split()), 12)
     return (
         operation_score * 20
+        + facility_score
         + contextual_score * 8
         + priority_family_score * 6
         + commercial_score * 3,

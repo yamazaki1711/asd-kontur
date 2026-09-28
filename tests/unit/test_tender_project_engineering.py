@@ -1070,6 +1070,23 @@ def test_reconciliation_prioritizes_critical_known_family_for_location_resolutio
     assert sheet_pile > generic
 
 
+def test_reconciliation_prioritizes_explicit_facility_context_over_unscoped_quantity_work() -> None:
+    scoped = work_reconciliation_priority(
+        "Устройство основания",
+        document_role="project_documentation",
+        nearby_context="КНС-4",
+        has_facility_hint=True,
+    )
+    unscoped = work_reconciliation_priority(
+        "Разработка и перемещение грунта",
+        document_role="estimate",
+        nearby_context="Общие объёмы",
+        family_key="excavation",
+    )
+
+    assert scoped > unscoped
+
+
 def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> None:
     model = _model()
 
