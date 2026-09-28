@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v27"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v28"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1493,6 +1493,7 @@ def _work_schedule(
         normalized_name = str(row.get("label") or row.get("normalized_name") or _normalized(name))
         locator_id = str(row.get("source_locator_id") or "")
         source_version_id = str(row.get("source_version_id") or "")
+        deterministic_non_work_reason = non_work_reason(name)
         family = classify_work_family(normalized_name)
         resolution = dict(work_resolutions.get(candidate_id) or {})
         if int(resolution.get("candidate_version") or 0) != int(row.get("version") or 0):
@@ -1605,6 +1606,20 @@ def _work_schedule(
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
         }
+        # Resource codes, headings and pure quantity rows are not construction
+        # operations even when their description contains a family keyword
+        # (for example an estimate resource named ``Трамбовки``).  Apply the
+        # same deterministic exclusion used by the Qwen scheduler before the
+        # family branch, otherwise these rows inflate the professional work
+        # schedule while never becoming eligible for semantic correction.
+        if deterministic_non_work_reason is not None:
+            excluded.append(
+                {
+                    **observation,
+                    "exclusion_reason": deterministic_non_work_reason,
+                }
+            )
+            continue
         if resolution.get("status") == "MATCHED":
             # Contextual local-Qwen interpretation may refine a broad
             # deterministic term (for example, a concrete phrase describing

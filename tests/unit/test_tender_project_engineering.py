@@ -491,7 +491,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v27"
+    assert model["model_version"] == "project-engineering-model-v28"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -734,6 +734,40 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         assert result[0] == family_key
 
     assert classify_work_family("Вывоз после приемки со склада готового оборудования") is None
+
+
+def test_estimate_resource_code_does_not_become_a_construction_work_scope() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "resource-row",
+                    "version": 1,
+                    "value": "91.08.09-024 Трамбовки пневматические",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "resource-locator",
+                    "source_role": "local_estimate",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict([_source("resource-locator", "Смета.pdf", 8)]),
+    )
+
+    assert model["works"] == []
+    assert model["unclassified_works"] == []
+    assert len(model["excluded_non_work_observations"]) == 1
+    assert "ресурс" in model["excluded_non_work_observations"][0]["exclusion_reason"].casefold()
 
 
 def test_professional_work_names_keep_materially_different_operations_separate() -> None:
