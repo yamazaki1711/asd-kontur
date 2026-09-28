@@ -531,6 +531,69 @@ def test_document_worker_yields_qwen_at_batch_boundary_for_foreground_assistant(
     assert not repository.claim_attempted
 
 
+def test_scoped_document_worker_refills_empty_semantic_queue_at_bounded_idle_interval() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001898"),
+        JobKind.PROJECT_WORK_RECONCILIATION,
+        {},
+        "sha256:" + "8" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claim_calls = 0
+            self.refill_calls = 0
+
+        def assistant_foreground_active(self, **_kwargs: object) -> bool:
+            return False
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            self.claim_calls += 1
+            return claimed if self.claim_calls == 3 else None
+
+        def refill_workspace_project_work_reconciliation_if_idle(
+            self, **kwargs: object
+        ) -> tuple[object, ...]:
+            assert kwargs["organization_id"] == ORGANIZATION_ID
+            assert kwargs["workspace_id"] == WORKSPACE_ID
+            self.refill_calls += 1
+            return (object(),)
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return True
+
+        def finish_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+    worker._next_idle_refill_at = 0.0
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.CANCELLED
+    assert repository.refill_calls == 1
+    assert repository.claim_calls == 3
+
+
 def test_unscoped_document_worker_returns_claim_when_foreground_assistant_is_active() -> None:
     claimed = ClaimedJob(
         ORGANIZATION_ID,

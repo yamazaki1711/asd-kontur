@@ -539,7 +539,7 @@ def test_full_metadata_plan_executes_required_workspace_content_search(monkeypat
         uuid4(),
         uuid4(),
         AssistantMode.TENDER,
-        "Сколько котлованов в этом проекте?",
+        "Какие сооружения входят в состав этого проекта?",
         "owner-a",
         1,
         1,
@@ -626,7 +626,7 @@ def test_full_metadata_plan_executes_required_workspace_content_search(monkeypat
 
     assert executed == [
         "consultant.search_workspace_documents",
-        "consultant.get_project_entity_inventory",
+        "consultant.get_work_packages",
         "consultant.get_requirement_matrix",
         "consultant.get_information_gaps",
     ]

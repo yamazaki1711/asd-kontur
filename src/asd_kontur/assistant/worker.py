@@ -101,6 +101,23 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
     )
+    asks_for_pit_inventory = "котлован" in normalized and any(
+        marker in normalized
+        for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
+    )
+    if asks_for_pit_inventory:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_project_entity_inventory",
+                    {"kind": "excavation_pit", "limit": 30},
+                    "Использовать подготовленный профессиональный инвентарь котлованов проекта.",
+                ),
+            ),
+        )
     if asks_for_sheet_pile_schedule:
         return SearchPlan(
             intent="workspace",
@@ -1262,11 +1279,50 @@ def _append_prepared_project_result(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
     )
+    asks_for_pit_inventory = "котлован" in normalized and any(
+        marker in normalized
+        for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
         str(item["source_id"]) for item in _deduplicated_sources(receipts) if item.get("source_id")
     }
+    if asks_for_pit_inventory:
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_project_entity_inventory":
+                continue
+            response = receipt.get("response")
+            if not isinstance(response, dict):
+                continue
+            value = response.get("value") if isinstance(response, dict) else None
+            if not isinstance(value, dict) or value.get("professional_scope") != (
+                "project_excavation_pit_inventory"
+            ):
+                continue
+            rows = [str(value.get("answer") or "").strip()]
+            rows.extend(
+                f"{item.get('name')}: {item.get('related_facility') or 'сооружение требует уточнения'}."
+                for item in value.get("pits") or ()
+                if isinstance(item, dict) and item.get("name")
+            )
+            rows.extend(
+                f"Требует уточнения — {item.get('description') or item.get('reason')}."
+                for item in value.get("requires_clarification") or ()
+                if isinstance(item, dict) and (item.get("description") or item.get("reason"))
+            )
+            headings_and_rows.append(
+                ("Инвентарь котлованов:", [row for row in rows if row])
+            )
+            for source in response.get("sources") or ():
+                if not isinstance(source, dict) or not source.get("source_id"):
+                    continue
+                source_id = str(source["source_id"])
+                if source_id in available_source_ids and source_id not in selected_source_ids:
+                    selected_source_ids.append(source_id)
+                if len(selected_source_ids) >= 8:
+                    break
+            break
     if asks_for_sheet_pile_schedule:
         schedule_rows: list[str] = []
         for receipt in receipts:
@@ -1399,7 +1455,7 @@ def _append_prepared_project_result(
     prepared_result = "\n\n".join(sections)
     published_answer = (
         prepared_result
-        if asks_for_sheet_pile_schedule
+        if asks_for_sheet_pile_schedule or asks_for_pit_inventory
         else answer.answer.rstrip() + "\n\n" + prepared_result
     )
     return SynthesizedAnswer(
@@ -1638,8 +1694,6 @@ def _professional_pit_inventory_prompt_record(
             else (
                 "name",
                 "related_facility",
-                "known_parameters",
-                "related_works",
                 "status",
                 "source_locator_ids",
             )

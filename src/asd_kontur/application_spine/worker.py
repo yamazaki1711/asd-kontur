@@ -142,6 +142,7 @@ class DocumentWorker:
         self._organization_id = organization_id
         self._workspace_id = workspace_id
         self._stopping = False
+        self._next_idle_refill_at = 0.0
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
@@ -197,7 +198,33 @@ class DocumentWorker:
                 workspace_id=self._workspace_id,
             )
         if claimed is None:
-            return None
+            refill = getattr(
+                self._repository,
+                "refill_workspace_project_work_reconciliation_if_idle",
+                None,
+            )
+            now = time.monotonic()
+            if (
+                self._organization_id is not None
+                and self._workspace_id is not None
+                and callable(refill)
+                and now >= self._next_idle_refill_at
+            ):
+                self._next_idle_refill_at = now + 30.0
+                scheduled = refill(
+                    organization_id=self._organization_id,
+                    workspace_id=self._workspace_id,
+                    correlation_id=uuid7(),
+                )
+                if scheduled:
+                    claimed = self._repository.claim_next_job(
+                        worker_identity=self._worker_identity,
+                        lease_seconds=self._lease_seconds,
+                        organization_id=self._organization_id,
+                        workspace_id=self._workspace_id,
+                    )
+            if claimed is None:
+                return None
         if callable(foreground_check) and foreground_check(
             organization_id=claimed.organization_id,
             workspace_id=claimed.workspace_id,

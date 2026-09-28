@@ -60,6 +60,16 @@ def test_sheet_pile_schedule_uses_direct_prepared_project_result() -> None:
     }
 
 
+def test_pit_inventory_uses_direct_prepared_project_result() -> None:
+    plan = _direct_project_result_plan(
+        "Сколько всего котлованов? Перечисли установленные и неразрешённые группы."
+    )
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_project_entity_inventory"]
+    assert plan.steps[0].arguments == {"kind": "excavation_pit", "limit": 30}
+
+
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 
@@ -1107,13 +1117,53 @@ def test_professional_pit_inventory_survives_prompt_projection() -> None:
         "котлован для ЛОС-3",
         "котлован для КНС-7",
     ]
-    assert inventory["result"]["value"]["pits"][0]["related_works"] == [
-        {
-            "work": "Погружение шпунта",
-            "quantities_by_document": {"РД": [{"value": "42", "unit": "т"}]},
-        }
-    ]
+    assert "related_works" not in inventory["result"]["value"]["pits"][0]
     assert (
         inventory["result"]["value"]["requires_clarification"][0]["description"]
         == "Котлованы под колодцы"
     )
+
+
+def test_prepared_pit_inventory_publishes_exact_project_result_and_unresolved_groups() -> None:
+    answer = SynthesizedAnswer(
+        "По проекту найдены котлованы.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Инвентарь котлованов.",
+        ("котлованы",),
+    )
+    completed = _append_prepared_project_result(
+        answer,
+        [
+            {
+                "tool": "consultant.get_project_entity_inventory",
+                "response": {
+                    "value": {
+                        "professional_scope": "project_excavation_pit_inventory",
+                        "answer": (
+                            "Подтверждено 2 отдельных котлована. Окончательное количество "
+                            "пока не установлено."
+                        ),
+                        "pits": [
+                            {
+                                "name": "Котлован КНС-4",
+                                "related_facility": "КНС-4",
+                            }
+                        ],
+                        "requires_clarification": [
+                            {"description": "Стартовый и приёмный котлованы перехода"}
+                        ],
+                    },
+                    "sources": [{"source_id": "pit-source"}],
+                },
+            }
+        ],
+        "Сколько всего котлованов? Перечисли их.",
+    )
+
+    assert completed.answer.startswith("Инвентарь котлованов:")
+    assert "Подтверждено 2 отдельных котлована" in completed.answer
+    assert "Котлован КНС-4: КНС-4" in completed.answer
+    assert "Стартовый и приёмный котлованы перехода" in completed.answer
+    assert completed.used_source_ids == ("pit-source",)

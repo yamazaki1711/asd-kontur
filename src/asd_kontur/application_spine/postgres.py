@@ -4707,8 +4707,35 @@ class SpinePostgresRepository:
 
         if claimed.job_kind is not JobKind.PROJECT_WORK_RECONCILIATION:
             return ()
+        return self.refill_workspace_project_work_reconciliation_if_idle(
+            organization_id=claimed.organization_id,
+            workspace_id=claimed.workspace_id,
+            correlation_id=claimed.job_id,
+            batch_size=batch_size,
+            max_batches=max_batches,
+        )
+
+    def refill_workspace_project_work_reconciliation_if_idle(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        correlation_id: UUID,
+        batch_size: int = 12,
+        max_batches: int = 4,
+    ) -> tuple[JobSummary, ...]:
+        """Recover an empty semantic queue when eligible project work remains.
+
+        A successful batch normally refills the bounded queue.  If the final
+        outstanding leases instead expire or exhaust their retry budget, there
+        is no successful ``claimed`` job left to call that hook.  The scoped
+        worker therefore uses this idempotent workspace form at a bounded idle
+        interval.  The regular scheduler remains the eligibility, profile and
+        idempotency authority; this method never replays accepted inputs.
+        """
+
         with Session(self._engine) as session, session.begin():
-            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            _set_scope(session, organization_id, workspace_id)
             outstanding = int(
                 session.execute(
                     sa.text(
@@ -4717,7 +4744,7 @@ class SpinePostgresRepository:
                         "job_kind='PROJECT_WORK_RECONCILIATION' AND "
                         "state IN ('queued','leased','running')"
                     ),
-                    {"o": claimed.organization_id, "w": claimed.workspace_id},
+                    {"o": organization_id, "w": workspace_id},
                 ).scalar_one()
             )
             if outstanding:
@@ -4725,21 +4752,21 @@ class SpinePostgresRepository:
             owner_identity_id = session.execute(
                 sa.text(
                     "SELECT created_by_identity_id FROM workspace.durable_jobs WHERE "
-                    "organization_id=:o AND workspace_id=:w AND job_id=:job"
+                    "organization_id=:o AND workspace_id=:w AND "
+                    "job_kind='PROJECT_WORK_RECONCILIATION' ORDER BY created_at DESC,job_id "
+                    "DESC LIMIT 1"
                 ),
-                {
-                    "o": claimed.organization_id,
-                    "w": claimed.workspace_id,
-                    "job": claimed.job_id,
-                },
-            ).scalar_one()
+                {"o": organization_id, "w": workspace_id},
+            ).scalar_one_or_none()
+            if owner_identity_id is None:
+                return ()
         return self.start_project_work_reconciliation(
             owner_identity_id=str(owner_identity_id),
-            workspace_id=claimed.workspace_id,
-            correlation_id=claimed.job_id,
+            workspace_id=workspace_id,
+            correlation_id=correlation_id,
             batch_size=batch_size,
             max_batches=max_batches,
-            _resolved_organization_id=claimed.organization_id,
+            _resolved_organization_id=organization_id,
         )
 
     def _ensure_structure_reconciliation_job(
