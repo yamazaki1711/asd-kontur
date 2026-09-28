@@ -2252,6 +2252,10 @@ def _assistant_engineering_for_query(
     asks_contractor_risks = "риск" in normalized_query and any(
         marker in normalized_query for marker in ("подряд", "проект", "тендер")
     )
+    asks_material_differences = "материал" in normalized_query and any(
+        marker in normalized_query
+        for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
+    )
 
     def relevant(row: Mapping[str, Any]) -> bool:
         if not tokens and not facility_markers:
@@ -2464,8 +2468,19 @@ def _assistant_engineering_for_query(
             for card in facility_cards[:6]
             for facility in (dict(card.get("facility") or {}),)
         ]
-    for key in ("issues", "scope_comparisons", "quantity_comparisons", "works", "materials"):
-        rows = selected_rows(key, max_rows=min(limit, 12))
+    for key in (
+        "issues",
+        "scope_comparisons",
+        "quantity_comparisons",
+        "material_comparisons",
+        "works",
+        "materials",
+    ):
+        if asks_material_differences and key in {"issues", "material_comparisons"}:
+            source_rows = [row for row in engineering.get(key) or () if isinstance(row, Mapping)]
+            rows = [compact_row(row) for row in source_rows[: min(limit, 12)]]
+        else:
+            rows = selected_rows(key, max_rows=min(limit, 12))
         if rows:
             result[key] = rows
     for key in ("customer_questions", "risks"):

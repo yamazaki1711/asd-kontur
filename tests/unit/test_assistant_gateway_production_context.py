@@ -519,6 +519,36 @@ def test_project_wide_action_queries_return_prepared_results_without_keyword_ove
     assert risks["risks"][0]["risk"] == "Ограждение может остаться нерасценённым."
 
 
+def test_project_wide_material_difference_query_returns_prepared_comparisons() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "material_comparisons": [
+                {
+                    "facility": "Участок 17",
+                    "work": "Железобетонные конструкции",
+                    "material": "Бетон В25",
+                    "description": "Морозостойкость: проект F200, ВОР F150.",
+                    "classification": "MATERIAL_DIFFERENCE",
+                    "source_locator_ids": ["design", "commercial"],
+                }
+            ]
+        },
+        query="Какие материалы расходятся между документами?",
+        limit=20,
+    )
+
+    assert projected["material_comparisons"] == [
+        {
+            "facility": "Участок 17",
+            "work": "Железобетонные конструкции",
+            "material": "Бетон В25",
+            "description": "Морозостойкость: проект F200, ВОР F150.",
+            "classification": "MATERIAL_DIFFERENCE",
+            "source_locator_ids": ["design", "commercial"],
+        }
+    ]
+
+
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {

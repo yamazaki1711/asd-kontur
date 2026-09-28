@@ -358,6 +358,60 @@ def test_requested_project_comparison_cannot_omit_validated_values() -> None:
     assert checks == {"passed": True, "problems": []}
 
 
+def test_requested_material_difference_cannot_omit_known_grades() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "material_comparisons": [
+                            {
+                                "facility": "Участок 17",
+                                "material": "Бетон В25",
+                                "description": (
+                                    "морозостойкость: проект F200, коммерческие документы F150."
+                                ),
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "Материалы требуют уточнения.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Сравнение материалов.",
+        ("материалы",),
+    )
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Какие материалы расходятся между документами?",
+    )
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+    complete = SynthesizedAnswer(
+        "Для бетона В25 в проекте указано F200, а в ВОР — F150.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Сравнение материалов.",
+        ("бетон В25", "F200", "F150"),
+    )
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Какие материалы расходятся между документами?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
     receipts = [
         {

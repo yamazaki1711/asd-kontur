@@ -12,6 +12,7 @@ from asd_kontur.tender.project_engineering import (
     _display_quantity,
     _document_composition,
     _issues,
+    _material_comparisons,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
     _pits,
@@ -969,7 +970,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v40"
+    assert model["model_version"] == "project-engineering-model-v41"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2222,6 +2223,53 @@ def test_duration_comparison_is_not_presented_as_construction_quantity() -> None
 
     assert comparison["comparison_kind"] == "duration"
     assert comparison["professional_status"] == "Различается продолжительность"
+
+
+def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_class() -> None:
+    source_context = dict(
+        [
+            _source("design-concrete", "КР.pdf", 14),
+            _source("commercial-concrete", "ВОР.pdf", 21),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [
+            {
+                "work_scope_id": "scope-17",
+                "facility_id": "facility-17",
+                "facility": "Участок 17",
+                "work_name": "Железобетонные конструкции",
+                "materials_by_document": {
+                    "РД": [
+                        {
+                            "name": "Бетон кл. В25, F200, W6",
+                            "source_locator_id": "design-concrete",
+                        }
+                    ],
+                    "ВОР": [
+                        {
+                            "name": "Смесь бетонная, класс В25, F(1)150, W6",
+                            "source_locator_id": "commercial-concrete",
+                        }
+                    ],
+                },
+            }
+        ],
+        source_context,
+    )
+
+    assert len(comparisons) == 1
+    comparison = comparisons[0]
+    assert comparison["classification"] == "MATERIAL_DIFFERENCE"
+    assert comparison["facility"] == "Участок 17"
+    assert comparison["material"] == "Бетон В25"
+    assert "F200" in comparison["description"]
+    assert "F150" in comparison["description"]
+    assert "W6" not in comparison["description"]
+    assert comparison["source_locator_ids"] == [
+        "commercial-concrete",
+        "design-concrete",
+    ]
 
 
 def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None:

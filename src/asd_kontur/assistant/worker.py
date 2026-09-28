@@ -844,6 +844,10 @@ def _with_structured_project_fact_checks(
         marker in normalized_question
         for marker in ("расхожд", "сравн", "разниц", "совпад", "вор", "смет")
     ) and any(marker in normalized_question for marker in ("объ", "колич", "пд", "рд", "работ"))
+    asks_for_material_differences = "материал" in normalized_question and any(
+        marker in normalized_question
+        for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
+    )
     if not any(
         (
             asks_for_sheet_pile,
@@ -851,6 +855,7 @@ def _with_structured_project_fact_checks(
             asks_for_customer_questions,
             asks_for_contractor_risks,
             asks_for_comparisons,
+            asks_for_material_differences,
         )
     ):
         return checks
@@ -861,6 +866,7 @@ def _with_structured_project_fact_checks(
     required_contractor_risks: set[str] = set()
     required_comparison_terms: set[str] = set()
     required_comparison_quantities: set[tuple[str, str]] = set()
+    required_material_terms: set[str] = set()
     for receipt in receipts:
         if receipt.get("tool") not in {
             "consultant.get_workspace_overview",
@@ -937,6 +943,21 @@ def _with_structured_project_fact_checks(
                                 str(value.get("unit") or "").strip(),
                             )
                         )
+        if asks_for_material_differences:
+            for item in engineering.get("material_comparisons") or ():
+                if not isinstance(item, dict):
+                    continue
+                material = str(item.get("material") or "").strip()
+                if material:
+                    concrete_class = re.search(r"[ВB]\s*\d+(?:[.,]\d+)?", material, re.I)
+                    required_material_terms.add(
+                        concrete_class.group(0).replace(" ", "")
+                        if concrete_class is not None
+                        else material
+                    )
+                required_material_terms.update(
+                    re.findall(r"\b(?:F|W)\d+\b", str(item.get("description") or ""), re.I)
+                )
     if not any(
         (
             required_terms,
@@ -945,6 +966,7 @@ def _with_structured_project_fact_checks(
             required_contractor_risks,
             required_comparison_terms,
             required_comparison_quantities,
+            required_material_terms,
         )
     ):
         return checks
@@ -975,6 +997,9 @@ def _with_structured_project_fact_checks(
         or (unit and unit.casefold().rstrip(".") not in normalized_answer)
         for value, unit in required_comparison_quantities
     )
+    material_difference_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key for value in required_material_terms
+    )
     contradicted = bool(
         re.search(
             r"(?:профил\w*|объ[её]м\w*|масс\w*)[^.]{0,80}"
@@ -991,6 +1016,8 @@ def _with_structured_project_fact_checks(
     if contractor_risk_omitted:
         problems.append("workspace_contractor_risk_omitted")
     if comparison_omitted:
+        problems.append("workspace_structured_fact_omitted")
+    if material_difference_omitted:
         problems.append("workspace_structured_fact_omitted")
     if contradicted:
         problems.append("workspace_structured_fact_contradicted")

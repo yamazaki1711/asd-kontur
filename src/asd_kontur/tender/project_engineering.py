@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v40"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v41"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -635,6 +635,7 @@ def build_project_engineering_model(
         available_document_roles=document_composition["available_roles"],
     )
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
+    material_comparisons = _material_comparisons(work_model["works"], source_context)
     issues = _issues(
         defects,
         comparisons,
@@ -642,6 +643,7 @@ def build_project_engineering_model(
         sheet_pile_schedule,
         work_model["works"],
         source_context,
+        material_comparisons=material_comparisons,
     )
     requirements = _requirements(matrix, normative_profile)
     actions, risks = _actions_and_risks(issues)
@@ -688,6 +690,7 @@ def build_project_engineering_model(
         "scope_comparisons": scope_comparisons,
         "sheet_pile_schedule": sheet_pile_schedule,
         "materials": work_model["materials"],
+        "material_comparisons": material_comparisons,
         "requirements": requirements,
         "issues": issues,
         "risks": risks,
@@ -729,6 +732,7 @@ def build_project_engineering_model(
                 "pending_quantity_observation_count"
             ],
             "quantity_comparison_count": len(comparisons),
+            "material_comparison_count": len(material_comparisons),
             "construction_quantity_comparison_count": len(
                 [value for value in comparisons if value.get("comparison_kind") == "quantity"]
             ),
@@ -2903,6 +2907,149 @@ def _merge_sheet_pile_rows(values: Iterable[Mapping[str, Any]]) -> list[dict[str
     return [grouped[key] for key in sorted(grouped)]
 
 
+def _concrete_material_spec(value: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Parse only explicit concrete durability properties from one material row."""
+
+    name = str(value.get("name") or "")
+    normalized = _normalized(name)
+    if "бетон" not in normalized:
+        return None
+    strength_match = re.search(
+        r"(?:класс|(?:кл\.?))?\s*[вb]\s*([0-9]+(?:[.,][0-9]+)?)",
+        normalized,
+    )
+    if strength_match is None:
+        return None
+    frost_match = re.search(r"\bf\s*(?:\(\s*1\s*\)|1)?\s*([0-9]+)", normalized)
+    water_match = re.search(r"\bw\s*([0-9]+)", normalized)
+    return {
+        "name": name,
+        "strength": f"В{strength_match.group(1).replace(',', '.')}",
+        "frost_value": int(frost_match.group(1)) if frost_match else None,
+        "frost_label": f"F{frost_match.group(1)}" if frost_match else None,
+        "water_value": int(water_match.group(1)) if water_match else None,
+        "water_label": f"W{water_match.group(1)}" if water_match else None,
+        "source_locator_id": value.get("source_locator_id"),
+    }
+
+
+def _material_comparisons(
+    works: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare explicit concrete properties within the same engineering scope."""
+
+    design_roles = {"ПД", "РД", "Спецификация"}
+    commercial_roles = {"ВОР", "Смета"}
+    result: list[dict[str, Any]] = []
+    for raw in works:
+        work = dict(raw)
+        if not work.get("facility_id"):
+            continue
+        materials_by_role = dict(work.get("materials_by_document") or {})
+        design_specs: list[tuple[str, dict[str, Any]]] = []
+        commercial_specs: list[tuple[str, dict[str, Any]]] = []
+        for role, values in materials_by_role.items():
+            target = (
+                design_specs
+                if role in design_roles
+                else commercial_specs
+                if role in commercial_roles
+                else None
+            )
+            if target is None:
+                continue
+            for value in values or ():
+                if not isinstance(value, Mapping):
+                    continue
+                spec = _concrete_material_spec(value)
+                if spec is not None:
+                    target.append((str(role), spec))
+        if not design_specs or not commercial_specs:
+            continue
+        strength_classes = {spec["strength"] for _role, spec in design_specs}.intersection(
+            spec["strength"] for _role, spec in commercial_specs
+        )
+        for strength in sorted(strength_classes):
+            design = [(role, spec) for role, spec in design_specs if spec["strength"] == strength]
+            commercial = [
+                (role, spec) for role, spec in commercial_specs if spec["strength"] == strength
+            ]
+            differences: list[dict[str, Any]] = []
+            for property_key, label in (
+                ("frost", "морозостойкость"),
+                ("water", "водонепроницаемость"),
+            ):
+                design_values = {
+                    int(spec[f"{property_key}_value"])
+                    for _role, spec in design
+                    if spec.get(f"{property_key}_value") is not None
+                }
+                commercial_values = {
+                    int(spec[f"{property_key}_value"])
+                    for _role, spec in commercial
+                    if spec.get(f"{property_key}_value") is not None
+                }
+                if not design_values or not commercial_values or design_values == commercial_values:
+                    continue
+                differences.append(
+                    {
+                        "property": label,
+                        "design": sorted(
+                            {
+                                str(spec[f"{property_key}_label"])
+                                for _role, spec in design
+                                if spec.get(f"{property_key}_label")
+                            }
+                        ),
+                        "commercial": sorted(
+                            {
+                                str(spec[f"{property_key}_label"])
+                                for _role, spec in commercial
+                                if spec.get(f"{property_key}_label")
+                            }
+                        ),
+                    }
+                )
+            if not differences:
+                continue
+            locator_ids = sorted(
+                {
+                    str(spec["source_locator_id"])
+                    for _role, spec in [*design, *commercial]
+                    if spec.get("source_locator_id")
+                }
+            )
+            descriptions = [
+                f"{item['property']}: проект {', '.join(item['design'])}, "
+                f"коммерческие документы {', '.join(item['commercial'])}"
+                for item in differences
+            ]
+            result.append(
+                {
+                    "material_comparison_id": semantic_digest(
+                        {
+                            "work_scope_id": work.get("work_scope_id"),
+                            "strength": strength,
+                            "differences": differences,
+                        }
+                    ),
+                    "classification": "MATERIAL_DIFFERENCE",
+                    "professional_status": "Характеристики бетона различаются",
+                    "facility": work.get("facility"),
+                    "facility_id": work.get("facility_id"),
+                    "work": work.get("work_name"),
+                    "material": f"Бетон {strength}",
+                    "description": "; ".join(descriptions) + ".",
+                    "design_roles": sorted({role for role, _spec in design}),
+                    "commercial_roles": sorted({role for role, _spec in commercial}),
+                    "source_locator_ids": locator_ids,
+                    "sources": _source_refs(locator_ids, source_context),
+                }
+            )
+    return _deduplicate_dicts(result)
+
+
 def _issues(
     defects: Iterable[Mapping[str, Any]],
     comparisons: Iterable[Mapping[str, Any]],
@@ -2910,8 +3057,32 @@ def _issues(
     sheet_pile_schedule: Iterable[Mapping[str, Any]],
     works: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
+    *,
+    material_comparisons: Iterable[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
+    for comparison in material_comparisons:
+        locators = [str(value) for value in comparison.get("source_locator_ids") or ()]
+        issues.append(
+            {
+                "issue_id": str(comparison["material_comparison_id"]),
+                "kind": "Различие характеристик материала",
+                "location": comparison.get("facility"),
+                "subject": f"{comparison.get('work')} — {comparison.get('material')}",
+                "description": comparison.get("description"),
+                "practical_consequence": (
+                    "Различие характеристик влияет на состав поставки, цену и приёмку материала."
+                ),
+                "recommended_action": (
+                    f"Просим подтвердить требуемые характеристики {comparison.get('material')} "
+                    f"для {comparison.get('facility')} и привести к одному значению "
+                    "проект и ВОР/смету."
+                ),
+                "source_locator_ids": locators,
+                "sources": _source_refs(locators, source_context),
+                "status": "Установленное расхождение маркировки",
+            }
+        )
     for comparison in comparisons:
         if comparison.get("difference") in {None, "0"} and "различаются" not in str(
             comparison.get("conclusion")
