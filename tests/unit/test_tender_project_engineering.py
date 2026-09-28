@@ -125,7 +125,7 @@ def test_project_work_is_not_called_omitted_while_commercial_rows_are_unclassifi
     )
 
     assert comparisons[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
-    assert "ещё не удалось однозначно классифицировать" in comparisons[0]["conclusion"]
+    assert "не установлен достаточный коммерческий состав" in comparisons[0]["conclusion"]
 
 
 def test_project_work_is_called_omitted_only_after_commercial_scope_is_classified() -> None:
@@ -150,6 +150,42 @@ def test_project_work_is_called_omitted_only_after_commercial_scope_is_classifie
                 "source_locator_ids": ["commercial-locator"],
             },
         ]
+    )
+
+    formwork = next(value for value in comparisons if value["family_key"] == "formwork")
+    assert formwork["classification"] == "WORK_MISSING_IN_COMMERCIAL"
+
+
+def test_unclassified_commercial_row_at_another_facility_does_not_block_omission() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-formwork",
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "family_key": "formwork",
+                "work_name": "Опалубочные работы",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                "work_scope_id": "commercial-concrete",
+                "facility_id": "kns-4",
+                "facility": "КНС 4",
+                "family_key": "reinforced_concrete",
+                "work_name": "Бетонирование",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-locator"],
+            },
+        ],
+        unclassified_works=[
+            {
+                "project_wording": "Неоднозначная коммерческая операция",
+                "document_role": "Смета",
+                "facility_id": "los-7",
+                "facility": "ЛОС 7",
+            }
+        ],
     )
 
     formwork = next(value for value in comparisons if value["family_key"] == "formwork")
@@ -491,7 +527,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v28"
+    assert model["model_version"] == "project-engineering-model-v29"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

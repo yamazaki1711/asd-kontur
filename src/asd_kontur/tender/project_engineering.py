@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v28"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v29"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2180,12 +2180,21 @@ def _scope_comparisons(
         for row in unclassified_works
         if str(row.get("document_role") or "") in design_roles
     ]
+    unresolved_commercial_facilities = {
+        str(row.get("facility_id")) for row in unresolved_commercial if row.get("facility_id")
+    }
+    unresolved_design_facilities = {
+        str(row.get("facility_id")) for row in unresolved_design if row.get("facility_id")
+    }
     commercial_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
     design_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    commercial_facilities: set[str] = set()
     for row in rows:
         roles = set(str(value) for value in row.get("document_roles") or ())
         if roles.intersection(commercial_roles):
             commercial_by_family[str(row.get("family_key") or "")].append(row)
+            if row.get("facility_id"):
+                commercial_facilities.add(str(row["facility_id"]))
         if roles.intersection(design_roles):
             design_by_family[str(row.get("family_key") or "")].append(row)
 
@@ -2204,7 +2213,9 @@ def _scope_comparisons(
                         "Проектные позиции этого вида найдены, но их нельзя однозначно "
                         "связать с данным коммерческим объёмом."
                     )
-                elif unresolved_design:
+                elif row.get("facility_id") in unresolved_design_facilities or (
+                    not row.get("facility_id") and unresolved_design
+                ):
                     status = "UNRESOLVED_SCOPE_MATCH"
                     professional_status = "Сопоставление проектного состава не завершено"
                     conclusion = (
@@ -2244,19 +2255,28 @@ def _scope_comparisons(
                     "Коммерческие позиции этого вида найдены, но их нельзя однозначно "
                     "распределить по сооружениям."
                 )
-            elif unresolved_commercial:
+            elif row.get("facility_id") in unresolved_commercial_facilities or (
+                not row.get("facility_id") and unresolved_commercial
+            ):
                 status = "UNRESOLVED_SCOPE_MATCH"
                 professional_status = "Сопоставление коммерческого состава не завершено"
                 conclusion = (
                     "Сопоставление пока не завершено: в ВОР/смете остаются описания работ, "
                     "которые ещё не удалось однозначно классифицировать."
                 )
-            else:
+            elif row.get("facility_id") in commercial_facilities:
                 status = "WORK_MISSING_IN_COMMERCIAL"
                 professional_status = "Возможная неучтённая работа"
                 conclusion = (
                     "Работа установлена в проектных документах, но соответствующая позиция "
                     "не найдена в имеющихся ВОР/сметах."
+                )
+            else:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Коммерческий состав сооружения не установлен"
+                conclusion = (
+                    "Для сооружения пока не установлен достаточный коммерческий состав, "
+                    "чтобы подтвердить наличие или отсутствие этой работы."
                 )
         result.append(
             {
