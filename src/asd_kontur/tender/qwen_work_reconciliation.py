@@ -181,9 +181,7 @@ class QwenProjectWorkReconciler:
             )
 
 
-def _unresolved_observation(
-    row: Mapping[str, Any], *, failure_code: str
-) -> dict[str, Any]:
+def _unresolved_observation(row: Mapping[str, Any], *, failure_code: str) -> dict[str, Any]:
     """Preserve one rejected interpretation without losing valid sibling rows."""
 
     observation: dict[str, Any] = {

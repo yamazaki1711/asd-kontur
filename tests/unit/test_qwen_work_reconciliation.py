@@ -235,9 +235,7 @@ def test_qwen_work_reconciliation_preserves_input_when_model_invents_identity(
     assert result["observations"][0]["candidate_id"] == "candidate-a"
     assert result["observations"][0]["status"] == "UNCLASSIFIED"
     assert "invented" not in json.dumps(result, ensure_ascii=False)
-    assert result["recovery_codes"][-1] == (
-        "qwen_work_reconciliation_observation_unresolved"
-    )
+    assert result["recovery_codes"][-1] == ("qwen_work_reconciliation_observation_unresolved")
 
 
 def test_qwen_work_reconciliation_cannot_hide_potential_commercial_work(
