@@ -2246,6 +2246,12 @@ def _assistant_engineering_for_query(
         match.group(0).replace(" ", "")
         for match in re.finditer(r"(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_query)
     )
+    asks_customer_questions = "вопрос" in normalized_query and any(
+        marker in normalized_query for marker in ("заказчик", "направ", "уточн")
+    )
+    asks_contractor_risks = "риск" in normalized_query and any(
+        marker in normalized_query for marker in ("подряд", "проект", "тендер")
+    )
 
     def relevant(row: Mapping[str, Any]) -> bool:
         if not tokens and not facility_markers:
@@ -2448,7 +2454,14 @@ def _assistant_engineering_for_query(
             result[key] = rows
     for key in ("customer_questions", "risks"):
         values = [value for value in engineering.get(key) or () if isinstance(value, Mapping)]
-        selected = [compact_row(value) for value in values if relevant(value)]
+        intent_requests_complete_schedule = (
+            key == "customer_questions" and asks_customer_questions
+        ) or (key == "risks" and asks_contractor_risks)
+        selected = [
+            compact_row(value)
+            for value in values
+            if relevant(value) or (intent_requests_complete_schedule and not facility_markers)
+        ]
         if selected:
             result[key] = selected[:12]
     requirements = engineering.get("requirements")

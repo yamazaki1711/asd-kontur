@@ -477,6 +477,39 @@ def test_query_focused_projection_keeps_professional_questions_and_risks() -> No
     ]
 
 
+def test_project_wide_action_queries_return_prepared_results_without_keyword_overlap() -> None:
+    engineering = {
+        "customer_questions": [
+            {
+                "question": "Просим подтвердить включение ограждения в ВОР.",
+                "location": "Участок 17",
+                "source_locator_ids": ["question-source"],
+            }
+        ],
+        "risks": [
+            {
+                "risk": "Ограждение может остаться нерасценённым.",
+                "mitigation": "Получить отдельную позицию ВОР.",
+                "location": "Участок 17",
+            }
+        ],
+    }
+
+    questions = _assistant_engineering_for_query(
+        engineering,
+        query="Какие вопросы надо направить Заказчику?",
+        limit=20,
+    )
+    risks = _assistant_engineering_for_query(
+        engineering,
+        query="Какие риски есть для Подрядчика?",
+        limit=20,
+    )
+
+    assert questions["customer_questions"][0]["location"] == "Участок 17"
+    assert risks["risks"][0]["risk"] == "Ограждение может остаться нерасценённым."
+
+
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {
