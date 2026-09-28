@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v14"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v15"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -477,6 +477,7 @@ def build_project_engineering_model(
         source_context,
         work_resolutions or {},
     )
+    pits = _attach_pit_work_scopes(pits, work_model["works"])
     comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
     scope_comparisons = _scope_comparisons(
         work_model["works"], unclassified_works=work_model["unclassified"]
@@ -1057,6 +1058,58 @@ def _pits(
             + "Поэтому окончательное количество по имеющимся данным пока не установлено."
         ),
     }
+
+
+def _attach_pit_work_scopes(
+    pits: Mapping[str, Any], works: Iterable[Mapping[str, Any]]
+) -> dict[str, Any]:
+    """Attach conservatively scoped construction work to established pits.
+
+    A facility-level work may be inherited by its pit only when the model has
+    exactly one established pit for that facility. Multiple pits require an
+    explicit lower-level association and therefore remain unassigned.
+    """
+
+    intrinsically_pit_scoped_families = {
+        "pit_preparation",
+        "sheet_piling",
+        "waling_beam",
+        "bracing",
+    }
+    context_dependent_families = {"excavation", "dewatering", "backfill", "compaction"}
+    established = [dict(value) for value in pits.get("established") or ()]
+    pits_by_facility: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for pit in established:
+        facility_id = str(pit.get("related_facility_id") or "")
+        if facility_id:
+            pits_by_facility[facility_id].append(pit)
+    work_by_facility: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for raw_work in works:
+        work = dict(raw_work)
+        facility_id = str(work.get("facility_id") or "")
+        family = str(work.get("family_key") or "")
+        wording = str(work.get("work_name") or "")
+        is_pit_scoped = family in intrinsically_pit_scoped_families or (
+            family in context_dependent_families and "котлован" in _normalized(wording)
+        )
+        if facility_id and is_pit_scoped:
+            work_by_facility[facility_id].append(work)
+    for facility_id, facility_pits in pits_by_facility.items():
+        if len(facility_pits) != 1:
+            continue
+        facility_pits[0]["related_works"] = [
+            {
+                "work_scope_id": work.get("work_scope_id"),
+                "work": work.get("work_name"),
+                "work_family": work.get("work_family"),
+                "quantities_by_document": dict(work.get("quantities_by_document") or {}),
+                "materials_by_document": dict(work.get("materials_by_document") or {}),
+                "source_locator_ids": list(work.get("source_locator_ids") or ()),
+                "status": ("Работа связана через единственный установленный котлован сооружения"),
+            }
+            for work in work_by_facility.get(facility_id, ())
+        ]
+    return {**dict(pits), "established": established}
 
 
 def _russian_pit_count(value: int, *, established: bool) -> str:

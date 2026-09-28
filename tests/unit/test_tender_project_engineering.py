@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
+    _attach_pit_work_scopes,
     _comparison_row,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
@@ -27,6 +28,72 @@ def test_facility_designations_preserve_multiple_explicit_project_scopes() -> No
     )
     assert facility_designation("Работы КНС-4") == "КНС 4"
     assert facility_designation("КНС-4 и ЛОС 8.1") is None
+
+
+def test_pit_inherits_relevant_work_only_for_one_established_pit_per_facility() -> None:
+    works = [
+        {
+            "work_scope_id": "sheet-pile-scope",
+            "facility_id": "facility-kns-4",
+            "family_key": "sheet_piling",
+            "work_name": "Погружение шпунта",
+            "work_family": "Шпунтовые работы",
+            "quantities_by_document": {"РД": [{"value": "42", "unit": "т"}]},
+            "materials_by_document": {},
+            "source_locator_ids": ["work-locator"],
+        },
+        {
+            "work_scope_id": "pipeline-scope",
+            "facility_id": "facility-kns-4",
+            "family_key": "pipeline",
+            "work_name": "Монтаж трубопровода",
+            "source_locator_ids": ["pipeline-locator"],
+        },
+        {
+            "work_scope_id": "generic-excavation",
+            "facility_id": "facility-kns-4",
+            "family_key": "excavation",
+            "work_name": "Разработка траншеи",
+            "project_wording": ["Разработка грунта в траншее"],
+            "source_locator_ids": ["trench-locator"],
+        },
+        {
+            "work_scope_id": "pit-excavation",
+            "facility_id": "facility-kns-4",
+            "family_key": "excavation",
+            "work_name": "Разработка котлована",
+            "project_wording": ["Разработка грунта котлована"],
+            "source_locator_ids": ["pit-excavation-locator"],
+        },
+    ]
+    result = _attach_pit_work_scopes(
+        {
+            "established": [
+                {
+                    "pit_id": "pit-kns-4",
+                    "related_facility_id": "facility-kns-4",
+                    "related_works": [],
+                }
+            ]
+        },
+        works,
+    )
+
+    assert [value["work"] for value in result["established"][0]["related_works"]] == [
+        "Погружение шпунта",
+        "Разработка котлована",
+    ]
+
+    ambiguous = _attach_pit_work_scopes(
+        {
+            "established": [
+                {"pit_id": "pit-a", "related_facility_id": "facility-kns-4"},
+                {"pit_id": "pit-b", "related_facility_id": "facility-kns-4"},
+            ]
+        },
+        works,
+    )
+    assert all(not value.get("related_works") for value in ambiguous["established"])
 
 
 def test_project_work_is_not_called_omitted_while_commercial_rows_are_unclassified() -> None:
@@ -364,7 +431,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v14"
+    assert model["model_version"] == "project-engineering-model-v15"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
