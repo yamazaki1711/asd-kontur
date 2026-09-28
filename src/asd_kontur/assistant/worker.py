@@ -105,6 +105,12 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         marker in normalized
         for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
     )
+    asks_for_facility_dossier = bool(
+        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
+    ) and any(
+        marker in normalized
+        for marker in ("работ", "стро", "котлован", "шпунт", "объём", "объем", "материал")
+    )
     if asks_for_pit_inventory:
         return SearchPlan(
             intent="workspace",
@@ -133,6 +139,19 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                     "consultant.get_discrepancies",
                     {},
                     "Добавить установленные расхождения по шпунтовому объёму и профилям.",
+                ),
+            ),
+        )
+    if asks_for_facility_dossier:
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_work_packages",
+                    {"query": question, "limit": 20},
+                    "Использовать подготовленное инженерное досье указанного сооружения.",
                 ),
             ),
         )
@@ -1291,6 +1310,10 @@ def _append_prepared_project_result(
         marker in normalized
         for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
     )
+    asks_for_facility_dossier = (
+        bool(re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized))
+        and "работ" in normalized
+    )
     headings_and_rows: list[tuple[str, list[str]]] = []
     selected_source_ids = list(answer.used_source_ids)
     available_source_ids = {
@@ -1335,7 +1358,10 @@ def _append_prepared_project_result(
             if receipt.get("tool") != "consultant.get_work_packages":
                 continue
             response = receipt.get("response")
-            value = response.get("value") if isinstance(response, dict) else None
+            if not isinstance(response, dict):
+                continue
+            response_dict: dict[str, Any] = response
+            value = response_dict.get("value")
             engineering = value.get("project_engineering") if isinstance(value, dict) else None
             if not isinstance(engineering, dict):
                 continue
@@ -1384,6 +1410,49 @@ def _append_prepared_project_result(
             break
         if schedule_rows:
             headings_and_rows.append(("Шпунтовые работы по сооружениям:", schedule_rows))
+    if asks_for_facility_dossier:
+        dossier_rows: list[str] = []
+        for receipt in receipts:
+            if receipt.get("tool") != "consultant.get_work_packages":
+                continue
+            response = receipt.get("response")
+            if not isinstance(response, dict):
+                continue
+            dossier_response: dict[str, Any] = response
+            value = dossier_response.get("value")
+            engineering = value.get("project_engineering") if isinstance(value, dict) else None
+            if not isinstance(engineering, dict):
+                continue
+            for dossier in engineering.get("facility_dossiers") or ():
+                if not isinstance(dossier, dict):
+                    continue
+                raw_facility = dossier.get("facility")
+                facility_name = (
+                    str(raw_facility.get("name") or raw_facility.get("designation") or "Сооружение")
+                    if isinstance(raw_facility, dict)
+                    else "Сооружение"
+                )
+                work_names = [
+                    str(work_name).strip()
+                    for work_name in dossier.get("work_names") or ()
+                    if str(work_name).strip()
+                ]
+                dossier_rows.append(
+                    f"{facility_name}: {int(dossier.get('work_count') or len(work_names))} "
+                    "видов работ."
+                )
+                dossier_rows.extend(work_names)
+            for source in dossier_response.get("sources") or ():
+                if not isinstance(source, dict) or not source.get("source_id"):
+                    continue
+                source_id = str(source["source_id"])
+                if source_id in available_source_ids and source_id not in selected_source_ids:
+                    selected_source_ids.append(source_id)
+                if len(selected_source_ids) >= 8:
+                    break
+            break
+        if dossier_rows:
+            headings_and_rows.append(("Работы сооружения:", dossier_rows))
     for receipt in receipts:
         if receipt.get("tool") != "consultant.get_discrepancies":
             continue
@@ -1461,7 +1530,7 @@ def _append_prepared_project_result(
     prepared_result = "\n\n".join(sections)
     published_answer = (
         prepared_result
-        if asks_for_sheet_pile_schedule or asks_for_pit_inventory
+        if asks_for_sheet_pile_schedule or asks_for_pit_inventory or asks_for_facility_dossier
         else answer.answer.rstrip() + "\n\n" + prepared_result
     )
     return SynthesizedAnswer(

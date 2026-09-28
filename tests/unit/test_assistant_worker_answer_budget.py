@@ -70,6 +70,60 @@ def test_pit_inventory_uses_direct_prepared_project_result() -> None:
     assert plan.steps[0].arguments == {"kind": "excavation_pit", "limit": 30}
 
 
+def test_facility_work_question_uses_prepared_engineering_dossier() -> None:
+    plan = _direct_project_result_plan("Какие работы выполняются на КНС-4?")
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_work_packages"]
+    assert plan.steps[0].arguments == {
+        "query": "Какие работы выполняются на КНС-4?",
+        "limit": 20,
+    }
+
+
+def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
+    answer = SynthesizedAnswer(
+        "На КНС-4 выполняются строительные работы.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Работы КНС-4.",
+        ("КНС-4",),
+    )
+    completed = _append_prepared_project_result(
+        answer,
+        [
+            {
+                "tool": "consultant.get_work_packages",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "facility_dossiers": [
+                                {
+                                    "facility": {"name": "КНС 4"},
+                                    "work_names": [
+                                        "Разработка котлована",
+                                        "Устройство шпунтового ограждения",
+                                    ],
+                                    "work_count": 2,
+                                }
+                            ]
+                        }
+                    },
+                    "sources": [{"source_id": "facility-source"}],
+                },
+            }
+        ],
+        "Какие работы выполняются на КНС-4?",
+    )
+
+    assert completed.answer.startswith("Работы сооружения:")
+    assert "КНС 4: 2 видов работ" in completed.answer
+    assert "Разработка котлована" in completed.answer
+    assert "Устройство шпунтового ограждения" in completed.answer
+    assert completed.used_source_ids == ("facility-source",)
+
+
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 
