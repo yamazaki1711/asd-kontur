@@ -1652,13 +1652,13 @@ def _append_prepared_project_result(
                     f"{facility_name}: {int(dossier.get('work_count') or len(work_names))} "
                     "видов работ."
                 )
-                pits = [
+                facility_pits = [
                     str(item.get("name") or item.get("designation") or "Котлован").strip()
                     for item in dossier.get("pits") or ()
                     if isinstance(item, dict)
                 ]
-                if pits:
-                    dossier_rows.append("Котлованы: " + ", ".join(pits) + ".")
+                if facility_pits:
+                    dossier_rows.append("Котлованы: " + ", ".join(facility_pits) + ".")
                 structures = [
                     str(item.get("name") or item.get("designation") or "Конструкция").strip()
                     for item in dossier.get("structures") or ()
