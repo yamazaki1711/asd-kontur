@@ -19,6 +19,7 @@ from asd_kontur.tender.project_engineering import (
     facility_designation,
     facility_designations,
     non_work_reason,
+    professional_work_name,
     work_reconciliation_priority,
 )
 
@@ -440,7 +441,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v22"
+    assert model["model_version"] == "project-engineering-model-v23"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -683,6 +684,29 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         assert result[0] == family_key
 
     assert classify_work_family("Вывоз после приемки со склада готового оборудования") is None
+
+
+def test_professional_work_names_keep_materially_different_operations_separate() -> None:
+    expected = {
+        ("roadworks", "Устройство основания из щебеночно-песчаной смеси"): (
+            "Устройство дорожного основания"
+        ),
+        ("roadworks", "Восстановление асфальтобетонного покрытия"): (
+            "Устройство дорожного покрытия"
+        ),
+        ("roadworks", "Восстановление экологической тропы"): ("Восстановление экологической тропы"),
+        ("chambers_wells", "Установка круглого колодца"): "Устройство колодца",
+        ("chambers_wells", "Монтаж корпуса КНС"): "Монтаж КНС",
+        ("electrical", "Монтаж опор наружного освещения"): "Монтаж опор освещения",
+        ("electrical", "Прокладка силового кабеля"): "Прокладка кабеля",
+        ("pit_preparation", "Бетонная подготовка под плиту"): ("Устройство бетонной подготовки"),
+        ("pit_preparation", "Песчаное основание под трубопровод"): (
+            "Устройство песчаного основания"
+        ),
+    }
+
+    for (family_key, wording), work_name in expected.items():
+        assert professional_work_name(family_key, wording) == work_name
 
 
 def test_same_family_operations_remain_distinct_engineering_scopes() -> None:

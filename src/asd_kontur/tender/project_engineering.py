@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v22"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v23"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -919,6 +919,70 @@ def professional_work_name(family_key: str, wording: object) -> str:
         if "подключ" in normalized or "врезк" in normalized:
             return "Подключение трубопровода"
         return "Монтаж трубопровода"
+    if family_key == "pit_preparation":
+        if "бетон" in normalized:
+            return "Устройство бетонной подготовки"
+        if "щеб" in normalized:
+            return "Устройство щебёночного основания"
+        if "пес" in normalized:
+            return "Устройство песчаного основания"
+        return "Подготовка основания"
+    if family_key == "chambers_wells":
+        if "люк" in normalized:
+            return "Установка люка"
+        if "колод" in normalized:
+            return "Устройство колодца"
+        if "камер" in normalized:
+            return "Устройство камеры"
+        if "кнс" in normalized or "насосн станц" in normalized:
+            return "Монтаж КНС"
+        if "лос" in normalized or "очистн сооружен" in normalized:
+            return "Монтаж ЛОС"
+        return "Колодцы, камеры и технологические сооружения"
+    if family_key == "electrical":
+        if "лент" in normalized and "кабел" in normalized:
+            return "Укладка сигнальной ленты над кабелем"
+        if "опор" in normalized and "освещ" in normalized:
+            return "Монтаж опор освещения"
+        if "светильник" in normalized:
+            return "Монтаж светильников"
+        if "наружн" in normalized and "освещ" in normalized:
+            return "Монтаж наружного освещения"
+        if "кабел" in normalized:
+            return "Прокладка кабеля"
+        return "Электромонтажные работы"
+    if family_key == "roadworks":
+        if "основан" in normalized:
+            return "Устройство дорожного основания"
+        if "асфальт" in normalized or "покрыт" in normalized:
+            return "Устройство дорожного покрытия"
+        if "бортов" in normalized:
+            return "Установка бортового камня"
+        if "экологическ" in normalized and "троп" in normalized:
+            return "Восстановление экологической тропы"
+        return "Дорожные работы"
+    if family_key == "site_preparation":
+        if "вертикальн" in normalized or "планиров" in normalized:
+            return "Вертикальная планировка"
+        if "складск" in normalized:
+            return "Устройство складских площадок"
+        if "мобильн" in normalized or "инвентарн здан" in normalized:
+            return "Размещение временных зданий"
+        if "насып" in normalized:
+            return "Устройство насыпи"
+        if "выруб" in normalized or "валк" in normalized or "корчев" in normalized:
+            return "Вырубка деревьев и кустарников"
+        if "лес" in normalized or "древес" in normalized or "порубочн" in normalized:
+            return "Вывоз порубочного материала"
+        if "расчист" in normalized or "освобожден" in normalized:
+            return "Расчистка строительной площадки"
+        return "Подготовка строительной площадки"
+    if family_key == "waste_management":
+        if "погруз" in normalized:
+            return "Погрузка строительных отходов"
+        if "вывоз" in normalized:
+            return "Вывоз строительных отходов"
+        return "Обращение со строительными отходами"
     if family_key == "pile_foundation":
         if "выкручив" in normalized or "извлеч" in normalized or "демонтаж" in normalized:
             return "Извлечение/демонтаж свай"
