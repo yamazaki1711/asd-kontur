@@ -5432,6 +5432,44 @@ function ProjectEngineeringResult({
                         );
                       })}
                     </ul>
+                    <h4>Материалы</h4>
+                    {cardMaterials.length ? (
+                      <ul>
+                        {cardMaterials.map((value, index) => {
+                          const material = value as Record<string, unknown>;
+                          const amount = [
+                            displayValue(material.quantity, ""),
+                            displayValue(material.unit, ""),
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+                          const scope = [
+                            displayValue(material.work_name, ""),
+                            displayValue(material.document_role, ""),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ");
+                          return (
+                            <li
+                              key={`${displayValue(material.name)}-${displayValue(material.document_role)}-${String(index)}`}
+                            >
+                              <strong>{displayValue(material.name)}</strong>
+                              {scope ? ` — ${scope}` : ""}
+                              {amount
+                                ? ` — ${amount}`
+                                : " — количество не найдено"}
+                              <ProjectSourceLinks
+                                locatorIds={material.source_locator_ids}
+                                workspaceId={workspaceId}
+                                modeSlug={modeSlug}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>Материалы для сооружения не установлены.</p>
+                    )}
                     <h4>Расхождения и вопросы</h4>
                     {cardIssues.length ? (
                       <ul>

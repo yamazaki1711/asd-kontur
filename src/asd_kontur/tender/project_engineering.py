@@ -3776,12 +3776,7 @@ def _facility_cards(
                 "pipelines": [
                     work for work in facility_works if work.get("family_key") == "pipeline"
                 ],
-                "materials": [
-                    material
-                    for work in facility_works
-                    for values in dict(work.get("materials_by_document") or {}).values()
-                    for material in values
-                ],
+                "materials": _facility_material_schedule(facility_works),
                 "comparisons": comparisons_by_facility.get(name, []),
                 "issues": facility_issues,
                 "documents": _source_refs(contributing_locator_ids, source_context),
@@ -3803,6 +3798,69 @@ def _facility_cards(
             }
         )
     return cards
+
+
+def _facility_material_schedule(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Consolidate repeated material mentions without merging different scopes.
+
+    Specifications, estimates and work schedules commonly repeat the same
+    material row.  A facility dossier needs one readable row for an identical
+    work/role/value while retaining every source locator.  A different work,
+    document role, quantity or unit remains a separate engineering row.
+    """
+
+    grouped: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    for work in works:
+        work_name = str(work.get("work_name") or "Работа").strip()
+        materials_by_document = work.get("materials_by_document")
+        if not isinstance(materials_by_document, Mapping):
+            continue
+        for document_role, materials in materials_by_document.items():
+            if not isinstance(materials, Iterable) or isinstance(materials, (str, bytes)):
+                continue
+            for raw_material in materials:
+                if not isinstance(raw_material, Mapping):
+                    continue
+                material = dict(raw_material)
+                name = str(material.get("name") or "").strip()
+                if not name:
+                    continue
+                quantity = str(material.get("quantity") or "").strip()
+                unit = str(material.get("unit") or "").strip()
+                role = str(document_role).strip()
+                key = (_normalized(name), quantity, _normalized(unit), role, work_name)
+                locator_ids = {
+                    str(value)
+                    for value in (
+                        material.get("source_locator_id"),
+                        *(material.get("source_locator_ids") or ()),
+                    )
+                    if value
+                }
+                existing = grouped.get(key)
+                if existing is None:
+                    material["document_role"] = role
+                    material["work_name"] = work_name
+                    material["source_locator_ids"] = sorted(locator_ids)
+                    material.pop("source_locator_id", None)
+                    grouped[key] = material
+                    continue
+                existing["source_locator_ids"] = sorted(
+                    {
+                        *(str(value) for value in existing.get("source_locator_ids") or ()),
+                        *locator_ids,
+                    }
+                )
+    return sorted(
+        grouped.values(),
+        key=lambda item: (
+            str(item.get("work_name") or ""),
+            str(item.get("document_role") or ""),
+            _normalized(item.get("name")),
+            str(item.get("quantity") or ""),
+            _normalized(item.get("unit")),
+        ),
+    )
 
 
 def _facility_characteristics(

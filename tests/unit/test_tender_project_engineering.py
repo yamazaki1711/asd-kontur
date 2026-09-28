@@ -11,6 +11,7 @@ from asd_kontur.tender.project_engineering import (
     _comparisons,
     _display_quantity,
     _document_composition,
+    _facility_material_schedule,
     _isolated_unassigned_comparison,
     _issues,
     _material_comparisons,
@@ -34,6 +35,62 @@ from asd_kontur.tender.project_engineering import (
     professional_work_name,
     work_reconciliation_priority,
 )
+
+
+def test_facility_material_schedule_consolidates_repeated_mentions_by_scope() -> None:
+    schedule = _facility_material_schedule(
+        [
+            {
+                "work_name": "Погружение шпунта",
+                "materials_by_document": {
+                    "ВОР": [
+                        {
+                            "name": "Шпунт Л5",
+                            "quantity": "9.5",
+                            "unit": "т",
+                            "source_locator_id": "vor-a",
+                        },
+                        {
+                            "name": "Шпунт Л5",
+                            "quantity": "9.5",
+                            "unit": "т",
+                            "source_locator_id": "vor-b",
+                        },
+                    ],
+                    "РД": [
+                        {
+                            "name": "Шпунт Л5",
+                            "quantity": "9.5",
+                            "unit": "т",
+                            "source_locator_id": "design",
+                        }
+                    ],
+                },
+            },
+            {
+                "work_name": "Устройство пояса",
+                "materials_by_document": {
+                    "ВОР": [
+                        {
+                            "name": "Шпунт Л5",
+                            "quantity": "9.5",
+                            "unit": "т",
+                            "source_locator_id": "belt",
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+
+    assert len(schedule) == 3
+    driving_vor = next(
+        row
+        for row in schedule
+        if row["work_name"] == "Погружение шпунта" and row["document_role"] == "ВОР"
+    )
+    assert driving_vor["source_locator_ids"] == ["vor-a", "vor-b"]
+    assert "source_locator_id" not in driving_vor
 
 
 def test_explicit_vor_heading_resolution_establishes_page_scope() -> None:
