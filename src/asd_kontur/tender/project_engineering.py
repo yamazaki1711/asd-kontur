@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v20"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v21"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -111,6 +111,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "срезк загрязнен грунт",
             "выемк загрязнен грунт",
             "откопк",
+            "дноуглубительн работ",
         ),
     ),
     (
@@ -321,6 +322,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "восстановлен асфальтобетон",
             "восстановлен тротуар",
             "восстановлен бортов",
+            "восстановлен экологическ троп",
         ),
     ),
     (
@@ -340,6 +342,9 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "монтаж кнс",
             "монтаж лос",
             "монтаж очистн сооружен",
+            "монтаж канализационн насосн станц",
+            "шеф монтажн работ",
+            "монтаж контейнер",
         ),
     ),
     (
@@ -377,10 +382,14 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "выкорчевыван пн",
             "расчистк площад",
             "складск площадк",
+            "складск площад",
             "вертикальн планировк",
             "планировк площад",
             "устройств насыпи",
             "планировк поверхност откос",
+            "вырубк",
+            "вывоз лес",
+            "мобильн инвентарн здан",
         ),
     ),
     (
@@ -400,8 +409,10 @@ _NON_WORK_OBSERVATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
         "Обобщённый заголовок без конкретной строительной операции",
         (
             "строительные работы",
+            "строительных работ",
             "строительно монтажные работы",
             "монтажные работы",
+            "монтажных работ",
             "строительство",
             "монтаж",
             "материалы",
@@ -413,6 +424,7 @@ _NON_WORK_OBSERVATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "оплата труда",
             "эксплуатация машин",
             "накладные расходы",
+            "сметная прибыль",
             "автомобили бортовые",
             "вода",
         ),
@@ -424,6 +436,7 @@ _NON_WORK_OBSERVATIONS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "сталь арматурная",
             "песок природный",
             "щиты настила",
+            "оборудования",
         ),
     ),
     (
@@ -734,6 +747,12 @@ def non_work_reason(value: object) -> str | None:
             return reason
     if re.fullmatch(r"\d+(?:[.,\s]\d+){2,}", normalized):
         return "Сметный шифр без описания строительной операции"
+    if re.match(r"^\d+(?:[.-]\d+){2,}\s+", normalized):
+        return "Сметный ресурс с кодом, а не отдельная строительная операция"
+    if normalized.startswith(("площадь ", "объем ", "объём ")):
+        return "Проектный показатель или количество, а не отдельная строительная операция"
+    if re.match(r"^бст\s+в\d", normalized):
+        return "Описание бетонной смеси, а не отдельная строительная операция"
     return None
 
 

@@ -651,7 +651,15 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Затирка цементным раствором швов колодца": "chambers_wells",
         "Монтаж лестницы КЛ-1": "structural_steel",
         "Восстановление асфальтобетонного покрытия": "roadworks",
+        "Восстановление экологической тропы": "roadworks",
         "Вывоз строительного мусора": "waste_management",
+        "Монтаж канализационных насосных станций": "equipment_installation",
+        "Шеф-монтажные работы": "equipment_installation",
+        "Устройство складских площадок": "site_preparation",
+        "Размещение мобильных инвентарных зданий": "site_preparation",
+        "Вырубка": "site_preparation",
+        "Вывоз леса": "site_preparation",
+        "Дноуглубительные работы": "excavation",
     }
 
     for wording, family_key in expected.items():
@@ -1140,6 +1148,18 @@ def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None
     )
     assert non_work_reason("Предварительное отстаивание сточных вод") == (
         "Эксплуатационная операция, а не строительная работа"
+    )
+    assert non_work_reason("строительных работ") == (
+        "Обобщённый заголовок без конкретной строительной операции"
+    )
+    assert non_work_reason("01.7.03.01-0001 Вода") == (
+        "Сметный ресурс с кодом, а не отдельная строительная операция"
+    )
+    assert non_work_reason("Объем насыпи") == (
+        "Проектный показатель или количество, а не отдельная строительная операция"
+    )
+    assert non_work_reason("БСТ В7,5 П2 W2 (заделка швов)") == (
+        "Описание бетонной смеси, а не отдельная строительная операция"
     )
 
 
