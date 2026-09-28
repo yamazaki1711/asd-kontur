@@ -145,7 +145,20 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
     ) and any(
         marker in normalized
-        for marker in ("работ", "стро", "котлован", "шпунт", "объём", "объем", "материал")
+        for marker in (
+            "работ",
+            "стро",
+            "котлован",
+            "шпунт",
+            "объём",
+            "объем",
+            "материал",
+            "расхожд",
+            "противореч",
+            "риск",
+            "вопрос",
+            "проблем",
+        )
     )
     if asks_for_facility_dossier:
         return SearchPlan(
@@ -1436,7 +1449,27 @@ def _append_prepared_project_result(
         re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
     ) and any(
         marker in normalized
-        for marker in ("работ", "стро", "котлован", "шпунт", "объём", "объем", "материал")
+        for marker in (
+            "работ",
+            "стро",
+            "котлован",
+            "шпунт",
+            "объём",
+            "объем",
+            "материал",
+            "расхожд",
+            "противореч",
+            "риск",
+            "вопрос",
+            "проблем",
+        )
+    )
+    asks_for_facility_quantities = asks_for_facility_dossier and any(
+        marker in normalized for marker in ("объём", "объем", "количеств")
+    )
+    asks_for_facility_materials = asks_for_facility_dossier and "материал" in normalized
+    asks_for_facility_issues = asks_for_facility_dossier and any(
+        marker in normalized for marker in ("расхожд", "противореч", "риск", "вопрос", "проблем")
     )
     asks_for_missing_commercial_work = (
         "работ" in normalized
@@ -1682,6 +1715,70 @@ def _append_prepared_project_result(
                     dossier_rows.append("Характеристики: " + "; ".join(characteristics) + ".")
                 if work_names:
                     dossier_rows.append("Основные работы: " + ", ".join(work_names) + ".")
+                if asks_for_facility_quantities:
+                    for work in dossier.get("work_schedule") or ():
+                        if not isinstance(work, dict):
+                            continue
+                        work_name = str(
+                            work.get("work_name") or work.get("work") or "Работа"
+                        ).strip()
+                        quantities = work.get("quantities_by_document")
+                        if not isinstance(quantities, dict):
+                            continue
+                        quantity_lines: list[str] = []
+                        for role, quantity_rows in quantities.items():
+                            if not isinstance(quantity_rows, list):
+                                continue
+                            role_values = [
+                                " ".join(
+                                    str(part).strip()
+                                    for part in (
+                                        quantity_row.get("value"),
+                                        quantity_row.get("unit"),
+                                    )
+                                    if part not in (None, "")
+                                )
+                                for quantity_row in quantity_rows
+                                if isinstance(quantity_row, dict)
+                            ]
+                            role_values = [value for value in role_values if value]
+                            if role_values:
+                                quantity_lines.append(f"{role}: {', '.join(role_values)}")
+                        if quantity_lines:
+                            dossier_rows.append(
+                                f"Объём — {work_name}: {'; '.join(quantity_lines)}."
+                            )
+                if asks_for_facility_materials:
+                    materials = [
+                        " ".join(
+                            str(part).strip()
+                            for part in (item.get("name"), item.get("quantity"), item.get("unit"))
+                            if part not in (None, "")
+                        )
+                        for item in dossier.get("materials") or ()
+                        if isinstance(item, dict) and item.get("name")
+                    ]
+                    if materials:
+                        dossier_rows.append("Материалы: " + "; ".join(materials) + ".")
+                if asks_for_facility_issues:
+                    for issue in dossier.get("issues") or ():
+                        if isinstance(issue, dict):
+                            text = str(
+                                issue.get("description")
+                                or issue.get("conclusion")
+                                or issue.get("professional_status")
+                                or ""
+                            ).strip()
+                            if text:
+                                dossier_rows.append("Расхождение: " + text)
+                    for question_item in dossier.get("customer_questions") or ():
+                        if isinstance(question_item, dict) and question_item.get("question"):
+                            dossier_rows.append(
+                                "Вопрос Заказчику: " + str(question_item["question"]).strip()
+                            )
+                    for risk_item in dossier.get("risks") or ():
+                        if isinstance(risk_item, dict) and risk_item.get("risk"):
+                            dossier_rows.append("Риск: " + str(risk_item["risk"]).strip())
                 missing_information = [
                     str(value).strip()
                     for value in dossier.get("missing_information") or ()

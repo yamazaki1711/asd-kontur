@@ -487,6 +487,36 @@ def test_query_focused_projection_keeps_professional_questions_and_risks() -> No
     ]
 
 
+def test_facility_projection_keeps_requested_quantities_and_materials() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "facility_cards": [
+                {
+                    "facility": {"name": "КНС 4"},
+                    "works": [
+                        {
+                            "work_name": "Погружение шпунта",
+                            "quantities_by_document": {"ВОР": [{"value": "95.028", "unit": "т"}]},
+                        }
+                    ],
+                    "materials": [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}],
+                }
+            ]
+        },
+        query="Какие объёмы и материалы предусмотрены на КНС-4?",
+        limit=20,
+    )
+
+    dossier = projected["facility_dossiers"][0]
+    assert dossier["work_schedule"] == [
+        {
+            "work_name": "Погружение шпунта",
+            "quantities_by_document": {"ВОР": [{"value": "95.028", "unit": "т"}]},
+        }
+    ]
+    assert dossier["materials"] == [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}]
+
+
 def test_project_wide_action_queries_return_prepared_results_without_keyword_overlap() -> None:
     engineering = {
         "customer_questions": [

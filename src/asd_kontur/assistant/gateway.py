@@ -2285,6 +2285,14 @@ def _assistant_engineering_for_query(
         and any(marker in normalized_query for marker in ("отсутств", "не учт", "неучт", "пропущ"))
         and any(marker in normalized_query for marker in ("вор", "смет", "коммерч"))
     )
+    asks_facility_quantities = bool(facility_markers) and any(
+        marker in normalized_query for marker in ("объём", "объем", "количеств")
+    )
+    asks_facility_materials = bool(facility_markers) and "материал" in normalized_query
+    asks_facility_issues = bool(facility_markers) and any(
+        marker in normalized_query
+        for marker in ("расхожд", "противореч", "риск", "вопрос", "проблем")
+    )
 
     def relevant(row: Mapping[str, Any]) -> bool:
         if not tokens and not facility_markers:
@@ -2320,6 +2328,8 @@ def _assistant_engineering_for_query(
                 "name",
                 "label",
                 "value",
+                "quantity",
+                "unit",
                 "pit",
                 "operation",
                 "work",
@@ -2547,6 +2557,49 @@ def _assistant_engineering_for_query(
                         for value in card.get("works") or ()
                         if isinstance(value, Mapping) and value.get("work_name")
                     }
+                ),
+                **(
+                    {
+                        "work_schedule": [
+                            compact_row(value)
+                            for value in card.get("works") or ()
+                            if isinstance(value, Mapping) and value.get("quantities_by_document")
+                        ][:40]
+                    }
+                    if asks_facility_quantities
+                    else {}
+                ),
+                **(
+                    {
+                        "materials": [
+                            compact_row(value)
+                            for value in card.get("materials") or ()
+                            if isinstance(value, Mapping)
+                        ][:30]
+                    }
+                    if asks_facility_materials
+                    else {}
+                ),
+                **(
+                    {
+                        "issues": [
+                            compact_row(value)
+                            for value in card.get("issues") or ()
+                            if isinstance(value, Mapping)
+                        ][:12],
+                        "customer_questions": [
+                            compact_row(value)
+                            for value in card.get("customer_questions") or ()
+                            if isinstance(value, Mapping)
+                        ][:12],
+                        "risks": [
+                            compact_row(value)
+                            for value in card.get("risks") or ()
+                            if isinstance(value, Mapping)
+                        ][:12],
+                    }
+                    if asks_facility_issues
+                    else {}
                 ),
                 "missing_information": [
                     str(value) for value in card.get("missing_information") or ()

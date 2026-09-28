@@ -321,6 +321,53 @@ def test_prepared_facility_dossier_publishes_complete_work_list() -> None:
     assert completed.used_source_ids == ("facility-source",)
 
 
+def test_prepared_facility_dossier_publishes_requested_quantities_and_materials() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "По КНС-4 подготовлено инженерное досье.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Объёмы и материалы КНС-4.",
+            ("КНС-4",),
+        ),
+        [
+            {
+                "tool": "consultant.get_work_packages",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "facility_dossiers": [
+                                {
+                                    "facility": {"name": "КНС 4"},
+                                    "work_names": ["Погружение шпунта"],
+                                    "work_count": 1,
+                                    "work_schedule": [
+                                        {
+                                            "work_name": "Погружение шпунта",
+                                            "quantities_by_document": {
+                                                "ВОР": [{"value": "95.028", "unit": "т"}]
+                                            },
+                                        }
+                                    ],
+                                    "materials": [
+                                        {"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}
+                                    ],
+                                }
+                            ]
+                        }
+                    },
+                    "sources": [{"source_id": "facility-source"}],
+                },
+            }
+        ],
+        "Какие объёмы и материалы предусмотрены на КНС-4?",
+    )
+
+    assert "Объём — Погружение шпунта: ВОР: 95.028 т" in completed.answer
+    assert "Материалы: Шпунт Л5 9.5 т" in completed.answer
+
+
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 
