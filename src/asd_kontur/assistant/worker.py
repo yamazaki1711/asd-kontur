@@ -164,13 +164,12 @@ class AssistantWorker:
         signal.signal(signal.SIGTERM, lambda *_: self._request_stop())
         signal.signal(signal.SIGINT, lambda *_: self._request_stop())
         while not self._stopping:
+            if not self._qwen_runtime_available():
+                time.sleep(1.0)
+                continue
             claimed = self._repository.claim(self._identity, self._lease_seconds)
             if claimed is None:
                 time.sleep(0.3)
-                continue
-            if not self._qwen_runtime_available():
-                self._repository.defer_for_busy_runtime(claimed)
-                time.sleep(1.0)
                 continue
             self._run(claimed)
 
