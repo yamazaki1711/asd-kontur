@@ -480,6 +480,11 @@ def test_query_focused_projection_keeps_professional_questions_and_risks() -> No
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {
+            "document_composition": {
+                "professional_summary": "В комплекте есть ПД и смета; ВОР не найдена.",
+                "available_roles": ["ПД", "Смета"],
+                "missing_roles": ["РД", "Спецификация", "ВОР", "Договор"],
+            },
             "facility_cards": [
                 {
                     "facility": {
@@ -516,13 +521,19 @@ def test_facility_query_keeps_structures_connections_and_work_names() -> None:
                     ],
                     "missing_information": ["Коммерческий объём не распределён"],
                 }
-            ]
+            ],
         },
         query="Какие конструкции и работы относятся к КНС-4?",
         limit=20,
     )
 
     dossier = projected["facility_dossiers"][0]
+    assert projected["document_composition"]["missing_roles"] == [
+        "РД",
+        "Спецификация",
+        "ВОР",
+        "Договор",
+    ]
     assert dossier["facility"]["name"] == "КНС 4"
     assert dossier["structures"] == [
         {

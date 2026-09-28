@@ -564,7 +564,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v31"
+    assert model["model_version"] == "project-engineering-model-v32"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -598,6 +598,41 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
             "status": "Установлено по явно указанному сооружению",
         }
     ]
+    assert model["document_composition"]["available_roles"] == [
+        "РД",
+        "Спецификация",
+        "ВОР",
+    ]
+
+
+def test_omission_names_only_the_supplied_commercial_denominator() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-reclamation",
+                "facility_id": "kns-8-1",
+                "facility": "КНС 8.1",
+                "family_key": "reclamation",
+                "work_name": "Рекультивация",
+                "document_roles": ["ПД"],
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                "work_scope_id": "commercial-concrete",
+                "facility_id": "kns-8-1",
+                "facility": "КНС 8.1",
+                "family_key": "reinforced_concrete",
+                "work_name": "Бетонирование",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["estimate-locator"],
+            },
+        ],
+        available_document_roles=["ПД", "Смета"],
+    )
+
+    reclamation = next(row for row in comparisons if row["family_key"] == "reclamation")
+    assert reclamation["classification"] == "WORK_MISSING_IN_COMMERCIAL"
+    assert reclamation["conclusion"].endswith("не найдена в предоставленных сметах.")
 
 
 def test_exact_structural_relationship_assigns_work_without_document_wide_guessing() -> None:

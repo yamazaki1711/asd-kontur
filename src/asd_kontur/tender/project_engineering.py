@@ -10,14 +10,14 @@ normal result while retaining document/page references for inspection.
 from __future__ import annotations
 
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v31"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v32"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -627,8 +627,12 @@ def build_project_engineering_model(
     )
     pits = _attach_pit_work_scopes(pits, work_model["works"])
     comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
+    documents = _documents(source_context)
+    document_composition = _document_composition(documents)
     scope_comparisons = _scope_comparisons(
-        work_model["works"], unclassified_works=work_model["unclassified"]
+        work_model["works"],
+        unclassified_works=work_model["unclassified"],
+        available_document_roles=document_composition["available_roles"],
     )
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context)
     issues = _issues(
@@ -651,7 +655,6 @@ def build_project_engineering_model(
         structure_relationships,
         source_context,
     )
-    documents = _documents(source_context)
     unresolved = {
         "facility_designations": [
             item for item in facilities if item["status"] == "Требует уточнения"
@@ -690,6 +693,7 @@ def build_project_engineering_model(
         "risks": risks,
         "customer_questions": actions,
         "documents": documents,
+        "document_composition": document_composition,
         "unresolved": unresolved,
         "summary": {
             "facility_count": len([item for item in facilities if not item["is_alias_group"]]),
@@ -2241,6 +2245,7 @@ def _scope_comparisons(
     works: Iterable[Mapping[str, Any]],
     *,
     unclassified_works: Iterable[Mapping[str, Any]] = (),
+    available_document_roles: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Classify design/commercial coverage for the same engineering family.
 
@@ -2252,6 +2257,10 @@ def _scope_comparisons(
     rows = [dict(value) for value in works]
     design_roles = {"ПД", "РД", "Спецификация"}
     commercial_roles = {"ВОР", "Смета"}
+    available_commercial_roles = commercial_roles.intersection(
+        str(value) for value in available_document_roles
+    )
+    commercial_denominator = _commercial_document_phrase(available_commercial_roles)
     unresolved_commercial = [
         dict(row)
         for row in unclassified_works
@@ -2351,7 +2360,7 @@ def _scope_comparisons(
                 professional_status = "Возможная неучтённая работа"
                 conclusion = (
                     "Работа установлена в проектных документах, но соответствующая позиция "
-                    "не найдена в имеющихся ВОР/сметах."
+                    f"не найдена {commercial_denominator}."
                 )
             else:
                 status = "UNRESOLVED_SCOPE_MATCH"
@@ -2381,6 +2390,17 @@ def _scope_comparisons(
             }
         )
     return _deduplicate_dicts(result)
+
+
+def _commercial_document_phrase(available_roles: Iterable[str]) -> str:
+    roles = set(available_roles)
+    if roles == {"Смета"}:
+        return "в предоставленных сметах"
+    if roles == {"ВОР"}:
+        return "в предоставленной ВОР"
+    if roles == {"ВОР", "Смета"}:
+        return "в предоставленных ВОР и сметах"
+    return "в доступных коммерческих документах"
 
 
 def _sheet_pile_schedule(
@@ -3203,6 +3223,35 @@ def _documents(source_context: Mapping[str, Mapping[str, Any]]) -> list[dict[str
     return sorted(unique.values(), key=lambda value: (value["document_role"], value["name"]))
 
 
+def _document_composition(documents: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    role_counts = Counter(
+        str(value.get("document_role") or "Роль не установлена") for value in documents
+    )
+    expected_roles = ("ПД", "РД", "Спецификация", "ВОР", "Смета", "Договор")
+    available_roles = [role for role in expected_roles if role_counts.get(role)]
+    missing_roles = [role for role in expected_roles if not role_counts.get(role)]
+    present = "; ".join(f"{role} — {role_counts[role]}" for role in available_roles)
+    unidentified = role_counts.get("Проектный документ", 0)
+    if unidentified:
+        present = (
+            f"{present}; роль требует уточнения — {unidentified}"
+            if present
+            else (f"роль требует уточнения — {unidentified}")
+        )
+    return {
+        "role_counts": dict(sorted(role_counts.items())),
+        "available_roles": available_roles,
+        "missing_roles": missing_roles,
+        "professional_summary": (
+            "В предоставленном комплекте установлены: "
+            f"{present or 'профессиональные роли не установлены'}. "
+            f"Отдельные документы не найдены: {', '.join(missing_roles) or 'нет'}. "
+            "Отсутствующий вид документа ограничивает только соответствующее сопоставление, "
+            "но не отменяет анализ имеющихся проектных материалов."
+        ),
+    }
+
+
 def _professional_document_role(source_role: object, display_name: object) -> str:
     name = _normalized(display_name)
     role = str(source_role or "")
@@ -3218,7 +3267,14 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Смета"
     if role == "specification":
         return "Спецификация"
-    if " рр" in f" {name}" or "рабоч" in name or role == "working_documentation":
+    if "раздел пд" in name or "часть пд" in name:
+        return "ПД"
+    if (
+        re.search(r"(?:^|[\s._-])рд(?:[\s._-]|$)", name)
+        or " рр" in f" {name}"
+        or "рабоч" in name
+        or role == "working_documentation"
+    ):
         return "РД"
     if role in {"project_documentation", "explanatory_note", "drawing_or_scheme"}:
         return "ПД"

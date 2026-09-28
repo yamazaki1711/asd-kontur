@@ -125,6 +125,13 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         _paragraph(
             str(pits.get("professional_answer") or "Инвентаризация котлованов не завершена.")
         ),
+        _heading("Состав исходных документов"),
+        _paragraph(
+            str(
+                dict(model.get("document_composition") or {}).get("professional_summary")
+                or "Состав исходных документов требует уточнения."
+            )
+        ),
         _heading("2. Состав объекта"),
         _simple_table(
             ("Сооружение / участок", "Тип", "Статус"),

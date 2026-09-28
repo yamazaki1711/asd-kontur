@@ -2374,6 +2374,12 @@ def _assistant_engineering_for_query(
         result["project"] = {
             key: value for key, value in project.items() if key in {"name", "purpose", "status"}
         }
+    document_composition = engineering.get("document_composition")
+    if isinstance(document_composition, Mapping):
+        result["document_composition"] = {
+            key: document_composition.get(key)
+            for key in ("professional_summary", "available_roles", "missing_roles")
+        }
     pits = engineering.get("pits")
     if isinstance(pits, Mapping) and (
         "котл" in normalized_query or "pit" in normalized_query or not query

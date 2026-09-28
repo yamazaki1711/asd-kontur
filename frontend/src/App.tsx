@@ -5052,6 +5052,10 @@ function ProjectEngineeringResult({
     ? (model.customer_questions as Record<string, unknown>[])
     : [];
   const requirements = (model.requirements ?? {}) as Record<string, unknown>;
+  const documentComposition = (model.document_composition ?? {}) as Record<
+    string,
+    unknown
+  >;
   const name = (project.name ?? {}) as Record<string, unknown>;
   const purpose = (project.purpose ?? {}) as Record<string, unknown>;
 
@@ -5094,6 +5098,13 @@ function ProjectEngineeringResult({
             {displayValue(
               pits.professional_answer,
               "Инвентаризация котлованов не завершена.",
+            )}
+          </p>
+          <h3>Состав исходных документов</h3>
+          <p>
+            {displayValue(
+              documentComposition.professional_summary,
+              "Состав исходных документов требует уточнения.",
             )}
           </p>
         </section>
