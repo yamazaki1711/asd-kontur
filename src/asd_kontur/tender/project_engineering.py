@@ -696,11 +696,17 @@ def build_project_engineering_model(
             "work_scope_count": len(work_model["works"]),
             "unclassified_work_count": len(work_model["unclassified"]),
             "excluded_non_work_observation_count": len(work_model["excluded"]),
+            "construction_scope_observation_count": work_model["classification"][
+                "construction_scope_observation_count"
+            ],
             "classified_work_observation_count": work_model["classification"][
                 "classified_observation_count"
             ],
             "total_work_observation_count": work_model["classification"]["total_observation_count"],
             "classified_work_percent": work_model["classification"]["classified_percent"],
+            "construction_scope_classified_percent": work_model["classification"][
+                "construction_scope_classified_percent"
+            ],
             "facility_assigned_work_observation_count": work_model["classification"][
                 "facility_assigned_observation_count"
             ],
@@ -830,6 +836,26 @@ def non_work_reason(value: object) -> str | None:
         return "Проектный показатель или количество, а не отдельная строительная операция"
     if re.match(r"^бст\s+в\d", normalized):
         return "Описание бетонной смеси, а не отдельная строительная операция"
+    return None
+
+
+def construction_scope_exclusion_reason(document_title: object) -> str | None:
+    """Keep operation/maintenance manuals out of the construction work schedule.
+
+    Russian project documentation sections ТБЭ and СОЭ describe safe operation,
+    maintenance and future repair of the completed asset.  Their verbs can look
+    exactly like construction operations to a lexical classifier, but they do
+    not define the contractor's current construction scope.  The observations
+    remain traceable and excluded with this explicit reason instead of being
+    presented as Tender works.
+    """
+
+    normalized = _normalized(document_title)
+    if re.search(r"(?:^|\s)(?:тбэ|соэ)(?:[.\s]|$)", normalized):
+        return (
+            "Эксплуатационная/ремонтная операция из профильного раздела ПД, "
+            "а не работа текущего строительства"
+        )
     return None
 
 
@@ -1537,7 +1563,11 @@ def _work_schedule(
         normalized_name = str(row.get("label") or row.get("normalized_name") or _normalized(name))
         locator_id = str(row.get("source_locator_id") or "")
         source_version_id = str(row.get("source_version_id") or "")
+        context = dict(source_context.get(locator_id) or {})
         deterministic_non_work_reason = non_work_reason(name)
+        scope_exclusion_reason = construction_scope_exclusion_reason(
+            context.get("safe_display_name")
+        )
         family = classify_work_family(normalized_name)
         resolution = dict(work_resolutions.get(candidate_id) or {})
         if int(resolution.get("candidate_version") or 0) != int(row.get("version") or 0):
@@ -1555,7 +1585,6 @@ def _work_schedule(
                     if locator_id in relationship_facilities_by_locator
                     else "Работа и сооружение указаны в одном исходном фрагменте"
                 )
-        context = dict(source_context.get(locator_id) or {})
         if facility is None:
             locator_value = context.get("locator_value")
             page = locator_value.get("page") if isinstance(locator_value, Mapping) else None
@@ -1656,11 +1685,13 @@ def _work_schedule(
         # same deterministic exclusion used by the Qwen scheduler before the
         # family branch, otherwise these rows inflate the professional work
         # schedule while never becoming eligible for semantic correction.
-        if deterministic_non_work_reason is not None:
+        if deterministic_non_work_reason is not None or scope_exclusion_reason is not None:
             excluded.append(
                 {
                     **observation,
-                    "exclusion_reason": deterministic_non_work_reason,
+                    "exclusion_reason": (
+                        deterministic_non_work_reason or scope_exclusion_reason
+                    ),
                 }
             )
             continue
@@ -1874,6 +1905,7 @@ def _work_schedule(
         for review in observation.get("quantity_interpretations") or ()
     ]
     total_count = classified_count + len(unclassified) + len(excluded)
+    construction_scope_count = classified_count + len(unclassified)
     return {
         "works": schedules,
         "materials": material_rows,
@@ -1884,8 +1916,14 @@ def _work_schedule(
             "classified_observation_count": classified_count,
             "unclassified_observation_count": len(unclassified),
             "excluded_non_work_observation_count": len(excluded),
+            "construction_scope_observation_count": construction_scope_count,
             "classified_percent": (
                 round(classified_count * 100 / total_count, 1) if total_count else 0.0
+            ),
+            "construction_scope_classified_percent": (
+                round(classified_count * 100 / construction_scope_count, 1)
+                if construction_scope_count
+                else 0.0
             ),
             "facility_assigned_observation_count": assigned_count,
             "facility_unassigned_observation_count": classified_count - assigned_count,

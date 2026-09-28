@@ -15,6 +15,7 @@ from asd_kontur.tender.project_engineering import (
     _scope_comparisons,
     build_project_engineering_model,
     classify_work_family,
+    construction_scope_exclusion_reason,
     document_comparison_side,
     established_facility_designations,
     facility_designation,
@@ -811,6 +812,48 @@ def test_estimate_resource_code_does_not_become_a_construction_work_scope() -> N
     assert model["unclassified_works"] == []
     assert len(model["excluded_non_work_observations"]) == 1
     assert "ресурс" in model["excluded_non_work_observations"][0]["exclusion_reason"].casefold()
+
+
+def test_operation_sections_do_not_inflate_the_current_construction_schedule() -> None:
+    assert construction_scope_exclusion_reason("Раздел ПД №10 005-ТБЭ.pdf") is not None
+    assert construction_scope_exclusion_reason("Раздел ПД №13 005-СОЭ.pdf") is not None
+    assert construction_scope_exclusion_reason("Раздел ПД №4 005-КР1.pdf") is None
+
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "future-repair",
+                    "version": 1,
+                    "value": "Ремонт трубопровода",
+                    "source_version_id": "source-operation",
+                    "source_locator_id": "operation-locator",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict([_source("operation-locator", "Раздел ПД №10 005-ТБЭ.pdf", 8)]),
+    )
+
+    assert model["works"] == []
+    assert model["unclassified_works"] == []
+    assert len(model["excluded_non_work_observations"]) == 1
+    assert "текущего строительства" in model["excluded_non_work_observations"][0][
+        "exclusion_reason"
+    ]
+    assert model["work_classification"]["construction_scope_observation_count"] == 0
+    assert model["work_classification"]["construction_scope_classified_percent"] == 0.0
 
 
 def test_professional_work_names_keep_materially_different_operations_separate() -> None:
