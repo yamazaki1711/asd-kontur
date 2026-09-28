@@ -84,6 +84,33 @@ def test_project_work_is_called_omitted_only_after_commercial_scope_is_classifie
     assert formwork["classification"] == "WORK_MISSING_IN_COMMERCIAL"
 
 
+def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "commercial-pipeline",
+                "facility_id": None,
+                "facility": "Место выполнения не установлено",
+                "family_key": "pipeline",
+                "work_name": "Монтаж трубопровода",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-locator"],
+            }
+        ],
+        unclassified_works=[
+            {
+                "project_wording": "Неоднозначная проектная операция",
+                "document_role": "РД",
+            }
+        ],
+    )
+
+    assert comparisons[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
+    assert comparisons[0]["professional_status"] == (
+        "Сопоставление проектного состава не завершено"
+    )
+
+
 def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
     value = _one_comparable_quantity(
         (

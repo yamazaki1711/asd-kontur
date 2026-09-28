@@ -1714,11 +1714,19 @@ def _scope_comparisons(
         for row in unclassified_works
         if str(row.get("document_role") or "") in commercial_roles
     ]
+    unresolved_design = [
+        dict(row)
+        for row in unclassified_works
+        if str(row.get("document_role") or "") in design_roles
+    ]
     commercial_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    design_by_family: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in rows:
         roles = set(str(value) for value in row.get("document_roles") or ())
         if roles.intersection(commercial_roles):
             commercial_by_family[str(row.get("family_key") or "")].append(row)
+        if roles.intersection(design_roles):
+            design_by_family[str(row.get("family_key") or "")].append(row)
 
     result: list[dict[str, Any]] = []
     for row in rows:
@@ -1727,9 +1735,26 @@ def _scope_comparisons(
         commercial = roles.intersection(commercial_roles)
         if not design:
             if commercial:
-                status = "COMMERCIAL_ONLY_WORK"
-                professional_status = "Коммерческая позиция без установленного основания"
-                conclusion = "Коммерческая позиция пока не связана с проектным объёмом."
+                possible_design = design_by_family.get(str(row.get("family_key") or ""), [])
+                if possible_design:
+                    status = "UNRESOLVED_SCOPE_MATCH"
+                    professional_status = "Требуется связать коммерческую и проектную позиции"
+                    conclusion = (
+                        "Проектные позиции этого вида найдены, но их нельзя однозначно "
+                        "связать с данным коммерческим объёмом."
+                    )
+                elif unresolved_design:
+                    status = "UNRESOLVED_SCOPE_MATCH"
+                    professional_status = "Сопоставление проектного состава не завершено"
+                    conclusion = (
+                        "Основание коммерческой позиции пока не установлено: в проектных "
+                        "документах остаются описания работ, которые ещё не удалось "
+                        "однозначно классифицировать."
+                    )
+                else:
+                    status = "COMMERCIAL_ONLY_WORK"
+                    professional_status = "Коммерческая позиция без установленного основания"
+                    conclusion = "Коммерческая позиция пока не связана с проектным объёмом."
             else:
                 continue
         elif commercial:
