@@ -6864,7 +6864,14 @@ def _application_engineering_projection(
             "work_scope_id": row.get("work_scope_id"),
             "facility": row.get("facility"),
             "family_key": row.get("family_key"),
+            "work_family": row.get("work_family"),
             "work_name": row.get("work_name"),
+            "project_wording": list(row.get("project_wording") or ()),
+            "document_roles": list(row.get("document_roles") or ()),
+            "quantities_by_document": dict(row.get("quantities_by_document") or {}),
+            "materials_by_document": dict(row.get("materials_by_document") or {}),
+            "source_locator_ids": list(row.get("source_locator_ids") or ()),
+            "sources": list(row.get("sources") or ()),
             "status": row.get("status"),
         }
         for row in works

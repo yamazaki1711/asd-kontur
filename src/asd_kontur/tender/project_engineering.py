@@ -2947,13 +2947,33 @@ def _facility_cards(
         facility_id = str(facility.get("facility_id") or "")
         name = str(facility.get("name") or "")
         facility_works = works_by_facility.get(facility_id, [])
+        facility_pits = pit_by_facility.get(facility_id, [])
+        facility_structures = structures_by_facility.get(facility_id, [])
+        facility_connections = connections_by_facility.get(facility_id, [])
+        facility_issues = issues_by_facility.get(name, [])
+        contributing_locator_ids = sorted(
+            {
+                *(str(value) for value in facility.get("source_locator_ids") or ()),
+                *(
+                    str(value)
+                    for row in [
+                        *facility_pits,
+                        *facility_structures,
+                        *facility_connections,
+                        *facility_works,
+                        *facility_issues,
+                    ]
+                    for value in row.get("source_locator_ids") or ()
+                ),
+            }
+        )
         cards.append(
             {
                 "facility": facility,
                 "purpose": None,
-                "pits": pit_by_facility.get(facility_id, []),
-                "structures": structures_by_facility.get(facility_id, []),
-                "connections": connections_by_facility.get(facility_id, []),
+                "pits": facility_pits,
+                "structures": facility_structures,
+                "connections": facility_connections,
                 "works": facility_works,
                 "sheet_piling": [
                     work for work in facility_works if work.get("family_key") == "sheet_piling"
@@ -2973,8 +2993,8 @@ def _facility_cards(
                     for material in values
                 ],
                 "comparisons": comparisons_by_facility.get(name, []),
-                "issues": issues_by_facility.get(name, []),
-                "documents": _source_refs(facility.get("source_locator_ids") or (), source_context),
+                "issues": facility_issues,
+                "documents": _source_refs(contributing_locator_ids, source_context),
                 "missing_information": [
                     label
                     for condition, label in (

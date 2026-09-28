@@ -1888,6 +1888,22 @@ def test_application_projection_hides_bulk_unclassified_rows_outside_work_view()
     assert general["unclassified_works"] == []
     assert general["unresolved"]["works"] == []
     assert general["unresolved"]["work_description_count"] == 8
+    projected_work = general["facility_cards"][0]["works"][0]
+    assert projected_work["quantities_by_document"]["РД"] == [
+        {
+            "value": "438",
+            "unit": "т",
+            "raw_value": "438",
+            "raw_unit": "т",
+            "source_locator_id": "q-rd",
+        }
+    ]
+    assert projected_work["materials_by_document"]["РД"][0]["name"] == ("Шпунт Л5-УМ, сталь С255")
+    assert "work-rd" in projected_work["source_locator_ids"]
+    assert {row["document"] for row in general["facility_cards"][0]["documents"]} >= {
+        "РД КР.pdf",
+        "ВОР.xlsx.pdf",
+    }
     assert [item["candidate_id"] for item in works["unclassified_works"]] == [
         "candidate-3",
         "candidate-4",
