@@ -441,6 +441,47 @@ def test_unallocated_same_family_commercial_work_keeps_design_scope_unresolved()
     assert enclosure["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
 
+def test_generic_sheet_pile_design_scope_covers_driving_at_same_facility_only() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-enclosure",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work_name": "Устройство шпунтового ограждения",
+                "document_roles": ["ПД"],
+                "source_locator_ids": ["design-a"],
+            },
+            {
+                "work_scope_id": "commercial-driving",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work_name": "Погружение шпунта",
+                "document_roles": ["ВОР"],
+                "source_locator_ids": ["commercial-a"],
+            },
+            {
+                "work_scope_id": "commercial-extraction",
+                "facility_id": "area-a",
+                "facility": "Участок А",
+                "family_key": "sheet_piling",
+                "work_name": "Извлечение шпунта",
+                "document_roles": ["ВОР"],
+                "source_locator_ids": ["commercial-extraction-a"],
+            },
+        ]
+    )
+
+    driving = next(row for row in comparisons if row["work"] == "Погружение шпунта")
+    extraction = next(row for row in comparisons if row["work"] == "Извлечение шпунта")
+    enclosure = next(row for row in comparisons if row["design_roles"] == ["ПД"])
+    assert driving["classification"] == "MATCH"
+    assert enclosure["classification"] == "MATCH"
+    assert extraction["classification"] == "UNRESOLVED_SCOPE_MATCH"
+
+
 def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
     comparisons = _scope_comparisons(
         [
@@ -846,7 +887,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v36"
+    assert model["model_version"] == "project-engineering-model-v37"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

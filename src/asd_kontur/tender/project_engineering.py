@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v36"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v37"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -2370,7 +2370,18 @@ def _scope_comparisons(
         if not design:
             if commercial:
                 possible_design = design_by_family.get(str(row.get("family_key") or ""), [])
-                if possible_design:
+                covered_by_design_scope = any(
+                    _design_scope_covers_commercial_operation(design_row, row)
+                    for design_row in possible_design
+                )
+                if covered_by_design_scope:
+                    status = "MATCH"
+                    professional_status = "Коммерческая операция имеет проектное основание"
+                    conclusion = (
+                        "Операция относится к установленному проектному объёму этого "
+                        "сооружения."
+                    )
+                elif possible_design:
                     status = "UNRESOLVED_SCOPE_MATCH"
                     professional_status = "Требуется связать коммерческую и проектную позиции"
                     conclusion = (
@@ -2421,7 +2432,18 @@ def _scope_comparisons(
             possible_without_facility = [
                 value for value in possible if not value.get("facility_id")
             ]
-            if possible_at_facility or possible_without_facility:
+            covered_commercial = any(
+                _design_scope_covers_commercial_operation(row, commercial_row)
+                for commercial_row in possible_at_facility
+            )
+            if covered_commercial:
+                status = "MATCH"
+                professional_status = "Коммерческий состав найден"
+                conclusion = (
+                    "Проектный объём связан с соответствующей коммерческой операцией "
+                    "этого сооружения."
+                )
+            elif possible_at_facility or possible_without_facility:
                 status = "UNRESOLVED_SCOPE_MATCH"
                 professional_status = "Требуется распределить коммерческий объём"
                 conclusion = (
@@ -2472,6 +2494,26 @@ def _scope_comparisons(
             }
         )
     return _deduplicate_dicts(result)
+
+
+def _design_scope_covers_commercial_operation(
+    design: Mapping[str, Any], commercial: Mapping[str, Any]
+) -> bool:
+    """Match a bounded generic design scope to its priced construction operation."""
+
+    if not design.get("facility_id") or design.get("facility_id") != commercial.get("facility_id"):
+        return False
+    if design.get("family_key") != commercial.get("family_key"):
+        return False
+    design_work = _normalized(design.get("work_name"))
+    commercial_work = _normalized(commercial.get("work_name"))
+    if design.get("family_key") == "sheet_piling":
+        return "устройство шпунтового ограждения" in design_work and commercial_work in {
+            "погружение шпунта",
+            "устройство шпунтового ограждения",
+            "шпунтовые работы",
+        }
+    return False
 
 
 def _commercial_document_phrase(available_roles: Iterable[str]) -> str:
