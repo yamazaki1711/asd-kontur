@@ -5498,10 +5498,7 @@ function ProjectEngineeringResult({
           <div className="card-grid">
             {comparisons.map((comparison) => {
               const left = (comparison.left ?? {}) as Record<string, unknown>;
-              const right = (comparison.right ?? {}) as Record<
-                string,
-                unknown
-              >;
+              const right = (comparison.right ?? {}) as Record<string, unknown>;
               return (
                 <article
                   className="entity-card"
