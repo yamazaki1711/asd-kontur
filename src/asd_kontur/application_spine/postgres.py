@@ -4604,6 +4604,57 @@ class SpinePostgresRepository:
                 scheduled.append(_job_summary(scheduled_job_row))
             return tuple(scheduled)
 
+    def refill_project_work_reconciliation_if_idle(
+        self,
+        claimed: ClaimedJob,
+        *,
+        batch_size: int = 12,
+        max_batches: int = 4,
+    ) -> tuple[JobSummary, ...]:
+        """Refill bounded semantic work only after the prior queue drains.
+
+        The regular scheduler remains the single eligibility and idempotency
+        authority.  Waiting for zero active jobs avoids repeatedly selecting
+        the same queued candidate batches and gives foreground requests a job
+        boundary between bounded local-Qwen calls.
+        """
+
+        if claimed.job_kind is not JobKind.PROJECT_WORK_RECONCILIATION:
+            return ()
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            outstanding = int(
+                session.execute(
+                    sa.text(
+                        "SELECT count(*) FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND "
+                        "job_kind='PROJECT_WORK_RECONCILIATION' AND "
+                        "state IN ('queued','leased','running')"
+                    ),
+                    {"o": claimed.organization_id, "w": claimed.workspace_id},
+                ).scalar_one()
+            )
+            if outstanding:
+                return ()
+            owner_identity_id = session.execute(
+                sa.text(
+                    "SELECT created_by_identity_id FROM workspace.durable_jobs WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                },
+            ).scalar_one()
+        return self.start_project_work_reconciliation(
+            owner_identity_id=str(owner_identity_id),
+            workspace_id=claimed.workspace_id,
+            correlation_id=claimed.job_id,
+            batch_size=batch_size,
+            max_batches=max_batches,
+        )
+
     def _ensure_structure_reconciliation_job(
         self,
         session: Session,

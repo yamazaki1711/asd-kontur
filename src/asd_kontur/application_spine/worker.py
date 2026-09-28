@@ -297,6 +297,8 @@ class DocumentWorker:
             self._repository.schedule_incremental_project_reconciliation(claimed)
         elif claimed.job_kind is JobKind.PROJECT_STRUCTURE_RECONCILIATION:
             self._repository.schedule_post_structure_project_reconciliation(claimed)
+        elif claimed.job_kind is JobKind.PROJECT_WORK_RECONCILIATION:
+            self._repository.refill_project_work_reconciliation_if_idle(claimed)
         return outcome
 
     def run_forever(self, *, idle_seconds: float = 0.25) -> None:
