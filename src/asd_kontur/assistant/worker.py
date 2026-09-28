@@ -111,6 +111,11 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                 {},
                 "Использовать подготовленные инженерные расхождения, вопросы и риски проекта.",
             ),
+            PlannedToolCall(
+                "consultant.search_workspace_documents",
+                {"query": question, "limit": 10},
+                "Подтвердить профессиональный результат точными фрагментами документов проекта.",
+            ),
         ),
     )
 

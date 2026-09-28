@@ -26,7 +26,11 @@ def test_prepared_project_discrepancy_question_uses_direct_professional_result()
 
     assert plan is not None
     assert plan.intent == "workspace"
-    assert [step.tool for step in plan.steps] == ["consultant.get_discrepancies"]
+    assert [step.tool for step in plan.steps] == [
+        "consultant.get_discrepancies",
+        "consultant.search_workspace_documents",
+    ]
+    assert plan.steps[-1].arguments["limit"] == 10
 
 
 def test_customer_questions_and_contractor_risks_use_prepared_project_result() -> None:
@@ -35,7 +39,8 @@ def test_customer_questions_and_contractor_risks_use_prepared_project_result() -
 
     assert questions is not None
     assert risks is not None
-    assert questions.steps == risks.steps
+    assert [step.tool for step in questions.steps] == [step.tool for step in risks.steps]
+    assert questions.steps[-1].arguments["query"] != risks.steps[-1].arguments["query"]
 
 
 def test_general_engineering_question_still_requires_model_planning() -> None:

@@ -506,6 +506,31 @@ def test_unexpected_handler_error_terminalizes_job_without_crashing_worker() -> 
     assert repository.finished["result_manifest"] == {"exception_type": "TypeError"}
 
 
+def test_document_worker_yields_qwen_at_batch_boundary_for_foreground_assistant() -> None:
+    class Repository:
+        def __init__(self) -> None:
+            self.claim_attempted = False
+
+        def assistant_foreground_active(self, **_kwargs: object) -> bool:
+            return True
+
+        def claim_next_job(self, **_kwargs: object) -> None:
+            self.claim_attempted = True
+            return None
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = ORGANIZATION_ID
+    worker._workspace_id = WORKSPACE_ID
+    worker._stopping = False
+
+    assert worker.run_once() is None
+    assert not repository.claim_attempted
+
+
 def test_independent_classification_recovery_refreshes_model_without_reviving_old_chain() -> None:
     claimed = ClaimedJob(
         ORGANIZATION_ID,

@@ -1243,6 +1243,22 @@ class SpinePostgresRepository:
             str(row.cancellation_state),
         )
 
+    def assistant_foreground_active(self, *, organization_id: UUID, workspace_id: UUID) -> bool:
+        """Return whether an interactive assistant turn needs the shared Qwen runtime."""
+
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            return bool(
+                session.scalar(
+                    sa.text(
+                        "SELECT EXISTS (SELECT 1 FROM workspace.assistant_turns WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "state IN ('queued','leased','running') AND cancellation_requested=false)"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+            )
+
     def reconcile_expired_exhausted_jobs(
         self, *, organization_id: UUID, workspace_id: UUID, limit: int = 8
     ) -> int:

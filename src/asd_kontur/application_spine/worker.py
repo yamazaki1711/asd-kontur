@@ -160,6 +160,20 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
+        foreground_check = getattr(self._repository, "assistant_foreground_active", None)
+        if (
+            self._organization_id is not None
+            and self._workspace_id is not None
+            and callable(foreground_check)
+            and foreground_check(
+                organization_id=self._organization_id,
+                workspace_id=self._workspace_id,
+            )
+        ):
+            # The local Qwen runtime is intentionally single-heavy-request. At
+            # the safe boundary between document batches, let the interactive
+            # project consultant run before another semantic batch is claimed.
+            return None
         if self._organization_id is not None and self._workspace_id is not None:
             self._repository.reconcile_expired_exhausted_jobs(
                 organization_id=self._organization_id,
