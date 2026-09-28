@@ -180,6 +180,14 @@ class DocumentWorker:
                 organization_id=self._organization_id,
                 workspace_id=self._workspace_id,
             )
+        else:
+            recovery_scopes = getattr(self._repository, "expired_exhausted_job_scopes", None)
+            if callable(recovery_scopes):
+                for organization_id, workspace_id in recovery_scopes():
+                    self._repository.reconcile_expired_exhausted_jobs(
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                    )
         claimed = self._repository.claim_next_job(
             worker_identity=self._worker_identity,
             lease_seconds=self._lease_seconds,
@@ -223,6 +231,31 @@ class DocumentWorker:
                         organization_id=self._organization_id,
                         workspace_id=self._workspace_id,
                     )
+            elif callable(refill) and now >= self._next_idle_refill_at:
+                refill_scopes = getattr(
+                    self._repository, "idle_project_work_reconciliation_scopes", None
+                )
+                if callable(refill_scopes):
+                    self._next_idle_refill_at = now + 30.0
+                    scheduled_any = False
+                    for organization_id, workspace_id in refill_scopes():
+                        scheduled_any = (
+                            bool(
+                                refill(
+                                    organization_id=organization_id,
+                                    workspace_id=workspace_id,
+                                    correlation_id=uuid7(),
+                                )
+                            )
+                            or scheduled_any
+                        )
+                    if scheduled_any:
+                        claimed = self._repository.claim_next_job(
+                            worker_identity=self._worker_identity,
+                            lease_seconds=self._lease_seconds,
+                            organization_id=None,
+                            workspace_id=None,
+                        )
             if claimed is None:
                 return None
         if callable(foreground_check) and foreground_check(

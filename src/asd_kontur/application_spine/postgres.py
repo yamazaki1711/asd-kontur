@@ -1419,6 +1419,32 @@ class SpinePostgresRepository:
                 reconciled += 1
         return reconciled
 
+    def expired_exhausted_job_scopes(self, *, limit: int = 8) -> tuple[tuple[UUID, UUID], ...]:
+        """Return bounded scopes whose terminal leases need RLS-scoped recovery."""
+
+        if not 1 <= limit <= 64:
+            raise ValueError("expired job scope limit is invalid")
+        with self._engine.begin() as connection:
+            rows = connection.execute(
+                sa.text("SELECT * FROM workspace.expired_exhausted_job_scopes(:limit)"),
+                {"limit": limit},
+            ).all()
+        return tuple((UUID(str(row.organization_id)), UUID(str(row.workspace_id))) for row in rows)
+
+    def idle_project_work_reconciliation_scopes(
+        self, *, limit: int = 8
+    ) -> tuple[tuple[UUID, UUID], ...]:
+        """Return bounded workspaces whose semantic queue has drained."""
+
+        if not 1 <= limit <= 64:
+            raise ValueError("project work refill scope limit is invalid")
+        with self._engine.begin() as connection:
+            rows = connection.execute(
+                sa.text("SELECT * FROM workspace.idle_project_work_reconciliation_scopes(:limit)"),
+                {"limit": limit},
+            ).all()
+        return tuple((UUID(str(row.organization_id)), UUID(str(row.workspace_id))) for row in rows)
+
     def mark_job_running(self, claimed: ClaimedJob, *, worker_identity: str) -> None:
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)

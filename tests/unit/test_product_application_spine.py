@@ -594,6 +594,77 @@ def test_scoped_document_worker_refills_empty_semantic_queue_at_bounded_idle_int
     assert repository.claim_calls == 3
 
 
+def test_shared_document_worker_recovers_terminal_leases_and_refills_their_workspace() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001897"),
+        JobKind.PROJECT_WORK_RECONCILIATION,
+        {},
+        "sha256:" + "7" * 64,
+        1,
+        1,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claim_calls = 0
+            self.recovered: list[tuple[object, object]] = []
+            self.refilled: list[tuple[object, object]] = []
+
+        def expired_exhausted_job_scopes(self) -> tuple[tuple[UUID, UUID], ...]:
+            return ((ORGANIZATION_ID, WORKSPACE_ID),)
+
+        def reconcile_expired_exhausted_jobs(self, **kwargs: object) -> int:
+            self.recovered.append((kwargs["organization_id"], kwargs["workspace_id"]))
+            return 2
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            self.claim_calls += 1
+            return claimed if self.claim_calls == 3 else None
+
+        def idle_project_work_reconciliation_scopes(
+            self,
+        ) -> tuple[tuple[UUID, UUID], ...]:
+            return ((ORGANIZATION_ID, WORKSPACE_ID),)
+
+        def refill_workspace_project_work_reconciliation_if_idle(
+            self, **kwargs: object
+        ) -> tuple[object, ...]:
+            self.refilled.append((kwargs["organization_id"], kwargs["workspace_id"]))
+            return (object(),)
+
+        def assistant_foreground_active(self, **_kwargs: object) -> bool:
+            return False
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def cancellation_requested(self, *_args: object, **_kwargs: object) -> bool:
+            return True
+
+        def finish_job(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "shared-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = None
+    worker._workspace_id = None
+    worker._stopping = False
+    worker._next_idle_refill_at = 0.0
+
+    outcome = worker.run_once()
+
+    assert outcome is not None
+    assert outcome.state is JobState.CANCELLED
+    assert repository.recovered == [(ORGANIZATION_ID, WORKSPACE_ID)]
+    assert repository.refilled == [(ORGANIZATION_ID, WORKSPACE_ID)]
+
+
 def test_unscoped_document_worker_returns_claim_when_foreground_assistant_is_active() -> None:
     claimed = ClaimedJob(
         ORGANIZATION_ID,
