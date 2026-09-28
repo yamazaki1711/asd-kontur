@@ -653,7 +653,7 @@ def validate_answer(
         problems.append("workspace_answer_without_workspace_tool")
     content_tools = {
         # The entity inventory is not metadata: it is the persisted,
-        # source-linked project result assembled from the workspace documents.
+        # source-linked project result assembled from workspace documents.
         # Requiring an additional raw-fragment search for the same exhaustive
         # count can only replace the prepared inventory with a top-k sample.
         "consultant.get_project_entity_inventory",
@@ -663,10 +663,24 @@ def validate_answer(
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
     }
+    prepared_overview_question = "consultant.get_workspace_overview" in tool_names and any(
+        marker in " ".join((question or "").casefold().replace("ё", "е").split())
+        for marker in (
+            "что это за проект",
+            "что строится",
+            "описание проекта",
+            "состав объекта",
+            "какие сооружения",
+            "какие объекты",
+            "какие лос",
+            "какие кнс",
+        )
+    )
     if (
         question is not None
         and requires_workspace_document_content(question)
         and not content_tools.intersection(tool_names)
+        and not prepared_overview_question
     ):
         problems.append("workspace_content_question_without_content_retrieval")
     if (

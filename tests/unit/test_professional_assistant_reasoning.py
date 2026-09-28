@@ -382,6 +382,37 @@ def test_source_linked_project_results_satisfy_content_retrieval(tool_name: str)
     assert receipt["passed"] is True
 
 
+def test_source_linked_project_overview_satisfies_project_composition_question() -> None:
+    source = {
+        "source_id": "11111111-1111-4111-8111-111111111111",
+        "authority_layer": "workspace_fact",
+    }
+    answer = parse_synthesized_answer(
+        json.dumps(
+            {
+                "answer": "Объект включает КНС-4 и ЛОС-8.1.",
+                "answer_type": "workspace_conclusion",
+                "needs_clarification": False,
+                "used_source_ids": [source["source_id"]],
+                "dialogue_summary": "Определяется состав объекта.",
+                "active_subjects": ["состав объекта"],
+            },
+            ensure_ascii=False,
+        ),
+        {source["source_id"]},
+    )
+
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.get_workspace_overview",),
+        sources=(source,),
+        question="Что это за проект и какие сооружения входят в его состав?",
+    )
+
+    assert receipt["passed"] is True
+
+
 def test_project_enumeration_replaces_metadata_when_plan_is_at_tool_budget() -> None:
     plan = SearchPlan(
         "workspace",
