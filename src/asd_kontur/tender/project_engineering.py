@@ -17,11 +17,24 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v15"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v16"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
         "qwen-project-work-reconciliation-v6",
+    }
+)
+_CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
+    {
+        "sheet_piling",
+        "waling_beam",
+        "excavation",
+        "soil_disposal",
+        "pipeline",
+        "pile_foundation",
+        "reinforced_concrete",
+        "equipment_installation",
+        "testing",
     }
 )
 
@@ -1350,9 +1363,22 @@ def _work_schedule(
                     unclassified.append(observation)
             continue
         family_key, family_name = family
-        operation_name = str(
-            resolution.get("operation")
-            if resolution.get("status") == "MATCHED" and resolution.get("operation")
+        # Local-Qwen preserves the source meaning but may phrase the same
+        # operation differently (for example ``забивка шпунта`` versus
+        # ``погружение шпунта``).  Keep that wording in ``project_wording`` and
+        # use the deterministic professional operation name as the schedule
+        # identity.  Otherwise equivalent design and commercial rows remain
+        # separate and cannot be compared.  The canonicalizer deliberately
+        # retains operation distinctions implemented by each family (driving
+        # versus extraction, trench versus pit, installation versus removal).
+        semantic_operation = str(resolution.get("operation") or "")
+        operation_name = (
+            professional_work_name(family_key, f"{name} {semantic_operation}")
+            if resolution.get("status") == "MATCHED"
+            and semantic_operation
+            and family_key in _CANONICAL_SEMANTIC_OPERATION_FAMILIES
+            else semantic_operation
+            if resolution.get("status") == "MATCHED" and semantic_operation
             else professional_work_name(family_key, name)
         )
         exact_key = (source_version_id, locator_id, normalized_name)

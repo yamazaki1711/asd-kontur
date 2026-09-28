@@ -431,7 +431,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v15"
+    assert model["model_version"] == "project-engineering-model-v16"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -1007,7 +1007,7 @@ def test_reviewed_synonyms_compare_only_within_same_facility_and_operation() -> 
                 "profile_version": "qwen-project-work-reconciliation-v5",
                 "status": "MATCHED",
                 "family_key": "sheet_piling",
-                "operation": "Погружение шпунта",
+                "operation": "Забивка стального шпунта",
                 "facility": "КНС 2",
                 "quantity_reviews": [
                     {"quantity_candidate_id": "estimate-mass", "status": "WORK_QUANTITY"}
