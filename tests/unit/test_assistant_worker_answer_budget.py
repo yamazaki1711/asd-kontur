@@ -412,6 +412,61 @@ def test_requested_material_difference_cannot_omit_known_grades() -> None:
     ) == {"passed": True, "problems": []}
 
 
+def test_requested_facility_work_inventory_cannot_be_silently_shortened() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_work_packages",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "facility_dossiers": [
+                            {
+                                "facility": {"name": "КНС 17"},
+                                "work_names": [
+                                    "Разработка котлована",
+                                    "Погружение шпунта",
+                                ],
+                                "work_count": 2,
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "На КНС-17 выполняется разработка котлована.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Работы КНС-17.",
+        (),
+    )
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Какие работы выполняются на КНС-17?",
+    )
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+    complete = SynthesizedAnswer(
+        "Установлены 2 работы: разработка котлована и погружение шпунта.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Работы КНС-17.",
+        (),
+    )
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Какие работы выполняются на КНС-17?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_project_customer_questions_and_contractor_risks_cannot_be_silently_shortened() -> None:
     receipts = [
         {

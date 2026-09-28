@@ -848,6 +848,9 @@ def _with_structured_project_fact_checks(
         marker in normalized_question
         for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
     )
+    asks_for_facility_works = "работ" in normalized_question and bool(
+        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
+    )
     if not any(
         (
             asks_for_sheet_pile,
@@ -856,6 +859,7 @@ def _with_structured_project_fact_checks(
             asks_for_contractor_risks,
             asks_for_comparisons,
             asks_for_material_differences,
+            asks_for_facility_works,
         )
     ):
         return checks
@@ -867,6 +871,8 @@ def _with_structured_project_fact_checks(
     required_comparison_terms: set[str] = set()
     required_comparison_quantities: set[tuple[str, str]] = set()
     required_material_terms: set[str] = set()
+    required_facility_work_names: set[str] = set()
+    required_facility_work_counts: set[int] = set()
     for receipt in receipts:
         if receipt.get("tool") not in {
             "consultant.get_workspace_overview",
@@ -958,6 +964,17 @@ def _with_structured_project_fact_checks(
                 required_material_terms.update(
                     re.findall(r"\b(?:F|W)\d+\b", str(item.get("description") or ""), re.I)
                 )
+        if asks_for_facility_works:
+            for dossier in engineering.get("facility_dossiers") or ():
+                if not isinstance(dossier, dict):
+                    continue
+                required_facility_work_names.update(
+                    str(value).strip()
+                    for value in dossier.get("work_names") or ()
+                    if str(value).strip()
+                )
+                if dossier.get("work_count") is not None:
+                    required_facility_work_counts.add(int(dossier["work_count"]))
     if not any(
         (
             required_terms,
@@ -967,6 +984,8 @@ def _with_structured_project_fact_checks(
             required_comparison_terms,
             required_comparison_quantities,
             required_material_terms,
+            required_facility_work_names,
+            required_facility_work_counts,
         )
     ):
         return checks
@@ -1000,6 +1019,12 @@ def _with_structured_project_fact_checks(
     material_difference_omitted = any(
         _inventory_text_key(value) not in normalized_answer_key for value in required_material_terms
     )
+    facility_work_omitted = any(
+        _inventory_text_key(value) not in normalized_answer_key
+        for value in required_facility_work_names
+    ) or any(
+        not re.search(rf"\b{count}\b", answer.answer) for count in required_facility_work_counts
+    )
     contradicted = bool(
         re.search(
             r"(?:профил\w*|объ[её]м\w*|масс\w*)[^.]{0,80}"
@@ -1018,6 +1043,8 @@ def _with_structured_project_fact_checks(
     if comparison_omitted:
         problems.append("workspace_structured_fact_omitted")
     if material_difference_omitted:
+        problems.append("workspace_structured_fact_omitted")
+    if facility_work_omitted:
         problems.append("workspace_structured_fact_omitted")
     if contradicted:
         problems.append("workspace_structured_fact_contradicted")
