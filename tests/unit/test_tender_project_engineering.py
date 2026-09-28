@@ -7,6 +7,7 @@ from decimal import Decimal
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
     _comparison_row,
+    _merge_sheet_pile_rows,
     _one_comparable_quantity,
     build_project_engineering_model,
     classify_work_family,
@@ -24,6 +25,75 @@ def test_comparable_quantity_normalizes_scaled_estimate_units() -> None:
     )
 
     assert value == (Decimal("827.5000"), "м3")
+
+
+def test_sheet_pile_schedule_consolidates_repeated_commercial_scope_without_summing() -> None:
+    rows = _merge_sheet_pile_rows(
+        (
+            {
+                "facility": "Место выполнения не установлено",
+                "facility_id": None,
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунтовых свай",
+                "profiles": ["Л5"],
+                "profiles_by_document": {"Смета": ["Л5"]},
+                "pile_length": [],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "95.028",
+                            "unit": "т",
+                            "occurrence_count": 1,
+                            "source_locator_ids": ["locator-a"],
+                        }
+                    ]
+                },
+                "waling_beams": [],
+                "steel": [],
+                "project_wording": ["Погружение шпунтовых свай"],
+                "source_locator_ids": ["locator-a"],
+                "sources_by_document": {},
+                "uncertainty": "Коммерческий объём не распределён по сооружениям.",
+            },
+            {
+                "facility": "Место выполнения не установлено",
+                "facility_id": None,
+                "family_key": "sheet_piling",
+                "operation": "Погружение шпунта",
+                "profiles": ["Л5-10"],
+                "profiles_by_document": {"Смета": ["Л5-10"]},
+                "pile_length": [],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "95.028",
+                            "unit": "т",
+                            "occurrence_count": 1,
+                            "source_locator_ids": ["locator-b"],
+                        }
+                    ]
+                },
+                "waling_beams": [],
+                "steel": [],
+                "project_wording": ["Погружение шпунта"],
+                "source_locator_ids": ["locator-b"],
+                "sources_by_document": {},
+                "uncertainty": "Коммерческий объём не распределён по сооружениям.",
+            },
+        )
+    )
+
+    assert len(rows) == 1
+    assert rows[0]["operation"] == "Погружение шпунта"
+    assert rows[0]["profiles"] == ["Л5", "Л5-10"]
+    assert rows[0]["quantities_by_document"]["Смета"] == [
+        {
+            "value": "95.028",
+            "unit": "т",
+            "occurrence_count": 2,
+            "source_locator_ids": ["locator-a", "locator-b"],
+        }
+    ]
 
 
 def _source(locator: str, document: str, page: int) -> tuple[str, dict[str, object]]:
@@ -173,7 +243,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v10"
+    assert model["model_version"] == "project-engineering-model-v11"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

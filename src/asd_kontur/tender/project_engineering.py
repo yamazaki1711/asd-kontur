@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v10"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v11"
 _QUANTITY_AWARE_WORK_PROFILE = "qwen-project-work-reconciliation-v5"
 
 _FACILITY_CODE = re.compile(
@@ -1817,6 +1817,7 @@ def _sheet_pile_schedule(
                 ),
                 "facility": row.get("facility"),
                 "facility_id": row.get("facility_id"),
+                "family_key": row.get("family_key"),
                 "pit": (
                     f"Котлован {row.get('facility')}"
                     if row.get("facility_id")
@@ -1858,7 +1859,85 @@ def _sheet_pile_schedule(
                 ),
             }
         )
-    return result
+    return _merge_sheet_pile_rows(result)
+
+
+def _merge_sheet_pile_rows(values: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Consolidate repeated descriptions of one scope without summing them."""
+
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    for raw in values:
+        row = dict(raw)
+        family_key = str(row.get("family_key") or "")
+        operation = str(row.get("operation") or "")
+        canonical_operation = (
+            operation
+            if operation.startswith("Материал шпунтового ограждения")
+            else professional_work_name(family_key, operation)
+            if family_key in {"sheet_piling", "waling_beam", "bracing"}
+            else operation
+        )
+        key = (
+            str(row.get("facility_id") or "unassigned"),
+            family_key,
+            canonical_operation,
+        )
+        current = grouped.get(key)
+        if current is None:
+            current = {
+                **row,
+                "operation": canonical_operation,
+                "quantities_by_document": {},
+                "project_quantities": {},
+                "commercial_quantities": {},
+                "profiles": [],
+                "profiles_by_document": {},
+                "pile_length": [],
+                "waling_beams": [],
+                "steel": [],
+                "project_wording": [],
+                "source_locator_ids": [],
+                "sources_by_document": {},
+            }
+            grouped[key] = current
+        for target_key in ("profiles", "pile_length", "waling_beams", "steel", "project_wording"):
+            current[target_key] = _ordered_unique(
+                [*current.get(target_key, ()), *row.get(target_key, ())]
+            )
+        current["source_locator_ids"] = sorted(
+            {
+                *(str(value) for value in current.get("source_locator_ids") or ()),
+                *(str(value) for value in row.get("source_locator_ids") or ()),
+            }
+        )
+        for role, profiles in dict(row.get("profiles_by_document") or {}).items():
+            current["profiles_by_document"][role] = _ordered_unique(
+                [
+                    *current["profiles_by_document"].get(role, ()),
+                    *(str(value) for value in profiles or ()),
+                ]
+            )
+        for role, quantities in dict(row.get("quantities_by_document") or {}).items():
+            current["quantities_by_document"][role] = _merge_consolidated_quantity_mentions(
+                [*current["quantities_by_document"].get(role, ()), *(quantities or ())]
+            )
+        current["project_quantities"] = {
+            role: quantities
+            for role, quantities in current["quantities_by_document"].items()
+            if role in {"ПД", "РД", "Спецификация"}
+        }
+        current["commercial_quantities"] = {
+            role: quantities
+            for role, quantities in current["quantities_by_document"].items()
+            if role in {"ВОР", "Смета"}
+        }
+        for role, sources in dict(row.get("sources_by_document") or {}).items():
+            current["sources_by_document"][role] = _deduplicate_dicts(
+                [*current["sources_by_document"].get(role, ()), *(sources or ())]
+            )
+        if row.get("uncertainty") and not current.get("uncertainty"):
+            current["uncertainty"] = row["uncertainty"]
+    return [grouped[key] for key in sorted(grouped)]
 
 
 def _issues(
@@ -2429,6 +2508,32 @@ def _consolidate_quantity_mentions(values: Iterable[Mapping[str, Any]]) -> list[
                     str(row["source_locator_id"]),
                 }
             )
+    return [grouped[key] for key in sorted(grouped)]
+
+
+def _merge_consolidated_quantity_mentions(
+    values: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for raw in values:
+        row = dict(raw)
+        key = (str(row.get("value") or ""), str(row.get("unit") or ""))
+        current = grouped.setdefault(
+            key,
+            {
+                "value": row.get("value"),
+                "unit": row.get("unit"),
+                "occurrence_count": 0,
+                "source_locator_ids": [],
+            },
+        )
+        current["occurrence_count"] += int(row.get("occurrence_count") or 1)
+        current["source_locator_ids"] = sorted(
+            {
+                *(str(value) for value in current.get("source_locator_ids") or ()),
+                *(str(value) for value in row.get("source_locator_ids") or ()),
+            }
+        )
     return [grouped[key] for key in sorted(grouped)]
 
 
