@@ -255,9 +255,7 @@ class AssistantWorker:
                         # before quality validation so a fluent but incomplete
                         # model answer cannot suppress information already
                         # available in the application model.
-                        answer = _append_prepared_project_result(
-                            answer, receipts, claimed.question
-                        )
+                        answer = _append_prepared_project_result(answer, receipts, claimed.question)
                 else:
                     answer = pending_answer
                 model_checks = self._model_quality_check(claimed, answer, receipts)
