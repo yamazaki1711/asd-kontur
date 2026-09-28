@@ -179,6 +179,61 @@ def test_requested_structured_waling_facts_pass_when_answered() -> None:
     assert checks == {"passed": True, "problems": []}
 
 
+def test_requested_sheet_pile_profile_and_steel_cannot_be_omitted() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_work_packages",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "sheet_pile_answer_facts": [
+                            {
+                                "operation": "Погружение шпунта",
+                                "profiles": ["Л5УМ"],
+                                "steel": ["С255"],
+                                "quantities_by_document": {"ВОР": [{"value": "41.7", "unit": "т"}]},
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    incomplete = SynthesizedAnswer(
+        "Проектом предусмотрено шпунтовое ограждение.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Шпунтовое ограждение.",
+        ("шпунт",),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=incomplete,
+        receipts=receipts,
+        question="Какой профиль шпунта и марка стали предусмотрены?",
+    )
+
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+    complete = SynthesizedAnswer(
+        "В проекте указан шпунт профиля Л5УМ из стали С255.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Шпунтовое ограждение.",
+        ("шпунт", "Л5УМ", "С255"),
+    )
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=complete,
+        receipts=receipts,
+        question="Какой профиль шпунта и марка стали предусмотрены?",
+    ) == {"passed": True, "problems": []}
+
+
 def test_broad_sheet_pile_scope_requires_associated_belt_quantity_and_beams() -> None:
     receipts = [
         {

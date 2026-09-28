@@ -827,6 +827,10 @@ def _with_structured_project_fact_checks(
     asks_for_sheet_pile = mentions_sheet_pile and any(
         marker in normalized_question for marker in ("все", "работ", "предусмотр", "покаж", "scope")
     )
+    asks_for_sheet_pile_identity = mentions_sheet_pile and any(
+        marker in normalized_question
+        for marker in ("какой", "профил", "материал", "марк", "стал", "л5")
+    )
     asks_for_waling = any(
         marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")
     )
@@ -876,6 +880,13 @@ def _with_structured_project_fact_checks(
             operation = str(raw.get("operation") or "").casefold().replace("ё", "е")
             operation_is_waling = any(marker in operation for marker in ("пояс", "обвяз", "балк"))
             beams = [str(beam).strip() for beam in raw.get("waling_beams") or ()]
+            if asks_for_sheet_pile_identity:
+                required_terms.update(
+                    str(value).strip()
+                    for key in ("profiles", "steel")
+                    for value in raw.get(key) or ()
+                    if str(value).strip()
+                )
             if not operation_is_waling and not any(beams):
                 continue
             required_terms.update(beam for beam in beams if beam)
