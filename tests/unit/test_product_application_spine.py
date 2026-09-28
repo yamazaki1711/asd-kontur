@@ -531,6 +531,55 @@ def test_document_worker_yields_qwen_at_batch_boundary_for_foreground_assistant(
     assert not repository.claim_attempted
 
 
+def test_unscoped_document_worker_returns_claim_when_foreground_assistant_is_active() -> None:
+    claimed = ClaimedJob(
+        ORGANIZATION_ID,
+        WORKSPACE_ID,
+        UUID("018f5c3e-7b00-7000-8000-000000001899"),
+        JobKind.PROJECT_WORK_RECONCILIATION,
+        {},
+        "sha256:" + "9" * 64,
+        1,
+        4,
+        "none",
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.claimed = False
+            self.yielded = False
+            self.marked_running = False
+
+        def assistant_foreground_active(self, **kwargs: object) -> bool:
+            return kwargs.get("organization_id") == ORGANIZATION_ID
+
+        def claim_next_job(self, **_kwargs: object) -> ClaimedJob | None:
+            if self.claimed:
+                return None
+            self.claimed = True
+            return claimed
+
+        def yield_job_for_foreground(self, value: ClaimedJob, **_kwargs: object) -> None:
+            assert value is claimed
+            self.yielded = True
+
+        def mark_job_running(self, *_args: object, **_kwargs: object) -> None:
+            self.marked_running = True
+
+    repository = Repository()
+    worker = object.__new__(DocumentWorker)
+    worker._repository = repository  # type: ignore[assignment]
+    worker._worker_identity = "synthetic-unscoped-worker"
+    worker._lease_seconds = 30
+    worker._organization_id = None
+    worker._workspace_id = None
+    worker._stopping = False
+
+    assert worker.run_once() is None
+    assert repository.yielded
+    assert not repository.marked_running
+
+
 def test_independent_classification_recovery_refreshes_model_without_reviving_old_chain() -> None:
     claimed = ClaimedJob(
         ORGANIZATION_ID,

@@ -1259,6 +1259,60 @@ class SpinePostgresRepository:
                 )
             )
 
+    def yield_job_for_foreground(
+        self, claimed: ClaimedJob, *, worker_identity: str, delay_seconds: int = 1
+    ) -> None:
+        """Return an untouched lease when foreground consultation owns Qwen.
+
+        Claiming increments ``attempt_count``. Because no handler or inference
+        has run at this boundary, restore that count while fencing the exact
+        lease generation. The durable job remains queued and retains all prior
+        receipts and lineage.
+        """
+
+        if not 0 <= delay_seconds <= 30:
+            raise ValueError("foreground_yield_delay_invalid")
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            changed = int(
+                getattr(
+                    session.execute(
+                        sa.text(
+                            "UPDATE workspace.durable_jobs SET state='queued',"
+                            "attempt_count=GREATEST(attempt_count-1,0),"
+                            "eligible_at=CURRENT_TIMESTAMP+make_interval(secs=>:delay),"
+                            "lease_owner=NULL,lease_expires_at=NULL WHERE "
+                            "organization_id=:organization AND workspace_id=:workspace AND "
+                            "job_id=:job AND state='leased' AND lease_owner=:worker AND "
+                            "lease_generation=:generation"
+                        ),
+                        {
+                            "delay": delay_seconds,
+                            "organization": claimed.organization_id,
+                            "workspace": claimed.workspace_id,
+                            "job": claimed.job_id,
+                            "worker": worker_identity,
+                            "generation": claimed.lease_generation,
+                        },
+                    ),
+                    "rowcount",
+                    0,
+                )
+            )
+            if changed != 1:
+                raise SpinePersistenceError("job_lease_fence_rejected")
+            self._append_event(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_id=claimed.job_id,
+                event_type="job.foreground_yield",
+                safe_message_code="assistant_foreground_active",
+                current=None,
+                total=None,
+                terminal=False,
+            )
+
     def reconcile_expired_exhausted_jobs(
         self, *, organization_id: UUID, workspace_id: UUID, limit: int = 8
     ) -> int:

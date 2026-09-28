@@ -198,6 +198,18 @@ class DocumentWorker:
             )
         if claimed is None:
             return None
+        if callable(foreground_check) and foreground_check(
+            organization_id=claimed.organization_id,
+            workspace_id=claimed.workspace_id,
+        ):
+            # An unscoped worker cannot know the workspace before claiming.  At
+            # that safe boundary, return the untouched lease without consuming
+            # an attempt so the foreground consultant gets the single Qwen slot.
+            self._repository.yield_job_for_foreground(
+                claimed,
+                worker_identity=self._worker_identity,
+            )
+            return None
         self._repository.mark_job_running(claimed, worker_identity=self._worker_identity)
         if self._repository.cancellation_requested(claimed):
             return self._terminal(
