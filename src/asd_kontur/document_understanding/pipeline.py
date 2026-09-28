@@ -13,6 +13,9 @@ from asd_kontur.application_spine.models import (
     ClaimedJob,
     JobKind,
 )
+from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_PROFILE,
+)
 
 from .models import (
     CLASSIFICATION_PROFILE_VERSION,
@@ -821,7 +824,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.REQUIREMENT_MATRIX_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: PROJECT_RECONCILIATION_PROFILE_VERSION,
         JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
-        JobKind.PROJECT_WORK_RECONCILIATION: "qwen-project-work-reconciliation-v6",
+        JobKind.PROJECT_WORK_RECONCILIATION: PROJECT_WORK_RECONCILIATION_PROFILE,
     }[kind]
 
 

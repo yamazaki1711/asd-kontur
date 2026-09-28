@@ -5,9 +5,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import pytest
-
-from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import QwenProjectWorkReconciler
 
 
@@ -97,7 +94,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v6"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v7"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -206,7 +203,7 @@ def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
     ]
 
 
-def test_qwen_work_reconciliation_rejects_incomplete_or_invented_output(
+def test_qwen_work_reconciliation_preserves_input_when_model_invents_identity(
     monkeypatch: Any,
 ) -> None:
     monkeypatch.setattr(
@@ -229,12 +226,18 @@ def test_qwen_work_reconciliation_rejects_incomplete_or_invented_output(
         ),
     )
 
-    with pytest.raises(QwenSemanticFailure, match="identity_invalid"):
-        QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
-            [{"candidate_id": "candidate-a", "wording": "Обратная засыпка"}],
-            work_families={"backfill": "Обратная засыпка и уплотнение"},
-            facilities=[],
-        )
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [{"candidate_id": "candidate-a", "wording": "Обратная засыпка"}],
+        work_families={"backfill": "Обратная засыпка и уплотнение"},
+        facilities=[],
+    )
+
+    assert result["observations"][0]["candidate_id"] == "candidate-a"
+    assert result["observations"][0]["status"] == "UNCLASSIFIED"
+    assert "invented" not in json.dumps(result, ensure_ascii=False)
+    assert result["recovery_codes"][-1] == (
+        "qwen_work_reconciliation_observation_unresolved"
+    )
 
 
 def test_qwen_work_reconciliation_cannot_hide_potential_commercial_work(
@@ -260,12 +263,33 @@ def test_qwen_work_reconciliation_cannot_hide_potential_commercial_work(
         ),
     )
 
-    with pytest.raises(QwenSemanticFailure, match="potential_work_excluded"):
-        QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
-            [{"candidate_id": "candidate-a", "wording": "Геодезическая разбивка"}],
-            work_families={"surveying": "Геодезические работы"},
-            facilities=[],
-        )
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [{"candidate_id": "candidate-a", "wording": "Геодезическая разбивка"}],
+        work_families={"surveying": "Геодезические работы"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_potential_work_excluded",
+        "qwen_work_reconciliation_potential_work_excluded",
+        "qwen_work_reconciliation_observation_unresolved",
+    ]
+    assert result["observations"] == [
+        {
+            "candidate_id": "candidate-a",
+            "status": "UNCLASSIFIED",
+            "family_key": None,
+            "operation": None,
+            "facility": None,
+            "confidence": "0",
+            "reason": (
+                "Интерпретация не принята после ограниченного повтора; описание сохранено "
+                "для последующего уточнения "
+                "(qwen_work_reconciliation_potential_work_excluded)."
+            ),
+        }
+    ]
 
 
 def test_qwen_work_reconciliation_allows_component_with_mounting_attribute(

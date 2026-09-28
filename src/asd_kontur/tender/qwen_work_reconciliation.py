@@ -13,14 +13,15 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v6"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v7"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
     "qwen-project-work-reconciliation-v5",
+    "qwen-project-work-reconciliation-v6",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@6.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@7.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -150,7 +151,11 @@ class QwenProjectWorkReconciler:
                 raise
             if len(rows) == 1:
                 if not single_retry_available:
-                    raise
+                    return (
+                        [_unresolved_observation(rows[0], failure_code=exc.code)],
+                        1,
+                        [exc.code, "qwen_work_reconciliation_observation_unresolved"],
+                    )
                 observations, call_count, codes = self._reconcile_rows(
                     rows,
                     work_families=work_families,
@@ -174,6 +179,40 @@ class QwenProjectWorkReconciler:
                 1 + left_calls + right_calls,
                 [exc.code, *left_codes, *right_codes],
             )
+
+
+def _unresolved_observation(
+    row: Mapping[str, Any], *, failure_code: str
+) -> dict[str, Any]:
+    """Preserve one rejected interpretation without losing valid sibling rows."""
+
+    observation: dict[str, Any] = {
+        "candidate_id": str(row["candidate_id"]),
+        "status": "UNCLASSIFIED",
+        "family_key": None,
+        "operation": None,
+        "facility": None,
+        "confidence": "0",
+        "reason": (
+            "Интерпретация не принята после ограниченного повтора; описание сохранено "
+            f"для последующего уточнения ({failure_code})."
+        ),
+    }
+    quantity_reviews = [
+        {
+            "quantity_candidate_id": str(value.get("quantity_candidate_id") or ""),
+            "status": "AMBIGUOUS",
+            "reason": (
+                "Значение сохранено без назначения: интерпретация связанной работы "
+                "не прошла проверку."
+            ),
+        }
+        for value in row.get("quantity_observations") or ()
+        if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+    ]
+    if quantity_reviews:
+        observation["quantity_reviews"] = quantity_reviews
+    return observation
 
 
 def _prompt(

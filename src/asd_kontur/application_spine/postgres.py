@@ -4364,7 +4364,7 @@ class SpinePostgresRepository:
                     existing_profile = str(existing.get("profile_version") or "")
                     existing_status = str(existing.get("status") or "")
                     linked_quantities = _unreviewed_work_quantities(linked_quantities, existing)
-                    if existing_profile == PROJECT_WORK_RECONCILIATION_PROFILE:
+                    if existing_profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES:
                         if not linked_quantities:
                             continue
                     # A prior negative decision or a work already tied to a
