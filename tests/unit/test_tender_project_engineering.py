@@ -14,6 +14,7 @@ from asd_kontur.tender.project_engineering import (
     _issues,
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
+    _pits,
     _professional_material_values,
     _scope_comparisons,
     _semantic_work_consensus,
@@ -968,7 +969,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v39"
+    assert model["model_version"] == "project-engineering-model-v40"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2230,6 +2231,49 @@ def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None
     assert group["reason"].startswith("Указана группа котлованов без количества")
     assert model["pits"]["is_final"] is False
     assert "окончательное количество" in model["pits"]["professional_answer"]
+
+
+def test_counted_well_pit_group_contributes_to_minimum_without_fabricated_members() -> None:
+    source_context = dict([_source("pit-group", "ВОР.pdf", 12)])
+    source_context["pit-group"].update(
+        page_commercial_scope_header="ВОР 03-02. Строительство ЛОС 17",
+    )
+    facilities = [
+        {
+            "facility_id": "facility-17",
+            "designation": "ЛОС 17",
+            "name": "ЛОС 17",
+        }
+    ]
+
+    result = _pits(
+        {
+            "candidate_pits": [
+                {
+                    "display_name": "Котлованы под колодцы D1800 (3 шт)",
+                    "aliases": ["Котлованы под колодцы D1800 (3 шт)"],
+                    "source_locator_ids": ["pit-group"],
+                },
+                {
+                    "display_name": "Котлованы перехода",
+                    "aliases": ["Котлованы перехода"],
+                    "source_locator_ids": [],
+                },
+            ],
+            "coverage": {"disposition_counts": {"ambiguous": 1}},
+        },
+        facilities,
+        source_context,
+    )
+
+    assert result["established_count"] == 3
+    assert result["named_established_count"] == 0
+    assert result["counted_group_pit_count"] == 3
+    assert len(result["established"]) == 1
+    assert result["established"][0]["aggregate_count"] == 3
+    assert result["established"][0]["related_facility"] == "ЛОС 17"
+    assert result["unresolved_group_count"] == 1
+    assert "поштучных марок" in result["professional_answer"]
 
 
 def test_model_ids_are_workspace_scoped_and_repeatable() -> None:

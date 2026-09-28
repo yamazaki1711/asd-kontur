@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v39"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v40"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1288,6 +1288,7 @@ def _pits(
         if value.get("designation")
     }
     established_by_facility: dict[str, dict[str, Any]] = {}
+    established_counted_groups: list[dict[str, Any]] = []
     clarification: list[dict[str, Any]] = []
     for raw in pit_inventory.get("candidate_pits") or ():
         pit = dict(raw)
@@ -1317,6 +1318,7 @@ def _pits(
                     "aliases": [],
                     "known_parameters": [],
                     "related_works": [],
+                    "aggregate_count": 1,
                     "sources": [],
                     "source_locator_ids": [],
                     "status": "Установлен по явной привязке к сооружению",
@@ -1329,6 +1331,60 @@ def _pits(
             description = str(pit.get("display_name") or pit.get("canonical_label") or "Котлован")
             stated_count_match = re.search(r"\b(\d+)\s*шт", _normalized(description))
             stated_count = int(stated_count_match.group(1)) if stated_count_match else None
+            locator_ids = sorted(str(value) for value in pit.get("source_locator_ids") or ())
+            commercial_designations = {
+                value
+                for locator_id in locator_ids
+                for context in (source_context.get(locator_id),)
+                if isinstance(context, Mapping)
+                for value in (
+                    commercial_scope_facility_designation(
+                        context.get("page_commercial_scope_header")
+                    ),
+                )
+                if value in facilities_by_designation
+            }
+            # An explicitly counted group of pits for wells/chambers under one
+            # commercial facility is a real minimum inventory even when the
+            # estimate does not give individual marks.  Keep it as an aggregate
+            # group; do not fabricate member identities.
+            counted_distinct_structure_group = bool(
+                stated_count
+                and len(commercial_designations) == 1
+                and any(
+                    marker in _normalized(description) for marker in ("колодц", "камер", "переход")
+                )
+            )
+            if counted_distinct_structure_group:
+                group_designation = next(iter(commercial_designations))
+                established_counted_groups.append(
+                    {
+                        "pit_id": semantic_digest(
+                            {
+                                "facility": group_designation,
+                                "label": _normalized(description),
+                                "count": stated_count,
+                                "kind": "counted_excavation_pit_group",
+                            }
+                        ),
+                        "name": description,
+                        "related_facility_id": facilities_by_designation[group_designation][
+                            "facility_id"
+                        ],
+                        "related_facility": group_designation,
+                        "aliases": [description],
+                        "known_parameters": [f"Количество по документу: {stated_count} шт."],
+                        "related_works": [],
+                        "aggregate_count": stated_count,
+                        "sources": _source_refs(locator_ids, source_context),
+                        "source_locator_ids": locator_ids,
+                        "status": (
+                            "Группа установлена по явному количеству в коммерческом "
+                            "разделе; поштучные марки не указаны"
+                        ),
+                    }
+                )
+                continue
             paired_working_receiving = "рабоч" in _normalized(
                 description
             ) and "приемн" in _normalized(description)
@@ -1360,15 +1416,21 @@ def _pits(
                     "stated_count": stated_count,
                     "minimum_count": 2 if paired_working_receiving else stated_count,
                     "sources": _source_refs(pit.get("source_locator_ids") or (), source_context),
-                    "source_locator_ids": sorted(
-                        str(value) for value in pit.get("source_locator_ids") or ()
-                    ),
+                    "source_locator_ids": locator_ids,
                 }
             )
     coverage = dict(pit_inventory.get("coverage") or {})
     ambiguous_count = int(dict(coverage.get("disposition_counts") or {}).get("ambiguous", 0))
     unresolved_count = len(clarification)
-    established = sorted(established_by_facility.values(), key=lambda value: value["name"])
+    established = sorted(
+        [*established_by_facility.values(), *established_counted_groups],
+        key=lambda value: (value["related_facility"], value["name"]),
+    )
+    named_established_count = len(established_by_facility)
+    counted_group_pit_count = sum(
+        int(value.get("aggregate_count") or 0) for value in established_counted_groups
+    )
+    established_count = named_established_count + counted_group_pit_count
     quantified_group_count = sum(
         int(value["stated_count"])
         for value in clarification
@@ -1381,7 +1443,9 @@ def _pits(
     )
     return {
         "established": established,
-        "established_count": len(established),
+        "established_count": established_count,
+        "named_established_count": named_established_count,
+        "counted_group_pit_count": counted_group_pit_count,
         "requires_clarification": clarification,
         "unresolved_group_count": unresolved_count,
         "quantified_unresolved_group_pit_count": quantified_group_count,
@@ -1389,10 +1453,16 @@ def _pits(
         "ambiguous_observation_count": ambiguous_count,
         "is_final": unresolved_count == 0,
         "professional_answer": (
-            f"В проекте {_russian_pit_count(len(established), established=True)}."
+            f"В проекте {_russian_pit_count(established_count, established=True)}."
             if unresolved_count == 0
-            else f"{_russian_pit_count(len(established), established=True).capitalize()}. "
-            f"Ещё {unresolved_count} {_russian_group_word(unresolved_count)} обозначений "
+            else f"{_russian_pit_count(established_count, established=True).capitalize()}. "
+            + (
+                f"Из них {named_established_count} имеют явную привязку к сооружению, "
+                f"ещё {counted_group_pit_count} указаны количеством в группах без поштучных марок. "
+                if counted_group_pit_count
+                else ""
+            )
+            + f"Ещё {unresolved_count} {_russian_group_word(unresolved_count)} обозначений "
             + ("требует уточнения. " if unresolved_count == 1 else "требуют уточнения. ")
             + (
                 f"В двух группах прямо указано суммарно {quantified_group_count} шт., "
@@ -1447,7 +1517,7 @@ def _attach_pit_work_scopes(
         if facility_id and is_pit_scoped:
             work_by_facility[facility_id].append(work)
     for facility_id, facility_pits in pits_by_facility.items():
-        if len(facility_pits) != 1:
+        if len(facility_pits) != 1 or int(facility_pits[0].get("aggregate_count") or 1) != 1:
             continue
         facility_pits[0]["related_works"] = [
             {

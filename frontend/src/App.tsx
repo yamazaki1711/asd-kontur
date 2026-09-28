@@ -5140,6 +5140,12 @@ function ProjectEngineeringResult({
               return (
                 <article className="entity-card" key={displayValue(pit.pit_id)}>
                   <h3>{displayValue(pit.name)}</h3>
+                  {Number(pit.aggregate_count ?? 1) > 1 && (
+                    <p>
+                      <strong>Количество в группе:</strong>{" "}
+                      {displayValue(pit.aggregate_count)} шт.
+                    </p>
+                  )}
                   <p>
                     Связанное сооружение:{" "}
                     {displayValue(pit.related_facility, "требует уточнения")}
@@ -5173,6 +5179,7 @@ function ProjectEngineeringResult({
                       })}
                     </ul>
                   )}
+                  <small>{displayValue(pit.status)}</small>
                   <ProjectSourceLinks
                     locatorIds={pit.source_locator_ids}
                     workspaceId={workspaceId}
