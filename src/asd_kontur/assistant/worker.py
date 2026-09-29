@@ -475,6 +475,7 @@ class AssistantWorker:
                 model_checks = self._model_quality_check(claimed, answer, receipts)
             structured_completion_problems = {
                 "workspace_structured_fact_omitted",
+                "workspace_structured_fact_contradicted",
                 "workspace_customer_question_omitted",
                 "workspace_contractor_risk_omitted",
             }
@@ -483,6 +484,23 @@ class AssistantWorker:
                 and not deterministic["passed"]
                 and set(deterministic["problems"]) <= structured_completion_problems
             ):
+                # A fluent model sentence can directly contradict the prepared
+                # facility result (for example, claim that no quantities were
+                # found while the dossier contains a checked PD/VOR pair).
+                # Appending the facts would leave both claims in the published
+                # answer.  At this narrow direct-result boundary, discard only
+                # that contradictory narrative and publish the prepared
+                # professional result that still passes the normal source and
+                # completeness validation below.
+                if "workspace_structured_fact_contradicted" in deterministic["problems"]:
+                    answer = SynthesizedAnswer(
+                        "По подготовленной модели проекта установлено:",
+                        "workspace_conclusion",
+                        False,
+                        (),
+                        answer.dialogue_summary,
+                        answer.active_subjects,
+                    )
                 answer = _append_prepared_project_result(answer, receipts, claimed.question)
                 deterministic = validate_answer(
                     answer,

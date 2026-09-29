@@ -276,6 +276,91 @@ def test_prepared_project_result_survives_malformed_qwen_narrative(
     assert repository.completed["quality_receipt"]["passed"] is True
 
 
+def test_prepared_facility_comparison_replaces_contradictory_model_narrative(
+    monkeypatch: Any,
+) -> None:
+    repository = _RecordingRepository()
+    worker = AssistantWorker(
+        cast(AssistantRepository, repository),
+        cast(ProfessionalAssistantKnowledgeQuery, object()),
+        identity="test-worker",
+    )
+    source_id = "44444444-4444-4444-8444-444444444444"
+    receipt = {
+        "step_sequence": 1,
+        "tool": "consultant.get_work_packages",
+        "arguments": {"query": "КНС-8.1", "limit": 20},
+        "reason": "Prepared facility comparison.",
+        "response": {
+            "outcome": "found",
+            "value": {
+                "project_engineering": {
+                    "facility_dossiers": [
+                        {
+                            "facility": {"name": "КНС 8.1"},
+                            "work_names": ["Прокладка кабеля"],
+                            "work_count": 1,
+                            "comparisons": [
+                                {
+                                    "work": "Прокладка кабеля",
+                                    "left": {
+                                        "document_role": "ПД",
+                                        "value": "30",
+                                        "unit": "м",
+                                    },
+                                    "right": {
+                                        "document_role": "ВОР",
+                                        "value": "60",
+                                        "unit": "м",
+                                    },
+                                    "conclusion": "Разница ПД ↔ ВОР: -30 м",
+                                }
+                            ],
+                        }
+                    ]
+                }
+            },
+            "sources": [{"source_id": source_id, "title": "Controlled source"}],
+        },
+    }
+    monkeypatch.setattr(worker, "_execute_tool", lambda *_args, **_kwargs: receipt)
+    contradictory = SynthesizedAnswer(
+        "По КНС-8.1 объёмы в документах не найдены.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Сравнение КНС-8.1.",
+        ("КНС-8.1",),
+    )
+    monkeypatch.setattr(worker, "_synthesize", lambda *_args, **_kwargs: contradictory)
+    monkeypatch.setattr(worker, "_repair_answer", lambda *_args, **_kwargs: contradictory)
+    monkeypatch.setattr(
+        worker,
+        "_model_quality_check",
+        lambda *_args, **_kwargs: {"passed": True, "issues": []},
+    )
+    claimed = ClaimedTurn(
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        uuid4(),
+        AssistantMode.TENDER,
+        "Какие расхождения по объёмам есть на КНС-8.1 между ПД и ВОР?",
+        "owner-a",
+        1,
+        1,
+    )
+
+    worker._run(claimed)
+
+    assert repository.failed is None
+    assert repository.completed is not None
+    assert "ПД: 30 м" in repository.completed["content"]
+    assert "ВОР: 60 м" in repository.completed["content"]
+    assert "не найдены" not in repository.completed["content"]
+    assert repository.completed["quality_receipt"]["passed"] is True
+
+
 def test_inventory_candidates_cannot_be_replaced_by_generic_insufficient_answer() -> None:
     source_id = "11111111-1111-4111-8111-111111111111"
     receipts = [
