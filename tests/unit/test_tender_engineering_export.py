@@ -151,6 +151,9 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Нормативные вопросы" in xml
     assert "Неопределённости / недостающие данные" in xml
     assert "Вопросы Заказчику" in xml
+    assert 'w:header="708"' in xml
+    assert 'w:footer="708"' in xml
+    assert 'w:gutter="0"' in xml
 
 
 def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None:
@@ -163,3 +166,6 @@ def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None
     assert "Позиция Заказчика" in xml
     assert "Запросить подтверждение объёма" in xml
     assert "КР.pdf, версия 2, стр./лист 17" in xml
+    assert 'w:header="708"' in xml
+    assert 'w:footer="708"' in xml
+    assert 'w:gutter="0"' in xml

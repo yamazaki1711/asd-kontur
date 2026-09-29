@@ -297,7 +297,8 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         "<w:body>" + "".join(body) + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
-        '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134"/>'
+        '<w:pgMar w:top="1134" w:right="1134" w:bottom="1134" w:left="1134" '
+        'w:header="708" w:footer="708" w:gutter="0"/>'
         "</w:sectPr></w:body></w:document>"
     )
     return _docx_package(document.encode())
@@ -370,7 +371,8 @@ def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> b
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         "<w:body>" + "".join(body) + '<w:sectPr><w:pgSz w:w="16838" w:h="11906" '
         'w:orient="landscape"/><w:pgMar w:top="850" w:right="850" w:bottom="850" '
-        'w:left="850"/></w:sectPr></w:body></w:document>'
+        'w:left="850" w:header="708" w:footer="708" w:gutter="0"/>'
+        "</w:sectPr></w:body></w:document>"
     )
     return _docx_package(document.encode())
 
@@ -401,14 +403,26 @@ def _simple_table(
     headers: tuple[str, ...], rows: Sequence[tuple[str, ...]], *, empty: str = "Нет данных."
 ) -> str:
     values = [headers, *rows] if rows else [headers, (empty, *("" for _ in headers[1:]))]
+    column_width = max(9000 // len(headers), 900)
     rendered = []
     for row in values:
         cells = "".join(
-            f'<w:tc><w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
+            f'<w:tc><w:tcPr><w:tcW w:w="{column_width}" w:type="dxa"/></w:tcPr>'
+            f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
             for value in row
         )
         rendered.append(f"<w:tr>{cells}</w:tr>")
-    return "<w:tbl>" + "".join(rendered) + "</w:tbl>"
+    grid = (
+        "<w:tblGrid>"
+        + "".join(f'<w:gridCol w:w="{column_width}"/>' for _ in headers)
+        + "</w:tblGrid>"
+    )
+    return (
+        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>'
+        + grid
+        + "".join(rendered)
+        + "</w:tbl>"
+    )
 
 
 def _role_values(value: object) -> str:
