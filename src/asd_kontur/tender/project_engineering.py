@@ -692,6 +692,8 @@ def build_project_engineering_model(
         project["missing_information"] = [
             value for value in project.get("missing_information") or () if value != "Состав объекта"
         ]
+        if project.get("name") and project.get("purpose"):
+            project["status"] = "Установлено"
     pits = _pits(pit_inventory, facilities, source_context)
     work_model = _work_schedule(
         candidates.get("work_types", ()),
@@ -1398,6 +1400,22 @@ def _project_overview(
     # overview dependent on one extractor label.
     name = select("object_name", "project_name", "construction_name")
     purpose = select("purpose")
+    if purpose is None and name is not None:
+        name_value = str(name.get("value") or "").strip()
+        normalized_name = _normalized(name_value)
+        if normalized_name.startswith(
+            (
+                "капитальный ремонт ",
+                "реконструкция ",
+                "строительство ",
+                "техническое перевооружение ",
+            )
+        ):
+            purpose = {
+                "value": name_value,
+                "status": "Назначение установлено из наименования объекта",
+                "source_locator_ids": list(name.get("source_locator_ids") or ()),
+            }
     composition = select("object_composition")
     description = select("object_description")
     location = select("location", "construction_location", "object_location")

@@ -1493,8 +1493,53 @@ def test_project_overview_consolidates_professional_field_aliases() -> None:
         "source_locator_ids": ["name-a", "name-b"],
     }
     assert model["project"]["description"]["value"].startswith("Подпорная стена")
+    assert model["project"]["purpose"] == {
+        "value": "Капитальный ремонт подпорной стены",
+        "status": "Назначение установлено из наименования объекта",
+        "source_locator_ids": ["name-a", "name-b"],
+    }
     assert model["project"]["location"]["value"].startswith("г. Петропавловск")
     assert model["project"]["foundation"]["value"] == ("Подпорная стена на свайном основании")
+
+
+def test_project_status_becomes_established_after_composition_is_assembled() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-overview-composition",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [
+                {
+                    "candidate_id": "name",
+                    "label": "project_name",
+                    "value": "Реконструкция водопропускного сооружения",
+                    "source_version_id": "source-a",
+                    "source_locator_id": "name",
+                }
+            ],
+            "work_types": [],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "Водопропускное сооружение ВС-1",
+                "candidate_labels": ["Водопропускное сооружение ВС-1"],
+                "member_structure_node_ids": ["facility-node-a", "facility-node-b"],
+                "source_locator_ids": ["facility-a", "facility-b"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert model["project"]["composition"]["value"] == "Водопропускное сооружение ВС-1"
+    assert model["project"]["status"] == "Установлено"
+    assert model["project"]["missing_information"] == []
 
 
 def test_omission_names_only_the_supplied_commercial_denominator() -> None:
