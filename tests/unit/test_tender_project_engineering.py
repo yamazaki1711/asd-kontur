@@ -1365,9 +1365,7 @@ def test_project_overview_consolidates_professional_field_aliases() -> None:
     }
     assert model["project"]["description"]["value"].startswith("Подпорная стена")
     assert model["project"]["location"]["value"].startswith("г. Петропавловск")
-    assert model["project"]["foundation"]["value"] == (
-        "Подпорная стена на свайном основании"
-    )
+    assert model["project"]["foundation"]["value"] == ("Подпорная стена на свайном основании")
 
 
 def test_omission_names_only_the_supplied_commercial_denominator() -> None:
