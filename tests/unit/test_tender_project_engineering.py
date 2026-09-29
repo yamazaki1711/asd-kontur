@@ -25,6 +25,7 @@ from asd_kontur.tender.project_engineering import (
     _resolution_establishes_page_scope,
     _scope_comparisons,
     _semantic_work_consensus,
+    _unique_values,
     build_project_engineering_model,
     classify_work_family,
     commercial_scope_facility_designation,
@@ -454,6 +455,33 @@ def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
     assert comparisons[0]["classification"] == "MATCH"
     assert comparisons[0]["left"]["unit"] == "м"
     assert comparisons[0]["right"]["unit"] == "м"
+
+
+def test_material_schedule_normalizes_unit_but_keeps_source_spelling() -> None:
+    values = _unique_values(
+        [
+            {
+                "raw_name": "Арматура А400",
+                "normalized_name": "арматура а400",
+                "raw_quantity": "2,0",
+                "normalized_value": "2.0",
+                "raw_unit": "тонны",
+                "normalized_unit": "тонны",
+                "source_locator_id": "material-row",
+            }
+        ],
+        "material",
+    )
+
+    assert values == [
+        {
+            "name": "Арматура А400",
+            "quantity": "2.0",
+            "unit": "т",
+            "raw_unit": "тонны",
+            "source_locator_id": "material-row",
+        }
+    ]
 
 
 def test_explicit_material_profile_is_not_overwritten_by_page_context() -> None:

@@ -4343,16 +4343,19 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                 "source_locator_id": row.get("source_locator_id"),
             }
         else:
+            raw_material_unit = row.get("normalized_unit", row.get("unit", row.get("raw_unit")))
+            display_material_unit = _normalized_unit(raw_material_unit)
             payload = {
                 "name": row.get("normalized_name", row.get("value")),
                 "quantity": row.get("normalized_value", row.get("raw_quantity")),
-                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
+                "unit": display_material_unit,
                 "source_locator_id": row.get("source_locator_id"),
             }
             rendered = {
                 "name": row.get("value", row.get("raw_name")),
                 "quantity": row.get("normalized_value", row.get("raw_quantity")),
-                "unit": row.get("normalized_unit", row.get("unit", row.get("raw_unit"))),
+                "unit": display_material_unit,
+                "raw_unit": row.get("raw_unit", raw_material_unit),
                 "source_locator_id": row.get("source_locator_id"),
             }
         result.setdefault(semantic_digest(payload), rendered)
