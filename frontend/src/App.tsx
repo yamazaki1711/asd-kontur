@@ -1073,15 +1073,73 @@ function WorkspaceCard({
   mode: ModeName;
   onOpen?: (identity: string) => void;
 }) {
+  const queryClient = useQueryClient();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [typedName, setTypedName] = useState("");
+  const projectName = displayWorkspaceName(workspace.display_name);
+  const remove = useMutation({
+    mutationFn: async () => {
+      const prepared = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/lifecycle/reset/prepare",
+        {
+          params: { path: { workspace_id: workspace.workspace_id } },
+          body: { confirmation: "PREPARE_WORKSPACE_RESET" },
+        },
+      );
+      const challenge = requireData(prepared.data, prepared.error);
+      const executed = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/lifecycle/reset/execute",
+        {
+          params: { path: { workspace_id: workspace.workspace_id } },
+          body: {
+            challenge_id: challenge.challenge_id,
+            confirmation_text: challenge.confirmation_text,
+          },
+        },
+      );
+      return requireData(executed.data, executed.error);
+    },
+    onSuccess: async () => {
+      for (const candidateMode of MODES) {
+        const key = `asd-recent-${MODE_DEFINITIONS[candidateMode].slug}`;
+        if (window.localStorage.getItem(key) === workspace.workspace_id) {
+          window.localStorage.removeItem(key);
+        }
+      }
+      queryClient.removeQueries({
+        predicate: (query) => query.queryKey.includes(workspace.workspace_id),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      setDeleteOpen(false);
+      setTypedName("");
+    },
+  });
   return (
     <article className="entity-card">
       <div className="entity-heading">
-        <h2>{displayWorkspaceName(workspace.display_name)}</h2>
-        <StatusPill>
-          {workspace.lifecycle_state === "ACTIVE"
-            ? "В работе"
-            : "Недоступен для изменений"}
-        </StatusPill>
+        <h2>{projectName}</h2>
+        <div className="workspace-card-actions">
+          <StatusPill>
+            {workspace.lifecycle_state === "ACTIVE"
+              ? "В работе"
+              : "Недоступен для изменений"}
+          </StatusPill>
+          <details className="workspace-action-menu">
+            <summary aria-label={`Действия с проектом ${projectName}`}>
+              ⋯
+            </summary>
+            <button
+              className="workspace-delete-action"
+              type="button"
+              onClick={(event) => {
+                event.currentTarget.closest("details")?.removeAttribute("open");
+                setDeleteOpen(true);
+              }}
+            >
+              Удалить проект
+            </button>
+          </details>
+        </div>
       </div>
       <p>Объект доступен для работы в выбранном режиме.</p>
       <Link
@@ -1091,6 +1149,58 @@ function WorkspaceCard({
       >
         Открыть
       </Link>
+      {deleteOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section
+            aria-labelledby={`delete-project-${workspace.workspace_id}`}
+            aria-modal="true"
+            className="delete-project-dialog"
+            role="dialog"
+          >
+            <h2 id={`delete-project-${workspace.workspace_id}`}>
+              Удалить проект «{projectName}»?
+            </h2>
+            <p>
+              Будут удалены документы проекта, результаты анализа, диалоги и
+              сформированные файлы. Это действие нельзя отменить.
+            </p>
+            <label>
+              Для подтверждения введите название проекта
+              <input
+                autoComplete="off"
+                autoFocus
+                value={typedName}
+                onChange={(event) => setTypedName(event.target.value)}
+              />
+            </label>
+            {remove.isError && <ErrorNotice error={remove.error} />}
+            {remove.isPending && (
+              <p role="status">Удаляем проект и проверяем очистку данных…</p>
+            )}
+            <div className="dialog-actions">
+              <button
+                className="secondary"
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => {
+                  setDeleteOpen(false);
+                  setTypedName("");
+                }}
+              >
+                Отмена
+              </button>
+              <button
+                className="danger"
+                type="button"
+                disabled={remove.isPending || typedName !== projectName}
+                onClick={() => remove.mutate()}
+              >
+                Удалить проект
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </article>
   );
 }

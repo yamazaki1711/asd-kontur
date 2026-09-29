@@ -1,0 +1,67 @@
+{
+  "schema": "ozero-post-deletion-verification-v1",
+  "observed_at": "2026-09-29T03:33:04Z",
+  "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+  "lifecycle": {
+    "state": "DESTROYED",
+    "version": 20,
+    "reset_receipt_id": "01a0eb29-4998-75e8-bd93-71c832388b03",
+    "outcome": "verified",
+    "completed_at": "2026-09-29T15:15:46.712637+12:00"
+  },
+  "workspace_residue": {
+    "authorized_workspace_list_contains_workspace": false,
+    "workspace_api_result": "workspace_not_found",
+    "active_database_project_rows": 0,
+    "active_object_store_items": 0,
+    "active_object_store_bytes": 0,
+    "active_runtime_artifact_matches": 0,
+    "retained_lifecycle_control_rows": [
+      "messaging.workspace_outbox"
+    ]
+  },
+  "before_after": {
+    "workspace_scoped_rows": [599080, 0],
+    "workspace_object_store_items": [2414, 0],
+    "workspace_object_store_bytes": [250064393, 0],
+    "active_documents": [22, 0],
+    "active_document_pages": [2529, 0],
+    "durable_jobs": [26966, 0]
+  },
+  "platform_integrity": {
+    "reset_platform_fingerprint_before": "sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487",
+    "reset_platform_fingerprint_after": "sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487",
+    "canonical_ntd_root_before": "sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510",
+    "canonical_ntd_root_after": "sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510",
+    "semantic_fingerprints_equal": true,
+    "critical_table_counts_equal": true,
+    "critical_table_count_mismatches": {},
+    "ntd_job_states_before": {
+      "succeeded": 319
+    },
+    "ntd_job_states_after": {
+      "succeeded": 319
+    },
+    "knowledge_gateway": {
+      "inventory_status": "ok",
+      "search_status": "ok",
+      "search_result_count": 3,
+      "surviving_workspace_scope_verified": true,
+      "surviving_workspace_count": 3
+    }
+  },
+  "runtime": {
+    "ntd_worker_pid": 98263,
+    "ntd_worker_state": "running",
+    "ntd_worker_last_exit": "never exited",
+    "qwen_pid": 36812,
+    "qwen_model": "Qwen3.8-27B-MLX-8bit",
+    "document_worker_temporarily_stopped_for_reset_recovery": true
+  },
+  "artifact_cleanup": {
+    "reset_archive_removed_from_archive_store": true,
+    "ozero_only_exports_removed_from_runtime_roots": true,
+    "mixed_platform_backups_preserved": true,
+    "git_history_preserved": true
+  }
+}

@@ -782,6 +782,73 @@ button:disabled {
   justify-content: space-between;
   gap: 0.5rem;
 }
+.workspace-card-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.workspace-action-menu {
+  position: relative;
+}
+.workspace-action-menu summary {
+  align-items: center;
+  border-radius: 0.45rem;
+  cursor: pointer;
+  display: flex;
+  font-size: 1.35rem;
+  font-weight: 800;
+  height: 2rem;
+  justify-content: center;
+  list-style: none;
+  width: 2rem;
+}
+.workspace-action-menu summary::-webkit-details-marker {
+  display: none;
+}
+.workspace-delete-action {
+  background: var(--white);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgb(24 52 38 / 12%);
+  color: #8c3424;
+  min-width: 10.5rem;
+  position: absolute;
+  right: 0;
+  top: 2.25rem;
+  z-index: 3;
+}
+.modal-backdrop {
+  align-items: center;
+  background: rgb(12 26 20 / 55%);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 30;
+}
+.delete-project-dialog {
+  background: var(--white);
+  border-radius: 0.85rem;
+  box-shadow: 0 24px 60px rgb(12 26 20 / 28%);
+  max-width: 34rem;
+  padding: 1.5rem;
+  width: 100%;
+}
+.delete-project-dialog label {
+  display: grid;
+  gap: 0.4rem;
+}
+.delete-project-dialog input {
+  border: 1px solid #b9c3bb;
+  border-radius: 0.45rem;
+  padding: 0.65rem;
+}
+.dialog-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
 .entity-card h2,
 .panel h2 {
   margin-top: 0;

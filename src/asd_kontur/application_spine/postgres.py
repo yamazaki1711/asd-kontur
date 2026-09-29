@@ -180,6 +180,34 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("migration_head_unavailable")
         return str(value)
 
+    @staticmethod
+    def _workspace_accepts_jobs(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> bool:
+        """Return whether new or retried work may enter this workspace.
+
+        Lifecycle reset fences writes before it inventories and purges data.
+        Worker-side successor/refill hooks do not pass through the public
+        intake guard, so every such hook must consult the same lifecycle row.
+        """
+
+        state = session.execute(
+            sa.text(
+                "SELECT lifecycle_state,write_fenced FROM workspace.workspaces "
+                "WHERE organization_id=:organization AND workspace_id=:workspace"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        ).one_or_none()
+        return state is not None and tuple(state) == ("ACTIVE", False)
+
+    def _require_workspace_accepts_jobs(
+        self, session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> None:
+        if not self._workspace_accepts_jobs(
+            session, organization_id=organization_id, workspace_id=workspace_id
+        ):
+            raise SpinePersistenceError("workspace_not_writable")
+
     def create_workspace(
         self,
         *,
@@ -1230,6 +1258,26 @@ class SpinePostgresRepository:
                 sa.text("SELECT * FROM workspace.claim_next_durable_job(:worker,:lease)"),
                 {"worker": worker_identity, "lease": lease_seconds},
             ).one_or_none()
+            if row is not None and not self._workspace_accepts_jobs(
+                session,
+                organization_id=UUID(str(row.organization_id)),
+                workspace_id=UUID(str(row.workspace_id)),
+            ):
+                session.execute(
+                    sa.text(
+                        "UPDATE workspace.durable_jobs SET state='cancelled',"
+                        "cancellation_state='acknowledged',completed_at=CURRENT_TIMESTAMP,"
+                        "lease_owner=NULL,lease_expires_at=NULL,"
+                        "typed_failure_code='workspace_reset_fence' WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": row.organization_id,
+                        "workspace": row.workspace_id,
+                        "job": row.job_id,
+                    },
+                )
+                row = None
         if row is None:
             return None
         return ClaimedJob(
@@ -1671,6 +1719,12 @@ class SpinePostgresRepository:
             return None
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            if not self._workspace_accepts_jobs(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+            ):
+                return None
             source = (
                 session.execute(
                     sa.text(
@@ -1811,6 +1865,12 @@ class SpinePostgresRepository:
             return None
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            if not self._workspace_accepts_jobs(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+            ):
+                return None
             source = (
                 session.execute(
                     sa.text(
@@ -1936,6 +1996,12 @@ class SpinePostgresRepository:
     ) -> bool:
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            if not self._workspace_accepts_jobs(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+            ):
+                return False
             row = session.execute(
                 sa.text(
                     "SELECT attempt_count,max_attempts,lease_owner,lease_generation FROM "
@@ -2188,6 +2254,9 @@ class SpinePostgresRepository:
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
+            self._require_workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             row = session.execute(
                 sa.text(
                     "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -2622,6 +2691,12 @@ class SpinePostgresRepository:
         """
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
+            if not self._workspace_accepts_jobs(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+            ):
+                return 0
             candidates = session.execute(
                 sa.text(
                     "WITH RECURSIVE ancestors AS ("
@@ -4162,6 +4237,9 @@ class SpinePostgresRepository:
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
+            self._require_workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
             sources = list(
                 session.execute(
                     sa.text(
@@ -4365,6 +4443,12 @@ class SpinePostgresRepository:
         )
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ):
+                if _resolved_organization_id is not None:
+                    return ()
+                raise SpinePersistenceError("workspace_not_writable")
             candidates = self._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -4762,6 +4846,10 @@ class SpinePostgresRepository:
 
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ):
+                return ()
             outstanding = int(
                 session.execute(
                     sa.text(
