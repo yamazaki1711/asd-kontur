@@ -445,6 +445,7 @@ def test_facility_quantity_discrepancy_publishes_only_requested_comparison() -> 
         question,
     )
 
+    assert completed.answer.startswith("Сопоставление объёмов по сооружению:")
     assert "КНС 8.1:" in completed.answer
     assert "ПД: 30 м; ВОР: 60 м" in completed.answer
     assert "Разница ПД ↔ ВОР: -30 м" in completed.answer

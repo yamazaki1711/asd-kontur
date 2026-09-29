@@ -1884,7 +1884,16 @@ def _append_prepared_project_result(
                     break
             break
         if dossier_rows:
-            headings_and_rows.append(("Работы сооружения:", dossier_rows))
+            dossier_heading = (
+                "Сопоставление объёмов по сооружению:"
+                if asks_for_facility_comparisons and asks_for_facility_quantities
+                else "Материалы сооружения:"
+                if asks_for_facility_materials
+                else "Расхождения и вопросы по сооружению:"
+                if asks_for_facility_issues
+                else "Работы сооружения:"
+            )
+            headings_and_rows.append((dossier_heading, dossier_rows))
     if asks_for_unresolved_information:
         gap_rows: list[str] = []
         for receipt in receipts:
