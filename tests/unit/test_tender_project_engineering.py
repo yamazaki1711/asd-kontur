@@ -2608,6 +2608,10 @@ def test_repeated_addressed_structures_form_distinct_incremental_project_cards()
         "Установлено по одинаковому адресу в нескольких документах"
     }
     assert all(len(row["member_structure_node_ids"]) == 2 for row in model["facilities"])
+    assert established_facility_designations([], structure_nodes=nodes) == (
+        "Подпорная стена по ул. Океанская, 63/1",
+        "Подпорная стена по ул. Океанская, 65/1",
+    )
 
 
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:

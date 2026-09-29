@@ -830,6 +830,8 @@ def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> 
 
 def established_facility_designations(
     identity_components: Iterable[Mapping[str, Any]],
+    *,
+    structure_nodes: Iterable[Mapping[str, Any]] = (),
 ) -> tuple[str, ...]:
     """Return unambiguous corroborated project-location labels.
 
@@ -842,7 +844,7 @@ def established_facility_designations(
 
     facilities, _node_to_facility = _facilities(
         "project-location-catalog",
-        (),
+        structure_nodes,
         identity_components,
     )
     counts = Counter(_normalized(value.get("name")) for value in facilities)

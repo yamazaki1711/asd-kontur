@@ -4571,7 +4571,16 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
             components = build_structure_identity_components(identity_candidates)
-            facilities = list(established_facility_designations(components))
+            facilities = list(
+                established_facility_designations(
+                    components,
+                    structure_nodes=self._project_structure_rows(
+                        session,
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                    ),
+                )
+            )
 
             prepared: list[dict[str, Any]] = []
             for row in unresolved:
