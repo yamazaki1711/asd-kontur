@@ -5470,6 +5470,46 @@ function ProjectEngineeringResult({
                     ) : (
                       <p>Материалы для сооружения не установлены.</p>
                     )}
+                    <h4>Сопоставление проектных и коммерческих объёмов</h4>
+                    {cardComparisons.length ? (
+                      <ul>
+                        {cardComparisons.map((value, index) => {
+                          const comparison = value as Record<string, unknown>;
+                          const left = (comparison.left ?? {}) as Record<
+                            string,
+                            unknown
+                          >;
+                          const right = (comparison.right ?? {}) as Record<
+                            string,
+                            unknown
+                          >;
+                          const sideText = (side: Record<string, unknown>) =>
+                            `${displayValue(side.document_role)}: ${displayValue(side.value)} ${displayValue(side.unit)}`;
+                          return (
+                            <li
+                              key={`${displayValue(comparison.comparison_id)}-${String(index)}`}
+                            >
+                              <strong>{displayValue(comparison.work)}</strong> —{" "}
+                              {sideText(left)} ↔ {sideText(right)}.{" "}
+                              {displayValue(
+                                comparison.conclusion,
+                                displayValue(comparison.professional_status),
+                              )}
+                              <ProjectSourceLinks
+                                locatorIds={comparison.source_locator_ids}
+                                workspaceId={workspaceId}
+                                modeSlug={modeSlug}
+                              />
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : (
+                      <p>
+                        Сопоставимые проектные и коммерческие объёмы не
+                        установлены.
+                      </p>
+                    )}
                     <h4>Расхождения и вопросы</h4>
                     {cardIssues.length ? (
                       <ul>

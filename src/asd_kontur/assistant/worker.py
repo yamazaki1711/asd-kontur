@@ -1748,6 +1748,34 @@ def _append_prepared_project_result(
                             dossier_rows.append(
                                 f"Объём — {work_name}: {'; '.join(quantity_lines)}."
                             )
+                if asks_for_facility_quantities or asks_for_facility_issues:
+                    for comparison in dossier.get("comparisons") or ():
+                        if not isinstance(comparison, dict):
+                            continue
+                        work_name = str(comparison.get("work") or "Работа").strip()
+                        sides: list[str] = []
+                        for side_name in ("left", "right"):
+                            side = comparison.get(side_name)
+                            if not isinstance(side, dict):
+                                continue
+                            role = str(side.get("document_role") or "Документ").strip()
+                            value = " ".join(
+                                str(part).strip()
+                                for part in (side.get("value"), side.get("unit"))
+                                if part not in (None, "")
+                            )
+                            if value:
+                                sides.append(f"{role}: {value}")
+                        conclusion = str(
+                            comparison.get("conclusion")
+                            or comparison.get("professional_status")
+                            or ""
+                        ).strip()
+                        if sides:
+                            suffix = f" — {conclusion}" if conclusion else ""
+                            dossier_rows.append(
+                                f"Сопоставление — {work_name}: {'; '.join(sides)}{suffix}."
+                            )
                 if asks_for_facility_materials:
                     materials = [
                         " ".join(

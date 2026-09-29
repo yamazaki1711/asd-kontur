@@ -353,6 +353,22 @@ def test_prepared_facility_dossier_publishes_requested_quantities_and_materials(
                                     "materials": [
                                         {"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}
                                     ],
+                                    "comparisons": [
+                                        {
+                                            "work": "Погружение шпунта",
+                                            "left": {
+                                                "document_role": "ВОР",
+                                                "value": "95.028",
+                                                "unit": "т",
+                                            },
+                                            "right": {
+                                                "document_role": "Смета",
+                                                "value": "95.028",
+                                                "unit": "т",
+                                            },
+                                            "conclusion": "Значения совпадают",
+                                        }
+                                    ],
                                 }
                             ]
                         }
@@ -366,6 +382,10 @@ def test_prepared_facility_dossier_publishes_requested_quantities_and_materials(
 
     assert "Объём — Погружение шпунта: ВОР: 95.028 т" in completed.answer
     assert "Материалы: Шпунт Л5 9.5 т" in completed.answer
+    assert (
+        "Сопоставление — Погружение шпунта: ВОР: 95.028 т; "
+        "Смета: 95.028 т — Значения совпадают" in completed.answer
+    )
 
 
 def test_general_engineering_question_still_requires_model_planning() -> None:

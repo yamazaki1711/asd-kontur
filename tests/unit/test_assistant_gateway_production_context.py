@@ -500,6 +500,18 @@ def test_facility_projection_keeps_requested_quantities_and_materials() -> None:
                         }
                     ],
                     "materials": [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}],
+                    "comparisons": [
+                        {
+                            "work": "Погружение шпунта",
+                            "left": {"document_role": "ВОР", "value": "95", "unit": "т"},
+                            "right": {
+                                "document_role": "Смета",
+                                "value": "95",
+                                "unit": "т",
+                            },
+                            "conclusion": "Значения совпадают",
+                        }
+                    ],
                 }
             ]
         },
@@ -515,6 +527,7 @@ def test_facility_projection_keeps_requested_quantities_and_materials() -> None:
         }
     ]
     assert dossier["materials"] == [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}]
+    assert dossier["comparisons"][0]["conclusion"] == "Значения совпадают"
 
 
 def test_project_wide_action_queries_return_prepared_results_without_keyword_overlap() -> None:

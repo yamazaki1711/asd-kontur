@@ -2564,9 +2564,14 @@ def _assistant_engineering_for_query(
                             compact_row(value)
                             for value in card.get("works") or ()
                             if isinstance(value, Mapping) and value.get("quantities_by_document")
-                        ][:40]
+                        ][:40],
+                        "comparisons": [
+                            compact_row(value)
+                            for value in card.get("comparisons") or ()
+                            if isinstance(value, Mapping)
+                        ][:20],
                     }
-                    if asks_facility_quantities
+                    if asks_facility_quantities or asks_facility_issues
                     else {}
                 ),
                 **(
