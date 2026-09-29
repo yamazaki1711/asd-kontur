@@ -1130,6 +1130,16 @@ def _source_is_local_estimate(context: Mapping[str, Any]) -> bool:
     return bool(scope_header and "локальн" in scope_header and "сметн" in scope_header)
 
 
+def professional_source_role(source_role: object, context: Mapping[str, Any]) -> str:
+    """Return the page-level professional role used by analysis and Qwen."""
+
+    if _source_is_bill_of_quantities(context):
+        return "ВОР"
+    if _source_is_local_estimate(context):
+        return "Смета"
+    return _professional_document_role(source_role, context.get("safe_display_name"))
+
+
 def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
     """Match a short engineering phrase by ordered Russian word stems.
 
@@ -2338,17 +2348,7 @@ def _work_schedule(
                 "Источник явно относится ко всем установленным сооружениям объекта; "
                 "распределение по отдельным адресам не указано"
             )
-        role = (
-            "ВОР"
-            if _source_is_bill_of_quantities(context)
-            else (
-                "Смета"
-                if _source_is_local_estimate(context)
-                else _professional_document_role(
-                    row.get("source_role"), context.get("safe_display_name")
-                )
-            )
-        )
+        role = professional_source_role(row.get("source_role"), context)
         linked_quantities = quantity_by_work.get(candidate_id, ())
         quantity_reviews = (
             {

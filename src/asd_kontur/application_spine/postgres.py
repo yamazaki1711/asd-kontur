@@ -38,6 +38,7 @@ from asd_kontur.tender.project_engineering import (
     facility_designation,
     mentioned_established_facilities,
     non_work_reason,
+    professional_source_role,
     work_family_catalog,
     work_reconciliation_priority,
 )
@@ -4659,7 +4660,7 @@ class SpinePostgresRepository:
                         "candidate_id": str(row["candidate_id"]),
                         "candidate_version": int(row["version"]),
                         "wording": wording,
-                        "document_role": str(row.get("source_role") or ""),
+                        "document_role": professional_source_role(row.get("source_role"), context),
                         "document": str(context.get("safe_display_name") or ""),
                         "page": page,
                         "scope": str(row.get("scope_key") or ""),
