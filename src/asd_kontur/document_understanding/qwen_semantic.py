@@ -158,9 +158,19 @@ class QwenDocumentSemanticAdapter:
             raise QwenSemanticFailure("qwen_semantic_input_unavailable")
         prompt = _prompt(pages)
         payload = _complete(self._endpoint, prompt, self._timeout_seconds)
-        roles, locator_ids = _parse(
-            payload, {str(item.locator.source_locator_id): item for item in pages}
-        )
+        allowed = {str(item.locator.source_locator_id): item for item in pages}
+        try:
+            roles, locator_ids = _parse(payload, allowed)
+        except QwenSemanticFailure as exc:
+            if exc.code != "qwen_semantic_response_invalid_locator":
+                raise
+            repaired = _complete(
+                self._endpoint,
+                _classification_evidence_repair_prompt(pages, payload),
+                self._timeout_seconds,
+                max_tokens=300,
+            )
+            roles, locator_ids = _parse(repaired, allowed)
         locators = tuple(
             {str(item.locator.source_locator_id): item.locator for item in pages}[item]
             for item in locator_ids
@@ -1842,6 +1852,33 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         "correspondence_administrative, unknown. locator_ids должны ссылаться только на "
         "фрагменты, подтверждающие выбранные roles. Не придумывай данные.\nФРАГМЕНТЫ:\n"
         + json.dumps(pages, ensure_ascii=False, separators=(",", ":"))
+    )
+
+
+def _classification_evidence_repair_prompt(
+    elements: tuple[_SemanticFragment, ...], prior_answer: str
+) -> str:
+    """Repair only malformed role locators without weakening exact validation."""
+
+    pages = [
+        {
+            "page": item.locator.page_number,
+            "locator_id": str(item.locator.source_locator_id),
+            "text": item.text,
+        }
+        for item in elements
+    ]
+    return (
+        "Исправь только ссылки locator_ids в JSON ниже. Сохрани роли, которые явно "
+        "подтверждаются входными фрагментами; неподтверждённую роль удали. Не добавляй "
+        "новые роли. Верни только JSON без Markdown в форме "
+        '{"roles":["..."],"locator_ids":["..."]}. '
+        "Каждый locator_id скопируй буквально из входных фрагментов. Если ни одна роль "
+        "не подтверждается, исправление невозможно: верни исходные роли и пустой locator_ids, "
+        "чтобы строгая проверка отклонила ответ.\nФРАГМЕНТЫ:\n"
+        + json.dumps(pages, ensure_ascii=False, separators=(",", ":"))
+        + "\nНЕКОРРЕКТНЫЙ ОТВЕТ:\n"
+        + prior_answer
     )
 
 
