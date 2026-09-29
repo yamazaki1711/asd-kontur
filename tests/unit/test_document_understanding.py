@@ -87,6 +87,10 @@ def test_source_unit_normalization_handles_russian_inflections() -> None:
     assert normalize_unit("миллиметров") == "mm"
     assert normalize_unit("тонны") == "t"
     assert normalize_unit("куб. м") == "m3"
+    assert normalize_unit("м.пог.") == "m"
+    assert normalize_unit("м. п.") == "m"
+    assert normalize_unit("пог. м") == "m"
+    assert normalize_unit("погонных метров") == "m"
     assert normalize_unit("") is None
 
 
