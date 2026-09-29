@@ -405,23 +405,32 @@ def _simple_table(
     values = [headers, *rows] if rows else [headers, (empty, *("" for _ in headers[1:]))]
     column_width = max(9000 // len(headers), 900)
     rendered = []
-    for row in values:
+    for row_index, row in enumerate(values):
         cells = "".join(
             f'<w:tc><w:tcPr><w:tcW w:w="{column_width}" w:type="dxa"/></w:tcPr>'
-            f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
+            f"<w:p><w:r>{'<w:rPr><w:b/></w:rPr>' if row_index == 0 else ''}"
+            f'<w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
             for value in row
         )
-        rendered.append(f"<w:tr>{cells}</w:tr>")
+        row_properties = "<w:trPr><w:tblHeader/></w:trPr>" if row_index == 0 else ""
+        rendered.append(f"<w:tr>{row_properties}{cells}</w:tr>")
     grid = (
         "<w:tblGrid>"
         + "".join(f'<w:gridCol w:w="{column_width}"/>' for _ in headers)
         + "</w:tblGrid>"
     )
     return (
-        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>'
-        + grid
-        + "".join(rendered)
-        + "</w:tbl>"
+        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>'
+        '<w:tblBorders><w:top w:val="single" w:sz="4" w:color="B7B7B7"/>'
+        '<w:left w:val="single" w:sz="4" w:color="B7B7B7"/>'
+        '<w:bottom w:val="single" w:sz="4" w:color="B7B7B7"/>'
+        '<w:right w:val="single" w:sz="4" w:color="B7B7B7"/>'
+        '<w:insideH w:val="single" w:sz="4" w:color="D9D9D9"/>'
+        '<w:insideV w:val="single" w:sz="4" w:color="D9D9D9"/></w:tblBorders>'
+        '<w:tblLayout w:type="fixed"/>'
+        '<w:tblCellMar><w:top w:w="80" w:type="dxa"/><w:left w:w="80" w:type="dxa"/>'
+        '<w:bottom w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/>'
+        "</w:tblCellMar></w:tblPr>" + grid + "".join(rendered) + "</w:tbl>"
     )
 
 

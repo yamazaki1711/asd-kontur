@@ -154,6 +154,9 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert 'w:header="708"' in xml
     assert 'w:footer="708"' in xml
     assert 'w:gutter="0"' in xml
+    assert "<w:tblHeader/>" in xml
+    assert "<w:tblBorders>" in xml
+    assert '<w:tblLayout w:type="fixed"/>' in xml
 
 
 def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None:
