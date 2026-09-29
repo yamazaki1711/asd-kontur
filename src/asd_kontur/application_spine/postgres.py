@@ -108,6 +108,10 @@ _SEMANTIC_PRIORITY_BY_ROLE = {
     "consolidated_estimate": 150,
 }
 _SEMANTIC_DEFAULT_PRIORITY = 130
+# Accepted model output that only needs deterministic candidate persistence is
+# the cheapest route to a usable project model.  Finish those recoveries before
+# starting unrelated new source interpretation.
+_CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # Bounded reconciliation turns extracted values into the first usable
 # engineering schedule.  Let one four-batch slice run ahead of the next source
 # extraction at a safe job boundary; the refill gate prevents it from starving
@@ -3858,6 +3862,23 @@ class SpinePostgresRepository:
                 .mappings()
                 .one_or_none()
             )
+            latest_provenance = dict(latest["provenance"]) if latest is not None else {}
+            if (
+                coverage is not None
+                and str(coverage["state"]) == "complete"
+                and latest_provenance.get("candidate_persistence_profile")
+                != ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE
+            ):
+                semantic_priority = max(semantic_priority, _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY)
+            elif (
+                coverage is not None
+                and str(coverage["state"]) == "complete"
+                and latest is not None
+                and str(latest["state"]) in {"queued", "running"}
+                and latest_provenance.get("candidate_persistence_profile")
+                == ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE
+            ):
+                semantic_priority = max(semantic_priority, _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY)
             if locator_count == 0:
                 scheduled.append(
                     {
@@ -3870,7 +3891,6 @@ class SpinePostgresRepository:
                 # Priority is dispatch metadata, not an engineering result.  Update
                 # only an unclaimed, compatible semantic pass; a running lease must
                 # keep its existing ordering and immutable input contract.
-                latest_provenance = dict(latest["provenance"])
                 if (
                     str(latest["state"]) == "queued"
                     and latest_provenance.get("engineering_semantic_profile")
@@ -3910,7 +3930,6 @@ class SpinePostgresRepository:
                     }
                 )
                 continue
-            latest_provenance = dict(latest["provenance"]) if latest is not None else {}
             coverage_complete = bool(coverage is not None and str(coverage["state"]) == "complete")
             latest_profile_persistence_complete = bool(
                 latest is not None
