@@ -271,6 +271,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "установк трубок водоотводн",
             "устройств водосточн труб",
             "устройств дренажн лотк",
+            "устройств дренажн коллектор",
             "устройств лотк прикромочн",
             "устройств водосбросн сооруж",
             "организац поверхностн сток дождев тал вод",
@@ -287,6 +288,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "закручиван винтов свай",
             "выкручиван винтов свай",
             "заполнен свай бетон",
+            "буронабивн свай",
         ),
     ),
     (
@@ -608,6 +610,31 @@ _CONSTRUCTION_OPERATION_MARKERS = (
     "восстановлен",
 )
 
+# Prefer the construction operation over a material word when one description
+# contains both.  For example, dismantling a reinforced-concrete collector is
+# demolition, and constructing a bored reinforced-concrete pile is pile work.
+# The order is reusable construction meaning, not a project-specific routing
+# table; unmatched families retain their catalog order below these priorities.
+_WORK_FAMILY_OPERATION_PRECEDENCE = {
+    "demolition": 0,
+    "sheet_piling": 1,
+    "waling_beam": 2,
+    "bracing": 3,
+    "dewatering": 4,
+    "backfill": 5,
+    "compaction": 6,
+    "excavation": 7,
+    "pile_foundation": 8,
+    "chambers_wells": 9,
+    "drainage": 10,
+    "pipeline": 11,
+    "reinforcement": 12,
+    "formwork": 13,
+    "waterproofing": 14,
+    "pit_preparation": 15,
+    "reinforced_concrete": 16,
+}
+
 _PROFESSIONAL_DEFECT_KINDS = frozenset(
     {
         "project_work_missing_in_estimate",
@@ -909,10 +936,21 @@ def mentioned_established_facilities(
 
 def classify_work_family(value: object) -> tuple[str, str] | None:
     normalized = _normalized(value)
-    for key, title, terms in _WORK_FAMILIES:
-        if any(_ordered_stem_phrase(normalized, term) for term in terms):
-            return key, title
-    return None
+    matches = [
+        (key, title, catalog_order)
+        for catalog_order, (key, title, terms) in enumerate(_WORK_FAMILIES)
+        if any(_ordered_stem_phrase(normalized, term) for term in terms)
+    ]
+    if not matches:
+        return None
+    key, title, _catalog_order = min(
+        matches,
+        key=lambda item: (
+            _WORK_FAMILY_OPERATION_PRECEDENCE.get(item[0], 100 + item[2]),
+            item[2],
+        ),
+    )
+    return key, title
 
 
 def work_family_catalog() -> dict[str, str]:
@@ -962,6 +1000,7 @@ def non_work_reason(value: object) -> str | None:
             "трубы стальные",
             "задвижки чугунные",
             "плиты перекрытия",
+            "кольца для колодцев",
             "кольцо стеновое",
             "битумы нефтяные",
             "мастика битумная",

@@ -1700,6 +1700,7 @@ def test_project_titles_section_headings_and_material_rows_are_not_work_scopes()
         ): "Заголовок раздела",
         "Трубы стальные бесшовные горячедеформированные диаметром 325 мм": "материала или изделия",
         "Плиты перекрытия 2ПП15-1": "материала или изделия",
+        "Кольца для колодцев сборные железобетонные": "материала или изделия",
         "Мастика битумная": "материала или изделия",
     }
 
@@ -1707,6 +1708,23 @@ def test_project_titles_section_headings_and_material_rows_are_not_work_scopes()
         reason = non_work_reason(wording)
         assert reason is not None
         assert reason_fragment.casefold() in reason.casefold()
+
+
+def test_specific_operation_wins_over_broad_material_family() -> None:
+    expected = {
+        "Разборка железобетонных конструкций объемом более 1 м³": "demolition",
+        (
+            "Устройство железобетонных буронабивных свай с бурением скважин "
+            "вращательным способом"
+        ): "pile_foundation",
+        "Устройство круглых колодцев из сборного железобетона": "chambers_wells",
+        "Устройство дренажного коллектора за стеной": "drainage",
+    }
+
+    for wording, family_key in expected.items():
+        result = classify_work_family(wording)
+        assert result is not None
+        assert result[0] == family_key
 
 
 def test_estimate_resource_code_does_not_become_a_construction_work_scope() -> None:
