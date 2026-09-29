@@ -2282,7 +2282,10 @@ def _assistant_engineering_for_query(
     )
     asks_missing_commercial_work = (
         "работ" in normalized_query
-        and any(marker in normalized_query for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(
+            marker in normalized_query
+            for marker in ("отсутств", "не найден", "не учт", "неучт", "пропущ")
+        )
         and any(marker in normalized_query for marker in ("вор", "смет", "коммерч"))
     )
     asks_facility_quantities = bool(facility_markers) and any(

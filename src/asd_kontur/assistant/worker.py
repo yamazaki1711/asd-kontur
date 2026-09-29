@@ -99,7 +99,10 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
     )
     asks_for_missing_commercial_work = (
         "работ" in normalized
-        and any(marker in normalized for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(
+            marker in normalized
+            for marker in ("отсутств", "не найден", "не учт", "неучт", "пропущ")
+        )
         and any(marker in normalized for marker in ("вор", "смет", "коммерч"))
     )
     asks_for_material_discrepancies = "материал" in normalized and any(
@@ -1193,7 +1196,8 @@ def _with_structured_project_fact_checks(
     asks_for_missing_commercial_work = (
         "работ" in normalized_question
         and any(
-            marker in normalized_question for marker in ("отсутств", "не учт", "неучт", "пропущ")
+            marker in normalized_question
+            for marker in ("отсутств", "не найден", "не учт", "неучт", "пропущ")
         )
         and any(marker in normalized_question for marker in ("вор", "смет", "коммерч"))
     )
@@ -1523,7 +1527,10 @@ def _append_prepared_project_result(
     )
     asks_for_missing_commercial_work = (
         "работ" in normalized
-        and any(marker in normalized for marker in ("отсутств", "не учт", "неучт", "пропущ"))
+        and any(
+            marker in normalized
+            for marker in ("отсутств", "не найден", "не учт", "неучт", "пропущ")
+        )
         and any(marker in normalized for marker in ("вор", "смет", "коммерч"))
     )
     asks_for_unresolved_information = any(

@@ -691,7 +691,7 @@ def test_missing_commercial_work_query_returns_established_omission_not_arbitrar
                 },
             ],
         },
-        query="Какие работы есть в проекте, но отсутствуют в ВОР или смете?",
+        query="Какие работы установлены в проекте, но не найдены в ВОР или смете?",
         limit=20,
     )
 
