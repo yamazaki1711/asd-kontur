@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v52"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v53"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -4173,7 +4173,15 @@ def _document_composition(
     }
     if embedded_vor_documents:
         role_counts["ВОР"] = len(embedded_vor_documents)
-    expected_roles = ("ПД", "РД", "Спецификация", "ВОР", "Смета", "Договор")
+    expected_roles = (
+        "ПД",
+        "РД",
+        "Спецификация",
+        "ВОР",
+        "Смета",
+        "Договор",
+        "Требования Заказчика",
+    )
     available_roles = [role for role in expected_roles if role_counts.get(role)]
     missing_roles = [role for role in expected_roles if not role_counts.get(role)]
     present = "; ".join(f"{role} — {role_counts[role]}" for role in available_roles)

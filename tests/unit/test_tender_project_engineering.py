@@ -1150,7 +1150,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v52"
+    assert model["model_version"] == "project-engineering-model-v53"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2303,6 +2303,7 @@ def test_document_composition_exposes_contract_and_customer_requirements() -> No
     assert model["document_composition"]["role_counts"]["Договор"] == 1
     assert model["document_composition"]["role_counts"]["Требования Заказчика"] == 1
     assert "Договор" in model["document_composition"]["available_roles"]
+    assert "Требования Заказчика" in model["document_composition"]["available_roles"]
 
 
 def test_established_facilities_exclude_equipment_model_designations() -> None:
