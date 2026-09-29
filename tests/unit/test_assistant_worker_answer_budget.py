@@ -57,6 +57,62 @@ def test_customer_questions_and_contractor_risks_use_prepared_project_result() -
     assert questions.steps[-1].arguments["query"] != risks.steps[-1].arguments["query"]
 
 
+def test_missing_commercial_work_question_keeps_work_and_customer_action() -> None:
+    source_id = "55555555-5555-4555-8555-555555555555"
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Проектный и коммерческий состав сопоставлены.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Проверка коммерческого состава.",
+            (),
+        ),
+        [
+            {
+                "tool": "consultant.get_discrepancies",
+                "response": {
+                    "value": {
+                        "project_engineering": {
+                            "customer_questions": [
+                                {
+                                    "question": (
+                                        "Просим подтвердить включение шпунтового ограждения "
+                                        "ЛОС 8.1 в ВОР/смету."
+                                    )
+                                }
+                            ],
+                            "scope_comparisons": [
+                                {
+                                    "classification": "WORK_MISSING_IN_COMMERCIAL",
+                                    "facility": "ЛОС 8.1",
+                                    "work": "Устройство шпунтового ограждения",
+                                    "conclusion": (
+                                        "Работа установлена в проекте, но коммерческая позиция "
+                                        "не найдена."
+                                    ),
+                                    "source_locator_ids": [source_id],
+                                }
+                            ],
+                        }
+                    },
+                    "sources": [{"source_id": source_id, "title": "Controlled source"}],
+                },
+            }
+        ],
+        (
+            "Какие работы есть в проекте, но отсутствуют в ВОР или смете, "
+            "и какой вопрос направить Заказчику?"
+        ),
+    )
+
+    assert "Работы, не найденные в ВОР/смете:" in completed.answer
+    assert "ЛОС 8.1 — Устройство шпунтового ограждения" in completed.answer
+    assert "Полный перечень вопросов Заказчику:" in completed.answer
+    assert "подтвердить включение шпунтового ограждения" in completed.answer
+    assert completed.used_source_ids == (source_id,)
+
+
 def test_sheet_pile_schedule_uses_direct_prepared_project_result() -> None:
     plan = _direct_project_result_plan(
         "Покажи все шпунтовые работы по сооружениям, включая пояса и профили."

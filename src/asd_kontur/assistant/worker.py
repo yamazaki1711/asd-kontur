@@ -2028,6 +2028,14 @@ def _append_prepared_project_result(
         engineering = value.get("project_engineering") if isinstance(value, dict) else None
         if not isinstance(engineering, dict):
             continue
+        for source in response.get("sources") or ():
+            if not isinstance(source, dict) or not source.get("source_id"):
+                continue
+            source_id = str(source["source_id"])
+            if source_id in available_source_ids and source_id not in selected_source_ids:
+                selected_source_ids.append(source_id)
+            if len(selected_source_ids) >= 8:
+                break
         if asks_for_customer_questions:
             rows = [
                 str(item.get("question") or "").strip()
@@ -2035,14 +2043,14 @@ def _append_prepared_project_result(
                 if isinstance(item, dict) and str(item.get("question") or "").strip()
             ]
             headings_and_rows.append(("Полный перечень вопросов Заказчику:", rows))
-        elif asks_for_contractor_risks:
+        if asks_for_contractor_risks:
             rows = [
                 f"{item.get('location')}: {item.get('risk')}"
                 for item in engineering.get("risks") or ()
                 if isinstance(item, dict) and str(item.get("risk") or "").strip()
             ]
             headings_and_rows.append(("Полный перечень установленных рисков:", rows))
-        else:
+        if not asks_for_customer_questions and not asks_for_contractor_risks:
             rows = []
             for item in engineering.get("issues") or ():
                 if not isinstance(item, dict):
@@ -2086,31 +2094,26 @@ def _append_prepared_project_result(
                         selected_source_ids.append(source_id)
                         break
             headings_and_rows.append(("Числовые сопоставления:", comparison_rows))
-            if asks_for_missing_commercial_work:
-                missing_rows = []
-                for item in engineering.get("scope_comparisons") or ():
-                    if (
-                        not isinstance(item, dict)
-                        or item.get("classification") != "WORK_MISSING_IN_COMMERCIAL"
-                    ):
-                        continue
-                    facility = str(item.get("facility") or "Место требует уточнения").strip()
-                    work = str(item.get("work") or "Работа требует уточнения").strip()
-                    conclusion = str(item.get("conclusion") or "").strip()
-                    missing_rows.append(
-                        f"{facility} — {work}: {conclusion}"
-                        if conclusion
-                        else f"{facility} — {work}."
-                    )
-                    for source_id in item.get("source_locator_ids") or ():
-                        source_id = str(source_id)
-                        if (
-                            source_id in available_source_ids
-                            and source_id not in selected_source_ids
-                        ):
-                            selected_source_ids.append(source_id)
-                            break
-                headings_and_rows.append(("Работы, не найденные в ВОР/смете:", missing_rows))
+        if asks_for_missing_commercial_work:
+            missing_rows = []
+            for item in engineering.get("scope_comparisons") or ():
+                if (
+                    not isinstance(item, dict)
+                    or item.get("classification") != "WORK_MISSING_IN_COMMERCIAL"
+                ):
+                    continue
+                facility = str(item.get("facility") or "Место требует уточнения").strip()
+                work = str(item.get("work") or "Работа требует уточнения").strip()
+                conclusion = str(item.get("conclusion") or "").strip()
+                missing_rows.append(
+                    f"{facility} — {work}: {conclusion}" if conclusion else f"{facility} — {work}."
+                )
+                for source_id in item.get("source_locator_ids") or ():
+                    source_id = str(source_id)
+                    if source_id in available_source_ids and source_id not in selected_source_ids:
+                        selected_source_ids.append(source_id)
+                        break
+            headings_and_rows.append(("Работы, не найденные в ВОР/смете:", missing_rows))
         break
     sections = [
         heading + "\n" + "\n".join(f"— {row}" for row in rows)
