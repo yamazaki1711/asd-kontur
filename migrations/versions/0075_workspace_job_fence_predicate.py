@@ -39,7 +39,7 @@ def upgrade() -> None:
         $$;
         REVOKE ALL ON FUNCTION workspace.workspace_accepts_durable_jobs(uuid,uuid) FROM PUBLIC;
         GRANT EXECUTE ON FUNCTION workspace.workspace_accepts_durable_jobs(uuid,uuid)
-          TO asd_product_app, asd_document_worker;
+          TO asd_app, asd_document_worker;
         """
     )
 
