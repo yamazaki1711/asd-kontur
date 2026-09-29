@@ -1114,6 +1114,15 @@ def document_comparison_side(source_role: object, display_name: object) -> str |
     return None
 
 
+def _source_is_bill_of_quantities(context: Mapping[str, Any]) -> bool:
+    """Recognize every page in a bounded VOR section, not only its heading page."""
+
+    if context.get("page_is_bill_of_quantities") is True:
+        return True
+    scope_header = _normalized(context.get("page_commercial_scope_header"))
+    return bool(scope_header and "ведомост" in scope_header and "объем" in scope_header)
+
+
 def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
     """Match a short engineering phrase by ordered Russian word stems.
 
@@ -2324,7 +2333,7 @@ def _work_schedule(
             )
         role = (
             "ВОР"
-            if context.get("page_is_bill_of_quantities") is True
+            if _source_is_bill_of_quantities(context)
             else _professional_document_role(
                 row.get("source_role"), context.get("safe_display_name")
             )
@@ -4522,7 +4531,7 @@ def _document_composition(
     embedded_vor_documents = {
         str(value.get("source_version_id") or "")
         for value in (source_context or {}).values()
-        if value.get("page_is_bill_of_quantities") is True
+        if _source_is_bill_of_quantities(value)
     }
     if embedded_vor_documents:
         role_counts["ВОР"] = len(embedded_vor_documents)

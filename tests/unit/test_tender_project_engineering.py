@@ -358,6 +358,75 @@ def test_document_composition_recognizes_vor_embedded_in_estimate_pdf() -> None:
     assert "ВОР в составе сметных файлов — 1" in composition["professional_summary"]
 
 
+def test_vor_role_continues_after_heading_within_same_commercial_scope() -> None:
+    source_context = dict([_source("vor-row", "Смешанный том.pdf", 3)])
+    source_context["vor-row"].update(
+        page_is_bill_of_quantities=False,
+        page_commercial_scope_code="02-01-01",
+        page_commercial_scope_header="ведомость объемов работ вор 02-01-01 подпорная стена",
+    )
+    model = build_project_engineering_model(
+        workspace_id="workspace-commercial-role",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "wall",
+                    "version": 1,
+                    "value": "Устройство подпорной стены из бетона",
+                    "source_version_id": "source-vor",
+                    "source_locator_id": "vor-row",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "wall-quantity",
+                    "work_candidate_id": "wall",
+                    "value": "211.3",
+                    "unit": "м3",
+                    "source_locator_id": "vor-row",
+                    "review_status": "ACCEPTED",
+                }
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=source_context,
+        work_resolutions={
+            "wall": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "reinforced_concrete",
+                "operation": "Устройство подпорной стены",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "wall-quantity", "status": "WORK_QUANTITY"}
+                ],
+            }
+        },
+    )
+
+    assert model["works"][0]["quantities_by_document"] == {
+        "ВОР": [
+            {
+                "value": "211.3",
+                "unit": "м3",
+                "raw_value": "211.3",
+                "raw_unit": "м3",
+                "source_locator_id": "vor-row",
+            }
+        ]
+    }
+    assert model["document_composition"]["available_roles"] == ["ВОР"]
+
+
 def test_document_register_uses_complete_inventory_before_candidates_exist() -> None:
     documents = _documents(
         {
