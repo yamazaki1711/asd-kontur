@@ -2508,9 +2508,7 @@ def test_generic_project_location_is_available_to_bounded_work_resolution() -> N
     )
 
     assert model["works"][0]["facility"] == "Берегоукрепительное сооружение"
-    assert model["works"][0]["status"].startswith(
-        "Сооружение установлено локальной моделью"
-    )
+    assert model["works"][0]["status"].startswith("Сооружение установлено локальной моделью")
 
 
 def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None:
