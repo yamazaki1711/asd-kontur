@@ -108,6 +108,11 @@ _SEMANTIC_PRIORITY_BY_ROLE = {
     "consolidated_estimate": 150,
 }
 _SEMANTIC_DEFAULT_PRIORITY = 130
+# Bounded reconciliation turns extracted values into the first usable
+# engineering schedule.  Let one four-batch slice run ahead of the next source
+# extraction at a safe job boundary; the refill gate prevents it from starving
+# the remaining corpus.
+_PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 
 
 def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
@@ -4766,6 +4771,34 @@ class SpinePostgresRepository:
                     {"o": organization_id, "w": workspace_id, "key": idempotency_key},
                 ).one_or_none()
                 if existing_job_row is not None:
+                    if (
+                        str(existing_job_row.state) == "queued"
+                        and int(existing_job_row.priority) != _PROJECT_WORK_RECONCILIATION_PRIORITY
+                    ):
+                        session.execute(
+                            sa.text(
+                                "UPDATE workspace.durable_jobs SET priority=:priority WHERE "
+                                "organization_id=:o AND workspace_id=:w AND job_id=:job AND "
+                                "state='queued'"
+                            ),
+                            {
+                                "o": organization_id,
+                                "w": workspace_id,
+                                "job": existing_job_row.job_id,
+                                "priority": _PROJECT_WORK_RECONCILIATION_PRIORITY,
+                            },
+                        )
+                        existing_job_row = session.execute(
+                            sa.text(
+                                "SELECT * FROM workspace.durable_jobs WHERE organization_id=:o "
+                                "AND workspace_id=:w AND job_id=:job"
+                            ),
+                            {
+                                "o": organization_id,
+                                "w": workspace_id,
+                                "job": existing_job_row.job_id,
+                            },
+                        ).one()
                     scheduled.append(_job_summary(existing_job_row))
                     continue
                 job_id = uuid7()
@@ -4776,7 +4809,7 @@ class SpinePostgresRepository:
                         "input_manifest,input_digest,idempotency_key,state,priority,max_attempts,"
                         "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
                         "(:o,:w,:job,:document,'PROJECT_WORK_RECONCILIATION',CAST(:manifest AS jsonb),"
-                        ":digest,:key,'queued',168,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),"
+                        ":digest,:key,'queued',:priority,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),"
                         ":correlation,:owner)"
                     ),
                     {
@@ -4787,6 +4820,7 @@ class SpinePostgresRepository:
                         "manifest": _json(manifest),
                         "digest": digest,
                         "key": idempotency_key,
+                        "priority": _PROJECT_WORK_RECONCILIATION_PRIORITY,
                         "provenance": _json(
                             {
                                 "contract": "project-work-reconciliation.command@1.0.0",
