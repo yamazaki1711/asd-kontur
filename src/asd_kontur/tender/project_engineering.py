@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v49"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v50"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -1272,12 +1272,20 @@ def _facilities(
     del structure_nodes
     groups: dict[str, dict[str, Any]] = {}
     node_to_facility: dict[str, str] = {}
-    for raw in identity_components:
-        component = dict(raw)
+    components = [dict(raw) for raw in identity_components]
+    has_project_container = any(
+        str(component.get("identity_kind") or "") in {"facility", "local_area", "zone"}
+        and len({str(value) for value in component.get("source_locator_ids") or ()}) >= 2
+        and len({str(value) for value in component.get("member_structure_node_ids") or ()}) >= 2
+        for component in components
+    )
+    for component in components:
         kind = str(component.get("identity_kind") or "")
         if kind not in {"facility", "local_area", "zone", "structure"}:
             continue
         label = str(component.get("canonical_label") or "").strip()
+        if not label:
+            continue
         designation = facility_designation(label)
         candidate_labels = [
             str(value).strip()
@@ -1294,14 +1302,43 @@ def _facilities(
             status = "Установлено по обозначению в документах"
             is_alias_group = False
         else:
-            continue
+            member_node_ids = {
+                str(value) for value in component.get("member_structure_node_ids") or ()
+            }
+            # A facility-shaped token rejected by the strict designation parser is
+            # commonly an equipment model (for example a pump-station model mark).
+            # It must not re-enter the project hierarchy through the generic path.
+            if designation or facility_designations(label):
+                continue
+            if len(source_locator_ids) < 2 or len(member_node_ids) < 2:
+                continue
+            # Reconciled structures are useful as the project-level navigation root
+            # when the package describes one or more structures but has no separate
+            # facility/area container.  In a multi-level project they stay below the
+            # established facility cards and are exposed through relationships.
+            if kind == "structure" and has_project_container:
+                continue
+            component_identity = str(component.get("identity_candidate_id") or "").strip()
+            key_payload = {
+                "kind": kind,
+                "identity_candidate_id": component_identity or None,
+                "member_structure_node_ids": sorted(member_node_ids),
+            }
+            key = f"component:{semantic_digest(key_payload)}"
+            status = "Установлено сопоставлением в нескольких документах"
+            is_alias_group = len(candidate_labels) > 1
         current = groups.setdefault(
             key,
             {
                 "facility_id": semantic_digest({"workspace_id": workspace_id, "facility_key": key}),
                 "designation": designation,
                 "name": designation or label,
-                "kind": "Сооружение" if kind == "facility" else "Участок",
+                "kind": {
+                    "facility": "Сооружение",
+                    "local_area": "Участок",
+                    "zone": "Зона",
+                    "structure": "Конструкция",
+                }[kind],
                 "aliases": set(),
                 "member_structure_node_ids": set(),
                 "source_locator_ids": set(),

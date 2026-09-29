@@ -1149,7 +1149,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v49"
+    assert model["model_version"] == "project-engineering-model-v50"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2291,6 +2291,96 @@ def test_established_facilities_exclude_equipment_model_designations() -> None:
             },
         ]
     ) == ("КНС 4",)
+
+
+def test_generic_project_structures_are_navigation_roots_without_facility_container() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-retaining-structure",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_candidate_id": "structure-north",
+                "identity_kind": "structure",
+                "canonical_label": "Подпорная конструкция Северная",
+                "candidate_labels": [
+                    "Подпорная конструкция Северная",
+                    "Северная подпорная конструкция",
+                ],
+                "member_structure_node_ids": ["north-rd", "north-pz"],
+                "source_locator_ids": ["north-rd-locator", "north-pz-locator"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert [(row["name"], row["kind"]) for row in model["facilities"]] == [
+        ("Подпорная конструкция Северная", "Конструкция")
+    ]
+    assert model["facilities"][0]["status"] == (
+        "Установлено сопоставлением в нескольких документах"
+    )
+
+
+def test_generic_identity_components_preserve_distinct_same_named_facilities() -> None:
+    components = [
+        {
+            "identity_candidate_id": suffix,
+            "identity_kind": "facility",
+            "canonical_label": "Технологическая площадка",
+            "candidate_labels": ["Технологическая площадка"],
+            "member_structure_node_ids": [f"{suffix}-rd", f"{suffix}-pz"],
+            "source_locator_ids": [f"{suffix}-rd-locator", f"{suffix}-pz-locator"],
+        }
+        for suffix in ("east", "west")
+    ]
+    model = build_project_engineering_model(
+        workspace_id="workspace-same-names",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=[],
+        identity_components=components,
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert len(model["facilities"]) == 2
+    assert {row["name"] for row in model["facilities"]} == {"Технологическая площадка"}
+    assert len({row["facility_id"] for row in model["facilities"]}) == 2
+
+
+def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-equipment-model",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_candidate_id": "equipment",
+                "identity_kind": "facility",
+                "canonical_label": "КНС-270/12С/3,0-9,1/4,82",
+                "candidate_labels": ["КНС-270/12С/3,0-9,1/4,82"],
+                "member_structure_node_ids": ["equipment-rd", "equipment-spec"],
+                "source_locator_ids": ["equipment-rd-locator", "equipment-spec-locator"],
+            }
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert model["facilities"] == []
 
 
 def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None:
