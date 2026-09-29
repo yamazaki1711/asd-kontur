@@ -1313,6 +1313,26 @@ def _facilities(
     groups: dict[str, dict[str, Any]] = {}
     node_to_facility: dict[str, str] = {}
     components = [dict(raw) for raw in identity_components]
+    nodes = [dict(raw) for raw in structure_nodes]
+
+    location_sources: dict[str, set[str]] = defaultdict(set)
+    location_labels: dict[str, set[str]] = defaultdict(set)
+    for node in nodes:
+        node_label = str(node.get("raw_name") or node.get("normalized_name") or "").strip()
+        location_key = _specific_structure_key(node_label)
+        source_version_id = str(node.get("source_version_id") or "")
+        if location_key is not None and source_version_id:
+            location_sources[location_key].add(source_version_id)
+            location_labels[location_key].add(node_label)
+    corroborated_locations = {
+        key for key, source_ids in location_sources.items() if len(source_ids) >= 2
+    }
+    for component in components:
+        component_label = str(component.get("canonical_label") or "").strip()
+        location_key = _specific_structure_key(component_label)
+        if location_key is not None and len(component.get("source_locator_ids") or ()) >= 2:
+            corroborated_locations.add(location_key)
+            location_labels[location_key].add(component_label)
 
     def establishes_project_container(component: Mapping[str, Any]) -> bool:
         if str(component.get("identity_kind") or "") not in {"facility", "local_area", "zone"}:
@@ -1341,6 +1361,15 @@ def _facilities(
         label = str(component.get("canonical_label") or "").strip()
         if not label:
             continue
+        if len(corroborated_locations) >= 2 and _location_project_container_label(
+            label,
+            [
+                candidate
+                for location in corroborated_locations
+                for candidate in location_labels.get(location, ())
+            ],
+        ):
+            continue
         designation = facility_designation(label)
         candidate_labels = [
             str(value).strip()
@@ -1367,21 +1396,35 @@ def _facilities(
                 continue
             if len(source_locator_ids) < 2 or len(member_node_ids) < 2:
                 continue
-            # Reconciled structures are useful as the project-level navigation root
-            # when the package describes one or more structures but has no separate
-            # facility/area container.  In a multi-level project they stay below the
-            # established facility cards and are exposed through relationships.
-            if kind == "structure" and has_project_container:
+            location_key = _specific_structure_key(label)
+            if location_key is not None:
+                key = f"source-corroborated-location:{location_key}"
+                status = "Установлено по одинаковому адресу в нескольких документах"
+                is_alias_group = False
+            elif kind == "structure" and corroborated_locations:
+                # When the package establishes separate address-specific
+                # structures, a generic plural label or one title listing
+                # several addresses is the project/container wording rather
+                # than another facility.  Keep its nodes available to the
+                # relationship model, but do not duplicate the professional
+                # facility inventory.
                 continue
-            component_identity = str(component.get("identity_candidate_id") or "").strip()
-            key_payload = {
-                "kind": kind,
-                "identity_candidate_id": component_identity or None,
-                "member_structure_node_ids": sorted(member_node_ids),
-            }
-            key = f"component:{semantic_digest(key_payload)}"
-            status = "Установлено сопоставлением в нескольких документах"
-            is_alias_group = len(candidate_labels) > 1
+            else:
+                # Reconciled structures are useful as the project-level navigation root
+                # when the package describes one or more structures but has no separate
+                # facility/area container.  In a multi-level project they stay below the
+                # established facility cards and are exposed through relationships.
+                if kind == "structure" and has_project_container:
+                    continue
+                component_identity = str(component.get("identity_candidate_id") or "").strip()
+                key_payload = {
+                    "kind": kind,
+                    "identity_candidate_id": component_identity or None,
+                    "member_structure_node_ids": sorted(member_node_ids),
+                }
+                key = f"component:{semantic_digest(key_payload)}"
+                status = "Установлено сопоставлением в нескольких документах"
+                is_alias_group = len(candidate_labels) > 1
         current = groups.setdefault(
             key,
             {
@@ -1419,8 +1462,7 @@ def _facilities(
         if _specific_structure_key(label) is not None
     }
     provisional: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for raw in structure_nodes:
-        node = dict(raw)
+    for node in nodes:
         if str(node.get("node_kind") or "") not in {
             "facility",
             "local_area",
@@ -1464,6 +1506,8 @@ def _facilities(
     facilities: list[dict[str, Any]] = []
     for value in groups.values():
         value["aliases"] = sorted(value["aliases"])
+        if str(value.get("status")) == "Установлено по одинаковому адресу в нескольких документах":
+            value["name"] = max(value["aliases"], key=lambda label: (len(label), label))
         value["member_structure_node_ids"] = sorted(value["member_structure_node_ids"])
         value["source_locator_ids"] = sorted(value["source_locator_ids"])
         facilities.append(value)
@@ -1474,12 +1518,37 @@ def _facilities(
 
 
 def _specific_structure_key(value: object) -> str | None:
-    normalized = _normalized(value).replace(",", " ")
-    normalized = " ".join(normalized.split())
-    addresses = re.findall(r"\b(?:ул\.?|улица)\s+[0-9a-zа-я. -]+?\s+\d+(?:/\d+)?\b", normalized)
+    addresses = _street_addresses(value)
     if len(addresses) != 1:
         return None
-    return normalized
+    return " ".join(addresses[0].replace(",", " ").split())
+
+
+def _street_addresses(value: object) -> list[str]:
+    normalized = _normalized(value).replace(",", " ")
+    normalized = " ".join(normalized.split())
+    return re.findall(r"\b(?:ул\.?|улица)\s+[0-9a-zа-я. -]+?\s+\d+(?:/\d+)?\b", normalized)
+
+
+def _location_project_container_label(value: object, specific_labels: Iterable[str]) -> bool:
+    """Identify a title that collectively names established location cards."""
+
+    if len(_street_addresses(value)) >= 2:
+        return True
+    if _street_addresses(value):
+        return False
+
+    def stems(label: object) -> set[str]:
+        return {
+            token[:4]
+            for token in re.findall(r"[0-9a-zа-я]+", _normalized(label))
+            if len(token) >= 4 and not token.isdigit()
+        }
+
+    generic = stems(value)
+    if not generic or len(generic) > 4:
+        return False
+    return any(generic <= stems(label) for label in specific_labels)
 
 
 def _pits(

@@ -2614,6 +2614,81 @@ def test_repeated_addressed_structures_form_distinct_incremental_project_cards()
     )
 
 
+def test_address_alias_components_do_not_duplicate_project_facilities() -> None:
+    nodes = [
+        {
+            "structure_node_id": f"wall-{address}-{source}",
+            "node_kind": "structure",
+            "raw_name": f"Подпорная стена по ул. Северная, {address}",
+            "source_version_id": source,
+            "source_locator_id": f"locator-{address}-{source}",
+        }
+        for address in ("10/1", "12/1")
+        for source in ("pz", "kr")
+    ]
+    components = [
+        {
+            "identity_candidate_id": f"full-{address}",
+            "identity_kind": "structure",
+            "canonical_label": f"Подпорная стена по ул. Северная, {address}",
+            "candidate_labels": [f"Подпорная стена по ул. Северная, {address}"],
+            "member_structure_node_ids": [f"full-{address}-pz", f"full-{address}-kr"],
+            "source_locator_ids": [f"full-{address}-pz-loc", f"full-{address}-kr-loc"],
+        }
+        for address in ("10/1", "12/1")
+    ]
+    components.extend(
+        {
+            "identity_candidate_id": f"address-{address}",
+            "identity_kind": "structure",
+            "canonical_label": f"ул. Северная, {address}",
+            "candidate_labels": [f"ул. Северная, {address}"],
+            "member_structure_node_ids": [f"address-{address}-pz", f"address-{address}-kr"],
+            "source_locator_ids": [f"address-{address}-pz-loc", f"address-{address}-kr-loc"],
+        }
+        for address in ("10/1", "12/1")
+    )
+    components.extend(
+        [
+            {
+                "identity_candidate_id": "generic",
+                "identity_kind": "facility",
+                "canonical_label": "Подпорные стены",
+                "candidate_labels": ["Подпорные стены"],
+                "member_structure_node_ids": ["generic-pz", "generic-kr"],
+                "source_locator_ids": ["generic-pz-loc", "generic-kr-loc"],
+            },
+            {
+                "identity_candidate_id": "combined",
+                "identity_kind": "facility",
+                "canonical_label": ("Подпорные стены по ул. Северная, 10/1 и ул. Северная, 12/1"),
+                "candidate_labels": ["Подпорные стены по ул. Северная, 10/1 и ул. Северная, 12/1"],
+                "member_structure_node_ids": ["combined-pz", "combined-kr"],
+                "source_locator_ids": ["combined-pz-loc", "combined-kr-loc"],
+            },
+        ]
+    )
+
+    model = build_project_engineering_model(
+        workspace_id="workspace-address-aliases",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=nodes,
+        identity_components=components,
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert {row["name"] for row in model["facilities"]} == {
+        "Подпорная стена по ул. Северная, 10/1",
+        "Подпорная стена по ул. Северная, 12/1",
+    }
+    assert len(model["facilities"]) == 2
+
+
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:
     model = build_project_engineering_model(
         workspace_id="workspace-equipment-model",
