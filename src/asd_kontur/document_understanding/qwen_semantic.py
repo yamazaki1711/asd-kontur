@@ -495,6 +495,7 @@ class QwenDocumentSemanticAdapter:
         work_by_fragment_identity: dict[tuple[str, str], WorkTypeCandidate] = {}
         works_by_name: dict[tuple[UUID, str], list[WorkTypeCandidate]] = defaultdict(list)
         works_by_fragment: dict[str, WorkTypeCandidate] = {}
+        unresolved_work_observations: dict[tuple[UUID, str], WorkTypeCandidate] = {}
         for allowed, parsed in extracted:
             for name, locator_id in parsed["works"]:
                 locator = allowed[locator_id].locator
@@ -653,7 +654,16 @@ class QwenDocumentSemanticAdapter:
             if work is None:
                 if defect is not None:
                     defects.append(defect)
-                continue
+                work = _unresolved_observation_work(
+                    work_name,
+                    locator,
+                    defect,
+                    unresolved_work_observations,
+                )
+                if work is None:
+                    continue
+                if work not in works:
+                    works.append(work)
             try:
                 parsed_value = Decimal(raw.replace(",", "."))
             except InvalidOperation:
@@ -691,7 +701,16 @@ class QwenDocumentSemanticAdapter:
             if work is None:
                 if defect is not None:
                     defects.append(defect)
-                continue
+                work = _unresolved_observation_work(
+                    work_name,
+                    locator,
+                    defect,
+                    unresolved_work_observations,
+                )
+                if work is None:
+                    continue
+                if work not in works:
+                    works.append(work)
             try:
                 parsed_value = Decimal(raw.replace(",", "."))
             except InvalidOperation:
@@ -1156,6 +1175,47 @@ def _resolve_work_reference(
         extraction_profile_version,
     )
     return None, defect
+
+
+def _unresolved_observation_work(
+    work_name: str,
+    locator: ExactLocator,
+    defect: ReconciliationDefect | None,
+    observations: dict[tuple[UUID, str], WorkTypeCandidate],
+) -> WorkTypeCandidate | None:
+    """Keep a quantity/material when its parent work was not emitted.
+
+    A missing parent is different from an ambiguous parent.  For zero candidate
+    works, create one locator-scoped unresolved observation so the numeric or
+    material fact reaches the project schedule and can be reconciled later.  If
+    several candidate works exist, preserve the ambiguity defect and attach to
+    none of them; choosing one would be a silent engineering misassignment.
+    """
+
+    normalized = " ".join(work_name.casefold().split())
+    parameters = defect.parameters if defect is not None else {}
+    candidate_ids = parameters.get("candidate_work_ids")
+    if not normalized or not isinstance(candidate_ids, list) or candidate_ids:
+        return None
+    key = (locator.source_locator_id, normalized)
+    existing = observations.get(key)
+    if existing is not None:
+        return existing
+    value = WorkTypeCandidate(
+        deterministic_uuid(
+            f"qwen-unresolved-work-observation:{QWEN_ENGINEERING_EXTRACTION_PROFILE}:"
+            f"{locator.source_version_id}:{locator.source_locator_id}:{normalized}"
+        ),
+        work_name,
+        normalized,
+        f"page:{locator.page_number}",
+        locator,
+        DocumentRole.PROJECT_DOCUMENTATION,
+        MappingStatus.UNRESOLVED,
+        extraction_profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    )
+    observations[key] = value
+    return value
 
 
 def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:

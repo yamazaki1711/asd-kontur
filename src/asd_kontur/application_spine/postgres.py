@@ -77,7 +77,11 @@ from .object_store import StagedObject, WorkspaceObjectStore
 
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
-ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = ENGINEERING_SEMANTIC_PROFILE_VERSION
+# Model output remains v15-compatible; this version records how accepted
+# manifests are assembled into durable candidates.  It is intentionally
+# independent so relationship-loss repairs can reuse accepted Qwen output
+# without relabelling it or repeating inference.
+ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = "engineering-candidate-persistence-v2"
 DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT = "document-classification-recovery-v1"
 TERMINAL_STATES = frozenset(
     {

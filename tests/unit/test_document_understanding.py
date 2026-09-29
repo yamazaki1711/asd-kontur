@@ -2410,7 +2410,15 @@ def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optio
                         "unit": "",
                         "fragment_id": fragments[2].fragment_id,
                         "work_fragment_id": fragments[0].fragment_id,
-                    }
+                    },
+                    {
+                        "work_name": "Неустановленная работа",
+                        "name": "Геотекстиль",
+                        "quantity": "12",
+                        "unit": "м2",
+                        "fragment_id": fragments[2].fragment_id,
+                        "work_fragment_id": "",
+                    },
                 ],
             },
             ensure_ascii=False,
@@ -2418,12 +2426,22 @@ def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optio
     ):
         result = adapter.extract_engineering(document.pages[0].elements)
 
-    assert not result.quantities
-    assert len(result.defects) == 1
-    assert result.defects[0].parameters["code"] == "unresolved_work_reference"
-    assert len(result.materials) == 1
-    assert result.materials[0].raw_quantity is None
-    assert result.materials[0].raw_unit is None
+    assert len(result.quantities) == 1
+    unresolved_work = next(
+        item for item in result.works if item.candidate_id == result.quantities[0].work_candidate_id
+    )
+    assert unresolved_work.raw_name == "Неустановленная работа"
+    assert (
+        unresolved_work.locator.source_locator_id == result.quantities[0].locator.source_locator_id
+    )
+    assert len(result.defects) == 2
+    assert {item.parameters["code"] for item in result.defects} == {"unresolved_work_reference"}
+    assert len(result.materials) == 2
+    optional_material = next(item for item in result.materials if item.raw_name == "Сталь")
+    assert optional_material.raw_quantity is None
+    assert optional_material.raw_unit is None
+    orphan_material = next(item for item in result.materials if item.raw_name == "Геотекстиль")
+    assert orphan_material.work_candidate_id == unresolved_work.candidate_id
 
 
 def test_qwen_engineering_normalizes_units_without_changing_source_spelling() -> None:

@@ -966,7 +966,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         assert rows[0]["provenance"]["semantic_recovery_of"] is None
         assert (
             rows[0]["provenance"]["candidate_persistence_profile"]
-            == "qwen-engineering-extraction-v15"
+            == "engineering-candidate-persistence-v2"
         )
         with postgres_environment.owner_engine.connect() as connection:
             structure_jobs = (
