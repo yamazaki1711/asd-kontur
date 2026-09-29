@@ -1149,7 +1149,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v50"
+    assert model["model_version"] == "project-engineering-model-v51"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2272,6 +2272,36 @@ def test_reconciliation_prioritizes_scoped_design_commercial_pair() -> None:
     assert document_comparison_side("project_documentation", "КР.pdf") == "design"
     assert document_comparison_side("project_documentation", "005.2-2025-СМ4.pdf") == "commercial"
     assert document_comparison_side("bill_of_quantities", "ВОР.xlsx") == "commercial"
+
+
+def test_document_composition_exposes_contract_and_customer_requirements() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-procurement",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={
+            "contract": {
+                "safe_display_name": "Проект контракта.docx",
+                "source_version_id": "contract-source",
+                "document_version": 1,
+            },
+            "requirements": {
+                "safe_display_name": "Требования к описанию объекта закупки.docx",
+                "source_version_id": "requirements-source",
+                "document_version": 1,
+            },
+        },
+    )
+
+    assert model["document_composition"]["role_counts"]["Договор"] == 1
+    assert model["document_composition"]["role_counts"]["Требования Заказчика"] == 1
+    assert "Договор" in model["document_composition"]["available_roles"]
 
 
 def test_established_facilities_exclude_equipment_model_designations() -> None:

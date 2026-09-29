@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v50"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v51"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -4172,6 +4172,18 @@ def _document_composition(
 def _professional_document_role(source_role: object, display_name: object) -> str:
     name = _normalized(display_name)
     role = str(source_role or "")
+    if role == "contract" or "проект контракт" in name or "проект договор" in name:
+        return "Договор"
+    if (
+        role == "customer_regulation"
+        or "требован заказчик" in name
+        or (
+            "объект" in name
+            and "закупк" in name
+            and any(marker in name for marker in ("требован", "описан"))
+        )
+    ):
+        return "Требования Заказчика"
     if "вор" in name or "ведомост объем" in name or "ведомост объём" in name:
         return "ВОР"
     if "смет" in name or re.search(r"(?:^|\s)см\d", name):
