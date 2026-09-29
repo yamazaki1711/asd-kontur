@@ -5209,7 +5209,9 @@ function ProjectEngineeringResult({
                   "Назначение и состав объекта уточняются",
                 )}
               </p>
-              {location.value ? <p>Место: {displayValue(location.value)}</p> : null}
+              {location.value ? (
+                <p>Место: {displayValue(location.value)}</p>
+              ) : null}
               {foundation.value ? (
                 <p>Конструктивная схема: {displayValue(foundation.value)}</p>
               ) : null}
