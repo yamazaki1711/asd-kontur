@@ -1273,12 +1273,27 @@ def _facilities(
     groups: dict[str, dict[str, Any]] = {}
     node_to_facility: dict[str, str] = {}
     components = [dict(raw) for raw in identity_components]
-    has_project_container = any(
-        str(component.get("identity_kind") or "") in {"facility", "local_area", "zone"}
-        and len({str(value) for value in component.get("source_locator_ids") or ()}) >= 2
-        and len({str(value) for value in component.get("member_structure_node_ids") or ()}) >= 2
-        for component in components
-    )
+
+    def establishes_project_container(component: Mapping[str, Any]) -> bool:
+        if str(component.get("identity_kind") or "") not in {"facility", "local_area", "zone"}:
+            return False
+        label = str(component.get("canonical_label") or "").strip()
+        source_locator_ids = {str(value) for value in component.get("source_locator_ids") or ()}
+        if not label or len(source_locator_ids) < 2:
+            return False
+        designation = facility_designation(label)
+        aliases = [
+            str(value).strip()
+            for value in component.get("candidate_labels") or (label,)
+            if str(value).strip()
+        ]
+        if designation:
+            return _explicit_designation_alias(designation, aliases)
+        if facility_designations(label):
+            return False
+        return len({str(value) for value in component.get("member_structure_node_ids") or ()}) >= 2
+
+    has_project_container = any(establishes_project_container(value) for value in components)
     for component in components:
         kind = str(component.get("identity_kind") or "")
         if kind not in {"facility", "local_area", "zone", "structure"}:

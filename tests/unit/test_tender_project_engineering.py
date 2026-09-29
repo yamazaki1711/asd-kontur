@@ -2383,6 +2383,42 @@ def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() ->
     assert model["facilities"] == []
 
 
+def test_equipment_model_does_not_hide_reconciled_project_structure() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-equipment-and-structure",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_candidate_id": "equipment",
+                "identity_kind": "facility",
+                "canonical_label": "КНС-270/12С/3,0-9,1/4,82",
+                "candidate_labels": ["КНС-270/12С/3,0-9,1/4,82"],
+                "member_structure_node_ids": ["equipment-rd", "equipment-spec"],
+                "source_locator_ids": ["equipment-rd-locator", "equipment-spec-locator"],
+            },
+            {
+                "identity_candidate_id": "structure",
+                "identity_kind": "structure",
+                "canonical_label": "Берегоукрепительное сооружение",
+                "candidate_labels": ["Берегоукрепительное сооружение"],
+                "member_structure_node_ids": ["structure-rd", "structure-pz"],
+                "source_locator_ids": ["structure-rd-locator", "structure-pz-locator"],
+            },
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert [(row["name"], row["kind"]) for row in model["facilities"]] == [
+        ("Берегоукрепительное сооружение", "Конструкция")
+    ]
+
+
 def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None:
     model = build_project_engineering_model(
         workspace_id="workspace-alpha",
