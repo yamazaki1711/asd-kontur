@@ -1158,6 +1158,10 @@ def _with_structured_project_fact_checks(
         marker in normalized_question
         for marker in ("проект", "документ", "вор", "смет", "пд", "рд")
     )
+    asks_for_technical_contradictions = "техническ" in normalized_question and any(
+        marker in normalized_question
+        for marker in ("противореч", "расхожд", "ошиб", "проблем")
+    )
     asks_for_comparisons = asks_for_project_discrepancies or (
         any(
             marker in normalized_question
@@ -1189,7 +1193,7 @@ def _with_structured_project_fact_checks(
     ) or (asks_for_project_discrepancies and not narrow_facility_quantity_comparison)
     asks_for_issue_details = (
         asks_for_project_discrepancies and not narrow_facility_quantity_comparison
-    )
+    ) or asks_for_technical_contradictions
     asks_for_facility_works = "работ" in normalized_question and bool(
         re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
     )
@@ -1209,6 +1213,7 @@ def _with_structured_project_fact_checks(
             asks_for_contractor_risks,
             asks_for_comparisons,
             asks_for_material_differences,
+            asks_for_technical_contradictions,
             asks_for_facility_works,
             asks_for_missing_commercial_work,
         )

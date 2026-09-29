@@ -701,6 +701,42 @@ def test_missing_commercial_work_query_returns_established_omission_not_arbitrar
     assert [row["location"] for row in projected["issues"]] == ["Участок 17"]
 
 
+def test_technical_contradiction_query_returns_prepared_engineering_issues() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "issues": [
+                {
+                    "kind": "Различие характеристик материала",
+                    "location": "КНС 8.1",
+                    "subject": "Шпунтовое ограждение",
+                    "description": "В проекте и ВОР указаны разные профили шпунта.",
+                    "source_locator_ids": ["design", "commercial"],
+                }
+            ],
+            "scope_comparisons": [
+                {
+                    "classification": "UNRESOLVED_SCOPE_MATCH",
+                    "facility": "Участок 4",
+                    "work": "Разработка грунта",
+                }
+            ],
+        },
+        query="Какие технические противоречия найдены?",
+        limit=20,
+    )
+
+    assert projected["issues"] == [
+        {
+            "kind": "Различие характеристик материала",
+            "location": "КНС 8.1",
+            "subject": "Шпунтовое ограждение",
+            "description": "В проекте и ВОР указаны разные профили шпунта.",
+            "source_locator_ids": ["design", "commercial"],
+            "source_refs": ["design", "commercial"],
+        }
+    ]
+
+
 def test_facility_query_keeps_structures_connections_and_work_names() -> None:
     projected = _assistant_engineering_for_query(
         {

@@ -2256,6 +2256,9 @@ def _assistant_engineering_for_query(
         marker in normalized_query
         for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
     )
+    asks_technical_contradictions = "техническ" in normalized_query and any(
+        marker in normalized_query for marker in ("противореч", "расхожд", "ошиб", "проблем")
+    )
     asks_unresolved = any(
         marker in normalized_query
         for marker in (
@@ -2646,6 +2649,9 @@ def _assistant_engineering_for_query(
             ]
             rows = [compact_row(row) for row in source_rows[: min(limit, 20)]]
         elif asks_material_differences and key in {"issues", "material_comparisons"}:
+            source_rows = [row for row in engineering.get(key) or () if isinstance(row, Mapping)]
+            rows = [compact_row(row) for row in source_rows[: min(limit, 12)]]
+        elif asks_technical_contradictions and key == "issues":
             source_rows = [row for row in engineering.get(key) or () if isinstance(row, Mapping)]
             rows = [compact_row(row) for row in source_rows[: min(limit, 12)]]
         else:

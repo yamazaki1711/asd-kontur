@@ -1180,6 +1180,46 @@ def test_project_discrepancy_question_requires_material_profile_and_omission_fac
     ) == {"passed": True, "problems": []}
 
 
+def test_technical_contradiction_question_cannot_omit_prepared_issue() -> None:
+    receipts = [
+        {
+            "tool": "consultant.get_discrepancies",
+            "response": {
+                "value": {
+                    "project_engineering": {
+                        "issues": [
+                            {
+                                "kind": "Профиль шпунта требует согласования",
+                                "location": "КНС 8.1",
+                                "subject": "Профиль шпунта",
+                                "description": "ПД: Л5УМ; ВОР: Л5-10.",
+                            }
+                        ]
+                    }
+                }
+            },
+        }
+    ]
+    answer = SynthesizedAnswer(
+        "Технических противоречий не найдено.",
+        "workspace_conclusion",
+        False,
+        (),
+        "Технические противоречия.",
+        (),
+    )
+
+    checks = _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=answer,
+        receipts=receipts,
+        question="Какие технические противоречия найдены?",
+    )
+
+    assert checks["passed"] is False
+    assert "workspace_structured_fact_omitted" in checks["problems"]
+
+
 def test_requested_material_difference_cannot_omit_known_grades() -> None:
     receipts = [
         {
