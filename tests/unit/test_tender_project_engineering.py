@@ -11,6 +11,7 @@ from asd_kontur.tender.project_engineering import (
     _comparisons,
     _display_quantity,
     _document_composition,
+    _documents,
     _facility_material_schedule,
     _isolated_unassigned_comparison,
     _issues,
@@ -352,6 +353,44 @@ def test_document_composition_recognizes_vor_embedded_in_estimate_pdf() -> None:
     assert composition["available_roles"] == ["ПД", "ВОР", "Смета"]
     assert composition["embedded_vor_document_count"] == 1
     assert "ВОР в составе сметных файлов — 1" in composition["professional_summary"]
+
+
+def test_document_register_uses_complete_inventory_before_candidates_exist() -> None:
+    documents = _documents(
+        {
+            "design-locator": {
+                "safe_display_name": "Project.pdf",
+                "document_version": 1,
+                "source_version_id": "design-version",
+            }
+        },
+        document_inventory=[
+            {
+                "safe_display_name": "Project.pdf",
+                "document_version": 1,
+                "source_version_id": "design-version",
+                "selected_roles": ["project_documentation"],
+            },
+            {
+                "safe_display_name": "Commercial scope.pdf",
+                "document_version": 1,
+                "source_version_id": "vor-version",
+                "selected_roles": ["bill_of_quantities"],
+            },
+            {
+                "safe_display_name": "Customer package.pdf",
+                "document_version": 2,
+                "source_version_id": "customer-version",
+                "selected_roles": ["customer_regulation"],
+            },
+        ],
+    )
+
+    assert {(row["name"], row["document_role"]) for row in documents} == {
+        ("Project.pdf", "ПД"),
+        ("Commercial scope.pdf", "ВОР"),
+        ("Customer package.pdf", "Требования Заказчика"),
+    }
 
 
 def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:

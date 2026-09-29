@@ -3363,6 +3363,12 @@ class SpinePostgresRepository:
                 .mappings()
                 .all()
             )
+            document_inventory = self._project_document_inventory(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                page_roles=page_roles,
+            )
             defects = (
                 session.execute(
                     sa.text(
@@ -3455,6 +3461,7 @@ class SpinePostgresRepository:
                 matrix=_jsonable_row(matrix),
                 normative_profile=_jsonable_row(profile) if profile is not None else None,
                 source_context=project_source_context,
+                document_inventory=document_inventory,
                 work_resolutions=work_resolutions,
                 structure_relationships=structure_relationships,
             )
@@ -5830,6 +5837,12 @@ class SpinePostgresRepository:
             matrix={"matrix": {"rows": []}},
             normative_profile=None,
             source_context=project_source_context,
+            document_inventory=cls._project_document_inventory(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                page_roles=(),
+            ),
             work_resolutions=work_resolutions,
             structure_relationships=structure_relationships,
         )
@@ -6246,6 +6259,64 @@ class SpinePostgresRepository:
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()
         return [_jsonable_row(row) for row in rows]
+
+    @staticmethod
+    def _project_document_inventory(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        page_roles: Iterable[Mapping[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Return the latest admitted document versions with known page roles."""
+
+        role_rows = list(page_roles)
+        if not role_rows:
+            role_rows = list(
+                session.execute(
+                    sa.text(
+                        "SELECT v.source_version_id,d.selected_roles FROM "
+                        "workspace.document_role_decisions d JOIN workspace.document_versions v "
+                        "ON v.organization_id=d.organization_id AND "
+                        "v.workspace_id=d.workspace_id AND v.document_id=d.document_id AND "
+                        "v.version=d.document_version WHERE d.organization_id=:organization AND "
+                        "d.workspace_id=:workspace"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                ).mappings()
+            )
+        roles_by_source: dict[str, set[str]] = defaultdict(set)
+        for raw in role_rows:
+            row = dict(raw)
+            source_version_id = str(row.get("source_version_id") or "")
+            if not source_version_id:
+                continue
+            roles_by_source[source_version_id].update(
+                str(role) for role in row.get("selected_roles") or () if str(role)
+            )
+        rows = session.execute(
+            sa.text(
+                "SELECT DISTINCT ON (document_id) document_id,version AS document_version,"
+                "source_version_id,safe_display_name,media_type,recorded_at FROM "
+                "workspace.document_versions WHERE organization_id=:organization AND "
+                "workspace_id=:workspace ORDER BY document_id,version DESC,recorded_at DESC"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        ).mappings()
+        inventory: list[dict[str, Any]] = []
+        for row in rows:
+            value = _jsonable_row(row)
+            value["selected_roles"] = sorted(
+                roles_by_source.get(str(value.get("source_version_id") or ""), set())
+            )
+            inventory.append(value)
+        return sorted(
+            inventory,
+            key=lambda value: (
+                str(value.get("safe_display_name") or ""),
+                str(value.get("document_id") or ""),
+            ),
+        )
 
     @staticmethod
     def _workspace_evidence_index(

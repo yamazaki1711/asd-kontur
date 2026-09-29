@@ -613,6 +613,7 @@ def build_project_engineering_model(
     matrix: Mapping[str, Any],
     normative_profile: Mapping[str, Any] | None,
     source_context: Mapping[str, Mapping[str, Any]],
+    document_inventory: Iterable[Mapping[str, Any]] = (),
     work_resolutions: Mapping[str, Mapping[str, Any]] | None = None,
     structure_relationships: Iterable[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
@@ -652,7 +653,7 @@ def build_project_engineering_model(
     )
     pits = _attach_pit_work_scopes(pits, work_model["works"])
     comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
-    documents = _documents(source_context)
+    documents = _documents(source_context, document_inventory=document_inventory)
     document_composition = _document_composition(documents, source_context=source_context)
     scope_comparisons = _scope_comparisons(
         work_model["works"],
@@ -4139,8 +4140,60 @@ def _facility_structure_links(
     )
 
 
-def _documents(source_context: Mapping[str, Mapping[str, Any]]) -> list[dict[str, Any]]:
+def _documents(
+    source_context: Mapping[str, Mapping[str, Any]],
+    *,
+    document_inventory: Iterable[Mapping[str, Any]] = (),
+) -> list[dict[str, Any]]:
+    """Return every admitted document, not only documents cited by candidates.
+
+    Candidate-linked context remains the source-navigation index.  It is not a
+    valid denominator for the project document register because a newly
+    admitted VOR, estimate or contract may have a page-role decision before it
+    emits an engineering observation.  Prefer the complete workspace inventory
+    when the application supplies it and retain the former context fallback for
+    isolated model consumers.
+    """
+
     unique: dict[tuple[str, int], dict[str, Any]] = {}
+    role_priority = {
+        "Договор": 0,
+        "Требования Заказчика": 1,
+        "Смета": 2,
+        "Спецификация": 3,
+        "ПД": 4,
+        "РД": 5,
+        "ВОР": 6,
+        "Проектный документ": 7,
+    }
+    for raw in document_inventory:
+        value = dict(raw)
+        name = str(value.get("safe_display_name") or value.get("name") or "")
+        version = int(value.get("document_version") or value.get("version") or 1)
+        if not name:
+            continue
+        filename_role = _professional_document_role(None, name)
+        roles = {
+            _professional_document_role(role, name)
+            for role in value.get("selected_roles") or value.get("source_roles") or ()
+        }
+        roles.add(filename_role)
+        # An explicit professional filename (for example VOR, estimate or
+        # contract) establishes the container role.  Otherwise prefer the
+        # design role for a mixed design PDF whose individual pages also carry
+        # schedules; those embedded schedules remain available through their
+        # page decisions and must not relabel the whole design volume as VOR.
+        document_role = (
+            filename_role
+            if filename_role != "Проектный документ"
+            else min(roles, key=lambda role: (role_priority.get(role, 99), role))
+        )
+        unique[(name, version)] = {
+            "name": name,
+            "version": version,
+            "source_version_id": str(value.get("source_version_id") or ""),
+            "document_role": document_role,
+        }
     for value in source_context.values():
         name = str(value.get("safe_display_name") or "")
         version = int(value.get("document_version") or 1)
