@@ -20,6 +20,7 @@ from asd_kontur.tender.project_engineering import (
     _merge_sheet_pile_rows,
     _one_comparable_quantity,
     _pits,
+    _professional_document_role,
     _professional_material_values,
     _resolution_establishes_page_scope,
     _scope_comparisons,
@@ -391,6 +392,25 @@ def test_document_register_uses_complete_inventory_before_candidates_exist() -> 
         ("Commercial scope.pdf", "ВОР"),
         ("Customer package.pdf", "Требования Заказчика"),
     }
+
+
+def test_document_roles_keep_procurement_correspondence_and_pos_out_of_generic_bucket() -> None:
+    assert (
+        _professional_document_role(
+            "contract",
+            "ТРЕБОВАНИЯ К СОДЕРЖАНИЮ, СОСТАВУ ЗАЯВКИ И ИНСТРУКЦИЯ.docx",
+        )
+        == "Закупочная документация"
+    )
+    assert (
+        _professional_document_role(
+            "correspondence_administrative",
+            "30.07.26 - о согласовании изменений.pdf",
+        )
+        == "Переписка/согласования"
+    )
+    assert _professional_document_role(None, "22.467 - ПОС.pdf") == "ПД"
+    assert _professional_document_role(None, "Криптоконтейнер_41.xml") == "Электронный контейнер"
 
 
 def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:

@@ -4159,12 +4159,15 @@ def _documents(
     role_priority = {
         "Договор": 0,
         "Требования Заказчика": 1,
-        "Смета": 2,
-        "Спецификация": 3,
-        "ПД": 4,
-        "РД": 5,
-        "ВОР": 6,
-        "Проектный документ": 7,
+        "Закупочная документация": 2,
+        "Смета": 3,
+        "Спецификация": 4,
+        "ПД": 5,
+        "РД": 6,
+        "ВОР": 7,
+        "Переписка/согласования": 8,
+        "Электронный контейнер": 9,
+        "Проектный документ": 10,
     }
     for raw in document_inventory:
         value = dict(raw)
@@ -4268,6 +4271,16 @@ def _document_composition(
 def _professional_document_role(source_role: object, display_name: object) -> str:
     name = _normalized(display_name)
     role = str(source_role or "")
+    if "криптоконтейнер" in name or name.endswith(".xml"):
+        return "Электронный контейнер"
+    if role == "correspondence_administrative" or "о согласовании" in name:
+        return "Переписка/согласования"
+    if (
+        "требован" in name
+        and "заявк" in name
+        and any(marker in name for marker in ("содержан", "состав", "заполнен"))
+    ):
+        return "Закупочная документация"
     if role == "contract" or "проект контракт" in name or "проект договор" in name:
         return "Договор"
     if (
@@ -4293,6 +4306,8 @@ def _professional_document_role(source_role: object, display_name: object) -> st
     if role == "specification":
         return "Спецификация"
     if "раздел пд" in name or "часть пд" in name:
+        return "ПД"
+    if re.search(r"(?:^|[\s._-])пос(?:[\s._-]|$)", name):
         return "ПД"
     if (
         re.search(r"(?:^|[\s._-])рд(?:[\s._-]|$)", name)
