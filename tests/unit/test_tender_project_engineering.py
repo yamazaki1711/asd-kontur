@@ -427,6 +427,65 @@ def test_vor_role_continues_after_heading_within_same_commercial_scope() -> None
     assert model["document_composition"]["available_roles"] == ["ВОР"]
 
 
+def test_local_estimate_role_overrides_coarse_container_role() -> None:
+    source_context = dict([_source("estimate-row", "Смешанный том.pdf", 31)])
+    source_context["estimate-row"].update(
+        page_commercial_scope_code="02-01-01",
+        page_commercial_scope_header=(
+            "локальный сметный расчет лср 02-01-01 конструктивные решения"
+        ),
+    )
+    model = build_project_engineering_model(
+        workspace_id="workspace-estimate-role",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "wall",
+                    "version": 1,
+                    "value": "Устройство подпорной стены из бетона",
+                    "source_version_id": "source-estimate",
+                    "source_locator_id": "estimate-row",
+                    "source_role": "project_documentation",
+                }
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "wall-quantity",
+                    "work_candidate_id": "wall",
+                    "value": "211.3",
+                    "unit": "м3",
+                    "source_locator_id": "estimate-row",
+                }
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=source_context,
+        work_resolutions={
+            "wall": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v5",
+                "status": "MATCHED",
+                "family_key": "reinforced_concrete",
+                "operation": "Устройство подпорной стены",
+                "quantity_reviews": [
+                    {"quantity_candidate_id": "wall-quantity", "status": "WORK_QUANTITY"}
+                ],
+            }
+        },
+    )
+
+    assert list(model["works"][0]["quantities_by_document"]) == ["Смета"]
+    assert model["works"][0]["quantities_by_document"]["Смета"][0]["value"] == "211.3"
+
+
 def test_document_register_uses_complete_inventory_before_candidates_exist() -> None:
     documents = _documents(
         {

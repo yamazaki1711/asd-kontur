@@ -1123,6 +1123,13 @@ def _source_is_bill_of_quantities(context: Mapping[str, Any]) -> bool:
     return bool(scope_header and "ведомост" in scope_header and "объем" in scope_header)
 
 
+def _source_is_local_estimate(context: Mapping[str, Any]) -> bool:
+    """Recognize rows carried by a bounded local-estimate section."""
+
+    scope_header = _normalized(context.get("page_commercial_scope_header"))
+    return bool(scope_header and "локальн" in scope_header and "сметн" in scope_header)
+
+
 def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
     """Match a short engineering phrase by ordered Russian word stems.
 
@@ -2334,8 +2341,12 @@ def _work_schedule(
         role = (
             "ВОР"
             if _source_is_bill_of_quantities(context)
-            else _professional_document_role(
-                row.get("source_role"), context.get("safe_display_name")
+            else (
+                "Смета"
+                if _source_is_local_estimate(context)
+                else _professional_document_role(
+                    row.get("source_role"), context.get("safe_display_name")
+                )
             )
         )
         linked_quantities = quantity_by_work.get(candidate_id, ())
