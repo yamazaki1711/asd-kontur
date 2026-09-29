@@ -643,6 +643,93 @@ def test_dependency_terminal_stage_recovers_only_from_matching_successor(
         assert dependencies == [recovered_hash.job_id]
 
 
+def test_autonomous_orchestrator_retries_historical_transient_model_failure_once(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="autonomy-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Autonomy owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "autonomy-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Autonomous recovery"},
+            headers=_csrf(client),
+        ).json()
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    failed_job_id = uuid4()
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = connection.scalar(
+            sa.text(
+                "SELECT created_by_identity_id FROM workspace.workspaces "
+                "WHERE organization_id=:organization AND workspace_id=:workspace"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        )
+        manifest = {"synthetic": "historical-transient-model-outage"}
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,job_kind,"
+                "input_manifest,input_digest,idempotency_key,state,completed_at,priority,max_attempts,"
+                "retry_policy_version,typed_failure_code,provenance,correlation_id,"
+                "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                "'PROJECT_UNDERSTANDING_RECONCILIATION',CAST(:manifest AS jsonb),:digest,:key,"
+                "'failed',CURRENT_TIMESTAMP,120,3,'synthetic-retry-v1',"
+                "'qwen_semantic_runtime_unavailable',CAST(:provenance AS jsonb),"
+                ":correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": failed_job_id,
+                "manifest": json.dumps(manifest),
+                "digest": semantic_digest(manifest),
+                "key": "synthetic-historical-transient-failure",
+                "provenance": json.dumps({"contract": "synthetic-autonomy-test@1.0.0"}),
+                "correlation": uuid4(),
+                "owner": owner,
+            },
+        )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    scopes = repository.autonomous_project_processing_scopes()
+    assert any(scope[1] == workspace_id for scope in scopes)
+    first = repository.schedule_autonomous_retry_replacements(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+    )
+    second = repository.schedule_autonomous_retry_replacements(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+    )
+
+    assert len(first) == 1
+    assert second == ()
+    with postgres_environment.owner_engine.connect() as connection:
+        replacement = (
+            connection.execute(
+                sa.text(
+                    "SELECT state,causation_id,input_digest,provenance FROM workspace.durable_jobs "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_id=:job"
+                ),
+                {"organization": organization_id, "workspace": workspace_id, "job": first[0]},
+            )
+            .mappings()
+            .one()
+        )
+    assert replacement["state"] == "queued"
+    assert replacement["causation_id"] == failed_job_id
+    assert replacement["input_digest"] == semantic_digest(manifest)
+    assert replacement["provenance"]["autonomous_retry_generation"] == 1
+
+
 def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,

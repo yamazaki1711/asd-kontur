@@ -32,6 +32,7 @@ from asd_kontur.ntd.local_semantic import (
 from .auth import OwnerAuthService
 from .config import SpineSettings
 from .object_store import WorkspaceObjectStore
+from .orchestrator import ProjectOrchestrator
 from .postgres import SpinePostgresRepository
 from .worker import DocumentWorker
 
@@ -48,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     subcommands.add_parser("serve-api")
     worker = subcommands.add_parser("run-worker")
     worker.add_argument("--identity", default=f"document-worker:{os.getpid()}")
+    subcommands.add_parser("run-project-orchestrator")
     assistant_worker = subcommands.add_parser("run-assistant-worker")
     assistant_worker.add_argument("--identity", default=f"assistant-worker:{os.getpid()}")
     ntd_worker = subcommands.add_parser("run-ntd-worker")
@@ -61,11 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     subcommands.add_parser("health")
     stop = subcommands.add_parser("stop")
     stop.add_argument(
-        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+        "--service",
+        choices=("api", "worker", "project-orchestrator", "assistant-worker", "qwen", "all"),
+        default="all",
     )
     logs = subcommands.add_parser("logs")
     logs.add_argument(
-        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+        "--service",
+        choices=("api", "worker", "project-orchestrator", "assistant-worker", "qwen", "all"),
+        default="all",
     )
     logs.add_argument("--lines", type=int, default=100)
     launchd = subcommands.add_parser("render-launchd")
@@ -122,6 +128,13 @@ def main(argv: list[str] | None = None) -> int:
         )
         try:
             worker_instance.run_forever()
+        finally:
+            engine.dispose()
+        return 0
+    if args.command == "run-project-orchestrator":
+        engine = sa.create_engine(settings.worker_database_url, pool_pre_ping=True)
+        try:
+            ProjectOrchestrator(SpinePostgresRepository(engine)).run_forever()
         finally:
             engine.dispose()
         return 0
@@ -284,7 +297,13 @@ def _log_root() -> Path:
 
 
 def _stop_launchd(service: str) -> int:
-    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
+    names = (
+        "api",
+        "worker",
+        "project-orchestrator",
+        "assistant-worker",
+        "qwen",
+    ) if service == "all" else (service,)
     outcomes: dict[str, str] = {}
     for name in names:
         label = f"ru.asd-kontur.spine.{name}"
@@ -303,7 +322,13 @@ def _show_logs(settings: SpineSettings, service: str, lines: int) -> int:
     del settings
     if lines < 1 or lines > 1000:
         raise ValueError("log line count must be between 1 and 1000")
-    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
+    names = (
+        "api",
+        "worker",
+        "project-orchestrator",
+        "assistant-worker",
+        "qwen",
+    ) if service == "all" else (service,)
     root = _log_root()
     missing = False
     for name in names:
@@ -375,6 +400,7 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
     service_commands = [
         ("api", "serve-api"),
         ("worker", "run-worker"),
+        ("project-orchestrator", "run-project-orchestrator"),
         ("assistant-worker", "run-assistant-worker"),
     ]
     if settings.ntd_processing_database_url is not None:
@@ -427,7 +453,7 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
     qwen_target = output / "ru.asd-kontur.spine.qwen.plist"
     qwen_target.write_text(qwen_content, encoding="utf-8")
     qwen_target.chmod(0o600)
-    rotation_names = ["api", "worker", "assistant-worker"]
+    rotation_names = ["api", "worker", "project-orchestrator", "assistant-worker"]
     if settings.ntd_processing_database_url is not None:
         rotation_names.append("ntd-worker")
     rotation_names.append("qwen")

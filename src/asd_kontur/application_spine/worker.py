@@ -64,6 +64,15 @@ class CancelledJob(RuntimeError):
     """Cancellation observed before the next semantic effect."""
 
 
+_RETRYABLE_STAGE_FAILURES = frozenset(
+    {
+        "qwen_semantic_runtime_unavailable",
+        "qwen_work_reconciliation_runtime_unavailable",
+        "qwen_vision_runtime_unavailable",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class WorkerOutcome:
     job_id: str
@@ -424,7 +433,10 @@ class DocumentWorker:
                 with self._open_source(claimed) as source:
                     return self._understanding.execute(claimed, source)
             except (UnderstandingStageFailure, NativeExtractionFailure, OcrFailure) as exc:
-                raise DeterministicJobFailure(translate_stage_error(exc)) from exc
+                failure_code = translate_stage_error(exc)
+                if failure_code in _RETRYABLE_STAGE_FAILURES:
+                    raise RetryableJobFailure(failure_code) from exc
+                raise DeterministicJobFailure(failure_code) from exc
         if handler is None:
             raise DeterministicJobFailure("job_kind_not_supported_by_document_worker")
         return handler(claimed)

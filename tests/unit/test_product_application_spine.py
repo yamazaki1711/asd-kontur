@@ -1238,6 +1238,7 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     log_root.mkdir()
     (log_root / "api.log").write_text("one\ntwo\nthree\n", encoding="utf-8")
     (log_root / "worker.log").write_text("worker\n", encoding="utf-8")
+    (log_root / "project-orchestrator.log").write_text("orchestrator\n", encoding="utf-8")
     (log_root / "assistant-worker.log").write_text("assistant\n", encoding="utf-8")
     (log_root / "qwen.log").write_text("qwen\n", encoding="utf-8")
     monkeypatch.setenv("ASD_LOG_ROOT", str(log_root))
@@ -1256,6 +1257,11 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     )
     assert assistant_plist["Label"] == "ru.asd-kontur.spine.assistant-worker"
     assert assistant_plist["ProgramArguments"][-1] == "run-assistant-worker"
+    orchestrator_plist = plistlib.loads(
+        (output / "ru.asd-kontur.spine.project-orchestrator.plist").read_bytes()
+    )
+    assert orchestrator_plist["Label"] == "ru.asd-kontur.spine.project-orchestrator"
+    assert orchestrator_plist["ProgramArguments"][-1] == "run-project-orchestrator"
     qwen_plist = plistlib.loads((output / "ru.asd-kontur.spine.qwen.plist").read_bytes())
     assert qwen_plist["Label"] == "ru.asd-kontur.spine.qwen"
     assert "asd_kontur.assistant.qwen_server" in qwen_plist["ProgramArguments"]

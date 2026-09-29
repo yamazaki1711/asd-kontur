@@ -1504,6 +1504,144 @@ class SpinePostgresRepository:
             ).all()
         return tuple((UUID(str(row.organization_id)), UUID(str(row.workspace_id))) for row in rows)
 
+    def autonomous_project_processing_scopes(
+        self, *, limit: int = 16
+    ) -> tuple[tuple[UUID, UUID, str, datetime], ...]:
+        """Return active project scopes for the supervised reconciliation sweep."""
+
+        if not 1 <= limit <= 64:
+            raise ValueError("autonomous project scope limit is invalid")
+        with self._engine.begin() as connection:
+            rows = connection.execute(
+                sa.text("SELECT * FROM workspace.autonomous_project_processing_scopes(:limit)"),
+                {"limit": limit},
+            ).all()
+        return tuple(
+            (
+                UUID(str(row.organization_id)),
+                UUID(str(row.workspace_id)),
+                str(row.owner_identity_id),
+                row.last_progress_at,
+            )
+            for row in rows
+        )
+
+    def schedule_autonomous_retry_replacements(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        limit: int = 16,
+    ) -> tuple[UUID, ...]:
+        """Replace historical transient terminal attempts without rewriting them.
+
+        Current workers retry these failures in-place.  This bounded lineage
+        repair exists for attempts made by older releases that incorrectly
+        terminalled local-model outages as deterministic content failures.
+        """
+
+        if not 1 <= limit <= 64:
+            raise ValueError("autonomous retry limit is invalid")
+        scheduled: list[UUID] = []
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            ):
+                return ()
+            candidates = (
+                session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs failed WHERE "
+                        "failed.organization_id=:organization AND failed.workspace_id=:workspace "
+                        "AND failed.state='failed' AND failed.typed_failure_code IN ("
+                        "'qwen_semantic_runtime_unavailable',"
+                        "'qwen_work_reconciliation_runtime_unavailable',"
+                        "'qwen_vision_runtime_unavailable') "
+                        "AND COALESCE((failed.provenance->>'autonomous_retry_generation')::integer,0)<2 "
+                        "AND NOT EXISTS (SELECT 1 FROM workspace.durable_jobs replacement WHERE "
+                        "replacement.organization_id=failed.organization_id AND "
+                        "replacement.workspace_id=failed.workspace_id AND "
+                        "replacement.job_kind=failed.job_kind AND replacement.idempotency_key="
+                        "('autonomous-retry-v1:'||failed.job_id::text)) "
+                        "ORDER BY failed.completed_at,failed.job_id LIMIT :limit "
+                        "FOR UPDATE OF failed SKIP LOCKED"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "limit": limit,
+                    },
+                )
+                .mappings()
+                .all()
+            )
+            for failed in candidates:
+                replacement_id = uuid7()
+                generation = int(failed["provenance"].get("autonomous_retry_generation", 0)) + 1
+                provenance = {
+                    **dict(failed["provenance"]),
+                    "autonomous_retry_contract": "project-orchestrator.retry@1.0.0",
+                    "autonomous_retry_generation": generation,
+                    "autonomous_retry_of": str(failed["job_id"]),
+                    "autonomous_retry_reason": str(failed["typed_failure_code"]),
+                }
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                        "priority,max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
+                        "created_by_identity_id) VALUES (:organization,:workspace,:job,:document,:kind,"
+                        "CAST(:manifest AS jsonb),:digest,:key,'queued',:priority,:max_attempts,"
+                        ":retry_policy,CAST(:provenance AS jsonb),:correlation,:causation,:owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": replacement_id,
+                        "document": failed["subject_document_id"],
+                        "kind": failed["job_kind"],
+                        "manifest": _json(dict(failed["input_manifest"])),
+                        "digest": failed["input_digest"],
+                        "key": f"autonomous-retry-v1:{failed['job_id']}",
+                        "priority": failed["priority"],
+                        "max_attempts": failed["max_attempts"],
+                        "retry_policy": failed["retry_policy_version"],
+                        "provenance": _json(provenance),
+                        "correlation": failed["correlation_id"],
+                        "causation": failed["job_id"],
+                        "owner": failed["created_by_identity_id"],
+                    },
+                )
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_job_dependencies "
+                        "(organization_id,workspace_id,job_id,depends_on_job_id,dependency_kind) "
+                        "SELECT organization_id,workspace_id,:replacement,depends_on_job_id,dependency_kind "
+                        "FROM workspace.durable_job_dependencies WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace AND job_id=:failed"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "replacement": replacement_id,
+                        "failed": failed["job_id"],
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=replacement_id,
+                    event_type="job.queued",
+                    safe_message_code="autonomous_transient_retry_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                scheduled.append(replacement_id)
+        return tuple(scheduled)
+
     def mark_job_running(self, claimed: ClaimedJob, *, worker_identity: str) -> None:
         with Session(self._engine) as session, session.begin():
             _set_scope(session, claimed.organization_id, claimed.workspace_id)
@@ -4266,8 +4404,13 @@ class SpinePostgresRepository:
         owner_identity_id: str,
         workspace_id: UUID,
         correlation_id: UUID,
+        _resolved_organization_id: UUID | None = None,
     ) -> JobSummary:
-        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        organization_id = (
+            _resolved_organization_id
+            if _resolved_organization_id is not None
+            else self.resolve_scope(owner_identity_id, workspace_id)
+        )
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
             self._require_workspace_accepts_jobs(
