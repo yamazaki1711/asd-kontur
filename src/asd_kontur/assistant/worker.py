@@ -2024,7 +2024,9 @@ def _append_prepared_project_result(
         if receipt.get("tool") != "consultant.get_discrepancies":
             continue
         response = receipt.get("response")
-        value = response.get("value") if isinstance(response, dict) else None
+        if not isinstance(response, dict):
+            continue
+        value = response.get("value")
         engineering = value.get("project_engineering") if isinstance(value, dict) else None
         if not isinstance(engineering, dict):
             continue
