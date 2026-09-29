@@ -192,13 +192,10 @@ class SpinePostgresRepository:
         """
 
         state = session.execute(
-            sa.text(
-                "SELECT lifecycle_state,write_fenced FROM workspace.workspaces "
-                "WHERE organization_id=:organization AND workspace_id=:workspace"
-            ),
+            sa.text("SELECT workspace.workspace_accepts_durable_jobs(:organization,:workspace)"),
             {"organization": organization_id, "workspace": workspace_id},
-        ).one_or_none()
-        return state is not None and tuple(state) == ("ACTIVE", False)
+        ).scalar_one()
+        return bool(state)
 
     def _require_workspace_accepts_jobs(
         self, session: Session, *, organization_id: UUID, workspace_id: UUID
