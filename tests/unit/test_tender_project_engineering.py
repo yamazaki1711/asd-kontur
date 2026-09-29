@@ -22,6 +22,7 @@ from asd_kontur.tender.project_engineering import (
     _pits,
     _professional_document_role,
     _professional_material_values,
+    _project_scope_facility_label,
     _resolution_establishes_page_scope,
     _scope_comparisons,
     _semantic_work_consensus,
@@ -2687,6 +2688,25 @@ def test_address_alias_components_do_not_duplicate_project_facilities() -> None:
         "Подпорная стена по ул. Северная, 12/1",
     }
     assert len(model["facilities"]) == 2
+
+
+def test_project_scope_requires_explicit_reference_to_every_addressed_facility() -> None:
+    facilities = [
+        {"name": "Подпорная стена по ул. Северная, 10/1"},
+        {"name": "Подпорная стена по ул. Северная, 12/1"},
+    ]
+
+    assert _project_scope_facility_label(
+        "Подпорные стены по ул. Северная, 10/1 и ул. Северная, 12/1",
+        facilities,
+    ) == (
+        "Объект в целом (Подпорная стена по ул. Северная, 10/1; "
+        "Подпорная стена по ул. Северная, 12/1)"
+    )
+    assert (
+        _project_scope_facility_label("Подпорная стена по ул. Северная, 10/1", facilities) is None
+    )
+    assert _project_scope_facility_label("Подпорные стены", facilities) is None
 
 
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:

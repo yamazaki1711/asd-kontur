@@ -1551,6 +1551,28 @@ def _location_project_container_label(value: object, specific_labels: Iterable[s
     return any(generic <= stems(label) for label in specific_labels)
 
 
+def _project_scope_facility_label(
+    value: object, facilities: Iterable[Mapping[str, Any]]
+) -> str | None:
+    """Return a professional project-wide label only for an explicit all-site scope."""
+
+    rows = [dict(item) for item in facilities]
+    facility_addresses = {
+        address
+        for item in rows
+        if (address := _specific_structure_key(item.get("name"))) is not None
+    }
+    if len(rows) < 2 or len(facility_addresses) != len(rows):
+        return None
+    scope_addresses = {
+        " ".join(item.replace(",", " ").split()) for item in _street_addresses(value)
+    }
+    if not facility_addresses <= scope_addresses:
+        return None
+    names = sorted(str(item.get("name") or "") for item in rows if item.get("name"))
+    return f"Объект в целом ({'; '.join(names)})"
+
+
 def _pits(
     pit_inventory: Mapping[str, Any],
     facilities: Iterable[Mapping[str, Any]],
@@ -2023,6 +2045,9 @@ def _work_schedule(
         for label, values in facility_labels.items()
         if len({str(value.get("facility_id")) for value in values}) == 1
     }
+    project_scope_id = semantic_digest(
+        {"project_facility_ids": sorted(str(item.get("facility_id")) for item in facilities)}
+    )
     commercial_facilities_by_scope: dict[str, set[str]] = defaultdict(set)
     for scope_context in source_context.values():
         scope_code = str(scope_context.get("page_commercial_scope_code") or "").strip()
@@ -2194,6 +2219,16 @@ def _work_schedule(
                 assignment_basis = (
                     "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
                 )
+        project_scope_label = (
+            _project_scope_facility_label(resolution.get("facility"), facilities)
+            if facility is None
+            else None
+        )
+        if project_scope_label is not None:
+            assignment_basis = (
+                "Источник явно относится ко всем установленным сооружениям объекта; "
+                "распределение по отдельным адресам не указано"
+            )
         role = (
             "ВОР"
             if context.get("page_is_bill_of_quantities") is True
@@ -2242,13 +2277,27 @@ def _work_schedule(
             "project_wording": name,
             "normalized_work_name": normalized_name,
             "facility_id": facility.get("facility_id") if facility else None,
+            "location_scope_id": (
+                str(facility.get("facility_id"))
+                if facility
+                else f"project:{project_scope_id}"
+                if project_scope_label is not None
+                else None
+            ),
+            "location_scope_kind": "facility"
+            if facility
+            else "project"
+            if project_scope_label is not None
+            else "unresolved",
             # Keep facility labels authoritative to the established project
             # inventory.  An unmatched facility-shaped token can be an
             # equipment model or a partial designation; showing it as the
             # work location would create a facility that the project model
             # does not actually contain.
-            "facility": designation if facility else None,
-            "facility_assignment_basis": assignment_basis if facility else None,
+            "facility": designation if facility else project_scope_label,
+            "facility_assignment_basis": assignment_basis
+            if facility or project_scope_label is not None
+            else None,
             "document_role": role,
             "source_version_id": source_version_id,
             "source_locator_id": locator_id,
@@ -2337,7 +2386,7 @@ def _work_schedule(
 
     grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for observation in exact_observations.values():
-        facility_key = str(observation.get("facility_id") or "unassigned")
+        facility_key = str(observation.get("location_scope_id") or "unassigned")
         # A broad operation such as ``Монтаж трубопровода`` is not an
         # engineering scope by itself.  Without a facility, merging all such
         # rows creates a project-wide pseudo-package and can attach unrelated
@@ -2411,7 +2460,11 @@ def _work_schedule(
         )
         schedule = {
             "work_scope_id": schedule_id,
-            "facility_id": None if facility_key == "unassigned" else facility_key,
+            "facility_id": next(
+                (str(item["facility_id"]) for item in observations if item.get("facility_id")),
+                None,
+            ),
+            "location_scope_kind": str(observations[0].get("location_scope_kind")),
             "facility": facility_name,
             "family_key": family_key,
             "work_name": operation_name,
@@ -2478,7 +2531,7 @@ def _work_schedule(
     excluded = _deduplicate_dicts(excluded)
     classified_count = len(exact_observations)
     assigned_count = len(
-        [value for value in exact_observations.values() if value.get("facility_id")]
+        [value for value in exact_observations.values() if value.get("location_scope_id")]
     )
     all_quantity_interpretations = [
         dict(review)
