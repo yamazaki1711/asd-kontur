@@ -1,5 +1,26 @@
 # OZERO Tender delivery changes
 
+## 2026-09-29 — facility comparison answers and professional Tender package
+
+- `4511d8e` makes the engineering Tender DOCX schema-valid; `8f18468` gives
+  schedules fixed table layout, repeated headers, borders, and readable cell
+  spacing. The current live model generates both the editable report and the
+  multi-file Tender analysis archive through the normal application service.
+- `bfe9996` makes a facility-specific quantity-comparison question use the
+  prepared same-scope comparisons without requiring unrelated material issues
+  and without dumping the entire facility work list. `e360db7` labels that
+  answer as a professional facility-volume comparison.
+- API/frontend/assistant release `e360db7` is active at migration `0074`.
+  Exact-SHA CI run `36506434377` passed all gates. Live turn
+  `01a0eac1-d4dc-7068-8360-ad8a90e1b75c` passed both quality layers and returned
+  KNS 8.1 cable quantities of 30 m in PD versus 60 m in VOR and estimate.
+- The controlled rollout preserved the document worker. A launch plist array
+  update initially left the old interpreter as an extra argument; the error was
+  detected before health acceptance, corrected, and the release then reached
+  ready state. Qwen was restarted only after repeated failed health observations
+  and confirmation that no OZERO or NTD job was active; bounded reconciliation
+  resumed automatically afterward.
+
 ## 2026-09-29 — practical facility dossiers and comparison schedules
 
 - `0df42cb`, `feb03ba`, and `bebb774` extend the shared project model and Tender UI

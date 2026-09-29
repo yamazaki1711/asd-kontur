@@ -1,5 +1,49 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-29 13:26 UTC+12 — exact facility comparisons and readable Tender package are live
+
+Release `e360db70826561a943f2d920fcb3917658e28a07` is active for the API,
+frontend, and assistant worker at migration `0074_foreground_aware_job_claim`.
+Exact-SHA CI run `36506434377` passed every configured gate. The document
+worker remains on compatible release `a5f87b5`; it was not restarted. The
+served frontend remains `assets/index-0UT2aBAY.js` with digest
+`sha256:1c1cd6159fece697b817c3ffd10e72fc5531fdb8db70294b020d522fc801c51e`.
+
+The deployed consultant now answers a facility-specific comparison question
+with the prepared engineering result instead of a generic insufficiency
+message. Turn `01a0eac1-d4dc-7068-8360-ad8a90e1b75c` states for KNS 8.1 that
+cable routing is 30 m in PD and 60 m in both VOR and the estimate, a -30 m
+difference in each comparison. The turn ran through local Qwen, persisted its
+answer, and passed deterministic and model quality checks. Interrupted recovery
+turn `01a0eabe-5771-7782-b139-4f1846ecb264` remains preserved separately with
+failure `qwen_stream_interrupted`.
+
+The current shared model contains 12 facilities, nine established pits and
+three unresolved pit groups, 837 consolidated work scopes, 622 material rows,
+14 quantity comparisons, two material comparisons, and seven issues, customer
+questions, and contractor risks. It classifies 3,132 of 4,377 construction-scope
+observations (71.6%), retains 1,245 as unresolved, and excludes 2,005 non-work
+observations. These counts may continue to advance as the bounded reconciliation
+worker persists new accepted results.
+
+The application-generated acceptance package is stored outside Git at
+`/Users/oleg/.asd-kontur/public-demo/acceptance/20260929-tender-v83/`.
+`OZERO_Tender_engineering_report.docx` has SHA-256
+`c39d768f444578bbc66f3f0225f7252037213e0b31d57ec15f0559b33928f051`;
+the strict DOCX validator passed all checks (6,220 paragraphs), and a local
+QuickLook render was visually inspected. `OZERO_Tender_analysis.zip` has SHA-256
+`aadd9bb94a31f8037378c1a698a98dc0dcd5f055ab19d7e922c0e6b9540d7a88`.
+LibreOffice/print qualification and an authenticated public-browser visual pass
+remain unverified.
+
+Local Qwen recovery was necessary after the loaded process stopped serving
+health requests while no OZERO or NTD job was active. The service was restarted
+at that safe boundary and returned healthy as `Qwen3.8-27B`. The supervised
+document worker then automatically resumed bounded reconciliation as job
+`01a0eac2-b14d-77b5-adde-67319511fec6`; it was running with a fresh heartbeat at
+this checkpoint. No accepted extraction, source version, or historical attempt
+was reset.
+
 ## 2026-09-29 12:18 UTC+12 — facility dossiers and comparisons are live
 
 An authenticated-user-facing release set pinned to

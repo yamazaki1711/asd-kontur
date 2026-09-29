@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-09-29T12:18:00+12:00",
+  "recorded_at": "2026-09-29T13:26:15+12:00",
   "scope": "OZERO Project Understanding and Tender Engineering Analysis",
   "cases": [
     {
@@ -28,7 +28,21 @@
       "expected": "Facility dossiers show same-scope design/commercial quantity comparisons with professional conclusions.",
       "observed": "The deployed KNS 8.1 dossier contains five comparisons, including cable routing 30 m in PD versus 60 m in VOR and estimate, and matching sheet-pile driving/extraction values between VOR and estimate.",
       "status": "PASS",
-      "evidence": "release bebb774; project-engineering-model-v49 facility_cards[KNS 8.1].comparisons"
+      "evidence": "release e360db70826561a943f2d920fcb3917658e28a07; project-engineering-model-v49 facility_cards[KNS 8.1].comparisons"
+    },
+    {
+      "id": "facility-comparison-consultation",
+      "expected": "A facility comparison question returns exact prepared project and commercial values and differences, without requiring unrelated material findings.",
+      "observed": "Turn 01a0eac1-d4dc-7068-8360-ad8a90e1b75c succeeded through local Qwen and returned KNS 8.1 cable routing as PD 30 m versus VOR 60 m and estimate 60 m, with -30 m differences. Deterministic and model checks passed.",
+      "status": "PASS",
+      "evidence": "workspace.assistant_messages and workspace.assistant_quality_receipts; release e360db70826561a943f2d920fcb3917658e28a07"
+    },
+    {
+      "id": "editable-tender-package",
+      "expected": "The current shared model exports as a readable editable Tender report and a complete analysis archive.",
+      "observed": "The application service generated a 56,103-byte DOCX and 1,029,998-byte ZIP from the live OZERO model. Strict DOCX validation passed all checks across 6,220 paragraphs; QuickLook visual inspection confirmed readable project and facility tables.",
+      "status": "PASS",
+      "evidence": "/Users/oleg/.asd-kontur/public-demo/acceptance/20260929-tender-v83; DOCX sha256:c39d768f444578bbc66f3f0225f7252037213e0b31d57ec15f0559b33928f051; ZIP sha256:aadd9bb94a31f8037378c1a698a98dc0dcd5f055ab19d7e922c0e6b9540d7a88"
     },
     {
       "id": "sheet-pile-schedule-consultation",
@@ -40,7 +54,7 @@
     {
       "id": "work-classification-progress",
       "expected": "Processed work descriptions become professional work scopes without hiding unresolved descriptions.",
-      "observed": "The current model classifies 3105 of 4404 construction-scope observations (70.5%), retains 1299 as unclassified, and separately excludes 1978 non-work observations.",
+      "observed": "The current model classifies 3132 of 4377 construction-scope observations (71.6%), retains 1245 as unclassified, and separately excludes 2005 non-work observations.",
       "status": "PARTIAL",
       "evidence": "project-engineering-model-v49 work_classification"
     },
@@ -49,7 +63,7 @@
       "expected": "A signed-in user visually navigates the deployed facility dossier, sources, and downloads through the public browser application.",
       "observed": "The exact-SHA browser E2E passed in CI and the public frontend bundle is active, but no attachable signed-in browser session was available for this checkpoint.",
       "status": "UNVERIFIED",
-      "evidence": "GitHub Actions run 36501289797; deployed frontend digest sha256:1c1cd6159fece697b817c3ffd10e72fc5531fdb8db70294b020d522fc801c51e"
+      "evidence": "GitHub Actions run 36506434377; deployed frontend digest sha256:1c1cd6159fece697b817c3ffd10e72fc5531fdb8db70294b020d522fc801c51e"
     }
   ]
 }
