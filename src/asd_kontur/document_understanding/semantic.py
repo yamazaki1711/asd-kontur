@@ -140,6 +140,41 @@ UNIT_ALIASES = {
 }
 
 
+def normalize_unit(value: object) -> str | None:
+    """Normalize source unit spelling without changing the numeric value."""
+
+    raw = " ".join(str(value or "").replace("\xa0", " ").strip().casefold().split())
+    normalized = raw.rstrip(".")
+    if not normalized:
+        return None
+    direct = UNIT_ALIASES.get(raw) or UNIT_ALIASES.get(normalized)
+    if direct is not None:
+        return direct
+    compact = normalized.replace(" ", "")
+    aliases = {
+        "кв.м": "m2",
+        "кв.м.": "m2",
+        "куб.м": "m3",
+        "куб.м.": "m3",
+        "тонна": "t",
+        "тонны": "t",
+        "тонн": "t",
+        "килограмм": "kg",
+        "килограмма": "kg",
+        "килограммов": "kg",
+        "метр": "m",
+        "метра": "m",
+        "метров": "m",
+        "миллиметр": "mm",
+        "миллиметра": "mm",
+        "миллиметров": "mm",
+        "штука": "piece",
+        "штуки": "piece",
+        "штук": "piece",
+    }
+    return aliases.get(compact)
+
+
 @dataclass(frozen=True, slots=True)
 class ClassificationBundle:
     candidates: tuple[RoleCandidate, ...]
@@ -326,7 +361,7 @@ def _extract_rows(
             if quantity_element is not None:
                 raw_unit = unit_element.raw_text.strip() if unit_element else ""
                 parsed = parse_exact_decimal(quantity_element.raw_text)
-                normalized_unit = UNIT_ALIASES.get(raw_unit.casefold())
+                normalized_unit = normalize_unit(raw_unit)
                 status = (
                     CandidateDecision.VERIFIED
                     if parsed is not None and normalized_unit is not None
@@ -361,7 +396,7 @@ def _extract_rows(
                     material_unit_element.raw_text if material_unit_element else None
                 )
                 normalized_material_unit = (
-                    UNIT_ALIASES.get(raw_material_unit.casefold()) if raw_material_unit else None
+                    normalize_unit(raw_material_unit) if raw_material_unit else None
                 )
                 material_status = (
                     CandidateDecision.VERIFIED
@@ -525,7 +560,7 @@ def reconcile_sources(
                 )
             )
         if quantity and quantity.parsed_value is not None and estimate.parsed_quantity is not None:
-            estimate_unit = UNIT_ALIASES.get((estimate.raw_unit or "").casefold())
+            estimate_unit = normalize_unit(estimate.raw_unit)
             if quantity.normalized_unit != estimate_unit:
                 defects.append(
                     _defect(

@@ -67,6 +67,7 @@ from asd_kontur.document_understanding.semantic import (
     StructuredCandidates,
     classify_pages,
     extract_structured_candidates,
+    normalize_unit,
     parse_exact_decimal,
     reconcile_sources,
 )
@@ -79,6 +80,14 @@ from asd_kontur.domain import deterministic_uuid
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
 SOURCE_VERSION_ID = UUID("20000000-0000-4000-8000-000000000001")
+
+
+def test_source_unit_normalization_handles_russian_inflections() -> None:
+    assert normalize_unit("метра") == "m"
+    assert normalize_unit("миллиметров") == "mm"
+    assert normalize_unit("тонны") == "t"
+    assert normalize_unit("куб. м") == "m3"
+    assert normalize_unit("") is None
 
 
 def test_project_materialization_profile_is_independent_from_structure_reconciliation() -> None:
@@ -2415,6 +2424,48 @@ def test_qwen_engineering_extraction_preserves_unresolved_relationship_and_optio
     assert len(result.materials) == 1
     assert result.materials[0].raw_quantity is None
     assert result.materials[0].raw_unit is None
+
+
+def test_qwen_engineering_normalizes_units_without_changing_source_spelling() -> None:
+    document = _extract_csv("A;B;C\n")
+    fragments = _engineering_batches(document.pages[0].elements)[0].fragments
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    response = {
+        "fields": [],
+        "structures": [],
+        "structure_relationships": [],
+        "works": [{"name": "Устройство свай", "fragment_id": fragments[0].fragment_id}],
+        "quantities": [
+            {
+                "work_name": "Устройство свай",
+                "value": "4,0",
+                "unit": "метра",
+                "fragment_id": fragments[1].fragment_id,
+                "work_fragment_id": fragments[0].fragment_id,
+            }
+        ],
+        "materials": [
+            {
+                "work_name": "Устройство свай",
+                "name": "Арматура",
+                "quantity": "2",
+                "unit": "тонны",
+                "fragment_id": fragments[2].fragment_id,
+                "work_fragment_id": fragments[0].fragment_id,
+            }
+        ],
+    }
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps(response, ensure_ascii=False),
+    ):
+        result = adapter.extract_engineering(document.pages[0].elements)
+
+    assert result.quantities[0].raw_unit == "метра"
+    assert result.quantities[0].normalized_unit == "m"
+    assert result.materials[0].raw_unit == "тонны"
+    assert result.materials[0].normalized_unit == "t"
 
 
 def test_qwen_engineering_extraction_preserves_incomplete_quantity_as_evidenced_defect() -> None:

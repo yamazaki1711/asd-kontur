@@ -16,6 +16,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
+from asd_kontur.document_understanding.semantic import normalize_unit as _normalize_source_unit
 
 PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v53"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
@@ -4396,7 +4397,16 @@ def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
 def _normalized_unit(value: object) -> str:
     normalized = " ".join(str(value or "").replace("\xa0", " ").strip().casefold().split())
     normalized = normalized.rstrip(".")
-    return {"m2": "м2", "m3": "м3"}.get(normalized, normalized)
+    canonical = _normalize_source_unit(normalized)
+    return {
+        "m": "м",
+        "mm": "мм",
+        "m2": "м2",
+        "m3": "м3",
+        "t": "т",
+        "kg": "кг",
+        "piece": "шт",
+    }.get(canonical or "", normalized)
 
 
 def _duration_unit(value: object) -> bool:

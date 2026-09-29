@@ -435,6 +435,27 @@ def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:
     assert comparisons[0]["conclusion"] == "Значения ВОР и сметы совпадают"
 
 
+def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
+    comparisons = _comparisons(
+        [
+            {
+                "work_scope_id": "pile-length",
+                "facility": "Подпорная стена ПС-1",
+                "work_name": "Устройство свай",
+                "quantities_by_document": {
+                    "РД": [{"value": "4,0", "unit": "метра"}],
+                    "ВОР": [{"value": "4", "unit": "м"}],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+    assert comparisons[0]["left"]["unit"] == "м"
+    assert comparisons[0]["right"]["unit"] == "м"
+
+
 def test_explicit_material_profile_is_not_overwritten_by_page_context() -> None:
     values = _professional_material_values(
         [
