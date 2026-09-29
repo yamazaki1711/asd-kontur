@@ -1,5 +1,18 @@
 # OZERO Tender delivery changes
 
+## 2026-09-29 — practical facility dossiers and comparison schedules
+
+- `0df42cb`, `feb03ba`, and `bebb774` extend the shared project model and Tender UI
+  with facility-scoped quantities, consolidated materials, and same-scope quantity
+  comparisons. The same projection is used by the UI and professional assistant.
+- The consultant now routes an explicit KNS/LOS question to the requested facility and
+  preserves prepared project facts in the answer. Project-composition questions can use
+  a source-linked overview, while metadata remains insufficient for exhaustive pit
+  questions.
+- Release `bebb774` is active for API/frontend/assistant. Exact-SHA CI run
+  `36501289797` passed all gates. The document worker was deliberately preserved on
+  `a5f87b5` during active Qwen reconciliation.
+
 ## 2026-09-18 — readable preliminary Tender findings
 
 - `38f637b` replaces the raw defect object on the Russian “Расхождения и пробелы”

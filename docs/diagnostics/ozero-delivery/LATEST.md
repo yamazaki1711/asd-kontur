@@ -1,5 +1,38 @@
 # OZERO Tender delivery — current checkpoint
 
+## 2026-09-29 12:18 UTC+12 — facility dossiers and comparisons are live
+
+An authenticated-user-facing release set pinned to
+`bebb77481fbe9c923c41471a6bea86826d08e5cc` is active for the API, frontend,
+and assistant worker at migration `0074_foreground_aware_job_claim`. The document
+worker remains on compatible release `a5f87b5` and was not restarted while it owned
+the single local-Qwen workload. The current frontend bundle digest is
+`sha256:1c1cd6159fece697b817c3ffd10e72fc5531fdb8db70294b020d522fc801c51e`.
+
+The application now exposes practical facility dossiers rather than requiring a user
+to inspect raw observations. The live KNS 4 dossier contains its pit and structures,
+38 construction work types, consolidated materials, and source-role quantities. Live
+consultant turn `01a0ea7b-106e-7510-a783-daab5667773d` returned those facts, including
+95.028 t of sheet-pile driving, 104.869 t of extraction, and 9.841 t of bracing/belt
+work; deterministic and model quality checks passed. Facility cards now also show
+same-scope quantity comparisons. KNS 8.1 includes cable routing of 30 m in PD versus
+60 m in VOR and estimate, while its VOR/estimate sheet-pile driving and extraction
+values match.
+
+The current project model contains 12 facilities, nine established pits and three
+unresolved pit groups. It classifies 3,105 of 4,404 construction-scope observations
+(70.5%), retains 1,299 descriptions as unresolved, and provides 815 work scopes,
+618 material rows, 14 quantity comparisons, two material comparisons, seven issues,
+seven customer questions, and seven contractor risks. These are useful partial
+engineering results, not complete Tender acceptance. The pit total is not final,
+facility assignment remains incomplete, and authenticated visual browser inspection
+is still unverified because no attachable signed-in browser session is available.
+
+Local Qwen continues bounded project-work reconciliation under the supervised document
+worker. At this checkpoint job `01a0ea85-b221-70dc-bea3-49a45006e6e6` was running with
+a fresh heartbeat; the queued KNS 8.1 comparison question will receive the next safe
+foreground slot.
+
 ## 2026-09-23 16:54 UTC+12 — scoped identity evidence connected to pit projection
 
 Reusable Tender materialization release `c83b3a3fc5f45202b6630a9b7e6b4630ccdd6d5f`
