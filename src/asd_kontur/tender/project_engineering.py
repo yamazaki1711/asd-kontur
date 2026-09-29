@@ -4194,9 +4194,9 @@ def _documents(
             "source_version_id": str(value.get("source_version_id") or ""),
             "document_role": document_role,
         }
-    for value in source_context.values():
-        name = str(value.get("safe_display_name") or "")
-        version = int(value.get("document_version") or 1)
+    for context_value in source_context.values():
+        name = str(context_value.get("safe_display_name") or "")
+        version = int(context_value.get("document_version") or 1)
         if not name:
             continue
         unique.setdefault(
@@ -4204,7 +4204,7 @@ def _documents(
             {
                 "name": name,
                 "version": version,
-                "source_version_id": str(value.get("source_version_id") or ""),
+                "source_version_id": str(context_value.get("source_version_id") or ""),
                 "document_role": _professional_document_role(None, name),
             },
         )

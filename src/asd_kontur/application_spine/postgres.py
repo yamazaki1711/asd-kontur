@@ -6266,14 +6266,15 @@ class SpinePostgresRepository:
         *,
         organization_id: UUID,
         workspace_id: UUID,
-        page_roles: Iterable[Mapping[str, Any]],
+        page_roles: Iterable[Any],
     ) -> list[dict[str, Any]]:
         """Return the latest admitted document versions with known page roles."""
 
-        role_rows = list(page_roles)
+        role_rows: list[dict[str, Any]] = [dict(row) for row in page_roles]
         if not role_rows:
-            role_rows = list(
-                session.execute(
+            role_rows = [
+                dict(row)
+                for row in session.execute(
                     sa.text(
                         "SELECT v.source_version_id,d.selected_roles FROM "
                         "workspace.document_role_decisions d JOIN workspace.document_versions v "
@@ -6284,7 +6285,7 @@ class SpinePostgresRepository:
                     ),
                     {"organization": organization_id, "workspace": workspace_id},
                 ).mappings()
-            )
+            ]
         roles_by_source: dict[str, set[str]] = defaultdict(set)
         for raw in role_rows:
             row = dict(raw)
@@ -6304,8 +6305,8 @@ class SpinePostgresRepository:
             {"organization": organization_id, "workspace": workspace_id},
         ).mappings()
         inventory: list[dict[str, Any]] = []
-        for row in rows:
-            value = _jsonable_row(row)
+        for inventory_row in rows:
+            value = _jsonable_row(inventory_row)
             value["selected_roles"] = sorted(
                 roles_by_source.get(str(value.get("source_version_id") or ""), set())
             )
