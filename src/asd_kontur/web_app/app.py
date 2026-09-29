@@ -115,6 +115,7 @@ from .schemas import (
     PilotResultView,
     ProjectCandidateReviewRequest,
     ProjectCandidateReviewView,
+    ProjectProcessingStatusView,
     ProjectUnderstandingView,
     ResetChallengeView,
     ResetExecuteRequest,
@@ -1011,6 +1012,22 @@ def _api_router() -> APIRouter:
             status_code=response_status,
             headers=headers,
         )
+
+    @router.get(
+        "/workspaces/{workspace_id}/processing-status",
+        response_model=ProjectProcessingStatusView,
+        tags=["project-understanding"],
+    )
+    def project_processing_status(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> ProjectProcessingStatusView:
+        value = _container(request).service.project_processing_status(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return ProjectProcessingStatusView(**jsonable_encoder(asdict(value)))
 
     @router.get(
         "/workspaces/{workspace_id}/project-understanding",

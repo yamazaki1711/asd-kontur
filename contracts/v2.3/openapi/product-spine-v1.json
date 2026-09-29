@@ -2575,6 +2575,93 @@
         "title": "ProjectCandidateReviewView",
         "type": "object"
       },
+      "ProjectProcessingStatusView": {
+        "additionalProperties": false,
+        "properties": {
+          "active_job_count": {
+            "title": "Active Job Count",
+            "type": "integer"
+          },
+          "blocked_job_count": {
+            "title": "Blocked Job Count",
+            "type": "integer"
+          },
+          "blocker_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Code"
+          },
+          "current_stage": {
+            "title": "Current Stage",
+            "type": "string"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "last_progress_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Progress At"
+          },
+          "processed_document_count": {
+            "title": "Processed Document Count",
+            "type": "integer"
+          },
+          "progress_percent": {
+            "title": "Progress Percent",
+            "type": "number"
+          },
+          "qwen_active": {
+            "title": "Qwen Active",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "processing",
+              "analyzing_project",
+              "tender_analysis",
+              "partially_complete",
+              "complete",
+              "processing_error"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "succeeded_job_count": {
+            "title": "Succeeded Job Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "current_stage",
+          "document_count",
+          "processed_document_count",
+          "succeeded_job_count",
+          "active_job_count",
+          "blocked_job_count",
+          "progress_percent",
+          "last_progress_at",
+          "qwen_active",
+          "blocker_code"
+        ],
+        "title": "ProjectProcessingStatusView",
+        "type": "object"
+      },
       "ProjectUnderstandingView": {
         "additionalProperties": false,
         "properties": {
@@ -6810,6 +6897,49 @@
         "summary": "Pilot Export Content",
         "tags": [
           "pilot-results"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/processing-status": {
+      "get": {
+        "operationId": "project_processing_status_api_v1_workspaces__workspace_id__processing_status_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectProcessingStatusView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Project Processing Status",
+        "tags": [
+          "project-understanding"
         ]
       }
     },

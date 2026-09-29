@@ -68,6 +68,7 @@ from .models import (
     JobSummary,
     KnowledgeStatus,
     PageLocator,
+    ProjectProcessingStatus,
     ResetChallenge,
     WorkspaceSummary,
     decode_cursor,
@@ -339,6 +340,103 @@ class SpinePostgresRepository:
         if row is None:
             raise SpinePersistenceError("workspace_not_found")
         return _workspace_summary(row)
+
+    def project_processing_status(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> ProjectProcessingStatus:
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            jobs = (
+                session.execute(
+                    sa.text(
+                        "SELECT count(*) AS total_count,"
+                        "count(*) FILTER (WHERE state='succeeded') AS succeeded_count,"
+                        "count(*) FILTER (WHERE state IN ('queued','leased','running')) AS active_count,"
+                        "count(*) FILTER (WHERE state IN ('leased','running')) AS running_count,"
+                        "count(*) FILTER (WHERE state='reconciliation_required') AS blocked_count,"
+                        "max(COALESCE(completed_at,heartbeat_at,started_at,created_at)) AS last_progress_at,"
+                        "array_agg(DISTINCT job_kind) FILTER (WHERE state IN ('queued','leased','running')) "
+                        "AS active_kinds,"
+                        "bool_or(state IN ('leased','running') AND job_kind IN ("
+                        "'OCR_EXTRACTION','DOCUMENT_PAGE_CLASSIFICATION',"
+                        "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
+                        "'PROJECT_WORK_RECONCILIATION')) AS qwen_active "
+                        "FROM workspace.durable_jobs WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .one()
+            )
+            documents = (
+                session.execute(
+                    sa.text(
+                        "WITH latest AS (SELECT DISTINCT ON (document_id,document_version) "
+                        "document_id,document_version,extraction_status FROM "
+                        "workspace.document_processing_states WHERE organization_id=:organization "
+                        "AND workspace_id=:workspace ORDER BY document_id,document_version,"
+                        "state_sequence DESC) SELECT count(*) AS document_count,"
+                        "count(*) FILTER (WHERE extraction_status IN "
+                        "('complete','partial_with_capability_gap')) AS processed_count FROM latest"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+                .mappings()
+                .one()
+            )
+            latest_failure = session.scalar(
+                sa.text(
+                    "SELECT typed_failure_code FROM workspace.durable_jobs WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "state IN ('failed','reconciliation_required') AND typed_failure_code IS NOT NULL "
+                    "ORDER BY completed_at DESC NULLS LAST,created_at DESC LIMIT 1"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+        active_kinds = {str(value) for value in jobs["active_kinds"] or ()}
+        analysis_kinds = {
+            JobKind.PROJECT_UNDERSTANDING_RECONCILIATION.value,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION.value,
+            JobKind.PROJECT_WORK_RECONCILIATION.value,
+            JobKind.WORK_QUANTITY_MATERIAL_EXTRACTION.value,
+            JobKind.WORK_PACKAGE_ASSEMBLY.value,
+            JobKind.REQUIREMENT_MATRIX_ASSEMBLY.value,
+        }
+        active_count = int(jobs["active_count"] or 0)
+        blocked_count = int(jobs["blocked_count"] or 0)
+        succeeded_count = int(jobs["succeeded_count"] or 0)
+        total_count = int(jobs["total_count"] or 0)
+        if active_count and active_kinds.intersection(analysis_kinds):
+            status = "analyzing_project"
+            stage = "project_analysis"
+        elif active_count:
+            status = "processing"
+            stage = "document_processing"
+        elif blocked_count:
+            status = "partially_complete"
+            stage = "blocked_items"
+        elif succeeded_count:
+            status = "complete"
+            stage = "tender_analysis"
+        else:
+            status = "processing_error" if latest_failure else "processing"
+            stage = "admission"
+        denominator = max(total_count, 1)
+        return ProjectProcessingStatus(
+            status=status,
+            current_stage=stage,
+            document_count=int(documents["document_count"] or 0),
+            processed_document_count=int(documents["processed_count"] or 0),
+            succeeded_job_count=succeeded_count,
+            active_job_count=active_count,
+            blocked_job_count=blocked_count,
+            progress_percent=round(100 * succeeded_count / denominator, 1),
+            last_progress_at=jobs["last_progress_at"],
+            qwen_active=bool(jobs["qwen_active"]),
+            blocker_code=str(latest_failure) if not active_count and latest_failure else None,
+        )
 
     def resolve_scope(self, owner_identity_id: str, workspace_id: UUID) -> UUID:
         with self._engine.connect() as connection:

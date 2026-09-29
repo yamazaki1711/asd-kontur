@@ -6214,6 +6214,17 @@ function ProjectUnderstandingPage() {
     retry: false,
     refetchInterval: 30_000,
   });
+  const processingStatus = useQuery({
+    queryKey: ["project-processing-status", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/processing-status",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+    refetchInterval: 10_000,
+  });
   const start = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST(
@@ -6226,6 +6237,9 @@ function ProjectUnderstandingPage() {
       await Promise.all([
         queryClient.invalidateQueries({
           queryKey: ["project-understanding", workspaceId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["project-processing-status", workspaceId],
         }),
         queryClient.invalidateQueries({ queryKey: ["jobs", workspaceId] }),
       ]);
@@ -6266,6 +6280,48 @@ function ProjectUnderstandingPage() {
       title="Модель объекта"
       lead="Структура ОКС, работы, объёмы, материалы и требования, сформированные из загруженных документов."
     >
+      {processingStatus.data && (
+        <section className="panel" aria-label="Состояние анализа проекта">
+          <h2>
+            {
+              {
+                processing: "Обработка документов",
+                analyzing_project: "Анализ проекта",
+                tender_analysis: "Тендерный анализ",
+                partially_complete: "Готово частично — есть нерешённые вопросы",
+                complete: "Готово",
+                processing_error: "Ошибка обработки",
+              }[processingStatus.data.status]
+            }
+          </h2>
+          <p>
+            Документы: {processingStatus.data.processed_document_count} из{" "}
+            {processingStatus.data.document_count}. Общий прогресс:{" "}
+            {processingStatus.data.progress_percent}%.
+          </p>
+          <p>
+            {processingStatus.data.qwen_active
+              ? "Локальный инженерный анализ выполняется."
+              : processingStatus.data.active_job_count > 0
+                ? "Следующие этапы поставлены в очередь и продолжатся автоматически."
+                : "Активных этапов обработки сейчас нет."}
+          </p>
+          {processingStatus.data.last_progress_at && (
+            <small>
+              Последнее продвижение:{" "}
+              {new Date(processingStatus.data.last_progress_at).toLocaleString(
+                "ru-RU",
+              )}
+            </small>
+          )}
+          {processingStatus.data.blocker_code && (
+            <InfoNotice>
+              Анализ завершён частично. Требуется устранить блокирующую ошибку
+              обработки.
+            </InfoNotice>
+          )}
+        </section>
+      )}
       <div className="model-actions">
         <button
           type="button"

@@ -64,6 +64,7 @@ from .models import (
     KnowledgeStatus,
     ModeName,
     ModeWorkspaceView,
+    ProjectProcessingStatus,
     WorkspaceSummary,
     semantic_digest,
 )
@@ -191,6 +192,14 @@ class ProductSpineService:
 
     def list_workspaces(self, *, owner_identity_id: str) -> tuple[WorkspaceSummary, ...]:
         return self._repository.list_workspaces(owner_identity_id=owner_identity_id)
+
+    def project_processing_status(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> ProjectProcessingStatus:
+        return self._repository.project_processing_status(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
 
     def register_uploads(
         self,

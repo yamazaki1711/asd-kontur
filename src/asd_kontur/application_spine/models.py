@@ -96,6 +96,21 @@ class WorkspaceSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ProjectProcessingStatus:
+    status: str
+    current_stage: str
+    document_count: int
+    processed_document_count: int
+    succeeded_job_count: int
+    active_job_count: int
+    blocked_job_count: int
+    progress_percent: float
+    last_progress_at: datetime | None
+    qwen_active: bool
+    blocker_code: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class DocumentSummary:
     organization_id: UUID
     workspace_id: UUID

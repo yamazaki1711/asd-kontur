@@ -387,6 +387,27 @@ class ProjectUnderstandingView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class ProjectProcessingStatusView(ApiModel):
+    status: Literal[
+        "processing",
+        "analyzing_project",
+        "tender_analysis",
+        "partially_complete",
+        "complete",
+        "processing_error",
+    ]
+    current_stage: str
+    document_count: int
+    processed_document_count: int
+    succeeded_job_count: int
+    active_job_count: int
+    blocked_job_count: int
+    progress_percent: float
+    last_progress_at: datetime | None
+    qwen_active: bool
+    blocker_code: str | None
+
+
 class ProjectCandidateReviewRequest(ApiModel):
     candidate_kind: Literal["project_field", "work_type", "quantity", "material"]
     candidate_id: UUID

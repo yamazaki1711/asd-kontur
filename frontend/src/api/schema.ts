@@ -775,6 +775,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/processing-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Project Processing Status */
+        get: operations["project_processing_status_api_v1_workspaces__workspace_id__processing_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/project-understanding": {
         parameters: {
             query?: never;
@@ -2270,6 +2287,34 @@ export interface components {
              * Format: uuid
              */
             review_decision_id: string;
+        };
+        /** ProjectProcessingStatusView */
+        ProjectProcessingStatusView: {
+            /** Active Job Count */
+            active_job_count: number;
+            /** Blocked Job Count */
+            blocked_job_count: number;
+            /** Blocker Code */
+            blocker_code: string | null;
+            /** Current Stage */
+            current_stage: string;
+            /** Document Count */
+            document_count: number;
+            /** Last Progress At */
+            last_progress_at: string | null;
+            /** Processed Document Count */
+            processed_document_count: number;
+            /** Progress Percent */
+            progress_percent: number;
+            /** Qwen Active */
+            qwen_active: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "processing" | "analyzing_project" | "tender_analysis" | "partially_complete" | "complete" | "processing_error";
+            /** Succeeded Job Count */
+            succeeded_job_count: number;
         };
         /** ProjectUnderstandingView */
         ProjectUnderstandingView: {
@@ -4544,6 +4589,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    project_processing_status_api_v1_workspaces__workspace_id__processing_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectProcessingStatusView"];
                 };
             };
             /** @description Validation Error */
