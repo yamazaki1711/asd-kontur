@@ -1671,6 +1671,15 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Снятие и складывание ПСП": "reclamation",
         "Обратная надвижка снятого ПСП": "reclamation",
         "Ввод инженерных сетей": "pipeline",
+        "Перекладка участка стального водопровода 300 мм": "pipeline",
+        "Перенос сетей водоснабжения": "pipeline",
+        "Врезка в существующие сети стального патрубка диаметром 50 мм": "pipeline",
+        "Протаскивание в футляр стальных труб диаметром 300 мм": "pipeline",
+        "Заполнение свай бетоном": "pile_foundation",
+        "Устройство подпорной стены из бетона В25, W6, F100": "reinforced_concrete",
+        "Втрамбовка щебня в грунт основания": "pit_preparation",
+        "Устройство дренажного лотка Л1-8": "drainage",
+        "Установка трубок водоотводных ПП 50 мм": "drainage",
     }
 
     for wording, family_key in expected.items():
@@ -1679,6 +1688,25 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         assert result[0] == family_key
 
     assert classify_work_family("Вывоз после приемки со склада готового оборудования") is None
+
+
+def test_project_titles_section_headings_and_material_rows_are_not_work_scopes() -> None:
+    expected = {
+        "Капитальный ремонт подпорной стены по ул. Примерная, 10": "Наименование объекта",
+        "Конструктивные решения": "Заголовок раздела",
+        (
+            "Наружные сети водопровода, канализации, теплоснабжения, "
+            "газопроводы для районов Крайнего Севера"
+        ): "Заголовок раздела",
+        "Трубы стальные бесшовные горячедеформированные диаметром 325 мм": "материала или изделия",
+        "Плиты перекрытия 2ПП15-1": "материала или изделия",
+        "Мастика битумная": "материала или изделия",
+    }
+
+    for wording, reason_fragment in expected.items():
+        reason = non_work_reason(wording)
+        assert reason is not None
+        assert reason_fragment.casefold() in reason.casefold()
 
 
 def test_estimate_resource_code_does_not_become_a_construction_work_scope() -> None:
