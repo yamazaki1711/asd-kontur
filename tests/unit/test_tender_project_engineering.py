@@ -31,6 +31,7 @@ from asd_kontur.tender.project_engineering import (
     established_facility_designations,
     facility_designation,
     facility_designations,
+    mentioned_established_facilities,
     non_work_reason,
     professional_work_name,
     work_reconciliation_priority,
@@ -1149,7 +1150,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v51"
+    assert model["model_version"] == "project-engineering-model-v52"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -2385,6 +2386,7 @@ def test_generic_identity_components_preserve_distinct_same_named_facilities() -
     assert len(model["facilities"]) == 2
     assert {row["name"] for row in model["facilities"]} == {"Технологическая площадка"}
     assert len({row["facility_id"] for row in model["facilities"]}) == 2
+    assert established_facility_designations(components) == ()
 
 
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:
@@ -2447,6 +2449,68 @@ def test_equipment_model_does_not_hide_reconciled_project_structure() -> None:
     assert [(row["name"], row["kind"]) for row in model["facilities"]] == [
         ("Берегоукрепительное сооружение", "Конструкция")
     ]
+
+
+def test_generic_project_location_is_available_to_bounded_work_resolution() -> None:
+    components = [
+        {
+            "identity_candidate_id": "retaining-structure",
+            "identity_kind": "structure",
+            "canonical_label": "Берегоукрепительное сооружение",
+            "candidate_labels": ["Берегоукрепительное сооружение"],
+            "member_structure_node_ids": ["structure-rd", "structure-pz"],
+            "source_locator_ids": ["structure-rd-locator", "structure-pz-locator"],
+        }
+    ]
+    facilities = established_facility_designations(components)
+
+    assert facilities == ("Берегоукрепительное сооружение",)
+    assert mentioned_established_facilities(
+        "Армирование берегоукрепительного сооружения", facilities
+    ) == ("Берегоукрепительное сооружение",)
+
+    model = build_project_engineering_model(
+        workspace_id="workspace-generic-location-work",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "reinforcement",
+                    "version": 1,
+                    "value": "Установка арматурных каркасов",
+                    "source_version_id": "work-source",
+                    "source_locator_id": "work-locator",
+                    "source_role": "working_documentation",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=components,
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict([_source("work-locator", "КР.pdf", 7)]),
+        work_resolutions={
+            "reinforcement": {
+                "candidate_version": 1,
+                "status": "MATCHED",
+                "family_key": "reinforcement",
+                "operation": "Армирование",
+                "facility": "Берегоукрепительное сооружение",
+                "confidence": "0.92",
+                "reason": "Сооружение явно указано в контексте работы.",
+            }
+        },
+    )
+
+    assert model["works"][0]["facility"] == "Берегоукрепительное сооружение"
+    assert model["works"][0]["status"].startswith(
+        "Сооружение установлено локальной моделью"
+    )
 
 
 def test_unmatched_facility_shaped_token_does_not_create_work_location() -> None:

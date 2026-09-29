@@ -36,7 +36,7 @@ from asd_kontur.tender.project_engineering import (
     document_comparison_side,
     established_facility_designations,
     facility_designation,
-    facility_designations,
+    mentioned_established_facilities,
     non_work_reason,
     work_family_catalog,
     work_reconciliation_priority,
@@ -4606,7 +4606,9 @@ class SpinePostgresRepository:
                 contextual_scope = (
                     f"{wording} {context_text} {context.get('safe_display_name') or ''}"
                 )
-                explicit_context_facilities = set(facility_designations(contextual_scope))
+                explicit_context_facilities = set(
+                    mentioned_established_facilities(contextual_scope, facilities)
+                )
                 hints = [value for value in facilities if value in explicit_context_facilities]
                 prepared.append(
                     {

@@ -17,7 +17,7 @@ from typing import Any
 
 from asd_kontur.application_spine.models import semantic_digest
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v51"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v52"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -829,33 +829,54 @@ def _explicit_designation_alias(designation: str, aliases: Iterable[object]) -> 
 def established_facility_designations(
     identity_components: Iterable[Mapping[str, Any]],
 ) -> tuple[str, ...]:
-    """Return corroborated project facilities, excluding equipment model marks.
+    """Return unambiguous corroborated project-location labels.
 
     A facility-shaped token can describe a pump-station product model.  It is
     not a project facility merely because that token was extracted.  The
-    professional inventory requires an explicit alias and at least two source
-    locators, matching the same rule used by facility cards.
+    professional inventory uses the same cross-document rule as the project
+    cards.  Duplicate labels are excluded because a label alone cannot choose
+    between two distinct same-named facilities.
     """
 
-    established: set[str] = set()
-    for raw in identity_components:
-        component = dict(raw)
-        if str(component.get("identity_kind") or "") not in {"facility", "local_area"}:
+    facilities, _node_to_facility = _facilities(
+        "project-location-catalog",
+        (),
+        identity_components,
+    )
+    counts = Counter(_normalized(value.get("name")) for value in facilities)
+    return tuple(
+        sorted(
+            str(value["name"])
+            for value in facilities
+            if counts[_normalized(value.get("name"))] == 1
+        )
+    )
+
+
+def mentioned_established_facilities(
+    value: object, established_facilities: Iterable[object]
+) -> tuple[str, ...]:
+    """Return only unambiguously named established locations in source context."""
+
+    text = _normalized(value)
+    matches: list[str] = []
+    for raw_label in established_facilities:
+        label = str(raw_label).strip()
+        needle = _normalized(label)
+        if not needle:
             continue
-        label = str(component.get("canonical_label") or "").strip()
-        designation = facility_designation(label)
-        aliases = [
-            str(value).strip()
-            for value in component.get("candidate_labels") or (label,)
-            if str(value).strip()
+        exact = re.search(rf"(?<![0-9a-zа-я]){re.escape(needle)}(?![0-9a-zа-я])", text)
+        tokens = needle.split()
+        stems = [
+            token if token.isdecimal() or len(token) <= 5 else token[: max(5, len(token) - 3)]
+            for token in tokens
         ]
-        if (
-            designation
-            and len({str(value) for value in component.get("source_locator_ids") or ()}) >= 2
-            and _explicit_designation_alias(designation, aliases)
-        ):
-            established.add(designation)
-    return tuple(sorted(established))
+        inflected = (
+            len(stems) >= 2 or (len(stems) == 1 and len(stems[0]) >= 8)
+        ) and _ordered_stem_phrase(text, " ".join(stems))
+        if exact or inflected:
+            matches.append(label)
+    return tuple(dict.fromkeys(matches))
 
 
 def classify_work_family(value: object) -> tuple[str, str] | None:
@@ -1838,6 +1859,18 @@ def _work_schedule(
         str(item.get("designation")): dict(item) for item in facilities if item.get("designation")
     }
     facility_by_id = {str(item.get("facility_id")): dict(item) for item in facilities}
+    facility_labels: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for item in facilities:
+        labels = [item.get("name"), *(item.get("aliases") or ())]
+        for label in labels:
+            normalized_label = _normalized(label)
+            if normalized_label:
+                facility_labels[normalized_label].append(dict(item))
+    facility_by_semantic_label = {
+        label: values[0]
+        for label, values in facility_labels.items()
+        if len({str(value.get("facility_id")) for value in values}) == 1
+    }
     commercial_facilities_by_scope: dict[str, set[str]] = defaultdict(set)
     for scope_context in source_context.values():
         scope_code = str(scope_context.get("page_commercial_scope_code") or "").strip()
@@ -2000,7 +2033,9 @@ def _work_schedule(
                 )
         if facility is None and resolution.get("facility"):
             semantic_designation = str(resolution["facility"])
-            semantic_facility = facility_by_designation.get(semantic_designation)
+            semantic_facility = facility_by_designation.get(
+                semantic_designation
+            ) or facility_by_semantic_label.get(_normalized(semantic_designation))
             if semantic_facility is not None:
                 facility = semantic_facility
                 designation = semantic_designation
