@@ -1485,6 +1485,16 @@ def test_common_project_operations_use_reusable_construction_families() -> None:
         "Монтаж габионов для защиты откоса": "gabion_erosion_protection",
         "Геодезические работы по разбивке осей": "surveying",
         "Удаление кустарников на строительной площадке": "site_preparation",
+        "Доставка (перемещение) на строительную площадку": "transportation",
+        "Перемещение строительной техники": "transportation",
+        "Установка трубчатых металлических стоек": "structural_steel",
+        "Установка лестницы из алюминия": "structural_steel",
+        "Входной контроль поступивших изделий": "testing",
+        "Установка системы вентиляции с дефлектором": "equipment_installation",
+        "Временное хранение строительных и бытовых отходов": "waste_management",
+        "Снятие и складывание ПСП": "reclamation",
+        "Обратная надвижка снятого ПСП": "reclamation",
+        "Ввод инженерных сетей": "pipeline",
     }
 
     for wording, family_key in expected.items():
@@ -2188,6 +2198,9 @@ def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None
     )
     assert non_work_reason("БСТ В7,5 П2 W2 (заделка швов)") == (
         "Описание бетонной смеси, а не отдельная строительная операция"
+    )
+    assert non_work_reason("ОТм(Зтм) Средний разряд машинистов 6") == (
+        "Сметный показатель трудозатрат, а не отдельная строительная операция"
     )
 
 

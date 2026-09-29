@@ -249,6 +249,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "сварк пластмассов труб",
             "установк задвиж",
             "установк клапан обратн",
+            "ввод инженерн сет",
         ),
     ),
     (
@@ -296,6 +297,8 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "стальн конструкц",
             "металлическ конструкц",
             "монтаж лестниц",
+            "установк лестниц из алюмин",
+            "установк трубчат металлическ стоек",
         ),
     ),
     (
@@ -339,6 +342,8 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "транспортировк",
             "доставк оборудован",
             "доставк материал",
+            "доставк перемещен на строительн площадк",
+            "перемещен строительн техник",
             "привоз чист грунт",
         ),
     ),
@@ -362,6 +367,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "вывоз промышлен отход",
             "погрузк мусор строительн",
             "погрузк в автотранспортн средств мусор",
+            "временн хранен строительн бытов отход",
         ),
     ),
     (
@@ -424,6 +430,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "монтаж контейнер",
             "монтаж дополнительн соединительн элемент",
             "установк пескоуловител",
+            "установк систем вентиляц",
         ),
     ),
     (
@@ -442,6 +449,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
             "испытан трубопровод",
             "лабораторн контроль",
             "визуальн контрол качеств",
+            "входн контрол",
             "отбор проб",
         ),
     ),
@@ -491,6 +499,7 @@ _WORK_FAMILIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         (
             "рекультивац",
             "плодородн сло",
+            "псп",
             "восстановлен травян",
             "растительн грунт",
         ),
@@ -878,6 +887,8 @@ def non_work_reason(value: object) -> str | None:
         return "Сметный шифр без описания строительной операции"
     if re.match(r"^\d+(?:[.-]\d+){2,}\s+", normalized):
         return "Сметный ресурс с кодом, а не отдельная строительная операция"
+    if normalized.startswith(("отм зтм", "от зт", "зтм ", "зт ")):
+        return "Сметный показатель трудозатрат, а не отдельная строительная операция"
     if normalized.startswith(("площадь ", "объем ", "объём ")):
         return "Проектный показатель или количество, а не отдельная строительная операция"
     if re.match(r"^бст\s+в\d", normalized):
@@ -1052,6 +1063,8 @@ def professional_work_name(family_key: str, wording: object) -> str:
             return "Устройство основания под трубопровод"
         if "подключ" in normalized or "врезк" in normalized:
             return "Подключение трубопровода"
+        if "ввод" in normalized and "инженерн" in normalized:
+            return "Ввод инженерных сетей"
         return "Монтаж трубопровода"
     if family_key == "pit_preparation":
         if "бетон" in normalized:
@@ -1133,7 +1146,15 @@ def professional_work_name(family_key: str, wording: object) -> str:
         if "бетонирован" in normalized or "бетонн работ" in normalized:
             return "Бетонирование"
         return "Железобетонные конструкции"
+    if family_key == "structural_steel":
+        if "стоек" in normalized:
+            return "Установка металлических стоек"
+        if "лестниц" in normalized:
+            return "Монтаж лестниц и ограждений"
+        return "Металлоконструкции"
     if family_key == "equipment_installation":
+        if "вентиляц" in normalized:
+            return "Монтаж системы вентиляции"
         if "насосн" in normalized:
             return "Монтаж насосного оборудования"
         if "емкост" in normalized or "корпус" in normalized:
@@ -1144,6 +1165,8 @@ def professional_work_name(family_key: str, wording: object) -> str:
             return "Монтаж ЛОС"
         return "Монтаж технологического оборудования"
     if family_key == "testing":
+        if "входн" in normalized and "контрол" in normalized:
+            return "Входной контроль"
         if "герметич" in normalized:
             return "Испытание на герметичность"
         if "промыв" in normalized:
@@ -1153,6 +1176,12 @@ def professional_work_name(family_key: str, wording: object) -> str:
         if "лабораторн" in normalized:
             return "Лабораторный контроль"
         return "Испытания и проверка"
+    if family_key == "reclamation":
+        if "обратн" in normalized and ("псп" in normalized or "плодород" in normalized):
+            return "Восстановление плодородного слоя почвы"
+        if "псп" in normalized or "плодород" in normalized:
+            return "Снятие и складирование плодородного слоя почвы"
+        return "Рекультивация"
     return next(title for key, title, _terms in _WORK_FAMILIES if key == family_key)
 
 
