@@ -388,6 +388,76 @@ def test_prepared_facility_dossier_publishes_requested_quantities_and_materials(
     )
 
 
+def test_facility_quantity_discrepancy_publishes_only_requested_comparison() -> None:
+    question = (
+        "По КНС-8.1 перечисли конкретные расхождения по объёмам между ПД, ВОР и сметой. "
+        "Для каждого укажи проектное и коммерческое значение и разницу."
+    )
+    difference = {
+        "work": "Прокладка кабеля",
+        "classification": "QUANTITY_DIFFERENCE",
+        "professional_status": "Различается объём",
+        "left": {"document_role": "ПД", "value": "30", "unit": "м"},
+        "right": {"document_role": "ВОР", "value": "60", "unit": "м"},
+        "conclusion": "Разница ПД ↔ ВОР: -30 м",
+    }
+    matching = {
+        "work": "Погружение шпунта",
+        "classification": "MATCH",
+        "professional_status": "Значения совпадают",
+        "left": {"document_role": "ВОР", "value": "95.028", "unit": "т"},
+        "right": {"document_role": "Смета", "value": "95.028", "unit": "т"},
+    }
+    receipt = {
+        "tool": "consultant.get_work_packages",
+        "response": {
+            "value": {
+                "project_engineering": {
+                    "facility_dossiers": [
+                        {
+                            "facility": {"name": "КНС 8.1"},
+                            "work_names": ["Прокладка кабеля", "Погружение шпунта"],
+                            "work_count": 2,
+                            "comparisons": [matching, difference],
+                        }
+                    ],
+                    "quantity_comparisons": [matching, difference],
+                    # This project-wide material difference is deliberately
+                    # unrelated to the requested facility quantity comparison.
+                    "material_comparisons": [
+                        {"material": "Бетон В25", "description": "F200 ↔ F150"}
+                    ],
+                }
+            },
+            "sources": [{"source_id": "facility-comparison-source"}],
+        },
+    }
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Проверены сопоставимые объёмы.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Объёмы КНС-8.1.",
+            ("КНС-8.1",),
+        ),
+        [receipt],
+        question,
+    )
+
+    assert "КНС 8.1:" in completed.answer
+    assert "ПД: 30 м; ВОР: 60 м" in completed.answer
+    assert "Разница ПД ↔ ВОР: -30 м" in completed.answer
+    assert "95.028" not in completed.answer
+    assert "Основные работы" not in completed.answer
+    assert _with_structured_project_fact_checks(
+        {"passed": True, "problems": []},
+        answer=completed,
+        receipts=[receipt],
+        question=question,
+    ) == {"passed": True, "problems": []}
+
+
 def test_general_engineering_question_still_requires_model_planning() -> None:
     assert _direct_project_result_plan("Как выполнять бетонирование зимой?") is None
 

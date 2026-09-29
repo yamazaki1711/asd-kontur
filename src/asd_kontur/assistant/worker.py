@@ -1165,12 +1165,27 @@ def _with_structured_project_fact_checks(
     asks_for_discrepancies = any(
         marker in normalized_question for marker in ("расхожд", "расход", "разниц")
     )
-    asks_for_material_differences = asks_for_project_discrepancies or (
+    facility_reference = bool(
+        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
+    )
+    asks_for_quantity_values = any(
+        marker in normalized_question for marker in ("объём", "объем", "количеств")
+    )
+    narrow_facility_quantity_comparison = (
+        facility_reference
+        and asks_for_comparisons
+        and asks_for_quantity_values
+        and "материал" not in normalized_question
+    )
+    asks_for_material_differences = (
         "материал" in normalized_question
         and any(
             marker in normalized_question
             for marker in ("расхожд", "расход", "различ", "не совпад", "противореч")
         )
+    ) or (asks_for_project_discrepancies and not narrow_facility_quantity_comparison)
+    asks_for_issue_details = (
+        asks_for_project_discrepancies and not narrow_facility_quantity_comparison
     )
     asks_for_facility_works = "работ" in normalized_question and bool(
         re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
@@ -1281,9 +1296,18 @@ def _with_structured_project_fact_checks(
             for item in comparison_items:
                 if not isinstance(item, dict):
                     continue
-                for key in ("work", "professional_status"):
-                    if str(item.get(key) or "").strip():
-                        required_comparison_terms.add(str(item[key]).strip())
+                work_name = str(item.get("work") or "").strip()
+                if work_name:
+                    required_comparison_terms.add(work_name)
+                # The professional conclusion is the most specific prepared
+                # difference statement. The generic comparison status is an
+                # alternative when no conclusion exists, not an additional
+                # phrase that the answer must repeat verbatim.
+                conclusion = str(
+                    item.get("conclusion") or item.get("professional_status") or ""
+                ).strip()
+                if conclusion:
+                    required_comparison_terms.add(conclusion)
                 for side in ("left", "right"):
                     value = item.get(side)
                     if not isinstance(value, dict):
@@ -1312,7 +1336,7 @@ def _with_structured_project_fact_checks(
                 required_material_terms.update(
                     re.findall(r"\b(?:F|W)\d+\b", str(item.get("description") or ""), re.I)
                 )
-        if asks_for_project_discrepancies:
+        if asks_for_issue_details:
             for item in engineering.get("issues") or ():
                 if not isinstance(item, dict):
                     continue
@@ -1485,9 +1509,17 @@ def _append_prepared_project_result(
     asks_for_facility_quantities = asks_for_facility_dossier and any(
         marker in normalized for marker in ("объём", "объем", "количеств")
     )
+    asks_for_facility_comparisons = asks_for_facility_dossier and any(
+        marker in normalized for marker in ("расхожд", "сравн", "разниц", "совпад")
+    )
     asks_for_facility_materials = asks_for_facility_dossier and "материал" in normalized
-    asks_for_facility_issues = asks_for_facility_dossier and any(
-        marker in normalized for marker in ("расхожд", "противореч", "риск", "вопрос", "проблем")
+    asks_for_facility_issues = asks_for_facility_dossier and (
+        any(marker in normalized for marker in ("противореч", "риск", "вопрос", "проблем"))
+        or asks_for_facility_materials
+        or ("расхожд" in normalized and not asks_for_facility_quantities)
+    )
+    narrow_facility_request = (
+        asks_for_facility_comparisons or asks_for_facility_materials or asks_for_facility_issues
     )
     asks_for_missing_commercial_work = (
         "работ" in normalized
@@ -1694,28 +1726,31 @@ def _append_prepared_project_result(
                     if isinstance(raw_facility, dict)
                     else "Сооружение"
                 )
+                if narrow_facility_request:
+                    dossier_rows.append(f"{facility_name}:")
                 work_names = [
                     str(work_name).strip()
                     for work_name in dossier.get("work_names") or ()
                     if str(work_name).strip()
                 ]
-                dossier_rows.append(
-                    f"{facility_name}: {int(dossier.get('work_count') or len(work_names))} "
-                    "видов работ."
-                )
+                if not narrow_facility_request:
+                    dossier_rows.append(
+                        f"{facility_name}: {int(dossier.get('work_count') or len(work_names))} "
+                        "видов работ."
+                    )
                 facility_pits = [
                     str(item.get("name") or item.get("designation") or "Котлован").strip()
                     for item in dossier.get("pits") or ()
                     if isinstance(item, dict)
                 ]
-                if facility_pits:
+                if facility_pits and not narrow_facility_request:
                     dossier_rows.append("Котлованы: " + ", ".join(facility_pits) + ".")
                 structures = [
                     str(item.get("name") or item.get("designation") or "Конструкция").strip()
                     for item in dossier.get("structures") or ()
                     if isinstance(item, dict)
                 ]
-                if structures:
+                if structures and not narrow_facility_request:
                     dossier_rows.append("Конструкции: " + ", ".join(structures) + ".")
                 characteristics = [
                     str(
@@ -1729,11 +1764,11 @@ def _append_prepared_project_result(
                     if isinstance(item, dict)
                 ]
                 characteristics = [value for value in characteristics if value]
-                if characteristics:
+                if characteristics and not narrow_facility_request:
                     dossier_rows.append("Характеристики: " + "; ".join(characteristics) + ".")
-                if work_names:
+                if work_names and not narrow_facility_request:
                     dossier_rows.append("Основные работы: " + ", ".join(work_names) + ".")
-                if asks_for_facility_quantities:
+                if asks_for_facility_quantities and not asks_for_facility_comparisons:
                     for work in dossier.get("work_schedule") or ():
                         if not isinstance(work, dict):
                             continue
@@ -1769,6 +1804,11 @@ def _append_prepared_project_result(
                 if asks_for_facility_quantities or asks_for_facility_issues:
                     for comparison in dossier.get("comparisons") or ():
                         if not isinstance(comparison, dict):
+                            continue
+                        if (
+                            asks_for_facility_comparisons
+                            and comparison.get("classification") == "MATCH"
+                        ):
                             continue
                         work_name = str(comparison.get("work") or "Работа").strip()
                         sides: list[str] = []
@@ -1830,7 +1870,7 @@ def _append_prepared_project_result(
                     for value in dossier.get("missing_information") or ()
                     if str(value).strip()
                 ]
-                if missing_information:
+                if missing_information and not narrow_facility_request:
                     dossier_rows.append(
                         "Требует уточнения: " + "; ".join(missing_information) + "."
                     )
