@@ -116,12 +116,17 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     project = dict(model.get("project") or {})
     name = dict(project.get("name") or {}).get("value") or "Наименование уточняется"
     purpose = dict(project.get("purpose") or {}).get("value") or "Назначение уточняется"
+    description = dict(project.get("description") or {}).get("value")
+    location = dict(project.get("location") or {}).get("value")
+    foundation = dict(project.get("foundation") or {}).get("value")
     pits = dict(model.get("pits") or {})
     body: list[str] = [
         _heading("Tender-анализ проекта", level=1),
         _paragraph(str(name)),
         _heading("1. Общая характеристика проекта"),
-        _paragraph(str(purpose)),
+        _paragraph(str(description or purpose)),
+        *([_paragraph(f"Место строительства: {location}")] if location else []),
+        *([_paragraph(f"Конструктивная схема: {foundation}")] if foundation else []),
         _paragraph(
             str(pits.get("professional_answer") or "Инвентаризация котлованов не завершена.")
         ),

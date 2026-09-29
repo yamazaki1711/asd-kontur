@@ -1302,6 +1302,74 @@ def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> No
     ]
 
 
+def test_project_overview_consolidates_professional_field_aliases() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-overview",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [
+                {
+                    "candidate_id": "name-project",
+                    "label": "project_name",
+                    "value": "Капитальный ремонт подпорной стены",
+                    "source_version_id": "source-a",
+                    "source_locator_id": "name-a",
+                },
+                {
+                    "candidate_id": "name-construction",
+                    "label": "construction_name",
+                    "value": "Капитальный ремонт подпорной стены",
+                    "source_version_id": "source-b",
+                    "source_locator_id": "name-b",
+                },
+                {
+                    "candidate_id": "description",
+                    "label": "object_description",
+                    "value": "Подпорная стена на свайном основании длиной 219 м",
+                    "source_version_id": "source-a",
+                    "source_locator_id": "description",
+                },
+                {
+                    "candidate_id": "location",
+                    "label": "location",
+                    "value": "г. Петропавловск-Камчатский, ул. Океанская",
+                    "source_version_id": "source-b",
+                    "source_locator_id": "location",
+                },
+                {
+                    "candidate_id": "foundation",
+                    "label": "foundation_type",
+                    "value": "Подпорная стена на свайном основании",
+                    "source_version_id": "source-a",
+                    "source_locator_id": "foundation",
+                },
+            ],
+            "work_types": [],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert model["project"]["name"] == {
+        "value": "Капитальный ремонт подпорной стены",
+        "status": "Установлено по нескольким документам",
+        "source_count": 2,
+        "source_locator_ids": ["name-a", "name-b"],
+    }
+    assert model["project"]["description"]["value"].startswith("Подпорная стена")
+    assert model["project"]["location"]["value"].startswith("г. Петропавловск")
+    assert model["project"]["foundation"]["value"] == (
+        "Подпорная стена на свайном основании"
+    )
+
+
 def test_omission_names_only_the_supplied_commercial_denominator() -> None:
     comparisons = _scope_comparisons(
         [

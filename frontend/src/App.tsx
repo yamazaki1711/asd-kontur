@@ -5190,6 +5190,9 @@ function ProjectEngineeringResult({
   >;
   const name = (project.name ?? {}) as Record<string, unknown>;
   const purpose = (project.purpose ?? {}) as Record<string, unknown>;
+  const description = (project.description ?? {}) as Record<string, unknown>;
+  const location = (project.location ?? {}) as Record<string, unknown>;
+  const foundation = (project.foundation ?? {}) as Record<string, unknown>;
 
   if (!Object.keys(model).length) return null;
   if (section === "general") {
@@ -5201,8 +5204,15 @@ function ProjectEngineeringResult({
               <p className="eyebrow">Объект</p>
               <h2>{displayValue(name.value, "Наименование уточняется")}</h2>
               <p>
-                {displayValue(purpose.value, "Назначение объекта уточняется")}
+                {displayValue(
+                  description.value ?? purpose.value,
+                  "Назначение и состав объекта уточняются",
+                )}
               </p>
+              {location.value ? <p>Место: {displayValue(location.value)}</p> : null}
+              {foundation.value ? (
+                <p>Конструктивная схема: {displayValue(foundation.value)}</p>
+              ) : null}
             </div>
             <StatusPill tone="warning">
               {displayValue(project.status, "Сформировано частично")}

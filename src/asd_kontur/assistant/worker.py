@@ -1593,6 +1593,24 @@ def _append_prepared_project_result(
                 purpose_text = str(purpose or "").strip()
                 if purpose_text:
                     overview_rows.append("Назначение: " + purpose_text)
+                description = project.get("description")
+                if isinstance(description, dict):
+                    description = description.get("value")
+                description_text = str(description or "").strip()
+                if description_text:
+                    overview_rows.append("Описание: " + description_text)
+                location = project.get("location")
+                if isinstance(location, dict):
+                    location = location.get("value")
+                location_text = str(location or "").strip()
+                if location_text:
+                    overview_rows.append("Место строительства: " + location_text)
+                foundation = project.get("foundation")
+                if isinstance(foundation, dict):
+                    foundation = foundation.get("value")
+                foundation_text = str(foundation or "").strip()
+                if foundation_text:
+                    overview_rows.append("Конструктивная схема: " + foundation_text)
                 composition = project.get("composition")
                 if isinstance(composition, dict):
                     composition = composition.get("value")

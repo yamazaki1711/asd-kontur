@@ -1223,8 +1223,11 @@ def _project_overview(
         if key and value:
             grouped[key][_normalized(value)].append(row)
 
-    def select(key: str) -> dict[str, Any] | None:
-        confirmed = verified.get(key)
+    def select(*keys: str) -> dict[str, Any] | None:
+        confirmed = next(
+            (verified.get(key) for key in keys if isinstance(verified.get(key), Mapping)),
+            None,
+        )
         if isinstance(confirmed, Mapping):
             return {
                 "value": confirmed.get("normalized_value", confirmed.get("raw_value")),
@@ -1233,7 +1236,10 @@ def _project_overview(
                 if confirmed.get("source_locator_id")
                 else [],
             }
-        values = grouped.get(key, {})
+        values: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for key in keys:
+            for normalized_value, rows in grouped.get(key, {}).items():
+                values[normalized_value].extend(rows)
         if not values:
             return None
         _normalized_value, rows = max(
@@ -1265,13 +1271,23 @@ def _project_overview(
             ),
         }
 
-    name = select("object_name")
+    # Different professional documents use different field names for the same
+    # construction object.  Treat those labels as aliases and prefer the value
+    # corroborated by the most independent sources instead of leaving the
+    # overview dependent on one extractor label.
+    name = select("object_name", "project_name", "construction_name")
     purpose = select("purpose")
     composition = select("object_composition")
+    description = select("object_description")
+    location = select("location", "construction_location", "object_location")
+    foundation = select("foundation_type")
     return {
         "name": name,
         "purpose": purpose,
         "composition": composition,
+        "description": description,
+        "location": location,
+        "foundation": foundation,
         "status": "Установлено частично"
         if not (name and purpose and composition)
         else "Установлено",

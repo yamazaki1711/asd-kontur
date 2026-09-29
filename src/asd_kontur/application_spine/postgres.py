@@ -7178,7 +7178,7 @@ def _application_engineering_projection(
         return row
 
     project = dict(model.get("project") or {})
-    for key in ("name", "purpose", "composition"):
+    for key in ("name", "purpose", "composition", "description", "location", "foundation"):
         if isinstance(project.get(key), Mapping):
             project[key] = bounded_locators(dict(project[key]))
 
