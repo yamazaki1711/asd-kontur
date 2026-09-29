@@ -1308,7 +1308,6 @@ def _facilities(
     structure_nodes: Iterable[Mapping[str, Any]],
     identity_components: Iterable[Mapping[str, Any]],
 ) -> tuple[list[dict[str, Any]], dict[str, str]]:
-    del structure_nodes
     groups: dict[str, dict[str, Any]] = {}
     node_to_facility: dict[str, str] = {}
     components = [dict(raw) for raw in identity_components]
@@ -1405,6 +1404,61 @@ def _facilities(
             str(value) for value in component.get("member_structure_node_ids") or ()
         )
         current["source_locator_ids"].update(source_locator_ids)
+
+    # Useful project navigation must not wait for the identity worker when the
+    # documents already repeat one exact, location-specific structure across
+    # independent sources.  This conservative fallback accepts address-bearing
+    # labels only; generic labels such as "подпорная стена" remain unresolved,
+    # and distinct addresses can never merge by name similarity.
+    existing_labels = {
+        _specific_structure_key(label)
+        for value in groups.values()
+        for label in (value.get("name"), *(value.get("aliases") or ()))
+        if _specific_structure_key(label) is not None
+    }
+    provisional: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for raw in structure_nodes:
+        node = dict(raw)
+        if str(node.get("node_kind") or "") not in {
+            "facility",
+            "local_area",
+            "zone",
+            "structure",
+        }:
+            continue
+        specific = _specific_structure_key(node.get("raw_name") or node.get("normalized_name"))
+        if specific is not None and specific not in existing_labels:
+            provisional[specific].append(node)
+    for specific_key, nodes in provisional.items():
+        sources = {str(value.get("source_version_id") or "") for value in nodes}
+        sources.discard("")
+        if len(sources) < 2:
+            continue
+        labels = _ordered_unique(
+            str(value.get("raw_name") or value.get("normalized_name") or "").strip()
+            for value in nodes
+        )
+        label = max(labels, key=lambda value: (len(value), value))
+        key = f"source-corroborated-location:{specific_key}"
+        groups[key] = {
+            "facility_id": semantic_digest({"workspace_id": workspace_id, "facility_key": key}),
+            "designation": None,
+            "name": label,
+            "kind": "Сооружение",
+            "aliases": set(labels),
+            "member_structure_node_ids": {
+                str(value.get("structure_node_id"))
+                for value in nodes
+                if value.get("structure_node_id")
+            },
+            "source_locator_ids": {
+                str(value.get("source_locator_id"))
+                for value in nodes
+                if value.get("source_locator_id")
+            },
+            "status": "Установлено по одинаковому адресу в нескольких документах",
+            "is_alias_group": False,
+        }
     facilities: list[dict[str, Any]] = []
     for value in groups.values():
         value["aliases"] = sorted(value["aliases"])
@@ -1415,6 +1469,15 @@ def _facilities(
             node_to_facility.setdefault(node_id, value["facility_id"])
     facilities.sort(key=lambda item: (item["is_alias_group"], item["name"], item["facility_id"]))
     return facilities, node_to_facility
+
+
+def _specific_structure_key(value: object) -> str | None:
+    normalized = _normalized(value).replace(",", " ")
+    normalized = " ".join(normalized.split())
+    addresses = re.findall(r"\b(?:ул\.?|улица)\s+[0-9a-zа-я. -]+?\s+\d+(?:/\d+)?\b", normalized)
+    if len(addresses) != 1:
+        return None
+    return normalized
 
 
 def _pits(

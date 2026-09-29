@@ -6188,7 +6188,7 @@ class SpinePostgresRepository:
                 "(SELECT DISTINCT ON (source_version_id) source_version_id,semantic_profile FROM profile_receipts "
                 "ORDER BY source_version_id,recorded_at DESC,receipt_rank DESC) "
                 "SELECT n.structure_node_id,n.version,n.node_kind,n.raw_name,n.normalized_name,n.parent_node_id,"
-                "n.source_locator_id,n.status,n.extraction_profile_version,n.fingerprint FROM "
+                "locator.source_version_id,n.source_locator_id,n.status,n.extraction_profile_version,n.fingerprint FROM "
                 "workspace.project_structure_node_versions n JOIN workspace.source_locators locator ON "
                 "locator.organization_id=n.organization_id AND locator.workspace_id=n.workspace_id AND "
                 "locator.source_locator_id=n.source_locator_id JOIN selected_profiles selected ON "

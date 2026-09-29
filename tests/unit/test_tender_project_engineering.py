@@ -2564,6 +2564,52 @@ def test_generic_identity_components_preserve_distinct_same_named_facilities() -
     assert established_facility_designations(components) == ()
 
 
+def test_repeated_addressed_structures_form_distinct_incremental_project_cards() -> None:
+    nodes = [
+        {
+            "structure_node_id": f"wall-{address}-{source}",
+            "node_kind": "structure",
+            "raw_name": f"Подпорная стена по ул. Океанская, {address}",
+            "source_version_id": source,
+            "source_locator_id": f"locator-{address}-{source}",
+        }
+        for address in ("63/1", "65/1")
+        for source in ("pz", "kr")
+    ]
+    nodes.extend(
+        {
+            "structure_node_id": f"combined-{source}",
+            "node_kind": "structure",
+            "raw_name": "Подпорные стены по ул. Океанская, 63/1, ул. Океанская, 65/1",
+            "source_version_id": source,
+            "source_locator_id": f"combined-locator-{source}",
+        }
+        for source in ("pz", "kr")
+    )
+    model = build_project_engineering_model(
+        workspace_id="workspace-addressed-walls",
+        project_definition={"definition": {"fields": {}}},
+        candidates={"project_fields": [], "work_types": [], "quantities": [], "materials": []},
+        structure_nodes=nodes,
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context={},
+    )
+
+    assert len(model["facilities"]) == 2
+    assert {row["name"] for row in model["facilities"]} == {
+        "Подпорная стена по ул. Океанская, 63/1",
+        "Подпорная стена по ул. Океанская, 65/1",
+    }
+    assert {row["status"] for row in model["facilities"]} == {
+        "Установлено по одинаковому адресу в нескольких документах"
+    }
+    assert all(len(row["member_structure_node_ids"]) == 2 for row in model["facilities"])
+
+
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:
     model = build_project_engineering_model(
         workspace_id="workspace-equipment-model",
