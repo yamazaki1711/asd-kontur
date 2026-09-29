@@ -1159,8 +1159,7 @@ def _with_structured_project_fact_checks(
         for marker in ("проект", "документ", "вор", "смет", "пд", "рд")
     )
     asks_for_technical_contradictions = "техническ" in normalized_question and any(
-        marker in normalized_question
-        for marker in ("противореч", "расхожд", "ошиб", "проблем")
+        marker in normalized_question for marker in ("противореч", "расхожд", "ошиб", "проблем")
     )
     asks_for_comparisons = asks_for_project_discrepancies or (
         any(
