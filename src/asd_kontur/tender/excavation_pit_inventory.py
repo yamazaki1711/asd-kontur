@@ -1,13 +1,13 @@
 """Source-backed excavation-pit candidate inventory.
 
 The projection deliberately recognizes only an explicit association written in
-the observation name (for example, ``котлован для КНС 4``). Generic mentions,
+the observation name (for example, ``котлован для корпуса 4``). Generic mentions,
 trenches, boreholes, and inferred facility relationships remain unresolved.
 That makes the resulting count useful as an established candidate subset while
 preventing it from being presented as a complete project total.
 """
 
-# ruff: noqa: RUF001, RUF002 -- Russian construction terms are intentional.
+# ruff: noqa: RUF001 -- Russian construction terms are intentional.
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from asd_kontur.application_spine.models import semantic_digest
 
 _EXPLICIT_FACILITY_PIT = re.compile(
     r"\b(?P<pit>котлован|pit)\b(?P<prefix>.*?)\bдля\b\s*"
-    r"(?P<kind>лос|кнс)\s*[-№nº]*\s*"
+    r"(?P<kind>[a-zа-яё]{2,16})\s*[-№nº]*\s*"
     r"(?P<number>\d+(?:\s*[.]\s*\d+)?)\b",
     flags=re.IGNORECASE | re.UNICODE,
 )

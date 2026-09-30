@@ -111,7 +111,7 @@ def render_engineering_findings_csv(model: Mapping[str, Any]) -> bytes:
 
 
 def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
-    """Render a readable editable Tender report in construction language."""
+    """Render an adaptive editable Tender report in construction language."""
 
     project = dict(model.get("project") or {})
     name = dict(project.get("name") or {}).get("value") or "Наименование уточняется"
@@ -137,167 +137,253 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
                 or "Состав исходных документов требует уточнения."
             )
         ),
-        _heading("2. Состав объекта"),
-        _simple_table(
-            ("Сооружение / участок", "Тип", "Статус"),
-            [
-                (
-                    str(row.get("name") or ""),
-                    str(row.get("kind") or ""),
-                    str(row.get("status") or ""),
-                )
-                for row in model.get("facilities") or ()
-            ],
-        ),
-        _heading("3. Сооружения"),
-        _simple_table(
-            (
-                "Сооружение",
-                "Основные характеристики",
-                "Котлованы",
-                "Конструкции и подключения",
-                "Основные работы",
-                "Нерешённые вопросы",
-            ),
-            [
-                (
-                    str(dict(row.get("facility") or {}).get("name") or ""),
-                    "; ".join(
-                        f"{value.get('label')}: {value.get('value')}"
-                        for value in row.get("characteristics") or ()
-                    )
-                    or "не установлены",
-                    ", ".join(str(value.get("name") or "") for value in row.get("pits") or ())
-                    or "не установлен / не предусмотрен",
-                    ", ".join(
-                        str(value.get("name") or "")
-                        for value in [
-                            *(row.get("structures") or ()),
-                            *(row.get("connections") or ()),
-                        ]
-                    )
-                    or "требуют привязки",
-                    ", ".join(str(value.get("work_name") or "") for value in row.get("works") or ())
-                    or "требуют привязки",
-                    "; ".join(str(value) for value in row.get("missing_information") or ()),
-                )
-                for row in model.get("facility_cards") or ()
-            ],
-        ),
-        _heading("4. Основные виды работ"),
-        _simple_table(
-            ("Место", "Работа", "Объёмы по документам", "Материалы"),
-            [
-                (
-                    str(row.get("facility") or "Требует уточнения"),
-                    str(row.get("work_name") or ""),
-                    _role_values(row.get("quantities_by_document")),
-                    _role_materials(row.get("materials_by_document")),
-                )
-                for row in model.get("works") or ()
-            ],
-        ),
-        _heading("5. Основные объёмы"),
-        _simple_table(
-            ("Сооружение / котлован", "Операция", "Объёмы по документам", "Ограничение"),
-            [
-                (
-                    " — ".join(
-                        value
-                        for value in (
-                            str(row.get("facility") or "Требует привязки"),
-                            str(row.get("pit") or ""),
-                        )
-                        if value
-                    ),
-                    str(row.get("operation") or ""),
-                    _role_values(row.get("quantities_by_document")),
-                    str(row.get("uncertainty") or ""),
-                )
-                for row in model.get("sheet_pile_schedule") or ()
-            ],
-            empty="Пообъектные объёмы пока не установлены.",
-        ),
-        _heading("6. Материалы"),
-        _simple_table(
-            ("Место", "Работа", "Документ", "Материал"),
-            [
-                (
-                    str(row.get("facility") or "Требует уточнения"),
-                    str(row.get("work") or ""),
-                    str(row.get("document_role") or ""),
-                    " ".join(
-                        str(value)
-                        for value in (row.get("name"), row.get("quantity"), row.get("unit"))
-                        if value not in (None, "")
-                    ),
-                )
-                for row in model.get("materials") or ()
-            ],
-            empty="Материалы по установленным работам не найдены.",
-        ),
-        _heading("7. Расхождения ПД/РД/спецификаций/ВОР/сметы"),
-        _simple_table(
-            ("Место", "Работа", "Сравнение", "Вывод"),
-            _engineering_comparison_rows(model),
-            empty="Сопоставимые значения по ролям документов пока не установлены.",
-        ),
-        _heading("8. Возможные неучтённые работы"),
-        _simple_table(
-            ("Место", "Работа", "Результат сопоставления", "Вывод"),
-            [
-                (
-                    str(row.get("facility") or "Требует уточнения"),
-                    str(row.get("work") or ""),
-                    str(row.get("professional_status") or ""),
-                    str(row.get("conclusion") or ""),
-                )
-                for row in model.get("scope_comparisons") or ()
-                if row.get("classification")
-                in {"WORK_MISSING_IN_COMMERCIAL", "COMMERCIAL_ONLY_WORK"}
-            ],
-            empty=(
-                "В установленном объёме доказанные неучтённые работы не выявлены; "
-                "незавершённые сопоставления перечислены в разделе 13."
-            ),
-        ),
-        _heading("9. Технические противоречия"),
-        _issue_table(model.get("issues") or ()),
-        _heading("10. Нормативные вопросы"),
-        _paragraph(str(dict(model.get("requirements") or {}).get("professional_summary") or "")),
-        _bullet_list(
-            [str(value) for value in dict(model.get("requirements") or {}).get("unresolved") or ()],
-            empty="Нормативные вопросы не установлены.",
-        ),
-        _heading("11. Вопросы Заказчику"),
-        _bullet_list(
-            [str(row.get("question") or "") for row in model.get("customer_questions") or ()],
-            empty="Вопросы будут сформированы после установления инженерных расхождений.",
-        ),
-        _heading("12. Риски Подрядчика"),
-        _bullet_list(
-            [str(row.get("risk") or "") for row in model.get("risks") or ()],
-            empty="Риски будут сформированы после установления инженерных расхождений.",
-        ),
-        _heading("13. Неопределённости / недостающие данные"),
-        _bullet_list(
-            [
-                str(value.get("reason") or value.get("description") or "")
-                for value in pits.get("requires_clarification") or ()
-            ]
-            + [str(value) for value in project.get("missing_information") or ()]
-            + _scope_comparison_uncertainties(model.get("scope_comparisons") or ()),
-            empty="Неопределённости не установлены.",
-        ),
-        _heading("Список исходных документов"),
-        _bullet_list(
-            [
-                f"{row.get('name')} (версия {row.get('version')}; {row.get('document_role')})"
-                for row in model.get("documents") or ()
-            ],
-            empty="Исходные документы не перечислены.",
-        ),
     ]
+    section = 2
+
+    def add_section(title: str, content: list[str]) -> None:
+        nonlocal section
+        body.append(_heading(f"{section}. {title}"))
+        body.extend(content)
+        section += 1
+
+    facilities = list(model.get("facilities") or ())
+    if facilities:
+        add_section(
+            "Состав объекта",
+            [
+                _simple_table(
+                    ("Сооружение / участок", "Тип", "Статус"),
+                    [
+                        (
+                            str(row.get("name") or ""),
+                            str(row.get("kind") or ""),
+                            str(row.get("status") or ""),
+                        )
+                        for row in facilities
+                    ],
+                )
+            ],
+        )
+    facility_cards = list(model.get("facility_cards") or ())
+    if facility_cards:
+        add_section(
+            "Сооружения",
+            [
+                _simple_table(
+                    (
+                        "Сооружение",
+                        "Основные характеристики",
+                        "Котлованы",
+                        "Конструкции и подключения",
+                        "Основные работы",
+                        "Нерешённые вопросы",
+                    ),
+                    [
+                        (
+                            str(dict(row.get("facility") or {}).get("name") or ""),
+                            "; ".join(
+                                f"{value.get('label')}: {value.get('value')}"
+                                for value in row.get("characteristics") or ()
+                            )
+                            or "не установлены",
+                            ", ".join(
+                                str(value.get("name") or "") for value in row.get("pits") or ()
+                            )
+                            or "не установлен / не предусмотрен",
+                            ", ".join(
+                                str(value.get("name") or "")
+                                for value in [
+                                    *(row.get("structures") or ()),
+                                    *(row.get("connections") or ()),
+                                ]
+                            )
+                            or "требуют привязки",
+                            ", ".join(
+                                str(value.get("work_name") or "")
+                                for value in row.get("works") or ()
+                            )
+                            or "требуют привязки",
+                            "; ".join(str(value) for value in row.get("missing_information") or ()),
+                        )
+                        for row in facility_cards
+                    ],
+                )
+            ],
+        )
+    works = list(model.get("works") or ())
+    if works:
+        add_section(
+            "Основные виды работ",
+            [
+                _simple_table(
+                    ("Место", "Работа", "Объёмы по документам", "Материалы"),
+                    [
+                        (
+                            str(row.get("facility") or "Требует уточнения"),
+                            str(row.get("work_name") or ""),
+                            _role_values(row.get("quantities_by_document")),
+                            _role_materials(row.get("materials_by_document")),
+                        )
+                        for row in works
+                    ],
+                )
+            ],
+        )
+    quantity_rows = [
+        (
+            str(work.get("facility") or "Требует привязки"),
+            str(work.get("work_name") or ""),
+            str(role),
+            " ".join(
+                str(part)
+                for part in (quantity.get("value"), quantity.get("unit"))
+                if part not in (None, "")
+            ),
+        )
+        for work in works
+        for role, quantities in dict(work.get("quantities_by_document") or {}).items()
+        for quantity in quantities or ()
+    ]
+    if quantity_rows:
+        add_section(
+            "Основные объёмы",
+            [_simple_table(("Место", "Работа", "Документ", "Объём"), quantity_rows)],
+        )
+    sheet_pile_schedule = list(model.get("sheet_pile_schedule") or ())
+    if sheet_pile_schedule:
+        add_section(
+            "Шпунтовые работы",
+            [
+                _simple_table(
+                    (
+                        "Сооружение / котлован",
+                        "Операция",
+                        "Объёмы по документам",
+                        "Ограничение",
+                    ),
+                    [
+                        (
+                            " — ".join(
+                                value
+                                for value in (
+                                    str(row.get("facility") or "Требует привязки"),
+                                    str(row.get("pit") or ""),
+                                )
+                                if value
+                            ),
+                            str(row.get("operation") or ""),
+                            _role_values(row.get("quantities_by_document")),
+                            str(row.get("uncertainty") or ""),
+                        )
+                        for row in sheet_pile_schedule
+                    ],
+                )
+            ],
+        )
+    materials = list(model.get("materials") or ())
+    if materials:
+        add_section(
+            "Материалы",
+            [
+                _simple_table(
+                    ("Место", "Работа", "Документ", "Материал"),
+                    [
+                        (
+                            str(row.get("facility") or "Требует уточнения"),
+                            str(row.get("work") or ""),
+                            str(row.get("document_role") or ""),
+                            " ".join(
+                                str(value)
+                                for value in (row.get("name"), row.get("quantity"), row.get("unit"))
+                                if value not in (None, "")
+                            ),
+                        )
+                        for row in materials
+                    ],
+                    empty="Материалы по установленным работам не найдены.",
+                )
+            ],
+        )
+    comparison_rows = _engineering_comparison_rows(model)
+    if comparison_rows:
+        add_section(
+            "Расхождения проектных и коммерческих документов",
+            [_simple_table(("Место", "Работа", "Сравнение", "Вывод"), comparison_rows)],
+        )
+    scope_comparisons = list(model.get("scope_comparisons") or ())
+    if scope_comparisons:
+        add_section(
+            "Возможные неучтённые работы",
+            [
+                _simple_table(
+                    ("Место", "Работа", "Результат сопоставления", "Вывод"),
+                    [
+                        (
+                            str(row.get("facility") or "Требует уточнения"),
+                            str(row.get("work") or ""),
+                            str(row.get("professional_status") or ""),
+                            str(row.get("conclusion") or ""),
+                        )
+                        for row in scope_comparisons
+                        if row.get("classification")
+                        in {"WORK_MISSING_IN_COMMERCIAL", "COMMERCIAL_ONLY_WORK"}
+                    ],
+                    empty=(
+                        "В установленном объёме доказанные неучтённые работы не выявлены; "
+                        "незавершённые сопоставления перечислены в неопределённостях."
+                    ),
+                )
+            ],
+        )
+    issues = list(model.get("issues") or ())
+    if issues:
+        add_section("Технические противоречия", [_issue_table(issues)])
+    requirements = dict(model.get("requirements") or {})
+    if requirements.get("professional_summary") or requirements.get("unresolved"):
+        add_section(
+            "Нормативные вопросы",
+            [
+                _paragraph(str(requirements.get("professional_summary") or "")),
+                _bullet_list(
+                    [str(value) for value in requirements.get("unresolved") or ()],
+                    empty="Нормативные вопросы не установлены.",
+                ),
+            ],
+        )
+    questions = [str(row.get("question") or "") for row in model.get("customer_questions") or ()]
+    if any(questions):
+        add_section("Вопросы Заказчику", [_bullet_list(questions, empty="")])
+    risks = [str(row.get("risk") or "") for row in model.get("risks") or ()]
+    if any(risks):
+        add_section("Риски Подрядчика", [_bullet_list(risks, empty="")])
+    uncertainties = (
+        [
+            str(value.get("reason") or value.get("description") or "")
+            for value in pits.get("requires_clarification") or ()
+        ]
+        + [str(value) for value in project.get("missing_information") or ()]
+        + _scope_comparison_uncertainties(scope_comparisons)
+    )
+    if any(uncertainties):
+        add_section(
+            "Неопределённости / недостающие данные",
+            [_bullet_list(uncertainties, empty="")],
+        )
+    documents = list(model.get("documents") or ())
+    if documents:
+        body.extend(
+            [
+                _heading("Список исходных документов"),
+                _bullet_list(
+                    [
+                        f"{row.get('name')} (версия {row.get('version')}; "
+                        f"{row.get('document_role')})"
+                        for row in documents
+                    ],
+                    empty="",
+                ),
+            ]
+        )
     document = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'

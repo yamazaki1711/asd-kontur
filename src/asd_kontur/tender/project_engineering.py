@@ -18,6 +18,15 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.semantic import normalize_unit as _normalize_source_unit
 
+from .quantity_semantics import (
+    QuantityRelation,
+    QuantityRelationship,
+    QuantityStatement,
+    QuantityType,
+    ScopeCompatibility,
+    evaluate_component_total,
+)
+
 PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v53"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
@@ -25,6 +34,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v6",
         "qwen-project-work-reconciliation-v7",
         "qwen-project-work-reconciliation-v8",
+        "qwen-project-work-reconciliation-v9",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -771,7 +781,12 @@ def build_project_engineering_model(
         work_resolutions or {},
     )
     pits = _attach_pit_work_scopes(pits, work_model["works"])
-    comparisons = _deduplicate_dicts(_validated_scope_quantity_comparisons(work_model["works"]))
+    comparisons = _deduplicate_dicts(
+        [
+            *_validated_scope_quantity_comparisons(work_model["works"]),
+            *_component_total_comparisons(work_model["works"]),
+        ]
+    )
     documents = _documents(source_context, document_inventory=document_inventory)
     document_composition = _document_composition(documents, source_context=source_context)
     scope_comparisons = _scope_comparisons(
@@ -1059,8 +1074,8 @@ def non_work_reason(value: object) -> str | None:
         )
     ):
         return "Проектная/расчётная работа, а не строительная операция"
-    if normalized.startswith(
-        ("капитальный ремонт подпорной стен", "капитальный ремонт подпорных стен")
+    if normalized.startswith(("капитальный ремонт ", "строительство ", "реконструкция ")) and any(
+        marker in normalized for marker in (" по ул ", " по ул. ", " по адресу ", " расположен ")
     ):
         return "Наименование объекта, а не отдельная строительная операция"
     if normalized in {
@@ -1068,11 +1083,7 @@ def non_work_reason(value: object) -> str | None:
         "водоотводные сооружения",
     }:
         return "Заголовок раздела, а не отдельная строительная операция"
-    if re.fullmatch(
-        r"наружные сети водопровода,? канализации,? теплоснабжения,? "
-        r"газопроводы для районов крайнего севера",
-        normalized,
-    ):
+    if normalized.startswith(("наружные сети ", "внутренние сети ")):
         return "Заголовок раздела, а не отдельная строительная операция"
     if normalized.startswith(
         (
@@ -1190,14 +1201,13 @@ def document_comparison_side(source_role: object, display_name: object) -> str |
     role = str(source_role or "")
     if (
         "вор" in name
-        or "ведомост объем" in name
-        or "ведомост объём" in name
+        or ("ведомост" in name and ("объем" in name or "объём" in name))
         or role == "bill_of_quantities"
     ):
         return "commercial"
     if (
         "смет" in name
-        or re.search(r"(?:^|\s)см\d", name)
+        or re.search(r"(?:^|[\s._-])см(?:[\s._-]|\d|$)", name)
         or role in {"local_estimate", "object_estimate", "consolidated_estimate"}
     ):
         return "commercial"
@@ -1218,7 +1228,11 @@ def _source_is_bill_of_quantities(context: Mapping[str, Any]) -> bool:
     if context.get("page_is_bill_of_quantities") is True:
         return True
     scope_header = _normalized(context.get("page_commercial_scope_header"))
-    return bool(scope_header and "ведомост" in scope_header and "объем" in scope_header)
+    return bool(
+        scope_header
+        and "ведомост" in scope_header
+        and ("объем" in scope_header or "объём" in scope_header)
+    )
 
 
 def _source_is_local_estimate(context: Mapping[str, Any]) -> bool:
@@ -1244,7 +1258,7 @@ def _ordered_stem_phrase(normalized: str, phrase: str) -> bool:
     Extraction preserves inflection (``разработка``/``разработке``), while the
     compact work-family contract deliberately stores stable stems.  Requiring
     every stem in order is more conservative than an unordered keyword bag and
-    still groups inflected wording without an OZERO-specific dictionary.
+    still groups inflected wording without a project-specific dictionary.
     """
 
     stems = tuple(value for value in phrase.split() if value)
@@ -2485,6 +2499,19 @@ def _work_schedule(
                     "reason": ("Значение ещё не проверено как объём этой строительной операции."),
                 }
             if review.get("status") in {"WORK_QUANTITY", "DURATION"}:
+                quantity.update(
+                    {
+                        key: review.get(key)
+                        for key in (
+                            "semantic_scope",
+                            "quantity_type",
+                            "relation_kind",
+                            "related_quantity_candidate_ids",
+                            "scope_compatibility",
+                        )
+                        if review.get(key) is not None
+                    }
+                )
                 accepted_quantities.append(quantity)
             quantity_interpretations.append(
                 {
@@ -2495,6 +2522,13 @@ def _work_schedule(
                         quantity.get("unit", quantity.get("raw_unit")),
                     ),
                     "status": review.get("status"),
+                    "semantic_scope": review.get("semantic_scope"),
+                    "quantity_type": review.get("quantity_type"),
+                    "relation_kind": review.get("relation_kind"),
+                    "related_quantity_candidate_ids": list(
+                        review.get("related_quantity_candidate_ids") or ()
+                    ),
+                    "scope_compatibility": review.get("scope_compatibility"),
                     "reason": review.get("reason"),
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
@@ -2853,11 +2887,21 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         quantities = dict(work.get("quantities_by_document") or {})
         for design_role in design_roles:
             for commercial_role in commercial_roles:
-                left = _one_comparable_quantity(quantities.get(design_role) or ())
-                right = _one_comparable_quantity(quantities.get(commercial_role) or ())
-                if left is None or right is None:
-                    continue
-                if left[1] != right[1]:
+                left_by_unit = _comparable_quantities_by_unit(quantities.get(design_role) or ())
+                right_by_unit = _comparable_quantities_by_unit(
+                    quantities.get(commercial_role) or ()
+                )
+                for unit in sorted(set(left_by_unit).intersection(right_by_unit)):
+                    left = (left_by_unit[unit], unit)
+                    right = (right_by_unit[unit], unit)
+                    difference = left[0] - right[0]
+                    if difference == 0:
+                        conclusion = "Значения совпадают"
+                    else:
+                        conclusion = (
+                            f"Разница {design_role} ↔ {commercial_role}: "
+                            f"{_decimal_text(difference)} {unit}"
+                        )
                     comparisons.append(
                         _comparison_row(
                             work,
@@ -2865,49 +2909,24 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                             commercial_role,
                             left,
                             right,
-                            None,
-                            "Единицы измерения различаются",
+                            difference,
+                            conclusion,
                         )
                     )
-                    continue
-                difference = left[0] - right[0]
-                if difference == 0:
-                    conclusion = "Значения совпадают"
-                else:
-                    conclusion = (
-                        f"Разница {design_role} ↔ {commercial_role}: "
-                        f"{_decimal_text(difference)} {left[1]}"
-                    )
-                comparisons.append(
-                    _comparison_row(
-                        work, design_role, commercial_role, left, right, difference, conclusion
-                    )
-                )
-        vor = _one_comparable_quantity(quantities.get("ВОР") or ())
-        estimate = _one_comparable_quantity(quantities.get("Смета") or ())
-        if vor is not None and estimate is not None:
-            if vor[1] != estimate[1]:
-                comparisons.append(
-                    _comparison_row(
-                        work,
-                        "ВОР",
-                        "Смета",
-                        vor,
-                        estimate,
-                        None,
-                        "Единицы ВОР и сметы различаются",
-                    )
-                )
-            else:
-                difference = vor[0] - estimate[0]
-                conclusion = (
-                    "Значения ВОР и сметы совпадают"
-                    if difference == 0
-                    else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {vor[1]}"
-                )
-                comparisons.append(
-                    _comparison_row(work, "ВОР", "Смета", vor, estimate, difference, conclusion)
-                )
+        vor_by_unit = _comparable_quantities_by_unit(quantities.get("ВОР") or ())
+        estimate_by_unit = _comparable_quantities_by_unit(quantities.get("Смета") or ())
+        for unit in sorted(set(vor_by_unit).intersection(estimate_by_unit)):
+            vor = (vor_by_unit[unit], unit)
+            estimate = (estimate_by_unit[unit], unit)
+            difference = vor[0] - estimate[0]
+            conclusion = (
+                "Значения ВОР и сметы совпадают"
+                if difference == 0
+                else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {unit}"
+            )
+            comparisons.append(
+                _comparison_row(work, "ВОР", "Смета", vor, estimate, difference, conclusion)
+            )
     return comparisons
 
 
@@ -2957,6 +2976,115 @@ def _validated_scope_quantity_comparisons(
             ):
                 continue
             result.append({**comparison, "scope_match_basis": basis})
+    return result
+
+
+def _component_total_comparisons(
+    works: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Verify only explicit Qwen scope relationships with deterministic arithmetic."""
+
+    result: list[dict[str, Any]] = []
+    for raw_work in works:
+        work = dict(raw_work)
+        for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
+            values = [dict(value) for value in raw_values or () if isinstance(value, Mapping)]
+            statements: list[QuantityStatement] = []
+            relationships: list[QuantityRelationship] = []
+            by_id = {
+                str(value.get("quantity_candidate_id") or ""): value
+                for value in values
+                if value.get("quantity_candidate_id")
+            }
+            for candidate_id, value in by_id.items():
+                try:
+                    statements.append(
+                        QuantityStatement(
+                            statement_id=candidate_id,
+                            value=Decimal(str(value.get("value"))),
+                            unit=str(value.get("unit") or ""),
+                            semantic_scope=str(value.get("semantic_scope") or ""),
+                            quantity_type=QuantityType(str(value.get("quantity_type") or "")),
+                            project_entity=str(work.get("facility_id") or "") or None,
+                            work=str(work.get("work_scope_id") or "") or None,
+                            source_role=str(role),
+                        )
+                    )
+                    relation = QuantityRelation(str(value.get("relation_kind") or "NONE"))
+                    compatibility = ScopeCompatibility(
+                        str(value.get("scope_compatibility") or "INSUFFICIENT_INFORMATION")
+                    )
+                except (InvalidOperation, TypeError, ValueError):
+                    continue
+                related = tuple(
+                    str(item) for item in value.get("related_quantity_candidate_ids") or ()
+                )
+                if relation is not QuantityRelation.NONE and related:
+                    relationships.append(
+                        QuantityRelationship(
+                            subject_id=candidate_id,
+                            relation=relation,
+                            object_ids=related,
+                            compatibility=compatibility,
+                        )
+                    )
+            for relationship in relationships:
+                checked = evaluate_component_total(statements, relationship)
+                if checked is None:
+                    continue
+                locator_ids = sorted(
+                    {
+                        str(by_id[candidate_id].get("source_locator_id") or "")
+                        for candidate_id in (checked.total_id, *checked.component_ids)
+                        if candidate_id in by_id
+                        and by_id[candidate_id].get("source_locator_id")
+                    }
+                )
+                result.append(
+                    {
+                        "comparison_id": semantic_digest(
+                            {
+                                "work_scope_id": work.get("work_scope_id"),
+                                "role": role,
+                                "total_id": checked.total_id,
+                                "component_ids": checked.component_ids,
+                            }
+                        ),
+                        "classification": checked.classification,
+                        "comparison_kind": "component_total",
+                        "professional_status": (
+                            "Итог не равен сумме составляющих"
+                            if checked.difference != 0
+                            else "Итог совпадает с суммой составляющих"
+                        ),
+                        "facility": work.get("facility"),
+                        "facility_id": work.get("facility_id"),
+                        "work": work.get("work_name"),
+                        "left": {
+                            "document_role": role,
+                            "value": _decimal_text(checked.stated_total),
+                            "unit": checked.unit,
+                        },
+                        "right": {
+                            "document_role": f"{role}: сумма составляющих",
+                            "value": _decimal_text(checked.calculated_total),
+                            "unit": checked.unit,
+                        },
+                        "difference": _decimal_text(checked.difference),
+                        "conclusion": (
+                            f"В документе {role} указан итог "
+                            f"{_decimal_text(checked.stated_total)} {checked.unit}, сумма "
+                            f"связанных составляющих — "
+                            f"{_decimal_text(checked.calculated_total)} {checked.unit}; "
+                            f"разница — {_decimal_text(checked.difference)} {checked.unit}."
+                        ),
+                        "source_locator_ids": locator_ids,
+                        "scope_match_basis": (
+                            "Связь общего объёма и составляющих установлена моделью по "
+                            "тексту; арифметика и единицы проверены детерминированно."
+                        ),
+                    }
+                )
     return result
 
 
@@ -3393,8 +3521,10 @@ def _sheet_pile_schedule(
         ]
         combined = " ".join([*wording, *material_names])
         normalized = _normalized(combined)
-        unassigned_profile_observation = row.get("family_key") not in relevant_families and bool(
-            re.search(r"\bл5(?:ум|\s*10)?\b", normalized)
+        unassigned_profile_observation = (
+            row.get("family_key") not in relevant_families
+            and bool(_sheet_pile_profiles(normalized))
+            and ("шпунт" in normalized or "ларсен" in normalized)
         )
         if row.get("family_key") not in relevant_families and not unassigned_profile_observation:
             continue
@@ -3419,10 +3549,12 @@ def _sheet_pile_schedule(
             if any(_material_sheet_pile_profiles(value, source_context) for value in values or ())
         }
         beams = _ordered_unique(
-            match.group(0).upper() for match in re.finditer(r"\b(?:30ш2|35ш2)\b", normalized)
+            re.sub(r"\s+", "", match.group(0)).upper()
+            for match in re.finditer(r"\b\d{1,3}\s*(?:ш|к|б)\s*\d{0,2}\b", normalized)
         )
         steel = _ordered_unique(
-            match.group(0).upper() for match in re.finditer(r"\bс\s*255\b", normalized)
+            re.sub(r"\s+", "", match.group(0)).upper()
+            for match in re.finditer(r"\bс\s*\d{3}\b", normalized)
         )
         lengths = _ordered_unique(
             f"{match.group(1)}–{match.group(2)} м"
@@ -4724,9 +4856,9 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         )
     ):
         return "Требования Заказчика"
-    if "вор" in name or "ведомост объем" in name or "ведомост объём" in name:
+    if "вор" in name or ("ведомост" in name and ("объем" in name or "объём" in name)):
         return "ВОР"
-    if "смет" in name or re.search(r"(?:^|\s)см\d", name):
+    if "смет" in name or re.search(r"(?:^|[\s._-])см(?:[\s._-]|\d|$)", name):
         return "Смета"
     if "спецификац" in name:
         return "Спецификация"
@@ -4772,6 +4904,19 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                 "raw_unit": row.get("raw_unit", raw_unit),
                 "source_locator_id": row.get("source_locator_id"),
             }
+            if row.get("semantic_scope"):
+                semantics = {
+                    "quantity_candidate_id": row.get("candidate_id"),
+                    "semantic_scope": row.get("semantic_scope"),
+                    "quantity_type": row.get("quantity_type"),
+                    "relation_kind": row.get("relation_kind"),
+                    "related_quantity_candidate_ids": list(
+                        row.get("related_quantity_candidate_ids") or ()
+                    ),
+                    "scope_compatibility": row.get("scope_compatibility"),
+                }
+                payload.update(semantics)
+                rendered.update(semantics)
         else:
             raw_material_unit = row.get("normalized_unit", row.get("unit", row.get("raw_unit")))
             display_material_unit = _normalized_unit(raw_material_unit)
@@ -4811,6 +4956,26 @@ def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decim
             unit = scaled.group("unit")
         unique.add((quantity, unit))
     return next(iter(unique)) if len(unique) == 1 else None
+
+
+def _comparable_quantities_by_unit(
+    values: Iterable[Mapping[str, Any]],
+) -> dict[str, Decimal]:
+    """Return one unambiguous value for each independently measured dimension.
+
+    A work can legitimately be described by several measures at once: bored
+    piles may have both a count and a concrete volume, for example.  Different
+    dimensions are not an engineering discrepancy.  Compare only dimensions
+    present on both sides and leave conflicting repeated values unresolved.
+    """
+
+    grouped: dict[str, set[Decimal]] = defaultdict(set)
+    for raw in values:
+        value = dict(raw)
+        quantity = _one_comparable_quantity([value])
+        if quantity is not None:
+            grouped[quantity[1]].add(quantity[0])
+    return {unit: next(iter(amounts)) for unit, amounts in grouped.items() if len(amounts) == 1}
 
 
 def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
@@ -4988,12 +5153,26 @@ def _merge_consolidated_quantity_mentions(
 
 
 def _sheet_pile_profiles(normalized: str) -> list[str]:
+    normalized = _normalized(normalized)
     profiles: list[str] = []
-    for match in re.finditer(r"\bл5(?:\s*ум|\s*10)?\b", normalized):
-        compact = match.group(0).upper().replace(" ", "")
-        value = "Л5УМ" if compact == "Л5УМ" else "Л5-10" if compact == "Л510" else "Л5"
+    for match in re.finditer(
+        r"\bл\s*-?\s*(?P<number>\d+)(?:\s*-?\s*(?P<suffix>[а-я]{1,3}|\d+))?\b",
+        normalized,
+    ):
+        number = match.group("number")
+        suffix = (match.group("suffix") or "").upper()
+        value = f"Л{number}{f'-{suffix}' if suffix and suffix.isdigit() else suffix}"
         profiles.append(value)
     return _ordered_unique(profiles)
+
+
+def _split_profile_suffix(profile: str) -> str | None:
+    match = re.fullmatch(r"Л\d+-?(?P<suffix>[А-Я]+)", profile.upper())
+    return match.group("suffix").casefold() if match is not None else None
+
+
+def _profile_display(profile: str) -> str:
+    return re.sub(r"^(Л\d+)([А-Я]+)$", r"\1-\2", profile.upper())
 
 
 def _material_sheet_pile_profiles(
@@ -5006,8 +5185,12 @@ def _material_sheet_pile_profiles(
     normalized_name = _normalized(material.get("name"))
     context = source_context.get(str(material.get("source_locator_id") or ""), {})
     page_profiles = [str(value) for value in context.get("page_sheet_pile_profiles") or ()]
+    split_profile_suffix = any(
+        suffix is not None and normalized_name.startswith(f"{suffix} ")
+        for suffix in (_split_profile_suffix(profile) for profile in page_profiles)
+    )
     incomplete_sheet_pile_material = (
-        normalized_name.startswith("ум из стали")
+        split_profile_suffix
         or "шпунт" in normalized_name
         or ("профили фасонные" in normalized_name and "свай" in normalized_name)
     )
@@ -5033,18 +5216,22 @@ def _professional_material_values(
                 material["profile_context_note"] = (
                     "Профиль в строке материала отличается от обозначения в контексте листа."
                 )
-        elif len(page_profiles) == 1 and _normalized(original).startswith("ум из стали"):
+        elif len(page_profiles) == 1 and (
+            (suffix := _split_profile_suffix(page_profiles[0])) is not None
+            and _normalized(original).startswith(f"{suffix} ")
+        ):
             material["source_name"] = original
-            material["name"] = f"Шпунт Л5-УМ {original[2:].strip()}"
+            material["name"] = (
+                f"Шпунт {_profile_display(page_profiles[0])} "
+                f"{original[len(suffix):].strip()}"
+            )
         elif (
             len(page_profiles) == 1
             and "профили фасонные" in _normalized(original)
             and "шпунтов" in _normalized(original)
         ):
             material["source_name"] = original
-            material["name"] = (
-                f"{original} {'Л5-УМ' if page_profiles[0] == 'Л5УМ' else page_profiles[0]}"
-            )
+            material["name"] = f"{original} {_profile_display(page_profiles[0])}"
         result.append(material)
     return result
 

@@ -1141,7 +1141,7 @@ def _with_structured_project_fact_checks(
     )
     asks_for_sheet_pile_identity = mentions_sheet_pile and any(
         marker in normalized_question
-        for marker in ("какой", "профил", "материал", "марк", "стал", "л5")
+        for marker in ("какой", "профил", "материал", "марк", "стал")
     )
     asks_for_waling = any(
         marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")
@@ -1356,7 +1356,8 @@ def _with_structured_project_fact_checks(
                     required_issue_terms.add(subject)
                 required_issue_terms.update(
                     re.findall(
-                        r"\b(?:Л5(?:-?10|УМ)?|[ВB]\s*\d+|F\d+)\b",
+                        r"\b(?:Л\s*-?\s*\d+(?:\s*-?\s*(?:[А-Я]{1,3}|\d+))?|"
+                        r"[ВB]\s*\d+(?:[.,]\d+)?|[FW]\s*\d+)\b",
                         str(item.get("description") or ""),
                         re.I,
                     )

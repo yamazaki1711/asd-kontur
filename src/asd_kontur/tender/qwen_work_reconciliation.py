@@ -1,6 +1,6 @@
 """Bounded local-Qwen interpretation of unresolved construction work descriptions."""
 
-# ruff: noqa: RUF001 -- Russian construction prompt terms are intentional.
+# ruff: noqa: E501, RUF001 -- bounded Russian JSON prompts are intentionally literal.
 
 from __future__ import annotations
 
@@ -13,16 +13,20 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v8"
+from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
+from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
+
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v9"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
     "qwen-project-work-reconciliation-v5",
     "qwen-project-work-reconciliation-v6",
     "qwen-project-work-reconciliation-v7",
+    "qwen-project-work-reconciliation-v8",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@8.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@9.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -126,9 +130,9 @@ class QwenProjectWorkReconciler:
                 self._endpoint,
                 _prompt(rows, work_families, facilities),
                 self._timeout_seconds,
-                # Real twelve-row OZERO batches repeatedly exhausted the old
-                # 170-token-per-row allowance even when every observation was
-                # valid.  Budget the complete required JSON shape while
+                # Representative twelve-row construction batches repeatedly
+                # exhausted the old 170-token-per-row allowance even when every
+                # observation was valid. Budget the complete required JSON shape while
                 # retaining the bounded 3,200-token ceiling and recursive
                 # split recovery for genuinely verbose or malformed output.
                 max_tokens=max(900, min(3_200, len(rows) * 240 + quantity_count * 100)),
@@ -202,6 +206,11 @@ def _unresolved_observation(row: Mapping[str, Any], *, failure_code: str) -> dic
         {
             "quantity_candidate_id": str(value.get("quantity_candidate_id") or ""),
             "status": "AMBIGUOUS",
+            "semantic_scope": "Не установлено после ограниченного повтора",
+            "quantity_type": QuantityType.UNKNOWN,
+            "relation_kind": QuantityRelation.NONE,
+            "related_quantity_candidate_ids": [],
+            "scope_compatibility": ScopeCompatibility.INSUFFICIENT_INFORMATION,
             "reason": (
                 "Значение сохранено без назначения: интерпретация связанной работы "
                 "не прошла проверку."
@@ -244,6 +253,18 @@ def _prompt(
         }
         for row in rows
     ]
+    task_payload = bounded_task_payload(
+        TenderHarnessTaskInput(
+            task=TenderAnalysisTask.WORK_CLASSIFICATION,
+            input_identity=semantic_digest(safe_rows),
+            context={
+                "work_families": dict(work_families),
+                "facilities": facilities,
+                "rows": safe_rows,
+            },
+        ),
+        max_chars=50_000,
+    )
     return f"""Вы анализируете извлечённые описания российского строительного проекта.
 Для КАЖДОЙ входной строки определите, является ли она строительной операцией, к какому виду работ
 относится и можно ли привязать её к одному сооружению. Не придумывайте отсутствующие работы,
@@ -251,9 +272,7 @@ def _prompt(
 испытание и временная операция могут быть отдельной коммерческой работой; материал, заголовок,
 техническая характеристика и функция оборудования не являются работой.
 
-Допустимые family_key: {json.dumps(dict(work_families), ensure_ascii=False)}
-Допустимые сооружения: {json.dumps(facilities, ensure_ascii=False)}
-Строки: {json.dumps(safe_rows, ensure_ascii=False)}
+Структурированная задача: {task_payload}
 
 Верните только JSON:
 {{"observations":[{{"candidate_id":"...","status":"MATCHED|AMBIGUOUS|UNCLASSIFIED|NOT_A_WORK",
@@ -261,6 +280,9 @@ def _prompt(
 "facility":"одно допустимое сооружение или null","confidence":"0.00..1.00",
 "reason":"краткая инженерная причина","quantity_reviews":[{{
 "quantity_candidate_id":"...","status":"WORK_QUANTITY|DIMENSION|DURATION|RESOURCE_OR_RATE|UNRELATED|AMBIGUOUS",
+"semantic_scope":"что именно измеряет значение","quantity_type":"TOTAL|SUBTOTAL|COMPONENT|STANDALONE|DIMENSION|DURATION|RESOURCE_OR_RATE|UNKNOWN",
+"relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
+"related_quantity_candidate_ids":["..."],"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
 "reason":"что именно означает значение в данном фрагменте"}}]}}]}}
 Верните ровно одну запись для каждого candidate_id, без новых идентификаторов. MATCHED требует один
 family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_key. Facility допустим только при
@@ -269,6 +291,10 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 означает объём именно этой строительной операции. Размер, отметка, мощность, расход, процент,
 продолжительность, цена и ресурс нормы не являются объёмом работы. Если табличная связь нарушена
 или значение нельзя отнести без догадки, используйте AMBIGUOUS, а не WORK_QUANTITY.
+Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
+когда текст явно устанавливает общий объём и его части. Не выводите отношение из близости чисел.
+Для NONE верните пустой related_quantity_candidate_ids. Для сравнения укажите одну точную
+scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
 контекст ему не противоречит; сооружение всё равно требует явной привязки.
 Явная строительная работа, исключённая из ВОР, сметы, договора или цены предложения, остаётся
@@ -363,7 +389,7 @@ def _parse(
     return [observations[candidate_id] for candidate_id in input_ids]
 
 
-def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dict[str, str]]:
+def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dict[str, Any]]:
     if not input_ids:
         if raw not in (None, []):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_unexpected")
@@ -371,23 +397,47 @@ def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dic
     if not isinstance(raw, list) or len(raw) != len(input_ids):
         raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
     allowed_ids = set(input_ids)
-    reviews: dict[str, dict[str, str]] = {}
+    reviews: dict[str, dict[str, Any]] = {}
     for value in raw:
         if not isinstance(value, dict):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         candidate_id = str(value.get("quantity_candidate_id") or "")
         status = str(value.get("status") or "")
+        semantic_scope = " ".join(str(value.get("semantic_scope") or "").split())
+        quantity_type = str(value.get("quantity_type") or "")
+        relation_kind = str(value.get("relation_kind") or "")
+        scope_compatibility = str(value.get("scope_compatibility") or "")
+        related = value.get("related_quantity_candidate_ids")
         reason = " ".join(str(value.get("reason") or "").split())
         if (
             candidate_id not in allowed_ids
             or candidate_id in reviews
             or status not in _QUANTITY_STATUSES
+            or quantity_type not in QuantityType
+            or relation_kind not in QuantityRelation
+            or scope_compatibility not in ScopeCompatibility
+            or not semantic_scope
+            or not isinstance(related, list)
             or not reason
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        related_ids = tuple(str(item) for item in related)
+        if (
+            len(set(related_ids)) != len(related_ids)
+            or candidate_id in related_ids
+            or not set(related_ids).issubset(allowed_ids)
+            or (relation_kind == QuantityRelation.NONE and related_ids)
+            or (relation_kind != QuantityRelation.NONE and not related_ids)
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         reviews[candidate_id] = {
             "quantity_candidate_id": candidate_id,
             "status": status,
+            "semantic_scope": semantic_scope[:500],
+            "quantity_type": quantity_type,
+            "relation_kind": relation_kind,
+            "related_quantity_candidate_ids": list(related_ids),
+            "scope_compatibility": scope_compatibility,
             "reason": reason[:500],
         }
     if set(reviews) != allowed_ids:

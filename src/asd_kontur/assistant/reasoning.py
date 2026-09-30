@@ -101,7 +101,7 @@ TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
     },
     {
         "name": "consultant.get_project_entity_inventory",
-        "description": "Получить покрытие и сверенный перечень кандидатов объектов/сооружений текущего ОКС; использовать для полного подсчёта ЛОС, КНС, котлованов, зон и сооружений.",
+        "description": "Получить сверенный перечень площадок, сооружений, котлованов, зон и других элементов текущего ОКС.",
         "schema": {
             "kind": "local_area|facility|excavation_pit|structure|zone optional",
             "query": "string optional",

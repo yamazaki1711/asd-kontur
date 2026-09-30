@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v8"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v9"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -162,11 +162,21 @@ def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
                             {
                                 "quantity_candidate_id": "quantity-volume",
                                 "status": "WORK_QUANTITY",
+                                "semantic_scope": "Объём разработки грунта в котловане",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
                                 "reason": "Значение указано как объём разработки грунта.",
                             },
                             {
                                 "quantity_candidate_id": "quantity-depth",
                                 "status": "DIMENSION",
+                                "semantic_scope": "Глубина котлована",
+                                "quantity_type": "DIMENSION",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "DIFFERENT_SCOPE",
                                 "reason": "Значение является глубиной котлована.",
                             },
                         ],
@@ -196,11 +206,21 @@ def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
         {
             "quantity_candidate_id": "quantity-volume",
             "status": "WORK_QUANTITY",
+            "semantic_scope": "Объём разработки грунта в котловане",
+            "quantity_type": "STANDALONE",
+            "relation_kind": "NONE",
+            "related_quantity_candidate_ids": [],
+            "scope_compatibility": "SAME_SCOPE",
             "reason": "Значение указано как объём разработки грунта.",
         },
         {
             "quantity_candidate_id": "quantity-depth",
             "status": "DIMENSION",
+            "semantic_scope": "Глубина котлована",
+            "quantity_type": "DIMENSION",
+            "relation_kind": "NONE",
+            "related_quantity_candidate_ids": [],
+            "scope_compatibility": "DIFFERENT_SCOPE",
             "reason": "Значение является глубиной котлована.",
         },
     ]

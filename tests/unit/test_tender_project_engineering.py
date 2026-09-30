@@ -9,6 +9,7 @@ from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
     _comparison_row,
     _comparisons,
+    _component_total_comparisons,
     _display_quantity,
     _document_composition,
     _documents,
@@ -26,6 +27,7 @@ from asd_kontur.tender.project_engineering import (
     _resolution_establishes_page_scope,
     _scope_comparisons,
     _semantic_work_consensus,
+    _sheet_pile_profiles,
     _unique_values,
     build_project_engineering_model,
     classify_work_family,
@@ -540,6 +542,11 @@ def test_document_roles_keep_procurement_correspondence_and_pos_out_of_generic_b
         == "Переписка/согласования"
     )
     assert _professional_document_role(None, "22.467 - ПОС.pdf") == "ПД"
+    assert (
+        _professional_document_role("project_documentation", "Ведомость объемов работ.pdf") == "ВОР"
+    )
+    assert _professional_document_role(None, "Ведомость объёмов работ.pdf") == "ВОР"
+    assert _professional_document_role("project_documentation", "22.467-СМ.Изм7.pdf") == "Смета"
     assert _professional_document_role(None, "Криптоконтейнер_41.xml") == "Электронный контейнер"
 
 
@@ -584,6 +591,115 @@ def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
     assert comparisons[0]["classification"] == "MATCH"
     assert comparisons[0]["left"]["unit"] == "м"
     assert comparisons[0]["right"]["unit"] == "м"
+
+
+def test_quantity_comparison_keeps_count_and_concrete_volume_as_separate_measures() -> None:
+    comparisons = _comparisons(
+        [
+            {
+                "work_scope_id": "bored-piles",
+                "facility": "Подпорная стена ПС-1",
+                "work_name": "Устройство свай",
+                "quantities_by_document": {
+                    "РД": [
+                        {"value": "124", "unit": "шт"},
+                        {"value": "15.5", "unit": "м3"},
+                    ],
+                    "ВОР": [{"value": "15.5", "unit": "м3"}],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+    assert comparisons[0]["left"] == {
+        "document_role": "РД",
+        "value": "15.5",
+        "unit": "м3",
+    }
+    assert comparisons[0]["right"] == {
+        "document_role": "ВОР",
+        "value": "15.5",
+        "unit": "м3",
+    }
+
+
+def test_quantity_comparison_does_not_call_different_measure_dimensions_a_discrepancy() -> None:
+    comparisons = _comparisons(
+        [
+            {
+                "work_scope_id": "bored-piles",
+                "facility": "Подпорная стена ПС-1",
+                "work_name": "Устройство свай",
+                "quantities_by_document": {
+                    "РД": [{"value": "124", "unit": "шт"}],
+                    "ВОР": [{"value": "15.5", "unit": "м3"}],
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
+
+
+def test_component_total_comparison_requires_explicit_semantic_relationship() -> None:
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-a",
+                "facility_id": "facility-a",
+                "facility": "Корпус А",
+                "work_name": "Монтаж металлоконструкций",
+                "quantities_by_document": {
+                    "РД": [
+                        {
+                            "quantity_candidate_id": "total",
+                            "value": "7.0",
+                            "unit": "т",
+                            "semantic_scope": "Общая масса каркаса",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "TOTAL_FOR",
+                            "related_quantity_candidate_ids": ["part-a", "part-b"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-total",
+                        },
+                        {
+                            "quantity_candidate_id": "part-a",
+                            "value": "5.2",
+                            "unit": "т",
+                            "semantic_scope": "Колонны",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-a",
+                        },
+                        {
+                            "quantity_candidate_id": "part-b",
+                            "value": "3.1",
+                            "unit": "т",
+                            "semantic_scope": "Балки",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-b",
+                        },
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "COMPONENT_TOTAL_MISMATCH"
+    assert comparisons[0]["difference"] == "-1.3"
+    assert comparisons[0]["source_locator_ids"] == [
+        "locator-a",
+        "locator-b",
+        "locator-total",
+    ]
 
 
 def test_material_schedule_normalizes_unit_but_keeps_source_spelling() -> None:
@@ -648,6 +764,19 @@ def test_page_text_profile_repairs_only_genuinely_split_material_wording() -> No
 
     assert values[0]["name"] == "Шпунт Л5-УМ из стали марки С255"
     assert values[0]["source_name"] == "УМ из стали марки С255"
+
+
+def test_sheet_pile_profile_parser_is_not_limited_to_one_project_profile() -> None:
+    assert _sheet_pile_profiles("Шпунт Л4-АУ; Л7-12 и Л8") == ["Л4АУ", "Л7-12", "Л8"]
+
+
+def test_page_text_profile_repair_uses_the_profile_suffix_from_context() -> None:
+    values = _professional_material_values(
+        [{"name": "АУ из стали марки С345", "source_locator_id": "material-row"}],
+        {"material-row": {"page_sheet_pile_profiles": ["Л4АУ"]}},
+    )
+
+    assert values[0]["name"] == "Шпунт Л4-АУ из стали марки С345"
 
 
 def test_page_profile_is_not_attached_to_unrelated_waling_material() -> None:
