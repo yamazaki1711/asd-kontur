@@ -18,6 +18,7 @@ from typing import Any
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.semantic import normalize_unit as _normalize_source_unit
 
+from .finding_model import ProfessionalFindingKind
 from .quantity_semantics import (
     QuantityRelation,
     QuantityRelationship,
@@ -4013,6 +4014,7 @@ def _issues(
         issues.append(
             {
                 "issue_id": str(comparison["material_comparison_id"]),
+                "finding_kind": ProfessionalFindingKind.MATERIAL_MISMATCH,
                 "kind": "Различие характеристик материала",
                 "location": comparison.get("facility"),
                 "subject": f"{comparison.get('work')} — {comparison.get('material')}",
@@ -4044,6 +4046,13 @@ def _issues(
         issues.append(
             {
                 "issue_id": str(comparison["comparison_id"]),
+                "finding_kind": (
+                    ProfessionalFindingKind.DURATION_MISMATCH
+                    if comparison_kind == "duration"
+                    else ProfessionalFindingKind.COMPONENT_TOTAL_MISMATCH
+                    if comparison_kind == "component_total"
+                    else ProfessionalFindingKind.QUANTITY_MISMATCH
+                ),
                 "kind": (
                     "Расхождение продолжительности"
                     if comparison_kind == "duration"
@@ -4089,6 +4098,7 @@ def _issues(
         issues.append(
             {
                 "issue_id": str(comparison["scope_comparison_id"]),
+                "finding_kind": ProfessionalFindingKind.DESIGN_SCOPE_MISSING_COMMERCIAL,
                 "kind": "Возможная неучтённая работа",
                 "location": comparison.get("facility"),
                 "subject": comparison.get("work"),
@@ -4143,6 +4153,7 @@ def _issues(
                         "locators": locators,
                     }
                 ),
+                "finding_kind": ProfessionalFindingKind.MATERIAL_MISMATCH,
                 "kind": "Профиль шпунта требует согласования",
                 "location": facility,
                 "subject": "Профиль шпунта",
@@ -4205,6 +4216,7 @@ def _issues(
         issues.append(
             {
                 "issue_id": issue_id,
+                "finding_kind": ProfessionalFindingKind.MISSING_PROJECT_INFORMATION,
                 "kind": "Коммерческий объём не распределён по сооружениям",
                 "location": work.get("facility"),
                 "subject": work.get("work_name"),
@@ -4248,6 +4260,7 @@ def _issues(
         issues.append(
             {
                 "issue_id": str(row.get("defect_id") or semantic_digest(row)),
+                "finding_kind": _defect_finding_kind(kind),
                 "kind": _issue_title(kind),
                 "location": parameters.get("location") or "Место требует уточнения",
                 "subject": parameters.get("work_name")
@@ -5149,6 +5162,34 @@ def _deduplicate_dicts(values: Iterable[Mapping[str, Any]]) -> list[dict[str, An
         row = dict(value)
         result.setdefault(semantic_digest(row), row)
     return [result[key] for key in sorted(result)]
+
+
+def _defect_finding_kind(kind: str) -> ProfessionalFindingKind:
+    return {
+        "project_work_missing_in_estimate": (
+            ProfessionalFindingKind.DESIGN_SCOPE_MISSING_COMMERCIAL
+        ),
+        "project_material_missing_in_estimate": (
+            ProfessionalFindingKind.DESIGN_SCOPE_MISSING_COMMERCIAL
+        ),
+        "estimate_position_unsupported_by_project": (
+            ProfessionalFindingKind.COMMERCIAL_SCOPE_WITHOUT_DESIGN_BASIS
+        ),
+        "quantity_mismatch": ProfessionalFindingKind.QUANTITY_MISMATCH,
+        "material_quantity_mismatch": ProfessionalFindingKind.QUANTITY_MISMATCH,
+        "normative_authority_unavailable": (ProfessionalFindingKind.NTD_APPLICABILITY_UNRESOLVED),
+        "rule_coverage_unavailable": ProfessionalFindingKind.NTD_APPLICABILITY_UNRESOLVED,
+        "drawing_intelligence_required": ProfessionalFindingKind.MISSING_PROJECT_INFORMATION,
+        "estimate_comparison_input_unavailable": (
+            ProfessionalFindingKind.MISSING_PROJECT_INFORMATION
+        ),
+        "estimate_material_comparison_input_unavailable": (
+            ProfessionalFindingKind.MISSING_PROJECT_INFORMATION
+        ),
+        "material_quantity_comparison_input_unavailable": (
+            ProfessionalFindingKind.MISSING_PROJECT_INFORMATION
+        ),
+    }.get(kind, ProfessionalFindingKind.OTHER_ENGINEERING_CONFLICT)
 
 
 def _issue_title(kind: str) -> str:

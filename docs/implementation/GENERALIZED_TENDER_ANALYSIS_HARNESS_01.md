@@ -86,6 +86,10 @@ blind-project workspace ID was found in the audited runtime paths.
     reusable procurement-notice, technical-specification, construction-schedule,
     engineering-survey, and design-calculation roles. Filenames remain supporting
     context rather than a project-specific decision table.
+12. Added a compact project-independent professional finding vocabulary while
+    preserving Russian construction-language titles and explanations in the UI
+    and report. Quantity, component-total, material, duration, scope, NTD, and
+    missing-information findings now carry stable machine-readable kinds.
 
 ## Autonomous runtime
 

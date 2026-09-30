@@ -927,6 +927,7 @@ def test_sheet_pile_profile_difference_is_reported_for_each_facility() -> None:
     )
 
     profile_issue = next(issue for issue in issues if issue["subject"] == "Профиль шпунта")
+    assert profile_issue["finding_kind"] == "MATERIAL_MISMATCH"
     assert profile_issue["location"] == "КНС 4"
     assert profile_issue["description"] == (
         "Для КНС 4 в документах указаны разные профили: ВОР: Л5; Смета: Л5УМ."
@@ -1403,6 +1404,7 @@ def test_facility_reclamation_omission_becomes_a_customer_action() -> None:
     )
 
     issue = issues[0]
+    assert issue["finding_kind"] == "DESIGN_SCOPE_MISSING_COMMERCIAL"
     assert issue["kind"] == "Возможная неучтённая работа"
     assert issue["location"] == "КНС 8.1"
     assert "Рекультивация" in issue["recommended_action"]
@@ -3424,6 +3426,7 @@ def test_model_calculates_real_role_comparison_and_hides_technical_defects() -> 
     assert comparison["difference"] == "77"
     assert comparison["comparison_kind"] == "quantity"
     assert comparison["classification"] == "QUANTITY_DIFFERENCE"
+    assert model["issues"][0]["finding_kind"] == "QUANTITY_MISMATCH"
     assert model["issues"][0]["kind"] == "Расхождение объёмов"
     assert all(item["issue_id"] != "technical" for item in model["issues"])
     assert model["customer_questions"][0]["question"].startswith(
