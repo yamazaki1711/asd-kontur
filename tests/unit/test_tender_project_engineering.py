@@ -674,6 +674,9 @@ def test_document_roles_keep_procurement_correspondence_and_pos_out_of_generic_b
     )
     assert _professional_document_role(None, "Ведомость объёмов работ.pdf") == "ВОР"
     assert _professional_document_role("project_documentation", "22.467-СМ.Изм7.pdf") == "Смета"
+    assert _professional_document_role("project_documentation", "ЛСР 02-01-01.pdf") == "Смета"
+    assert _professional_document_role(None, "ОСР-04 Наружные сети.pdf") == "Смета"
+    assert _professional_document_role(None, "ССР-01.xlsx") == "Смета"
     assert _professional_document_role(None, "Криптоконтейнер_41.xml") == "Электронный контейнер"
 
 

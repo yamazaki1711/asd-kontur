@@ -5362,7 +5362,9 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Требования Заказчика"
     if "вор" in name or ("ведомост" in name and ("объем" in name or "объём" in name)):
         return "ВОР"
-    if "смет" in name or re.search(r"(?:^|[\s._-])см(?:[\s._-]|\d|$)", name):
+    if "смет" in name or re.search(
+        r"(?:^|[\s._-])(?:см|лср|оср|сср)(?:[\s._-]|\d|$)", name
+    ):
         return "Смета"
     if "спецификац" in name:
         return "Спецификация"
