@@ -83,7 +83,7 @@ ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v17"
 # manifests are assembled into durable candidates.  It is intentionally
 # independent so relationship-loss repairs can reuse accepted Qwen output
 # without relabelling it or repeating inference.
-ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = "engineering-candidate-persistence-v2"
+ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = "engineering-candidate-persistence-v3"
 DOCUMENT_CLASSIFICATION_RECOVERY_CONTRACT = "document-classification-recovery-v1"
 TERMINAL_STATES = frozenset(
     {
