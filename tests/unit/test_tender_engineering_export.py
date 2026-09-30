@@ -186,12 +186,8 @@ def test_tender_report_adapts_to_procurement_and_contract_inputs() -> None:
     value["participants"] = [{"label": "Заказчик", "value": "АО Заказчик"}]
     value["commercial_conditions"] = [{"label": "НМЦК", "value": "125 млн руб."}]
     value["time_requirements"] = [{"label": "Срок договора", "value": "18 месяцев"}]
-    value["procurement_requirements"] = [
-        {"label": "Требование СРО", "value": "Членство в СРО"}
-    ]
-    value["contract_conditions"] = [
-        {"label": "Гарантийный срок", "value": "60 месяцев"}
-    ]
+    value["procurement_requirements"] = [{"label": "Требование СРО", "value": "Членство в СРО"}]
+    value["contract_conditions"] = [{"label": "Гарантийный срок", "value": "60 месяцев"}]
 
     payload = render_engineering_tender_report_docx(value)
 

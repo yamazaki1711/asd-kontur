@@ -969,9 +969,7 @@ def _tender_context(
 ) -> dict[str, list[dict[str, Any]]]:
     """Project commercial context derived only from explicit typed fields."""
 
-    result: dict[str, list[dict[str, Any]]] = {
-        section: [] for section in _TENDER_CONTEXT_FIELDS
-    }
+    result: dict[str, list[dict[str, Any]]] = {section: [] for section in _TENDER_CONTEXT_FIELDS}
     seen: set[tuple[str, str, str]] = set()
     for raw in project_fields:
         row = dict(raw)
@@ -3131,8 +3129,7 @@ def _component_total_comparisons(
                     {
                         str(by_id[candidate_id].get("source_locator_id") or "")
                         for candidate_id in (checked.total_id, *checked.component_ids)
-                        if candidate_id in by_id
-                        and by_id[candidate_id].get("source_locator_id")
+                        if candidate_id in by_id and by_id[candidate_id].get("source_locator_id")
                     }
                 )
                 result.append(
@@ -5317,8 +5314,7 @@ def _professional_material_values(
         ):
             material["source_name"] = original
             material["name"] = (
-                f"Шпунт {_profile_display(page_profiles[0])} "
-                f"{original[len(suffix):].strip()}"
+                f"Шпунт {_profile_display(page_profiles[0])} {original[len(suffix) :].strip()}"
             )
         elif (
             len(page_profiles) == 1

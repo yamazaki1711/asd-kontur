@@ -298,12 +298,16 @@ def _log_root() -> Path:
 
 def _stop_launchd(service: str) -> int:
     names = (
-        "api",
-        "worker",
-        "project-orchestrator",
-        "assistant-worker",
-        "qwen",
-    ) if service == "all" else (service,)
+        (
+            "api",
+            "worker",
+            "project-orchestrator",
+            "assistant-worker",
+            "qwen",
+        )
+        if service == "all"
+        else (service,)
+    )
     outcomes: dict[str, str] = {}
     for name in names:
         label = f"ru.asd-kontur.spine.{name}"
@@ -323,12 +327,16 @@ def _show_logs(settings: SpineSettings, service: str, lines: int) -> int:
     if lines < 1 or lines > 1000:
         raise ValueError("log line count must be between 1 and 1000")
     names = (
-        "api",
-        "worker",
-        "project-orchestrator",
-        "assistant-worker",
-        "qwen",
-    ) if service == "all" else (service,)
+        (
+            "api",
+            "worker",
+            "project-orchestrator",
+            "assistant-worker",
+            "qwen",
+        )
+        if service == "all"
+        else (service,)
+    )
     root = _log_root()
     missing = False
     for name in names:

@@ -1175,8 +1175,7 @@ def _with_structured_project_fact_checks(
         marker in normalized_question for marker in ("все", "работ", "предусмотр", "покаж", "scope")
     )
     asks_for_sheet_pile_identity = mentions_sheet_pile and any(
-        marker in normalized_question
-        for marker in ("какой", "профил", "материал", "марк", "стал")
+        marker in normalized_question for marker in ("какой", "профил", "материал", "марк", "стал")
     )
     asks_for_waling = any(
         marker in normalized_question for marker in ("распределительн", "обвязочн", "пояс", "балк")

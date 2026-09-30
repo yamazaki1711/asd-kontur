@@ -66,5 +66,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
-        raise RuntimeError("Autonomous project orchestration downgrade requires a disposable database")
+        raise RuntimeError(
+            "Autonomous project orchestration downgrade requires a disposable database"
+        )
     op.execute("DROP FUNCTION workspace.autonomous_project_processing_scopes(integer)")

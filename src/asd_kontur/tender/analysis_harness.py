@@ -62,4 +62,3 @@ def bounded_task_payload(
     if len(payload) > max_chars:
         raise ValueError("tender harness context exceeds the declared bound")
     return payload
-
