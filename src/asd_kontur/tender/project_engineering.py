@@ -4375,9 +4375,9 @@ def _material_comparisons(
                     "sources": _source_refs(locator_ids, source_context),
                 }
             )
-    semantic_groups: dict[
-        tuple[str, str, str], dict[str, list[dict[str, Any]]]
-    ] = defaultdict(lambda: defaultdict(list))
+    semantic_groups: dict[tuple[str, str, str], dict[str, list[dict[str, Any]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     for raw in material_rows:
         material = dict(raw)
         material_kind = _normalized(material.get("material_kind"))
@@ -4385,9 +4385,7 @@ def _material_comparisons(
         if not material_kind or role not in design_roles | commercial_roles:
             continue
         location_key = str(
-            material.get("location_scope_id")
-            or material.get("facility_id")
-            or "unresolved"
+            material.get("location_scope_id") or material.get("facility_id") or "unresolved"
         )
         family_key = str(material.get("associated_work_family_key") or "")
         semantic_groups[(location_key, family_key, material_kind)][role].append(material)

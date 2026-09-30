@@ -4149,9 +4149,7 @@ def test_non_work_material_resource_is_projected_into_material_schedule() -> Non
                         "material_name": "Polymer membrane",
                         "material_kind": "polymer membrane",
                         "associated_work_family_key": "waterproofing",
-                        "properties": [
-                            {"kind": "THICKNESS", "value": "2.4", "unit": "mm"}
-                        ],
+                        "properties": [{"kind": "THICKNESS", "value": "2.4", "unit": "mm"}],
                         "quantity_candidate_ids": ["quantity-material-row"],
                         "confidence": "0.94",
                         "reason": "Material and thickness are explicit.",

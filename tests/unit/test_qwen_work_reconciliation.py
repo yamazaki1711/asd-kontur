@@ -136,9 +136,7 @@ def test_qwen_work_reconciliation_preserves_material_resource_semantics(
                                 "material_name": "Полимерная мембрана",
                                 "material_kind": "полимерная мембрана",
                                 "associated_work_family_key": "waterproofing",
-                                "properties": [
-                                    {"kind": "THICKNESS", "value": "2.4", "unit": "mm"}
-                                ],
+                                "properties": [{"kind": "THICKNESS", "value": "2.4", "unit": "mm"}],
                                 "quantity_candidate_ids": ["material-q"],
                                 "confidence": "0.94",
                                 "reason": "Материал и толщина названы явно.",
