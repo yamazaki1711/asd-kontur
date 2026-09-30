@@ -105,14 +105,14 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
         == "industrial-document-understanding-v0.2"
     )
     assert (
-        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == "qwen-project-work-reconciliation-v13"
+        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == "qwen-project-work-reconciliation-v14"
     )
 
 
 def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> None:
     result = {
         "contract": "project-work-reconciliation-result@12.0.0",
-        "profile_version": "qwen-project-work-reconciliation-v13",
+        "profile_version": "qwen-project-work-reconciliation-v14",
         "observations": [
             {
                 "candidate_id": "candidate-a",
@@ -131,7 +131,7 @@ def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> 
         def load_project_work_reconciliation_result(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, object]:
-            assert profile_version == "qwen-project-work-reconciliation-v13"
+            assert profile_version == "qwen-project-work-reconciliation-v14"
             return result
 
     class Qwen:
@@ -151,7 +151,7 @@ def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> 
         deterministic_uuid("work-reconciliation-job"),
         JobKind.PROJECT_WORK_RECONCILIATION,
         {
-            "work_reconciliation_profile": "qwen-project-work-reconciliation-v13",
+            "work_reconciliation_profile": "qwen-project-work-reconciliation-v14",
             "work_observations": [{"candidate_id": "candidate-a"}],
             "work_families": {"backfill": "Обратная засыпка"},
             "facilities": [],

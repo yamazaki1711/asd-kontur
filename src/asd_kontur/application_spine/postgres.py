@@ -7870,7 +7870,14 @@ def _quantities_requiring_semantic_review(
         review = reviews.get(str(row.get("candidate_id") or ""))
         if review is None or (
             review.get("status") in {"WORK_QUANTITY", "DURATION"}
-            and review.get("relationship_reviewed") is not True
+            and (
+                review.get("relationship_reviewed") is not True
+                or (
+                    review.get("relation_kind")
+                    in {"TOTAL_FOR", "COMPONENT_OF", "SUBTOTAL_OF"}
+                    and "component_set_complete" not in review
+                )
+            )
         ):
             result.append(row)
     return result

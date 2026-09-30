@@ -219,6 +219,36 @@ def test_quantity_review_chunks_schedule_relationship_pass_before_completion() -
     assert [value["candidate_id"] for value in remaining] == ["quantity-8", "quantity-9"]
 
 
+def test_legacy_component_relationship_is_requeued_for_completeness_review() -> None:
+    quantities = [
+        {"candidate_id": "quantity-total"},
+        {"candidate_id": "quantity-part"},
+    ]
+    prior = {
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "quantity-total",
+                "status": "WORK_QUANTITY",
+                "relation_kind": "TOTAL_FOR",
+                "relationship_reviewed": True,
+            },
+            {
+                "quantity_candidate_id": "quantity-part",
+                "status": "WORK_QUANTITY",
+                "relation_kind": "COMPONENT_OF",
+                "relationship_reviewed": True,
+            },
+        ]
+    }
+
+    remaining = _quantities_requiring_semantic_review(quantities, prior)
+
+    assert [value["candidate_id"] for value in remaining] == [
+        "quantity-total",
+        "quantity-part",
+    ]
+
+
 def test_quantity_relationship_batches_group_by_engineering_context_not_number() -> None:
     rows = [
         _work_batch_row(

@@ -790,6 +790,8 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
                             "relation_kind": "TOTAL_FOR",
                             "related_quantity_candidate_ids": ["part-a", "part-b"],
                             "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "component_set_complete": True,
                             "source_locator_id": "locator-total",
                         },
                         {
@@ -849,6 +851,8 @@ def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
                             "relation_kind": "TOTAL_FOR",
                             "related_quantity_candidate_ids": ["section-a", "section-b"],
                             "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "component_set_complete": True,
                             "source_locator_id": "locator-total",
                         }
                     ]
@@ -907,6 +911,49 @@ def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
         "locator-b",
         "locator-total",
     ]
+
+
+def test_component_total_comparison_rejects_explicitly_incomplete_component_set() -> None:
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-earthworks",
+                "facility_id": "facility-a",
+                "facility": "Сооружение А",
+                "work_name": "Разработка грунта",
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "total",
+                            "value": "250",
+                            "unit": "м3",
+                            "semantic_scope": "Общий объём разработки грунта",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "TOTAL_FOR",
+                            "related_quantity_candidate_ids": ["manual-part"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "component_set_complete": False,
+                        },
+                        {
+                            "quantity_candidate_id": "manual-part",
+                            "value": "40",
+                            "unit": "м3",
+                            "semantic_scope": "Ручная разработка грунта",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "component_set_complete": None,
+                        },
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
 
 
 def test_component_total_comparison_rejects_different_explicit_pipe_diameters() -> None:
@@ -978,6 +1025,8 @@ def test_component_total_rounding_match_is_not_a_professional_issue() -> None:
                         "relation_kind": "TOTAL_FOR",
                         "related_quantity_candidate_ids": ["part-a", "part-b"],
                         "scope_compatibility": "COMPONENT_VS_TOTAL",
+                        "relationship_reviewed": True,
+                        "component_set_complete": True,
                     },
                     {
                         "quantity_candidate_id": "part-a",
@@ -1830,7 +1879,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v54"
+    assert model["model_version"] == "project-engineering-model-v55"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

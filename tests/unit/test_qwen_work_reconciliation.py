@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v13"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v14"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -183,6 +183,7 @@ def test_quantity_relationship_review_uses_relationship_sized_output_budget(
                                 "relation_kind": "NONE",
                                 "related_quantity_candidate_ids": [],
                                 "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": None,
                                 "reason": "Итоговый объём в пакете не указан.",
                             }
                         ],
@@ -337,6 +338,7 @@ def test_qwen_work_reconciliation_allows_explicit_cross_row_quantity_relation(
                                 "relation_kind": "TOTAL_FOR",
                                 "related_quantity_candidate_ids": ["quantity-section"],
                                 "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": True,
                                 "reason": "Таблица обозначает значение как общий итог.",
                             }
                         ],
@@ -358,6 +360,7 @@ def test_qwen_work_reconciliation_allows_explicit_cross_row_quantity_relation(
                                 "relation_kind": "COMPONENT_OF",
                                 "related_quantity_candidate_ids": ["quantity-total"],
                                 "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": None,
                                 "reason": "Строка является частью общего итога.",
                             }
                         ],
@@ -438,6 +441,7 @@ def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> 
                                 "relation_kind": "TOTAL_FOR",
                                 "related_quantity_candidate_ids": ["quantity-component"],
                                 "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": True,
                                 "reason": "Значение обозначено как общий итог.",
                             }
                         ],
@@ -459,6 +463,7 @@ def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> 
                                 "relation_kind": "COMPONENT_OF",
                                 "related_quantity_candidate_ids": ["quantity-total"],
                                 "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": None,
                                 "reason": "Строка является составляющей общего объёма.",
                             }
                         ],
@@ -480,6 +485,97 @@ def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> 
         for observation in result["observations"]
         for review in observation["quantity_reviews"]
     )
+
+
+def test_quantity_relationship_task_preserves_incomplete_component_set(monkeypatch: Any) -> None:
+    rows = [
+        {
+            "candidate_id": "candidate-total",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Общий объём земляных работ",
+            "deterministic_family_hint": "excavation",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-total", "value": "250", "unit": "м3"}
+            ],
+        },
+        {
+            "candidate_id": "candidate-part",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Ручная разработка грунта",
+            "deterministic_family_hint": "excavation",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-part", "value": "40", "unit": "м3"}
+            ],
+        },
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка грунта",
+                        "facility": None,
+                        "confidence": "0.91",
+                        "reason": "Указан общий объём.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общий объём разработки грунта",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": ["quantity-part"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": False,
+                                "reason": (
+                                    "Передана только ручная часть; механизированная часть "
+                                    "отсутствует."
+                                ),
+                            }
+                        ],
+                    },
+                    {
+                        "candidate_id": "candidate-part",
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка грунта",
+                        "facility": None,
+                        "confidence": "0.91",
+                        "reason": "Указана ручная часть.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-part",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Ручная разработка грунта",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": None,
+                                "reason": "Это одна из составляющих общего объёма.",
+                            }
+                        ],
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"excavation": "Земляные работы"},
+        facilities=[],
+    )
+
+    total_review = result["observations"][0]["quantity_reviews"][0]
+    assert total_review["relationship_reviewed"] is True
+    assert total_review["component_set_complete"] is False
 
 
 def test_split_quantity_batch_is_not_certified_as_complete_relationship_review(

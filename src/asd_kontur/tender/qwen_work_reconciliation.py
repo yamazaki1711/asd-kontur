@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v13"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v14"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -28,9 +28,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v10",
     "qwen-project-work-reconciliation-v11",
     "qwen-project-work-reconciliation-v12",
+    "qwen-project-work-reconciliation-v13",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@12.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@13.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -67,6 +68,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_output_unexpected",
         "qwen_work_reconciliation_quantity_output_incomplete",
         "qwen_work_reconciliation_quantity_output_invalid",
+        "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_semantic_response_incomplete",
         "qwen_semantic_response_output_exhausted",
     }
@@ -335,6 +337,7 @@ def _prompt(
 "semantic_scope":"что именно измеряет значение","quantity_type":"TOTAL|SUBTOTAL|COMPONENT|STANDALONE|DIMENSION|DURATION|RESOURCE_OR_RATE|UNKNOWN",
 "relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
 "related_quantity_candidate_ids":["..."],"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
+"component_set_complete":true|false|null,
 "reason":"что именно означает значение в данном фрагменте"}}]}}]}}
 Верните ровно одну запись для каждого candidate_id, без новых идентификаторов. MATCHED требует один
 family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_key. Facility допустим только при
@@ -347,6 +350,10 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
 из близости чисел.
+Для TOTAL_FOR обязательно укажите component_set_complete=true только если переданные связанные
+quantity_candidate_id перечисляют ВСЕ составляющие итога. Если передана лишь часть состава,
+пропущена вычисляемая/упомянутая составляющая либо полнота неизвестна, укажите false. Для остальных
+relation_kind верните null. Нельзя объявлять расхождение между итогом и неполным набором частей.
 Пакет может содержать проектные и коммерческие строки одного сооружения из разных документов.
 Если они описывают один инженерный объём, используйте одинаковое нормализованное operation. Если
 одна строка является частью, включённой работой, альтернативой, другой редакцией или иным объёмом,
@@ -485,6 +492,7 @@ def _parse_quantity_reviews(
         relation_kind = str(value.get("relation_kind") or "")
         scope_compatibility = str(value.get("scope_compatibility") or "")
         related = value.get("related_quantity_candidate_ids")
+        component_set_complete = value.get("component_set_complete")
         reason = " ".join(str(value.get("reason") or "").split())
         if (
             candidate_id not in allowed_ids
@@ -498,6 +506,16 @@ def _parse_quantity_reviews(
             or not reason
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        if relationship_review:
+            if relation_kind == QuantityRelation.TOTAL_FOR:
+                if not isinstance(component_set_complete, bool):
+                    raise QwenSemanticFailure(
+                        "qwen_work_reconciliation_component_completeness_invalid"
+                    )
+            elif component_set_complete is not None:
+                raise QwenSemanticFailure(
+                    "qwen_work_reconciliation_component_completeness_invalid"
+                )
         related_ids = tuple(str(item) for item in related)
         if (
             len(set(related_ids)) != len(related_ids)
@@ -519,6 +537,7 @@ def _parse_quantity_reviews(
         }
         if relationship_review:
             reviews[candidate_id]["relationship_reviewed"] = True
+            reviews[candidate_id]["component_set_complete"] = component_set_complete
     if set(reviews) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
     return [reviews[candidate_id] for candidate_id in input_ids]

@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v54"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v55"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -40,6 +40,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v11",
         "qwen-project-work-reconciliation-v12",
         "qwen-project-work-reconciliation-v13",
+        "qwen-project-work-reconciliation-v14",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -840,6 +841,10 @@ def build_project_engineering_model(
             for work in work_model["works"]
             for value in work.get("quantity_interpretations") or ()
             if value.get("status") in {"AMBIGUOUS", "UNREVIEWED"}
+            or (
+                value.get("relation_kind") == "TOTAL_FOR"
+                and value.get("component_set_complete") is False
+            )
         ],
         "requirements": list(requirements["unresolved"]),
     }
@@ -2679,6 +2684,8 @@ def _work_schedule(
                             "relation_kind",
                             "related_quantity_candidate_ids",
                             "scope_compatibility",
+                            "relationship_reviewed",
+                            "component_set_complete",
                         )
                         if review.get(key) is not None
                     }
@@ -2700,6 +2707,8 @@ def _work_schedule(
                         review.get("related_quantity_candidate_ids") or ()
                     ),
                     "scope_compatibility": review.get("scope_compatibility"),
+                    "relationship_reviewed": review.get("relationship_reviewed"),
+                    "component_set_complete": review.get("component_set_complete"),
                     "reason": review.get("reason"),
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
@@ -3161,7 +3170,6 @@ def _component_total_comparisons(
 
     records: dict[str, dict[str, Any]] = {}
     relationships: dict[tuple[str, str, tuple[str, ...]], QuantityRelationship] = {}
-    component_ids_by_total: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
         work = dict(raw_work)
         for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
@@ -3201,9 +3209,13 @@ def _component_total_comparisons(
                     str(item) for item in value.get("related_quantity_candidate_ids") or ()
                 )
                 if relation is not QuantityRelation.NONE and related:
-                    if relation is QuantityRelation.COMPONENT_OF:
-                        for total_id in related:
-                            component_ids_by_total[total_id].add(candidate_id)
+                    if value.get("relationship_reviewed") is not True:
+                        continue
+                    if (
+                        relation is QuantityRelation.TOTAL_FOR
+                        and value.get("component_set_complete") is not True
+                    ):
+                        continue
                     relationship = QuantityRelationship(
                         subject_id=candidate_id,
                         relation=relation,
@@ -3211,17 +3223,6 @@ def _component_total_comparisons(
                         compatibility=compatibility,
                     )
                     relationships[(candidate_id, relation.value, related)] = relationship
-    for total_id, component_ids in component_ids_by_total.items():
-        related = tuple(sorted(component_ids))
-        if total_id in records and related:
-            relationships[(total_id, QuantityRelation.TOTAL_FOR.value, related)] = (
-                QuantityRelationship(
-                    subject_id=total_id,
-                    relation=QuantityRelation.TOTAL_FOR,
-                    object_ids=related,
-                    compatibility=ScopeCompatibility.COMPONENT_VS_TOTAL,
-                )
-            )
     statements = [dict(record)["statement"] for record in records.values()]
     result: list[dict[str, Any]] = []
     for relationship in relationships.values():
