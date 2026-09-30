@@ -152,6 +152,7 @@ class DocumentWorker:
         self._workspace_id = workspace_id
         self._stopping = False
         self._next_idle_refill_at = 0.0
+        self._semantic_processing_enabled = qwen_semantic_url is not None
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
             qwen_vision=QwenVisionOcrAdapter(qwen_vision_url),
@@ -224,6 +225,7 @@ class DocumentWorker:
             if (
                 self._organization_id is not None
                 and self._workspace_id is not None
+                and getattr(self, "_semantic_processing_enabled", True)
                 and callable(refill)
                 and now >= self._next_idle_refill_at
             ):
@@ -240,7 +242,11 @@ class DocumentWorker:
                         organization_id=self._organization_id,
                         workspace_id=self._workspace_id,
                     )
-            elif callable(refill) and now >= self._next_idle_refill_at:
+            elif (
+                getattr(self, "_semantic_processing_enabled", True)
+                and callable(refill)
+                and now >= self._next_idle_refill_at
+            ):
                 refill_scopes = getattr(
                     self._repository, "idle_project_work_reconciliation_scopes", None
                 )

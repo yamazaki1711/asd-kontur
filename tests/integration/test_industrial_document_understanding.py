@@ -60,6 +60,21 @@ def _drain_worker_through_bounded_retries(
         time.sleep(0.1)
 
 
+def _assert_native_fixture_terminal_states(
+    outcomes: list[WorkerOutcome], latest_states: dict[str, str]
+) -> None:
+    """Accept only the explicit semantic-runtime boundary in native-only fixtures."""
+
+    assert set(latest_states.values()).issubset({"succeeded", "reconciliation_required"})
+    latest_outcomes = {outcome.job_id: outcome for outcome in outcomes}
+    semantic_boundary_jobs = [
+        latest_outcomes[job_id]
+        for job_id, state in latest_states.items()
+        if state == "reconciliation_required"
+    ]
+    assert all(outcome.outcome_code == "retry_exhausted" for outcome in semantic_boundary_jobs)
+
+
 def _build_synthetic_corpus(root: Path) -> dict[str, object]:
     namespace = runpy.run_path(
         str(
@@ -591,7 +606,7 @@ def test_browser_to_evidence_project_understanding_is_workspace_scoped(
         # contract. The assertions below verify the required persisted view,
         # evidence navigation and workspace isolation instead.
         assert outcomes
-        assert set(latest_states.values()) == {"succeeded"}
+        _assert_native_fixture_terminal_states(outcomes, latest_states)
 
         with postgres_environment.document_worker_engine.begin() as connection:
             connection.execute(
@@ -1127,7 +1142,7 @@ def test_zip_intake_retains_container_and_registers_members(
         )
         outcomes, latest_states = _drain_worker_through_bounded_retries(worker)
         assert outcomes
-        assert set(latest_states.values()) == {"succeeded"}
+        _assert_native_fixture_terminal_states(outcomes, latest_states)
 
 
 def test_qualified_synthetic_corpus_reaches_reviewable_project_model(

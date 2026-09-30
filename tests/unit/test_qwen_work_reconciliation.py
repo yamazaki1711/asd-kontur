@@ -968,6 +968,63 @@ def test_qwen_work_reconciliation_discards_weak_facility_proximity_but_keeps_wor
     observation = result["observations"][0]
     assert observation["status"] == "MATCHED"
     assert observation["facility"] is None
+
+
+def test_qwen_work_reconciliation_discards_unestablished_facility_but_keeps_semantics(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "steel-columns",
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Монтаж стальных колонн",
+                        "facility": "Навес N-12",
+                        "confidence": "0.94",
+                        "reason": "Работа относится к каркасу навеса.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "steel-columns-q",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Масса стальных колонн",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Значение относится к колоннам.",
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "steel-columns",
+                "wording": "Монтаж стальных колонн",
+                "quantity_observations": [
+                    {"quantity_candidate_id": "steel-columns-q", "value": "7.6", "unit": "t"}
+                ],
+            }
+        ],
+        work_families={"structural_steel": "Металлоконструкции"},
+        facilities=[],
+    )
+
+    observation = result["observations"][0]
+    assert observation["status"] == "MATCHED"
+    assert observation["family_key"] == "structural_steel"
+    assert observation["facility"] is None
+    assert observation["quantity_reviews"][0]["semantic_scope"] == "Масса стальных колонн"
+    assert "отсутствует в установленном составе объекта" in observation["reason"]
     assert "Привязка к сооружению не принята" in observation["reason"]
 
 

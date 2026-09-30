@@ -445,7 +445,11 @@ def _parse(
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_potential_work_excluded")
         if facility is not None and facility not in allowed_facilities:
-            raise QwenSemanticFailure("qwen_work_reconciliation_facility_invalid")
+            facility = None
+            reason = (
+                f"{reason} Привязка к сооружению не принята: указанное обозначение отсутствует "
+                "в установленном составе объекта."
+            )
         if facility is not None and _WEAK_FACILITY_REASON.search(reason):
             facility = None
             reason = (
