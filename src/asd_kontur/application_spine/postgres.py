@@ -94,6 +94,34 @@ TERMINAL_STATES = frozenset(
     }
 )
 
+
+def _effective_project_processing_job_sql(alias: str) -> str:
+    """Exclude immutable history superseded by the current semantic result.
+
+    The rows remain available to diagnostics.  This predicate only defines the
+    professional progress denominator and terminal blocker projection.
+    """
+
+    if alias != "job":
+        raise ValueError("unsupported durable-job SQL alias")
+    return (
+        "NOT (job.state='reconciliation_required' AND "
+        "job.typed_failure_code='dependency_terminal_failure') AND "
+        "NOT (job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
+        "COALESCE(job.input_manifest->>'work_reconciliation_profile','')<>"
+        ":current_work_profile) AND "
+        "NOT (job.job_kind='PROJECT_DEFINITION_EXTRACTION' AND EXISTS ("
+        "SELECT 1 FROM workspace.durable_jobs newer WHERE "
+        "newer.organization_id=job.organization_id AND "
+        "newer.workspace_id=job.workspace_id AND "
+        "newer.job_kind=job.job_kind AND newer.state='succeeded' AND "
+        "newer.created_at>job.created_at AND "
+        "newer.input_manifest->>'source_version_id'="
+        "job.input_manifest->>'source_version_id' AND "
+        "newer.input_manifest->>'engineering_semantic_profile'="
+        ":current_engineering_profile))"
+    )
+
 # Dispatch priorities are intentionally coarse and derived only from durable
 # document-role decisions.  They influence which independent source uses the
 # single local-Qwen slot next; they do not change candidate authority, evidence
@@ -511,13 +539,13 @@ class SpinePostgresRepository:
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> ProjectProcessingStatus:
         organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        effective_job = _effective_project_processing_job_sql("job")
         with Session(self._engine) as session, session.begin():
             _set_scope(session, organization_id, workspace_id)
             jobs = (
                 session.execute(
                     sa.text(
-                        "SELECT count(*) FILTER (WHERE NOT (job.state='reconciliation_required' "
-                        "AND job.typed_failure_code='dependency_terminal_failure')) AS total_count,"
+                        "SELECT count(*) AS total_count,"
                         "count(*) FILTER (WHERE job.state='succeeded') AS succeeded_count,"
                         "count(*) FILTER (WHERE job.state IN ('queued','leased','running')) AS active_count,"
                         "count(*) FILTER (WHERE job.state IN ('leased','running')) AS running_count,"
@@ -540,9 +568,15 @@ class SpinePostgresRepository:
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
                         "'PROJECT_WORK_RECONCILIATION')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
-                        "AND job.workspace_id=:workspace"
+                        "AND job.workspace_id=:workspace AND "
+                        f"{effective_job}"
                     ),
-                    {"organization": organization_id, "workspace": workspace_id},
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "current_work_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        "current_engineering_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                    },
                 )
                 .mappings()
                 .one()
@@ -565,19 +599,25 @@ class SpinePostgresRepository:
             )
             latest_failure = session.scalar(
                 sa.text(
-                    "SELECT typed_failure_code FROM workspace.durable_jobs WHERE "
-                    "organization_id=:organization AND workspace_id=:workspace AND "
-                    "state IN ('failed','reconciliation_required') AND typed_failure_code IS NOT NULL "
-                    "AND typed_failure_code IS DISTINCT FROM 'dependency_terminal_failure' "
-                    "AND NOT EXISTS (SELECT 1 FROM workspace.durable_jobs accepted WHERE "
-                    "accepted.organization_id=workspace.durable_jobs.organization_id AND "
-                    "accepted.workspace_id=workspace.durable_jobs.workspace_id AND "
-                    "accepted.job_kind=workspace.durable_jobs.job_kind AND "
-                    "accepted.input_digest=workspace.durable_jobs.input_digest AND "
+                    "SELECT job.typed_failure_code FROM workspace.durable_jobs job WHERE "
+                    "job.organization_id=:organization AND job.workspace_id=:workspace AND "
+                    "job.state IN ('failed','reconciliation_required') AND "
+                    "job.typed_failure_code IS NOT NULL AND "
+                    f"{effective_job} AND "
+                    "NOT EXISTS (SELECT 1 FROM workspace.durable_jobs accepted WHERE "
+                    "accepted.organization_id=job.organization_id AND "
+                    "accepted.workspace_id=job.workspace_id AND "
+                    "accepted.job_kind=job.job_kind AND "
+                    "accepted.input_digest=job.input_digest AND "
                     "accepted.state='succeeded') "
-                    "ORDER BY completed_at DESC NULLS LAST,created_at DESC LIMIT 1"
+                    "ORDER BY job.completed_at DESC NULLS LAST,job.created_at DESC LIMIT 1"
                 ),
-                {"organization": organization_id, "workspace": workspace_id},
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "current_work_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    "current_engineering_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
+                },
             )
         active_kinds = {str(value) for value in jobs["active_kinds"] or ()}
         analysis_kinds = {
