@@ -85,7 +85,7 @@ class QwenVisionOcrAdapter:
         return bool(
             response.status == 200
             and isinstance(payload, dict)
-            and payload.get("status") == "ready"
+            and payload.get("status") in {"ready", "QWEN_READY_IDLE"}
         )
 
     def extract(

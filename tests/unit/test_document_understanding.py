@@ -1095,6 +1095,40 @@ def test_qwen_vision_ocr_uses_bounded_page_generation_budget(tmp_path: Path) -> 
     assert result.adapter_version == "qwen-vision-ocr-v3"
 
 
+@pytest.mark.parametrize(
+    ("runtime_status", "expected"),
+    [
+        ("ready", True),
+        ("QWEN_READY_IDLE", True),
+        ("QWEN_MODEL_LOADING", False),
+        ("QWEN_GENERATING", False),
+        ("QWEN_ERROR", False),
+    ],
+)
+def test_qwen_vision_availability_understands_runtime_status_plane(
+    runtime_status: str,
+    expected: bool,
+) -> None:
+    class Response:
+        status = 200
+
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def read(self, _size: int) -> bytes:
+            return json.dumps({"status": runtime_status}).encode()
+
+    adapter = QwenVisionOcrAdapter("http://127.0.0.1:8790/vision")
+    with patch(
+        "asd_kontur.document_understanding.ocr.urllib.request.urlopen",
+        return_value=Response(),
+    ):
+        assert adapter.available() is expected
+
+
 def test_ocr_locator_retry_is_idempotent_by_deterministic_locator_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
