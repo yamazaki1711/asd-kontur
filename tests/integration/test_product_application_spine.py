@@ -1125,7 +1125,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 .all()
             )
         assert len(rows) == 1
-        assert rows[0]["priority"] == 170
+        assert rows[0]["priority"] == 195
         assert rows[0]["provenance"]["semantic_recovery_of"] is None
         assert (
             rows[0]["provenance"]["candidate_persistence_profile"]
