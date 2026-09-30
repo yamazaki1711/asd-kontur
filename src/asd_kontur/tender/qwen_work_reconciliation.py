@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v15"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v16"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -30,9 +30,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v12",
     "qwen-project-work-reconciliation-v13",
     "qwen-project-work-reconciliation-v14",
+    "qwen-project-work-reconciliation-v15",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@13.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@14.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -144,7 +145,7 @@ class QwenProjectWorkReconciler:
             output_budget = (
                 max(1_600, min(5_000, len(rows) * 360 + quantity_count * 180))
                 if relationship_review
-                else max(900, min(3_200, len(rows) * 240 + quantity_count * 100))
+                else max(1_400, min(4_000, len(rows) * 320 + quantity_count * 140))
             )
             raw = _complete(
                 self._endpoint,
@@ -353,8 +354,10 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 из близости чисел.
 Для TOTAL_FOR обязательно укажите component_set_complete=true только если переданные связанные
 quantity_candidate_id перечисляют ВСЕ составляющие итога. Если передана лишь часть состава,
-пропущена вычисляемая/упомянутая составляющая либо полнота неизвестна, укажите false. Для остальных
-relation_kind верните null. Нельзя объявлять расхождение между итогом и неполным набором частей.
+пропущена вычисляемая/упомянутая составляющая либо полнота неизвестна, укажите false. Во всех
+остальных quantity_reviews укажите component_set_complete=null. relation_kind всегда должен быть
+одним из перечисленных значений; когда связи нет, используйте NONE. Нельзя объявлять расхождение
+между итогом и неполным набором частей.
 Пакет может содержать проектные и коммерческие строки одного сооружения из разных документов.
 Если они описывают один инженерный объём, используйте одинаковое нормализованное operation. Если
 одна строка является частью, включённой работой, альтернативой, другой редакцией или иным объёмом,

@@ -17,7 +17,7 @@ def test_qwen_work_reconciliation_preserves_exact_rows_and_allowed_scope(
     def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
         assert "КНС-4" in prompt
         assert "backfill" in prompt
-        assert max_tokens >= 900
+        assert max_tokens >= 1_400
         return json.dumps(
             {
                 "observations": [
@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v15"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v16"
 
 
 def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
@@ -108,6 +108,8 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
         assert "даже когда сами числа" in prompt
         assert "дословно одинаковый краткий" in prompt
         assert "DUPLICATE_OF означает именно повтор" in prompt
+        assert "relation_kind всегда должен быть одним" in prompt
+        assert "relation_kind верните null" not in prompt
         return json.dumps(
             {
                 "observations": [
@@ -202,7 +204,7 @@ def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
     ]
 
     def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
-        assert max_tokens == 2_880
+        assert max_tokens == 3_840
         return json.dumps(
             {
                 "observations": [
@@ -309,7 +311,7 @@ def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
     def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
         assert "quantity-volume" in prompt
         assert "quantity-depth" in prompt
-        assert max_tokens >= 900
+        assert max_tokens >= 1_400
         return json.dumps(
             {
                 "observations": [

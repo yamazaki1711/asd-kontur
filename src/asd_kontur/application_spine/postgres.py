@@ -79,8 +79,8 @@ from .object_store import StagedObject, WorkspaceObjectStore
 
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
 ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v17"
-# Model output remains v15-compatible; this version records how accepted
-# manifests are assembled into durable candidates.  It is intentionally
+# Model output remains compatible with accepted bounded work interpretations;
+# this version records how accepted manifests are assembled into durable candidates. It is intentionally
 # independent so relationship-loss repairs can reuse accepted Qwen output
 # without relabelling it or repeating inference.
 ENGINEERING_CANDIDATE_PERSISTENCE_PROFILE = "engineering-candidate-persistence-v3"
@@ -177,7 +177,7 @@ _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 # batches preserve bounded semantic context while materially reducing repair
 # calls and time to an accepted project result.
 # Four rows keep the single local model available at useful project boundaries.
-# Live v15 receipts showed an 8-row long tail of 7-13 model calls and 8-19
+# Live terminal receipts showed an 8-row long tail of 7-13 model calls and 8-19
 # minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
 _PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
 
@@ -4303,7 +4303,7 @@ class SpinePostgresRepository:
         correlation_id: UUID,
         sources: list[dict[str, Any]],
     ) -> list[dict[str, object]]:
-        """Queue one explicit v15 semantic pass per native-readable active source.
+        """Queue one explicit current-profile semantic pass per native-readable active source.
 
         The intake pipeline historically chained semantic extraction behind OCR and
         page-role classification.  Native-readable project content must instead be
