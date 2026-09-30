@@ -122,6 +122,7 @@ def _effective_project_processing_job_sql(alias: str) -> str:
         ":current_engineering_profile))"
     )
 
+
 # Dispatch priorities are intentionally coarse and derived only from durable
 # document-role decisions.  They influence which independent source uses the
 # single local-Qwen slot next; they do not change candidate authority, evidence
@@ -5098,9 +5099,7 @@ class SpinePostgresRepository:
                 linked_quantities = list(row.get("linked_quantities") or ())
                 prior_quantity_reviews = {
                     str(value.get("quantity_candidate_id") or ""): dict(value)
-                    for value in dict(row.get("prior_resolution") or {}).get(
-                        "quantity_reviews"
-                    )
+                    for value in dict(row.get("prior_resolution") or {}).get("quantity_reviews")
                     or ()
                     if isinstance(value, Mapping) and value.get("quantity_candidate_id")
                 }
@@ -5147,9 +5146,7 @@ class SpinePostgresRepository:
                 explicit_context_facilities = set(
                     mentioned_established_facilities(contextual_scope, facilities)
                 )
-                prior_facility = str(
-                    dict(row.get("prior_resolution") or {}).get("facility") or ""
-                )
+                prior_facility = str(dict(row.get("prior_resolution") or {}).get("facility") or "")
                 if prior_facility in facilities:
                     explicit_context_facilities.add(prior_facility)
                 hints = [value for value in facilities if value in explicit_context_facilities]
@@ -5465,6 +5462,20 @@ class SpinePostgresRepository:
                 ),
                 {"o": organization_id, "w": workspace_id},
             ).scalar_one_or_none()
+            # A newly admitted workspace has no prior work-reconciliation job.
+            # Requiring one here made the safety sweep a refill mechanism only:
+            # the first semantic batch still had to be created by an operator.
+            # The durable admission chain already carries the exact owning
+            # identity, so use its latest job as the generic bootstrap source.
+            if owner_identity_id is None:
+                owner_identity_id = session.execute(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w ORDER BY created_at DESC,job_id "
+                        "DESC LIMIT 1"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).scalar_one_or_none()
             if owner_identity_id is None:
                 return ()
         return self.start_project_work_reconciliation(
@@ -7911,14 +7922,17 @@ def _quantities_requiring_semantic_review(
     for value in linked_quantities:
         row = dict(value)
         review = reviews.get(str(row.get("candidate_id") or ""))
-        if review is None or not current_profile_reviewed or (
-            review.get("status") in {"WORK_QUANTITY", "DURATION"}
-            and (
-                review.get("relationship_reviewed") is not True
-                or (
-                    review.get("relation_kind")
-                    in {"TOTAL_FOR", "COMPONENT_OF", "SUBTOTAL_OF"}
-                    and "component_set_complete" not in review
+        if (
+            review is None
+            or not current_profile_reviewed
+            or (
+                review.get("status") in {"WORK_QUANTITY", "DURATION"}
+                and (
+                    review.get("relationship_reviewed") is not True
+                    or (
+                        review.get("relation_kind") in {"TOTAL_FOR", "COMPONENT_OF", "SUBTOTAL_OF"}
+                        and "component_set_complete" not in review
+                    )
                 )
             )
         ):

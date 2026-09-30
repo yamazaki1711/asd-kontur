@@ -730,6 +730,82 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
     assert replacement["provenance"]["autonomous_retry_generation"] == 1
 
 
+def test_autonomous_work_reconciliation_bootstraps_without_prior_work_job(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="autonomous-work-bootstrap-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Autonomous work bootstrap owner",
+    )
+    with TestClient(app) as client:
+        principal = _login(
+            client,
+            "autonomous-work-bootstrap-owner",
+            "Synthetic-Owner-Password-42!",
+        )
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Autonomous work bootstrap workspace"},
+            headers=_csrf(client),
+        ).json()
+
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    owner_identity_id = str(principal["owner_identity_id"])
+    manifest = {"synthetic": "completed-admission-chain"}
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                "job_kind,input_manifest,input_digest,idempotency_key,state,priority,max_attempts,"
+                "retry_policy_version,provenance,correlation_id,created_by_identity_id,"
+                "completed_at) VALUES (:organization,:workspace,:job,'DOCUMENT_ADMISSION',"
+                "CAST(:manifest AS jsonb),:digest,:key,'succeeded',100,3,'synthetic',"
+                "CAST(:provenance AS jsonb),:correlation,:owner,CURRENT_TIMESTAMP)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": uuid4(),
+                "manifest": json.dumps(manifest),
+                "digest": semantic_digest(manifest),
+                "key": "synthetic-completed-admission-chain",
+                "provenance": json.dumps({"contract": "synthetic"}),
+                "correlation": uuid4(),
+                "owner": owner_identity_id,
+            },
+        )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    captured: dict[str, object] = {}
+
+    def start_project_work_reconciliation(**kwargs: object) -> tuple[object, ...]:
+        captured.update(kwargs)
+        return (object(),)
+
+    monkeypatch.setattr(
+        repository,
+        "start_project_work_reconciliation",
+        start_project_work_reconciliation,
+    )
+
+    scheduled = repository.refill_workspace_project_work_reconciliation_if_idle(
+        organization_id=organization_id,
+        workspace_id=workspace_id,
+        correlation_id=uuid4(),
+    )
+
+    assert len(scheduled) == 1
+    assert captured["owner_identity_id"] == owner_identity_id
+    assert captured["workspace_id"] == workspace_id
+    assert captured["_resolved_organization_id"] == organization_id
+
+
 def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
