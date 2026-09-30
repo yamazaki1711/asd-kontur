@@ -115,9 +115,7 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
 
 def test_engineering_prompt_requires_every_explicit_quantity_row_without_arithmetic() -> None:
     document = _extract_csv(
-        "Работа;Ед.;Количество\n"
-        "Устройство покрытия;м2;125\n"
-        "Итого покрытие;м2;125\n"
+        "Работа;Ед.;Количество\nУстройство покрытия;м2;125\nИтого покрытие;м2;125\n"
     )
     fragment = _engineering_batches(document.pages[0].elements)[0].fragments[0]
 
