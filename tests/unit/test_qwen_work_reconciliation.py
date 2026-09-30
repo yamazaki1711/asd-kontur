@@ -108,7 +108,8 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
         assert "даже когда сами числа" in prompt
         assert "дословно одинаковый краткий" in prompt
         assert "DUPLICATE_OF означает именно повтор" in prompt
-        assert "relation_kind всегда должен быть одним" in prompt
+        assert "relation_kind всегда должен быть" in prompt
+        assert "одним из перечисленных значений" in prompt
         assert "relation_kind верните null" not in prompt
         return json.dumps(
             {
