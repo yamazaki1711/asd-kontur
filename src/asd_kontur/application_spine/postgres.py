@@ -6060,6 +6060,10 @@ class SpinePostgresRepository:
                     prior_quantity_reviews,
                     item.get("quantity_reviews") or (),
                 )
+                material_reviews = _merged_material_reviews(
+                    compatible_current.get("material_reviews") or (),
+                    item.get("material_reviews") or (),
+                )
                 combined = {
                     **dict(item),
                     "candidate_version": candidate_version,
@@ -6077,6 +6081,8 @@ class SpinePostgresRepository:
                     combined["facility"] = compatible_current["facility"]
                 if quantity_reviews:
                     combined["quantity_reviews"] = quantity_reviews
+                if material_reviews:
+                    combined["material_reviews"] = material_reviews
                 resolved[candidate_id] = combined
         return resolved
 
@@ -7982,6 +7988,21 @@ def _merged_quantity_reviews(
         candidate_id = str(value.get("quantity_candidate_id") or "")
         if candidate_id:
             reviews[candidate_id] = dict(value)
+    return list(reviews.values())
+
+
+def _merged_material_reviews(
+    prior: Iterable[Mapping[str, Any]],
+    current: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Preserve validated material interpretations across bounded relation passes."""
+
+    reviews: dict[tuple[str, str], dict[str, Any]] = {}
+    for value in (*tuple(prior), *tuple(current)):
+        material_kind = str(value.get("material_kind") or "").casefold().strip()
+        material_name = str(value.get("material_name") or "").casefold().strip()
+        if material_kind and material_name:
+            reviews[(material_kind, material_name)] = dict(value)
     return list(reviews.values())
 
 

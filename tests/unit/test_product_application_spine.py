@@ -374,6 +374,12 @@ def test_work_resolution_profile_upgrade_preserves_facility_and_quantity_reviews
                         "quantity_reviews": [
                             {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"}
                         ],
+                        "material_reviews": [
+                            {
+                                "material_name": "Polymer membrane",
+                                "material_kind": "polymer membrane",
+                            }
+                        ],
                     }
                 ]
             },
@@ -420,6 +426,9 @@ def test_work_resolution_profile_upgrade_preserves_facility_and_quantity_reviews
     assert resolved["quantity_reviews"] == [
         {"quantity_candidate_id": "quantity-1", "status": "WORK_QUANTITY"},
         {"quantity_candidate_id": "quantity-2", "status": "DIMENSION"},
+    ]
+    assert resolved["material_reviews"] == [
+        {"material_name": "Polymer membrane", "material_kind": "polymer membrane"}
     ]
 
 

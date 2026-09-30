@@ -32,6 +32,7 @@ from asd_kontur.tender.project_engineering import (
     _tender_context,
     _tender_context_comparisons,
     _unique_values,
+    _work_schedule,
     build_project_engineering_model,
     classify_work_family,
     commercial_scope_facility_designation,
@@ -1951,7 +1952,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v56"
+    assert model["model_version"] == "project-engineering-model-v57"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -3966,6 +3967,140 @@ def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_cl
         "commercial-concrete",
         "design-concrete",
     ]
+
+
+def test_semantic_material_resource_comparison_survives_non_work_source_rows() -> None:
+    source_context = dict(
+        [
+            _source("design-membrane", "R14_materials.pdf", 3),
+            _source("commercial-membrane", "C22_offer.pdf", 5),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": "project:test",
+                "facility": "Project scope",
+                "work": "Waterproofing",
+                "document_role": "Спецификация",
+                "name": "Polymer membrane",
+                "material_kind": "polymer membrane",
+                "associated_work_family_key": "waterproofing",
+                "properties": [{"kind": "THICKNESS", "value": "2.4", "unit": "mm"}],
+                "source_locator_id": "design-membrane",
+            },
+            {
+                "location_scope_id": "project:test",
+                "facility": "Project scope",
+                "work": "Waterproofing",
+                "document_role": "ВОР",
+                "name": "Polymer membrane",
+                "material_kind": "polymer membrane",
+                "associated_work_family_key": "waterproofing",
+                "properties": [{"kind": "THICKNESS", "value": "1.8", "unit": "mm"}],
+                "source_locator_id": "commercial-membrane",
+            },
+            {
+                "location_scope_id": "project:test",
+                "facility": "Project scope",
+                "work": "Primer application",
+                "document_role": "ВОР",
+                "name": "Primer",
+                "material_kind": "primer",
+                "associated_work_family_key": "waterproofing",
+                "properties": [{"kind": "TYPE", "value": "epoxy", "unit": None}],
+                "source_locator_id": "commercial-membrane",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATERIAL_DIFFERENCE"
+    assert comparisons[0]["property_differences"] == [
+        {"property": "THICKNESS", "design": ["2.4 mm"], "commercial": ["1.8 mm"]}
+    ]
+    assert "2.4 mm" in comparisons[0]["description"]
+    assert "1.8 mm" in comparisons[0]["description"]
+
+
+def test_non_work_material_resource_is_projected_into_material_schedule() -> None:
+    source_context = dict([_source("material-row", "Specification R14.pdf", 3)])
+    result = _work_schedule(
+        [
+            {
+                "candidate_id": "work-material-row",
+                "version": 1,
+                "value": "Polymer membrane, thickness 2.4 mm",
+                "label": "polymer membrane thickness 2.4 mm",
+                "source_version_id": "source-material-row",
+                "source_locator_id": "material-row",
+                "source_role": "specification",
+            }
+        ],
+        [
+            {
+                "candidate_id": "quantity-material-row",
+                "work_candidate_id": "work-material-row",
+                "normalized_value": "760",
+                "normalized_unit": "m2",
+                "source_locator_id": "material-row",
+            }
+        ],
+        [
+            {
+                "candidate_id": "material-candidate-row",
+                "work_candidate_id": "work-material-row",
+                "name": "Polymer membrane, thickness 2.4 mm",
+                "source_locator_id": "material-row",
+            }
+        ],
+        [],
+        {},
+        [],
+        source_context,
+        {
+            "work-material-row": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v18",
+                "status": "NOT_A_WORK",
+                "reason": "Material resource, not a construction operation.",
+                "quantity_reviews": [
+                    {
+                        "quantity_candidate_id": "quantity-material-row",
+                        "status": "RESOURCE_OR_RATE",
+                        "semantic_scope": "Membrane area",
+                        "quantity_type": "RESOURCE_OR_RATE",
+                        "relation_kind": "NONE",
+                        "related_quantity_candidate_ids": [],
+                        "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                        "reason": "Material quantity.",
+                    }
+                ],
+                "material_reviews": [
+                    {
+                        "material_name": "Polymer membrane",
+                        "material_kind": "polymer membrane",
+                        "associated_work_family_key": "waterproofing",
+                        "properties": [
+                            {"kind": "THICKNESS", "value": "2.4", "unit": "mm"}
+                        ],
+                        "quantity_candidate_ids": ["quantity-material-row"],
+                        "confidence": "0.94",
+                        "reason": "Material and thickness are explicit.",
+                    }
+                ],
+            }
+        },
+    )
+
+    assert result["works"] == []
+    assert result["classification"]["excluded_non_work_observation_count"] == 1
+    assert len(result["materials"]) == 1
+    assert result["materials"][0]["material_kind"] == "polymer membrane"
+    assert result["materials"][0]["quantity"] == "760"
+    assert result["materials"][0]["document_role"] == "Спецификация"
 
 
 def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None:

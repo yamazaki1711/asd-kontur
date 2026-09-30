@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v17"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v18"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -32,9 +32,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v14",
     "qwen-project-work-reconciliation-v15",
     "qwen-project-work-reconciliation-v16",
+    "qwen-project-work-reconciliation-v17",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@14.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@15.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -45,6 +46,9 @@ _QUANTITY_STATUSES = frozenset(
         "UNRELATED",
         "AMBIGUOUS",
     }
+)
+_MATERIAL_PROPERTY_KINDS = frozenset(
+    {"GRADE", "CLASS", "PROFILE", "THICKNESS", "DIAMETER", "TYPE", "OTHER"}
 )
 _POTENTIAL_WORK_AT_START = re.compile(
     r"^(?:перевоз\w*|транспортирован\w*|погруз\w*|разгруз\w*|испытан\w*|"
@@ -72,6 +76,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_output_incomplete",
         "qwen_work_reconciliation_quantity_output_invalid",
         "qwen_work_reconciliation_component_completeness_invalid",
+        "qwen_work_reconciliation_material_output_invalid",
         "qwen_semantic_response_incomplete",
         "qwen_semantic_response_output_exhausted",
     }
@@ -358,7 +363,13 @@ def _prompt(
 "relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
 "related_quantity_candidate_ids":["..."],"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
 "component_set_complete":true|false|null,
-"reason":"что именно означает значение в данном фрагменте"}}]}}]}}
+"reason":"что именно означает значение в данном фрагменте"}}],
+"material_reviews":[{{"material_name":"точное наименование без размера/марки",
+"material_kind":"краткий общий вид материала","associated_work_family_key":"ключ или null",
+"properties":[{{"kind":"GRADE|CLASS|PROFILE|THICKNESS|DIAMETER|TYPE|OTHER",
+"value":"значение","unit":"единица или null"}}],
+"quantity_candidate_ids":["..."],"confidence":"0.00..1.00",
+"reason":"почему материал относится к строке"}}]}}]}}
 Верните ровно одну запись для каждого candidate_id, без новых идентификаторов. MATCHED требует один
 family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_key. Facility допустим только при
 явной привязке из текста или контекста; нахождение в одном документе недостаточно.
@@ -398,6 +409,14 @@ OVERLAPPING_SCOPE либо другую точную причину. INSUFFICIEN
 scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
 контекст ему не противоречит; сооружение всё равно требует явной привязки.
+material_reviews содержит только явно названные в строке или ближайшем контексте материалы,
+изделия и их характеристики. Для строки без материала верните пустой список. Материальная позиция
+может иметь status=NOT_A_WORK и при этом обязана остаться в material_reviews. material_name — точное
+наименование без марки, класса, профиля, толщины и диаметра; material_kind — общий инженерный вид,
+нормализованный одинаково для проектной и коммерческой формулировки одного материала. Не объединяйте
+разные материалы только по общей работе. Свяжите quantity_candidate_ids только с количеством ресурса,
+не с объёмом строительной операции. associated_work_family_key допустим только из переданного каталога.
+Размеры и обозначения сохраняйте в properties; числовые значения не сравнивайте самостоятельно.
 Явная строительная работа, исключённая из ВОР, сметы, договора или цены предложения, остаётся
 работой: используйте MATCHED либо AMBIGUOUS и отразите коммерческое исключение в reason. Нельзя
 помечать такую работу NOT_A_WORK только потому, что она не включена в предложение.
@@ -453,6 +472,7 @@ def _parse(
         facility = str(value.get("facility") or "").strip() or None
         reason = " ".join(str(value.get("reason") or "").split())
         raw_quantity_reviews = value.get("quantity_reviews")
+        raw_material_reviews = value.get("material_reviews", [])
         try:
             confidence = Decimal(str(value.get("confidence")))
         except (InvalidOperation, TypeError) as exc:
@@ -489,6 +509,11 @@ def _parse(
             allowed_related_ids=all_quantity_ids,
             relationship_review=mark_relationship_reviewed,
         )
+        material_reviews = _parse_material_reviews(
+            raw_material_reviews,
+            allowed_quantity_ids=set(quantity_ids),
+            work_families=allowed_families,
+        )
         observation: dict[str, Any] = {
             "candidate_id": candidate_id,
             "status": status,
@@ -500,10 +525,79 @@ def _parse(
         }
         if quantity_ids:
             observation["quantity_reviews"] = quantity_reviews
+        if material_reviews:
+            observation["material_reviews"] = material_reviews
         observations[candidate_id] = observation
     if set(observations) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_incomplete_output")
     return [observations[candidate_id] for candidate_id in input_ids]
+
+
+def _parse_material_reviews(
+    raw: object,
+    *,
+    allowed_quantity_ids: set[str],
+    work_families: set[str],
+) -> list[dict[str, Any]]:
+    if not isinstance(raw, list) or len(raw) > 4:
+        raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for value in raw:
+        if not isinstance(value, dict):
+            raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+        material_name = " ".join(str(value.get("material_name") or "").split())
+        material_kind = " ".join(str(value.get("material_kind") or "").split())
+        family = value.get("associated_work_family_key")
+        family_key = str(family) if family is not None else None
+        reason = " ".join(str(value.get("reason") or "").split())
+        try:
+            confidence = Decimal(str(value.get("confidence")))
+        except (InvalidOperation, TypeError) as exc:
+            raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid") from exc
+        raw_quantity_ids = value.get("quantity_candidate_ids")
+        raw_properties = value.get("properties")
+        if (
+            not material_name
+            or not material_kind
+            or (family_key is not None and family_key not in work_families)
+            or not Decimal("0") <= confidence <= Decimal("1")
+            or not reason
+            or not isinstance(raw_quantity_ids, list)
+            or not isinstance(raw_properties, list)
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+        quantity_ids = tuple(str(item) for item in raw_quantity_ids)
+        if len(set(quantity_ids)) != len(quantity_ids) or not set(quantity_ids).issubset(
+            allowed_quantity_ids
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+        properties: list[dict[str, str | None]] = []
+        for raw_property in raw_properties:
+            if not isinstance(raw_property, dict):
+                raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+            kind = str(raw_property.get("kind") or "")
+            property_value = " ".join(str(raw_property.get("value") or "").split())
+            unit_value = " ".join(str(raw_property.get("unit") or "").split()) or None
+            if kind not in _MATERIAL_PROPERTY_KINDS or not property_value:
+                raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+            properties.append({"kind": kind, "value": property_value[:160], "unit": unit_value})
+        identity = (material_kind.casefold(), material_name.casefold())
+        if identity in seen:
+            raise QwenSemanticFailure("qwen_work_reconciliation_material_output_invalid")
+        seen.add(identity)
+        result.append(
+            {
+                "material_name": material_name[:300],
+                "material_kind": material_kind[:200],
+                "associated_work_family_key": family_key,
+                "properties": properties,
+                "quantity_candidate_ids": list(quantity_ids),
+                "confidence": format(confidence, "f"),
+                "reason": reason[:500],
+            }
+        )
+    return result
 
 
 def _parse_quantity_reviews(

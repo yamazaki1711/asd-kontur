@@ -97,7 +97,85 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v17"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v18"
+
+
+def test_qwen_work_reconciliation_preserves_material_resource_semantics(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "material_reviews" in prompt
+        assert "Материальная позиция" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "material-row",
+                        "status": "NOT_A_WORK",
+                        "family_key": None,
+                        "operation": None,
+                        "facility": None,
+                        "confidence": "0.96",
+                        "reason": "Строка является материальной позицией.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "material-q",
+                                "status": "RESOURCE_OR_RATE",
+                                "semantic_scope": "Площадь мембранного покрытия",
+                                "quantity_type": "RESOURCE_OR_RATE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": None,
+                                "reason": "Количество материала.",
+                            }
+                        ],
+                        "material_reviews": [
+                            {
+                                "material_name": "Полимерная мембрана",
+                                "material_kind": "полимерная мембрана",
+                                "associated_work_family_key": "waterproofing",
+                                "properties": [
+                                    {"kind": "THICKNESS", "value": "2.4", "unit": "mm"}
+                                ],
+                                "quantity_candidate_ids": ["material-q"],
+                                "confidence": "0.94",
+                                "reason": "Материал и толщина названы явно.",
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "material-row",
+                "wording": "Полимерная мембрана толщиной 2,4 мм",
+                "quantity_observations": [
+                    {"quantity_candidate_id": "material-q", "value": "760", "unit": "m2"}
+                ],
+            }
+        ],
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    assert result["observations"][0]["material_reviews"] == [
+        {
+            "material_name": "Полимерная мембрана",
+            "material_kind": "полимерная мембрана",
+            "associated_work_family_key": "waterproofing",
+            "properties": [{"kind": "THICKNESS", "value": "2.4", "unit": "mm"}],
+            "quantity_candidate_ids": ["material-q"],
+            "confidence": "0.94",
+            "reason": "Материал и толщина названы явно.",
+        }
+    ]
 
 
 def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(

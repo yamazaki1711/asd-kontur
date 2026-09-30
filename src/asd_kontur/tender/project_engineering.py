@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v56"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v57"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -44,6 +44,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v15",
         "qwen-project-work-reconciliation-v16",
         "qwen-project-work-reconciliation-v17",
+        "qwen-project-work-reconciliation-v18",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -806,7 +807,9 @@ def build_project_engineering_model(
         available_document_roles=document_composition["available_roles"],
     )
     sheet_pile_schedule = _sheet_pile_schedule(work_model["works"], source_context, pits=pits)
-    material_comparisons = _material_comparisons(work_model["works"], source_context)
+    material_comparisons = _material_comparisons(
+        work_model["works"], source_context, material_rows=work_model["materials"]
+    )
     issues = _issues(
         defects,
         comparisons,
@@ -2568,6 +2571,7 @@ def _work_schedule(
     exact_observations: dict[tuple[str, str, str], dict[str, Any]] = {}
     unclassified: list[dict[str, Any]] = []
     excluded: list[dict[str, Any]] = []
+    standalone_material_rows: list[dict[str, Any]] = []
     for row in work_rows:
         candidate_id = str(row.get("candidate_id") or "")
         name = str(row.get("value") or row.get("raw_name") or "").strip()
@@ -2716,6 +2720,12 @@ def _work_schedule(
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
             )
+        semantic_materials = _semantic_material_values(
+            resolution.get("material_reviews") or (),
+            linked_quantities=linked_quantities,
+            source_locator_id=locator_id,
+            source_context=source_context,
+        )
         observation = {
             "candidate_id": candidate_id,
             "project_wording": name,
@@ -2748,9 +2758,14 @@ def _work_schedule(
             "source": _source_ref(locator_id, source_context),
             "quantities": _unique_values(accepted_quantities, "quantity"),
             "quantity_interpretations": quantity_interpretations,
-            "materials": _professional_material_values(
-                _unique_values(material_by_work.get(candidate_id, ()), "material"),
-                source_context,
+            "materials": _deduplicate_dicts(
+                [
+                    *_professional_material_values(
+                        _unique_values(material_by_work.get(candidate_id, ()), "material"),
+                        source_context,
+                    ),
+                    *semantic_materials,
+                ]
             ),
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
@@ -2780,6 +2795,23 @@ def _work_schedule(
                 operation_name = str(resolution.get("operation") or family_name)
                 family = (family_key, family_name)
         elif resolution.get("status") == "NOT_A_WORK":
+            for material in semantic_materials:
+                standalone_material_rows.append(
+                    {
+                        "work_scope_id": None,
+                        "location_scope_id": observation.get("location_scope_id"),
+                        "facility": observation.get("facility")
+                        or "Место применения не установлено",
+                        "work": (
+                            work_family_catalog().get(
+                                str(material.get("associated_work_family_key") or "")
+                            )
+                            or "Связанная работа требует уточнения"
+                        ),
+                        "document_role": role,
+                        **material,
+                    }
+                )
             excluded.append(
                 {
                     **observation,
@@ -2986,7 +3018,7 @@ def _work_schedule(
     construction_scope_count = classified_count + len(unclassified)
     return {
         "works": schedules,
-        "materials": material_rows,
+        "materials": _deduplicate_dicts([*material_rows, *standalone_material_rows]),
         "unclassified": unclassified,
         "excluded": excluded,
         "classification": {
@@ -4140,6 +4172,8 @@ def _concrete_material_spec(value: Mapping[str, Any]) -> dict[str, Any] | None:
 def _material_comparisons(
     works: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
+    *,
+    material_rows: Iterable[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """Compare explicit material identities within one reconciled work scope."""
 
@@ -4341,7 +4375,123 @@ def _material_comparisons(
                     "sources": _source_refs(locator_ids, source_context),
                 }
             )
+    semantic_groups: dict[
+        tuple[str, str, str], dict[str, list[dict[str, Any]]]
+    ] = defaultdict(lambda: defaultdict(list))
+    for raw in material_rows:
+        material = dict(raw)
+        material_kind = _normalized(material.get("material_kind"))
+        role = str(material.get("document_role") or "")
+        if not material_kind or role not in design_roles | commercial_roles:
+            continue
+        location_key = str(
+            material.get("location_scope_id")
+            or material.get("facility_id")
+            or _normalized(material.get("facility"))
+            or "project"
+        )
+        family_key = str(material.get("associated_work_family_key") or "")
+        semantic_groups[(location_key, family_key, material_kind)][role].append(material)
+    for (location_key, family_key, material_kind), values_by_role in sorted(
+        semantic_groups.items()
+    ):
+        for design_role in sorted(design_roles.intersection(values_by_role)):
+            for commercial_role in sorted(commercial_roles.intersection(values_by_role)):
+                design_values = values_by_role[design_role]
+                commercial_values = values_by_role[commercial_role]
+                design_properties = _material_property_values(design_values)
+                commercial_properties = _material_property_values(commercial_values)
+                shared_properties = sorted(
+                    set(design_properties).intersection(commercial_properties)
+                )
+                differences = [
+                    {
+                        "property": kind,
+                        "design": sorted(design_properties[kind]),
+                        "commercial": sorted(commercial_properties[kind]),
+                    }
+                    for kind in shared_properties
+                    if design_properties[kind] != commercial_properties[kind]
+                ]
+                if not differences:
+                    continue
+                locator_ids = sorted(
+                    {
+                        str(value.get("source_locator_id"))
+                        for value in [*design_values, *commercial_values]
+                        if value.get("source_locator_id")
+                    }
+                )
+                descriptions = [
+                    f"{_material_property_label(item['property'])}: "
+                    f"{design_role} — {', '.join(item['design'])}; "
+                    f"{commercial_role} — {', '.join(item['commercial'])}"
+                    for item in differences
+                ]
+                design = design_values[0]
+                commercial = commercial_values[0]
+                result.append(
+                    {
+                        "material_comparison_id": semantic_digest(
+                            {
+                                "location": location_key,
+                                "family": family_key,
+                                "material_kind": material_kind,
+                                "design_role": design_role,
+                                "commercial_role": commercial_role,
+                                "differences": differences,
+                            }
+                        ),
+                        "classification": "MATERIAL_DIFFERENCE",
+                        "professional_status": "Характеристики материала различаются",
+                        "facility": design.get("facility")
+                        or commercial.get("facility")
+                        or "Место применения не установлено",
+                        "facility_id": design.get("facility_id") or commercial.get("facility_id"),
+                        "work": design.get("work")
+                        or commercial.get("work")
+                        or work_family_catalog().get(family_key)
+                        or "Связанная работа требует уточнения",
+                        "material": design.get("name") or commercial.get("name"),
+                        "material_kind": design.get("material_kind")
+                        or commercial.get("material_kind"),
+                        "description": "; ".join(descriptions) + ".",
+                        "design_roles": [design_role],
+                        "commercial_roles": [commercial_role],
+                        "property_differences": differences,
+                        "source_locator_ids": locator_ids,
+                        "sources": _source_refs(locator_ids, source_context),
+                    }
+                )
     return _deduplicate_dicts(result)
+
+
+def _material_property_values(
+    materials: Iterable[Mapping[str, Any]],
+) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = defaultdict(set)
+    for material in materials:
+        for raw in material.get("properties") or ():
+            if not isinstance(raw, Mapping):
+                continue
+            kind = str(raw.get("kind") or "")
+            value = " ".join(str(raw.get("value") or "").split())
+            unit = " ".join(str(raw.get("unit") or "").split())
+            if kind and value:
+                result[kind].add(f"{value}{f' {unit}' if unit else ''}")
+    return result
+
+
+def _material_property_label(kind: str) -> str:
+    return {
+        "GRADE": "марка",
+        "CLASS": "класс",
+        "PROFILE": "профиль",
+        "THICKNESS": "толщина",
+        "DIAMETER": "диаметр",
+        "TYPE": "тип",
+        "OTHER": "характеристика",
+    }.get(kind, kind.casefold())
 
 
 def _one_material_quantity(
@@ -5847,6 +5997,62 @@ def _professional_material_values(
             material["source_name"] = original
             material["name"] = f"{original} {_profile_display(page_profiles[0])}"
         result.append(material)
+    return result
+
+
+def _semantic_material_values(
+    reviews: Iterable[Mapping[str, Any]],
+    *,
+    linked_quantities: Iterable[Mapping[str, Any]],
+    source_locator_id: str,
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Project validated material facts even when their source row is not a work."""
+
+    quantities = {
+        str(value.get("candidate_id") or ""): dict(value)
+        for value in linked_quantities
+        if value.get("candidate_id")
+    }
+    result: list[dict[str, Any]] = []
+    for raw in reviews:
+        review = dict(raw)
+        name = str(review.get("material_name") or "").strip()
+        material_kind = str(review.get("material_kind") or "").strip()
+        if not name or not material_kind:
+            continue
+        quantity_ids = [
+            str(value)
+            for value in review.get("quantity_candidate_ids") or ()
+            if str(value) in quantities
+        ]
+        quantity = quantities[quantity_ids[0]] if len(quantity_ids) == 1 else {}
+        locator_id = str(quantity.get("source_locator_id") or source_locator_id)
+        result.append(
+            {
+                "name": name,
+                "normalized_name": _normalized(name),
+                "material_kind": material_kind,
+                "normalized_material_kind": _normalized(material_kind),
+                "associated_work_family_key": review.get("associated_work_family_key"),
+                "properties": [
+                    dict(value)
+                    for value in review.get("properties") or ()
+                    if isinstance(value, Mapping)
+                ],
+                "quantity": quantity.get("normalized_value", quantity.get("value")),
+                "raw_quantity": quantity.get("raw_quantity", quantity.get("value")),
+                "unit": quantity.get(
+                    "normalized_unit", quantity.get("unit", quantity.get("raw_unit"))
+                ),
+                "raw_unit": quantity.get("raw_unit", quantity.get("unit")),
+                "quantity_candidate_ids": quantity_ids,
+                "source_locator_id": locator_id,
+                "source": _source_ref(locator_id, source_context),
+                "confidence": review.get("confidence"),
+                "interpretation_reason": review.get("reason"),
+            }
+        )
     return result
 
 
