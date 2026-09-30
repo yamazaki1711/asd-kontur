@@ -98,6 +98,16 @@ Scope compatibility is explicit: `SAME_SCOPE`, `OVERLAPPING_SCOPE`,
 `REVISION_DIFFERENCE`, or `INSUFFICIENT_INFORMATION`. Automatic numeric
 discrepancies require `SAME_SCOPE` or a valid `COMPONENT_VS_TOTAL` relationship.
 
+Cross-document semantic batches are assembled only when deterministic context
+has already established one exact facility and one construction family on both
+a design and a commercial side. The batch does not assert equivalence: Qwen
+must decide whether the rows describe the same operation, a component, an
+included activity, an alternative, a revision, or an unrelated scope. Batch
+assembly is bounded by row and quantity-context limits and works with both
+internal role identifiers and professional Russian role labels. This permits
+semantic normalization across different wording without falling back to label
+similarity as a comparison rule.
+
 ## Finding model
 
 The professional finding vocabulary is small and reusable: quantity or

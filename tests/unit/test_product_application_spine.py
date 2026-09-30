@@ -23,6 +23,7 @@ from asd_kontur.application_spine.object_store import (
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
     SpinePostgresRepository,
+    _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
     _semantic_extraction_priority,
@@ -35,6 +36,141 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def _work_batch_row(
+    candidate_id: str,
+    *,
+    facility: str,
+    family: str,
+    document_role: str,
+    wording: str,
+    quantity_count: int = 1,
+) -> dict[str, object]:
+    return {
+        "candidate_id": candidate_id,
+        "candidate_version": 1,
+        "wording": wording,
+        "document_role": document_role,
+        "document": f"Документ {candidate_id}",
+        "page": 1,
+        "scope": "",
+        "facility_hints": [facility],
+        "deterministic_family_hint": family,
+        "nearby_context": wording,
+        "nearby_context_locator_ids": [],
+        "quantity_observations": [
+            {"candidate_id": f"{candidate_id}-quantity-{index}"} for index in range(quantity_count)
+        ],
+        "source_version_id": f"source-{candidate_id}",
+        "source_locator_id": f"locator-{candidate_id}",
+        "semantic_priority": (100, 1, 1),
+    }
+
+
+@pytest.mark.parametrize(
+    ("facility", "family", "design_wording", "commercial_wording"),
+    (
+        ("Мост через реку Северную", "pile_foundation", "Бурение свай", "Устройство свай"),
+        ("Участок водовода № 7", "pipeline", "Прокладка трубы", "Монтаж трубопровода"),
+    ),
+)
+def test_cross_document_work_batches_are_project_independent(
+    facility: str,
+    family: str,
+    design_wording: str,
+    commercial_wording: str,
+) -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility=facility,
+            family=family,
+            document_role="Рабочая документация",
+            wording=design_wording,
+        ),
+        _work_batch_row(
+            "commercial",
+            facility=facility,
+            family=family,
+            document_role="Ведомость объемов работ",
+            wording=commercial_wording,
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
+
+    assert [[value["candidate_id"] for value in batch] for batch in batches] == [
+        ["design", "commercial"]
+    ]
+    assert selected == {"design", "commercial"}
+    assert all("comparison_side" not in value for value in batches[0])
+
+
+def test_cross_document_work_batches_do_not_mix_scope_or_one_sided_rows() -> None:
+    rows = [
+        _work_batch_row(
+            "bridge-design",
+            facility="Мост",
+            family="pile_foundation",
+            document_role="Рабочая документация",
+            wording="Бурение свай",
+        ),
+        _work_batch_row(
+            "building-commercial",
+            facility="Административное здание",
+            family="pile_foundation",
+            document_role="Смета",
+            wording="Устройство свай",
+        ),
+        _work_batch_row(
+            "bridge-pipeline-commercial",
+            facility="Мост",
+            family="pipeline",
+            document_role="Смета",
+            wording="Прокладка водоотвода",
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
+
+    assert batches == []
+    assert selected == set()
+
+
+def test_cross_document_work_batches_preserve_quantity_context_bound() -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility="Резервуар",
+            family="reinforced_concrete",
+            document_role="Проектная документация",
+            wording="Устройство стен резервуара",
+            quantity_count=9,
+        ),
+        _work_batch_row(
+            "commercial",
+            facility="Резервуар",
+            family="reinforced_concrete",
+            document_role="Локальная смета",
+            wording="Бетонирование стен",
+            quantity_count=7,
+        ),
+        _work_batch_row(
+            "extra",
+            facility="Резервуар",
+            family="reinforced_concrete",
+            document_role="Локальная смета",
+            wording="Устройство железобетонных стен",
+            quantity_count=2,
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
+
+    assert len(batches) == 1
+    assert sum(len(row["quantity_observations"]) for row in batches[0]) == 16
+    assert selected == {"design", "commercial"}
 
 
 def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:

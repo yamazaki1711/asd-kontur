@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v9"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v10"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(

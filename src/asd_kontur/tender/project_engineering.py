@@ -36,6 +36,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v7",
         "qwen-project-work-reconciliation-v8",
         "qwen-project-work-reconciliation-v9",
+        "qwen-project-work-reconciliation-v10",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -1292,25 +1293,40 @@ def document_comparison_side(source_role: object, display_name: object) -> str |
     """Return the professional comparison side for one project source."""
 
     name = _normalized(display_name)
-    role = str(source_role or "")
+    role = _normalized(source_role)
     if (
         "вор" in name
         or ("ведомост" in name and ("объем" in name or "объём" in name))
-        or role == "bill_of_quantities"
+        or role in {"bill of quantities", "вор", "ведомость объемов работ"}
     ):
         return "commercial"
     if (
         "смет" in name
         or re.search(r"(?:^|[\s._-])см(?:[\s._-]|\d|$)", name)
-        or role in {"local_estimate", "object_estimate", "consolidated_estimate"}
+        or role
+        in {
+            "local estimate",
+            "object estimate",
+            "consolidated estimate",
+            "смета",
+            "локальная смета",
+            "объектная смета",
+            "сводный сметный расчет",
+            "сводный сметный расчёт",
+        }
     ):
         return "commercial"
     if role in {
-        "project_documentation",
-        "working_documentation",
+        "project documentation",
+        "working documentation",
         "specification",
-        "explanatory_note",
-        "drawing_or_scheme",
+        "explanatory note",
+        "drawing or scheme",
+        "проектная документация",
+        "рабочая документация",
+        "спецификация",
+        "пояснительная записка",
+        "чертежи / схемы",
     }:
         return "design"
     return None

@@ -90,6 +90,20 @@ blind-project workspace ID was found in the audited runtime paths.
     preserving Russian construction-language titles and explanations in the UI
     and report. Quantity, component-total, material, duration, scope, NTD, and
     missing-information findings now carry stable machine-readable kinds.
+13. Advanced work reconciliation to profile v10 and added bounded
+    cross-document semantic batches. Rows enter such a batch only when the same
+    exact facility and generic work family occur on both design and commercial
+    document sides. Qwen, not the batch builder, decides whether their
+    engineering scopes are the same, composite, alternative, revision-related,
+    or incomparable. Parameterized bridge, pipeline, and reservoir cases prove
+    that neither project names nor retaining-wall vocabulary drive the
+    mechanism.
+14. Corrected the document-side boundary to recognize both internal role keys
+    and the professional Russian role labels supplied by the live preparation
+    path. Before this correction, the intended cross-document review remained
+    unreachable even when compatible design and commercial rows existed.
+15. Added migration 0078 for immutable v10 results while retaining v3-v9 read
+    compatibility. Downgrade remains fail-closed if v10 results exist.
 
 ## Autonomous runtime
 

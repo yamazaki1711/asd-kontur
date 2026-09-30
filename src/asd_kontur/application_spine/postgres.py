@@ -138,6 +138,90 @@ def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
     )
 
 
+def _cross_document_work_batches(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    batch_size: int,
+    max_batches: int,
+) -> tuple[list[list[dict[str, Any]]], set[str]]:
+    """Select bounded design/commercial contexts for one engineering scope.
+
+    The grouping keys are deterministic context established before Qwen: one
+    exact facility hint and one construction family. Qwen receives both sides
+    and decides normalized meaning; this helper never declares equivalence.
+    """
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        row = dict(raw)
+        hints = [str(value) for value in row.get("facility_hints") or ()]
+        family = str(row.get("deterministic_family_hint") or "")
+        side = document_comparison_side(row.get("document_role"), row.get("document"))
+        if len(hints) == 1 and family and side in {"design", "commercial"}:
+            row["comparison_side"] = side
+            groups[(hints[0], family)].append(row)
+
+    eligible = [
+        (key, values)
+        for key, values in groups.items()
+        if {str(value["comparison_side"]) for value in values} == {"design", "commercial"}
+    ]
+    eligible.sort(
+        key=lambda item: (
+            max(tuple(value.get("semantic_priority") or (0, 0, 0)) for value in item[1]),
+            len(item[1]),
+            item[0],
+        ),
+        reverse=True,
+    )
+    batches: list[list[dict[str, Any]]] = []
+    selected_ids: set[str] = set()
+    for _key, values in eligible:
+        if len(batches) >= max_batches:
+            break
+        ordered = sorted(
+            values,
+            key=lambda value: (
+                tuple(-part for part in tuple(value.get("semantic_priority") or (0, 0, 0))),
+                int(value.get("page") or 0),
+                str(value.get("candidate_id") or ""),
+            ),
+        )
+        seed = [
+            next(value for value in ordered if value["comparison_side"] == side)
+            for side in ("design", "commercial")
+        ]
+        batch: list[dict[str, Any]] = []
+        seen_wordings: set[str] = set()
+        quantity_count = 0
+        for value in [*seed, *ordered]:
+            candidate_id = str(value.get("candidate_id") or "")
+            if candidate_id in selected_ids or any(
+                candidate_id == str(existing.get("candidate_id") or "") for existing in batch
+            ):
+                continue
+            wording = " ".join(str(value.get("wording") or "").casefold().split())
+            row_quantity_count = len(value.get("quantity_observations") or ())
+            if wording in seen_wordings or len(batch) >= batch_size:
+                continue
+            if batch and quantity_count + row_quantity_count > 16:
+                continue
+            cleaned = dict(value)
+            cleaned.pop("semantic_priority", None)
+            cleaned.pop("comparison_side", None)
+            batch.append(cleaned)
+            seen_wordings.add(wording)
+            quantity_count += row_quantity_count
+        if {
+            document_comparison_side(value.get("document_role"), value.get("document"))
+            for value in batch
+        } != {"design", "commercial"}:
+            continue
+        batches.append(batch)
+        selected_ids.update(str(value["candidate_id"]) for value in batch)
+    return batches, selected_ids
+
+
 def _deterministic_scope_requires_semantic_review(
     *,
     deterministic_family: tuple[str, str] | None,
@@ -4971,9 +5055,15 @@ class SpinePostgresRepository:
                     priority[2],
                 )
 
-            batches: list[list[dict[str, Any]]] = []
+            batches, cross_document_candidate_ids = _cross_document_work_batches(
+                prepared,
+                batch_size=batch_size,
+                max_batches=max_batches,
+            )
             by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in prepared:
+                if str(row["candidate_id"]) in cross_document_candidate_ids:
+                    continue
                 by_source[str(row["source_version_id"])].append(row)
             for rows in by_source.values():
                 rows.sort(

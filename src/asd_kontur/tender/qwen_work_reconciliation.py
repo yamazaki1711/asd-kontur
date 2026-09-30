@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v9"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v10"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -24,9 +24,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v6",
     "qwen-project-work-reconciliation-v7",
     "qwen-project-work-reconciliation-v8",
+    "qwen-project-work-reconciliation-v9",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@9.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@10.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -295,6 +296,10 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
 из близости чисел.
+Пакет может содержать проектные и коммерческие строки одного сооружения из разных документов.
+Если они описывают один инженерный объём, используйте одинаковое нормализованное operation. Если
+одна строка является частью, включённой работой, альтернативой, другой редакцией или иным объёмом,
+не объединяйте их только из-за одинакового deterministic_family_hint; отразите различие в reason.
 Для NONE верните пустой related_quantity_candidate_ids. Для сравнения укажите одну точную
 scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
