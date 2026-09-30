@@ -93,6 +93,20 @@ class _InferenceRequest:
 _INFERENCE_COMPLETE = object()
 
 
+def _generation_token_ceiling(prompt_text: str) -> int:
+    """Return the bounded output budget for one already-loaded local model.
+
+    Structured project reconciliation can require more JSON than an
+    interactive answer.  The caller still chooses its smaller task-specific
+    budget; this ceiling only prevents the status/service layer from silently
+    truncating a qualified request below that budget.
+    """
+
+    if prompt_text.startswith("Role: qwen3.8-27b-developer-worker@"):
+        return 6000
+    return 3200
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, type=Path)
@@ -209,9 +223,7 @@ def main() -> None:
             try:
                 request = json.loads(self.rfile.read(length))
                 prompt_text = str(request["prompt"])
-                generation_ceiling = (
-                    6000 if prompt_text.startswith("Role: qwen3.8-27b-developer-worker@") else 1800
-                )
+                generation_ceiling = _generation_token_ceiling(prompt_text)
                 max_tokens = min(generation_ceiling, max(64, int(request.get("max_tokens", 1200))))
                 temperature = float(request.get("temperature", 0.2))
                 if not 0.0 <= temperature <= 0.7:

@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v11"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v12"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -408,6 +408,82 @@ def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> 
 
     assert all(
         review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
+def test_split_quantity_batch_is_not_certified_as_complete_relationship_review(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "excavation",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "value": value,
+                    "unit": "м3",
+                }
+            ],
+        }
+        for candidate_id, quantity_id, wording, value in (
+            ("candidate-total", "quantity-total", "Общий объём грунта", "125"),
+            ("candidate-part", "quantity-part", "Разработка грунта на участке", "100"),
+        )
+    ]
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        present = [row for row in rows if row["candidate_id"] in prompt]
+        if len(present) == 2:
+            return '{"observations": ['
+        row = present[0]
+        quantity = row["quantity_observations"][0]
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка грунта",
+                        "facility": None,
+                        "confidence": "0.85",
+                        "reason": (
+                            "Строительная операция установлена, связь требует полного пакета."
+                        ),
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": quantity["quantity_candidate_id"],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": row["wording"],
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "reason": "В разделённом контексте связь не установлена.",
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"excavation": "Земляные работы"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 3
+    assert all(
+        "relationship_reviewed" not in review
         for observation in result["observations"]
         for review in observation["quantity_reviews"]
     )

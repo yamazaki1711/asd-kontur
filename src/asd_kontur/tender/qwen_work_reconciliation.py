@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v11"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v12"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -26,9 +26,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v8",
     "qwen-project-work-reconciliation-v9",
     "qwen-project-work-reconciliation-v10",
+    "qwen-project-work-reconciliation-v11",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@11.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@12.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -123,6 +124,7 @@ class QwenProjectWorkReconciler:
         facilities: tuple[str, ...],
         relationship_review: bool,
         single_retry_available: bool = True,
+        relationship_context_complete: bool = True,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
         input_ids = tuple(str(row["candidate_id"]) for row in rows)
         quantity_ids_by_work = {
@@ -163,6 +165,9 @@ class QwenProjectWorkReconciler:
                     work_families=work_families,
                     facilities=facilities,
                     relationship_review=relationship_review,
+                    mark_relationship_reviewed=(
+                        relationship_review and relationship_context_complete
+                    ),
                 ),
                 1,
                 [],
@@ -183,6 +188,7 @@ class QwenProjectWorkReconciler:
                     facilities=facilities,
                     relationship_review=relationship_review,
                     single_retry_available=False,
+                    relationship_context_complete=relationship_context_complete,
                 )
                 return observations, call_count + 1, [exc.code, *codes]
             midpoint = len(rows) // 2
@@ -191,12 +197,14 @@ class QwenProjectWorkReconciler:
                 work_families=work_families,
                 facilities=facilities,
                 relationship_review=relationship_review,
+                relationship_context_complete=False,
             )
             right, right_calls, right_codes = self._reconcile_rows(
                 rows[midpoint:],
                 work_families=work_families,
                 facilities=facilities,
                 relationship_review=relationship_review,
+                relationship_context_complete=False,
             )
             return (
                 [*left, *right],
@@ -362,6 +370,7 @@ def _parse(
     work_families: Mapping[str, str],
     facilities: tuple[str, ...],
     relationship_review: bool,
+    mark_relationship_reviewed: bool,
 ) -> list[dict[str, Any]]:
     text = raw.strip()
     if text.startswith("```"):
@@ -425,7 +434,7 @@ def _parse(
             raw_quantity_reviews,
             quantity_ids,
             allowed_related_ids=all_quantity_ids,
-            relationship_review=relationship_review,
+            relationship_review=mark_relationship_reviewed,
         )
         observation: dict[str, Any] = {
             "candidate_id": candidate_id,

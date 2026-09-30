@@ -1,6 +1,11 @@
 from __future__ import annotations
 
-from asd_kontur.assistant.qwen_server import QwenRuntimeState
+from asd_kontur.assistant.qwen_server import QwenRuntimeState, _generation_token_ceiling
+
+
+def test_generation_token_ceiling_preserves_structured_semantic_budget() -> None:
+    assert _generation_token_ceiling("structured Tender analysis") == 3200
+    assert _generation_token_ceiling("Role: qwen3.8-27b-developer-worker@1") == 6000
 
 
 def test_qwen_runtime_state_distinguishes_loading_idle_and_generation() -> None:
