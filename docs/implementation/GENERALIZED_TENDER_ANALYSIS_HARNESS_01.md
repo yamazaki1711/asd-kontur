@@ -44,6 +44,7 @@ The semantic harness nevertheless remained shallow and corpus-shaped:
 | KNS/LOS designation parser | Domain-specific recognizer | Retained as a specialized deterministic signal, not a required ontology. Generic Qwen structure extraction remains the primary project-independent path. |
 | Consultant facility intent limited to KNS/LOS codes | Corpus-specific routing | Replaced by matching persisted project-facility labels and a bounded generic construction-location route. |
 | Explicit pit association limited to KNS/LOS | Corpus-specific restriction | Generalized to an explicit named/code facility followed by a designation number; semantic pit decisions remain available for other forms. |
+| Always-visible pit and sheet-pile Tender panels | Corpus-shaped UI behavior | Made conditional on the current project model. Projects without pits or sheet piling now lead with their actual facilities, structures, works, quantities, and materials. |
 | Construction work family vocabulary | General construction rule | Retained. Unknown concepts remain unclassified rather than forced. |
 
 No production rule containing the destroyed OZERO workspace ID or the active

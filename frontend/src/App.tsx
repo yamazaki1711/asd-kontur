@@ -5130,6 +5130,7 @@ function ProjectEngineeringResult({
   const unresolvedPits = Array.isArray(pits.requires_clarification)
     ? (pits.requires_clarification as Record<string, unknown>[])
     : [];
+  const hasPitInventory = establishedPits.length + unresolvedPits.length > 0;
   const works = Array.isArray(model.works)
     ? (model.works as Record<string, unknown>[])
     : [];
@@ -5225,10 +5226,12 @@ function ProjectEngineeringResult({
               label="Сооружения и участки"
               value={Number(summary.facility_count ?? 0)}
             />
-            <Metric
-              label="Установленные котлованы"
-              value={Number(summary.established_pit_count ?? 0)}
-            />
+            {hasPitInventory ? (
+              <Metric
+                label="Установленные котлованы"
+                value={Number(summary.established_pit_count ?? 0)}
+              />
+            ) : null}
             <Metric
               label="Виды и места работ"
               value={Number(summary.work_scope_count ?? 0)}
@@ -5238,12 +5241,14 @@ function ProjectEngineeringResult({
               value={Number(summary.issue_count ?? 0)}
             />
           </div>
-          <p>
-            {displayValue(
-              pits.professional_answer,
-              "Инвентаризация котлованов не завершена.",
-            )}
-          </p>
+          {hasPitInventory ? (
+            <p>
+              {displayValue(
+                pits.professional_answer,
+                "Инвентаризация котлованов не завершена.",
+              )}
+            </p>
+          ) : null}
           <h3>Состав исходных документов</h3>
           <p>
             {displayValue(
@@ -5273,79 +5278,89 @@ function ProjectEngineeringResult({
   if (section === "structure") {
     return (
       <>
-        <section className="panel">
-          <h2>Котлованы и конструкции</h2>
-          <p>{displayValue(pits.professional_answer)}</p>
-          <div className="card-grid">
-            {establishedPits.map((pit) => {
-              const pitWorks = Array.isArray(pit.related_works)
-                ? (pit.related_works as Record<string, unknown>[])
-                : [];
-              return (
-                <article className="entity-card" key={displayValue(pit.pit_id)}>
-                  <h3>{displayValue(pit.name)}</h3>
-                  {Number(pit.aggregate_count ?? 1) > 1 && (
+        {hasPitInventory ? (
+          <section className="panel">
+            <h2>Котлованы</h2>
+            <p>{displayValue(pits.professional_answer)}</p>
+            <div className="card-grid">
+              {establishedPits.map((pit) => {
+                const pitWorks = Array.isArray(pit.related_works)
+                  ? (pit.related_works as Record<string, unknown>[])
+                  : [];
+                return (
+                  <article
+                    className="entity-card"
+                    key={displayValue(pit.pit_id)}
+                  >
+                    <h3>{displayValue(pit.name)}</h3>
+                    {Number(pit.aggregate_count ?? 1) > 1 && (
+                      <p>
+                        <strong>Количество в группе:</strong>{" "}
+                        {displayValue(pit.aggregate_count)} шт.
+                      </p>
+                    )}
                     <p>
-                      <strong>Количество в группе:</strong>{" "}
-                      {displayValue(pit.aggregate_count)} шт.
+                      Связанное сооружение:{" "}
+                      {displayValue(pit.related_facility, "требует уточнения")}
                     </p>
-                  )}
-                  <p>
-                    Связанное сооружение:{" "}
-                    {displayValue(pit.related_facility, "требует уточнения")}
-                  </p>
-                  <p>
-                    <strong>Работы котлована:</strong>{" "}
-                    {pitWorks.length === 0 && "не установлены"}
-                  </p>
-                  {pitWorks.length > 0 && (
-                    <ul>
-                      {pitWorks.map((work) => {
-                        const quantities = Object.entries(
-                          (work.quantities_by_document ?? {}) as Record<
-                            string,
-                            unknown
-                          >,
-                        ).flatMap(([role, values]) =>
-                          (Array.isArray(values) ? values : []).map((value) => {
-                            const row = value as Record<string, unknown>;
-                            return `${role}: ${displayValue(row.value)} ${displayValue(row.unit)}`;
-                          }),
-                        );
-                        return (
-                          <li key={displayValue(work.work_scope_id)}>
-                            {displayValue(work.work)}
-                            {quantities.length > 0
-                              ? ` — ${quantities.join(", ")}`
-                              : ""}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                  <small>{displayValue(pit.status)}</small>
-                  <ProjectSourceLinks
-                    locatorIds={pit.source_locator_ids}
-                    workspaceId={workspaceId}
-                    modeSlug={modeSlug}
-                  />
-                </article>
-              );
-            })}
-          </div>
-          {unresolvedPits.length > 0 && (
-            <>
-              <h3>Что требуется уточнить</h3>
-              <ul>
-                {unresolvedPits.slice(0, 30).map((pit, index) => (
-                  <li key={`${displayValue(pit.description)}-${String(index)}`}>
-                    {displayValue(pit.description)} — {displayValue(pit.reason)}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </section>
+                    <p>
+                      <strong>Работы котлована:</strong>{" "}
+                      {pitWorks.length === 0 && "не установлены"}
+                    </p>
+                    {pitWorks.length > 0 && (
+                      <ul>
+                        {pitWorks.map((work) => {
+                          const quantities = Object.entries(
+                            (work.quantities_by_document ?? {}) as Record<
+                              string,
+                              unknown
+                            >,
+                          ).flatMap(([role, values]) =>
+                            (Array.isArray(values) ? values : []).map(
+                              (value) => {
+                                const row = value as Record<string, unknown>;
+                                return `${role}: ${displayValue(row.value)} ${displayValue(row.unit)}`;
+                              },
+                            ),
+                          );
+                          return (
+                            <li key={displayValue(work.work_scope_id)}>
+                              {displayValue(work.work)}
+                              {quantities.length > 0
+                                ? ` — ${quantities.join(", ")}`
+                                : ""}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    <small>{displayValue(pit.status)}</small>
+                    <ProjectSourceLinks
+                      locatorIds={pit.source_locator_ids}
+                      workspaceId={workspaceId}
+                      modeSlug={modeSlug}
+                    />
+                  </article>
+                );
+              })}
+            </div>
+            {unresolvedPits.length > 0 && (
+              <>
+                <h3>Что требуется уточнить</h3>
+                <ul>
+                  {unresolvedPits.slice(0, 30).map((pit, index) => (
+                    <li
+                      key={`${displayValue(pit.description)}-${String(index)}`}
+                    >
+                      {displayValue(pit.description)} —{" "}
+                      {displayValue(pit.reason)}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </section>
+        ) : null}
         <section className="panel">
           <h2>Карточки сооружений</h2>
           <div className="card-grid">
@@ -5784,111 +5799,115 @@ function ProjectEngineeringResult({
             </tbody>
           </table>
         </div>
-        <h2>Шпунтовые работы и распределительные пояса</h2>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Сооружение / котлован</th>
-                <th>Операция</th>
-                <th>Профиль / сталь</th>
-                <th>Объёмы по документам</th>
-                <th>Материалы по документам</th>
-                <th>Ограничение</th>
-                <th>Источник</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sheetPileSchedule.map((scope) => (
-                <tr key={displayValue(scope.sheet_pile_scope_id)}>
-                  <td>
-                    <strong>
-                      {displayValue(scope.facility, "Требует привязки")}
-                    </strong>
-                    <small>{displayValue(scope.pit)}</small>
-                  </td>
-                  <td>{displayValue(scope.operation)}</td>
-                  <td>
-                    {[
-                      ...(Array.isArray(scope.profiles)
-                        ? scope.profiles.map(String)
-                        : []),
-                      ...(Array.isArray(scope.waling_beams)
-                        ? scope.waling_beams.map(String)
-                        : []),
-                      ...(Array.isArray(scope.steel)
-                        ? scope.steel.map(String)
-                        : []),
-                    ].join(", ") || "не найдено"}
-                  </td>
-                  <td>
-                    {Object.entries(
-                      (scope.quantities_by_document ?? {}) as Record<
-                        string,
-                        unknown
-                      >,
-                    ).map(([role, values]) => (
-                      <p key={role}>
-                        <strong>{role}:</strong>{" "}
-                        {(Array.isArray(values) ? values : [])
-                          .map((value) => {
-                            const row = value as Record<string, unknown>;
-                            return (
-                              displayValue(row.value) +
-                              " " +
-                              displayValue(row.unit) +
-                              (Number(row.occurrence_count ?? 1) > 1
-                                ? " (" +
-                                  displayValue(row.occurrence_count) +
-                                  " упоминания)"
-                                : "")
-                            );
-                          })
-                          .join(", ") || "не найдено"}
-                      </p>
-                    ))}
-                  </td>
-                  <td>
-                    {Object.entries(
-                      (scope.materials_by_document ?? {}) as Record<
-                        string,
-                        unknown
-                      >,
-                    ).map(([role, values]) => (
-                      <p key={role}>
-                        <strong>{role}:</strong>{" "}
-                        {(Array.isArray(values) ? values : [])
-                          .map((value) => {
-                            const row = value as Record<string, unknown>;
-                            return [
-                              displayValue(row.name),
-                              row.quantity === null ||
-                              row.quantity === undefined
-                                ? ""
-                                : displayValue(row.quantity) +
+        {sheetPileSchedule.length > 0 ? (
+          <>
+            <h2>Шпунтовые работы и распределительные пояса</h2>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Сооружение / котлован</th>
+                    <th>Операция</th>
+                    <th>Профиль / сталь</th>
+                    <th>Объёмы по документам</th>
+                    <th>Материалы по документам</th>
+                    <th>Ограничение</th>
+                    <th>Источник</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sheetPileSchedule.map((scope) => (
+                    <tr key={displayValue(scope.sheet_pile_scope_id)}>
+                      <td>
+                        <strong>
+                          {displayValue(scope.facility, "Требует привязки")}
+                        </strong>
+                        <small>{displayValue(scope.pit)}</small>
+                      </td>
+                      <td>{displayValue(scope.operation)}</td>
+                      <td>
+                        {[
+                          ...(Array.isArray(scope.profiles)
+                            ? scope.profiles.map(String)
+                            : []),
+                          ...(Array.isArray(scope.waling_beams)
+                            ? scope.waling_beams.map(String)
+                            : []),
+                          ...(Array.isArray(scope.steel)
+                            ? scope.steel.map(String)
+                            : []),
+                        ].join(", ") || "не найдено"}
+                      </td>
+                      <td>
+                        {Object.entries(
+                          (scope.quantities_by_document ?? {}) as Record<
+                            string,
+                            unknown
+                          >,
+                        ).map(([role, values]) => (
+                          <p key={role}>
+                            <strong>{role}:</strong>{" "}
+                            {(Array.isArray(values) ? values : [])
+                              .map((value) => {
+                                const row = value as Record<string, unknown>;
+                                return (
+                                  displayValue(row.value) +
                                   " " +
-                                  displayValue(row.unit),
-                            ]
-                              .filter(Boolean)
-                              .join(" — ");
-                          })
-                          .join("; ") || "не найдено"}
-                      </p>
-                    ))}
-                  </td>
-                  <td>{displayValue(scope.uncertainty, "Привязано")}</td>
-                  <td>
-                    <ProjectSourceLinks
-                      locatorIds={scope.source_locator_ids}
-                      workspaceId={workspaceId}
-                      modeSlug={modeSlug}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                                  displayValue(row.unit) +
+                                  (Number(row.occurrence_count ?? 1) > 1
+                                    ? " (" +
+                                      displayValue(row.occurrence_count) +
+                                      " упоминания)"
+                                    : "")
+                                );
+                              })
+                              .join(", ") || "не найдено"}
+                          </p>
+                        ))}
+                      </td>
+                      <td>
+                        {Object.entries(
+                          (scope.materials_by_document ?? {}) as Record<
+                            string,
+                            unknown
+                          >,
+                        ).map(([role, values]) => (
+                          <p key={role}>
+                            <strong>{role}:</strong>{" "}
+                            {(Array.isArray(values) ? values : [])
+                              .map((value) => {
+                                const row = value as Record<string, unknown>;
+                                return [
+                                  displayValue(row.name),
+                                  row.quantity === null ||
+                                  row.quantity === undefined
+                                    ? ""
+                                    : displayValue(row.quantity) +
+                                      " " +
+                                      displayValue(row.unit),
+                                ]
+                                  .filter(Boolean)
+                                  .join(" — ");
+                              })
+                              .join("; ") || "не найдено"}
+                          </p>
+                        ))}
+                      </td>
+                      <td>{displayValue(scope.uncertainty, "Привязано")}</td>
+                      <td>
+                        <ProjectSourceLinks
+                          locatorIds={scope.source_locator_ids}
+                          workspaceId={workspaceId}
+                          modeSlug={modeSlug}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : null}
         {unclassified.length > 0 && (
           <section className="technical-section">
             <h3>
