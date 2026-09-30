@@ -157,7 +157,10 @@ _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 # recursive repair in 72 of 78 cases (3.72 model calls on average).  Eight-row
 # batches preserve bounded semantic context while materially reducing repair
 # calls and time to an accepted project result.
-_PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 8
+# Four rows keep the single local model available at useful project boundaries.
+# Live v15 receipts showed an 8-row long tail of 7-13 model calls and 8-19
+# minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
+_PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
 
 
 def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
