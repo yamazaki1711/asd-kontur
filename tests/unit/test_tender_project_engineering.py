@@ -879,9 +879,7 @@ def test_quantity_schedule_preserves_review_authority_for_component_arithmetic()
     total = next(value for value in scheduled_values if value["quantity_candidate_id"] == "total")
     assert total["relationship_reviewed"] is True
     assert total["component_set_complete"] is True
-    assert all(
-        value.get("relationship_reviewed") is True for value in scheduled_values
-    )
+    assert all(value.get("relationship_reviewed") is True for value in scheduled_values)
     assert all(
         "component_set_complete" not in value
         for value in scheduled_values
