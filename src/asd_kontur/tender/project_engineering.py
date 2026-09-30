@@ -4935,6 +4935,16 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Электронный контейнер"
     if role == "correspondence_administrative" or "о согласовании" in name:
         return "Переписка/согласования"
+    if role == "procurement_notice":
+        return "Извещение о закупке"
+    if role == "technical_specification":
+        return "Техническое задание"
+    if role == "construction_schedule":
+        return "Календарный график"
+    if role == "engineering_survey":
+        return "Инженерные изыскания"
+    if role == "design_calculation":
+        return "Расчёт"
     if (
         "требован" in name
         and "заявк" in name

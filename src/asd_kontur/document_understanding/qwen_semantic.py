@@ -40,7 +40,7 @@ from .models import (
 )
 from .semantic import StructuredCandidates, normalize_unit
 
-QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
+QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v2"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v16"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
@@ -1918,7 +1918,9 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         '{"roles":["..."],"locator_ids":["..."]}. '
         "roles — от одного до трёх точных значений из: explanatory_note, "
         "project_documentation, working_documentation, bill_of_quantities, local_estimate, "
-        "object_estimate, consolidated_estimate, specification, contract, customer_regulation, "
+        "object_estimate, consolidated_estimate, specification, contract, procurement_notice, "
+        "technical_specification, construction_schedule, engineering_survey, design_calculation, "
+        "customer_regulation, "
         "normative_reference_list, executive_documentation, drawing_or_scheme, "
         "correspondence_administrative, unknown. locator_ids должны ссылаться только на "
         "фрагменты, подтверждающие выбранные roles. Не придумывай данные.\nФРАГМЕНТЫ:\n"

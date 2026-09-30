@@ -53,6 +53,7 @@ from asd_kontur.document_understanding.postgres import (
 )
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
     QwenDocumentSemanticAdapter,
     QwenSemanticFailure,
     _compatible_batch_digest,
@@ -1217,6 +1218,32 @@ def test_qwen_semantic_classification_accepts_only_returned_evidence_locators() 
     assert result.candidates[0].role is DocumentRole.EXPLANATORY_NOTE
     assert result.candidates[0].locators[0].source_locator_id == UUID(locator_id)
     assert result.decisions[0].decision_code == "qwen_bounded_document_semantic"
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        "procurement_notice",
+        "technical_specification",
+        "construction_schedule",
+        "engineering_survey",
+        "design_calculation",
+    ],
+)
+def test_qwen_semantic_classification_supports_general_tender_document_roles(
+    role: str,
+) -> None:
+    document = _extract_csv("Титульный лист и содержание документа\n")
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps({"roles": [role], "locator_ids": [locator_id]}),
+    ):
+        result = adapter.classify(document.pages[0].elements)
+
+    assert result.candidates[0].role.value == role
 
 
 def test_qwen_semantic_classification_accepts_one_json_object_wrapped_by_model_text() -> None:
@@ -3447,6 +3474,6 @@ def test_classification_persists_qwen_semantic_candidate_alongside_page_roles() 
 
     assert result["qwen_semantic_candidate_count"] == 1
     assert any(
-        candidate.extraction_profile_version == "qwen-document-semantic-v1"
+        candidate.extraction_profile_version == QWEN_SEMANTIC_CLASSIFICATION_PROFILE
         for candidate in cast(tuple[Any, ...], captured["candidates"])
     )

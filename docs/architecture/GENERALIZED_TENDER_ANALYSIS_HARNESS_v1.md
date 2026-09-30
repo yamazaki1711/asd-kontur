@@ -47,7 +47,12 @@ the global catalog.
 ## Staged analysis
 
 1. **Document package understanding** classifies roles from title pages,
-   headings, stamps, tables, contents, and filename support signals.
+   headings, stamps, tables, contents, and filename support signals. The
+   reusable vocabulary includes project/working documentation, drawings,
+   specifications, estimates, procurement notices, technical specifications,
+   schedules, calculations, surveys, contracts, customer requirements, and
+   administrative correspondence; it does not depend on a project filename
+   table.
 2. **Project understanding** identifies purpose, location, participants,
    facilities, structures, areas, and functional relationships.
 3. **Engineering entity extraction** emits typed, source-located entities.

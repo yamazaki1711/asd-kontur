@@ -108,6 +108,11 @@ _SEMANTIC_PRIORITY_BY_ROLE = {
     "local_estimate": 150,
     "object_estimate": 150,
     "consolidated_estimate": 150,
+    "procurement_notice": 165,
+    "technical_specification": 165,
+    "construction_schedule": 155,
+    "design_calculation": 160,
+    "engineering_survey": 145,
 }
 _SEMANTIC_DEFAULT_PRIORITY = 130
 # Accepted model output that only needs deterministic candidate persistence is

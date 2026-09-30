@@ -81,6 +81,10 @@ blind-project workspace ID was found in the audited runtime paths.
     in the same bounded Qwen batch. The model may identify the semantic graph;
     deterministic code still rejects invented identities, cross-role or
     cross-facility arithmetic, incompatible units, and conflicting revisions.
+11. Advanced content-based document classification to profile v2 and added
+    reusable procurement-notice, technical-specification, construction-schedule,
+    engineering-survey, and design-calculation roles. Filenames remain supporting
+    context rather than a project-specific decision table.
 
 ## Autonomous runtime
 
