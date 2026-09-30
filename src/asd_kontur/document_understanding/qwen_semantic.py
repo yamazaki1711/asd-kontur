@@ -41,13 +41,13 @@ from .models import (
 from .semantic import StructuredCandidates, normalize_unit
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v2"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v16"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v17"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
 _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
-# v16 adds stable participant, commercial, schedule, procurement, and contract field
-# meanings. Prior batch manifests did not ask the model for that project context, so
-# treating them as compatible would silently convert missing analysis into empty facts.
+# v17 adds exhaustive explicit table/list quantity retention. Prior batch manifests did
+# not require every component, subtotal and total row, so treating them as compatible
+# would silently convert missing analysis into empty facts.
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES: tuple[str, ...] = ()
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
@@ -1575,6 +1575,13 @@ def _engineering_prompt(
         "если источник их не указывает или имя работы дано только вне этого пакета. "
         "Для quantity пустые work_name, value или unit означают неполное наблюдение: "
         "всё равно укажи fragment_id, чтобы оно было сохранено как вопрос, "
+        "Для каждой явной строки таблицы или перечня, где вместе указаны работа либо итог, "
+        "числовое значение и единица измерения, обязательно верни отдельный элемент works "
+        "и отдельный элемент quantities. Не пропускай строки только потому, что они являются "
+        "компонентами, подытогами, итогами, повторяют единицу измерения или имеют одинаковое "
+        "значение. Не складывай и не сравнивай числа: сохрани исходную формулировку строки как "
+        "work_name, исходное value и unit; смысловую связь итогов и компонентов определит "
+        "следующая задача. "
         "fragment_id обязан быть одним из коротких идентификаторов F1, F2 и т.д. во входе: "
         "копируй его буквально, без точки, двоеточия, пробела или другого текста. "
         "work_fragment_id, если не пуст, также обязан быть одним из них. Если нет факта, массив пуст.\nФРАГМЕНТЫ:\n"

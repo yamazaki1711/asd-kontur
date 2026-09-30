@@ -1114,7 +1114,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                         "SELECT job_id,priority,provenance FROM workspace.durable_jobs WHERE "
                         "organization_id=:organization AND workspace_id=:workspace "
                         "AND job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
-                        "provenance->>'engineering_semantic_profile'='qwen-engineering-extraction-v16'"
+                        "provenance->>'engineering_semantic_profile'='qwen-engineering-extraction-v17'"
                     ),
                     {
                         "organization": workspace["organization_id"],
@@ -1450,7 +1450,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                         "normalized_name,parent_node_id,source_locator_id,status,"
                         "extraction_profile_version,fingerprint) VALUES "
                         "(:organization,:workspace,:node,1,'excavation_pit',:name,:normalized,NULL,"
-                        ":locator,'candidate','qwen-engineering-extraction-v16',:fingerprint)"
+                        ":locator,'candidate','qwen-engineering-extraction-v17',:fingerprint)"
                     ),
                     {
                         "organization": workspace["organization_id"],
@@ -1464,7 +1464,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                 )
         initial_pit_groups = understanding_repository.load_pit_observation_groups(
             structure_claim,
-            profile_version="qwen-engineering-extraction-v16",
+            profile_version="qwen-engineering-extraction-v17",
             disposition_profile_version=pit_profile,
         )
         assert tuple(len(group) for group in initial_pit_groups) == (8, 2)
@@ -1504,7 +1504,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
         )
         resumed_pit_groups = understanding_repository.load_pit_observation_groups(
             structure_claim,
-            profile_version="qwen-engineering-extraction-v16",
+            profile_version="qwen-engineering-extraction-v17",
             disposition_profile_version=pit_profile,
         )
         assert tuple(len(group) for group in resumed_pit_groups) == (8,)
@@ -1708,7 +1708,7 @@ def test_start_project_understanding_queues_native_semantic_recovery_once(
                         "organization_id=:organization AND workspace_id=:workspace AND "
                         "job_kind='PROJECT_DEFINITION_EXTRACTION' AND "
                         "provenance->>'engineering_semantic_profile'="
-                        "'qwen-engineering-extraction-v16' "
+                        "'qwen-engineering-extraction-v17' "
                         "ORDER BY created_at,job_id"
                     ),
                     {
@@ -1934,7 +1934,7 @@ def test_project_view_selects_only_the_latest_source_semantic_profile(
             )
             for candidate_id, value, profile in (
                 (uuid4(), "legacy observation", "project-definition-extraction-v0.1"),
-                (uuid4(), "current observation", "qwen-engineering-extraction-v16"),
+                (uuid4(), "current observation", "qwen-engineering-extraction-v17"),
             ):
                 connection.execute(
                     sa.text(
@@ -1961,7 +1961,7 @@ def test_project_view_selects_only_the_latest_source_semantic_profile(
                     },
                 )
             stage_id = uuid4()
-            output = {"profile_scope": "qwen-engineering-extraction-v16"}
+            output = {"profile_scope": "qwen-engineering-extraction-v17"}
             connection.execute(
                 sa.text(
                     "INSERT INTO workspace.project_understanding_stage_results "
@@ -1969,7 +1969,7 @@ def test_project_view_selects_only_the_latest_source_semantic_profile(
                     "source_version_id,stage_kind,profile_version,input_digest,output_manifest,"
                     "output_digest,terminal_status) VALUES "
                     "(:organization,:workspace,:result,:job,:document,:version,:source,"
-                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v16',:input,"
+                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v17',:input,"
                     "CAST(:output AS jsonb),:digest,'complete')"
                 ),
                 {
@@ -1989,7 +1989,7 @@ def test_project_view_selects_only_the_latest_source_semantic_profile(
         assert response.status_code == 200, response.text
         values = response.json()["candidates"]["project_fields"]
         assert [item["value"] for item in values] == ["current observation"]
-        assert values[0]["extraction_profile_version"] == "qwen-engineering-extraction-v16"
+        assert values[0]["extraction_profile_version"] == "qwen-engineering-extraction-v17"
 
 
 def test_completed_semantic_source_queues_one_incremental_model_refresh(
@@ -2058,7 +2058,7 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
             semantic_job_id = uuid4()
             semantic_provenance = {
                 "contract": "synthetic.incremental-semantic@1.0.0",
-                "engineering_semantic_profile": "qwen-engineering-extraction-v16",
+                "engineering_semantic_profile": "qwen-engineering-extraction-v17",
             }
             connection.execute(
                 sa.text(
@@ -2109,7 +2109,7 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                     "source_version_id,stage_kind,profile_version,input_digest,output_manifest,"
                     "output_digest,terminal_status) VALUES "
                     "(:organization,:workspace,:result,:job,:document,:version,:source,"
-                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v16',:input,"
+                    "'PROJECT_DEFINITION_EXTRACTION','qwen-engineering-extraction-v17',:input,"
                     "CAST(:output AS jsonb),:digest,'complete')"
                 ),
                 {

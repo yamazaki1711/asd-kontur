@@ -59,6 +59,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     _compatible_batch_digest,
     _engineering_batch,
     _engineering_batches,
+    _engineering_prompt,
     _fragments,
     _SemanticFragment,
     _split_engineering_batch,
@@ -110,6 +111,22 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
     assert (
         _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == "qwen-project-work-reconciliation-v15"
     )
+
+
+def test_engineering_prompt_requires_every_explicit_quantity_row_without_arithmetic() -> None:
+    document = _extract_csv(
+        "Работа;Ед.;Количество\n"
+        "Устройство покрытия;м2;125\n"
+        "Итого покрытие;м2;125\n"
+    )
+    fragment = _engineering_batches(document.pages[0].elements)[0].fragments[0]
+
+    prompt = _engineering_prompt((fragment,))
+
+    assert "обязательно верни отдельный элемент works" in prompt
+    assert "отдельный элемент quantities" in prompt
+    assert "Не складывай и не сравнивай числа" in prompt
+    assert "компонентами, подытогами, итогами" in prompt
 
 
 def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> None:
@@ -1871,7 +1888,7 @@ def test_pit_observation_reconciliation_reports_its_own_progress_stage() -> None
         def workspace_engineering_semantic_coverage(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, int | bool]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {"source_count": 1, "complete_source_count": 1, "complete": True}
 
         def load_structure_identity_observation_groups(
@@ -1886,7 +1903,7 @@ def test_pit_observation_reconciliation_reports_its_own_progress_stage() -> None
             profile_version: str,
             disposition_profile_version: str,
         ) -> tuple[tuple[dict[str, object], ...], ...]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             assert disposition_profile_version == "qwen-excavation-pit-observation-v2"
             return groups
 
@@ -1981,13 +1998,13 @@ def test_project_materialization_defers_optional_structure_identity_inference() 
         def workspace_engineering_semantic_coverage(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, int | bool]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {"source_count": 4, "complete_source_count": 3, "complete": False}
 
         def load_structure_identity_observation_groups(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> tuple[tuple[dict[str, object], ...], ...]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return (
                 (
                     {"structure_node_id": str(deterministic_uuid("materialization-left"))},
@@ -2051,13 +2068,13 @@ def test_structure_identity_reconciliation_preserves_independent_groups_after_fa
         def workspace_engineering_semantic_coverage(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, int | bool]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {"source_count": 4, "complete_source_count": 4, "complete": True}
 
         def load_structure_identity_observation_groups(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> tuple[tuple[dict[str, object], ...], ...]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return (
                 ({"structure_node_id": str(first)}, {"structure_node_id": str(second)}),
                 ({"structure_node_id": str(third)}, {"structure_node_id": str(fourth)}),
@@ -2189,13 +2206,13 @@ def test_partial_workspace_coverage_reconciles_completed_source_group() -> None:
         def workspace_engineering_semantic_coverage(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, int | bool]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {"source_count": 3, "complete_source_count": 2, "complete": False}
 
         def load_structure_identity_observation_groups(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> tuple[tuple[dict[str, object], ...], ...]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return (({"structure_node_id": str(left)}, {"structure_node_id": str(right)}),)
 
         def load_structure_identity_group_receipts(
@@ -2294,13 +2311,13 @@ def test_structure_identity_reconciliation_resumes_from_terminal_group_receipts(
         def workspace_engineering_semantic_coverage(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, int | bool]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {"source_count": 2, "complete_source_count": 2, "complete": True}
 
         def load_structure_identity_observation_groups(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> tuple[tuple[dict[str, object], ...], ...]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return (observations,)
 
         def load_structure_identity_group_receipts(
@@ -2752,13 +2769,13 @@ def test_qwen_engineering_candidates_are_profile_scoped() -> None:
     qwen_field = next(
         value
         for value in result.project_fields
-        if value.extraction_profile_version == "qwen-engineering-extraction-v16"
+        if value.extraction_profile_version == "qwen-engineering-extraction-v17"
     )
-    assert result.works[0].extraction_profile_version == "qwen-engineering-extraction-v16"
-    assert result.structures[0].extraction_profile_version == "qwen-engineering-extraction-v16"
+    assert result.works[0].extraction_profile_version == "qwen-engineering-extraction-v17"
+    assert result.structures[0].extraction_profile_version == "qwen-engineering-extraction-v17"
     fragment_id = _engineering_batches(document.pages[0].elements)[0].fragments[0].fragment_id
     assert qwen_field.candidate_id == deterministic_uuid(
-        "qwen-field:qwen-engineering-extraction-v16:"
+        "qwen-field:qwen-engineering-extraction-v17:"
         f"{qwen_field.locator.source_version_id}:{fragment_id}:purpose:котлован"
     )
     assert qwen_field.candidate_id != deterministic_uuid(
@@ -3168,7 +3185,7 @@ def test_qwen_engineering_batch_v6_manifest_preserves_fragment_coverage() -> Non
 
     manifest = batch.input_manifest
 
-    assert manifest["profile_version"] == "qwen-engineering-extraction-v16"
+    assert manifest["profile_version"] == "qwen-engineering-extraction-v17"
     assert isinstance(manifest["fragments"], list)
     assert {item["fragment_id"] for item in manifest["fragments"]} == {
         item.fragment_id for item in batch.fragments
@@ -3273,7 +3290,7 @@ def test_project_field_stage_persists_each_accepted_qwen_engineering_batch() -> 
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
             assert profile_version in {
-                "qwen-engineering-extraction-v16",
+                "qwen-engineering-extraction-v17",
             }
             return {}
 
@@ -3466,7 +3483,7 @@ def test_project_field_stage_uses_qwen_evidence_when_classification_is_unavailab
         def load_accepted_engineering_batches(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, dict[str, object]]:
-            assert profile_version == "qwen-engineering-extraction-v16"
+            assert profile_version == "qwen-engineering-extraction-v17"
             return {}
 
         def load_elements(self, _claimed: ClaimedJob) -> tuple[LayoutElement, ...]:

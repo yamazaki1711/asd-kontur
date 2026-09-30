@@ -470,7 +470,7 @@ def test_document_coverage_keeps_native_and_semantic_statuses_distinct() -> None
                 "admission_status": "accepted",
                 "extraction_status": "complete",
                 "page_count": 12,
-                "profile_version": "qwen-engineering-extraction-v16",
+                "profile_version": "qwen-engineering-extraction-v17",
                 "expected_fragment_count": 20,
                 "accepted_batch_count": 3,
                 "accepted_fragment_count": 16,
