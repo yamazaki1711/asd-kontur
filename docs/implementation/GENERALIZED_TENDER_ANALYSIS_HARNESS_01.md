@@ -42,6 +42,7 @@ The semantic harness nevertheless remained shallow and corpus-shaped:
 | Consultant required-term L5 regex | Corpus-specific validation | Generalized to arbitrary L-number profiles and common concrete durability classes. |
 | Exact 30SH2/35SH2 waling profiles and C255 steel extraction | Hardcoded project vocabulary | Generalized to bounded Russian rolled-section and structural-steel grade syntax. |
 | KNS/LOS designation parser | Domain-specific recognizer | Retained as a specialized deterministic signal, not a required ontology. Generic Qwen structure extraction remains the primary project-independent path. |
+| Consultant facility intent limited to KNS/LOS codes | Corpus-specific routing | Replaced by matching persisted project-facility labels and a bounded generic construction-location route. |
 | Explicit pit association limited to KNS/LOS | Corpus-specific restriction | Generalized to an explicit named/code facility followed by a designation number; semantic pit decisions remain available for other forms. |
 | Construction work family vocabulary | General construction rule | Retained. Unknown concepts remain unclassified rather than forced. |
 

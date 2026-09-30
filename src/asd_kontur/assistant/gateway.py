@@ -2241,9 +2241,12 @@ def _assistant_engineering_for_query(
     sheet_pile_query = not normalized_query or any(
         marker in normalized_query for marker in _SHEET_PILE_QUERY_MARKERS
     )
+    query_key = re.sub(r"[^0-9a-zа-яё]+", "", normalized_query)
     facility_markers = tuple(
-        match.group(0).replace(" ", "")
-        for match in re.finditer(r"(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_query)
+        marker
+        for label in _project_facility_labels(engineering)
+        if len(marker := re.sub(r"[^0-9a-zа-яё]+", "", label.casefold())) >= 2
+        and marker in query_key
     )
     asks_customer_questions = "вопрос" in normalized_query and any(
         marker in normalized_query for marker in ("заказчик", "направ", "уточн")
@@ -2305,7 +2308,7 @@ def _assistant_engineering_for_query(
         text = json.dumps(row, ensure_ascii=False, default=str).casefold().replace("ё", "е")
         compact = text.replace(" ", "").replace("-", "")
         if facility_markers:
-            return any(marker.replace("-", "") in compact for marker in facility_markers)
+            return any(marker in compact for marker in facility_markers)
         return any(token in text for token in tokens)
 
     def compact_quantities(value: Any) -> dict[str, list[dict[str, Any]]]:
@@ -2675,6 +2678,28 @@ def _assistant_engineering_for_query(
     ):
         result["requirements"] = dict(requirements)
     return result
+
+
+def _project_facility_labels(engineering: Mapping[str, Any]) -> tuple[str, ...]:
+    """Return user-visible facility labels from the persisted project model."""
+
+    labels: list[str] = []
+    for row in engineering.get("facilities") or ():
+        if isinstance(row, Mapping):
+            labels.extend(str(row.get(key) or "").strip() for key in ("name", "designation"))
+    for key in ("facility_cards", "facility_dossiers"):
+        for row in engineering.get(key) or ():
+            if not isinstance(row, Mapping):
+                continue
+            facility = row.get("facility")
+            if isinstance(facility, Mapping):
+                labels.extend(
+                    str(facility.get(field) or "").strip()
+                    for field in ("name", "designation", "label")
+                )
+            elif facility:
+                labels.append(str(facility).strip())
+    return tuple(dict.fromkeys(label for label in labels if label))
 
 
 def _nested_source_locator_ids(value: Any) -> set[str]:

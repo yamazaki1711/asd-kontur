@@ -209,6 +209,13 @@ def test_facility_pit_question_uses_facility_dossier_not_project_inventory() -> 
     assert [step.tool for step in plan.steps] == ["consultant.get_work_packages"]
 
 
+def test_unseen_facility_terminology_uses_the_same_dossier_route() -> None:
+    plan = _direct_project_result_plan("Какие работы выполняются на опоре № 12?")
+
+    assert plan is not None
+    assert [step.tool for step in plan.steps] == ["consultant.get_work_packages"]
+
+
 def test_unresolved_project_question_uses_prepared_information_gaps() -> None:
     plan = _direct_project_result_plan("Что ещё не удалось определить?")
 

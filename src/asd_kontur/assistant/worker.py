@@ -144,9 +144,7 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
         marker in normalized
         for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
     )
-    asks_for_facility_dossier = bool(
-        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
-    ) and any(
+    asks_for_facility_dossier = _looks_like_facility_dossier_question(normalized) and any(
         marker in normalized
         for marker in (
             "работ",
@@ -271,6 +269,43 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                 "Подтвердить профессиональный результат точными фрагментами документов проекта.",
             ),
         ),
+    )
+
+
+def _looks_like_facility_dossier_question(normalized_question: str) -> bool:
+    """Recognize a construction-location question without a fixed facility ontology."""
+
+    facility_nouns = (
+        "сооружен",
+        "объект",
+        "участ",
+        "корпус",
+        "здан",
+        "мост",
+        "стен",
+        "опор",
+        "секц",
+        "блок",
+        "резервуар",
+        "эстакад",
+        "тоннел",
+        "станц",
+        "цех",
+    )
+    explicit_code = re.search(
+        r"\b(?:по|на|для|у|к)\s+[a-zа-яё]{1,16}\s*[-№]?\s*\d+(?:[.,]\d+)*\b",
+        normalized_question,
+        re.IGNORECASE,
+    )
+    if explicit_code is not None:
+        return True
+    return any(
+        re.search(
+            rf"\b{noun}\w*\b[^?!.]{{0,40}}\b(?:№\s*)?\d+(?:[.,]\d+)*\b",
+            normalized_question,
+            re.IGNORECASE,
+        )
+        for noun in facility_nouns
     )
 
 
@@ -1171,9 +1206,7 @@ def _with_structured_project_fact_checks(
     asks_for_discrepancies = any(
         marker in normalized_question for marker in ("расхожд", "расход", "разниц")
     )
-    facility_reference = bool(
-        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
-    )
+    facility_reference = _question_references_structured_facility(receipts, normalized_question)
     asks_for_quantity_values = any(
         marker in normalized_question for marker in ("объём", "объем", "количеств")
     )
@@ -1193,9 +1226,7 @@ def _with_structured_project_fact_checks(
     asks_for_issue_details = (
         asks_for_project_discrepancies and not narrow_facility_quantity_comparison
     ) or asks_for_technical_contradictions
-    asks_for_facility_works = "работ" in normalized_question and bool(
-        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized_question)
-    )
+    asks_for_facility_works = "работ" in normalized_question and facility_reference
     asks_for_missing_commercial_work = (
         "работ" in normalized_question
         and any(
@@ -1480,6 +1511,45 @@ def _inventory_text_key(value: str) -> str:
     return "".join(character for character in value.casefold() if character.isalnum())
 
 
+def _question_references_structured_facility(
+    receipts: list[dict[str, Any]], normalized_question: str
+) -> bool:
+    """Match any persisted project facility label, not a corpus-specific acronym."""
+
+    question_key = _inventory_text_key(normalized_question)
+    for receipt in receipts:
+        response = receipt.get("response")
+        value = response.get("value") if isinstance(response, dict) else None
+        engineering = value.get("project_engineering") if isinstance(value, dict) else None
+        if not isinstance(engineering, dict):
+            continue
+        for label in _structured_facility_labels(engineering):
+            label_key = _inventory_text_key(label)
+            if len(label_key) >= 2 and label_key in question_key:
+                return True
+    return False
+
+
+def _structured_facility_labels(engineering: dict[str, Any]) -> tuple[str, ...]:
+    labels: list[str] = []
+    for row in engineering.get("facilities") or ():
+        if isinstance(row, dict):
+            labels.extend(str(row.get(key) or "").strip() for key in ("name", "designation"))
+    for key in ("facility_cards", "facility_dossiers"):
+        for row in engineering.get(key) or ():
+            if not isinstance(row, dict):
+                continue
+            facility = row.get("facility")
+            if isinstance(facility, dict):
+                labels.extend(
+                    str(facility.get(field) or "").strip()
+                    for field in ("name", "designation", "label")
+                )
+            elif facility:
+                labels.append(str(facility).strip())
+    return tuple(dict.fromkeys(label for label in labels if label))
+
+
 def _append_prepared_project_result(
     answer: SynthesizedAnswer, receipts: list[dict[str, Any]], question: str
 ) -> SynthesizedAnswer:
@@ -1496,8 +1566,8 @@ def _append_prepared_project_result(
         marker in normalized
         for marker in ("сколько", "всего", "перечисл", "покаж", "какие", "инвентар")
     )
-    asks_for_facility_dossier = bool(
-        re.search(r"\b(?:кнс|лос)\s*-?\s*\d+(?:[.,]\d+)?", normalized)
+    asks_for_facility_dossier = _question_references_structured_facility(
+        receipts, normalized
     ) and any(
         marker in normalized
         for marker in (
