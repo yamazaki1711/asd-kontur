@@ -4433,8 +4433,8 @@ def _material_comparisons(
                     f"{commercial_role} — {', '.join(item['commercial'])}"
                     for item in differences
                 ]
-                design = design_values[0]
-                commercial = commercial_values[0]
+                design_material = design_values[0]
+                commercial_material = commercial_values[0]
                 result.append(
                     {
                         "material_comparison_id": semantic_digest(
@@ -4449,17 +4449,18 @@ def _material_comparisons(
                         ),
                         "classification": "MATERIAL_DIFFERENCE",
                         "professional_status": "Характеристики материала различаются",
-                        "facility": design.get("facility")
-                        or commercial.get("facility")
+                        "facility": design_material.get("facility")
+                        or commercial_material.get("facility")
                         or "Место применения не установлено",
-                        "facility_id": design.get("facility_id") or commercial.get("facility_id"),
-                        "work": design.get("work")
-                        or commercial.get("work")
+                        "facility_id": design_material.get("facility_id")
+                        or commercial_material.get("facility_id"),
+                        "work": design_material.get("work")
+                        or commercial_material.get("work")
                         or work_family_catalog().get(family_key)
                         or "Связанная работа требует уточнения",
-                        "material": design.get("name") or commercial.get("name"),
-                        "material_kind": design.get("material_kind")
-                        or commercial.get("material_kind"),
+                        "material": design_material.get("name") or commercial_material.get("name"),
+                        "material_kind": design_material.get("material_kind")
+                        or commercial_material.get("material_kind"),
                         "description": "; ".join(descriptions) + ".",
                         "design_roles": [design_role],
                         "commercial_roles": [commercial_role],
