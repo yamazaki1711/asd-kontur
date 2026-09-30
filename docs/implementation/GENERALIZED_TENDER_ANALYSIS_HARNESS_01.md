@@ -310,6 +310,14 @@ at 0/12 accepted batches after five completed model requests; this is recorded
 as a semantic-output/recovery performance limitation, not claimed as a new
 professional result.
 
+The same job later completed autonomously after 13 Qwen requests and its result
+became durable; the worker immediately claimed the next project job. Historical
+receipts quantified the cause: 72 of 78 twelve-row work-reconciliation batches
+needed recursive repair, averaging 3.72 calls, while observed batches of up to
+nine rows normally completed in one call. The next candidate therefore reduces
+future default batches to eight rows. Existing queued jobs and accepted history
+are unchanged; the change applies only to subsequent idempotent refills.
+
 ## Remaining implementation work
 
 - persist and schedule the remaining generalized semantic tasks beyond work and

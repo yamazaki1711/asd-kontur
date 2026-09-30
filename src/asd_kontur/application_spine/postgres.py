@@ -124,6 +124,11 @@ _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # extraction at a safe job boundary; the refill gate prevents it from starving
 # the remaining corpus.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
+# Live project receipts showed that twelve-row strict-JSON batches required
+# recursive repair in 72 of 78 cases (3.72 model calls on average).  Eight-row
+# batches preserve bounded semantic context while materially reducing repair
+# calls and time to an accepted project result.
+_PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 8
 
 
 def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
@@ -4800,7 +4805,7 @@ class SpinePostgresRepository:
         owner_identity_id: str,
         workspace_id: UUID,
         correlation_id: UUID,
-        batch_size: int = 12,
+        batch_size: int = _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
         max_batches: int = 4,
         _resolved_organization_id: UUID | None = None,
     ) -> tuple[JobSummary, ...]:
@@ -5232,7 +5237,7 @@ class SpinePostgresRepository:
         self,
         claimed: ClaimedJob,
         *,
-        batch_size: int = 12,
+        batch_size: int = _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
         max_batches: int = 4,
     ) -> tuple[JobSummary, ...]:
         """Refill bounded semantic work only after the prior queue drains.
@@ -5259,7 +5264,7 @@ class SpinePostgresRepository:
         organization_id: UUID,
         workspace_id: UUID,
         correlation_id: UUID,
-        batch_size: int = 12,
+        batch_size: int = _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
         max_batches: int = 4,
     ) -> tuple[JobSummary, ...]:
         """Recover an empty semantic queue when eligible project work remains.
