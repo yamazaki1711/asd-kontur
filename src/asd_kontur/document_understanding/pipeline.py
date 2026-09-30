@@ -57,6 +57,7 @@ from .semantic import (
 )
 
 MAX_BOUNDED_PROCESSING_BYTES = 256 * 1024 * 1024
+_MAX_NEW_ENGINEERING_BATCHES_PER_DURABLE_JOB = 1
 
 
 class UnderstandingStageFailure(RuntimeError):
@@ -510,6 +511,7 @@ class IndustrialDocumentUnderstandingPipeline:
                         claimed, batch, failure_code, failure_diagnostics
                     )
                 ),
+                max_new_batches=_MAX_NEW_ENGINEERING_BATCHES_PER_DURABLE_JOB,
             )
         except QwenSemanticFailure as exc:
             raise UnderstandingStageFailure(exc.code) from exc

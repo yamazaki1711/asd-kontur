@@ -3230,6 +3230,72 @@ def test_qwen_engineering_extraction_reuses_only_validated_batch_manifests() -> 
     assert len(accepted) == 1
 
 
+def test_qwen_engineering_extraction_yields_after_one_new_batch_and_resumes() -> None:
+    document = _extract_csv(
+        "\n".join(f"Independent work {index};value {index}" for index in range(80)) + "\n"
+    )
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+    accepted: dict[str, dict[str, object]] = {}
+    memberships: dict[str, tuple[str, ...]] = {}
+    response = json.dumps(
+        {
+            "fields": [],
+            "structures": [],
+            "structure_relationships": [],
+            "works": [],
+            "quantities": [],
+            "materials": [],
+        }
+    )
+
+    def record(batch: object, manifest: dict[str, object]) -> None:
+        engineering_batch = cast(Any, batch)
+        accepted[engineering_batch.digest] = manifest
+        memberships[engineering_batch.digest] = tuple(
+            str(fragment.fragment_id) for fragment in engineering_batch.fragments
+        )
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete", return_value=response
+    ) as complete:
+        adapter.extract_engineering(
+            document.pages[0].elements,
+            batching_policy_version="dense-fragments-v1",
+            max_new_batches=1,
+            on_accepted_batch=record,
+        )
+        assert complete.call_count == 1
+        assert len(accepted) == 1
+
+        adapter.extract_engineering(
+            document.pages[0].elements,
+            accepted_batches=accepted,
+            accepted_batch_fragment_ids=memberships,
+            batching_policy_version="dense-fragments-v1",
+            max_new_batches=1,
+            on_accepted_batch=record,
+        )
+
+    assert complete.call_count == 2
+    assert len(accepted) == 2
+    assert (
+        len(
+            _engineering_batches(
+                document.pages[0].elements, batching_policy_version="dense-fragments-v1"
+            )
+        )
+        > 2
+    )
+
+
+def test_qwen_engineering_extraction_rejects_non_positive_new_batch_limit() -> None:
+    document = _extract_csv("work;value\n")
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with pytest.raises(ValueError, match="max_new_batches_must_be_positive"):
+        adapter.extract_engineering(document.pages[0].elements, max_new_batches=0)
+
+
 def test_qwen_engineering_extraction_does_not_reuse_prior_profile_without_relationships() -> None:
     document = _extract_csv("проектная запись;значение\n")
     batch = _engineering_batches(document.pages[0].elements)[0]

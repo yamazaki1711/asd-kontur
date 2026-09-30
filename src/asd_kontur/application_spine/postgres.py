@@ -123,6 +123,25 @@ def _effective_project_processing_job_sql(alias: str) -> str:
     )
 
 
+def _semantic_recovery_stalled(
+    *,
+    latest_state: str,
+    coverage_state: str,
+    recovery_contract: object,
+    recovery_attempt: int,
+    accepted_fragment_count: int,
+    previous_accepted_fragment_count: int,
+) -> bool:
+    """Stop retrying a partial semantic source only after a no-progress recovery."""
+    return (
+        latest_state == "succeeded"
+        and coverage_state == "partial"
+        and recovery_contract == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
+        and recovery_attempt >= 1
+        and accepted_fragment_count <= previous_accepted_fragment_count
+    )
+
+
 # Dispatch priorities are intentionally coarse and derived only from durable
 # document-role decisions.  They influence which independent source uses the
 # single local-Qwen slot next; they do not change candidate authority, evidence
@@ -4433,14 +4452,23 @@ class SpinePostgresRepository:
                 continue
 
             recovery_attempt = int(latest_provenance.get("semantic_coverage_recovery_attempt", 0))
+            previous_accepted_fragment_count = int(
+                latest_provenance.get("accepted_fragment_count", 0)
+            )
+            accepted_fragment_count = (
+                int(coverage["accepted_fragment_count"]) if coverage is not None else 0
+            )
             if (
                 latest is not None
-                and str(latest["state"]) == "succeeded"
                 and coverage is not None
-                and str(coverage["state"]) == "partial"
-                and latest_provenance.get("semantic_coverage_recovery_contract")
-                == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
-                and recovery_attempt >= 1
+                and _semantic_recovery_stalled(
+                    latest_state=str(latest["state"]),
+                    coverage_state=str(coverage["state"]),
+                    recovery_contract=latest_provenance.get("semantic_coverage_recovery_contract"),
+                    recovery_attempt=recovery_attempt,
+                    accepted_fragment_count=accepted_fragment_count,
+                    previous_accepted_fragment_count=previous_accepted_fragment_count,
+                )
             ):
                 scheduled.append(
                     {

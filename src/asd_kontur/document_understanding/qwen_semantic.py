@@ -449,25 +449,46 @@ class QwenDocumentSemanticAdapter:
         on_batch_progress: Callable[[int, int], None] | None = None,
         on_failed_batch: Callable[[QwenEngineeringBatch, str, dict[str, object]], None]
         | None = None,
+        max_new_batches: int | None = None,
     ) -> StructuredCandidates:
-        """Extract evidence-bound engineering candidates from every bounded locator batch."""
+        """Extract candidates, optionally yielding after bounded new inference.
+
+        Persisted accepted batches are reusable without consuming the limit.
+        ``max_new_batches`` bounds only source batches that may issue a new
+        Qwen request, including that batch's bounded repair path. This gives
+        the durable worker a fair scheduling boundary without discarding
+        accepted work or changing the all-batches default for direct callers.
+        """
+        if max_new_batches is not None and max_new_batches < 1:
+            raise ValueError("max_new_batches_must_be_positive")
         accepted = accepted_batches or {}
         accepted_fragments = accepted_batch_fragment_ids or {}
         failed = failed_batch_digests or frozenset()
         compatible = compatible_accepted_batches or {}
         compatible_fragments = compatible_accepted_batch_fragment_ids or {}
-        # Existing accepted v15 batches predate the dense packing policy. Resume
-        # them with byte-identical manifests so their evidence can be reused.
-        # Callers opt into dense packing explicitly; the adapter's default stays
-        # legacy-compatible for direct consumers and existing tests.
+        # Same-profile accepted batches retain the caller's current packing
+        # policy. Compatible older-profile receipts, when configured, retain
+        # legacy packing so their byte-identical manifests can be reused.
+        # The adapter default remains legacy-compatible for direct consumers.
         batches = _engineering_batches(
             elements,
-            batching_policy_version=(None if accepted or compatible else batching_policy_version),
+            batching_policy_version=(None if compatible else batching_policy_version),
         )
         if not batches:
             raise QwenSemanticFailure("qwen_engineering_input_unavailable")
         extracted: list[tuple[dict[str, _SemanticFragment], dict[str, list[tuple[str, ...]]]]] = []
+        new_batches = 0
         for current, batch in enumerate(batches, start=1):
+            if not _engineering_batch_resolved_without_inference(
+                batch,
+                accepted=accepted,
+                accepted_batch_fragment_ids=accepted_fragments,
+                compatible_accepted_batches=compatible,
+                compatible_accepted_batch_fragment_ids=compatible_fragments,
+            ):
+                if max_new_batches is not None and new_batches >= max_new_batches:
+                    break
+                new_batches += 1
             extracted.extend(
                 self._extract_engineering_batch(
                     batch,
@@ -858,7 +879,7 @@ class QwenDocumentSemanticAdapter:
         """
         batches = _engineering_batches(
             elements,
-            batching_policy_version=(None if accepted_batches else batching_policy_version),
+            batching_policy_version=batching_policy_version,
         )
         return tuple(
             self.accepted_batch_candidates(batch, manifest)
@@ -1355,6 +1376,40 @@ def _accepted_engineering_batch_available(
     return any(
         _compatible_batch_digest(batch.fragments, profile_version) in compatible_accepted_batches
         for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES
+    )
+
+
+def _engineering_batch_resolved_without_inference(
+    batch: QwenEngineeringBatch,
+    *,
+    accepted: Mapping[str, dict[str, object]],
+    accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+    compatible_accepted_batches: Mapping[str, dict[str, object]],
+    compatible_accepted_batch_fragment_ids: Mapping[str, tuple[str, ...]],
+) -> bool:
+    """Return whether one current batch can be rebuilt from accepted receipts."""
+    if _accepted_engineering_batch_available(
+        batch,
+        accepted=accepted,
+        compatible_accepted_batches=compatible_accepted_batches,
+    ):
+        return True
+    if _accepted_engineering_fragment_cover(
+        batch,
+        accepted=accepted,
+        accepted_batch_fragment_ids=accepted_batch_fragment_ids,
+        compatible_accepted_batches=compatible_accepted_batches,
+        compatible_accepted_batch_fragment_ids=compatible_accepted_batch_fragment_ids,
+    ):
+        return True
+    recovered_children = _split_engineering_batch(batch)
+    return bool(recovered_children) and all(
+        _accepted_engineering_batch_available(
+            child,
+            accepted=accepted,
+            compatible_accepted_batches=compatible_accepted_batches,
+        )
+        for child in recovered_children
     )
 
 

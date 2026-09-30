@@ -29,6 +29,7 @@ from asd_kontur.application_spine.postgres import (
     _quantities_requiring_semantic_review,
     _quantity_relationship_batches,
     _semantic_extraction_priority,
+    _semantic_recovery_stalled,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
@@ -40,6 +41,28 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_semantic_recovery_continues_while_accepted_coverage_advances() -> None:
+    assert not _semantic_recovery_stalled(
+        latest_state="succeeded",
+        coverage_state="partial",
+        recovery_contract="engineering-leaf-recovery-v6",
+        recovery_attempt=4,
+        accepted_fragment_count=38,
+        previous_accepted_fragment_count=29,
+    )
+
+
+def test_semantic_recovery_stops_after_bounded_no_progress_attempt() -> None:
+    assert _semantic_recovery_stalled(
+        latest_state="succeeded",
+        coverage_state="partial",
+        recovery_contract="engineering-leaf-recovery-v6",
+        recovery_attempt=2,
+        accepted_fragment_count=38,
+        previous_accepted_fragment_count=38,
+    )
 
 
 def _work_batch_row(
