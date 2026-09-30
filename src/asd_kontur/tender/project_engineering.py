@@ -5434,6 +5434,12 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                     ),
                     "scope_compatibility": row.get("scope_compatibility"),
                 }
+                for review_field in (
+                    "relationship_reviewed",
+                    "component_set_complete",
+                ):
+                    if row.get(review_field) is not None:
+                        semantics[review_field] = row.get(review_field)
                 payload.update(semantics)
                 rendered.update(semantics)
         else:

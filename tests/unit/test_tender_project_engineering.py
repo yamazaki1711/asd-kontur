@@ -832,6 +832,80 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
     ]
 
 
+def test_quantity_schedule_preserves_review_authority_for_component_arithmetic() -> None:
+    raw_values = [
+        {
+            "candidate_id": "total",
+            "value": "86",
+            "unit": "m3",
+            "semantic_scope": "Общий объём железобетона",
+            "quantity_type": "TOTAL",
+            "relation_kind": "TOTAL_FOR",
+            "related_quantity_candidate_ids": ["part-a", "part-b"],
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "relationship_reviewed": True,
+            "component_set_complete": True,
+            "source_locator_id": "locator-total",
+        },
+        {
+            "candidate_id": "part-a",
+            "value": "48",
+            "unit": "m3",
+            "semantic_scope": "Плита",
+            "quantity_type": "COMPONENT",
+            "relation_kind": "COMPONENT_OF",
+            "related_quantity_candidate_ids": ["total"],
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "relationship_reviewed": True,
+            "component_set_complete": None,
+            "source_locator_id": "locator-a",
+        },
+        {
+            "candidate_id": "part-b",
+            "value": "32",
+            "unit": "m3",
+            "semantic_scope": "Бортовые стенки",
+            "quantity_type": "COMPONENT",
+            "relation_kind": "COMPONENT_OF",
+            "related_quantity_candidate_ids": ["total"],
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "relationship_reviewed": True,
+            "component_set_complete": None,
+            "source_locator_id": "locator-b",
+        },
+    ]
+
+    scheduled_values = _unique_values(raw_values, "quantity")
+    total = next(value for value in scheduled_values if value["quantity_candidate_id"] == "total")
+    assert total["relationship_reviewed"] is True
+    assert total["component_set_complete"] is True
+    assert all(
+        value.get("relationship_reviewed") is True for value in scheduled_values
+    )
+    assert all(
+        "component_set_complete" not in value
+        for value in scheduled_values
+        if value["quantity_candidate_id"] != "total"
+    )
+
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-total",
+                "facility_id": "facility-a",
+                "facility": "Погрузочная платформа",
+                "work_name": "Железобетонные конструкции",
+                "quantities_by_document": {"РД": scheduled_values},
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "COMPONENT_TOTAL_MISMATCH"
+    assert comparisons[0]["left"]["value"] == "86"
+    assert comparisons[0]["right"]["value"] == "80"
+
+
 def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
     comparisons = _component_total_comparisons(
         [
