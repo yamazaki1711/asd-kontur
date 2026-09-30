@@ -23,6 +23,7 @@ from asd_kontur.tender.project_engineering import (
     _pits,
     _professional_document_role,
     _professional_material_values,
+    _professional_quantity_issue_comparisons,
     _project_scope_facility_label,
     _resolution_establishes_page_scope,
     _scope_comparisons,
@@ -805,6 +806,60 @@ def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
         "locator-b",
         "locator-total",
     ]
+
+
+def test_component_total_rounding_match_is_not_a_professional_issue() -> None:
+    works = [
+        {
+            "work_scope_id": "scope-total",
+            "facility_id": "facility-a",
+            "facility": "Резервуар Р-1",
+            "work_name": "Защитное покрытие",
+            "quantities_by_document": {
+                "РД": [
+                    {
+                        "quantity_candidate_id": "total",
+                        "value": "10.0",
+                        "unit": "м2",
+                        "semantic_scope": "Общая площадь",
+                        "quantity_type": "TOTAL",
+                        "relation_kind": "TOTAL_FOR",
+                        "related_quantity_candidate_ids": ["part-a", "part-b"],
+                        "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    },
+                    {
+                        "quantity_candidate_id": "part-a",
+                        "value": "4.96",
+                        "unit": "м2",
+                        "semantic_scope": "Стена",
+                        "quantity_type": "COMPONENT",
+                        "relation_kind": "COMPONENT_OF",
+                        "related_quantity_candidate_ids": ["total"],
+                        "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    },
+                    {
+                        "quantity_candidate_id": "part-b",
+                        "value": "5.03",
+                        "unit": "м2",
+                        "semantic_scope": "Днище",
+                        "quantity_type": "COMPONENT",
+                        "relation_kind": "COMPONENT_OF",
+                        "related_quantity_candidate_ids": ["total"],
+                        "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    },
+                ]
+            },
+        }
+    ]
+
+    comparisons = _component_total_comparisons(works)
+    issues = _professional_quantity_issue_comparisons(comparisons)
+
+    assert comparisons[0]["classification"] == "ROUNDING_MATCH"
+    assert comparisons[0]["professional_status"] == (
+        "Расхождение находится в пределах точности округления"
+    )
+    assert issues == []
 
 
 def test_material_schedule_normalizes_unit_but_keeps_source_spelling() -> None:

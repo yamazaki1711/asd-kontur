@@ -78,9 +78,72 @@ class ComponentTotalResult:
     component_ids: tuple[str, ...]
     unit: str
     stated_total: Decimal
-    calculated_total: Decimal
-    difference: Decimal
+    calculated_total: Decimal | None
+    difference: Decimal | None
     classification: str
+    explanation: str
+
+
+class ComponentTotalClassification(StrEnum):
+    MATCH = "MATCH"
+    ROUNDING_MATCH = "ROUNDING_MATCH"
+    MISMATCH = "MISMATCH"
+    INCOMPLETE_COMPONENT_SET = "INCOMPLETE_COMPONENT_SET"
+    INCOMPATIBLE_SCOPE = "INCOMPATIBLE_SCOPE"
+
+
+def assess_component_total(
+    statements: Iterable[QuantityStatement],
+    relationship: QuantityRelationship,
+) -> ComponentTotalResult:
+    """Return a typed deterministic assessment of one semantic relationship."""
+
+    by_id = {statement.statement_id: statement for statement in statements}
+    total = by_id.get(relationship.subject_id)
+    components = [by_id.get(component_id) for component_id in relationship.object_ids]
+    if total is None or any(component is None for component in components):
+        return _component_result(
+            total,
+            relationship,
+            ComponentTotalClassification.INCOMPLETE_COMPONENT_SET,
+            "Not every statement referenced by the semantic relationship is available.",
+        )
+    resolved = [component for component in components if component is not None]
+    if (
+        relationship.relation is not QuantityRelation.TOTAL_FOR
+        or relationship.compatibility is not ScopeCompatibility.COMPONENT_VS_TOTAL
+        or total.quantity_type is not QuantityType.TOTAL
+        or any(
+            component.quantity_type not in {QuantityType.COMPONENT, QuantityType.SUBTOTAL}
+            for component in resolved
+        )
+        or not _component_scope_is_compatible(total, resolved)
+    ):
+        return _component_result(
+            total,
+            relationship,
+            ComponentTotalClassification.INCOMPATIBLE_SCOPE,
+            "The semantic relationship, units, document role, revision, "
+            "or engineering scope is incompatible.",
+        )
+    calculated = sum((component.value for component in resolved), Decimal("0"))
+    difference = total.value - calculated
+    if difference == 0:
+        classification = ComponentTotalClassification.MATCH
+    elif calculated.quantize(_reported_quantum(total.value)) == total.value:
+        classification = ComponentTotalClassification.ROUNDING_MATCH
+    else:
+        classification = ComponentTotalClassification.MISMATCH
+    return ComponentTotalResult(
+        total_id=total.statement_id,
+        component_ids=relationship.object_ids,
+        unit=total.unit,
+        stated_total=total.value,
+        calculated_total=calculated,
+        difference=difference,
+        classification=classification.value,
+        explanation="The arithmetic was evaluated with Decimal after semantic scope validation.",
+    )
 
 
 def evaluate_component_total(
@@ -89,67 +152,66 @@ def evaluate_component_total(
 ) -> ComponentTotalResult | None:
     """Verify an explicit model relationship; never infer one from similar numbers."""
 
-    if (
-        relationship.relation is not QuantityRelation.TOTAL_FOR
-        or relationship.compatibility is not ScopeCompatibility.COMPONENT_VS_TOTAL
-    ):
+    assessed = assess_component_total(statements, relationship)
+    if assessed.classification in {
+        ComponentTotalClassification.INCOMPLETE_COMPONENT_SET.value,
+        ComponentTotalClassification.INCOMPATIBLE_SCOPE.value,
+    }:
         return None
-    by_id = {statement.statement_id: statement for statement in statements}
-    total = by_id.get(relationship.subject_id)
-    components = [by_id.get(component_id) for component_id in relationship.object_ids]
-    if total is None or any(component is None for component in components):
-        return None
-    resolved_components = [component for component in components if component is not None]
-    if total.quantity_type is not QuantityType.TOTAL:
-        return None
-    if any(
-        component.quantity_type not in {QuantityType.COMPONENT, QuantityType.SUBTOTAL}
-        for component in resolved_components
-    ):
-        return None
-    if any(component.unit != total.unit for component in resolved_components):
-        return None
-    if any(
-        total.project_entity is not None
-        and component.project_entity is not None
-        and component.project_entity != total.project_entity
-        for component in resolved_components
-    ):
-        return None
-    if any(
-        total.work is not None and component.work is not None and component.work != total.work
-        for component in resolved_components
-    ):
-        return None
-    if any(
-        total.material is not None
-        and component.material is not None
-        and component.material != total.material
-        for component in resolved_components
-    ):
-        return None
-    if any(
-        total.revision is not None
-        and component.revision is not None
-        and component.revision != total.revision
-        for component in resolved_components
-    ):
-        return None
-    if any(
-        total.source_role is not None
-        and component.source_role is not None
-        and component.source_role != total.source_role
-        for component in resolved_components
-    ):
-        return None
-    calculated = sum((component.value for component in resolved_components), Decimal("0"))
-    difference = total.value - calculated
+    if assessed.classification == ComponentTotalClassification.MISMATCH.value:
+        return ComponentTotalResult(
+            total_id=assessed.total_id,
+            component_ids=assessed.component_ids,
+            unit=assessed.unit,
+            stated_total=assessed.stated_total,
+            calculated_total=assessed.calculated_total,
+            difference=assessed.difference,
+            classification="COMPONENT_TOTAL_MISMATCH",
+            explanation=assessed.explanation,
+        )
+    return assessed
+
+
+def _component_scope_is_compatible(
+    total: QuantityStatement,
+    components: list[QuantityStatement],
+) -> bool:
+    if any(component.unit != total.unit for component in components):
+        return False
+    for attribute in ("project_entity", "work", "material", "revision", "source_role"):
+        total_value = getattr(total, attribute)
+        if any(
+            total_value is not None
+            and getattr(component, attribute) is not None
+            and getattr(component, attribute) != total_value
+            for component in components
+        ):
+            return False
+    return True
+
+
+def _component_result(
+    total: QuantityStatement | None,
+    relationship: QuantityRelationship,
+    classification: ComponentTotalClassification,
+    explanation: str,
+) -> ComponentTotalResult:
     return ComponentTotalResult(
-        total_id=total.statement_id,
+        total_id=relationship.subject_id,
         component_ids=relationship.object_ids,
-        unit=total.unit,
-        stated_total=total.value,
-        calculated_total=calculated,
-        difference=difference,
-        classification="MATCH" if difference == 0 else "COMPONENT_TOTAL_MISMATCH",
+        unit=total.unit if total else "",
+        stated_total=total.value if total else Decimal("0"),
+        calculated_total=None,
+        difference=None,
+        classification=classification.value,
+        explanation=explanation,
     )
+
+
+def _reported_quantum(value: Decimal) -> Decimal:
+    """Return the decimal resolution explicitly reported by the stated total."""
+
+    exponent = value.as_tuple().exponent
+    if not isinstance(exponent, int):
+        raise ValueError("non-finite quantity total is invalid")
+    return Decimal(1).scaleb(exponent)

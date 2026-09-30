@@ -13,7 +13,8 @@ import io
 import json
 import threading
 from collections.abc import Iterable
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from datetime import UTC, datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,60 @@ def _collect_generated_text(results: Iterable[Any]) -> str:
     return "".join(str(result.text) for result in results)
 
 
+class QwenRuntimeState:
+    """Thread-safe lightweight state independent of the heavy generation loop."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._status = "QWEN_MODEL_LOADING"
+        self._status_changed_at = datetime.now(UTC).isoformat()
+        self._generation_started_at: str | None = None
+        self._completed_requests = 0
+        self._last_error: str | None = None
+        self._runtime: tuple[Any, Any, Any] | None = None
+
+    def model_ready(self, model: Any, processor: Any, config: Any) -> None:
+        with self._lock:
+            self._runtime = (model, processor, config)
+            self._set_status("QWEN_READY_IDLE")
+
+    def model_error(self, error: BaseException) -> None:
+        with self._lock:
+            self._last_error = type(error).__name__
+            self._set_status("QWEN_ERROR")
+
+    def generation_started(self) -> None:
+        with self._lock:
+            self._generation_started_at = datetime.now(UTC).isoformat()
+            self._set_status("QWEN_GENERATING")
+
+    def generation_finished(self, error: BaseException | None = None) -> None:
+        with self._lock:
+            self._completed_requests += 1
+            self._generation_started_at = None
+            self._last_error = type(error).__name__ if error is not None else None
+            self._set_status("QWEN_READY_IDLE")
+
+    def runtime(self) -> tuple[Any, Any, Any] | None:
+        with self._lock:
+            return self._runtime
+
+    def snapshot(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "status": self._status,
+                "model": "Qwen3.8-27B",
+                "status_changed_at": self._status_changed_at,
+                "generation_started_at": self._generation_started_at,
+                "completed_requests": self._completed_requests,
+                "last_error": self._last_error,
+            }
+
+    def _set_status(self, status: str) -> None:
+        self._status = status
+        self._status_changed_at = datetime.now(UTC).isoformat()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, type=Path)
@@ -32,12 +87,19 @@ def main() -> None:
     args = parser.parse_args()
     if args.host not in {"127.0.0.1", "::1", "localhost"}:
         raise ValueError("qwen_server_must_bind_loopback")
-    import mlx_vlm  # type: ignore[import-not-found]
-    from mlx_vlm import prompt_utils
-
-    model, processor = mlx_vlm.load(str(args.model))
-    config = model.config
+    state = QwenRuntimeState()
     generation_lock = threading.Lock()
+
+    def load_model() -> None:
+        try:
+            import mlx_vlm  # type: ignore[import-not-found]
+
+            model, processor = mlx_vlm.load(str(args.model))
+            state.model_ready(model, processor, model.config)
+        except BaseException as exc:  # the status endpoint must survive a fatal loader error
+            state.model_error(exc)
+
+    threading.Thread(target=load_model, name="qwen-model-loader", daemon=True).start()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "ASDKonturQwen/1.0"
@@ -49,9 +111,7 @@ def main() -> None:
             if self.path != "/health":
                 self.send_error(404)
                 return
-            payload = json.dumps(
-                {"status": "ready", "model": "Qwen3.8-27B"}, ensure_ascii=False
-            ).encode()
+            payload = json.dumps(state.snapshot(), ensure_ascii=False).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(payload)))
@@ -88,10 +148,20 @@ def main() -> None:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 self.send_error(400)
                 return
+            runtime = state.runtime()
+            if runtime is None:
+                self.send_error(503)
+                return
             if not generation_lock.acquire(blocking=False):
                 self.send_error(429)
                 return
+            generation_error: BaseException | None = None
             try:
+                model, processor, config = runtime
+                import mlx_vlm
+                from mlx_vlm import prompt_utils
+
+                state.generation_started()
                 image: Any = None
                 if image_bytes is not None:
                     from PIL import Image
@@ -155,14 +225,20 @@ def main() -> None:
                 )
             except (BrokenPipeError, ConnectionResetError):
                 pass
+            except BaseException as exc:
+                generation_error = exc
+                raise
             finally:
+                state.generation_finished(generation_error)
                 generation_lock.release()
 
         def _write(self, payload: dict[str, Any]) -> None:
             self.wfile.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
             self.wfile.flush()
 
-    HTTPServer((args.host, args.port), Handler).serve_forever()
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    server.daemon_threads = True
+    server.serve_forever()
 
 
 if __name__ == "__main__":

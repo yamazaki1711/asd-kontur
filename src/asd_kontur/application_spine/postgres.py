@@ -439,7 +439,8 @@ class SpinePostgresRepository:
             jobs = (
                 session.execute(
                     sa.text(
-                        "SELECT count(*) AS total_count,"
+                        "SELECT count(*) FILTER (WHERE NOT (job.state='reconciliation_required' "
+                        "AND job.typed_failure_code='dependency_terminal_failure')) AS total_count,"
                         "count(*) FILTER (WHERE job.state='succeeded') AS succeeded_count,"
                         "count(*) FILTER (WHERE job.state IN ('queued','leased','running')) AS active_count,"
                         "count(*) FILTER (WHERE job.state IN ('leased','running')) AS running_count,"
@@ -458,6 +459,7 @@ class SpinePostgresRepository:
                         "AS active_kinds,"
                         "bool_or(job.state IN ('leased','running') AND job.job_kind IN ("
                         "'OCR_EXTRACTION','DOCUMENT_PAGE_CLASSIFICATION',"
+                        "'PROJECT_DEFINITION_EXTRACTION',"
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
                         "'PROJECT_WORK_RECONCILIATION')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
@@ -502,6 +504,7 @@ class SpinePostgresRepository:
             )
         active_kinds = {str(value) for value in jobs["active_kinds"] or ()}
         analysis_kinds = {
+            JobKind.PROJECT_DEFINITION_EXTRACTION.value,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION.value,
             JobKind.PROJECT_STRUCTURE_RECONCILIATION.value,
             JobKind.PROJECT_WORK_RECONCILIATION.value,

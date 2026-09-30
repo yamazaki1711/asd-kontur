@@ -3143,6 +3143,8 @@ def _component_total_comparisons(
         total_record = records.get(relationship.subject_id)
         if checked is None or total_record is None:
             continue
+        if checked.calculated_total is None or checked.difference is None:
+            continue
         work = dict(total_record["work"])
         role = str(total_record["role"])
         locator_ids = sorted(
@@ -3166,9 +3168,11 @@ def _component_total_comparisons(
                 "classification": checked.classification,
                 "comparison_kind": "component_total",
                 "professional_status": (
-                    "Итог не равен сумме составляющих"
-                    if checked.difference != 0
-                    else "Итог совпадает с суммой составляющих"
+                    "Итог совпадает с суммой составляющих"
+                    if checked.classification == "MATCH"
+                    else "Расхождение находится в пределах точности округления"
+                    if checked.classification == "ROUNDING_MATCH"
+                    else "Итог не равен сумме составляющих"
                 ),
                 "facility": work.get("facility"),
                 "facility_id": work.get("facility_id"),
@@ -3190,6 +3194,11 @@ def _component_total_comparisons(
                     f"связанных составляющих — "
                     f"{_decimal_text(checked.calculated_total)} {checked.unit}; "
                     f"разница — {_decimal_text(checked.difference)} {checked.unit}."
+                    + (
+                        " Значения согласуются с указанной точностью округления."
+                        if checked.classification == "ROUNDING_MATCH"
+                        else ""
+                    )
                 ),
                 "source_locator_ids": locator_ids,
                 "scope_match_basis": (
@@ -4292,7 +4301,7 @@ def _issues(
                 "status": "Требует уточнения",
             }
         )
-    return _deduplicate_dicts(issues)
+    return [_complete_professional_finding(value) for value in _deduplicate_dicts(issues)]
 
 
 def _professional_quantity_issue_comparisons(
@@ -4310,6 +4319,8 @@ def _professional_quantity_issue_comparisons(
     groups: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
     passthrough: list[dict[str, Any]] = []
     for row in rows:
+        if row.get("classification") in {"MATCH", "ROUNDING_MATCH"}:
+            continue
         left = dict(row.get("left") or {})
         right = dict(row.get("right") or {})
         if row.get("classification") != "QUANTITY_DIFFERENCE" or str(
@@ -4363,6 +4374,18 @@ def _professional_quantity_issue_comparisons(
         )
         passthrough.append(base)
     return passthrough
+
+
+def _complete_professional_finding(value: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply the shared professional finding envelope to every finding source."""
+
+    row = dict(value)
+    established = str(row.get("status") or "").startswith("Установ")
+    row.setdefault("comparison_data", {})
+    row.setdefault("uncertainty", None if established else str(row.get("status") or ""))
+    row.setdefault("confidence", "HIGH" if established else "MODERATE")
+    row.setdefault("documents", list(row.get("sources") or ()))
+    return row
 
 
 def _quantity_difference_professional_text(

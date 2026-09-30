@@ -114,6 +114,27 @@ blind-project workspace ID was found in the audited runtime paths.
     path retained 348 work scopes and 235 material rows instead of exposing the
     partial replacement. This changes read selection only; no candidate or
     immutable result is overwritten.
+17. Completed the project-independent semantic task inventory and added one
+    shared strict result validator for input identity, decisions, confidence,
+    source references, normalized interpretation, relationships and explicit
+    ambiguity. This closes the contract gap without creating a monolithic
+    project-analysis prompt.
+18. Added typed deterministic component/total outcomes: exact match, rounding
+    match, mismatch, incomplete component set and incompatible scope. Rounding
+    matches remain comparisons but no longer become Tender issues; incomplete
+    and incompatible sets never produce arithmetic findings.
+19. Completed the reusable professional-finding envelope with comparison data,
+    document/source references, confidence, uncertainty, practical consequence
+    and recommended action while keeping deterministic values authoritative.
+20. Added an independent Qwen status plane. The HTTP service now reports model
+    loading, ready/idle, generating and error states while a generation is in
+    flight, but retains one heavy-model generation lock. The assistant worker
+    treats a generating model as healthy but not claimable, avoiding competing
+    requests without misreporting process death.
+21. Corrected the user-facing job denominator so immutable historical
+    dependency-terminal descendants do not keep an active project permanently
+    below completion. Their history is retained and remains available to
+    technical diagnostics.
 
 ## Autonomous runtime
 
@@ -157,6 +178,32 @@ document roles, or an `INCOMPARABLE_TO` decision produce no numeric finding.
 An invented cross-row identity is rejected and the source value remains visible
 as unresolved. These are mechanism tests, not expected values for a real
 project.
+
+Typed acceptance additionally covers reported-precision rounding, an incomplete
+component set, monolithic versus precast concrete, different revisions and the
+same work name in different facilities. These cases prove that the engine
+prefers `INCOMPATIBLE_SCOPE` or an unresolved result over a false discrepancy.
+
+## Backlog convergence audit
+
+A read-only live audit found 103 queued jobs at the observation point: 21
+project-definition, 38 structure-reconciliation, 38 project-understanding,
+three work-reconciliation and three work/quantity/material extraction jobs.
+All queued jobs had unique input digests and idempotency keys. Dependencies
+were grouped as 17 already satisfied, 38 legitimately pending and 48 direct
+stage jobs without a predecessor edge; there was no duplicate refill storm.
+
+The 120 `reconciliation_required` rows were immutable historical
+`dependency_terminal_failure` descendants: two document aggregation, one page
+classification, 19 evidence-index, one native-layout, one OCR, one OCR-routing,
+one page-health, one project-definition, 19 structure-reconciliation, 19
+project-understanding, 19 requirement-matrix, 19 work-package and 17
+work/quantity/material rows. Forty-three terminal failures were separately
+accounted for: 37 transient Qwen-unavailable histories, four invalid locators,
+one OCR failure and one unsupported format. No row was patched or deleted.
+The autonomous orchestrator owns eligible replacements; immutable historical
+rows are excluded only from the professional progress denominator, not from
+diagnostic history.
 
 ## Blind-project and unseen-corpus status
 
@@ -227,12 +274,11 @@ Qwen restart recovery are therefore demonstrated for the active real project.
 Mac sleep/wake was not tested.
 
 The Qwen service uses an older launchd release label, but its loaded
-`qwen_server.py` is byte-identical to the candidate implementation
-(`sha256:4c0b429e63fd6daddc0c9517b62802f7a7b4c21cba6c437cca67ab9cd7346d30`).
-Its single-threaded health endpoint cannot answer while a long generation owns
-the request loop; process/connection/heartbeat evidence distinguishes that
-observable condition from service death. This remains an operational
-observability limitation.
+`qwen_server.py` was byte-identical to release `3cdfd066`. The subsequent
+candidate replaces the single-threaded health limitation with a lightweight
+threaded status plane while retaining a single generation lock. Deployment and
+live loading/generating/idle verification remain release gates for that
+candidate.
 
 The independent bridge corpus and parameterized quantity tests prove the
 shared mechanisms across different names, work types, units and values without
@@ -246,8 +292,7 @@ full unseen-project acceptance remains open.
 - complete a live autonomous unseen-project run without code changes;
 - improve project entity consolidation and produce defensible quantity,
   comparison and finding results for the blind project;
-- make Qwen health/availability observable while its one heavy request is in
-  progress;
+- deploy and verify the independent Qwen status plane under launchd;
 - run signed-in visual browser acceptance when an in-app browser session is
   available, and test the supported Mac sleep/wake boundary.
 

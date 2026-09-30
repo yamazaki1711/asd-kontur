@@ -72,10 +72,16 @@ the global catalog.
 10. **Consultant access** retrieves compact task-specific slices of the same
     persisted project model; it does not rediscover the project from raw text.
 
-The task vocabulary is defined by `TenderAnalysisTask`: document role, project
-entity, work, quantity scope and relationship, material relationship, structure
-identity, document scope, contradiction, commercial completeness, procurement,
-contract, and NTD applicability tasks.
+The task vocabulary is defined by `TenderAnalysisTask`: document-role
+classification; project summary and participant extraction; facility/structure
+extraction and relationship resolution; work classification and scope
+resolution; quantity scope and relationship analysis; material scope and
+relationship analysis; cross-document and commercial scope matching;
+engineering contradiction review; procurement and contract summaries;
+customer-question and contractor-risk generation; and NTD applicability
+review. Every task result uses the same validated envelope: input identities,
+decision, normalized interpretation, relationships, confidence, ambiguity or
+blocker, and source references.
 
 ## Quantity semantics
 
@@ -97,6 +103,11 @@ Scope compatibility is explicit: `SAME_SCOPE`, `OVERLAPPING_SCOPE`,
 `COMPONENT_VS_TOTAL`, `DIFFERENT_SCOPE`, `ALTERNATIVE_DESIGN`,
 `REVISION_DIFFERENCE`, or `INSUFFICIENT_INFORMATION`. Automatic numeric
 discrepancies require `SAME_SCOPE` or a valid `COMPONENT_VS_TOTAL` relationship.
+The deterministic component/total engine returns `MATCH`, `ROUNDING_MATCH`,
+`MISMATCH`, `INCOMPLETE_COMPONENT_SET`, or `INCOMPATIBLE_SCOPE`. It uses
+`Decimal` and normalized units; a rounding match remains an auditable
+comparison but never becomes a professional discrepancy. Incomplete or
+incompatible sets remain visible without fabricated arithmetic.
 
 Cross-document semantic batches are assembled only when deterministic context
 has already established one exact facility and one construction family on both
@@ -135,6 +146,13 @@ quantity analysis, commercial comparison, partial Tender analysis, and complete
 to current capability. Report regeneration reads the same versioned model, so
 new accepted analysis improves the application without reprocessing unrelated
 documents.
+
+The persistent Qwen runtime exposes a lightweight threaded status plane with
+`QWEN_MODEL_LOADING`, `QWEN_READY_IDLE`, `QWEN_GENERATING`, and `QWEN_ERROR`.
+Generation remains protected by one non-blocking lock, so observability cannot
+create a second heavy Metal process. Workers claim new model work only while
+the runtime is idle; transient busy responses retain the existing bounded
+retry behavior.
 
 Accepted semantic batches may populate a source progressively when it has no
 completed semantic profile. During a profile upgrade, however, the application

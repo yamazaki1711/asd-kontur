@@ -349,8 +349,17 @@ class AssistantWorker:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         try:
             with opener.open(request, timeout=1.0) as response:
-                return int(response.status) == 200
-        except (urllib.error.URLError, TimeoutError, ConnectionError, OSError):
+                if int(response.status) != 200:
+                    return False
+                payload = json.loads(response.read())
+                return str(payload.get("status") or "") in {"ready", "QWEN_READY_IDLE"}
+        except (
+            json.JSONDecodeError,
+            urllib.error.URLError,
+            TimeoutError,
+            ConnectionError,
+            OSError,
+        ):
             return False
 
     def _run(self, claimed: ClaimedTurn) -> None:
