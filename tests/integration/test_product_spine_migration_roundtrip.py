@@ -130,6 +130,17 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                     connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
                     == migration_head
                 )
+                claim_definition = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_functiondef("
+                            "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                        )
+                    )
+                )
+                assert claim_definition.index("SELECT max(served.started_at)") < (
+                    claim_definition.index("CASE WHEN EXISTS (")
+                )
 
             # 0045 must restore the 0044 wrapper AND retain its v1 implementation.
             run_migration(str(repository_root), database_url, "0044_dep_recovery_idempotency")
