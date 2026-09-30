@@ -3183,6 +3183,12 @@ def _component_total_comparisons(
                         project_entity=str(work.get("facility_id") or "") or None,
                         source_role=str(role),
                         revision=str(value.get("revision") or "") or None,
+                        scope_qualifiers=_quantity_scope_qualifiers(
+                            [
+                                value.get("semantic_scope"),
+                                *(work.get("project_wording") or ()),
+                            ]
+                        ),
                     )
                     relation = QuantityRelation(str(value.get("relation_kind") or "NONE"))
                     compatibility = ScopeCompatibility(
@@ -5539,6 +5545,33 @@ def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
     except InvalidOperation:
         return value, unit
     return _decimal_text(quantity), scaled.group("unit")
+
+
+def _quantity_scope_qualifiers(values: Iterable[object]) -> tuple[str, ...]:
+    """Extract explicit dimensions that must not conflict across a relation.
+
+    Qwen establishes the candidate semantic graph.  This conservative
+    deterministic guard prevents that graph from merging visibly different
+    diameters or section sizes.  It does not infer a relationship from the
+    dimensions and does not reject a generic total that states no qualifier.
+    """
+
+    text = " ".join(str(value or "") for value in values)
+    normalized = text.casefold().replace(",", ".")
+    qualifiers: set[str] = set()
+    for match in re.finditer(
+        r"(?:диаметр(?:ом|а)?|диметр(?:ом|а)?|\b(?:dn|d|ду))\s*[:=№-]?\s*"
+        r"(?P<value>\d+(?:\.\d+)?)\s*(?:мм|mm)?",
+        normalized,
+    ):
+        qualifiers.add(f"diameter:{match.group('value')}mm")
+    for match in re.finditer(
+        r"(?P<first>\d+(?:\.\d+)?)\s*[xх×]\s*(?P<second>\d+(?:\.\d+)?)"
+        r"\s*(?:мм|mm)?",
+        normalized,
+    ):
+        qualifiers.add(f"section:{match.group('first')}x{match.group('second')}mm")
+    return tuple(sorted(qualifiers))
 
 
 def _normalized_unit(value: object) -> str:

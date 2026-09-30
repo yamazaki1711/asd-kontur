@@ -911,6 +911,57 @@ def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
     ]
 
 
+def test_component_total_comparison_rejects_different_explicit_pipe_diameters() -> None:
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-total",
+                "facility_id": None,
+                "facility": "Место выполнения не установлено",
+                "work_name": "Демонтаж трубопровода",
+                "project_wording": ["Демонтаж трубопровода диаметром 300 мм"],
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "total",
+                            "value": "109",
+                            "unit": "м",
+                            "semantic_scope": "Общая длина демонтируемого трубопровода",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "TOTAL_FOR",
+                            "related_quantity_candidate_ids": ["component"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                        }
+                    ]
+                },
+            },
+            {
+                "work_scope_id": "scope-component",
+                "facility_id": None,
+                "facility": "Место выполнения не установлено",
+                "work_name": "Демонтаж трубопровода",
+                "project_wording": ["Демонтаж трубопровода диметром 50 мм"],
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "component",
+                            "value": "1",
+                            "unit": "м",
+                            "semantic_scope": "Длина демонтируемого трубопровода",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+
+    assert comparisons == []
+
+
 def test_component_total_rounding_match_is_not_a_professional_issue() -> None:
     works = [
         {

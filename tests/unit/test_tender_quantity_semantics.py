@@ -147,6 +147,35 @@ def test_component_total_rejects_conflicting_engineering_scope(dimension: str) -
     assert evaluate_component_total(statements, relation) is None
 
 
+def test_component_total_rejects_conflicting_explicit_diameters() -> None:
+    statements = [
+        QuantityStatement(
+            "total",
+            Decimal("109"),
+            "м",
+            "Демонтаж трубопровода",
+            QuantityType.TOTAL,
+            scope_qualifiers=("diameter:300mm",),
+        ),
+        QuantityStatement(
+            "component",
+            Decimal("1"),
+            "м",
+            "Демонтаж трубопровода",
+            QuantityType.COMPONENT,
+            scope_qualifiers=("diameter:50mm",),
+        ),
+    ]
+    relation = QuantityRelationship(
+        subject_id="total",
+        relation=QuantityRelation.TOTAL_FOR,
+        object_ids=("component",),
+        compatibility=ScopeCompatibility.COMPONENT_VS_TOTAL,
+    )
+
+    assert evaluate_component_total(statements, relation) is None
+
+
 def test_component_total_allows_explicit_cross_document_relationship() -> None:
     statements = [
         QuantityStatement(

@@ -52,6 +52,7 @@ class QuantityStatement:
     material: str | None = None
     source_role: str | None = None
     revision: str | None = None
+    scope_qualifiers: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.statement_id or not self.unit or not self.semantic_scope:
@@ -191,6 +192,13 @@ def _component_scope_is_compatible(
             for component in components
         ):
             return False
+    total_qualifiers = set(total.scope_qualifiers)
+    if total_qualifiers and any(
+        component.scope_qualifiers
+        and total_qualifiers.isdisjoint(component.scope_qualifiers)
+        for component in components
+    ):
+        return False
     return True
 
 
