@@ -4025,6 +4025,72 @@ def test_semantic_material_resource_comparison_survives_non_work_source_rows() -
     assert "1.8 mm" in comparisons[0]["description"]
 
 
+def test_project_level_material_comparison_requires_isolated_sources() -> None:
+    source_context = dict(
+        [
+            _source("design-a", "Specification.pdf", 3),
+            _source("design-b", "Specification.pdf", 8),
+            _source("commercial", "Offer.pdf", 5),
+        ]
+    )
+
+    isolated = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "document_role": "Спецификация",
+                "name": "Mineral wool",
+                "material_kind": "mineral wool",
+                "associated_work_family_key": "thermal_insulation",
+                "properties": [{"kind": "THICKNESS", "value": "150", "unit": "mm"}],
+                "source_locator_id": "design-a",
+            },
+            {
+                "document_role": "ВОР",
+                "name": "Mineral wool",
+                "material_kind": "mineral wool",
+                "associated_work_family_key": "thermal_insulation",
+                "properties": [{"kind": "THICKNESS", "value": "120", "unit": "mm"}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+    assert len(isolated) == 1
+
+    ambiguous = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "document_role": "Спецификация",
+                "name": "Mineral wool",
+                "material_kind": "mineral wool",
+                "associated_work_family_key": "thermal_insulation",
+                "properties": [{"kind": "THICKNESS", "value": "150", "unit": "mm"}],
+                "source_locator_id": "design-a",
+            },
+            {
+                "document_role": "Спецификация",
+                "name": "Mineral wool",
+                "material_kind": "mineral wool",
+                "associated_work_family_key": "thermal_insulation",
+                "properties": [{"kind": "THICKNESS", "value": "80", "unit": "mm"}],
+                "source_locator_id": "design-b",
+            },
+            {
+                "document_role": "ВОР",
+                "name": "Mineral wool",
+                "material_kind": "mineral wool",
+                "associated_work_family_key": "thermal_insulation",
+                "properties": [{"kind": "THICKNESS", "value": "120", "unit": "mm"}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+    assert ambiguous == []
+
+
 def test_non_work_material_resource_is_projected_into_material_schedule() -> None:
     source_context = dict([_source("material-row", "Specification R14.pdf", 3)])
     result = _work_schedule(

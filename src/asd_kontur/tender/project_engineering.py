@@ -4387,8 +4387,7 @@ def _material_comparisons(
         location_key = str(
             material.get("location_scope_id")
             or material.get("facility_id")
-            or _normalized(material.get("facility"))
-            or "project"
+            or "unresolved"
         )
         family_key = str(material.get("associated_work_family_key") or "")
         semantic_groups[(location_key, family_key, material_kind)][role].append(material)
@@ -4399,6 +4398,14 @@ def _material_comparisons(
             for commercial_role in sorted(commercial_roles.intersection(values_by_role)):
                 design_values = values_by_role[design_role]
                 commercial_values = values_by_role[commercial_role]
+                # A project-level material statement can legitimately have no
+                # resolved facility.  Compare that scope only when each side is
+                # isolated; otherwise identical material names from different
+                # unresolved structures could be merged into a false finding.
+                if location_key == "unresolved" and (
+                    len(design_values) != 1 or len(commercial_values) != 1
+                ):
+                    continue
                 design_properties = _material_property_values(design_values)
                 commercial_properties = _material_property_values(commercial_values)
                 shared_properties = sorted(
