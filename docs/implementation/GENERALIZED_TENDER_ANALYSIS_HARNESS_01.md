@@ -70,6 +70,8 @@ blind-project workspace ID was found in the audited runtime paths.
 7. Made the editable Tender report adaptive: it now emits only sections backed
    by the current project model and builds the main quantity schedule across
    all work families rather than treating sheet piling as the universal case.
+8. Added migration 0077 so immutable v9 semantic results can be persisted while
+   retaining v3-v8 compatibility; downgrade is fail-closed when v9 rows exist.
 
 ## Autonomous runtime
 

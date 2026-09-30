@@ -31,6 +31,7 @@ SPINE_WORKSPACE_TABLES = (
     "pilot_export_versions",
     "pilot_mode_result_versions",
     "pilot_result_item_decisions",
+    "project_work_reconciliation_results",
 )
 
 
