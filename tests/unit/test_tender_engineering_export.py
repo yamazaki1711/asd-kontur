@@ -181,6 +181,34 @@ def test_tender_report_omits_sections_without_project_inputs() -> None:
     assert "Риски Подрядчика" not in xml
 
 
+def test_tender_report_adapts_to_procurement_and_contract_inputs() -> None:
+    value = _model()
+    value["participants"] = [{"label": "Заказчик", "value": "АО Заказчик"}]
+    value["commercial_conditions"] = [{"label": "НМЦК", "value": "125 млн руб."}]
+    value["time_requirements"] = [{"label": "Срок договора", "value": "18 месяцев"}]
+    value["procurement_requirements"] = [
+        {"label": "Требование СРО", "value": "Членство в СРО"}
+    ]
+    value["contract_conditions"] = [
+        {"label": "Гарантийный срок", "value": "60 месяцев"}
+    ]
+
+    payload = render_engineering_tender_report_docx(value)
+
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    for expected in (
+        "Участники проекта",
+        "АО Заказчик",
+        "Коммерческие условия / цена",
+        "125 млн руб.",
+        "Сроки",
+        "Требования закупки",
+        "Договорные условия и гарантии",
+    ):
+        assert expected in xml
+
+
 def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None:
     payload = render_engineering_disagreement_protocol_docx(_model())
 

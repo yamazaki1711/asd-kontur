@@ -1561,6 +1561,16 @@ def _engineering_prompt(
         '"quantities":[{"work_name":"...","value":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}],'
         '"materials":[{"work_name":"...","name":"...","quantity":"...","unit":"...","fragment_id":"...","work_fragment_id":"..."}]}. '
         "Все шесть ключей JSON обязательны, даже если соответствующий массив пуст. "
+        "Для fields используй стабильные key, когда факт явно указан: project_name, "
+        "project_purpose, project_location, project_code, customer, developer, "
+        "technical_customer, designer, general_designer, general_contractor, contractor, "
+        "nmck, initial_contract_price, contract_price, price_basis, vat, payment_terms, "
+        "advance_payment, construction_duration, contract_duration, work_duration, start_date, "
+        "completion_date, contract_deadline, milestone, procurement_method, "
+        "participant_requirement, experience_requirement, sro_requirement, bid_security, "
+        "contract_security, warranty_period, warranty_security, acceptance_terms, "
+        "change_procedure, responsibility, termination_terms. Не переноси данные между "
+        "разными организациями, сроками или условиями и не выводи отсутствующий факт. "
         "quantity и unit материала, а также work_fragment_id, могут быть пустыми строками, "
         "если источник их не указывает или имя работы дано только вне этого пакета. "
         "Для quantity пустые work_name, value или unit означают неполное наблюдение: "

@@ -28,6 +28,7 @@ from asd_kontur.tender.project_engineering import (
     _scope_comparisons,
     _semantic_work_consensus,
     _sheet_pile_profiles,
+    _tender_context,
     _unique_values,
     build_project_engineering_model,
     classify_work_family,
@@ -42,6 +43,31 @@ from asd_kontur.tender.project_engineering import (
     professional_work_name,
     work_reconciliation_priority,
 )
+
+
+def test_tender_context_is_generic_and_keeps_source_bound_commercial_facts() -> None:
+    source_context = dict([_source("contract", "Draft contract.pdf", 4)])
+
+    context = _tender_context(
+        [
+            {"label": "customer", "value": "АО Заказчик", "source_locator_id": "contract"},
+            {"label": "contract_price", "value": "125000000 руб.", "source_locator_id": "contract"},
+            {"label": "contract_duration", "value": "18 месяцев", "source_locator_id": "contract"},
+            {"label": "warranty_period", "value": "60 месяцев", "source_locator_id": "contract"},
+            {
+                "label": "unrelated_project_fact",
+                "value": "Не входит",
+                "source_locator_id": "contract",
+            },
+        ],
+        source_context,
+    )
+
+    assert context["participants"][0]["value"] == "АО Заказчик"
+    assert context["commercial_conditions"][0]["value"] == "125000000 руб."
+    assert context["time_requirements"][0]["value"] == "18 месяцев"
+    assert context["contract_conditions"][0]["value"] == "60 месяцев"
+    assert all("Не входит" not in str(values) for values in context.values())
 
 
 def test_facility_material_schedule_consolidates_repeated_mentions_by_scope() -> None:

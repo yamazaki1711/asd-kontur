@@ -146,6 +146,31 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         body.extend(content)
         section += 1
 
+    def add_context_section(model_key: str, title: str) -> None:
+        values = [dict(value) for value in model.get(model_key) or ()]
+        if values:
+            add_section(
+                title,
+                [
+                    _simple_table(
+                        ("Показатель", "Значение"),
+                        [
+                            (
+                                str(value.get("label") or ""),
+                                str(value.get("value") or ""),
+                            )
+                            for value in values
+                        ],
+                    )
+                ],
+            )
+
+    add_context_section("participants", "Участники проекта")
+    add_context_section("commercial_conditions", "Коммерческие условия / цена")
+    add_context_section("time_requirements", "Сроки")
+    add_context_section("procurement_requirements", "Требования закупки")
+    add_context_section("contract_conditions", "Договорные условия и гарантии")
+
     facilities = list(model.get("facilities") or ())
     if facilities:
         add_section(

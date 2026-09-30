@@ -25,7 +25,7 @@ PAGE_HEALTH_PROFILE_VERSION = "page-health-v0.1"
 NATIVE_LAYOUT_PROFILE_VERSION = "native-layout-v0.1"
 OCR_ROUTING_PROFILE_VERSION = "ocr-routing-v0.1"
 CLASSIFICATION_PROFILE_VERSION = "document-page-role-v0.1"
-PROJECT_EXTRACTION_PROFILE_VERSION = "project-definition-extraction-v0.1"
+PROJECT_EXTRACTION_PROFILE_VERSION = "project-definition-extraction-v0.2"
 WORK_EXTRACTION_PROFILE_VERSION = "work-quantity-material-extraction-v0.1"
 
 

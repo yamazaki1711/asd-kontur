@@ -747,6 +747,7 @@ def build_project_engineering_model(
     """Return the project-first model consumed by UI, report and assistant."""
 
     project = _project_overview(project_definition, candidates.get("project_fields", ()))
+    tender_context = _tender_context(candidates.get("project_fields", ()), source_context)
     facilities, node_to_facility = _facilities(
         workspace_id,
         structure_nodes,
@@ -839,6 +840,11 @@ def build_project_engineering_model(
     model = {
         "model_version": PROJECT_ENGINEERING_MODEL_VERSION,
         "project": project,
+        "participants": tender_context["participants"],
+        "commercial_conditions": tender_context["commercial_conditions"],
+        "time_requirements": tender_context["time_requirements"],
+        "procurement_requirements": tender_context["procurement_requirements"],
+        "contract_conditions": tender_context["contract_conditions"],
         "facilities": facilities,
         "facility_cards": facility_cards,
         "pits": pits,
@@ -907,6 +913,95 @@ def build_project_engineering_model(
     }
     model["model_fingerprint"] = semantic_digest(model)
     return model
+
+
+_TENDER_CONTEXT_FIELDS: dict[str, dict[str, str]] = {
+    "participants": {
+        "customer": "Заказчик",
+        "client": "Заказчик",
+        "developer": "Застройщик",
+        "technical_customer": "Технический заказчик",
+        "designer": "Проектировщик",
+        "general_designer": "Генеральный проектировщик",
+        "general_contractor": "Генеральный подрядчик",
+        "contractor": "Подрядчик",
+    },
+    "commercial_conditions": {
+        "nmck": "НМЦК",
+        "initial_contract_price": "Начальная цена",
+        "contract_price": "Цена договора",
+        "price_basis": "Основание цены",
+        "vat": "НДС",
+        "payment_terms": "Условия оплаты",
+        "advance_payment": "Аванс",
+    },
+    "time_requirements": {
+        "construction_duration": "Продолжительность строительства",
+        "contract_duration": "Срок договора",
+        "work_duration": "Срок выполнения работ",
+        "start_date": "Начало работ",
+        "completion_date": "Окончание работ",
+        "contract_deadline": "Срок исполнения договора",
+        "milestone": "Этап / контрольный срок",
+    },
+    "procurement_requirements": {
+        "procurement_method": "Способ закупки",
+        "participant_requirement": "Требование к участнику",
+        "experience_requirement": "Требование к опыту",
+        "sro_requirement": "Требование СРО",
+        "bid_security": "Обеспечение заявки",
+        "contract_security": "Обеспечение исполнения договора",
+    },
+    "contract_conditions": {
+        "warranty_period": "Гарантийный срок",
+        "warranty_security": "Обеспечение гарантии",
+        "acceptance_terms": "Условия приёмки",
+        "change_procedure": "Порядок изменения объёма",
+        "responsibility": "Ответственность сторон",
+        "termination_terms": "Условия расторжения",
+    },
+}
+
+
+def _tender_context(
+    project_fields: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Project commercial context derived only from explicit typed fields."""
+
+    result: dict[str, list[dict[str, Any]]] = {
+        section: [] for section in _TENDER_CONTEXT_FIELDS
+    }
+    seen: set[tuple[str, str, str]] = set()
+    for raw in project_fields:
+        row = dict(raw)
+        key = _normalized(row.get("label") or row.get("key")).replace(" ", "_")
+        value = str(row.get("value") or "").strip()
+        locator_id = str(row.get("source_locator_id") or "")
+        if not key or not value:
+            continue
+        for section, fields in _TENDER_CONTEXT_FIELDS.items():
+            label = fields.get(key)
+            if label is None:
+                continue
+            identity = (section, key, _normalized(value))
+            if identity in seen:
+                break
+            seen.add(identity)
+            locator_ids = [locator_id] if locator_id else []
+            result[section].append(
+                {
+                    "field": key,
+                    "label": label,
+                    "value": value,
+                    "source_locator_ids": locator_ids,
+                    "sources": _source_refs(locator_ids, source_context),
+                }
+            )
+            break
+    for values in result.values():
+        values.sort(key=lambda item: (str(item["label"]), str(item["value"])))
+    return result
 
 
 def facility_designation(value: object) -> str | None:
