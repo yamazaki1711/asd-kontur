@@ -4268,17 +4268,21 @@ def _material_comparisons(
                 ("frost", "морозостойкость"),
                 ("water", "водонепроницаемость"),
             ):
-                design_values = {
+                property_design_values = {
                     int(spec[f"{property_key}_value"])
                     for _role, spec in design
                     if spec.get(f"{property_key}_value") is not None
                 }
-                commercial_values = {
+                property_commercial_values = {
                     int(spec[f"{property_key}_value"])
                     for _role, spec in commercial
                     if spec.get(f"{property_key}_value") is not None
                 }
-                if not design_values or not commercial_values or design_values == commercial_values:
+                if (
+                    not property_design_values
+                    or not property_commercial_values
+                    or property_design_values == property_commercial_values
+                ):
                     continue
                 differences.append(
                     {
