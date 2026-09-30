@@ -46,6 +46,7 @@ The semantic harness nevertheless remained shallow and corpus-shaped:
 | Explicit pit association limited to KNS/LOS | Corpus-specific restriction | Generalized to an explicit named/code facility followed by a designation number; semantic pit decisions remain available for other forms. |
 | Always-visible pit and sheet-pile Tender panels | Corpus-shaped UI behavior | Made conditional on the current project model. Projects without pits or sheet piling now lead with their actual facilities, structures, works, quantities, and materials. |
 | Construction work family vocabulary | General construction rule | Retained. Unknown concepts remain unclassified rather than forced. |
+| OZERO quantities, profiles and facility labels in assistant/project-model tests | General algorithms with project-derived cases | Retained only in isolated tests of structured-fact preservation and display. A runtime-code scan found none of these exact values, workspace IDs or project titles in `src`, `frontend` or migrations. Independent bridge, pipeline and reservoir cases exercise the mechanisms with changed terminology and values. |
 
 No production rule containing the destroyed OZERO workspace ID or the active
 blind-project workspace ID was found in the audited runtime paths.
@@ -124,6 +125,14 @@ Controlled service restart tests and a later blind snapshot are still required
 before this record can set `AutonomousProjectProcessing=true` for the completed
 release candidate.
 
+At 2026-09-30 13:12 +12:00, the same supervised runtime had reached 106
+successful work-reconciliation jobs and was continuing a 54-batch semantic
+project-definition job (27 accepted batches) through the persistent Qwen
+service. One lease left by an earlier worker restart remained expired and was
+available to the existing recovery path; it was not edited or retried by a
+developer command. This is progression evidence, not yet final Codex-absent
+acceptance for the v10 release.
+
 ## General quantity acceptance
 
 Parameterized controlled cases cover different terminology and measures:
@@ -162,6 +171,26 @@ The initial autonomous run eliminated the previous zero-claimable queue gap and
 fed multiple work-reconciliation jobs to the already-loaded Qwen service. Exact
 time-to-first-summary, queue idle gaps, per-task durations, retries, and
 time-to-first-finding remain to be captured from the current candidate release.
+
+## Migration and verification checkpoint
+
+Migration 0078 was tested against a separately restored physical backup before
+the public database was upgraded. The backup is
+`pre-0078-cross-document-20260930T1310/public-before-0078.dump` with SHA-256
+`700e691a1acfddc402ce4a98acd84857c84f9d1ba2627a1e503c85005004b398`.
+The explicit downgrade/upgrade integration gate passed on database
+`asd_kontur_restore_0078_20260930`. The platform-memory fingerprint was exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`
+in both the public source and restored candidate, and remained identical after
+the public migration.
+
+Focused backend verification passed 278 tests across batching, semantic
+validation, project modeling, findings and exports. The broader local run
+passed 997 tests with 109 skipped; its sole reported failure was the deliberate
+full-migration guard when `ASD_TEST_DATABASE_URL` was omitted, while that same
+test passed separately with the restored database URL. Frontend typecheck,
+lint, formatting, five component tests, dependency audit and production build
+passed. Exact-SHA CI remains a separate release gate.
 
 ## Remaining implementation work
 
