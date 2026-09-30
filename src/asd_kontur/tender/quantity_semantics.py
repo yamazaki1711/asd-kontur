@@ -194,8 +194,7 @@ def _component_scope_is_compatible(
             return False
     total_qualifiers = set(total.scope_qualifiers)
     if total_qualifiers and any(
-        component.scope_qualifiers
-        and total_qualifiers.isdisjoint(component.scope_qualifiers)
+        component.scope_qualifiers and total_qualifiers.isdisjoint(component.scope_qualifiers)
         for component in components
     ):
         return False

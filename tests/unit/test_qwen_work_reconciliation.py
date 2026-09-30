@@ -188,12 +188,8 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
         facilities=[],
     )
 
-    reviews = [
-        observation["quantity_reviews"][0] for observation in result["observations"]
-    ]
-    assert {review["semantic_scope"] for review in reviews} == {
-        "Площадь обмазочной гидроизоляции"
-    }
+    reviews = [observation["quantity_reviews"][0] for observation in result["observations"]]
+    assert {review["semantic_scope"] for review in reviews} == {"Площадь обмазочной гидроизоляции"}
     assert {review["scope_compatibility"] for review in reviews} == {"SAME_SCOPE"}
 
 

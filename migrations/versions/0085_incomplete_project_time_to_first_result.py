@@ -67,7 +67,9 @@ def upgrade() -> None:
     )
     if not isinstance(definition, str) or _INITIAL_PROJECT_PRIORITY not in definition:
         raise RuntimeError("0084 claim priority definition unavailable")
-    connection.execute(sa.text(definition.replace(_INITIAL_PROJECT_PRIORITY, _INCOMPLETE_PROJECT_PRIORITY)))
+    connection.execute(
+        sa.text(definition.replace(_INITIAL_PROJECT_PRIORITY, _INCOMPLETE_PROJECT_PRIORITY))
+    )
 
 
 def downgrade() -> None:

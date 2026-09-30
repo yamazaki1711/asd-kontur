@@ -523,9 +523,7 @@ def _parse_quantity_reviews(
                         "qwen_work_reconciliation_component_completeness_invalid"
                     )
             elif component_set_complete is not None:
-                raise QwenSemanticFailure(
-                    "qwen_work_reconciliation_component_completeness_invalid"
-                )
+                raise QwenSemanticFailure("qwen_work_reconciliation_component_completeness_invalid")
         related_ids = tuple(str(item) for item in related)
         if (
             len(set(related_ids)) != len(related_ids)

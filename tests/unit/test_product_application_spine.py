@@ -207,7 +207,7 @@ def test_quantity_review_chunks_schedule_relationship_pass_before_completion() -
                 "status": "WORK_QUANTITY",
             }
             for index in range(8)
-        ]
+        ],
     }
 
     remaining = _quantities_requiring_semantic_review(quantities, first_result)
@@ -243,7 +243,7 @@ def test_legacy_component_relationship_is_requeued_for_completeness_review() -> 
                 "relation_kind": "COMPONENT_OF",
                 "relationship_reviewed": True,
             },
-        ]
+        ],
     }
 
     remaining = _quantities_requiring_semantic_review(quantities, prior)
