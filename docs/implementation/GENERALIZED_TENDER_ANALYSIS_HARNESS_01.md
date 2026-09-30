@@ -105,6 +105,15 @@ blind-project workspace ID was found in the audited runtime paths.
     unreachable even when compatible design and commercial rows existed.
 15. Added migration 0078 for immutable v10 results while retaining v3-v9 read
     compatibility. Downgrade remains fail-closed if v10 results exist.
+16. Corrected progressive profile selection after live observation showed the
+    user model dropping from 341 work scopes / 185 material rows to 241 / 124
+    while a newer semantic profile was only partly processed. Accepted batches
+    remain visible for a source with no completed profile, but a profile upgrade
+    now keeps serving the last terminal source result until the replacement
+    stage is terminal. Against the same live durable state, the corrected read
+    path retained 348 work scopes and 235 material rows instead of exposing the
+    partial replacement. This changes read selection only; no candidate or
+    immutable result is overwritten.
 
 ## Autonomous runtime
 

@@ -136,6 +136,14 @@ to current capability. Report regeneration reads the same versioned model, so
 new accepted analysis improves the application without reprocessing unrelated
 documents.
 
+Accepted semantic batches may populate a source progressively when it has no
+completed semantic profile. During a profile upgrade, however, the application
+continues serving the last terminal profile until the replacement stage itself
+is terminal. A partially processed new profile must not replace a complete
+older source model and make established project schedules disappear mid-run.
+The terminal switch remains versioned and may legitimately remove prior false
+positives; the prior immutable result remains available in history.
+
 ## Project-independent guarantees
 
 - No project identifier, filename, facility, quantity, or expected answer is a
