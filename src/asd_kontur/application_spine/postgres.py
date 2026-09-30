@@ -78,7 +78,7 @@ from .models import (
 from .object_store import StagedObject, WorkspaceObjectStore
 
 OWNER_ORGANIZATION_NAMESPACE = UUID("a57c6d8e-f982-4ec3-8c0f-96d35debd0be")
-ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v15"
+ENGINEERING_SEMANTIC_PROFILE_VERSION = "qwen-engineering-extraction-v16"
 # Model output remains v15-compatible; this version records how accepted
 # manifests are assembled into durable candidates.  It is intentionally
 # independent so relationship-loss repairs can reuse accepted Qwen output

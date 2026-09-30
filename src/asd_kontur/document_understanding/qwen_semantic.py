@@ -41,13 +41,13 @@ from .models import (
 from .semantic import StructuredCandidates, normalize_unit
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v1"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v15"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v16"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
 _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
-# v14 adds a required relationship collection.  Prior batch manifests did not ask
-# the model to inspect or report those observations, so treating them as compatible
-# would silently turn missing relationship coverage into an accepted empty result.
+# v16 adds stable participant, commercial, schedule, procurement, and contract field
+# meanings. Prior batch manifests did not ask the model for that project context, so
+# treating them as compatible would silently convert missing analysis into empty facts.
 _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES: tuple[str, ...] = ()
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
