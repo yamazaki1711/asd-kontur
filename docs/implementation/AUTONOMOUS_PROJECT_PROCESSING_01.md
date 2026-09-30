@@ -126,15 +126,20 @@ a project answer.
 
 ## 9. Acceptance evidence
 
-Pending controlled activation of migration
-`0076_autonomous_project_orchestration`, supervised-service installation and
-the real Codex-absent observation. Acceptance requires multiple real jobs and
-model calls, successor creation, project-model change and Tender refresh with
-no manual runtime progression command.
+The final candidate is supervised under launchd with migration
+`0078_cross_document_scope_reconciliation`. During the final read-only
+observation, no manual refill, retry, successor, reconciliation or SQL write was
+issued. The real incomplete workspace increased from 473 to 477 succeeded
+jobs. A project-definition job completed after the controlled Qwen restart,
+the orchestrator published downstream model jobs, and the worker automatically
+claimed the next project-definition job. That successor reached two of five
+accepted semantic batches and maintained a current lease and heartbeat.
 
-Restart checks required: document worker, orchestrator, Qwen and API. Supported
-Mac sleep/wake behavior must be reported from an actual observation; it is not
-inferred from launchd configuration.
+Worker restart recovered an expired lease without repeating accepted output;
+orchestrator restart reconstructed eligible work; API restart did not stop
+background processing; and Qwen restart was performed at a zero-running-job
+boundary before the worker automatically resumed semantic processing. Mac
+sleep/wake was not tested and is not claimed.
 
 ## 10. Performance and remaining risks
 
@@ -143,12 +148,17 @@ safety bound is one 30-second sweep plus normal claim latency. Actual Qwen idle
 gap, request duration, retry rate and semantic-to-project-model latency will be
 measured during the real autonomous run.
 
-Known limitations before acceptance:
+Known limitations after acceptance:
 
-- launchd activation and real-project observation are not yet recorded;
 - cancellation/unsupported/invalid-locator roots intentionally remain partial
   blockers unless a separate supported recovery strategy applies;
-- user-facing high-level project status still needs to consume the durable
-  state without exposing the internal queue;
+- the Qwen server health route is single-threaded and does not answer while a
+  long generation occupies the request loop, although process, connection,
+  worker heartbeat and accepted-batch evidence remain available;
+- the current project model is still semantically shallow and incomplete;
 - machine reboot resilience is not claimed; the supported boundary is the
   per-user launchd session until separately tested.
+
+Final operational status for this release:
+`AutonomousProjectProcessing=true`. This does not imply
+`GeneralizedTenderHarness=true` or `ProductReady=true`.

@@ -161,9 +161,20 @@ project.
 ## Blind-project and unseen-corpus status
 
 The active real project remains a blind validation corpus. No owner-known
-finding has been added to prompts, fixtures, catalogs, or runtime data. A durable
-blind Tender snapshot and its fingerprint have not yet been produced for this
-checkpoint.
+finding has been added to prompts, fixtures, catalogs, or runtime data. The
+durable snapshot captured at 2026-09-30 15:07 +12:00 is stored outside Git at
+`~/.asd-kontur/qualification/generalized-tender-20260930/01a0eba7-70ba-7770-9601-1a713dd359cf/`.
+Its model SHA-256 is
+`bd5d15383f37baeda54654f4ce320c8cd5a03928861b4fd72f1eeb1abf6c7679`;
+the editable report SHA-256 is
+`1f0817bedd1323f403ab6d7387f30ded20486653704aad6e06ca806f39716364`;
+and the analysis archive SHA-256 is
+`7ab214c0ede52d719fbf2e1b2e80435f3a0f04bff14114597a0ebfd4bc14553d`.
+The snapshot identifies the retaining-wall capital-repair project, six current
+facility/structure groups, 179 consolidated works, 142 materials, 18
+participants and six commercial conditions. It has no defensible quantity
+comparison or professional finding yet, so the report remains explicitly
+partial.
 
 An independent controlled bridge corpus now runs through the unchanged shared
 project-model path. It uses a bridge facility, bored-pile work, different
@@ -201,14 +212,44 @@ test passed separately with the restored database URL. Frontend typecheck,
 lint, formatting, five component tests, dependency audit and production build
 passed. Exact-SHA CI remains a separate release gate.
 
+## Final release verification
+
+Release `3cdfd0669c779432a08309d7f6c1e1f2c17ef3d0` and migration
+`0078_cross_document_scope_reconciliation` are active for API, worker,
+assistant worker and project orchestrator. Exact-SHA CI run 36657643792 passed.
+After a controlled Qwen restart, project-definition job
+`01a0efc7-4194-7802-8f93-be1635fd787b` completed and the supervised services
+automatically claimed successor `01a0efc7-4196-7422-9991-14c001a1fbb5`.
+Without a manual retry, refill, successor or reconciliation command, succeeded
+jobs rose from 473 to 477 and the successor reached two of five accepted
+semantic batches while continuing to heartbeat. API, worker, orchestrator and
+Qwen restart recovery are therefore demonstrated for the active real project.
+Mac sleep/wake was not tested.
+
+The Qwen service uses an older launchd release label, but its loaded
+`qwen_server.py` is byte-identical to the candidate implementation
+(`sha256:4c0b429e63fd6daddc0c9517b62802f7a7b4c21cba6c437cca67ab9cd7346d30`).
+Its single-threaded health endpoint cannot answer while a long generation owns
+the request loop; process/connection/heartbeat evidence distinguishes that
+observable condition from service death. This remains an operational
+observability limitation.
+
+The independent bridge corpus and parameterized quantity tests prove the
+shared mechanisms across different names, work types, units and values without
+a code change. They do not execute a second complete live Qwen project, so the
+full unseen-project acceptance remains open.
+
 ## Remaining implementation work
 
 - persist and schedule the remaining generalized semantic tasks beyond work and
   quantity reconciliation;
-- complete restart acceptance for worker, orchestrator, Qwen, and API;
-- run the blind real project to a fingerprinted preliminary report;
-- run the independent unseen controlled corpus without code changes;
-- deploy the unified candidate, run browser acceptance, and obtain exact-SHA CI.
+- complete a live autonomous unseen-project run without code changes;
+- improve project entity consolidation and produce defensible quantity,
+  comparison and finding results for the blind project;
+- make Qwen health/availability observable while its one heavy request is in
+  progress;
+- run signed-in visual browser acceptance when an in-app browser session is
+  available, and test the supported Mac sleep/wake boundary.
 
 Current status: `GeneralizedTenderHarness=false`,
-`AutonomousProjectProcessing=false`, `ProductReady=false`.
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
