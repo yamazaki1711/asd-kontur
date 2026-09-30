@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v16"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v17"
 
 
 def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
@@ -475,6 +475,105 @@ def test_qwen_work_reconciliation_allows_explicit_cross_row_quantity_relation(
 
     total_review = result["observations"][0]["quantity_reviews"][0]
     assert total_review["related_quantity_candidate_ids"] == ["quantity-section"]
+
+
+def test_quantity_relationship_prompt_makes_same_row_peer_identities_explicit(
+    monkeypatch: Any,
+) -> None:
+    quantity_ids = ("quantity-total", "quantity-north", "quantity-south")
+    rows = [
+        {
+            "candidate_id": "candidate-waterproofing",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Устройство мембранной гидроизоляции",
+            "deterministic_family_hint": "waterproofing",
+            "nearby_context": ("Северная зона 510 м2. Южная зона 290 м2. Общая площадь 835 м2."),
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_ids[0], "value": "835", "unit": "м2"},
+                {"quantity_candidate_id": quantity_ids[1], "value": "510", "unit": "м2"},
+                {"quantity_candidate_id": quantity_ids[2], "value": "290", "unit": "м2"},
+            ],
+        }
+    ]
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        payload = prompt.split("Структурированная задача: ", 1)[1].split("\n\n", 1)[0]
+        task = json.loads(payload)
+        assert task["context"]["all_quantity_candidate_ids"] == list(quantity_ids)
+        safe_row = task["context"]["rows"][0]
+        assert safe_row["available_quantity_candidate_ids"] == list(quantity_ids)
+        assert safe_row["quantity_observations"][0]["peer_quantity_candidate_ids"] == [
+            "quantity-north",
+            "quantity-south",
+        ]
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-waterproofing",
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Устройство мембранной гидроизоляции",
+                        "facility": None,
+                        "confidence": "0.96",
+                        "reason": "Общий объём и обе зоны указаны явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общая площадь гидроизоляции",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": [
+                                    "quantity-north",
+                                    "quantity-south",
+                                ],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": True,
+                                "reason": "Текст обозначает значение общим итогом двух зон.",
+                            },
+                            {
+                                "quantity_candidate_id": "quantity-north",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь гидроизоляции северной зоны",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": None,
+                                "reason": "Северная зона является частью общего итога.",
+                            },
+                            {
+                                "quantity_candidate_id": "quantity-south",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь гидроизоляции южной зоны",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": None,
+                                "reason": "Южная зона является частью общего итога.",
+                            },
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    total = result["observations"][0]["quantity_reviews"][0]
+    assert total["related_quantity_candidate_ids"] == [
+        "quantity-north",
+        "quantity-south",
+    ]
 
 
 def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> None:

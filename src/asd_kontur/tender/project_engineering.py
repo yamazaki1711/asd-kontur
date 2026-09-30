@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v55"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v56"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -43,6 +43,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v14",
         "qwen-project-work-reconciliation-v15",
         "qwen-project-work-reconciliation-v16",
+        "qwen-project-work-reconciliation-v17",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(

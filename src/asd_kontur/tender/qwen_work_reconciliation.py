@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v16"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v17"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -31,6 +31,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v13",
     "qwen-project-work-reconciliation-v14",
     "qwen-project-work-reconciliation-v15",
+    "qwen-project-work-reconciliation-v16",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@14.0.0"
@@ -267,6 +268,12 @@ def _prompt(
     *,
     relationship_review: bool,
 ) -> str:
+    all_quantity_candidate_ids = [
+        str(value.get("quantity_candidate_id") or "")
+        for row in rows
+        for value in row.get("quantity_observations") or ()
+        if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+    ]
     safe_rows = [
         {
             "candidate_id": str(row["candidate_id"]),
@@ -279,6 +286,11 @@ def _prompt(
             "deterministic_family_hint": row.get("deterministic_family_hint"),
             "nearby_context": str(row.get("nearby_context") or ""),
             "nearby_context_locator_ids": list(row.get("nearby_context_locator_ids") or ()),
+            "available_quantity_candidate_ids": [
+                str(value.get("quantity_candidate_id") or "")
+                for value in row.get("quantity_observations") or ()
+                if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+            ],
             "quantity_observations": [
                 {
                     "quantity_candidate_id": str(value.get("quantity_candidate_id") or ""),
@@ -289,6 +301,11 @@ def _prompt(
                     "prior_semantic_scope": value.get("prior_semantic_scope"),
                     "prior_quantity_type": value.get("prior_quantity_type"),
                     "prior_status": value.get("prior_status"),
+                    "peer_quantity_candidate_ids": [
+                        candidate_id
+                        for candidate_id in all_quantity_candidate_ids
+                        if candidate_id != str(value.get("quantity_candidate_id") or "")
+                    ],
                 }
                 for value in row.get("quantity_observations") or ()
                 if isinstance(value, Mapping)
@@ -308,6 +325,7 @@ def _prompt(
                 "work_families": dict(work_families),
                 "facilities": facilities,
                 "rows": safe_rows,
+                "all_quantity_candidate_ids": all_quantity_candidate_ids,
             },
         ),
         max_chars=50_000,
@@ -352,6 +370,11 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
 из близости чисел.
+Все доступные для этого прохода идентификаторы перечислены в all_quantity_candidate_ids,
+available_quantity_candidate_ids и peer_quantity_candidate_ids. Если нужный связанный идентификатор
+есть в этих полях, используйте его; нельзя утверждать, что идентификатор не передан. Если контекст
+явно называет значение итогом, а другие переданные значения — его составляющими, отразите связь
+TOTAL_FOR/COMPONENT_OF, не выполняя арифметику самостоятельно.
 Для TOTAL_FOR обязательно укажите component_set_complete=true только если переданные связанные
 quantity_candidate_id перечисляют ВСЕ составляющие итога. Если передана лишь часть состава,
 пропущена вычисляемая/упомянутая составляющая либо полнота неизвестна, укажите false. Во всех
