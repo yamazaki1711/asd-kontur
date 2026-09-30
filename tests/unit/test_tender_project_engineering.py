@@ -728,6 +728,85 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
     ]
 
 
+def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-total",
+                "facility_id": "facility-a",
+                "facility": "Мостовой переход",
+                "work_name": "Общая длина трубопровода",
+                "quantities_by_document": {
+                    "РД": [
+                        {
+                            "quantity_candidate_id": "total",
+                            "value": "150",
+                            "unit": "м",
+                            "semantic_scope": "Общая длина трубопровода",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "TOTAL_FOR",
+                            "related_quantity_candidate_ids": ["section-a", "section-b"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-total",
+                        }
+                    ]
+                },
+            },
+            {
+                "work_scope_id": "scope-a",
+                "facility_id": "facility-a",
+                "facility": "Мостовой переход",
+                "work_name": "Участок трубопровода А",
+                "quantities_by_document": {
+                    "РД": [
+                        {
+                            "quantity_candidate_id": "section-a",
+                            "value": "120",
+                            "unit": "м",
+                            "semantic_scope": "Длина участка А",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-a",
+                        }
+                    ]
+                },
+            },
+            {
+                "work_scope_id": "scope-b",
+                "facility_id": "facility-a",
+                "facility": "Мостовой переход",
+                "work_name": "Участок трубопровода Б",
+                "quantities_by_document": {
+                    "РД": [
+                        {
+                            "quantity_candidate_id": "section-b",
+                            "value": "80",
+                            "unit": "м",
+                            "semantic_scope": "Длина участка Б",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "source_locator_id": "locator-b",
+                        }
+                    ]
+                },
+            },
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "COMPONENT_TOTAL_MISMATCH"
+    assert comparisons[0]["difference"] == "-50"
+    assert comparisons[0]["source_locator_ids"] == [
+        "locator-a",
+        "locator-b",
+        "locator-total",
+    ]
+
+
 def test_material_schedule_normalizes_unit_but_keeps_source_spelling() -> None:
     values = _unique_values(
         [

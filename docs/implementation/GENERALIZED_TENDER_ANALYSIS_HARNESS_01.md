@@ -77,6 +77,10 @@ blind-project workspace ID was found in the audited runtime paths.
    project-participant, commercial, schedule, procurement, and contract field
    keys. The shared model and adaptive report expose those sections only when
    the uploaded package supplies them.
+10. Extended quantity relationship analysis across separate work/schedule rows
+    in the same bounded Qwen batch. The model may identify the semantic graph;
+    deterministic code still rejects invented identities, cross-role or
+    cross-facility arithmetic, incompatible units, and conflicting revisions.
 
 ## Autonomous runtime
 
@@ -106,9 +110,12 @@ Parameterized controlled cases cover different terminology and measures:
 - pipeline length: `120 + 80` against stated `150 m`.
 
 The same deterministic implementation reports the arithmetic difference only
-after an explicit `COMPONENT_VS_TOTAL` relationship. Incompatible units,
-different facilities, or an `INCOMPARABLE_TO` decision produce no numeric
-finding. These are mechanism tests, not expected values for a real project.
+after an explicit `COMPONENT_VS_TOTAL` relationship. The relationship may join
+separate schedule rows; incompatible units, different facilities, different
+document roles, or an `INCOMPARABLE_TO` decision produce no numeric finding.
+An invented cross-row identity is rejected and the source value remains visible
+as unresolved. These are mechanism tests, not expected values for a real
+project.
 
 ## Blind-project and unseen-corpus status
 

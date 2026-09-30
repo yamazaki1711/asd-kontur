@@ -226,6 +226,144 @@ def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(
     ]
 
 
+def test_qwen_work_reconciliation_allows_explicit_cross_row_quantity_relation(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": "candidate-total",
+            "wording": "Общая длина трубопровода",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-total", "value": "150", "unit": "м"}
+            ],
+        },
+        {
+            "candidate_id": "candidate-section",
+            "wording": "Длина участка А",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-section", "value": "120", "unit": "м"}
+            ],
+        },
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "pipeline_installation",
+                        "operation": "Общая длина трубопровода",
+                        "facility": "Переход А",
+                        "confidence": "0.92",
+                        "reason": "Итог и сооружение указаны явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общая длина трубопровода",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": ["quantity-section"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "reason": "Таблица обозначает значение как общий итог.",
+                            }
+                        ],
+                    },
+                    {
+                        "candidate_id": "candidate-section",
+                        "status": "MATCHED",
+                        "family_key": "pipeline_installation",
+                        "operation": "Монтаж участка трубопровода",
+                        "facility": "Переход А",
+                        "confidence": "0.91",
+                        "reason": "Участок и сооружение указаны явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-section",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина участка А",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "reason": "Строка является частью общего итога.",
+                            }
+                        ],
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"pipeline_installation": "Монтаж трубопроводов"},
+        facilities=["Переход А"],
+    )
+
+    total_review = result["observations"][0]["quantity_reviews"][0]
+    assert total_review["related_quantity_candidate_ids"] == ["quantity-section"]
+
+
+def test_qwen_work_reconciliation_rejects_invented_cross_row_quantity_identity(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setattr(
+        "asd_kontur.tender.qwen_work_reconciliation._complete",
+        lambda *_args, **_kwargs: json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "pipeline_installation",
+                        "operation": "Общая длина трубопровода",
+                        "facility": None,
+                        "confidence": "0.9",
+                        "reason": "Общий итог указан явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общая длина трубопровода",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": ["invented-quantity"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "reason": "Связь заявлена моделью.",
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        ),
+    )
+
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "candidate-total",
+                "wording": "Общая длина трубопровода",
+                "quantity_observations": [
+                    {"quantity_candidate_id": "quantity-total", "value": "150", "unit": "м"}
+                ],
+            }
+        ],
+        work_families={"pipeline_installation": "Монтаж трубопроводов"},
+        facilities=[],
+    )
+
+    assert result["observations"][0]["status"] == "UNCLASSIFIED"
+    assert result["observations"][0]["quantity_reviews"][0]["relation_kind"] == "NONE"
+    assert result["observations"][0]["quantity_reviews"][0]["related_quantity_candidate_ids"] == []
+    assert "qwen_work_reconciliation_quantity_output_invalid" in result["recovery_codes"]
+
+
 def test_qwen_work_reconciliation_preserves_input_when_model_invents_identity(
     monkeypatch: Any,
 ) -> None:

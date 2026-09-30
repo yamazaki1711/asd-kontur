@@ -82,8 +82,11 @@ revision. Supported semantic relationships are `COMPONENT_OF`, `SUBTOTAL_OF`,
 
 Qwen may establish the semantic relationship from bounded text. Deterministic
 code validates that all referenced identities exist, the subject is not its own
-component, units match, entities do not conflict, and only then performs
-arithmetic. Numeric similarity never creates a relationship.
+component, units and document roles match, entities and revisions do not
+conflict, and only then performs arithmetic. A relationship may connect
+separate schedule rows from the same bounded semantic batch, because project
+totals and their components are commonly printed on different rows. Numeric
+similarity never creates a relationship.
 
 Scope compatibility is explicit: `SAME_SCOPE`, `OVERLAPPING_SCOPE`,
 `COMPONENT_VS_TOTAL`, `DIFFERENT_SCOPE`, `ALTERNATIVE_DESIGN`,
@@ -130,4 +133,3 @@ documents.
 - The same unchanged code must pass a controlled corpus with different names,
   structures, works, documents, values, and units before the harness can be
   declared generalized.
-

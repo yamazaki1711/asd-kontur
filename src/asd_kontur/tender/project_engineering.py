@@ -3075,33 +3075,28 @@ def _validated_scope_quantity_comparisons(
 def _component_total_comparisons(
     works: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Verify only explicit Qwen scope relationships with deterministic arithmetic."""
+    """Verify explicit total/component graphs, including separate schedule rows."""
 
-    result: list[dict[str, Any]] = []
+    records: dict[str, dict[str, Any]] = {}
+    relationships: dict[tuple[str, str, tuple[str, ...]], QuantityRelationship] = {}
     for raw_work in works:
         work = dict(raw_work)
         for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
             values = [dict(value) for value in raw_values or () if isinstance(value, Mapping)]
-            statements: list[QuantityStatement] = []
-            relationships: list[QuantityRelationship] = []
-            by_id = {
-                str(value.get("quantity_candidate_id") or ""): value
-                for value in values
-                if value.get("quantity_candidate_id")
-            }
-            for candidate_id, value in by_id.items():
+            for value in values:
+                candidate_id = str(value.get("quantity_candidate_id") or "")
+                if not candidate_id:
+                    continue
                 try:
-                    statements.append(
-                        QuantityStatement(
-                            statement_id=candidate_id,
-                            value=Decimal(str(value.get("value"))),
-                            unit=str(value.get("unit") or ""),
-                            semantic_scope=str(value.get("semantic_scope") or ""),
-                            quantity_type=QuantityType(str(value.get("quantity_type") or "")),
-                            project_entity=str(work.get("facility_id") or "") or None,
-                            work=str(work.get("work_scope_id") or "") or None,
-                            source_role=str(role),
-                        )
+                    statement = QuantityStatement(
+                        statement_id=candidate_id,
+                        value=Decimal(str(value.get("value"))),
+                        unit=str(value.get("unit") or ""),
+                        semantic_scope=str(value.get("semantic_scope") or ""),
+                        quantity_type=QuantityType(str(value.get("quantity_type") or "")),
+                        project_entity=str(work.get("facility_id") or "") or None,
+                        source_role=str(role),
+                        revision=str(value.get("revision") or "") or None,
                     )
                     relation = QuantityRelation(str(value.get("relation_kind") or "NONE"))
                     compatibility = ScopeCompatibility(
@@ -3109,74 +3104,84 @@ def _component_total_comparisons(
                     )
                 except (InvalidOperation, TypeError, ValueError):
                     continue
+                records.setdefault(
+                    candidate_id,
+                    {"statement": statement, "value": value, "work": work, "role": str(role)},
+                )
                 related = tuple(
                     str(item) for item in value.get("related_quantity_candidate_ids") or ()
                 )
                 if relation is not QuantityRelation.NONE and related:
-                    relationships.append(
-                        QuantityRelationship(
-                            subject_id=candidate_id,
-                            relation=relation,
-                            object_ids=related,
-                            compatibility=compatibility,
-                        )
+                    relationship = QuantityRelationship(
+                        subject_id=candidate_id,
+                        relation=relation,
+                        object_ids=related,
+                        compatibility=compatibility,
                     )
-            for relationship in relationships:
-                checked = evaluate_component_total(statements, relationship)
-                if checked is None:
-                    continue
-                locator_ids = sorted(
+                    relationships[(candidate_id, relation.value, related)] = relationship
+    statements = [dict(record)["statement"] for record in records.values()]
+    result: list[dict[str, Any]] = []
+    for relationship in relationships.values():
+        checked = evaluate_component_total(statements, relationship)
+        total_record = records.get(relationship.subject_id)
+        if checked is None or total_record is None:
+            continue
+        work = dict(total_record["work"])
+        role = str(total_record["role"])
+        locator_ids = sorted(
+            {
+                str(records[candidate_id]["value"].get("source_locator_id") or "")
+                for candidate_id in (checked.total_id, *checked.component_ids)
+                if candidate_id in records
+                and records[candidate_id]["value"].get("source_locator_id")
+            }
+        )
+        result.append(
+            {
+                "comparison_id": semantic_digest(
                     {
-                        str(by_id[candidate_id].get("source_locator_id") or "")
-                        for candidate_id in (checked.total_id, *checked.component_ids)
-                        if candidate_id in by_id and by_id[candidate_id].get("source_locator_id")
+                        "work_scope_id": work.get("work_scope_id"),
+                        "role": role,
+                        "total_id": checked.total_id,
+                        "component_ids": checked.component_ids,
                     }
-                )
-                result.append(
-                    {
-                        "comparison_id": semantic_digest(
-                            {
-                                "work_scope_id": work.get("work_scope_id"),
-                                "role": role,
-                                "total_id": checked.total_id,
-                                "component_ids": checked.component_ids,
-                            }
-                        ),
-                        "classification": checked.classification,
-                        "comparison_kind": "component_total",
-                        "professional_status": (
-                            "Итог не равен сумме составляющих"
-                            if checked.difference != 0
-                            else "Итог совпадает с суммой составляющих"
-                        ),
-                        "facility": work.get("facility"),
-                        "facility_id": work.get("facility_id"),
-                        "work": work.get("work_name"),
-                        "left": {
-                            "document_role": role,
-                            "value": _decimal_text(checked.stated_total),
-                            "unit": checked.unit,
-                        },
-                        "right": {
-                            "document_role": f"{role}: сумма составляющих",
-                            "value": _decimal_text(checked.calculated_total),
-                            "unit": checked.unit,
-                        },
-                        "difference": _decimal_text(checked.difference),
-                        "conclusion": (
-                            f"В документе {role} указан итог "
-                            f"{_decimal_text(checked.stated_total)} {checked.unit}, сумма "
-                            f"связанных составляющих — "
-                            f"{_decimal_text(checked.calculated_total)} {checked.unit}; "
-                            f"разница — {_decimal_text(checked.difference)} {checked.unit}."
-                        ),
-                        "source_locator_ids": locator_ids,
-                        "scope_match_basis": (
-                            "Связь общего объёма и составляющих установлена моделью по "
-                            "тексту; арифметика и единицы проверены детерминированно."
-                        ),
-                    }
-                )
+                ),
+                "classification": checked.classification,
+                "comparison_kind": "component_total",
+                "professional_status": (
+                    "Итог не равен сумме составляющих"
+                    if checked.difference != 0
+                    else "Итог совпадает с суммой составляющих"
+                ),
+                "facility": work.get("facility"),
+                "facility_id": work.get("facility_id"),
+                "work": work.get("work_name"),
+                "left": {
+                    "document_role": role,
+                    "value": _decimal_text(checked.stated_total),
+                    "unit": checked.unit,
+                },
+                "right": {
+                    "document_role": f"{role}: сумма составляющих",
+                    "value": _decimal_text(checked.calculated_total),
+                    "unit": checked.unit,
+                },
+                "difference": _decimal_text(checked.difference),
+                "conclusion": (
+                    f"В документе {role} указан итог "
+                    f"{_decimal_text(checked.stated_total)} {checked.unit}, сумма "
+                    f"связанных составляющих — "
+                    f"{_decimal_text(checked.calculated_total)} {checked.unit}; "
+                    f"разница — {_decimal_text(checked.difference)} {checked.unit}."
+                ),
+                "source_locator_ids": locator_ids,
+                "scope_match_basis": (
+                    "Связь общего объёма и составляющих установлена моделью по тексту; "
+                    "роль документа, сооружение, единицы и арифметика проверены "
+                    "детерминированно."
+                ),
+            }
+        )
     return result
 
 

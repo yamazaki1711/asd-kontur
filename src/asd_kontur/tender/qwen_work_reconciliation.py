@@ -292,7 +292,9 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 продолжительность, цена и ресурс нормы не являются объёмом работы. Если табличная связь нарушена
 или значение нельзя отнести без догадки, используйте AMBIGUOUS, а не WORK_QUANTITY.
 Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
-когда текст явно устанавливает общий объём и его части. Не выводите отношение из близости чисел.
+когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
+Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
+из близости чисел.
 Для NONE верните пустой related_quantity_candidate_ids. Для сравнения укажите одну точную
 scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
@@ -331,6 +333,11 @@ def _parse(
     if len(values) != len(input_ids):
         raise QwenSemanticFailure("qwen_work_reconciliation_incomplete_output")
     allowed_ids = set(input_ids)
+    all_quantity_ids = {
+        quantity_id
+        for candidate_id in input_ids
+        for quantity_id in quantity_ids_by_work.get(candidate_id, ())
+    }
     allowed_families = set(work_families)
     allowed_facilities = set(facilities)
     observations: dict[str, dict[str, Any]] = {}
@@ -371,7 +378,11 @@ def _parse(
                 "инженерной связи недостаточна."
             )
         quantity_ids = quantity_ids_by_work.get(candidate_id, ())
-        quantity_reviews = _parse_quantity_reviews(raw_quantity_reviews, quantity_ids)
+        quantity_reviews = _parse_quantity_reviews(
+            raw_quantity_reviews,
+            quantity_ids,
+            allowed_related_ids=all_quantity_ids,
+        )
         observation: dict[str, Any] = {
             "candidate_id": candidate_id,
             "status": status,
@@ -389,7 +400,12 @@ def _parse(
     return [observations[candidate_id] for candidate_id in input_ids]
 
 
-def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dict[str, Any]]:
+def _parse_quantity_reviews(
+    raw: object,
+    input_ids: tuple[str, ...],
+    *,
+    allowed_related_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
     if not input_ids:
         if raw not in (None, []):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_unexpected")
@@ -397,6 +413,7 @@ def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dic
     if not isinstance(raw, list) or len(raw) != len(input_ids):
         raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
     allowed_ids = set(input_ids)
+    relation_ids = allowed_related_ids if allowed_related_ids is not None else allowed_ids
     reviews: dict[str, dict[str, Any]] = {}
     for value in raw:
         if not isinstance(value, dict):
@@ -425,7 +442,7 @@ def _parse_quantity_reviews(raw: object, input_ids: tuple[str, ...]) -> list[dic
         if (
             len(set(related_ids)) != len(related_ids)
             or candidate_id in related_ids
-            or not set(related_ids).issubset(allowed_ids)
+            or not set(related_ids).issubset(relation_ids)
             or (relation_kind == QuantityRelation.NONE and related_ids)
             or (relation_kind != QuantityRelation.NONE and not related_ids)
         ):

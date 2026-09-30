@@ -135,6 +135,13 @@ def evaluate_component_total(
         for component in resolved_components
     ):
         return None
+    if any(
+        total.source_role is not None
+        and component.source_role is not None
+        and component.source_role != total.source_role
+        for component in resolved_components
+    ):
+        return None
     calculated = sum((component.value for component in resolved_components), Decimal("0"))
     difference = total.value - calculated
     return ComponentTotalResult(
