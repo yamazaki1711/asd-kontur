@@ -318,6 +318,15 @@ nine rows normally completed in one call. The next candidate therefore reduces
 future default batches to eight rows. Existing queued jobs and accepted history
 are unchanged; the change applies only to subsequent idempotent refills.
 
+That optimization is active in application release
+`c9a251ac986a34314fe1180dd8a0886a24c3882e`; exact-SHA CI run 36669285326
+passed. Qwen remains pinned to byte-compatible inference release `5679343` so
+the already-loaded model was not restarted merely for an application batching
+constant. By the compact post-release observation the workspace had reached
+549 succeeded jobs, two new work-reconciliation results had become terminal,
+and the corrected Qwen status plane had observed 37 completed requests with one
+heavy process and no manual progression command.
+
 ## Remaining implementation work
 
 - persist and schedule the remaining generalized semantic tasks beyond work and
@@ -325,8 +334,8 @@ are unchanged; the change applies only to subsequent idempotent refills.
 - complete a live autonomous unseen-project run without code changes;
 - improve project entity consolidation and produce defensible quantity,
   comparison and finding results for the blind project;
-- reduce expensive recursive repair when strict work-reconciliation JSON is not
-  accepted, without weakening validation;
+- measure the eight-row refill policy against new terminal receipts and reduce
+  remaining strict-output repair without weakening validation;
 - run signed-in visual browser acceptance when an in-app browser session is
   available, and test the supported Mac sleep/wake boundary.
 
