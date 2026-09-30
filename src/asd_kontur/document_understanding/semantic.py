@@ -152,6 +152,13 @@ def normalize_unit(value: object) -> str | None:
         return direct
     compact = normalized.replace(" ", "")
     aliases = {
+        # OCR and office-text extraction commonly split the exponent from the
+        # metre symbol (``м 2`` / ``м 3``).  Compacting is safe here because
+        # it changes spelling only; the numeric value is left untouched.
+        "м2": "m2",
+        "м3": "m3",
+        "m2": "m2",
+        "m3": "m3",
         "кв.м": "m2",
         "кв.м.": "m2",
         "куб.м": "m3",

@@ -99,10 +99,21 @@ separate schedule rows from the same bounded semantic batch, because project
 totals and their components are commonly printed on different rows. Numeric
 similarity never creates a relationship.
 
+`TOTAL_FOR` also carries an explicit component-set-complete decision. Qwen may
+certify it only when every component named or derived in the bounded source
+context is represented by a persisted quantity identity. A partial set remains
+an unresolved engineering relationship; deterministic code must not turn the
+missing remainder into a discrepancy.
+
 Scope compatibility is explicit: `SAME_SCOPE`, `OVERLAPPING_SCOPE`,
 `COMPONENT_VS_TOTAL`, `DIFFERENT_SCOPE`, `ALTERNATIVE_DESIGN`,
 `REVISION_DIFFERENCE`, or `INSUFFICIENT_INFORMATION`. Automatic numeric
 discrepancies require `SAME_SCOPE` or a valid `COMPONENT_VS_TOTAL` relationship.
+For cross-document values, Qwen must make that compatibility decision even when
+the values differ and must assign the exact same concise semantic-scope label to
+both sides of a genuine `SAME_SCOPE` comparison. `DUPLICATE_OF` is reserved for
+a repeated statement, while `REVISION_OF` requires an established revision
+relationship. Neither label similarity nor equal numbers establish scope.
 The deterministic component/total engine returns `MATCH`, `ROUNDING_MATCH`,
 `MISMATCH`, `INCOMPLETE_COMPONENT_SET`, or `INCOMPATIBLE_SCOPE`. It uses
 `Decimal` and normalized units; a rounding match remains an auditable
