@@ -128,30 +128,30 @@ def _effective_project_processing_job_sql(alias: str) -> str:
 # single local-Qwen slot next; they do not change candidate authority, evidence
 # selection, or fairness within a tier.
 _SEMANTIC_PRIORITY_BY_ROLE = {
-    "drawing_or_scheme": 170,
-    "working_documentation": 170,
-    "project_documentation": 170,
-    "explanatory_note": 160,
-    "specification": 160,
-    "bill_of_quantities": 150,
-    "local_estimate": 150,
-    "object_estimate": 150,
-    "consolidated_estimate": 150,
-    "procurement_notice": 165,
-    "technical_specification": 165,
-    "construction_schedule": 155,
-    "design_calculation": 160,
-    "engineering_survey": 145,
+    "drawing_or_scheme": 195,
+    "working_documentation": 195,
+    "project_documentation": 195,
+    "explanatory_note": 190,
+    "specification": 190,
+    "bill_of_quantities": 190,
+    "local_estimate": 190,
+    "object_estimate": 190,
+    "consolidated_estimate": 190,
+    "procurement_notice": 190,
+    "technical_specification": 190,
+    "construction_schedule": 185,
+    "design_calculation": 190,
+    "engineering_survey": 180,
 }
-_SEMANTIC_DEFAULT_PRIORITY = 130
+_SEMANTIC_DEFAULT_PRIORITY = 180
 # Accepted model output that only needs deterministic candidate persistence is
 # the cheapest route to a usable project model.  Finish those recoveries before
 # starting unrelated new source interpretation.
 _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # Bounded reconciliation turns extracted values into the first usable
-# engineering schedule.  Let one four-batch slice run ahead of the next source
-# extraction at a safe job boundary; the refill gate prevents it from starving
-# the remaining corpus.
+# engineering schedule, but it must not run ahead of first-pass semantic
+# interpretation in the same workspace. Workspace-fair claim ordering still
+# prevents a large new package from starving other projects.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 # Live project receipts showed that twelve-row strict-JSON batches required
 # recursive repair in 72 of 78 cases (3.72 model calls on average).  Eight-row

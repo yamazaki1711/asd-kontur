@@ -1086,10 +1086,22 @@ def test_successful_project_work_job_requests_bounded_idle_refill() -> None:
 def test_semantic_extraction_priority_prefers_persisted_structural_roles() -> None:
     """A one-slot worker reaches source-backed structural evidence before estimates."""
 
-    assert _semantic_extraction_priority(("local_estimate",)) == 150
-    assert _semantic_extraction_priority(("project_documentation",)) == 170
-    assert _semantic_extraction_priority(("local_estimate", "drawing_or_scheme")) == 170
-    assert _semantic_extraction_priority(()) == 130
+    assert _semantic_extraction_priority(("local_estimate",)) == 190
+    assert _semantic_extraction_priority(("project_documentation",)) == 195
+    assert _semantic_extraction_priority(("local_estimate", "drawing_or_scheme")) == 195
+    assert _semantic_extraction_priority(()) == 180
+
+
+def test_first_pass_semantics_precedes_deep_work_reconciliation() -> None:
+    assert _semantic_extraction_priority(()) > 175
+    for role in (
+        "project_documentation",
+        "bill_of_quantities",
+        "local_estimate",
+        "procurement_notice",
+        "engineering_survey",
+    ):
+        assert _semantic_extraction_priority((role,)) > 175
 
 
 def test_semantic_coverage_state_distinguishes_unresolved_and_recovered_failures() -> None:
