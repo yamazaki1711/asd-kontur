@@ -149,10 +149,12 @@ documents.
 
 The persistent Qwen runtime exposes a lightweight threaded status plane with
 `QWEN_MODEL_LOADING`, `QWEN_READY_IDLE`, `QWEN_GENERATING`, and `QWEN_ERROR`.
-Generation remains protected by one non-blocking lock, so observability cannot
-create a second heavy Metal process. Workers claim new model work only while
-the runtime is idle; transient busy responses retain the existing bounded
-retry behavior.
+One dedicated inference thread owns both MLX model loading and generation;
+request threads only transport bounded inputs/results and serve health.
+Generation remains protected by one non-blocking admission lock, so
+observability cannot create a second heavy Metal process. Workers claim new
+model work only while the runtime is idle; transient busy responses retain the
+existing bounded retry behavior.
 
 Accepted semantic batches may populate a source progressively when it has no
 completed semantic profile. During a profile upgrade, however, the application

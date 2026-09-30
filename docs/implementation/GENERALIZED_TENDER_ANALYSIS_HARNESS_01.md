@@ -285,6 +285,31 @@ shared mechanisms across different names, work types, units and values without
 a code change. They do not execute a second complete live Qwen project, so the
 full unseen-project acceptance remains open.
 
+Release `5679343aec519b347b1199492afa8709859c4263` subsequently activated the
+typed component/total outcomes, shared semantic-task result envelope,
+professional-finding completion, corrected professional progress denominator,
+and the independent Qwen status plane. Exact-SHA CI run 36667568869 passed;
+migration remains `0078_cross_document_scope_reconciliation`.
+
+The first status-plane candidate (`79961d8`) correctly exposed health but ran
+MLX generation in HTTP request threads. Live activation caused repeatable MLX
+segmentation faults. Qwen alone was immediately rolled back to the prior stable
+runtime; no accepted project fact was lost. The corrected release gives one
+dedicated thread exclusive ownership of both model loading and inference, while
+HTTP threads only transport bounded requests/results and serve health. During
+the corrected live run the same Qwen PID remained at one launchd run, health
+answered `QWEN_GENERATING`, and five real project requests completed with no
+runtime error while the bounded semantic recovery continued.
+
+Across the controlled restart, supervised services advanced the real workspace
+from 495 to 533 succeeded jobs without a manual retry, refill, successor, or
+reconciliation command. The platform-memory fingerprint remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`.
+At the release-receipt observation the active work-reconciliation job was still
+at 0/12 accepted batches after five completed model requests; this is recorded
+as a semantic-output/recovery performance limitation, not claimed as a new
+professional result.
+
 ## Remaining implementation work
 
 - persist and schedule the remaining generalized semantic tasks beyond work and
@@ -292,7 +317,8 @@ full unseen-project acceptance remains open.
 - complete a live autonomous unseen-project run without code changes;
 - improve project entity consolidation and produce defensible quantity,
   comparison and finding results for the blind project;
-- deploy and verify the independent Qwen status plane under launchd;
+- reduce expensive recursive repair when strict work-reconciliation JSON is not
+  accepted, without weakening validation;
 - run signed-in visual browser acceptance when an in-app browser session is
   available, and test the supported Mac sleep/wake boundary.
 
