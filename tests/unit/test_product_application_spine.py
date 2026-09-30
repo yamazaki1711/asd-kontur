@@ -33,6 +33,9 @@ from asd_kontur.application_spine.postgres import (
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.document_understanding.postgres import _identity_observation_group_key
+from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_PROFILE,
+)
 from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
@@ -197,6 +200,7 @@ def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
 def test_quantity_review_chunks_schedule_relationship_pass_before_completion() -> None:
     quantities = [{"candidate_id": f"quantity-{index}", "value": index} for index in range(10)]
     first_result = {
+        "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
         "quantity_reviews": [
             {
                 "quantity_candidate_id": f"quantity-{index}",
@@ -225,6 +229,7 @@ def test_legacy_component_relationship_is_requeued_for_completeness_review() -> 
         {"candidate_id": "quantity-part"},
     ]
     prior = {
+        "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
         "quantity_reviews": [
             {
                 "quantity_candidate_id": "quantity-total",
@@ -247,6 +252,25 @@ def test_legacy_component_relationship_is_requeued_for_completeness_review() -> 
         "quantity-total",
         "quantity-part",
     ]
+
+
+def test_prior_profile_quantity_reviews_are_requeued_for_current_scope_policy() -> None:
+    quantities = [{"candidate_id": "quantity-design"}, {"candidate_id": "quantity-vor"}]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v14",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": value["candidate_id"],
+                "status": "WORK_QUANTITY",
+                "relation_kind": "NONE",
+                "relationship_reviewed": True,
+                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+            }
+            for value in quantities
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == quantities
 
 
 def test_quantity_relationship_batches_group_by_engineering_context_not_number() -> None:

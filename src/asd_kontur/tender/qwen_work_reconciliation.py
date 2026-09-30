@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v14"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v15"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -29,6 +29,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v11",
     "qwen-project-work-reconciliation-v12",
     "qwen-project-work-reconciliation-v13",
+    "qwen-project-work-reconciliation-v14",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@13.0.0"
@@ -358,6 +359,15 @@ relation_kind верните null. Нельзя объявлять расхож�
 Если они описывают один инженерный объём, используйте одинаковое нормализованное operation. Если
 одна строка является частью, включённой работой, альтернативой, другой редакцией или иным объёмом,
 не объединяйте их только из-за одинакового deterministic_family_hint; отразите различие в reason.
+Для каждой пары переданных чисел по одной инженерной операции примите явное решение о
+сопоставимости. Если значения измеряют один и тот же инженерный объём, даже когда сами числа
+различаются, укажите SAME_SCOPE для обеих строк и используйте для них дословно одинаковый краткий
+semantic_scope. relation_kind при этом может оставаться NONE: одинаковый объём не обязательно
+является повтором одной записи. DUPLICATE_OF означает именно повтор одного утверждения, а не просто
+сопоставимые строки. REVISION_OF допустимо только при установленной связи редакций, а не потому,
+что строки находятся в двух похожих документах. Если область различается, укажите DIFFERENT_SCOPE,
+OVERLAPPING_SCOPE либо другую точную причину. INSUFFICIENT_INFORMATION используйте лишь когда
+переданного контекста действительно недостаточно для такого решения.
 Для NONE верните пустой related_quantity_candidate_ids. Для сравнения укажите одну точную
 scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если

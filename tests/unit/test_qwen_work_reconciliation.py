@@ -97,7 +97,104 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v14"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v15"
+
+
+def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "даже когда сами числа" in prompt
+        assert "дословно одинаковый краткий" in prompt
+        assert "DUPLICATE_OF означает именно повтор" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "design",
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Обмазочная гидроизоляция",
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": "Проектная строка.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "design-q",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь обмазочной гидроизоляции",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Тот же инженерный объём.",
+                            }
+                        ],
+                    },
+                    {
+                        "candidate_id": "commercial",
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Обмазочная гидроизоляция",
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": "Коммерческая строка.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "commercial-q",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь обмазочной гидроизоляции",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Тот же инженерный объём.",
+                            }
+                        ],
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    rows = [
+        {
+            "candidate_id": "design",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Площадь обмазочной гидроизоляции",
+            "document_role": "ПД",
+            "quantity_observations": [
+                {"quantity_candidate_id": "design-q", "value": "830.4", "unit": "m2"}
+            ],
+        },
+        {
+            "candidate_id": "commercial",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Обмазочная гидроизоляция",
+            "document_role": "ВОР",
+            "quantity_observations": [
+                {"quantity_candidate_id": "commercial-q", "value": "833.9", "unit": "m2"}
+            ],
+        },
+    ]
+
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    reviews = [
+        observation["quantity_reviews"][0] for observation in result["observations"]
+    ]
+    assert {review["semantic_scope"] for review in reviews} == {
+        "Площадь обмазочной гидроизоляции"
+    }
+    assert {review["scope_compatibility"] for review in reviews} == {"SAME_SCOPE"}
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(

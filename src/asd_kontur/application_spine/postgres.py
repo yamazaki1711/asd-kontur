@@ -7864,11 +7864,14 @@ def _quantities_requiring_semantic_review(
         for value in existing_resolution.get("quantity_reviews") or ()
         if isinstance(value, Mapping) and value.get("quantity_candidate_id")
     }
+    current_profile_reviewed = (
+        existing_resolution.get("profile_version") == PROJECT_WORK_RECONCILIATION_PROFILE
+    )
     result: list[dict[str, Any]] = []
     for value in linked_quantities:
         row = dict(value)
         review = reviews.get(str(row.get("candidate_id") or ""))
-        if review is None or (
+        if review is None or not current_profile_reviewed or (
             review.get("status") in {"WORK_QUANTITY", "DURATION"}
             and (
                 review.get("relationship_reviewed") is not True
