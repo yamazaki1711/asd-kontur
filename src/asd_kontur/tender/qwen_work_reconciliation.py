@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v10"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v11"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -25,9 +25,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v7",
     "qwen-project-work-reconciliation-v8",
     "qwen-project-work-reconciliation-v9",
+    "qwen-project-work-reconciliation-v10",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@10.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@11.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -93,10 +94,16 @@ class QwenProjectWorkReconciler:
         if any(not value for value in input_ids) or len(set(input_ids)) != len(input_ids):
             raise QwenSemanticFailure("qwen_work_reconciliation_input_identity_invalid")
         allowed_facilities = tuple(dict.fromkeys(str(value) for value in facilities if value))
+        relationship_review = all(
+            str(row.get("analysis_task") or "")
+            == TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value
+            for row in input_rows
+        )
         observations, call_count, recovery_codes = self._reconcile_rows(
             input_rows,
             work_families=work_families,
             facilities=allowed_facilities,
+            relationship_review=relationship_review,
         )
         manifest = {
             "contract": WORK_RECONCILIATION_CONTRACT,
@@ -114,6 +121,7 @@ class QwenProjectWorkReconciler:
         *,
         work_families: Mapping[str, str],
         facilities: tuple[str, ...],
+        relationship_review: bool,
         single_retry_available: bool = True,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
         input_ids = tuple(str(row["candidate_id"]) for row in rows)
@@ -129,7 +137,12 @@ class QwenProjectWorkReconciler:
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             raw = _complete(
                 self._endpoint,
-                _prompt(rows, work_families, facilities),
+                _prompt(
+                    rows,
+                    work_families,
+                    facilities,
+                    relationship_review=relationship_review,
+                ),
                 self._timeout_seconds,
                 # Representative twelve-row construction batches repeatedly
                 # exhausted the old 170-token-per-row allowance even when every
@@ -149,6 +162,7 @@ class QwenProjectWorkReconciler:
                     quantity_ids_by_work=quantity_ids_by_work,
                     work_families=work_families,
                     facilities=facilities,
+                    relationship_review=relationship_review,
                 ),
                 1,
                 [],
@@ -167,6 +181,7 @@ class QwenProjectWorkReconciler:
                     rows,
                     work_families=work_families,
                     facilities=facilities,
+                    relationship_review=relationship_review,
                     single_retry_available=False,
                 )
                 return observations, call_count + 1, [exc.code, *codes]
@@ -175,11 +190,13 @@ class QwenProjectWorkReconciler:
                 rows[:midpoint],
                 work_families=work_families,
                 facilities=facilities,
+                relationship_review=relationship_review,
             )
             right, right_calls, right_codes = self._reconcile_rows(
                 rows[midpoint:],
                 work_families=work_families,
                 facilities=facilities,
+                relationship_review=relationship_review,
             )
             return (
                 [*left, *right],
@@ -226,7 +243,11 @@ def _unresolved_observation(row: Mapping[str, Any], *, failure_code: str) -> dic
 
 
 def _prompt(
-    rows: list[dict[str, Any]], work_families: Mapping[str, str], facilities: tuple[str, ...]
+    rows: list[dict[str, Any]],
+    work_families: Mapping[str, str],
+    facilities: tuple[str, ...],
+    *,
+    relationship_review: bool,
 ) -> str:
     safe_rows = [
         {
@@ -247,6 +268,9 @@ def _prompt(
                     "unit": value.get("unit"),
                     "source_locator_id": value.get("source_locator_id"),
                     "nearby_context": str(value.get("nearby_context") or ""),
+                    "prior_semantic_scope": value.get("prior_semantic_scope"),
+                    "prior_quantity_type": value.get("prior_quantity_type"),
+                    "prior_status": value.get("prior_status"),
                 }
                 for value in row.get("quantity_observations") or ()
                 if isinstance(value, Mapping)
@@ -256,7 +280,11 @@ def _prompt(
     ]
     task_payload = bounded_task_payload(
         TenderHarnessTaskInput(
-            task=TenderAnalysisTask.WORK_CLASSIFICATION,
+            task=(
+                TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS
+                if relationship_review
+                else TenderAnalysisTask.WORK_CLASSIFICATION
+            ),
             input_identity=semantic_digest(safe_rows),
             context={
                 "work_families": dict(work_families),
@@ -266,12 +294,21 @@ def _prompt(
         ),
         max_chars=50_000,
     )
+    relationship_instruction = (
+        "Это отдельный проход смысловых связей числовых значений. Классификацию работы "
+        "сохраните по переданным подсказкам; определите, какие значения описывают один "
+        "инженерный объём, общий итог, составляющую, дубль, альтернативу или другую редакцию. "
+        "Для каждого числа обязательно повторно установите semantic_scope по исходному контексту."
+        if relationship_review
+        else ""
+    )
     return f"""Вы анализируете извлечённые описания российского строительного проекта.
 Для КАЖДОЙ входной строки определите, является ли она строительной операцией, к какому виду работ
 относится и можно ли привязать её к одному сооружению. Не придумывайте отсутствующие работы,
 сооружения, объёмы или материалы. Совпадение по одному слову недостаточно. Перевозка, погрузка,
 испытание и временная операция могут быть отдельной коммерческой работой; материал, заголовок,
 техническая характеристика и функция оборудования не являются работой.
+{relationship_instruction}
 
 Структурированная задача: {task_payload}
 
@@ -324,6 +361,7 @@ def _parse(
     quantity_ids_by_work: Mapping[str, tuple[str, ...]],
     work_families: Mapping[str, str],
     facilities: tuple[str, ...],
+    relationship_review: bool,
 ) -> list[dict[str, Any]]:
     text = raw.strip()
     if text.startswith("```"):
@@ -387,6 +425,7 @@ def _parse(
             raw_quantity_reviews,
             quantity_ids,
             allowed_related_ids=all_quantity_ids,
+            relationship_review=relationship_review,
         )
         observation: dict[str, Any] = {
             "candidate_id": candidate_id,
@@ -410,6 +449,7 @@ def _parse_quantity_reviews(
     input_ids: tuple[str, ...],
     *,
     allowed_related_ids: set[str] | None = None,
+    relationship_review: bool = False,
 ) -> list[dict[str, Any]]:
     if not input_ids:
         if raw not in (None, []):
@@ -462,6 +502,8 @@ def _parse_quantity_reviews(
             "scope_compatibility": scope_compatibility,
             "reason": reason[:500],
         }
+        if relationship_review:
+            reviews[candidate_id]["relationship_reviewed"] = True
     if set(reviews) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
     return [reviews[candidate_id] for candidate_id in input_ids]

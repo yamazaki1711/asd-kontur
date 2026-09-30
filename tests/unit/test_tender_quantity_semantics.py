@@ -147,7 +147,7 @@ def test_component_total_rejects_conflicting_engineering_scope(dimension: str) -
     assert evaluate_component_total(statements, relation) is None
 
 
-def test_component_total_rejects_different_document_roles() -> None:
+def test_component_total_allows_explicit_cross_document_relationship() -> None:
     statements = [
         QuantityStatement(
             "total",
@@ -175,7 +175,10 @@ def test_component_total_rejects_different_document_roles() -> None:
         compatibility=ScopeCompatibility.COMPONENT_VS_TOTAL,
     )
 
-    assert evaluate_component_total(statements, relation) is None
+    result = evaluate_component_total(statements, relation)
+
+    assert result is not None
+    assert result.classification == "MATCH"
 
 
 def test_component_total_reports_rounding_match_at_stated_precision() -> None:

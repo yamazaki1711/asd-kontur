@@ -121,7 +121,7 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     foundation = dict(project.get("foundation") or {}).get("value")
     pits = dict(model.get("pits") or {})
     body: list[str] = [
-        _heading("Tender-анализ проекта", level=1),
+        _heading("Первичный анализ проекта", level=1),
         _paragraph(str(name)),
         _heading("1. Общая характеристика проекта"),
         _paragraph(str(description or purpose)),

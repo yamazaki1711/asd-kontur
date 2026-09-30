@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v10"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v11"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -307,6 +307,110 @@ def test_qwen_work_reconciliation_allows_explicit_cross_row_quantity_relation(
 
     total_review = result["observations"][0]["quantity_reviews"][0]
     assert total_review["related_quantity_candidate_ids"] == ["quantity-section"]
+
+
+def test_quantity_relationship_task_marks_dedicated_review(monkeypatch: Any) -> None:
+    rows = [
+        {
+            "candidate_id": "candidate-total",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Общий объём разработки грунта",
+            "deterministic_family_hint": "excavation",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "quantity-total",
+                    "value": "125",
+                    "unit": "м3",
+                    "prior_semantic_scope": "Объём разработки грунта",
+                    "prior_quantity_type": "STANDALONE",
+                    "prior_status": "WORK_QUANTITY",
+                }
+            ],
+        },
+        {
+            "candidate_id": "candidate-component",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Механизированная разработка грунта",
+            "deterministic_family_hint": "excavation",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "quantity-component",
+                    "value": "100",
+                    "unit": "м3",
+                    "prior_semantic_scope": "Механизированная разработка грунта",
+                    "prior_quantity_type": "STANDALONE",
+                    "prior_status": "WORK_QUANTITY",
+                }
+            ],
+        },
+    ]
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "QUANTITY_RELATIONSHIP_ANALYSIS" in prompt
+        assert "prior_semantic_scope" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка грунта",
+                        "facility": "Сооружение 7",
+                        "confidence": "0.93",
+                        "reason": "Переданная операция сохранена.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общий объём разработки грунта",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": ["quantity-component"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "reason": "Значение обозначено как общий итог.",
+                            }
+                        ],
+                    },
+                    {
+                        "candidate_id": "candidate-component",
+                        "status": "MATCHED",
+                        "family_key": "excavation",
+                        "operation": "Разработка грунта",
+                        "facility": "Сооружение 7",
+                        "confidence": "0.92",
+                        "reason": "Переданная операция сохранена.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-component",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Механизированная разработка грунта",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "reason": "Строка является составляющей общего объёма.",
+                            }
+                        ],
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"excavation": "Земляные работы"},
+        facilities=["Сооружение 7"],
+    )
+
+    assert all(
+        review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
 
 
 def test_qwen_work_reconciliation_rejects_invented_cross_row_quantity_identity(

@@ -30,6 +30,7 @@ from asd_kontur.tender.project_engineering import (
     _semantic_work_consensus,
     _sheet_pile_profiles,
     _tender_context,
+    _tender_context_comparisons,
     _unique_values,
     build_project_engineering_model,
     classify_work_family,
@@ -47,7 +48,7 @@ from asd_kontur.tender.project_engineering import (
 
 
 def test_tender_context_is_generic_and_keeps_source_bound_commercial_facts() -> None:
-    source_context = dict([_source("contract", "Draft contract.pdf", 4)])
+    source_context = dict([_source("contract", "Проект контракта.pdf", 4)])
 
     context = _tender_context(
         [
@@ -65,10 +66,109 @@ def test_tender_context_is_generic_and_keeps_source_bound_commercial_facts() -> 
     )
 
     assert context["participants"][0]["value"] == "АО Заказчик"
-    assert context["commercial_conditions"][0]["value"] == "125000000 руб."
+    assert context["commercial_conditions"][0]["value"] == "125 000 000,00 руб."
     assert context["time_requirements"][0]["value"] == "18 месяцев"
     assert context["contract_conditions"][0]["value"] == "60 месяцев"
     assert all("Не входит" not in str(values) for values in context.values())
+
+
+def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> None:
+    source_context = dict(
+        [
+            _source("nmck-a", "Обоснование НМЦК.pdf", 2),
+            _source("nmck-b", "Обоснование НМЦК.pdf", 3),
+            _source("estimate", "Локальная смета.pdf", 1),
+        ]
+    )
+    context = _tender_context(
+        [
+            {
+                "label": "initial_contract_price",
+                "value": "41 573 447,08",
+                "source_locator_id": "nmck-a",
+            },
+            {
+                "label": "initial_contract_price",
+                "value": "41573447.08",
+                "source_locator_id": "nmck-b",
+            },
+            {
+                "label": "nmck",
+                "value": "проектно-сметный метод",
+                "source_locator_id": "nmck-a",
+            },
+            {
+                "label": "initial_contract_price",
+                "value": "887,58",
+                "source_locator_id": "estimate",
+            },
+        ],
+        source_context,
+    )
+
+    assert [(row["field"], row["value"]) for row in context["commercial_conditions"]] == [
+        ("initial_contract_price", "41 573 447,08 руб.")
+    ]
+
+
+def test_contract_estimate_filename_is_not_reduced_to_ordinary_estimate() -> None:
+    assert _professional_document_role(None, "Проект сметы контракта.docx") == (
+        "Смета контракта"
+    )
+
+
+def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
+    source_context = dict(
+        [
+            _source("estimate", "Локальная смета.xlsx", 1),
+            _source("contract", "Проект контракта.pdf", 4),
+            _source("pos", "Раздел ПД. ПОС.pdf", 12),
+            _source("procurement", "Обоснование НМЦК.pdf", 2),
+        ]
+    )
+    comparisons = _tender_context_comparisons(
+        {
+            "commercial_conditions": [
+                {
+                    "field": "vat",
+                    "value": "20%",
+                    "source_locator_ids": ["estimate"],
+                },
+                {
+                    "field": "vat",
+                    "value": "22%",
+                    "source_locator_ids": ["contract"],
+                },
+            ],
+            "time_requirements": [
+                {
+                    "field": "construction_duration",
+                    "value": "2,2 месяца",
+                    "source_locator_ids": ["pos"],
+                },
+                {
+                    "field": "work_duration",
+                    "value": "4 месяца",
+                    "source_locator_ids": ["procurement"],
+                },
+                {
+                    "field": "contract_duration",
+                    "value": "10 месяцев",
+                    "source_locator_ids": ["contract"],
+                },
+            ],
+        },
+        source_context,
+    )
+
+    assert [(row["comparison_kind"], row["classification"]) for row in comparisons] == [
+        ("commercial_condition", "COMMERCIAL_CONDITION_MISMATCH"),
+        ("duration", "DURATION_MISMATCH"),
+    ]
+    assert comparisons[0]["left"]["document_role"] == "Смета"
+    assert comparisons[0]["right"]["document_role"] == "Договор"
+    assert comparisons[1]["left"]["value"] == "2.2"
+    assert comparisons[1]["right"]["value"] == "4"
 
 
 def test_facility_material_schedule_consolidates_repeated_mentions_by_scope() -> None:

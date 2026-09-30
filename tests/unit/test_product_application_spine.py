@@ -26,8 +26,9 @@ from asd_kontur.application_spine.postgres import (
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
+    _quantities_requiring_semantic_review,
+    _quantity_relationship_batches,
     _semantic_extraction_priority,
-    _unreviewed_work_quantities,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
@@ -193,7 +194,7 @@ def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
     )
 
 
-def test_quantity_review_chunks_resume_without_silently_accepting_deferred_values() -> None:
+def test_quantity_review_chunks_schedule_relationship_pass_before_completion() -> None:
     quantities = [{"candidate_id": f"quantity-{index}", "value": index} for index in range(10)]
     first_result = {
         "quantity_reviews": [
@@ -205,9 +206,59 @@ def test_quantity_review_chunks_resume_without_silently_accepting_deferred_value
         ]
     }
 
-    remaining = _unreviewed_work_quantities(quantities, first_result)
+    remaining = _quantities_requiring_semantic_review(quantities, first_result)
+
+    assert [value["candidate_id"] for value in remaining] == [
+        f"quantity-{index}" for index in range(10)
+    ]
+
+    for review in first_result["quantity_reviews"]:
+        review["relationship_reviewed"] = True
+    remaining = _quantities_requiring_semantic_review(quantities, first_result)
 
     assert [value["candidate_id"] for value in remaining] == ["quantity-8", "quantity-9"]
+
+
+def test_quantity_relationship_batches_group_by_engineering_context_not_number() -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility="Сооружение 7",
+            family="earthworks",
+            document_role="ПД",
+            wording="Разработка грунта",
+            quantity_count=2,
+        ),
+        _work_batch_row(
+            "commercial",
+            facility="Сооружение 7",
+            family="earthworks",
+            document_role="Смета",
+            wording="Разработка грунта",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "other-facility",
+            facility="Сооружение 8",
+            family="earthworks",
+            document_role="Смета",
+            wording="Разработка грунта",
+            quantity_count=1,
+        ),
+    ]
+    for row in rows:
+        row["relationship_review_needed"] = True
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=8, max_batches=4)
+
+    assert len(batches) == 1
+    assert {item["candidate_id"] for item in batches[0]} == {"design", "commercial"}
+    assert all(
+        item["analysis_task"] == "QUANTITY_RELATIONSHIP_ANALYSIS"
+        for batch in batches
+        for item in batch
+    )
+    assert selected == {"design", "commercial"}
 
 
 def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:

@@ -178,7 +178,11 @@ def _component_scope_is_compatible(
 ) -> bool:
     if any(component.unit != total.unit for component in components):
         return False
-    for attribute in ("project_entity", "work", "material", "revision", "source_role"):
+    # An explicitly established component/total relationship may cross
+    # document roles (for example, itemized design quantities against a VOR
+    # total). Source role is therefore reported, but is not itself a reason to
+    # reject a Qwen-established engineering relationship.
+    for attribute in ("project_entity", "work", "material", "revision"):
         total_value = getattr(total, attribute)
         if any(
             total_value is not None

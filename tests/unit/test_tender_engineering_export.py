@@ -135,7 +135,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     with zipfile.ZipFile(io.BytesIO(payload)) as document:
         assert document.testzip() is None
         xml = document.read("word/document.xml").decode("utf-8")
-    assert "Tender-анализ проекта" in xml
+    assert "Первичный анализ проекта" in xml
     assert "Общая характеристика проекта" in xml
     assert "В комплекте есть ПД и смета; ВОР не найдена." in xml
     assert "Испытательный комплекс" in xml

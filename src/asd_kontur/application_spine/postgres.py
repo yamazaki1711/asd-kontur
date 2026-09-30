@@ -227,6 +227,78 @@ def _cross_document_work_batches(
     return batches, selected_ids
 
 
+def _quantity_relationship_batches(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    batch_size: int,
+    max_batches: int,
+) -> tuple[list[list[dict[str, Any]]], set[str]]:
+    """Select bounded quantity groups for a dedicated semantic relation pass.
+
+    Exact facility identity is retained when available. Unassigned quantities
+    are grouped only by construction family; Qwen must still establish any
+    relationship from the supplied source context. Numeric proximity is never
+    used as evidence of compatibility.
+    """
+
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        row = dict(raw)
+        if row.get("relationship_review_needed") is not True:
+            continue
+        family = str(row.get("deterministic_family_hint") or "")
+        if not family:
+            continue
+        hints = tuple(str(value) for value in row.get("facility_hints") or ())
+        location = hints[0] if len(hints) == 1 else "unassigned"
+        groups[(location, family)].append(row)
+
+    ordered_groups = sorted(
+        groups.items(),
+        key=lambda item: (
+            len(
+                {
+                    document_comparison_side(row.get("document_role"), row.get("document"))
+                    for row in item[1]
+                }
+                - {None}
+            ),
+            sum(len(row.get("quantity_observations") or ()) for row in item[1]),
+            item[0],
+        ),
+        reverse=True,
+    )
+    batches: list[list[dict[str, Any]]] = []
+    selected: set[str] = set()
+    for _key, values in ordered_groups:
+        if len(batches) >= max_batches:
+            break
+        ordered = sorted(
+            values,
+            key=lambda row: (
+                str(row.get("document_role") or ""),
+                int(row.get("page") or 0),
+                str(row.get("candidate_id") or ""),
+            ),
+        )
+        batch: list[dict[str, Any]] = []
+        quantity_count = 0
+        for row in ordered:
+            candidate_id = str(row.get("candidate_id") or "")
+            if not candidate_id or candidate_id in selected or len(batch) >= batch_size:
+                continue
+            row_quantity_count = len(row.get("quantity_observations") or ())
+            if row_quantity_count == 0 or (batch and quantity_count + row_quantity_count > 16):
+                continue
+            batch.append({**row, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"})
+            quantity_count += row_quantity_count
+        if quantity_count < 2:
+            continue
+        batches.append(batch)
+        selected.update(str(row["candidate_id"]) for row in batch)
+    return batches, selected
+
+
 def _deterministic_scope_requires_semantic_review(
     *,
     deterministic_family: tuple[str, str] | None,
@@ -4861,7 +4933,9 @@ class SpinePostgresRepository:
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
                     existing_profile = str(existing.get("profile_version") or "")
                     existing_status = str(existing.get("status") or "")
-                    linked_quantities = _unreviewed_work_quantities(linked_quantities, existing)
+                    linked_quantities = _quantities_requiring_semantic_review(
+                        linked_quantities, existing
+                    )
                     if existing_profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES:
                         if not linked_quantities:
                             continue
@@ -4877,6 +4951,12 @@ class SpinePostgresRepository:
                         and not linked_quantities
                     ):
                         continue
+                    existing_family_key = str(existing.get("family_key") or "")
+                    if existing_family_key in work_family_catalog():
+                        deterministic_family = (
+                            existing_family_key,
+                            work_family_catalog()[existing_family_key],
+                        )
                 # A deterministically classified row with an explicit facility
                 # does not need Qwen to identify the work scope.  Its linked
                 # numeric observations may still need semantic interpretation,
@@ -4896,6 +4976,7 @@ class SpinePostgresRepository:
                     deterministic_family[0] if deterministic_family is not None else None
                 )
                 row["linked_quantities"] = linked_quantities
+                row["prior_resolution"] = existing or {}
                 unresolved.append(row)
             if not unresolved:
                 return ()
@@ -4975,6 +5056,14 @@ class SpinePostgresRepository:
                 )
                 context_text = str(context_window["text"])
                 linked_quantities = list(row.get("linked_quantities") or ())
+                prior_quantity_reviews = {
+                    str(value.get("quantity_candidate_id") or ""): dict(value)
+                    for value in dict(row.get("prior_resolution") or {}).get(
+                        "quantity_reviews"
+                    )
+                    or ()
+                    if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+                }
                 selected_quantities = [
                     value for value in linked_quantities if value.get("candidate_id")
                 ][:8]
@@ -4990,16 +5079,26 @@ class SpinePostgresRepository:
                         {
                             "quantity_candidate_id": str(quantity.get("candidate_id") or ""),
                             "quantity_candidate_version": int(quantity.get("version") or 0),
-                            "value": quantity.get("normalized_value", quantity.get("value")),
-                            "unit": quantity.get(
-                                "normalized_unit",
-                                quantity.get("unit", quantity.get("raw_unit")),
-                            ),
+                            "value": quantity.get("normalized_value")
+                            if quantity.get("normalized_value") is not None
+                            else quantity.get("value"),
+                            "unit": quantity.get("normalized_unit")
+                            or quantity.get("unit")
+                            or quantity.get("raw_unit"),
                             "source_locator_id": quantity_locator_id,
                             "nearby_context": str(quantity_context["text"]),
                             "nearby_context_locator_ids": list(
                                 quantity_context["source_locator_ids"]
                             ),
+                            "prior_semantic_scope": prior_quantity_reviews.get(
+                                str(quantity.get("candidate_id") or ""), {}
+                            ).get("semantic_scope"),
+                            "prior_quantity_type": prior_quantity_reviews.get(
+                                str(quantity.get("candidate_id") or ""), {}
+                            ).get("quantity_type"),
+                            "prior_status": prior_quantity_reviews.get(
+                                str(quantity.get("candidate_id") or ""), {}
+                            ).get("status"),
                         }
                     )
                 contextual_scope = (
@@ -5008,6 +5107,11 @@ class SpinePostgresRepository:
                 explicit_context_facilities = set(
                     mentioned_established_facilities(contextual_scope, facilities)
                 )
+                prior_facility = str(
+                    dict(row.get("prior_resolution") or {}).get("facility") or ""
+                )
+                if prior_facility in facilities:
+                    explicit_context_facilities.add(prior_facility)
                 hints = [value for value in facilities if value in explicit_context_facilities]
                 prepared.append(
                     {
@@ -5028,6 +5132,13 @@ class SpinePostgresRepository:
                         ),
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
+                        "relationship_review_needed": any(
+                            prior_quantity_reviews.get(
+                                str(value.get("candidate_id") or ""), {}
+                            ).get("relationship_reviewed")
+                            is not True
+                            for value in selected_quantities
+                        ),
                     }
                 )
             frequency: dict[str, int] = defaultdict(int)
@@ -5063,14 +5174,23 @@ class SpinePostgresRepository:
                     priority[2],
                 )
 
-            batches, cross_document_candidate_ids = _cross_document_work_batches(
+            relationship_batches, relationship_candidate_ids = _quantity_relationship_batches(
                 prepared,
                 batch_size=batch_size,
                 max_batches=max_batches,
             )
+            batches = list(relationship_batches)
+            remaining_batch_capacity = max_batches - len(batches)
+            cross_document_batches, cross_document_candidate_ids = _cross_document_work_batches(
+                prepared,
+                batch_size=batch_size,
+                max_batches=remaining_batch_capacity,
+            )
+            batches.extend(cross_document_batches)
+            selected_candidate_ids = relationship_candidate_ids | cross_document_candidate_ids
             by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in prepared:
-                if str(row["candidate_id"]) in cross_document_candidate_ids:
+                if str(row["candidate_id"]) in selected_candidate_ids:
                     continue
                 by_source[str(row["source_version_id"])].append(row)
             for rows in by_source.values():
@@ -7733,22 +7853,27 @@ def _application_engineering_projection(
     return projected
 
 
-def _unreviewed_work_quantities(
+def _quantities_requiring_semantic_review(
     linked_quantities: Iterable[Mapping[str, Any]],
     existing_resolution: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Keep every linked quantity until its exact candidate has a meaning decision."""
+    """Keep unreviewed values and accepted values missing a relation pass."""
 
-    reviewed_ids = {
-        str(value.get("quantity_candidate_id") or "")
+    reviews = {
+        str(value.get("quantity_candidate_id") or ""): dict(value)
         for value in existing_resolution.get("quantity_reviews") or ()
         if isinstance(value, Mapping) and value.get("quantity_candidate_id")
     }
-    return [
-        dict(value)
-        for value in linked_quantities
-        if str(value.get("candidate_id") or "") not in reviewed_ids
-    ]
+    result: list[dict[str, Any]] = []
+    for value in linked_quantities:
+        row = dict(value)
+        review = reviews.get(str(row.get("candidate_id") or ""))
+        if review is None or (
+            review.get("status") in {"WORK_QUANTITY", "DURATION"}
+            and review.get("relationship_reviewed") is not True
+        ):
+            result.append(row)
+    return result
 
 
 def _merged_quantity_reviews(

@@ -37,6 +37,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v8",
         "qwen-project-work-reconciliation-v9",
         "qwen-project-work-reconciliation-v10",
+        "qwen-project-work-reconciliation-v11",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -788,6 +789,7 @@ def build_project_engineering_model(
         [
             *_validated_scope_quantity_comparisons(work_model["works"]),
             *_component_total_comparisons(work_model["works"]),
+            *_tender_context_comparisons(tender_context, source_context),
         ]
     )
     documents = _documents(source_context, document_inventory=document_inventory)
@@ -980,11 +982,17 @@ def _tender_context(
         locator_id = str(row.get("source_locator_id") or "")
         if not key or not value:
             continue
+        context = dict(source_context.get(locator_id) or {})
+        document_role = _professional_document_role(
+            context.get("source_role"), context.get("safe_display_name")
+        )
+        if not _tender_context_value_is_plausible(key, value, document_role):
+            continue
         for section, fields in _TENDER_CONTEXT_FIELDS.items():
             label = fields.get(key)
             if label is None:
                 continue
-            identity = (section, key, _normalized(value))
+            identity = (section, key, _tender_context_identity_value(key, value))
             if identity in seen:
                 break
             seen.add(identity)
@@ -992,8 +1000,8 @@ def _tender_context(
             result[section].append(
                 {
                     "field": key,
-                    "label": label,
-                    "value": value,
+                    "label": _professional_context_label(key, value, label),
+                    "value": _professional_context_value(key, value),
                     "source_locator_ids": locator_ids,
                     "sources": _source_refs(locator_ids, source_context),
                 }
@@ -1002,6 +1010,57 @@ def _tender_context(
     for values in result.values():
         values.sort(key=lambda item: (str(item["label"]), str(item["value"])))
     return result
+
+
+def _tender_context_value_is_plausible(key: str, value: str, document_role: str) -> bool:
+    """Reject type-confused project fields before they reach the professional report."""
+
+    if key not in {"nmck", "initial_contract_price", "contract_price"}:
+        return True
+    if document_role not in {"Закупочная документация", "Договор", "Смета контракта"}:
+        return False
+    compact = value.replace("\u00a0", " ").strip()
+    # Price fields must contain one monetary-looking number, not a date,
+    # calculation method, table subtotal label or unrelated estimate resource.
+    if not re.fullmatch(r"[0-9][0-9\s]*(?:[.,][0-9]{1,2})?(?:\s*(?:руб\.?|₽))?", compact):
+        return False
+    digits = re.sub(r"\D", "", compact.split(",", 1)[0].split(".", 1)[0])
+    return len(digits) >= 5
+
+
+def _tender_context_identity_value(key: str, value: str) -> str:
+    if key == "vat" and value.strip().endswith("%"):
+        return _normalized(value)
+    if key not in {"nmck", "initial_contract_price", "contract_price", "vat"}:
+        return _normalized(value)
+    numeric = re.sub(r"\s*(?:руб\.?|₽)\s*$", "", value.replace("\u00a0", " ").strip())
+    numeric = numeric.replace(" ", "").replace(",", ".")
+    try:
+        return f"money:{Decimal(numeric).normalize()}"
+    except InvalidOperation:
+        return _normalized(value)
+
+
+def _professional_context_label(key: str, value: str, default: str) -> str:
+    if key == "vat":
+        return "Ставка НДС" if value.strip().endswith("%") else "Сумма НДС"
+    return default
+
+
+def _professional_context_value(key: str, value: str) -> str:
+    if key == "vat" and value.strip().endswith("%"):
+        return value
+    if key not in {"nmck", "initial_contract_price", "contract_price", "vat"}:
+        return value
+    numeric = re.sub(r"\s*(?:руб\.?|₽)\s*$", "", value.replace("\u00a0", " ").strip())
+    numeric = numeric.replace(" ", "").replace(",", ".")
+    try:
+        amount = Decimal(numeric).quantize(Decimal("0.01"))
+    except InvalidOperation:
+        return value
+    integer, fraction = f"{amount:.2f}".split(".")
+    grouped = f"{int(integer):,}".replace(",", " ")
+    return f"{grouped},{fraction} руб."
 
 
 def facility_designation(value: object) -> str | None:
@@ -2995,25 +3054,29 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
     for raw in works:
         work = dict(raw)
         quantities = dict(work.get("quantities_by_document") or {})
+        scoped = {
+            role: _comparable_quantities_by_semantic_scope(values)
+            for role, values in quantities.items()
+        }
         for design_role in design_roles:
             for commercial_role in commercial_roles:
-                left_by_unit = _comparable_quantities_by_unit(quantities.get(design_role) or ())
-                right_by_unit = _comparable_quantities_by_unit(
-                    quantities.get(commercial_role) or ()
-                )
-                for unit in sorted(set(left_by_unit).intersection(right_by_unit)):
-                    left = (left_by_unit[unit], unit)
-                    right = (right_by_unit[unit], unit)
-                    difference = left[0] - right[0]
-                    if difference == 0:
-                        conclusion = "Значения совпадают"
-                    else:
-                        conclusion = (
-                            f"Разница {design_role} ↔ {commercial_role}: "
-                            f"{_decimal_text(difference)} {unit}"
-                        )
-                    comparisons.append(
-                        _comparison_row(
+                left_by_scope = scoped.get(design_role) or {}
+                right_by_scope = scoped.get(commercial_role) or {}
+                for scope in sorted(set(left_by_scope).intersection(right_by_scope)):
+                    left_by_unit = left_by_scope[scope]
+                    right_by_unit = right_by_scope[scope]
+                    for unit in sorted(set(left_by_unit).intersection(right_by_unit)):
+                        left = (left_by_unit[unit], unit)
+                        right = (right_by_unit[unit], unit)
+                        difference = left[0] - right[0]
+                        if difference == 0:
+                            conclusion = "Значения совпадают"
+                        else:
+                            conclusion = (
+                                f"Разница {design_role} ↔ {commercial_role}: "
+                                f"{_decimal_text(difference)} {unit}"
+                            )
+                        row = _comparison_row(
                             work,
                             design_role,
                             commercial_role,
@@ -3022,21 +3085,27 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                             difference,
                             conclusion,
                         )
-                    )
-        vor_by_unit = _comparable_quantities_by_unit(quantities.get("ВОР") or ())
-        estimate_by_unit = _comparable_quantities_by_unit(quantities.get("Смета") or ())
-        for unit in sorted(set(vor_by_unit).intersection(estimate_by_unit)):
-            vor = (vor_by_unit[unit], unit)
-            estimate = (estimate_by_unit[unit], unit)
-            difference = vor[0] - estimate[0]
-            conclusion = (
-                "Значения ВОР и сметы совпадают"
-                if difference == 0
-                else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {unit}"
-            )
-            comparisons.append(
-                _comparison_row(work, "ВОР", "Смета", vor, estimate, difference, conclusion)
-            )
+                        row["semantic_scope"] = scope
+                        comparisons.append(row)
+        vor_by_scope = scoped.get("ВОР") or {}
+        estimate_by_scope = scoped.get("Смета") or {}
+        for scope in sorted(set(vor_by_scope).intersection(estimate_by_scope)):
+            for unit in sorted(
+                set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])
+            ):
+                vor = (vor_by_scope[scope][unit], unit)
+                estimate = (estimate_by_scope[scope][unit], unit)
+                difference = vor[0] - estimate[0]
+                conclusion = (
+                    "Значения ВОР и сметы совпадают"
+                    if difference == 0
+                    else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {unit}"
+                )
+                row = _comparison_row(
+                    work, "ВОР", "Смета", vor, estimate, difference, conclusion
+                )
+                row["semantic_scope"] = scope
+                comparisons.append(row)
     return comparisons
 
 
@@ -3055,8 +3124,6 @@ def _validated_scope_quantity_comparisons(
     result: list[dict[str, Any]] = []
     for raw in works:
         work = dict(raw)
-        if work.get("quantities_semantically_validated") is not True:
-            continue
         exact_cross_role_wording = _exact_cross_role_work_wording(work)
         semantic_cross_role_operation = _semantic_cross_role_work_operation(work)
         if (
@@ -3096,6 +3163,7 @@ def _component_total_comparisons(
 
     records: dict[str, dict[str, Any]] = {}
     relationships: dict[tuple[str, str, tuple[str, ...]], QuantityRelationship] = {}
+    component_ids_by_total: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
         work = dict(raw_work)
         for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
@@ -3129,6 +3197,9 @@ def _component_total_comparisons(
                     str(item) for item in value.get("related_quantity_candidate_ids") or ()
                 )
                 if relation is not QuantityRelation.NONE and related:
+                    if relation is QuantityRelation.COMPONENT_OF:
+                        for total_id in related:
+                            component_ids_by_total[total_id].add(candidate_id)
                     relationship = QuantityRelationship(
                         subject_id=candidate_id,
                         relation=relation,
@@ -3136,6 +3207,17 @@ def _component_total_comparisons(
                         compatibility=compatibility,
                     )
                     relationships[(candidate_id, relation.value, related)] = relationship
+    for total_id, component_ids in component_ids_by_total.items():
+        related = tuple(sorted(component_ids))
+        if total_id in records and related:
+            relationships[(total_id, QuantityRelation.TOTAL_FOR.value, related)] = (
+                QuantityRelationship(
+                    subject_id=total_id,
+                    relation=QuantityRelation.TOTAL_FOR,
+                    object_ids=related,
+                    compatibility=ScopeCompatibility.COMPONENT_VS_TOTAL,
+                )
+            )
     statements = [dict(record)["statement"] for record in records.values()]
     result: list[dict[str, Any]] = []
     for relationship in relationships.values():
@@ -3205,6 +3287,147 @@ def _component_total_comparisons(
                     "Связь общего объёма и составляющих установлена моделью по тексту; "
                     "роль документа, сооружение, единицы и арифметика проверены "
                     "детерминированно."
+                ),
+            }
+        )
+    return result
+
+
+def _tender_context_comparisons(
+    tender_context: Mapping[str, Iterable[Mapping[str, Any]]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare typed commercial rates and like-for-like active durations."""
+
+    result: list[dict[str, Any]] = []
+    vat_rows: list[tuple[Decimal, str, list[str]]] = []
+    for raw in tender_context.get("commercial_conditions") or ():
+        row = dict(raw)
+        if row.get("field") != "vat":
+            continue
+        match = re.fullmatch(r"\s*([0-9]+(?:[.,][0-9]+)?)\s*%\s*", str(row.get("value") or ""))
+        if match is None:
+            continue
+        locators = [str(value) for value in row.get("source_locator_ids") or ()]
+        vat_rows.append(
+            (
+                Decimal(match.group(1).replace(",", ".")),
+                _context_comparison_role(locators, source_context),
+                locators,
+            )
+        )
+    result.extend(
+        _distinct_context_value_comparisons(
+            vat_rows,
+            subject="Ставка НДС",
+            unit="%",
+            comparison_kind="commercial_condition",
+        )
+    )
+
+    duration_rows: list[tuple[Decimal, str, list[str]]] = []
+    for raw in tender_context.get("time_requirements") or ():
+        row = dict(raw)
+        if row.get("field") not in {"construction_duration", "work_duration"}:
+            continue
+        match = re.fullmatch(
+            r"\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:месяц(?:а|ев)?|мес\.?)\s*",
+            str(row.get("value") or "").casefold(),
+        )
+        if match is None:
+            continue
+        locators = [str(value) for value in row.get("source_locator_ids") or ()]
+        duration_rows.append(
+            (
+                Decimal(match.group(1).replace(",", ".")),
+                _context_comparison_role(locators, source_context),
+                locators,
+            )
+        )
+    result.extend(
+        _distinct_context_value_comparisons(
+            duration_rows,
+            subject="Продолжительность выполнения работ",
+            unit="мес.",
+            comparison_kind="duration",
+        )
+    )
+    return result
+
+
+def _context_comparison_role(
+    locator_ids: Iterable[str], source_context: Mapping[str, Mapping[str, Any]]
+) -> str:
+    for locator_id in locator_ids:
+        context = source_context.get(locator_id)
+        if context:
+            return _professional_document_role(
+                context.get("source_role"), context.get("safe_display_name")
+            )
+    return "Документ"
+
+
+def _distinct_context_value_comparisons(
+    rows: Iterable[tuple[Decimal, str, list[str]]],
+    *,
+    subject: str,
+    unit: str,
+    comparison_kind: str,
+) -> list[dict[str, Any]]:
+    grouped: dict[Decimal, dict[str, Any]] = {}
+    for value, role, locators in rows:
+        current = grouped.setdefault(value, {"roles": set(), "locators": set()})
+        current["roles"].add(role)
+        current["locators"].update(locators)
+    if len(grouped) < 2:
+        return []
+    ordered = sorted(grouped.items(), key=lambda item: item[0])
+    base_value, base = ordered[0]
+    result: list[dict[str, Any]] = []
+    for other_value, other in ordered[1:]:
+        left_role = "/".join(sorted(base["roles"]))
+        right_role = "/".join(sorted(other["roles"]))
+        difference = base_value - other_value
+        locators = sorted(set(base["locators"]) | set(other["locators"]))
+        result.append(
+            {
+                "comparison_id": semantic_digest(
+                    {
+                        "subject": subject,
+                        "left": [str(base_value), left_role],
+                        "right": [str(other_value), right_role],
+                        "locators": locators,
+                    }
+                ),
+                "work_scope_id": None,
+                "facility": "Объект в целом",
+                "work": subject,
+                "left": {
+                    "document_role": left_role,
+                    "value": _decimal_text(base_value),
+                    "unit": unit,
+                },
+                "right": {
+                    "document_role": right_role,
+                    "value": _decimal_text(other_value),
+                    "unit": unit,
+                },
+                "difference": _decimal_text(difference),
+                "comparison_kind": comparison_kind,
+                "classification": (
+                    "DURATION_MISMATCH"
+                    if comparison_kind == "duration"
+                    else "COMMERCIAL_CONDITION_MISMATCH"
+                ),
+                "professional_status": "Значения в документах различаются",
+                "conclusion": (
+                    f"{subject}: {left_role} — {_decimal_text(base_value)} {unit}; "
+                    f"{right_role} — {_decimal_text(other_value)} {unit}."
+                ),
+                "source_locator_ids": locators,
+                "scope_match_basis": (
+                    "Сопоставлены одинаковые типизированные условия; числовые значения "
+                    "нормализованы детерминированно."
                 ),
             }
         )
@@ -3910,16 +4133,102 @@ def _material_comparisons(
     works: Iterable[Mapping[str, Any]],
     source_context: Mapping[str, Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Compare explicit concrete properties within the same engineering scope."""
+    """Compare explicit material identities within one reconciled work scope."""
 
     design_roles = {"ПД", "РД", "Спецификация"}
     commercial_roles = {"ВОР", "Смета"}
     result: list[dict[str, Any]] = []
     for raw in works:
         work = dict(raw)
+        materials_by_role = dict(work.get("materials_by_document") or {})
+        exact_by_role: dict[str, dict[str, list[dict[str, Any]]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
+        for role, values in materials_by_role.items():
+            if role not in design_roles | commercial_roles:
+                continue
+            for raw_value in values or ():
+                if not isinstance(raw_value, Mapping):
+                    continue
+                value = dict(raw_value)
+                identity = _normalized(value.get("name"))
+                if identity:
+                    exact_by_role[str(role)][identity].append(value)
+        for design_role in sorted(design_roles.intersection(exact_by_role)):
+            for commercial_role in sorted(commercial_roles.intersection(exact_by_role)):
+                identities = set(exact_by_role[design_role]).intersection(
+                    exact_by_role[commercial_role]
+                )
+                for identity in sorted(identities):
+                    design_values = exact_by_role[design_role][identity]
+                    commercial_values = exact_by_role[commercial_role][identity]
+                    design_quantity = _one_material_quantity(design_values)
+                    commercial_quantity = _one_material_quantity(commercial_values)
+                    classification = "MATERIAL_MATCH"
+                    quantity_compared = False
+                    description = (
+                        f"Материал «{design_values[0].get('name')}» указан в "
+                        f"{design_role} и {commercial_role}."
+                    )
+                    difference: str | None = None
+                    if (
+                        design_quantity is not None
+                        and commercial_quantity is not None
+                        and design_quantity[1] == commercial_quantity[1]
+                    ):
+                        delta = design_quantity[0] - commercial_quantity[0]
+                        quantity_compared = True
+                        difference = _decimal_text(delta)
+                        if delta != 0:
+                            classification = "MATERIAL_DIFFERENCE"
+                            description = (
+                                f"Количество материала «{design_values[0].get('name')}» "
+                                f"различается: {design_role} — "
+                                f"{_decimal_text(design_quantity[0])} {design_quantity[1]}, "
+                                f"{commercial_role} — "
+                                f"{_decimal_text(commercial_quantity[0])} "
+                                f"{commercial_quantity[1]}."
+                            )
+                    locator_ids = sorted(
+                        {
+                            str(value.get("source_locator_id"))
+                            for value in [*design_values, *commercial_values]
+                            if value.get("source_locator_id")
+                        }
+                    )
+                    result.append(
+                        {
+                            "material_comparison_id": semantic_digest(
+                                {
+                                    "work_scope_id": work.get("work_scope_id"),
+                                    "material": identity,
+                                    "design_role": design_role,
+                                    "commercial_role": commercial_role,
+                                }
+                            ),
+                            "classification": classification,
+                            "professional_status": (
+                                "Материал и количество совпадают"
+                                if classification == "MATERIAL_MATCH" and quantity_compared
+                                else "Материал указан в проектных и коммерческих документах"
+                                if classification == "MATERIAL_MATCH"
+                                else "Количество материала различается"
+                            ),
+                            "facility": work.get("facility"),
+                            "facility_id": work.get("facility_id"),
+                            "work": work.get("work_name"),
+                            "material": design_values[0].get("name"),
+                            "description": description,
+                            "design_roles": [design_role],
+                            "commercial_roles": [commercial_role],
+                            "difference": difference,
+                            "source_locator_ids": locator_ids,
+                            "sources": _source_refs(locator_ids, source_context),
+                        }
+                    )
+
         if not work.get("facility_id"):
             continue
-        materials_by_role = dict(work.get("materials_by_document") or {})
         design_specs: list[tuple[str, dict[str, Any]]] = []
         commercial_specs: list[tuple[str, dict[str, Any]]] = []
         for role, values in materials_by_role.items():
@@ -4023,6 +4332,22 @@ def _material_comparisons(
     return _deduplicate_dicts(result)
 
 
+def _one_material_quantity(
+    values: Iterable[Mapping[str, Any]],
+) -> tuple[Decimal, str] | None:
+    unique: set[tuple[Decimal, str]] = set()
+    for value in values:
+        raw = value.get("quantity")
+        unit = _normalized_unit(value.get("unit") or value.get("raw_unit"))
+        if raw is None or not unit:
+            continue
+        try:
+            unique.add((Decimal(str(raw).replace(",", ".")), unit))
+        except InvalidOperation:
+            continue
+    return next(iter(unique)) if len(unique) == 1 else None
+
+
 def _issues(
     defects: Iterable[Mapping[str, Any]],
     comparisons: Iterable[Mapping[str, Any]],
@@ -4035,6 +4360,8 @@ def _issues(
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
     for comparison in material_comparisons:
+        if comparison.get("classification") == "MATERIAL_MATCH":
+            continue
         locators = [str(value) for value in comparison.get("source_locator_ids") or ()]
         issues.append(
             {
@@ -4074,6 +4401,8 @@ def _issues(
                 "finding_kind": (
                     ProfessionalFindingKind.DURATION_MISMATCH
                     if comparison_kind == "duration"
+                    else ProfessionalFindingKind.CONTRACT_RISK
+                    if comparison_kind == "commercial_condition"
                     else ProfessionalFindingKind.COMPONENT_TOTAL_MISMATCH
                     if comparison_kind == "component_total"
                     else ProfessionalFindingKind.QUANTITY_MISMATCH
@@ -4081,6 +4410,8 @@ def _issues(
                 "kind": (
                     "Расхождение продолжительности"
                     if comparison_kind == "duration"
+                    else "Расхождение коммерческих условий"
+                    if comparison_kind == "commercial_condition"
                     else "Расхождение объёмов"
                     if comparison.get("difference") is not None
                     else "Несопоставимые единицы"
@@ -4092,9 +4423,19 @@ def _issues(
                     "Продолжительность работ и календарные условия требуют согласования "
                     "до подачи предложения."
                     if comparison_kind == "duration"
+                    else "Различие коммерческих условий влияет на расчёт цены договора."
+                    if comparison_kind == "commercial_condition"
                     else consequence
                 ),
-                "recommended_action": (action),
+                "recommended_action": (
+                    "Просим подтвердить применяемое коммерческое условие и привести "
+                    "закупочные, договорные и сметные документы к одному значению."
+                    if comparison_kind == "commercial_condition"
+                    else "Просим подтвердить обязательный срок выполнения работ и "
+                    "согласовать календарные условия проектной и закупочной документации."
+                    if comparison_kind == "duration"
+                    else action
+                ),
                 "source_locator_ids": list(comparison.get("source_locator_ids") or ()),
                 "sources": _source_refs(comparison.get("source_locator_ids") or (), source_context),
                 "status": "Установленное расхождение"
@@ -4989,6 +5330,8 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Переписка/согласования"
     if role == "procurement_notice":
         return "Извещение о закупке"
+    if "нмцк" in name:
+        return "Закупочная документация"
     if role == "technical_specification":
         return "Техническое задание"
     if role == "construction_schedule":
@@ -5005,6 +5348,8 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Закупочная документация"
     if role == "contract" or "проект контракт" in name or "проект договор" in name:
         return "Договор"
+    if "смет" in name and "контракт" in name:
+        return "Смета контракта"
     if (
         role == "customer_regulation"
         or "требован заказчик" in name
@@ -5048,8 +5393,12 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
     for raw in values:
         row = dict(raw)
         if kind == "quantity":
-            raw_value = row.get("normalized_value", row.get("value"))
-            raw_unit = row.get("normalized_unit", row.get("unit", row.get("raw_unit")))
+            raw_value = (
+                row.get("normalized_value")
+                if row.get("normalized_value") is not None
+                else row.get("value")
+            )
+            raw_unit = row.get("normalized_unit") or row.get("unit") or row.get("raw_unit")
             display_value, display_unit = _display_quantity(raw_value, raw_unit)
             payload = {
                 "value": display_value,
@@ -5099,9 +5448,13 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
 def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decimal, str] | None:
     unique: set[tuple[Decimal, str]] = set()
     for value in values:
-        raw = value.get("normalized_value", value.get("value"))
+        raw = (
+            value.get("normalized_value")
+            if value.get("normalized_value") is not None
+            else value.get("value")
+        )
         unit = _normalized_unit(
-            value.get("normalized_unit", value.get("unit", value.get("raw_unit")))
+            value.get("normalized_unit") or value.get("unit") or value.get("raw_unit")
         )
         if raw is None or not unit:
             continue
@@ -5135,6 +5488,40 @@ def _comparable_quantities_by_unit(
         if quantity is not None:
             grouped[quantity[1]].add(quantity[0])
     return {unit: next(iter(amounts)) for unit, amounts in grouped.items() if len(amounts) == 1}
+
+
+def _comparable_quantities_by_semantic_scope(
+    values: Iterable[Mapping[str, Any]],
+) -> dict[str, dict[str, Decimal]]:
+    """Return unambiguous values keyed by model-established engineering scope."""
+
+    grouped: dict[str, dict[str, set[Decimal]]] = defaultdict(lambda: defaultdict(set))
+    for raw in values:
+        value = dict(raw)
+        scope = _normalized(value.get("semantic_scope"))
+        if scope:
+            if str(value.get("scope_compatibility") or "") not in {
+                ScopeCompatibility.SAME_SCOPE.value,
+                ScopeCompatibility.COMPONENT_VS_TOTAL.value,
+            }:
+                continue
+        else:
+            # Compatibility path for deterministic/older accepted rows. The
+            # caller still requires a unique value per role and unit, so this
+            # cannot turn a multi-valued schedule into a discrepancy.
+            scope = "__legacy_unscoped__"
+        quantity = _one_comparable_quantity([value])
+        if quantity is not None:
+            grouped[scope][quantity[1]].add(quantity[0])
+    return {
+        scope: {
+            unit: next(iter(amounts))
+            for unit, amounts in units.items()
+            if len(amounts) == 1
+        }
+        for scope, units in grouped.items()
+        if any(len(amounts) == 1 for amounts in units.values())
+    }
 
 
 def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
