@@ -773,6 +773,14 @@ class IndustrialDocumentUnderstandingPipeline:
         ):
             raise UnderstandingStageFailure("work_reconciliation_manifest_invalid")
         profile_version = str(manifest.get("work_reconciliation_profile") or "")
+        # A queued semantic job is immutable, so a release may encounter work
+        # created by an older prompt/schema profile.  Running that manifest
+        # through the current adapter wastes the single local-model slot and
+        # can only fail at persistence because the current output contract no
+        # longer matches the queued profile.  Terminate it before inference;
+        # the supervised planner will schedule the current idempotent profile.
+        if profile_version != PROJECT_WORK_RECONCILIATION_PROFILE:
+            raise UnderstandingStageFailure("work_reconciliation_profile_superseded")
         reusable = self._repository.load_project_work_reconciliation_result(
             claimed,
             profile_version=profile_version,

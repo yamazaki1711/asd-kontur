@@ -166,6 +166,51 @@ def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> 
     assert calls == 0
 
 
+def test_project_work_reconciliation_rejects_superseded_profile_before_qwen() -> None:
+    calls = 0
+
+    class Repository:
+        def load_project_work_reconciliation_result(
+            self, _claimed: ClaimedJob, *, profile_version: str
+        ) -> dict[str, object] | None:
+            raise AssertionError(f"stale profile must not be loaded: {profile_version}")
+
+    class Qwen:
+        def reconcile_project_works(self, *_args: object, **_kwargs: object) -> dict[str, object]:
+            nonlocal calls
+            calls += 1
+            raise AssertionError("stale profile must not consume local-model work")
+
+    pipeline = IndustrialDocumentUnderstandingPipeline(
+        cast(IndustrialUnderstandingRepository, Repository()),
+        qwen_vision=cast(QwenVisionOcrAdapter, object()),
+        qwen_semantic=cast(QwenDocumentSemanticAdapter, Qwen()),
+    )
+    claimed = ClaimedJob(
+        deterministic_uuid("stale-work-reconciliation-organization"),
+        deterministic_uuid("stale-work-reconciliation-workspace"),
+        deterministic_uuid("stale-work-reconciliation-job"),
+        JobKind.PROJECT_WORK_RECONCILIATION,
+        {
+            "work_reconciliation_profile": "qwen-project-work-reconciliation-v10",
+            "work_observations": [{"candidate_id": "candidate-a"}],
+            "work_families": {"backfill": "Обратная засыпка"},
+            "facilities": [],
+        },
+        "sha256:" + "d" * 64,
+        1,
+        1,
+        "not_requested",
+    )
+
+    with pytest.raises(
+        UnderstandingStageFailure,
+        match="work_reconciliation_profile_superseded",
+    ):
+        pipeline._work_reconciliation(claimed, BytesIO())
+    assert calls == 0
+
+
 def test_identity_observation_groups_are_bounded_balanced_and_complete() -> None:
     source_a = deterministic_uuid("identity-group-source-a")
     source_b = deterministic_uuid("identity-group-source-b")
