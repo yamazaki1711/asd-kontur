@@ -895,6 +895,9 @@ def test_reconciliation_reports_material_quantity_delta_only_after_exact_resourc
         ("+12,350", Decimal("12.350")),
         ("-0.025", Decimal("-0.025")),
         ("1 234,50", Decimal("1234.50")),
+        ("1\u00a0234,50", Decimal("1234.50")),
+        ("1\u202f234,50", Decimal("1234.50")),
+        ("1\u2009234,50", Decimal("1234.50")),
         ("12,3.5", None),
         ("12 м³", None),
         ("Ø12", None),
@@ -2584,7 +2587,7 @@ def test_qwen_engineering_normalizes_units_without_changing_source_spelling() ->
         "quantities": [
             {
                 "work_name": "Устройство свай",
-                "value": "4,0",
+                "value": "4\u202f600,25",
                 "unit": "метра",
                 "fragment_id": fragments[1].fragment_id,
                 "work_fragment_id": fragments[0].fragment_id,
@@ -2594,7 +2597,7 @@ def test_qwen_engineering_normalizes_units_without_changing_source_spelling() ->
             {
                 "work_name": "Устройство свай",
                 "name": "Арматура",
-                "quantity": "2",
+                "quantity": "1 120",
                 "unit": "тонны",
                 "fragment_id": fragments[2].fragment_id,
                 "work_fragment_id": fragments[0].fragment_id,
@@ -2609,8 +2612,10 @@ def test_qwen_engineering_normalizes_units_without_changing_source_spelling() ->
         result = adapter.extract_engineering(document.pages[0].elements)
 
     assert result.quantities[0].raw_unit == "метра"
+    assert result.quantities[0].parsed_value == Decimal("4600.25")
     assert result.quantities[0].normalized_unit == "m"
     assert result.materials[0].raw_unit == "тонны"
+    assert result.materials[0].parsed_quantity == Decimal("1120")
     assert result.materials[0].normalized_unit == "t"
 
 

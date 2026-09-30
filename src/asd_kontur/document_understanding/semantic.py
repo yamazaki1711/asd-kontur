@@ -752,7 +752,9 @@ def reconcile_sources(
 
 
 def parse_exact_decimal(raw: str) -> Decimal | None:
-    value = raw.strip().replace("\u00a0", "").replace(" ", "")
+    value = raw.strip()
+    for separator in (" ", "\u00a0", "\u202f", "\u2009"):
+        value = value.replace(separator, "")
     if not re.fullmatch(r"[+-]?\d+(?:[,.]\d+)?", value):
         return None
     try:

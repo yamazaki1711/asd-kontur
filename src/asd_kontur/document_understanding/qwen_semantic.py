@@ -38,7 +38,7 @@ from .models import (
     StructureRelationshipCandidate,
     WorkTypeCandidate,
 )
-from .semantic import StructuredCandidates, normalize_unit
+from .semantic import StructuredCandidates, normalize_unit, parse_exact_decimal
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v2"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v17"
@@ -664,10 +664,7 @@ class QwenDocumentSemanticAdapter:
                     continue
                 if work not in works:
                     works.append(work)
-            try:
-                parsed_value = Decimal(raw.replace(",", "."))
-            except InvalidOperation:
-                parsed_value = None
+            parsed_value = parse_exact_decimal(raw)
             normalized_unit = normalize_unit(unit) if parsed_value is not None else None
             quantities.append(
                 QuantityCandidate(
@@ -711,10 +708,7 @@ class QwenDocumentSemanticAdapter:
                     continue
                 if work not in works:
                     works.append(work)
-            try:
-                parsed_value = Decimal(raw.replace(",", "."))
-            except InvalidOperation:
-                parsed_value = None
+            parsed_value = parse_exact_decimal(raw)
             materials.append(
                 MaterialCandidate(
                     deterministic_uuid(
