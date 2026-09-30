@@ -4,7 +4,7 @@ from asd_kontur.assistant.qwen_server import QwenRuntimeState, _generation_token
 
 
 def test_generation_token_ceiling_preserves_structured_semantic_budget() -> None:
-    assert _generation_token_ceiling("structured Tender analysis") == 3200
+    assert _generation_token_ceiling("structured Tender analysis") == 5000
     assert _generation_token_ceiling("Role: qwen3.8-27b-developer-worker@1") == 6000
 
 

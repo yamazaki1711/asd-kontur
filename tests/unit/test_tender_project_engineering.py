@@ -112,9 +112,7 @@ def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> N
 
 
 def test_contract_estimate_filename_is_not_reduced_to_ordinary_estimate() -> None:
-    assert _professional_document_role(None, "Проект сметы контракта.docx") == (
-        "Смета контракта"
-    )
+    assert _professional_document_role(None, "Проект сметы контракта.docx") == ("Смета контракта")
 
 
 def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
@@ -1832,7 +1830,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v53"
+    assert model["model_version"] == "project-engineering-model-v54"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

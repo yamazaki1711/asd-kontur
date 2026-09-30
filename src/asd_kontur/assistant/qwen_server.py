@@ -104,7 +104,7 @@ def _generation_token_ceiling(prompt_text: str) -> int:
 
     if prompt_text.startswith("Role: qwen3.8-27b-developer-worker@"):
         return 6000
-    return 3200
+    return 5000
 
 
 def main() -> None:

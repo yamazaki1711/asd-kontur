@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v53"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v54"
 _QUANTITY_AWARE_WORK_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v5",
@@ -39,6 +39,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v10",
         "qwen-project-work-reconciliation-v11",
         "qwen-project-work-reconciliation-v12",
+        "qwen-project-work-reconciliation-v13",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -3091,9 +3092,7 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         vor_by_scope = scoped.get("ВОР") or {}
         estimate_by_scope = scoped.get("Смета") or {}
         for scope in sorted(set(vor_by_scope).intersection(estimate_by_scope)):
-            for unit in sorted(
-                set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])
-            ):
+            for unit in sorted(set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])):
                 vor = (vor_by_scope[scope][unit], unit)
                 estimate = (estimate_by_scope[scope][unit], unit)
                 difference = vor[0] - estimate[0]
@@ -3102,9 +3101,7 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                     if difference == 0
                     else f"Разница ВОР ↔ Смета: {_decimal_text(difference)} {unit}"
                 )
-                row = _comparison_row(
-                    work, "ВОР", "Смета", vor, estimate, difference, conclusion
-                )
+                row = _comparison_row(work, "ВОР", "Смета", vor, estimate, difference, conclusion)
                 row["semantic_scope"] = scope
                 comparisons.append(row)
     return comparisons
@@ -5369,9 +5366,7 @@ def _professional_document_role(source_role: object, display_name: object) -> st
         return "Требования Заказчика"
     if "вор" in name or ("ведомост" in name and ("объем" in name or "объём" in name)):
         return "ВОР"
-    if "смет" in name or re.search(
-        r"(?:^|[\s._-])(?:см|лср|оср|сср)(?:[\s._-]|\d|$)", name
-    ):
+    if "смет" in name or re.search(r"(?:^|[\s._-])(?:см|лср|оср|сср)(?:[\s._-]|\d|$)", name):
         return "Смета"
     if "спецификац" in name:
         return "Спецификация"
@@ -5523,11 +5518,7 @@ def _comparable_quantities_by_semantic_scope(
         if quantity is not None:
             grouped[scope][quantity[1]].add(quantity[0])
     return {
-        scope: {
-            unit: next(iter(amounts))
-            for unit, amounts in units.items()
-            if len(amounts) == 1
-        }
+        scope: {unit: next(iter(amounts)) for unit, amounts in units.items() if len(amounts) == 1}
         for scope, units in grouped.items()
         if any(len(amounts) == 1 for amounts in units.values())
     }

@@ -97,7 +97,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v12"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v13"
 
 
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
@@ -138,6 +138,75 @@ def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
 
     assert result["inference_call_count"] == 1
     assert result["recovery_codes"] == []
+
+
+def test_quantity_relationship_review_uses_relationship_sized_output_budget(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": f"candidate-{index}",
+            "wording": f"Устройство участка {index}",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": f"quantity-{index}",
+                    "value": str(index + 1),
+                    "unit": "m",
+                }
+            ],
+        }
+        for index in range(8)
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        assert max_tokens == 4_320
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "pipeline",
+                        "operation": "Монтаж участка трубопровода",
+                        "facility": None,
+                        "confidence": "0.9",
+                        "reason": "Строка прямо описывает монтаж участка.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина отдельного участка трубопровода",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "reason": "Итоговый объём в пакете не указан.",
+                            }
+                        ],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"pipeline": "Трубопроводы"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 1
+    assert all(
+        review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
 
 
 def test_qwen_work_reconciliation_classifies_linked_quantity_meaning(

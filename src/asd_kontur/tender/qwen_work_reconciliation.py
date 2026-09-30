@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v12"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v13"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -27,6 +27,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v9",
     "qwen-project-work-reconciliation-v10",
     "qwen-project-work-reconciliation-v11",
+    "qwen-project-work-reconciliation-v12",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@12.0.0"
@@ -137,6 +138,11 @@ class QwenProjectWorkReconciler:
         }
         try:
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
+            output_budget = (
+                max(1_600, min(5_000, len(rows) * 360 + quantity_count * 180))
+                if relationship_review
+                else max(900, min(3_200, len(rows) * 240 + quantity_count * 100))
+            )
             raw = _complete(
                 self._endpoint,
                 _prompt(
@@ -149,9 +155,9 @@ class QwenProjectWorkReconciler:
                 # Representative twelve-row construction batches repeatedly
                 # exhausted the old 170-token-per-row allowance even when every
                 # observation was valid. Budget the complete required JSON shape while
-                # retaining the bounded 3,200-token ceiling and recursive
-                # split recovery for genuinely verbose or malformed output.
-                max_tokens=max(900, min(3_200, len(rows) * 240 + quantity_count * 100)),
+                # retaining a bounded task-specific ceiling and recursive split
+                # recovery for genuinely verbose or malformed output.
+                max_tokens=output_budget,
             )
             return (
                 _parse(
