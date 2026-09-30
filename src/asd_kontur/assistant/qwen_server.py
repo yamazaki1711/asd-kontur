@@ -11,8 +11,10 @@ import argparse
 import base64
 import io
 import json
+import queue
 import threading
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -79,6 +81,18 @@ class QwenRuntimeState:
         self._status_changed_at = datetime.now(UTC).isoformat()
 
 
+@dataclass(frozen=True, slots=True)
+class _InferenceRequest:
+    prompt_text: str
+    max_tokens: int
+    temperature: float
+    image_bytes: bytes | None
+    output: queue.Queue[object]
+
+
+_INFERENCE_COMPLETE = object()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", required=True, type=Path)
@@ -89,17 +103,82 @@ def main() -> None:
         raise ValueError("qwen_server_must_bind_loopback")
     state = QwenRuntimeState()
     generation_lock = threading.Lock()
+    request_queue: queue.Queue[_InferenceRequest] = queue.Queue(maxsize=1)
 
-    def load_model() -> None:
+    def inference_loop() -> None:
         try:
             import mlx_vlm  # type: ignore[import-not-found]
+            from mlx_vlm import prompt_utils
 
             model, processor = mlx_vlm.load(str(args.model))
-            state.model_ready(model, processor, model.config)
+            config = model.config
+            state.model_ready(model, processor, config)
         except BaseException as exc:  # the status endpoint must survive a fatal loader error
             state.model_error(exc)
+            return
+        while True:
+            request = request_queue.get()
+            generation_error: BaseException | None = None
+            state.generation_started()
+            try:
+                image: Any = None
+                if request.image_bytes is not None:
+                    from PIL import Image
 
-    threading.Thread(target=load_model, name="qwen-model-loader", daemon=True).start()
+                    image = Image.open(io.BytesIO(request.image_bytes)).convert("RGB")
+                prompt = prompt_utils.apply_chat_template(
+                    processor,
+                    config,
+                    request.prompt_text,
+                    num_images=1 if image is not None else 0,
+                    enable_thinking=False,
+                )
+                if image is not None:
+                    response_text = _collect_generated_text(
+                        mlx_vlm.stream_generate(
+                            model,
+                            processor,
+                            prompt,
+                            image=image,
+                            max_tokens=request.max_tokens,
+                            temperature=request.temperature,
+                        )
+                    )
+                    request.output.put({"event": "vision_completed", "text": response_text})
+                else:
+                    request.output.put({"event": "started", "model": "Qwen3.8-27B"})
+                    prior = ""
+                    generation_events = 0
+                    for result in mlx_vlm.stream_generate(
+                        model,
+                        processor,
+                        prompt,
+                        image=None,
+                        max_tokens=request.max_tokens,
+                        temperature=request.temperature,
+                    ):
+                        generation_events += 1
+                        current = str(result.text)
+                        delta = current[len(prior) :] if current.startswith(prior) else current
+                        prior = current
+                        if delta:
+                            request.output.put({"event": "delta", "text": delta})
+                    request.output.put(
+                        {
+                            "event": "completed",
+                            "generation_events": generation_events,
+                            "max_tokens": request.max_tokens,
+                            "limit_reached": generation_events >= request.max_tokens,
+                        }
+                    )
+            except BaseException as exc:
+                generation_error = exc
+                request.output.put(exc)
+            finally:
+                state.generation_finished(generation_error)
+                request.output.put(_INFERENCE_COMPLETE)
+
+    threading.Thread(target=inference_loop, name="qwen-inference", daemon=True).start()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "ASDKonturQwen/1.0"
@@ -148,43 +227,24 @@ def main() -> None:
             except (KeyError, TypeError, ValueError, json.JSONDecodeError):
                 self.send_error(400)
                 return
-            runtime = state.runtime()
-            if runtime is None:
+            if state.runtime() is None:
                 self.send_error(503)
                 return
             if not generation_lock.acquire(blocking=False):
                 self.send_error(429)
                 return
-            generation_error: BaseException | None = None
+            output: queue.Queue[object] = queue.Queue()
+            inference_request = _InferenceRequest(
+                prompt_text=prompt_text,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                image_bytes=image_bytes,
+                output=output,
+            )
             try:
-                model, processor, config = runtime
-                import mlx_vlm
-                from mlx_vlm import prompt_utils
-
-                state.generation_started()
-                image: Any = None
-                if image_bytes is not None:
-                    from PIL import Image
-
-                    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-                prompt = prompt_utils.apply_chat_template(
-                    processor,
-                    config,
-                    prompt_text,
-                    num_images=1 if image is not None else 0,
-                    enable_thinking=False,
-                )
+                request_queue.put_nowait(inference_request)
                 if self.path == "/vision":
-                    response_text = _collect_generated_text(
-                        mlx_vlm.stream_generate(
-                            model,
-                            processor,
-                            prompt,
-                            image=image,
-                            max_tokens=max_tokens,
-                            temperature=temperature,
-                        )
-                    )
+                    response_text = self._vision_result(output)
                     payload = json.dumps(
                         {"model": "Qwen3.8-27B", "text": response_text}, ensure_ascii=False
                     ).encode()
@@ -198,39 +258,35 @@ def main() -> None:
                 self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-                self._write({"event": "started", "model": "Qwen3.8-27B"})
-                prior = ""
-                generation_events = 0
-                for result in mlx_vlm.stream_generate(
-                    model,
-                    processor,
-                    prompt,
-                    image=image,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                ):
-                    generation_events += 1
-                    current = str(result.text)
-                    delta = current[len(prior) :] if current.startswith(prior) else current
-                    prior = current
-                    if delta:
-                        self._write({"event": "delta", "text": delta})
-                self._write(
-                    {
-                        "event": "completed",
-                        "generation_events": generation_events,
-                        "max_tokens": max_tokens,
-                        "limit_reached": generation_events >= max_tokens,
-                    }
-                )
+                connected = True
+                while True:
+                    value = output.get()
+                    if value is _INFERENCE_COMPLETE:
+                        break
+                    if isinstance(value, BaseException):
+                        raise value
+                    if not isinstance(value, dict):
+                        raise RuntimeError("qwen inference emitted an invalid event")
+                    if connected:
+                        try:
+                            self._write(value)
+                        except (BrokenPipeError, ConnectionResetError):
+                            connected = False
             except (BrokenPipeError, ConnectionResetError):
                 pass
-            except BaseException as exc:
-                generation_error = exc
-                raise
             finally:
-                state.generation_finished(generation_error)
                 generation_lock.release()
+
+        def _vision_result(self, output: queue.Queue[object]) -> str:
+            result = ""
+            while True:
+                value = output.get()
+                if value is _INFERENCE_COMPLETE:
+                    return result
+                if isinstance(value, BaseException):
+                    raise value
+                if isinstance(value, dict) and value.get("event") == "vision_completed":
+                    result = str(value.get("text") or "")
 
         def _write(self, payload: dict[str, Any]) -> None:
             self.wfile.write((json.dumps(payload, ensure_ascii=False) + "\n").encode("utf-8"))
