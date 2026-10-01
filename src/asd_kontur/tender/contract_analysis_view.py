@@ -10,6 +10,10 @@ import sqlalchemy as sa
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
+from asd_kontur.document_understanding.qwen_semantic import (
+    QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+)
+
 
 class TenderContractAnalysisError(RuntimeError):
     """A scoped Tender projection could not be read."""
@@ -187,7 +191,8 @@ class TenderContractAnalysisRepository:
                     "workspace.document_versions v JOIN workspace.document_role_decisions role ON "
                     "role.organization_id=v.organization_id AND role.workspace_id=v.workspace_id AND "
                     "role.document_id=v.document_id AND role.document_version=v.version WHERE "
-                    "v.organization_id=:o AND v.workspace_id=:w AND 'contract'=ANY(role.selected_roles) "
+                    "v.organization_id=:o AND v.workspace_id=:w AND "
+                    "role.validator_version=:role_profile AND 'contract'=ANY(role.selected_roles) "
                     "AND EXISTS (SELECT 1 FROM workspace.document_version_activation_decisions active "
                     "WHERE active.organization_id=v.organization_id AND active.workspace_id=v.workspace_id "
                     "AND active.document_id=v.document_id AND active.selected_document_version=v.version "
@@ -196,7 +201,11 @@ class TenderContractAnalysisRepository:
                     "AND newer.document_id=active.document_id AND newer.decision_version>active.decision_version)) "
                     "ORDER BY v.source_version_id"
                 ),
-                {"o": organization_id, "w": workspace_id},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                },
             ).mappings()
         )
         if not contract_sources:
