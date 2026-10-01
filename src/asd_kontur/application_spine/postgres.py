@@ -4663,7 +4663,6 @@ class SpinePostgresRepository:
                         "source_version_id": str(source_version_id),
                         "job_id": str(existing["job_id"]),
                         "state": str(existing["state"]),
-                        "failure_code": existing["typed_failure_code"],
                     }
                 )
                 continue
