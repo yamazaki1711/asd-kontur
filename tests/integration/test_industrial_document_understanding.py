@@ -274,7 +274,7 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         assert response.status_code == 200, response.text
         value = response.json()
         assert value == {
-            "status": "not_started",
+            "status": "contract_input_unavailable",
             "process": None,
             "assessment": None,
             "clauses": [],
@@ -284,7 +284,7 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             "revised_contracts": [],
             "revised_clauses": [],
             "deliverables": [],
-            "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
+            "gaps": ["DRAFT_CONTRACT_SOURCE_UNAVAILABLE"],
             "authority_boundary": "read_only_projection",
         }
 
@@ -294,7 +294,7 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         exported = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
         assert exported.status_code == 200, exported.text
         assert exported.headers["content-type"] == "text/csv; charset=utf-8"
-        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in exported.content.decode("utf-8-sig")
+        assert "DRAFT_CONTRACT_SOURCE_UNAVAILABLE" in exported.content.decode("utf-8-sig")
         report = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx")
         assert report.status_code == 200, report.text
         assert report.headers["content-type"] == (
@@ -302,8 +302,8 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
         )
         with zipfile.ZipFile(io.BytesIO(report.content)) as package:
             report_xml = package.read("word/document.xml").decode("utf-8")
-        assert "Договорный Tender-процесс не сформирован" in report_xml
-        assert "TENDER_CONTRACT_PROCESS_NOT_STARTED" in report_xml
+        assert "Проект договора не найден" in report_xml
+        assert "DRAFT_CONTRACT_SOURCE_UNAVAILABLE" in report_xml
         hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
         assert hidden_export.status_code == 404, hidden_export.text
         hidden_report = other.get(

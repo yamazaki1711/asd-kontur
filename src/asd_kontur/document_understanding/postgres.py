@@ -30,6 +30,7 @@ from asd_kontur.ntd.pd_rd import (
     evaluate_pd_rd_requirements,
     load_spds_corpus_denominator,
 )
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
 from .models import (
@@ -460,6 +461,62 @@ class IndustrialUnderstandingRepository:
                     or str(existing.result_digest) != result_digest
                 ):
                     raise ValueError("project_work_reconciliation_result_conflict")
+
+    def load_contract_analysis_result(self, claimed: ClaimedJob) -> dict[str, object] | None:
+        with self._session(claimed) as session:
+            value = session.scalar(
+                sa.text(
+                    "SELECT result_manifest FROM workspace.contract_analysis_results WHERE "
+                    "organization_id=:o AND workspace_id=:w AND job_id=:job"
+                ),
+                {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+            )
+        return dict(value) if isinstance(value, dict) else None
+
+    def record_contract_analysis_result(
+        self, claimed: ClaimedJob, *, output_manifest: dict[str, object]
+    ) -> None:
+        manifest = claimed.input_manifest
+        profile = str(manifest.get("contract_analysis_profile") or "")
+        if profile != CONTRACT_ANALYSIS_PROFILE:
+            raise ValueError("contract_analysis_profile_invalid")
+        result_digest = semantic_digest(output_manifest)
+        with self._session(claimed) as session:
+            inserted = session.execute(
+                sa.text(
+                    "INSERT INTO workspace.contract_analysis_results "
+                    "(organization_id,workspace_id,job_id,source_version_id,profile_version,"
+                    "batch_ordinal,source_locator_ids,input_digest,result_manifest,result_digest,model_identity) "
+                    "VALUES (:o,:w,:job,:source,:profile,:ordinal,CAST(:locators AS uuid[]),:input,"
+                    "CAST(:result AS jsonb),:digest,:model) ON CONFLICT DO NOTHING"
+                ),
+                {
+                    "o": claimed.organization_id,
+                    "w": claimed.workspace_id,
+                    "job": claimed.job_id,
+                    "source": UUID(str(manifest["source_version_id"])),
+                    "profile": profile,
+                    "ordinal": int(manifest["batch_ordinal"]),
+                    "locators": [UUID(str(value)) for value in manifest["source_locator_ids"]],
+                    "input": claimed.input_digest,
+                    "result": _json(output_manifest),
+                    "digest": result_digest,
+                    "model": str(manifest.get("model_identity") or "local-qwen3.8-27b"),
+                },
+            )
+            if not (getattr(inserted, "rowcount", 0) or 0):
+                existing = session.execute(
+                    sa.text(
+                        "SELECT input_digest,result_digest FROM workspace.contract_analysis_results "
+                        "WHERE organization_id=:o AND workspace_id=:w AND job_id=:job"
+                    ),
+                    {"o": claimed.organization_id, "w": claimed.workspace_id, "job": claimed.job_id},
+                ).one()
+                if (
+                    str(existing.input_digest) != claimed.input_digest
+                    or str(existing.result_digest) != result_digest
+                ):
+                    raise ValueError("contract_analysis_result_conflict")
 
     def load_project_work_reconciliation_result(
         self,

@@ -68,6 +68,7 @@ _RETRYABLE_STAGE_FAILURES = frozenset(
     {
         "qwen_semantic_runtime_unavailable",
         "qwen_work_reconciliation_runtime_unavailable",
+        "qwen_contract_analysis_runtime_unavailable",
         "qwen_vision_runtime_unavailable",
     }
 )
@@ -434,6 +435,7 @@ class DocumentWorker:
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
             JobKind.PROJECT_STRUCTURE_RECONCILIATION,
             JobKind.PROJECT_WORK_RECONCILIATION,
+            JobKind.CONTRACT_ANALYSIS,
         }:
             try:
                 with self._open_source(claimed) as source:

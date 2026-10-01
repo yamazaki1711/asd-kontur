@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid5
 
 import sqlalchemy as sa
 from sqlalchemy import Engine
@@ -38,20 +38,9 @@ class TenderContractAnalysisRepository:
                 .one_or_none()
             )
             if process is None:
-                return {
-                    "status": "not_started",
-                    "process": None,
-                    "assessment": None,
-                    "clauses": [],
-                    "issues": [],
-                    "protocols": [],
-                    "disagreement_items": [],
-                    "revised_contracts": [],
-                    "revised_clauses": [],
-                    "deliverables": [],
-                    "gaps": ["TENDER_CONTRACT_PROCESS_NOT_STARTED"],
-                    "authority_boundary": "read_only_projection",
-                }
+                return self._candidate_projection(
+                    session, organization_id=organization_id, workspace_id=workspace_id
+                )
             process_id = process["tender_process_id"]
             assessment = (
                 session.execute(
@@ -187,6 +176,210 @@ class TenderContractAnalysisRepository:
             "authority_boundary": "read_only_projection; Tender-service and qualified reviewer retain legal-writing authority",
         }
 
+    @staticmethod
+    def _candidate_projection(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any]:
+        contract_sources = list(
+            session.execute(
+                sa.text(
+                    "SELECT DISTINCT v.source_version_id,v.safe_display_name FROM "
+                    "workspace.document_versions v JOIN workspace.document_role_decisions role ON "
+                    "role.organization_id=v.organization_id AND role.workspace_id=v.workspace_id AND "
+                    "role.document_id=v.document_id AND role.document_version=v.version WHERE "
+                    "v.organization_id=:o AND v.workspace_id=:w AND 'contract'=ANY(role.selected_roles) "
+                    "AND EXISTS (SELECT 1 FROM workspace.document_version_activation_decisions active "
+                    "WHERE active.organization_id=v.organization_id AND active.workspace_id=v.workspace_id "
+                    "AND active.document_id=v.document_id AND active.selected_document_version=v.version "
+                    "AND NOT EXISTS (SELECT 1 FROM workspace.document_version_activation_decisions newer "
+                    "WHERE newer.organization_id=active.organization_id AND newer.workspace_id=active.workspace_id "
+                    "AND newer.document_id=active.document_id AND newer.decision_version>active.decision_version)) "
+                    "ORDER BY v.source_version_id"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            ).mappings()
+        )
+        if not contract_sources:
+            return _empty_candidate_projection(
+                status="contract_input_unavailable",
+                gaps=["DRAFT_CONTRACT_SOURCE_UNAVAILABLE"],
+            )
+        jobs = list(
+            session.execute(
+                sa.text(
+                    "SELECT job_id,state,typed_failure_code,created_at,completed_at FROM "
+                    "workspace.durable_jobs WHERE organization_id=:o AND workspace_id=:w "
+                    "AND job_kind='CONTRACT_ANALYSIS' ORDER BY created_at,job_id"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            ).mappings()
+        )
+        results = list(
+            session.execute(
+                sa.text(
+                    "SELECT result.job_id,result.source_version_id,result.batch_ordinal,"
+                    "result.result_manifest,result.recorded_at FROM workspace.contract_analysis_results result "
+                    "JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id AND "
+                    "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
+                    "result.organization_id=:o AND result.workspace_id=:w AND job.state='succeeded' "
+                    "ORDER BY result.source_version_id,result.batch_ordinal,result.recorded_at"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            ).mappings()
+        )
+        clauses: list[dict[str, Any]] = []
+        issues: list[dict[str, Any]] = []
+        disagreement_items: list[dict[str, Any]] = []
+        revised_clauses: list[dict[str, Any]] = []
+        for result in results:
+            manifest = result["result_manifest"]
+            if not isinstance(manifest, dict):
+                continue
+            clause_ids: dict[str, str] = {}
+            for clause in manifest.get("clauses") or ():
+                if not isinstance(clause, dict):
+                    continue
+                clause_ref = str(clause.get("clause_ref") or "")
+                clause_id = str(
+                    uuid5(
+                        workspace_id,
+                        f"contract-clause:{result['source_version_id']}:{clause_ref}:"
+                        f"{clause.get('source_text')}",
+                    )
+                )
+                clause_ids[clause_ref] = clause_id
+                locator_ids = [str(value) for value in clause.get("source_locator_ids") or ()]
+                clauses.append(
+                    {
+                        "clause_id": clause_id,
+                        "clause_version": 1,
+                        "clause_key": clause_ref,
+                        "locator_label": str(clause.get("section") or ""),
+                        "authority_layer": "qwen_contract_candidate",
+                        "source_version_id": str(result["source_version_id"]),
+                        "source_locator_id": locator_ids[0] if locator_ids else None,
+                        "source_locator_ids": locator_ids,
+                        "source_text": clause.get("source_text"),
+                        "category": clause.get("category"),
+                        "customer_obligation": clause.get("customer_obligation"),
+                        "contractor_obligation": clause.get("contractor_obligation"),
+                        "condition": clause.get("condition"),
+                    }
+                )
+            for risk in manifest.get("risks") or ():
+                if not isinstance(risk, dict):
+                    continue
+                clause_ref = str(risk.get("clause_ref") or "")
+                clause_id = clause_ids.get(clause_ref)
+                if clause_id is None:
+                    continue
+                issue_id = str(
+                    uuid5(
+                        workspace_id,
+                        f"contract-risk:{clause_id}:{risk.get('kind')}:{risk.get('description')}",
+                    )
+                )
+                issue = {
+                    "issue_id": issue_id,
+                    "issue_version": 1,
+                    "issue_kind": "contract_risk",
+                    "subject": risk.get("kind"),
+                    "severity": risk.get("severity"),
+                    "applicability": "candidate",
+                    "clause_id": clause_id,
+                    "clause_version": 1,
+                    "uncertainty_code": risk.get("uncertainty"),
+                    "description": risk.get("description"),
+                    "recommendation_text": risk.get("recommended_action"),
+                    "consequence_code": risk.get("practical_consequence"),
+                    "confidence": risk.get("confidence"),
+                    "authority": risk.get("authority"),
+                }
+                issues.append(issue)
+                proposed = risk.get("proposed_contractor_wording")
+                if risk.get("disagreement_required") is True and proposed:
+                    item_id = str(uuid5(workspace_id, f"contract-disagreement:{issue_id}"))
+                    disagreement_items.append(
+                        {
+                            "item_id": item_id,
+                            "ordinal": len(disagreement_items) + 1,
+                            "clause_id": clause_id,
+                            "clause_version": 1,
+                            "issue_id": issue_id,
+                            "issue_version": 1,
+                            "proposed_clause_text": proposed,
+                            "consequence_code": risk.get("practical_consequence"),
+                            "uncertainty_issue_ids": [],
+                        }
+                    )
+                    revised_clauses.append(
+                        {
+                            "revised_clause_id": str(
+                                uuid5(workspace_id, f"contract-revised-clause:{item_id}")
+                            ),
+                            "ordinal": len(revised_clauses) + 1,
+                            "source_clause_id": clause_id,
+                            "source_clause_version": 1,
+                            "issue_id": issue_id,
+                            "issue_version": 1,
+                            "disagreement_item_id": item_id,
+                            "revised_text": proposed,
+                        }
+                    )
+        active = any(str(job["state"]) in {"queued", "leased", "running"} for job in jobs)
+        failed = [job for job in jobs if str(job["state"]) in {"failed", "reconciliation_required"}]
+        status = "analyzing" if active else "drafted" if results else "analysis_pending"
+        gaps: list[str] = []
+        if active:
+            gaps.append("CONTRACT_ANALYSIS_IN_PROGRESS")
+        if failed:
+            gaps.append("CONTRACT_ANALYSIS_BATCH_FAILURES")
+        if results and not issues:
+            gaps.append("CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES")
+        return {
+            "status": status,
+            "process": {
+                "tender_process_id": f"draft:{workspace_id}",
+                "revision": len(results),
+                "state": status,
+                "updated_at": max(
+                    (result["recorded_at"] for result in results), default=None
+                ),
+            },
+            "assessment": {
+                "status": "partial" if active or failed else "complete",
+                "required_source_classes": ["draft_contract"],
+                "available_source_classes": ["draft_contract"],
+                "missing_source_classes": [],
+                "source_names": [str(source["safe_display_name"]) for source in contract_sources],
+            },
+            "clauses": clauses,
+            "issues": issues,
+            "protocols": [],
+            "disagreement_items": disagreement_items,
+            "revised_contracts": [],
+            "revised_clauses": revised_clauses,
+            "deliverables": [
+                {
+                    "deliverable_kind": "disagreement_protocol",
+                    "state": "draft" if disagreement_items else "pending",
+                    "blocker_issue_ids": [],
+                    "uncertainty_issue_ids": [],
+                },
+                {
+                    "deliverable_kind": "revised_contract",
+                    "state": "candidate_clause_schedule" if revised_clauses else "pending",
+                    "blocker_issue_ids": [],
+                    "uncertainty_issue_ids": [],
+                },
+            ],
+            "gaps": gaps,
+            "authority_boundary": (
+                "autonomous commercial-risk draft; qualified human review is required before "
+                "legal finalization or signature"
+            ),
+        }
+
     def _scope_for(self, owner_identity_id: str, workspace_id: UUID) -> UUID:
         with self._engine.connect() as connection:
             value = connection.scalar(
@@ -209,3 +402,20 @@ def _set_scope(session: Session, organization_id: UUID, workspace_id: UUID) -> N
 
 def _row(value: Any) -> dict[str, Any]:
     return {key: str(item) if isinstance(item, UUID) else item for key, item in dict(value).items()}
+
+
+def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, Any]:
+    return {
+        "status": status,
+        "process": None,
+        "assessment": None,
+        "clauses": [],
+        "issues": [],
+        "protocols": [],
+        "disagreement_items": [],
+        "revised_contracts": [],
+        "revised_clauses": [],
+        "deliverables": [],
+        "gaps": gaps,
+        "authority_boundary": "read_only_projection",
+    }

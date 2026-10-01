@@ -806,6 +806,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.project_reconciliation_defects",
         "workspace.project_pit_observation_disposition_receipts",
         "workspace.project_work_reconciliation_results",
+        "workspace.contract_analysis_results",
         "workspace.project_structure_relationship_candidates",
         "workspace.engineering_extraction_batches",
         "workspace.source_cross_references",

@@ -14,6 +14,7 @@ from .conftest import create_database, drop_database, run_migration
 pytestmark = pytest.mark.postgres
 
 SPINE_WORKSPACE_TABLES = (
+    "contract_analysis_results",
     "document_pages",
     "document_processing_states",
     "document_records",
@@ -149,6 +150,7 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 fairness_end = claim_definition.index("),'-infinity'::timestamptz)")
                 fairness_definition = claim_definition[fairness_start:fairness_end]
                 assert "PROJECT_WORK_RECONCILIATION" in fairness_definition
+                assert "CONTRACT_ANALYSIS" in fairness_definition
                 assert "DOCUMENT_HASH" not in fairness_definition
 
             # 0045 must restore the 0044 wrapper AND retain its v1 implementation.

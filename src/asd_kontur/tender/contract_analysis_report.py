@@ -24,7 +24,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         str(item.get("disagreement_item_id", "")): item
         for item in _records(view.get("revised_clauses"))
     }
-    disagreement_rows: list[tuple[str, str, str, str, str, str]] = []
+    disagreement_rows: list[tuple[str, str, str, str, str, str, str]] = []
     for ordinal, item in enumerate(_records(view.get("disagreement_items")), start=1):
         clause = clause_by_identity.get(
             (str(item.get("clause_id", "")), str(item.get("clause_version", ""))), {}
@@ -34,6 +34,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             (
                 str(ordinal),
                 str(clause.get("clause_key") or "Не указано"),
+                str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 _source_reference(clause),
                 str(revised.get("revised_text") or item.get("proposed_clause_text") or ""),
                 str(item.get("consequence_code") or "Не указано"),
@@ -46,6 +47,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             str(ordinal),
             str(item.get("issue_kind") or "Не указано"),
             str(item.get("subject") or "Не указано"),
+            str(item.get("description") or "Не указано"),
             str(item.get("applicability") or "Не указано"),
             str(item.get("recommendation_text") or "Требуется уточнение"),
             str(item.get("consequence_code") or "Не указано"),
@@ -83,8 +85,8 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     else:
         body.append(
             _paragraph(
-                "Договорный Tender-процесс не сформирован. Это не означает, что договор "
-                "проверен или риски отсутствуют."
+                "Проект договора не найден среди загруженных документов. Договорные риски "
+                "и предложения по изменению условий без исходного договора не подготовлены."
             )
         )
 
@@ -94,8 +96,9 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             _table(
                 (
                     "№",
-                    "Исходное положение",
-                    "Точный источник",
+                    "Пункт договора",
+                    "Редакция Заказчика",
+                    "Источник",
                     "Предлагаемая редакция",
                     "Практическое последствие",
                     "Неопределённость",
@@ -109,6 +112,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                     "№",
                     "Вид",
                     "Предмет",
+                    "Риск для Подрядчика",
                     "Применимость",
                     "Рекомендация",
                     "Последствие",

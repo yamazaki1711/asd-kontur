@@ -13,6 +13,7 @@ from asd_kontur.application_spine.models import (
     ClaimedJob,
     JobKind,
 )
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
@@ -96,6 +97,7 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: self._reconciliation,
             JobKind.PROJECT_STRUCTURE_RECONCILIATION: self._reconciliation,
             JobKind.PROJECT_WORK_RECONCILIATION: self._work_reconciliation,
+            JobKind.CONTRACT_ANALYSIS: self._contract_analysis,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
@@ -805,6 +807,37 @@ class IndustrialDocumentUnderstandingPipeline:
         )
         return result
 
+    def _contract_analysis(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_contract_analysis_runtime_unavailable")
+        manifest = claimed.input_manifest
+        if str(manifest.get("contract_analysis_profile") or "") != CONTRACT_ANALYSIS_PROFILE:
+            raise UnderstandingStageFailure("contract_analysis_profile_superseded")
+        reusable = self._repository.load_contract_analysis_result(claimed)
+        if reusable is not None:
+            return reusable
+        raw_locator_ids = manifest.get("source_locator_ids")
+        if not isinstance(raw_locator_ids, list) or not raw_locator_ids:
+            raise UnderstandingStageFailure("contract_analysis_manifest_invalid")
+        expected = {str(value) for value in raw_locator_ids}
+        fragments = [
+            {
+                "source_locator_id": str(element.locator.source_locator_id),
+                "page": element.locator.page_number,
+                "text": element.raw_text,
+            }
+            for element in self._repository.load_elements(claimed)
+            if str(element.locator.source_locator_id) in expected and element.raw_text.strip()
+        ]
+        if {str(value["source_locator_id"]) for value in fragments} != expected:
+            raise UnderstandingStageFailure("contract_analysis_source_context_incomplete")
+        try:
+            result = self._qwen_semantic.analyze_contract(fragments)
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+        self._repository.record_contract_analysis_result(claimed, output_manifest=result)
+        return result
+
 
 def _read_bounded(source: BinaryIO) -> bytes:
     content = source.read(MAX_BOUNDED_PROCESSING_BYTES + 1)
@@ -835,6 +868,7 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: PROJECT_RECONCILIATION_PROFILE_VERSION,
         JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
         JobKind.PROJECT_WORK_RECONCILIATION: PROJECT_WORK_RECONCILIATION_PROFILE,
+        JobKind.CONTRACT_ANALYSIS: CONTRACT_ANALYSIS_PROFILE,
     }[kind]
 
 

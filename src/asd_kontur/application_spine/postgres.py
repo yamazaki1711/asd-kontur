@@ -42,6 +42,7 @@ from asd_kontur.tender.project_engineering import (
     work_family_catalog,
     work_reconciliation_priority,
 )
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES,
     PROJECT_WORK_RECONCILIATION_PROFILE,
@@ -172,6 +173,7 @@ _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # interpretation in the same workspace. Workspace-fair claim ordering still
 # prevents a large new package from starving other projects.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
+_CONTRACT_ANALYSIS_PRIORITY = 188
 # Live project receipts showed that twelve-row strict-JSON batches required
 # recursive repair in 72 of 78 cases (3.72 model calls on average).  Eight-row
 # batches preserve bounded semantic context while materially reducing repair
@@ -589,7 +591,7 @@ class SpinePostgresRepository:
                         "'OCR_EXTRACTION','DOCUMENT_PAGE_CLASSIFICATION',"
                         "'PROJECT_DEFINITION_EXTRACTION',"
                         "'WORK_QUANTITY_MATERIAL_EXTRACTION','PROJECT_STRUCTURE_RECONCILIATION',"
-                        "'PROJECT_WORK_RECONCILIATION')) AS qwen_active "
+                        "'PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS')) AS qwen_active "
                         "FROM workspace.durable_jobs job WHERE job.organization_id=:organization "
                         "AND job.workspace_id=:workspace AND "
                         f"{effective_job}"
@@ -651,6 +653,7 @@ class SpinePostgresRepository:
             JobKind.WORK_QUANTITY_MATERIAL_EXTRACTION.value,
             JobKind.WORK_PACKAGE_ASSEMBLY.value,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY.value,
+            JobKind.CONTRACT_ANALYSIS.value,
         }
         active_count = int(jobs["active_count"] or 0)
         blocked_count = int(jobs["blocked_count"] or 0)
@@ -1360,6 +1363,7 @@ class SpinePostgresRepository:
                 JobKind.WORKSPACE_RESET_RECONCILIATION,
                 JobKind.ID_DOCUMENT_GENERATION,
                 JobKind.PROJECT_WORK_RECONCILIATION,
+                JobKind.CONTRACT_ANALYSIS,
             }
         )
         if media_type == "application/zip":
@@ -4753,6 +4757,163 @@ class SpinePostgresRepository:
             )
         return scheduled
 
+    def _schedule_contract_analysis(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        sources: list[dict[str, Any]],
+    ) -> list[dict[str, object]]:
+        """Queue bounded contract interpretation after semantic role classification.
+
+        Source-role decisions select eligible documents; exact persisted layout
+        identities define each immutable batch. The method is called by the
+        supervised project reconciler and is idempotent across every sweep.
+        """
+
+        scheduled: list[dict[str, object]] = []
+        for source in sources:
+            roles = {str(value) for value in source.get("document_roles", ())}
+            if "contract" not in roles or int(source["native_locator_count"]) == 0:
+                continue
+            source_version_id = UUID(str(source["source_version_id"]))
+            rows = list(
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (element.source_locator_id) "
+                        "element.source_locator_id,element.page_number,element.reading_order,"
+                        "COALESCE(NULLIF(element.raw_text,''),element.normalized_text) AS source_text "
+                        "FROM workspace.native_layout_element_versions element WHERE "
+                        "element.organization_id=:o AND element.workspace_id=:w AND "
+                        "element.source_version_id=:source AND "
+                        "COALESCE(NULLIF(element.raw_text,''),element.normalized_text)<>'' "
+                        "ORDER BY element.source_locator_id,element.page_number,element.reading_order"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "source": source_version_id},
+                ).mappings()
+            )
+            rows.sort(
+                key=lambda row: (
+                    int(row["page_number"]),
+                    int(row["reading_order"]),
+                    str(row["source_locator_id"]),
+                )
+            )
+            batches: list[list[Mapping[str, Any]]] = []
+            current: list[Mapping[str, Any]] = []
+            current_chars = 0
+            for row in rows:
+                text_value = " ".join(str(row["source_text"]).split())
+                if not text_value:
+                    continue
+                if current and (len(current) >= 24 or current_chars + len(text_value) > 12_000):
+                    batches.append(current)
+                    current = []
+                    current_chars = 0
+                current.append(row)
+                current_chars += len(text_value)
+            if current:
+                batches.append(current)
+            for ordinal, batch in enumerate(batches, start=1):
+                locator_ids = [str(row["source_locator_id"]) for row in batch]
+                batch_digest = semantic_digest(
+                    {
+                        "profile": CONTRACT_ANALYSIS_PROFILE,
+                        "source_version_id": str(source_version_id),
+                        "source_locator_ids": locator_ids,
+                    }
+                )
+                key = f"contract-analysis:{source_version_id}:{CONTRACT_ANALYSIS_PROFILE}:{batch_digest}"
+                existing = (
+                    session.execute(
+                        sa.text(
+                            "SELECT job_id,state,typed_failure_code FROM workspace.durable_jobs "
+                            "WHERE organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
+                        ),
+                        {"o": organization_id, "w": workspace_id, "key": key},
+                    )
+                    .mappings()
+                    .one_or_none()
+                )
+                if existing is not None:
+                    scheduled.append(
+                        {
+                            "source_version_id": str(source_version_id),
+                            "batch_ordinal": ordinal,
+                            "job_id": str(existing["job_id"]),
+                            "state": str(existing["state"]),
+                        }
+                    )
+                    continue
+                job_id = uuid7()
+                manifest = {
+                    "document_id": str(source["document_id"]),
+                    "document_version": int(source["version"]),
+                    "source_version_id": str(source_version_id),
+                    "object_key": str(source["object_key"]),
+                    "media_type": str(source["media_type"]),
+                    "content_digest": str(source["content_digest"]),
+                    "contract_analysis_profile": CONTRACT_ANALYSIS_PROFILE,
+                    "batch_ordinal": ordinal,
+                    "batch_digest": batch_digest,
+                    "source_locator_ids": locator_ids,
+                    "model_identity": "local-qwen3.8-27b",
+                }
+                session.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "subject_document_id,job_kind,input_manifest,input_digest,idempotency_key,state,"
+                        "priority,max_attempts,retry_policy_version,provenance,correlation_id,created_by_identity_id) "
+                        "VALUES (:o,:w,:job,:document,'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),"
+                        ":digest,:key,'queued',:priority,3,'spine-retry-v0.1',CAST(:provenance AS jsonb),"
+                        ":correlation,:owner)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "job": job_id,
+                        "document": source["document_id"],
+                        "manifest": _json(manifest),
+                        "digest": semantic_digest(
+                            {"kind": JobKind.CONTRACT_ANALYSIS.value, "manifest": manifest}
+                        ),
+                        "key": key,
+                        "priority": _CONTRACT_ANALYSIS_PRIORITY,
+                        "provenance": _json(
+                            {
+                                "contract": "tender.contract-analysis-job@1.0.0",
+                                "source_version_id": str(source_version_id),
+                                "contract_analysis_profile": CONTRACT_ANALYSIS_PROFILE,
+                            }
+                        ),
+                        "correlation": correlation_id,
+                        "owner": owner_identity_id,
+                    },
+                )
+                self._append_event(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_id=job_id,
+                    event_type="job.queued",
+                    safe_message_code="contract_analysis_queued",
+                    current=0,
+                    total=1,
+                    terminal=False,
+                )
+                scheduled.append(
+                    {
+                        "source_version_id": str(source_version_id),
+                        "batch_ordinal": ordinal,
+                        "job_id": str(job_id),
+                        "state": "queued",
+                    }
+                )
+        return scheduled
+
     def start_project_understanding(
         self,
         *,
@@ -4828,6 +4989,14 @@ class SpinePostgresRepository:
                 correlation_id=correlation_id,
                 sources=[dict(source) for source in sources],
             )
+            contract_jobs = self._schedule_contract_analysis(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                owner_identity_id=owner_identity_id,
+                correlation_id=correlation_id,
+                sources=[dict(source) for source in sources],
+            )
             reviews = session.scalars(
                 sa.text(
                     "SELECT decision_digest FROM workspace.project_candidate_review_decisions WHERE "
@@ -4842,6 +5011,7 @@ class SpinePostgresRepository:
                     "reviews": list(reviews),
                     "classification_jobs": classification_jobs,
                     "semantic_jobs": semantic_jobs,
+                    "contract_jobs": contract_jobs,
                 }
             )
             idempotency_key = (

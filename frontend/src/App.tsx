@@ -2705,12 +2705,12 @@ function TenderContractAnalysisBody({
     Record<string, unknown>
   >;
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
-  if (value.status === "not_started") {
+  if (value.status === "contract_input_unavailable") {
     return (
       <InfoNotice>
-        Договорный Tender-процесс ещё не был сформирован. Это не означает, что
-        договор проверен и риски отсутствуют. Для запуска нужны доступные
-        договорные исходные данные и установленный процесс Tender-службы.
+        Проект договора не найден среди загруженных документов. Договорные
+        риски и предложения по изменению условий не могут быть подготовлены без
+        исходного договора.
         <GapList gaps={value.gaps} />
       </InfoNotice>
     );
@@ -2719,9 +2719,9 @@ function TenderContractAnalysisBody({
   return (
     <>
       <InfoNotice>
-        Это просмотр канонических записей Tender-процесса. Он не создаёт
-        юридическое заключение, не меняет исходный договор и не заменяет
-        квалифицированное рассмотрение.
+        {value.status === "analyzing" || value.status === "analysis_pending"
+          ? "Анализ договора выполняется автоматически. Положения, риски и предложения появляются по мере обработки документа."
+          : "Это рабочий анализ коммерческих рисков Подрядчика. Он не меняет исходный договор и требует профессиональной юридической проверки перед согласованием или подписанием."}
       </InfoNotice>
       <div className="candidate-actions">
         <a
@@ -2838,7 +2838,7 @@ function TenderContractAnalysisBody({
               <thead>
                 <tr>
                   <th>Ключ</th>
-                  <th>Основание</th>
+                  <th>Текст положения</th>
                   <th>Источник</th>
                 </tr>
               </thead>
@@ -2849,7 +2849,7 @@ function TenderContractAnalysisBody({
                     <tr key={String(clause.clause_id)}>
                       <td>{displayValue(clause.clause_key, "—")}</td>
                       <td>
-                        {displayValue(clause.authority_layer, "—")}
+                        {displayValue(clause.source_text, "—")}
                         <small>{displayValue(clause.locator_label, "")}</small>
                       </td>
                       <td>
@@ -2874,7 +2874,7 @@ function TenderContractAnalysisBody({
             </table>
           </div>
         ) : (
-          <p>Положения договора ещё не извлечены в канонический процесс.</p>
+          <p>Положения договора ещё извлекаются.</p>
         )}
       </section>
       <section className="panel">
@@ -2901,10 +2901,13 @@ function TenderContractAnalysisBody({
                       {humanizeStatus(displayValue(issue.applicability, "—"))}
                     </td>
                     <td>
+                      {displayValue(issue.description, "")}
+                      <small>
                       {displayValue(
                         issue.recommendation_text,
                         "Требуется уточнение",
                       )}
+                      </small>
                       <small>{displayValue(issue.consequence_code, "")}</small>
                     </td>
                   </tr>
@@ -2913,7 +2916,7 @@ function TenderContractAnalysisBody({
             </table>
           </div>
         ) : (
-          <p>Канонические вопросы и риски ещё не зарегистрированы.</p>
+          <p>Риски Подрядчика ещё не выявлены или анализ продолжается.</p>
         )}
       </section>
       <section className="panel">

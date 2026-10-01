@@ -234,6 +234,18 @@ class QwenDocumentSemanticAdapter:
             timeout_seconds=self._timeout_seconds,
         ).reconcile(rows, work_families=work_families, facilities=facilities)
 
+    def analyze_contract(
+        self, fragments: Iterable[Mapping[str, object]]
+    ) -> dict[str, object]:
+        """Interpret one exact, bounded contract batch through local Qwen."""
+
+        from asd_kontur.tender.qwen_contract_analysis import QwenContractAnalyzer
+
+        return QwenContractAnalyzer(
+            self._endpoint,
+            timeout_seconds=self._timeout_seconds,
+        ).analyze(fragments)
+
     def extract_structures(
         self, elements: Iterable[LayoutElement]
     ) -> tuple[StructureNodeCandidate, ...]:
