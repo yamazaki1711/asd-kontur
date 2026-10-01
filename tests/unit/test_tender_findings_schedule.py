@@ -511,8 +511,15 @@ def test_application_service_returns_editable_schedule_from_scoped_project_view(
                 "evidence_index": {},
             }
 
+    class ContractAnalysisRepository:
+        def latest(self, *, owner_identity_id: str, workspace_id: UUID) -> dict[str, object]:
+            assert owner_identity_id == "owner-1"
+            assert workspace_id == expected_workspace_id
+            return {"status": "contract_input_unavailable", "issues": []}
+
     service = object.__new__(ProductSpineService)
     service._repository = cast(SpinePostgresRepository, Repository())
+    service._tender_contract_analysis = ContractAnalysisRepository()  # type: ignore[assignment]
     result = service.tender_findings_schedule(
         owner_identity_id="owner-1", workspace_id=expected_workspace_id
     )

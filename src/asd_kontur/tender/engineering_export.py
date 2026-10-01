@@ -92,8 +92,11 @@ def render_engineering_findings_csv(model: Mapping[str, Any]) -> bytes:
         ),
     )
     writer.writeheader()
-    for ordinal, issue in enumerate(model.get("issues") or (), start=1):
-        row = dict(issue)
+    issues = [
+        *[dict(value) for value in model.get("issues") or () if isinstance(value, Mapping)],
+        *_contract_finding_rows(model),
+    ]
+    for ordinal, row in enumerate(issues, start=1):
         writer.writerow(
             {
                 "№": ordinal,
@@ -363,6 +366,57 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     issues = list(model.get("issues") or ())
     if issues:
         add_section("Технические противоречия", [_issue_table(issues)])
+    contract = dict(model.get("contract_analysis") or {})
+    contract_issues = _contract_issue_rows(contract)
+    if contract_issues:
+        add_section(
+            "Договорные риски Подрядчика",
+            [
+                _simple_table(
+                    (
+                        "Пункт договора",
+                        "Редакция Заказчика",
+                        "Риск Подрядчика",
+                        "Практическое последствие",
+                        "Рекомендуемое действие",
+                    ),
+                    [
+                        (
+                            row["clause_label"],
+                            row["source_text"],
+                            row["description"],
+                            row["practical_consequence"],
+                            row["recommended_action"],
+                        )
+                        for row in contract_issues
+                    ],
+                )
+            ],
+        )
+    proposed_changes = _contract_proposed_change_rows(contract)
+    if proposed_changes:
+        add_section(
+            "Предлагаемые изменения договора",
+            [
+                _simple_table(
+                    (
+                        "Пункт договора",
+                        "Редакция Заказчика",
+                        "Редакция Подрядчика",
+                        "Практическая причина",
+                    ),
+                    [
+                        (
+                            row["clause_label"],
+                            row["source_text"],
+                            row["proposed_text"],
+                            row["reason"],
+                        )
+                        for row in proposed_changes
+                    ],
+                )
+            ],
+        )
     requirements = dict(model.get("requirements") or {})
     if requirements.get("professional_summary") or requirements.get("unresolved"):
         add_section(
@@ -440,6 +494,92 @@ def _engineering_comparison_rows(model: Mapping[str, Any]) -> list[tuple[str, st
         for row in model.get("material_comparisons") or ()
     )
     return rows
+
+
+def _contract_issue_rows(contract: Mapping[str, Any]) -> list[dict[str, str]]:
+    clauses = {
+        str(row.get("clause_id")): dict(row)
+        for value in contract.get("clauses") or ()
+        if isinstance(value, Mapping)
+        for row in (dict(value),)
+    }
+    rows: list[dict[str, str]] = []
+    for value in contract.get("issues") or ():
+        if not isinstance(value, Mapping):
+            continue
+        issue = dict(value)
+        clause = clauses.get(str(issue.get("clause_id")), {})
+        rows.append(
+            {
+                "clause_label": str(
+                    clause.get("clause_key") or clause.get("locator_label") or "Пункт не указан"
+                ),
+                "source_text": str(clause.get("source_text") or "Исходная редакция не извлечена"),
+                "description": str(issue.get("description") or issue.get("subject") or ""),
+                "practical_consequence": str(issue.get("consequence_code") or ""),
+                "recommended_action": str(issue.get("recommendation_text") or ""),
+                "severity": str(issue.get("severity") or ""),
+                "uncertainty": str(issue.get("uncertainty_code") or ""),
+                "source_version_id": str(clause.get("source_version_id") or ""),
+                "source_locator_ids": "; ".join(
+                    str(item) for item in clause.get("source_locator_ids") or ()
+                ),
+            }
+        )
+    return rows
+
+
+def _contract_proposed_change_rows(contract: Mapping[str, Any]) -> list[dict[str, str]]:
+    clauses = {
+        str(row.get("clause_id")): dict(row)
+        for value in contract.get("clauses") or ()
+        if isinstance(value, Mapping)
+        for row in (dict(value),)
+    }
+    issues = {
+        str(row.get("issue_id")): dict(row)
+        for value in contract.get("issues") or ()
+        if isinstance(value, Mapping)
+        for row in (dict(value),)
+    }
+    rows: list[dict[str, str]] = []
+    for value in contract.get("disagreement_items") or ():
+        if not isinstance(value, Mapping):
+            continue
+        item = dict(value)
+        clause = clauses.get(str(item.get("clause_id")), {})
+        issue = issues.get(str(item.get("issue_id")), {})
+        rows.append(
+            {
+                "clause_label": str(
+                    clause.get("clause_key") or clause.get("locator_label") or "Пункт не указан"
+                ),
+                "source_text": str(clause.get("source_text") or "Исходная редакция не извлечена"),
+                "proposed_text": str(item.get("proposed_clause_text") or ""),
+                "reason": str(
+                    issue.get("description")
+                    or item.get("consequence_code")
+                    or "Требуется согласование условий"
+                ),
+            }
+        )
+    return rows
+
+
+def _contract_finding_rows(model: Mapping[str, Any]) -> list[dict[str, str]]:
+    return [
+        {
+            "kind": "Договорный риск",
+            "location": row["clause_label"],
+            "subject": row["source_text"],
+            "description": row["description"],
+            "practical_consequence": row["practical_consequence"],
+            "recommended_action": row["recommended_action"],
+            "status": "Кандидат для проверки",
+            "source_locator_ids": row["source_locator_ids"],
+        }
+        for row in _contract_issue_rows(dict(model.get("contract_analysis") or {}))
+    ]
 
 
 def render_engineering_disagreement_protocol_docx(model: Mapping[str, Any]) -> bytes:

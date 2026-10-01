@@ -662,8 +662,14 @@ class ProductSpineService:
         )
         if view is None:
             raise ValueError("project_understanding_no_result")
-        engineering = dict(view.get("project_engineering") or {})
-        if engineering.get("works"):
+        engineering = self._engineering_with_contract_analysis(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            engineering=view.get("project_engineering"),
+        )
+        if engineering.get("works") or dict(engineering.get("contract_analysis") or {}).get(
+            "issues"
+        ):
             data = render_engineering_findings_csv(engineering)
             digest = "sha256:" + hashlib.sha256(data).hexdigest()
             return DocumentContent(
@@ -704,7 +710,11 @@ class ProductSpineService:
         )
         if view is None:
             raise ValueError("project_understanding_no_result")
-        engineering = dict(view.get("project_engineering") or {})
+        engineering = self._engineering_with_contract_analysis(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            engineering=view.get("project_engineering"),
+        )
         if engineering:
             data = render_engineering_tender_report_docx(engineering)
             digest = "sha256:" + hashlib.sha256(data).hexdigest()
@@ -776,6 +786,27 @@ class ProductSpineService:
             len(data),
             (data,),
         )
+
+    def _engineering_with_contract_analysis(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        engineering: object,
+    ) -> dict[str, Any]:
+        """Attach the workspace contract result to a transient export model.
+
+        The persisted project-engineering model remains the authority for construction
+        facts. Contract analysis is another workspace-scoped result and is joined only
+        for user-facing Tender deliverables.
+        """
+
+        model = dict(engineering) if isinstance(engineering, dict) else {}
+        model["contract_analysis"] = self.tender_contract_analysis(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return model
 
     def tender_document_coverage_schedule(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -872,8 +903,15 @@ class ProductSpineService:
         if view is None:
             raise ValueError("project_understanding_no_result")
         materialization = dict(view.get("materialization") or {})
-        engineering = dict(view.get("project_engineering") or {})
-        professional = bool(engineering.get("works"))
+        engineering = self._engineering_with_contract_analysis(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            engineering=view.get("project_engineering"),
+        )
+        professional = bool(
+            engineering.get("works")
+            or dict(engineering.get("contract_analysis") or {}).get("issues")
+        )
         common = {
             "materialization_state": str(materialization.get("state", "not_requested")),
             "coverage_gaps": materialization.get("gaps", []),

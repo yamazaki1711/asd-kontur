@@ -205,6 +205,59 @@ def test_tender_report_adapts_to_procurement_and_contract_inputs() -> None:
         assert expected in xml
 
 
+def test_primary_tender_outputs_include_candidate_contract_risks_and_revisions() -> None:
+    value = _model()
+    value["contract_analysis"] = {
+        "status": "drafted",
+        "clauses": [
+            {
+                "clause_id": "clause-17",
+                "clause_key": "7.4",
+                "source_text": "Подрядчик отвечает за задержку независимо от причины.",
+                "source_version_id": "source-contract",
+                "source_locator_ids": ["page-12"],
+            }
+        ],
+        "issues": [
+            {
+                "issue_id": "risk-17",
+                "clause_id": "clause-17",
+                "subject": "Одностороннее распределение риска задержки",
+                "description": "Условие не учитывает задержку исходных данных Заказчиком.",
+                "consequence_code": "Подрядчик несёт риск срока вне своего контроля.",
+                "recommendation_text": "Предусмотреть продление срока при задержке Заказчика.",
+                "severity": "high",
+            }
+        ],
+        "disagreement_items": [
+            {
+                "clause_id": "clause-17",
+                "issue_id": "risk-17",
+                "proposed_clause_text": (
+                    "Срок продлевается на период задержки исходных данных Заказчиком."
+                ),
+            }
+        ],
+    }
+
+    finding_rows = list(
+        csv.DictReader(io.StringIO(render_engineering_findings_csv(value).decode("utf-8-sig")))
+    )
+    contract_row = next(row for row in finding_rows if row["Вид вопроса"] == "Договорный риск")
+    assert contract_row["Место"] == "7.4"
+    assert contract_row["Практическое последствие"] == (
+        "Подрядчик несёт риск срока вне своего контроля."
+    )
+
+    payload = render_engineering_tender_report_docx(value)
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Договорные риски Подрядчика" in xml
+    assert "Условие не учитывает задержку исходных данных Заказчиком." in xml
+    assert "Предлагаемые изменения договора" in xml
+    assert "Срок продлевается на период задержки исходных данных Заказчиком." in xml
+
+
 def test_disagreement_protocol_is_editable_and_keeps_contractor_action() -> None:
     payload = render_engineering_disagreement_protocol_docx(_model())
 
