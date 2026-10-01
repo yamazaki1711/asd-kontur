@@ -41,7 +41,7 @@ from .models import (
 from .semantic import StructuredCandidates, normalize_unit, parse_exact_decimal
 
 QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v2"
-QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v17"
+QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v18"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
 _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
@@ -60,6 +60,7 @@ _FAILED_BATCH_RECOVERY_STRATEGY = "failed_batch_recovery-v1"
 _SINGLE_FRAGMENT_RECOVERY_STRATEGY = "single_fragment_repair-v2"
 _OUTPUT_EXHAUSTION_SPLIT_STRATEGY = "output_exhaustion_split-v2"
 _OUTPUT_EXHAUSTION_RECOVERY_STRATEGY = "output_exhaustion_recovery-v2"
+_QUANTITY_PRESENCE_REVIEW_STRATEGY = "quantity_presence_review-v1"
 _MIN_OUTPUT_EXHAUSTION_SPLIT_CHARS = 300
 _RECOVERABLE_ENGINEERING_BATCH_FAILURES = frozenset(
     {
@@ -984,6 +985,21 @@ class QwenDocumentSemanticAdapter:
                 max_tokens=1_200,
             )
             parsed = _parse_engineering(payload, allowed)
+            if _engineering_quantity_presence_review_required(parsed, batch.fragments):
+                reviewed_payload = _complete(
+                    self._endpoint,
+                    _engineering_quantity_presence_review_prompt(batch.fragments, payload),
+                    self._timeout_seconds,
+                    max_tokens=1_500,
+                )
+                reviewed = _parse_engineering(reviewed_payload, allowed)
+                parsed = _merge_engineering_results(parsed, reviewed)
+                batch = _engineering_batch(
+                    batch.ordinal,
+                    batch.fragments,
+                    prompt_strategy=_QUANTITY_PRESENCE_REVIEW_STRATEGY,
+                    batching_policy_version=batch.batching_policy_version,
+                )
         except QwenSemanticFailure as exc:
             if (
                 batch.prompt_strategy in {"standard", _FAILED_BATCH_RECOVERY_STRATEGY}
@@ -1566,6 +1582,64 @@ def _has_engineering_observations(parsed: Mapping[str, list[tuple[str, ...]]]) -
     return any(parsed.values())
 
 
+_EXPLICIT_MEASUREMENT_RE = re.compile(
+    r"(?<![\w])\d[\d\s.,]*(?:"
+    r"м(?:\s*[²³23]|\s*кв\.?|\s*куб\.?)?|m(?:\s*[23²³])?|"
+    r"км|km|см|cm|мм|mm|т|t|кг|kg|шт\.?|pcs?"
+    r")(?![\w])",
+    flags=re.IGNORECASE,
+)
+_TABULAR_MEASUREMENT_RE = re.compile(
+    r"(?<![\w])(?:м(?:\s*[²³23]|\s*кв\.?|\s*куб\.?)?|m(?:\s*[23²³])?|"
+    r"км|km|см|cm|мм|mm|т|t|кг|kg|шт\.?|pcs?)"
+    r"(?:\s*[;|:\t]\s*|\s{2,})\d[\d\s.,]*(?![\w])",
+    flags=re.IGNORECASE,
+)
+
+
+def _engineering_quantity_presence_review_required(
+    parsed: Mapping[str, list[tuple[str, ...]]],
+    fragments: tuple[_SemanticFragment, ...],
+) -> bool:
+    """Detect a likely quantity omission without interpreting engineering scope.
+
+    The first semantic pass remains authoritative for meaning.  This guard only
+    notices the mechanically suspicious combination that exposed the unseen-
+    corpus defect: Qwen emitted construction works from a batch containing an
+    explicit number-plus-unit measurement, but emitted no quantity observation.
+    A focused second semantic pass decides whether the measurement is actually
+    a work quantity; deterministic code does not infer that from the number.
+    """
+
+    combined_text = "\t".join(fragment.text for fragment in fragments)
+    return (
+        bool(parsed.get("works"))
+        and not (parsed.get("quantities") or parsed.get("incomplete_quantities"))
+        and bool(
+            _EXPLICIT_MEASUREMENT_RE.search(combined_text)
+            or _TABULAR_MEASUREMENT_RE.search(combined_text)
+        )
+    )
+
+
+def _merge_engineering_results(
+    original: Mapping[str, list[tuple[str, ...]]],
+    reviewed: Mapping[str, list[tuple[str, ...]]],
+) -> dict[str, list[tuple[str, ...]]]:
+    """Merge a bounded completeness review without discarding accepted facts."""
+
+    result: dict[str, list[tuple[str, ...]]] = {}
+    for key in original.keys() | reviewed.keys():
+        values = list(original.get(key, ()))
+        seen = set(values)
+        for item in reviewed.get(key, ()):
+            if item not in seen:
+                values.append(item)
+                seen.add(item)
+        result[key] = values
+    return result
+
+
 def _engineering_allowed_fragments(
     fragments: tuple[_SemanticFragment, ...],
 ) -> dict[str, _SemanticFragment]:
@@ -1644,6 +1718,41 @@ def _engineering_prompt(
             "Не используй locator_id как fragment_id.\n" + prompt
         )
     return prompt
+
+
+def _engineering_quantity_presence_review_prompt(
+    elements: tuple[_SemanticFragment, ...], prior_answer: str
+) -> str:
+    """Request a bounded semantic completeness check for quantity-bearing work rows."""
+
+    fragments = [
+        {
+            "fragment_id": f"F{ordinal}",
+            "page": item.locator.page_number,
+            "character_start": item.character_start,
+            "character_end": item.character_end,
+            "text": item.text,
+        }
+        for ordinal, item in enumerate(elements, start=1)
+    ]
+    return (
+        "Проверь полноту извлечения только для явных объёмов работ и материалов. "
+        "Во входных фрагментах есть числовое значение с инженерной единицей, а первый ответ "
+        "содержит работы, но не содержит quantities. Определи по смыслу, является ли каждое "
+        "такое значение объёмом/количеством работы, материала, геометрическим размером либо "
+        "иным несопоставимым числом. Не выполняй арифметику и не сравнивай значения. "
+        "Верни полный исправленный JSON с шестью обязательными массивами fields, structures, "
+        "structure_relationships, works, quantities, materials по той же схеме, сохранив "
+        "подтверждённые элементы первого ответа. Для каждой явной строки таблицы, где вместе "
+        "указаны работа, число и единица, верни work и quantity с исходными work_name, value "
+        "и unit. Размеры, даты, цены и сроки не превращай в объёмы работ. fragment_id и "
+        "work_fragment_id копируй только как F1, F2 и т.д. из входа. Если после проверки "
+        "объёмов работ действительно нет, оставь quantities пустым; не выдумывай факт.\n"
+        "ФРАГМЕНТЫ:\n"
+        + json.dumps(fragments, ensure_ascii=False, separators=(",", ":"))
+        + "\nПЕРВЫЙ ОТВЕТ:\n"
+        + prior_answer
+    )
 
 
 def _engineering_evidence_repair_prompt(
