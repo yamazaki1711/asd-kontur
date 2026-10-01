@@ -95,9 +95,7 @@ def upgrade() -> None:
         "workspace_id=NULLIF(current_setting('asd.workspace_id',true),'')::uuid)"
     )
     op.execute("GRANT SELECT ON workspace.contract_analysis_results TO asd_app")
-    op.execute(
-        "GRANT SELECT,INSERT ON workspace.contract_analysis_results TO asd_document_worker"
-    )
+    op.execute("GRANT SELECT,INSERT ON workspace.contract_analysis_results TO asd_document_worker")
     op.execute(
         "GRANT SELECT,DELETE ON workspace.contract_analysis_results TO asd_destruction_executor"
     )
@@ -108,8 +106,7 @@ def upgrade() -> None:
     )
     _replace_fairness(
         "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION'",
-        "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION',"
-        "'CONTRACT_ANALYSIS'",
+        "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS'",
     )
 
 
@@ -117,8 +114,7 @@ def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
         raise RuntimeError("Contract-analysis downgrade requires a disposable database")
     _replace_fairness(
-        "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION',"
-        "'CONTRACT_ANALYSIS'",
+        "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION','CONTRACT_ANALYSIS'",
         "'PROJECT_STRUCTURE_RECONCILIATION','PROJECT_WORK_RECONCILIATION'",
     )
     op.execute("DROP TABLE workspace.contract_analysis_results")

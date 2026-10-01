@@ -342,9 +342,7 @@ class TenderContractAnalysisRepository:
                 "tender_process_id": f"draft:{workspace_id}",
                 "revision": len(results),
                 "state": status,
-                "updated_at": max(
-                    (result["recorded_at"] for result in results), default=None
-                ),
+                "updated_at": max((result["recorded_at"] for result in results), default=None),
             },
             "assessment": {
                 "status": "partial" if active or failed else "complete",

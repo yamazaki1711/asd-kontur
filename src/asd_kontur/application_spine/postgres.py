@@ -4616,9 +4616,7 @@ class SpinePostgresRepository:
         profile = f"{CLASSIFICATION_PROFILE_VERSION}+{QWEN_SEMANTIC_CLASSIFICATION_PROFILE}"
         for source in sources:
             source_version_id = UUID(str(source["source_version_id"]))
-            current_roles = tuple(
-                str(role) for role in source.get("current_document_roles", ())
-            )
+            current_roles = tuple(str(role) for role in source.get("current_document_roles", ()))
             if current_roles:
                 scheduled.append(
                     {
