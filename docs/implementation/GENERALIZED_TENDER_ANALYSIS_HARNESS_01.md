@@ -327,15 +327,375 @@ constant. By the compact post-release observation the workspace had reached
 and the corrected Qwen status plane had observed 37 completed requests with one
 heavy process and no manual progression command.
 
+## Real-result checkpoint — 2026-09-30
+
+The blind retaining-wall workspace now produces a professional result from the
+shared model rather than a zero-result mechanism demonstration. Snapshot
+`BLIND_TENDER_ANALYSIS_SNAPSHOT_v2` was frozen before any owner-known finding
+comparison at:
+
+`~/.asd-kontur/qualification/generalized-tender-20260930/01a0eba7-70ba-7770-9601-1a713dd359cf/v2/`
+
+Its manifest SHA-256 is
+`84900760e5c7881aeec98f4af6db40a53c6523e0e1af1dd45d385c5a45bf9432`.
+The snapshot records model `project-engineering-model-v55` with fingerprint
+`sha256:dda94895f8db4b214c5b673274c23e91df586d6d9bbf9341b84a1e0070619c43`.
+At the freeze it contained six facility/structure groups, 209 consolidated work
+scopes, 259 reviewed quantity observations, 233 accepted work quantities, four
+quantity/condition comparisons, four material comparisons, two professional
+findings, two customer questions and two contractor risks.
+
+The established construction comparisons are a `219 m` PD/VOR match for the
+metal enclosure and a `65.4 m3` VOR/estimate match for crushed-stone foundation
+preparation. The professional mismatches are estimate VAT `20%` versus contract
+VAT `22%`, and project/POS duration `2.2 months` versus procurement duration
+`4 months`. Both mismatches carry source locators, a Russian professional
+explanation, a customer clarification action and a contractor consequence.
+Four material matches connect project and commercial documents for crushed
+stone, sand and geotextile. No owner-provided discrepancy was used.
+
+The quantity matrix contains 328 interpreted rows. Its blocker accounting is:
+four comparisons established, 185 missing sufficiently grounded structure
+links, 76 unresolved semantic scopes, 54 true non-comparable values and nine
+unit-incompatible values. This makes the remaining bridge explicit rather than
+reporting only a zero comparison count. A previously emitted `772.5 m3` versus
+`115.9 m3` component-total mismatch was removed: Qwen established that the
+known component set was incomplete, and deterministic arithmetic now refuses
+the false discrepancy.
+
+The editable DOCX is structurally valid and its extracted text contains the
+project, participants, commercial conditions, schedule, works, comparisons,
+findings, questions and risks. No compatible office renderer is installed on
+the deployment host, so visual pagination was not claimed and no alternative
+renderer experiment was substituted.
+
+Profile v15 terminal receipts provide the current eight-row measurement. Across
+15 successful jobs it averaged eight rows, 404.8 seconds, 2.60 inference calls,
+0.80 recovery codes per job and 71.1 accepted rows/hour. The older v8 profile
+averaged 10.17 rows, 359.2 seconds, 3.13 calls and 1.16 recovery codes per job.
+The v15 contract performs additional scope and component-completeness work, so
+raw throughput is not directly comparable; the eight-row boundary is retained
+because it lowers calls and repair pressure while preserving the stricter
+output. It is not claimed as a throughput improvement.
+
+Live operation exposed two generic starvation defects. Migration
+`0084_new_project_time_to_first_result` prioritized only a workspace with zero
+processed documents, so a new project lost priority after its first document.
+Migration `0085_incomplete_project_time_to_first_result` keeps priority while a
+latest document state is actively incomplete. A second observation showed that
+completed intake could still lose all capacity to an older workspace's deep
+semantic queue. Migration `0086_workspace_fair_job_claim` therefore orders
+eligible workspaces by least recent service before applying job priority within
+the selected workspace. It does not inspect a project name, document role,
+work family or expected result.
+
+The 0085/0086 chain passed upgrade, fail-closed downgrade and re-upgrade on the
+separately restored database `asd_kontur_restore_0085_20260930`. The source
+backup is
+`~/.asd-kontur/public-demo/backups/pre-0085-incomplete-project-priority-20260930T2215/public-before-0085.dump`
+with SHA-256
+`d51242850a7317f640f30bd7aa6bdde2551cd77ebc8929564ea18a15fb21b764`.
+The platform-memory fingerprint remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`.
+The roof development control exposed one further generic scheduler defect.
+The autonomous refill returned no work when a workspace had never previously
+had a `PROJECT_WORK_RECONCILIATION` job. Thus the first semantic batch still
+depended on an operator-created predecessor even though later batches were
+autonomous. Release `d0641e95ce0bc678828f213bf1873178960c4e50` fixes that
+bootstrap by deriving the durable owner identity from the latest workspace job
+when no earlier work-reconciliation job exists. The idempotency key and batch
+eligibility remain unchanged. The roof corpus is therefore development
+evidence, not the strict final unseen acceptance corpus.
+
+The deployed API, worker, assistant worker and orchestrator use release
+`d0641e95ce0bc678828f213bf1873178960c4e50` and migration
+`0086_workspace_fair_job_claim`. The persistent Qwen process was not restarted;
+its server module is byte-compatible. After activation the supervised
+orchestrator independently created four initial work-reconciliation batches
+for the roof control and additional batches for the earlier heat and culvert
+controls. No manual successor, retry, refill or reconciliation command was
+issued.
+
+The strict final unseen control was introduced only after that source release:
+
+- workspace: `01a0f229-8537-79fa-9c20-44844689b10f`;
+- display name: `Final Unseen Control — Firewater D-6`;
+- corpus root:
+  `~/.asd-kontur/qualification/generalized-tender-20260930/final-unseen-control-firewater-v1`;
+- external corpus manifest SHA-256:
+  `e2cf9c555b5459f3b5c618c526481a72a9386b17d7ccc0b9d23a01fcea0251d4`;
+- three stable selectable-text PDF inputs with different names, facilities,
+  work types, quantities and units from the real blind project.
+
+The external oracle is not uploaded to the workspace or included in Qwen
+context. It defines a `120 m + 80 m` component/total relationship, a stated
+`230 m` total, a `200 m` commercial scope, and a false-positive trap consisting
+of `6` wells versus `6 m3` concrete preparation. No production source change is
+permitted after this corpus introduction. At the first live checkpoint the
+workspace advanced autonomously from admission to 17 succeeded jobs; the
+orchestrator created document-classification and project-semantic successors,
+and Qwen began `PROJECT_DEFINITION_EXTRACTION` at
+`2026-10-01T00:22:47+12:00` without any Codex runtime progression command.
+
+Focused verification for the bootstrap change passed 51 unit tests and the
+targeted PostgreSQL integration test. Backend lint passed. The full
+PostgreSQL-backed suite passed 1,138 tests with one skip and two failures: the
+native DOCX/CSV project-understanding fixture exceeded its eight-second drain
+window with one final job still queued, and the ZIP intake fixture observed a
+`reconciliation_required` terminal result where it expected every job to
+succeed. Both failures reproduced individually and remain release limitations;
+they are not hidden as successful acceptance. Frontend typecheck, lint,
+formatting, five component tests and production build passed.
+
+## Exact-release continuation — 2026-10-01
+
+Release `5fdb1b04ddc8b8a04d7cf34754802841f500cdef` makes one previously
+unprocessed engineering source batch the maximum work of one durable semantic
+job. Accepted batches from the same semantic profile remain reusable under the
+dense batching policy, so yielding does not reprocess accepted content. The
+autonomous planner schedules another idempotent recovery only while accepted
+fragment coverage increases and stops after a no-progress recovery. This is a
+scheduling boundary; it does not change project facts or Qwen's semantic
+contract.
+
+The focused backend gate passed 160 tests. The broad local gate passed 1,040
+tests with 110 skips; its only unavailable check was the database migration
+round trip because that invocation intentionally had no `ASD_TEST_DATABASE_URL`.
+Exact-SHA GitHub Actions run `36751000961` passed, including PostgreSQL
+integration, browser E2E and security jobs. API, document worker, assistant
+worker and project orchestrator run from the pinned exact-release directory;
+migration remains `0086_workspace_fair_job_claim`.
+
+The current blind-project snapshot remains independent of owner-known answers.
+Its 328-row quantity matrix records four established comparisons and classifies
+the remaining blockers as 185 missing structure links, 76 unresolved semantic
+scopes, 54 true non-comparable values and nine incompatible units. The accepted
+professional result includes:
+
+- a `219 m` PD/VOR match for the metal enclosure;
+- a `65.4 m3` VOR/estimate match for crushed-stone foundation preparation;
+- estimate VAT `20%` versus contract VAT `22%`;
+- project/POS duration `2.2 months` versus procurement duration `4 months`;
+- matching sand, crushed-stone and geotextile material scopes;
+- two source-linked customer questions and two contractor risks derived from
+  the VAT and duration conflicts.
+
+The frozen `BLIND_TENDER_ANALYSIS_SNAPSHOT_v2` manifest is
+`sha256:84900760e5c7881aeec98f4af6db40a53c6523e0e1af1dd45d385c5a45bf9432`;
+its editable report is
+`sha256:70de51a20a6a520106152a01c6b69054e99447d8a02d940383d50950458b431f`.
+No office-compatible renderer is installed on the host, so DOCX structure and
+extracted content were verified but visual pagination is not claimed.
+
+Actual terminal v15 receipts reject the earlier eight-row assumption. Four-row
+batches measured 15 jobs (14 succeeded, one failed), 2.13 model calls, 0.60
+repair codes, 177.4 seconds and 75.9 accepted rows/hour on average. Eight-row
+batches measured 29 jobs (28 succeeded, one failed), 3.17 calls, 1.28 repairs,
+402.3 seconds and 69.9 accepted rows/hour. The deployed four-row policy is
+therefore retained.
+
+A strict unseen PDF control was created only after source release `5fdb1b0`:
+
+- workspace `01a0f378-45b8-77d2-8a54-a6efbb22183d`;
+- display name `Post-release Unseen PDF Control - School Roof S17`;
+- four one-page selectable-text PDF inputs with manifest SHA-256
+  `f0f65033bdc04fdd31518255a3a347710265ba1d4d92ccd8e40a68a31e465e87`;
+- an external, non-uploaded acceptance oracle with SHA-256
+  `d6d6cb4472b43cd19378644015ebaf10a8e21edc9d5f426b976075a07bed9a81`.
+
+The corpus changes project name, participants, filenames, structures, work
+families, quantities and commercial terms. It contains a component/total
+relationship, a cross-document quantity mismatch, a material-thickness
+mismatch, an explicitly absent commercial demolition position and two false-
+comparison traps. Production code contains none of these expected values.
+
+At admission the workspace had 16 succeeded jobs, zero accepted semantic
+fragments and no project result. Supervised services independently advanced it
+to a usable early report: `Капитальный ремонт кровли`, the customer and
+designer, VAT and payment terms, private-tender basis, performance security,
+warranty and both project/tender duration statements. The harness correctly
+kept `45 working days` and `3 calendar months` as non-comparable duration
+scopes. The early editable report and archive were generated from the shared
+project model; the DOCX ZIP/XML structure and extracted Russian content passed
+verification.
+
+The long-lived Qwen process was then restarted once under launchd so it loaded
+the already-tested pinned threaded status-plane implementation. Its PID changed
+from `26466` to `90242`; the document worker and orchestrator were not
+restarted. The loopback `/health` endpoint remained responsive during
+generation, and durable processing resumed automatically without a retry,
+refill or successor command. The status plane must be queried without the host
+SOCKS proxy (`NO_PROXY`/equivalent loopback bypass).
+
+The strict unseen run remains in progress at this record point. It is not yet
+accepted as the full unseen-project gate until the working schedule and
+commercial sheet produce a quantity relationship, a valid comparison, a
+professional finding, false-positive rejection and the final preliminary
+report under the unchanged source release.
+
+## Complete-context and document-role correction — 2026-10-01
+
+Release `96ef4569db48f8f1915351fa1fda72f21386f471` corrected a second
+generic relationship-review failure. A complete three/four-row
+`QUANTITY_RELATIONSHIP_ANALYSIS` response could exhaust its compact first-pass
+output budget and then lose cross-row authority when generic recovery split the
+batch. Profile `qwen-project-work-reconciliation-v19`, admitted by migration
+`0092_relationship_review_budget_v19`, retries the same bounded context once
+with the established 5,000-token ceiling before the existing split fallback.
+The fallback remains bounded, and no project value or work family is encoded in
+the policy. A parameterized test uses a changed `825 + 550 = 1375` steel-mass
+relationship to prove the mechanism.
+
+The physical pre-migration backup is:
+
+`~/.asd-kontur/public-demo/backups/pre-0092-relationship-budget-20261001T151853/public-before-0092.dump`
+
+Its SHA-256 is
+`34e88488e7ba012bc47a075017d2eea10f2667bbb877f6428e2ac856944dc3f4`.
+Upgrade, fail-closed downgrade and re-upgrade passed on the separately restored
+database `asd_kontur_restore_0092_20261001`. The 26 platform-global table
+counts and fingerprints remained exactly equal before and after migration;
+NTD processing remained `319 succeeded`. The full local PostgreSQL-backed
+suite passed 1,160 tests with one skip. Exact-SHA CI run `36809799636` passed.
+
+The post-release warehouse-yard control then exposed a distinct generic bridge
+defect. Durable page-role decisions correctly classified its design,
+specification and commercial documents as `РД`, `Спецификация` and `ВОР`, but
+the engineering read model trusted a fragment-local Qwen role and rendered the
+work observations as `ПД`. After three of four documents had complete semantic
+coverage, the workspace had eight pending quantities and zero comparisons.
+This control is preserved as a failed unseen attempt; it is not retroactively
+claimed as a pass.
+
+Release `5ec6d23555782bc0460b7dad343b430997d9ab8a` carries the generic
+correction. Source context now includes the latest page-scoped role-decision
+set. The professional read model prefers an established non-unknown page role
+over a fragment-local broad role, while retaining separate roles for different
+pages of a mixed document. A read-only evaluation against the already
+persisted warehouse data changed the same rows from `ПД` to `РД`,
+`Спецификация` and `ВОР` without re-extraction or project-specific rules. The
+focused gate passed 157 tests. Exact-SHA CI run `36813132587` passed, including
+PostgreSQL integration, migration round-trip, browser E2E and security checks.
+
+The API, document worker, assistant worker and autonomous orchestrator now run
+from the pinned `5ec6d23` release. Qwen PID `90242` and NTD worker PID `98263`
+were not restarted. API readiness reports migration `0092`. A post-deployment
+snapshot again matched all 26 platform table counts/fingerprints and the `319`
+terminal NTD jobs exactly; its SHA-256 is
+`505711eecafc45438311ebdeee8a8f7c0bb334d20266a5975ff606c83f6c09a0`.
+
+A new independent drainage-network control was generated and visually checked
+only after source `5ec6d23` was frozen. It changes project purpose,
+participants, filenames, structures, work families, quantities, materials and
+commercial conditions. Its workspace is
+`01a0f5a9-7ed2-7343-9710-5ec208920750`, and its runtime admission digest is
+`sha256:d297d6ce95b253d3c0dabea675839b7d4a10aaea4eb0ae3b50880d12fcf46f47`.
+The external oracle is not uploaded. Admission created the normal durable graph
+with `manual_progression_commands=0`; production source remains frozen for the
+acceptance run.
+
+That frozen drainage-network run completed semantic coverage for all four
+documents without a queue, retry or successor command from Codex. The page-role
+bridge correctly exposed `A17` as `РД`, `B28` as `Спецификация` and `C39` as
+`ВОР`. The shared model established the project purpose, customer, designer,
+private-request procurement method, monthly payment basis, three-percent
+performance security, twenty-month warranty and distinct `28 working days`
+versus `6 calendar weeks` time scopes. It classified all ten construction
+observations, accepted nine of ten reviewed quantities and produced:
+
+- an exact `6 piece` RD/VOR well-count match;
+- a real `150 m` RD versus `145 m` VOR sand-base quantity discrepancy;
+- a source-linked professional finding, customer question and contractor risk
+  for the unpriced `5 m` difference;
+- a sand material match;
+- no false comparison between wells and weeks, sand volume and warranty months,
+  or working-day and calendar-week durations.
+
+The run remains a partial unseen acceptance, not a pass. Although Qwen's
+professional reason correctly described the two pipeline segments as components
+of the stated pipeline total, strict output validation rejected the complete
+relationship response because `component_set_complete` had an invalid shape.
+The subsequent split recovery safely preserved the quantities but necessarily
+lost cross-row authority. The stated total therefore remained ambiguous and no
+component/total arithmetic result was published. The pipe `SDR17` and `SDR21`
+properties were preserved but did not yet become a material comparison because
+the unresolved pipeline work scopes were not consolidated.
+
+Release `74bff1abfc537bd62ab708c1e45679099c89d11f` addresses the generic
+complete-context failure as profile `qwen-project-work-reconciliation-v20`.
+One bounded schema-repair pass now receives the same complete group and the
+typed validation failure before recursive split fallback. A harmless model
+variation (`component_set_complete=false` on a non-total row) is normalized to
+`null`; no semantic relation or arithmetic result is inferred by the parser.
+Parameterized cable-length and structural-steel tests change names, quantities,
+units and work families. Migration `0093_relationship_schema_repair_v20`
+admits the versioned profile. The focused gate passed 240 tests.
+
+Before public migration, the physical backup
+`~/.asd-kontur/public-demo/backups/pre-0093-relationship-schema-20261001T173500/public-before-0093.dump`
+was created with SHA-256
+`1bed4d1f9023ea90978fac42308369a6ca638d03a134fe968a3f0a6a39c29a8c`.
+The separately restored database `asd_kontur_restore_0093_20261001` passed
+upgrade, fail-closed downgrade and re-upgrade. All 26 platform-table counts and
+fingerprints plus the `319 succeeded` NTD state remained exactly equal; the
+pre-migration platform snapshot SHA-256 is
+`505711eecafc45438311ebdeee8a8f7c0bb334d20266a5975ff606c83f6c09a0`.
+
+Exact-SHA CI run `36820305995` passed for `74bff1a`, including PostgreSQL
+integration and migration round-trip, frontend checks, browser E2E, security
+checks and the production-contamination guard. The production database then
+advanced to `0093_relationship_schema_repair_v20`. Its post-migration platform
+snapshot has SHA-256
+`cab90bcc35ea566fc758737b5391edb2f6cac10c727f30430f8523e1bbd3958a`;
+all 26 platform-table counts/fingerprints and the `319 succeeded` NTD state
+remain exactly equal to the pre-migration snapshot. API, document worker,
+assistant worker and project orchestrator now run from the pinned release
+`~/.asd-kontur/public-demo/releases/20261001-74bff1a-relationship-schema-v20`.
+The persistent Qwen and NTD worker processes were not restarted.
+
+A new independent steel-gallery control was generated only after that release
+and migration were frozen. Its four visually checked one-page PDF inputs use a
+new project purpose, participants, filenames, structures, structural-steel
+work, quantities, material grades and private commercial conditions. The
+external acceptance oracle is stored outside the input directory and was not
+uploaded or included in model context. The normal application admission
+created workspace `01a0f605-1608-7c9a-8b8a-f13e83a11920`, display name
+`Post-v20 Unseen Control - Steel Gallery SG-314`, with manifest digest
+`sha256:c1f308eeba8ac67027865b0af444401992651cb582bd99dc3beb5264a856df52`.
+Admission used release `74bff1a` and records zero manual progression commands.
+The supervised orchestrator independently created and completed the initial
+project-model stages. No queue refill, retry, successor, reconciliation or
+priority command was issued after admission.
+
+That admission also exposed a generic time-to-first-result scheduler defect.
+Model-slot fairness was evaluated before semantic completion, so a newly
+admitted project with only one of four source documents semantically complete
+shared the single model with historical deep-reconciliation work. The system
+remained autonomous but could take hours to deliver the next primary project
+fact. Migration `0094_intake_before_fairness` changes only durable claim
+ordering: active workspaces with incomplete project-definition semantics are
+ranked first, then by the fraction of active documents already semantically
+complete, and only then by model-slot fairness. The policy is independent of
+project name, document name, work family and expected result.
+
+The migration was tested against the physical pre-migration backup at
+`~/.asd-kontur/public-demo/backups/pre-0094-intake-priority-20261001T183300/`
+(dump SHA-256
+`289e7522d45fbbe958a41a3685e65389b8d1c5eee427c8321d65e82bf3edb27e`).
+The separately restored database passed upgrade, downgrade and re-upgrade.
+Its first transactional model claim changed from a historical workspace to the
+incomplete steel-gallery workspace without any row patch. All 26 platform
+knowledge table counts/fingerprints and the `319 succeeded` NTD state remained
+exactly equal; the corrected post-upgrade snapshot SHA-256 is
+`c132cf6c3f39751c82ef6ebc81eb2103113db0ba3b19d1496e9dce406da28a93`.
+
 ## Remaining implementation work
 
-- persist and schedule the remaining generalized semantic tasks beyond work and
-  quantity reconciliation;
-- complete a live autonomous unseen-project run without code changes;
-- improve project entity consolidation and produce defensible quantity,
-  comparison and finding results for the blind project;
-- measure the eight-row refill policy against new terminal receipts and reduce
-  remaining strict-output repair without weakening validation;
+- complete the admitted post-v20 steel-gallery run and freeze its independent
+  live result;
+- improve project entity consolidation, especially the 185 blind-project
+  quantities without a sufficiently grounded structure link;
+- reduce strict-output repair without weakening semantic validation;
 - run signed-in visual browser acceptance when an in-app browser session is
   available, and test the supported Mac sleep/wake boundary.
 
