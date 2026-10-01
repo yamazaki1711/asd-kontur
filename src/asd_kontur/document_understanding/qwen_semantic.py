@@ -45,10 +45,11 @@ QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v18"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
 _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES = ("qwen-structure-identity-v1",)
-# v17 adds exhaustive explicit table/list quantity retention. Prior batch manifests did
-# not require every component, subtotal and total row, so treating them as compatible
-# would silently convert missing analysis into empty facts.
-_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES: tuple[str, ...] = ()
+# v18 adds a focused quantity-presence review for new semantic batches. Existing v17
+# manifests remain valid project facts and can be re-materialized without consuming the
+# single local-model slot; they are not retroactively labelled as presence-reviewed.
+# A new source has no v17 receipt and therefore always executes the v18 contract.
+_COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES = ("qwen-engineering-extraction-v17",)
 _MAX_PAGES = 6
 _MAX_CHARS_PER_PAGE = 800
 _MAX_PROMPT_CHARS = 4_800
