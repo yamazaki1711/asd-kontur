@@ -770,6 +770,37 @@ remain queued behind previously admitted incomplete controls. The strict unseen
 gate is therefore still open; no comparison with the external oracle has been
 made.
 
+Migration `0096_first_fact_fairness` corrects the remaining intake starvation
+without privileging any project name, document name, construction family or
+expected result. A workspace receives the highest claim tier only until its
+first accepted `PROJECT_DEFINITION_EXTRACTION` result exists; deeper semantic
+work then returns to the existing model-slot fair-share order. The migration
+changes only `workspace.claim_next_durable_job` and does not mutate project or
+platform knowledge rows.
+
+Exact-SHA CI run `36930821157` passed for release
+`0aaf22580045f44534d10f80a3410a41274f1063`, including PostgreSQL integration,
+migration round-trip, browser E2E, dependency security and license checks. The
+public database advanced from `0095_incomplete_semantic_fairness` to
+`0096_first_fact_fairness` after the existing physical backup and disposable
+upgrade/downgrade/re-upgrade test. A byte-for-byte `platform` schema data dump
+around the production migration remained exactly
+`b5bc08de8c258a5829003644671d936785c57cd3a6c5b1e5d557c51df854dc82`;
+the NTD job state remained exactly `319 succeeded`.
+
+API, assistant worker and project orchestrator were switched first to the
+pinned release
+`~/.asd-kontur/public-demo/releases/20261002-0aaf225-first-fact-fairness`.
+The document worker's existing Qwen reconciliation was not interrupted: its
+graceful stop handler completed job
+`01a0f619-f716-7583-8dee-5f7a0f06203c` successfully at
+`2026-10-02T10:52:00+12:00`, exited at the safe boundary, and relaunched from
+the same pinned release. Readiness then returned HTTP 200 on migration `0096`.
+Persistent Qwen PID `90242` and NTD worker PID `98263` were not restarted. The
+new worker immediately completed additional project-definition jobs under the
+new ordering and continued autonomous reconciliation without a manual queue or
+successor command.
+
 ## Remaining implementation work
 
 - complete and fingerprint the final post-`0095` service-wing control, then
