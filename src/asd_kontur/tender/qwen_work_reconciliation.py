@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v19"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v20"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -34,6 +34,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v16",
     "qwen-project-work-reconciliation-v17",
     "qwen-project-work-reconciliation-v18",
+    "qwen-project-work-reconciliation-v19",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@15.0.0"
@@ -138,6 +139,8 @@ class QwenProjectWorkReconciler:
         single_retry_available: bool = True,
         relationship_context_complete: bool = True,
         expanded_relationship_budget: bool = False,
+        relationship_schema_retry_available: bool = True,
+        relationship_repair_code: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
         input_ids = tuple(str(row["candidate_id"]) for row in rows)
         quantity_ids_by_work = {
@@ -164,6 +167,7 @@ class QwenProjectWorkReconciler:
                     work_families,
                     facilities,
                     relationship_review=relationship_review,
+                    relationship_repair_code=relationship_repair_code,
                 ),
                 self._timeout_seconds,
                 # Representative twelve-row construction batches repeatedly
@@ -215,6 +219,30 @@ class QwenProjectWorkReconciler:
                     single_retry_available=single_retry_available,
                     relationship_context_complete=True,
                     expanded_relationship_budget=True,
+                    relationship_schema_retry_available=relationship_schema_retry_available,
+                )
+                return observations, call_count + 1, [exc.code, *codes]
+            if (
+                relationship_review
+                and relationship_context_complete
+                and relationship_schema_retry_available
+                and exc.code
+                in {
+                    "qwen_work_reconciliation_component_completeness_invalid",
+                    "qwen_work_reconciliation_quantity_output_incomplete",
+                    "qwen_work_reconciliation_quantity_output_invalid",
+                }
+            ):
+                observations, call_count, codes = self._reconcile_rows(
+                    rows,
+                    work_families=work_families,
+                    facilities=facilities,
+                    relationship_review=relationship_review,
+                    single_retry_available=single_retry_available,
+                    relationship_context_complete=True,
+                    expanded_relationship_budget=True,
+                    relationship_schema_retry_available=False,
+                    relationship_repair_code=exc.code,
                 )
                 return observations, call_count + 1, [exc.code, *codes]
             if len(rows) == 1:
@@ -298,6 +326,7 @@ def _prompt(
     facilities: tuple[str, ...],
     *,
     relationship_review: bool,
+    relationship_repair_code: str | None = None,
 ) -> str:
     all_quantity_candidate_ids = [
         str(value.get("quantity_candidate_id") or "")
@@ -369,6 +398,15 @@ def _prompt(
         if relationship_review
         else ""
     )
+    relationship_repair_instruction = ""
+    if relationship_repair_code:
+        relationship_repair_instruction = (
+            "Предыдущий ответ для ТОГО ЖЕ полного пакета отклонён валидатором схемы с кодом "
+            f"{relationship_repair_code}. Не сокращайте и не разбивайте пакет. Верните все строки "
+            "заново. Для TOTAL_FOR укажите непустые related_quantity_candidate_ids и булево "
+            "component_set_complete. Для COMPONENT_OF/SUBTOTAL_OF укажите связанный итог и "
+            "component_set_complete=null. Для NONE список связей должен быть пустым."
+        )
     return f"""Вы анализируете извлечённые описания российского строительного проекта.
 Для КАЖДОЙ входной строки определите, является ли она строительной операцией, к какому виду работ
 относится и можно ли привязать её к одному сооружению. Не придумывайте отсутствующие работы,
@@ -376,6 +414,7 @@ def _prompt(
 испытание и временная операция могут быть отдельной коммерческой работой; материал, заголовок,
 техническая характеристика и функция оборудования не являются работой.
 {relationship_instruction}
+{relationship_repair_instruction}
 
 Структурированная задача: {task_payload}
 
@@ -672,8 +711,14 @@ def _parse_quantity_reviews(
                     raise QwenSemanticFailure(
                         "qwen_work_reconciliation_component_completeness_invalid"
                     )
-            elif component_set_complete is not None:
+            elif component_set_complete not in (None, False):
                 raise QwenSemanticFailure("qwen_work_reconciliation_component_completeness_invalid")
+            else:
+                # Models occasionally emit false rather than null for a component.
+                # Both mean that completeness is not asserted by this non-total row;
+                # normalize the harmless schema variation without changing any
+                # semantic relationship.
+                component_set_complete = None
         related_ids = tuple(str(item) for item in related)
         if (
             len(set(related_ids)) != len(related_ids)

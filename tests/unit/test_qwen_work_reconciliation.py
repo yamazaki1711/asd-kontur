@@ -98,7 +98,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v19"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v20"
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(
@@ -1014,6 +1014,191 @@ def test_output_exhausted_relationship_batch_retries_complete_context_with_expan
     assert budgets == [1_620, 5_000]
     assert result["inference_call_count"] == 2
     assert result["recovery_codes"] == ["qwen_semantic_response_output_exhausted"]
+    assert all(
+        review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
+def test_relationship_review_normalizes_false_component_completeness_to_null(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": "candidate-total",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Общая длина кабельной трассы",
+            "deterministic_family_hint": "electrical",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-total", "value": "310", "unit": "m"}
+            ],
+        },
+        {
+            "candidate_id": "candidate-part",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Участок кабельной трассы в галерее",
+            "deterministic_family_hint": "electrical",
+            "quantity_observations": [
+                {"quantity_candidate_id": "quantity-part", "value": "130", "unit": "m"}
+            ],
+        },
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "electrical",
+                        "operation": "Прокладка кабельной трассы",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": "Указана общая длина.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Общая длина кабельной трассы",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "TOTAL_FOR",
+                                "related_quantity_candidate_ids": ["quantity-part"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": False,
+                                "reason": "Передана только одна из составляющих.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    },
+                    {
+                        "candidate_id": "candidate-part",
+                        "status": "MATCHED",
+                        "family_key": "electrical",
+                        "operation": "Прокладка кабельной трассы",
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": "Указана часть трассы.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-part",
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина трассы в галерее",
+                                "quantity_type": "COMPONENT",
+                                "relation_kind": "COMPONENT_OF",
+                                "related_quantity_candidate_ids": ["quantity-total"],
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": False,
+                                "reason": "Это одна составляющая общего итога.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    },
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"electrical": "Электромонтажные работы"},
+        facilities=[],
+    )
+
+    component = result["observations"][1]["quantity_reviews"][0]
+    assert component["component_set_complete"] is None
+    assert result["inference_call_count"] == 1
+
+
+def test_relationship_schema_failure_retries_same_complete_context_once(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "structural_steel",
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_id, "value": value, "unit": "t"}
+            ],
+        }
+        for candidate_id, quantity_id, wording, value in (
+            ("candidate-total", "quantity-total", "Общая масса металлоконструкций", "18.4"),
+            ("candidate-east", "quantity-east", "Металлоконструкции восточной секции", "10.1"),
+            ("candidate-west", "quantity-west", "Металлоконструкции западной секции", "8.3"),
+        )
+    ]
+    calls: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        calls.append(prompt)
+        repaired = "qwen_work_reconciliation_component_completeness_invalid" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Монтаж металлоконструкций",
+                        "facility": None,
+                        "confidence": "0.95",
+                        "reason": "Итог и секции названы явно.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Масса металлоконструкций",
+                                "quantity_type": (
+                                    "TOTAL"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT"
+                                ),
+                                "relation_kind": (
+                                    "TOTAL_FOR"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT_OF"
+                                ),
+                                "related_quantity_candidate_ids": (
+                                    ["quantity-east", "quantity-west"]
+                                    if row["candidate_id"] == "candidate-total"
+                                    else ["quantity-total"]
+                                ),
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": (
+                                    True
+                                    if repaired and row["candidate_id"] == "candidate-total"
+                                    else None
+                                ),
+                                "reason": "Установлена связь итога и составляющих.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"structural_steel": "Металлоконструкции"},
+        facilities=[],
+    )
+
+    assert len(calls) == 2
+    assert all(row["candidate_id"] in calls[1] for row in rows)
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_component_completeness_invalid"]
     assert all(
         review["relationship_reviewed"] is True
         for observation in result["observations"]
