@@ -138,11 +138,13 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                         )
                     )
                 )
-                assert claim_definition.index("CASE WHEN EXISTS (") < (
+                assert claim_definition.index("CASE WHEN (") < (
                     claim_definition.index("SELECT max(served.started_at)")
                 )
                 assert "PROJECT_DEFINITION_EXTRACTION" in claim_definition
                 assert "count(*) FILTER" not in claim_definition
+                assert "completed_version" in claim_definition
+                assert "incremental_source_job_id" not in claim_definition
                 fairness_start = claim_definition.index("SELECT max(served.started_at)")
                 fairness_end = claim_definition.index("),'-infinity'::timestamptz)")
                 fairness_definition = claim_definition[fairness_start:fairness_end]

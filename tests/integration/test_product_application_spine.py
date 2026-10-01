@@ -2268,7 +2268,8 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                     "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
                 )
             )
-        assert "incremental_source_job_id" in str(claim_definition)
+        assert "completed_version" in str(claim_definition)
+        assert "incremental_source_job_id" not in str(claim_definition)
 
 
 def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(

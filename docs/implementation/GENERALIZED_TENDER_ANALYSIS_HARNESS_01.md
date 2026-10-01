@@ -706,10 +706,74 @@ downgrade and re-upgrade passed on the disposable restored database, together
 with the focused 243-test orchestration/analysis gate and the full migration
 round-trip test.
 
+Release `f0476a8d837c63a072e129e25c2a5e57812b4c00` deploys that policy as
+migration `0095_incomplete_semantic_fairness`. The physical pre-migration
+backup is
+`~/.asd-kontur/public-demo/backups/pre-0095-incomplete-fairness-20261001T190500/public-before-0095.dump`;
+its SHA-256 is
+`cf42cc39ef3019884219d3c71a010b5736f3a8fc6ee256735781d8d1c26904b2`.
+Upgrade, fail-closed downgrade and re-upgrade passed on the disposable restore.
+The post-migration platform snapshot is stored beside that backup as
+`platform-after-0095.json` with SHA-256
+`f621263072480d7822c7844b0be270bc4714aebd6f247673850257fc1760a2e0`.
+Its 26 platform-table counts/fingerprints, Knowledge Gateway status and NTD
+worker state are exactly equal to the pre-migration snapshot; the only whole-
+file difference is the expected migration-head metadata. NTD remains at 319
+succeeded jobs. Exact-SHA CI run `36828257227` passed:
+<https://github.com/yamazaki1711/asd-kontur/actions/runs/36828257227>.
+
+API, document worker, assistant worker and autonomous project orchestrator now
+run from the pinned release
+`~/.asd-kontur/public-demo/releases/20261001-f0476a8-incomplete-project-fairness`.
+Qwen PID `90242` and NTD worker PID `98263` were not restarted. During the
+first launchd update, generated candidate plists briefly referenced a missing
+release-local `.venv`, so the four application services failed to start. The
+preserved plist topology was restored immediately with the correct pinned
+environment. Qwen and the NTD worker were unaffected. Readiness then returned
+HTTP 200 on migration `0095`.
+
+The immutable terminal receipts also provide a direct batching measurement.
+The current `qwen-project-work-reconciliation-v20` profile has 17 completed
+jobs and 31 Qwen calls (1.82 calls/job); six jobs used bounded repair (35.3%).
+The original `v8` workload recorded 106 completed jobs and 332 calls (3.13
+calls/job), with 79 jobs using repair (74.5%). The current four-row production
+batch therefore reduces observed calls and repair incidence. It does not yet
+solve coarse job latency: individual reconciliation jobs may still contain
+multiple sequential calls before model-slot fairness can move to another
+workspace.
+
+A final independent service-wing waterproofing control was generated and
+visually checked only after source and migration `0095` were frozen. The input
+PDF SHA-256 values are:
+
+- `N15_service_wing_design.pdf`:
+  `b18fcff84c44e151a80943144ed35cc19907eb06db3071c27944f667c7efd8ba`;
+- `P27_material_register.pdf`:
+  `c7759c623c393e06d26c20e9c0fdb94a89e53fffe611188dd4b5f8ffe82e1266`;
+- `Q39_commercial_schedule.pdf`:
+  `94112a5064c3077ac61d62396eb9dbf1542c48e51d90f28ee1de63efa976e5b9`;
+- `R51_request_terms.pdf`:
+  `9986b6d1855d230753a131c59ff25647c4ec4837e94e3c3f3f99ee90dbbd7e67`.
+
+The external oracle remains outside the uploaded input. Normal application
+admission created workspace `01a0f64d-728e-718e-bb0a-49bf73738e42` with
+manifest digest
+`sha256:f04a582bd6f62af37fc4394fa7981f842ca51862ff6a1a2963147bf3b3550dae`
+and records zero manual progression commands. Supervised services independently
+admitted and interpreted all four documents (31 of 31 semantic fragments,
+zero failed fragments), classified the design, specification and commercial
+roles, and extracted the project name, customer, designer, private request-for-
+proposals method, payment basis, six-percent security, 30-month warranty and
+the distinct 22-working-day and seven-calendar-week duration statements.
+At this record point its quantity-relationship and final Tender-analysis jobs
+remain queued behind previously admitted incomplete controls. The strict unseen
+gate is therefore still open; no comparison with the external oracle has been
+made.
+
 ## Remaining implementation work
 
-- complete the admitted post-v20 steel-gallery run and freeze its independent
-  live result;
+- complete and fingerprint the final post-`0095` service-wing control, then
+  compare its frozen result with the external oracle;
 - improve project entity consolidation, especially the 185 blind-project
   quantities without a sufficiently grounded structure link;
 - reduce strict-output repair without weakening semantic validation;
