@@ -4616,13 +4616,15 @@ class SpinePostgresRepository:
         profile = f"{CLASSIFICATION_PROFILE_VERSION}+{QWEN_SEMANTIC_CLASSIFICATION_PROFILE}"
         for source in sources:
             source_version_id = UUID(str(source["source_version_id"]))
-            roles = tuple(str(role) for role in source.get("document_roles", ()))
-            if roles:
+            current_roles = tuple(
+                str(role) for role in source.get("current_document_roles", ())
+            )
+            if current_roles:
                 scheduled.append(
                     {
                         "source_version_id": str(source_version_id),
                         "state": "succeeded",
-                        "selected_roles": sorted(roles),
+                        "selected_roles": sorted(current_roles),
                     }
                 )
                 continue
@@ -4776,7 +4778,7 @@ class SpinePostgresRepository:
 
         scheduled: list[dict[str, object]] = []
         for source in sources:
-            roles = {str(value) for value in source.get("document_roles", ())}
+            roles = {str(value) for value in source.get("current_document_roles", ())}
             if "contract" not in roles or int(source["native_locator_count"]) == 0:
                 continue
             source_version_id = UUID(str(source["source_version_id"]))
@@ -4956,15 +4958,27 @@ class SpinePostgresRepository:
                         "FROM workspace.document_role_decisions d CROSS JOIN LATERAL "
                         "unnest(d.selected_roles) AS role(value) "
                         "WHERE d.organization_id=:organization AND d.workspace_id=:workspace "
-                        "GROUP BY d.document_id,d.document_version) SELECT active_versions.*,"
+                        "GROUP BY d.document_id,d.document_version), current_role_summaries AS (SELECT "
+                        "d.document_id,d.document_version,array_agg(DISTINCT role.value ORDER BY role.value) "
+                        "AS document_roles FROM workspace.document_role_decisions d CROSS JOIN LATERAL "
+                        "unnest(d.selected_roles) AS role(value) WHERE d.organization_id=:organization AND "
+                        "d.workspace_id=:workspace AND d.validator_version=:current_role_profile GROUP BY "
+                        "d.document_id,d.document_version) SELECT active_versions.*,"
                         "COALESCE(native_counts.native_locator_count,0) AS native_locator_count,"
-                        "COALESCE(role_summaries.document_roles,ARRAY[]::text[]) AS document_roles "
+                        "COALESCE(role_summaries.document_roles,ARRAY[]::text[]) AS document_roles,"
+                        "COALESCE(current_role_summaries.document_roles,ARRAY[]::text[]) AS current_document_roles "
                         "FROM active_versions LEFT JOIN native_counts ON native_counts.source_version_id=active_versions.source_version_id "
                         "LEFT JOIN role_summaries ON role_summaries.document_id=active_versions.document_id "
                         "AND role_summaries.document_version=active_versions.version "
+                        "LEFT JOIN current_role_summaries ON current_role_summaries.document_id=active_versions.document_id "
+                        "AND current_role_summaries.document_version=active_versions.version "
                         "ORDER BY active_versions.recorded_at DESC,active_versions.document_id"
                     ),
-                    {"organization": organization_id, "workspace": workspace_id},
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "current_role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                    },
                 )
                 .mappings()
                 .all()

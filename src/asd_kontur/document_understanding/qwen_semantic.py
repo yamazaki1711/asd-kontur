@@ -40,7 +40,7 @@ from .models import (
 )
 from .semantic import StructuredCandidates, normalize_unit, parse_exact_decimal
 
-QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v2"
+QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v3"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v18"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
@@ -2094,7 +2094,13 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         "Используй только приведённые фрагменты. Верни первой и единственной строкой JSON "
         "без Markdown: "
         '{"roles":["..."],"locator_ids":["..."]}. '
-        "roles — от одного до трёх точных значений из: explanatory_note, "
+        "Классифицируй назначение самого документа, а не отдельные упомянутые в нём "
+        "приложения. contract выбирай только для проекта/текста договора, содержащего "
+        "согласуемые условия сторон, предмет, обязательства, оплату, приёмку, ответственность "
+        "или расторжение. Инструкция участнику закупки, извещение и требования к заявке — "
+        "procurement_notice, а не contract. Смета/расчёт цены контракта без условий сторон — "
+        "local_estimate, object_estimate или consolidated_estimate, а не contract. roles — от "
+        "одного до трёх точных значений из: explanatory_note, "
         "project_documentation, working_documentation, bill_of_quantities, local_estimate, "
         "object_estimate, consolidated_estimate, specification, contract, procurement_notice, "
         "technical_specification, construction_schedule, engineering_survey, design_calculation, "

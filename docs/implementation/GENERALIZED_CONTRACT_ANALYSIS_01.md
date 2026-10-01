@@ -18,6 +18,12 @@ The cross-repository user-result audit is recorded in
   fairness and project status.
 - Added autonomous, role-driven, bounded contract batching to the supervised
   project reconciliation sweep.
+- Corrected the generic semantic role contract after a live blind read showed
+  that procurement application instructions had been labelled `contract` while
+  the actual draft agreement had not. Profile v3 now distinguishes a document
+  containing negotiable party obligations from procurement instructions and
+  price calculations. Existing sources are autonomously reclassified under the
+  versioned profile; no filename or project-specific exception was added.
 - Added strict local-Qwen clause/risk analysis with exact locator and source-text
   validation, reusable risk categories, benign-clause support, and one bounded
   JSON repair.
