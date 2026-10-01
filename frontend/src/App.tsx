@@ -2708,8 +2708,8 @@ function TenderContractAnalysisBody({
   if (value.status === "contract_input_unavailable") {
     return (
       <InfoNotice>
-        Проект договора не найден среди загруженных документов. Договорные
-        риски и предложения по изменению условий не могут быть подготовлены без
+        Проект договора не найден среди загруженных документов. Договорные риски
+        и предложения по изменению условий не могут быть подготовлены без
         исходного договора.
         <GapList gaps={value.gaps} />
       </InfoNotice>
@@ -2903,10 +2903,10 @@ function TenderContractAnalysisBody({
                     <td>
                       {displayValue(issue.description, "")}
                       <small>
-                      {displayValue(
-                        issue.recommendation_text,
-                        "Требуется уточнение",
-                      )}
+                        {displayValue(
+                          issue.recommendation_text,
+                          "Требуется уточнение",
+                        )}
                       </small>
                       <small>{displayValue(issue.consequence_code, "")}</small>
                     </td>
