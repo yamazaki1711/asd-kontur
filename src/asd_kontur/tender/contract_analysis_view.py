@@ -270,13 +270,13 @@ class TenderContractAnalysisRepository:
                 if not isinstance(risk, dict):
                     continue
                 clause_ref = str(risk.get("clause_ref") or "")
-                clause_id = clause_ids.get(clause_ref)
-                if clause_id is None:
+                risk_clause_id = clause_ids.get(clause_ref)
+                if risk_clause_id is None:
                     continue
                 issue_id = str(
                     uuid5(
                         workspace_id,
-                        f"contract-risk:{clause_id}:{risk.get('kind')}:{risk.get('description')}",
+                        f"contract-risk:{risk_clause_id}:{risk.get('kind')}:{risk.get('description')}",
                     )
                 )
                 issue = {
@@ -286,7 +286,7 @@ class TenderContractAnalysisRepository:
                     "subject": risk.get("kind"),
                     "severity": risk.get("severity"),
                     "applicability": "candidate",
-                    "clause_id": clause_id,
+                    "clause_id": risk_clause_id,
                     "clause_version": 1,
                     "uncertainty_code": risk.get("uncertainty"),
                     "description": risk.get("description"),
@@ -303,7 +303,7 @@ class TenderContractAnalysisRepository:
                         {
                             "item_id": item_id,
                             "ordinal": len(disagreement_items) + 1,
-                            "clause_id": clause_id,
+                            "clause_id": risk_clause_id,
                             "clause_version": 1,
                             "issue_id": issue_id,
                             "issue_version": 1,
@@ -318,7 +318,7 @@ class TenderContractAnalysisRepository:
                                 uuid5(workspace_id, f"contract-revised-clause:{item_id}")
                             ),
                             "ordinal": len(revised_clauses) + 1,
-                            "source_clause_id": clause_id,
+                            "source_clause_id": risk_clause_id,
                             "source_clause_version": 1,
                             "issue_id": issue_id,
                             "issue_version": 1,

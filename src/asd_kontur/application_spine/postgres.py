@@ -4813,7 +4813,7 @@ class SpinePostgresRepository:
                     batches.append(current)
                     current = []
                     current_chars = 0
-                current.append(row)
+                current.append(dict(row))
                 current_chars += len(text_value)
             if current:
                 batches.append(current)
