@@ -689,6 +689,23 @@ knowledge table counts/fingerprints and the `319 succeeded` NTD state remained
 exactly equal; the corrected post-upgrade snapshot SHA-256 is
 `c132cf6c3f39751c82ef6ebc81eb2103113db0ba3b19d1496e9dce406da28a93`.
 
+Production observation refined that policy. Ordering incomplete projects by
+their completion ratio allowed an older 25%-complete control workspace to
+monopolize the worker even while newer incomplete projects had dependency-free
+semantic jobs. The fresh waterproofing control reached two of four semantic
+documents and then waited while the worker completed historical deterministic
+jobs. It is retained as a failed scheduling acceptance, not counted as the
+strict unseen pass.
+
+Migration `0095_incomplete_semantic_fairness` removes only that ratio
+tie-breaker. The resulting order is: semantically incomplete workspaces before
+fully interpreted historical work, then model-slot fair sharing between the
+incomplete workspaces. This keeps the product-value tier while ensuring that a
+single incomplete workspace cannot monopolize Qwen. Upgrade, fail-closed
+downgrade and re-upgrade passed on the disposable restored database, together
+with the focused 243-test orchestration/analysis gate and the full migration
+round-trip test.
+
 ## Remaining implementation work
 
 - complete the admitted post-v20 steel-gallery run and freeze its independent
