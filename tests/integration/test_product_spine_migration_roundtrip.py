@@ -141,6 +141,11 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert claim_definition.index("SELECT max(served.started_at)") < (
                     claim_definition.index("CASE WHEN EXISTS (")
                 )
+                fairness_start = claim_definition.index("SELECT max(served.started_at)")
+                fairness_end = claim_definition.index("),'-infinity'::timestamptz)")
+                fairness_definition = claim_definition[fairness_start:fairness_end]
+                assert "PROJECT_WORK_RECONCILIATION" in fairness_definition
+                assert "DOCUMENT_HASH" not in fairness_definition
 
             # 0045 must restore the 0044 wrapper AND retain its v1 implementation.
             run_migration(str(repository_root), database_url, "0044_dep_recovery_idempotency")
