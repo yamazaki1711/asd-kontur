@@ -1432,6 +1432,34 @@ def professional_source_role(source_role: object, context: Mapping[str, Any]) ->
         return "ВОР"
     if _source_is_local_estimate(context):
         return "Смета"
+    # The page-role classifier sees the title block, headings and table shape,
+    # whereas an individual engineering candidate may carry a broad role that
+    # Qwen inferred from one fragment.  Use the established page decision when
+    # it has a professional meaning so design/commercial comparisons do not
+    # inherit a fragment-local misclassification.  This remains page-scoped:
+    # mixed documents can legitimately contain design, specification and VOR
+    # pages without relabelling the whole container.
+    decided_roles = {
+        _professional_document_role(value, context.get("safe_display_name"))
+        for value in context.get("selected_roles") or ()
+    }
+    decided_roles.discard("Проектный документ")
+    if decided_roles:
+        priority = {
+            "Договор": 0,
+            "Извещение о закупке": 1,
+            "Техническое задание": 2,
+            "Требования Заказчика": 3,
+            "Смета": 4,
+            "ВОР": 5,
+            "Спецификация": 6,
+            "РД": 7,
+            "ПД": 8,
+            "Расчёт": 9,
+            "Календарный график": 10,
+            "Инженерные изыскания": 11,
+        }
+        return min(decided_roles, key=lambda value: (priority.get(value, 99), value))
     return _professional_document_role(source_role, context.get("safe_display_name"))
 
 

@@ -43,9 +43,33 @@ from asd_kontur.tender.project_engineering import (
     facility_designations,
     mentioned_established_facilities,
     non_work_reason,
+    professional_source_role,
     professional_work_name,
     work_reconciliation_priority,
 )
+
+
+def test_page_role_decision_overrides_fragment_local_document_role() -> None:
+    assert (
+        professional_source_role(
+            "project_documentation",
+            {
+                "safe_display_name": "C63_scope.pdf",
+                "selected_roles": ["unknown", "bill_of_quantities"],
+            },
+        )
+        == "ВОР"
+    )
+    assert (
+        professional_source_role(
+            "project_documentation",
+            {
+                "safe_display_name": "D41_design.pdf",
+                "selected_roles": ["working_documentation"],
+            },
+        )
+        == "РД"
+    )
 
 
 def test_tender_context_is_generic_and_keeps_source_bound_commercial_facts() -> None:
