@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import (
     QwenProjectWorkReconciler,
     potential_work_description,
@@ -97,7 +98,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v18"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v19"
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(
@@ -920,6 +921,101 @@ def test_split_quantity_batch_is_not_certified_as_complete_relationship_review(
     assert result["inference_call_count"] == 3
     assert all(
         "relationship_reviewed" not in review
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
+def test_output_exhausted_relationship_batch_retries_complete_context_with_expanded_budget(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "roadworks",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "value": value,
+                    "unit": "m2",
+                }
+            ],
+        }
+        for candidate_id, quantity_id, wording, value in (
+            ("candidate-total", "quantity-total", "Общая площадь покрытия", "1375"),
+            ("candidate-north", "quantity-north", "Покрытие северного участка", "825"),
+            ("candidate-south", "quantity-south", "Покрытие южного участка", "550"),
+        )
+    ]
+    budgets: list[int] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        budgets.append(max_tokens)
+        if len(budgets) == 1:
+            raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
+        assert all(row["candidate_id"] in prompt for row in rows)
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "roadworks",
+                        "operation": "Устройство покрытия",
+                        "facility": None,
+                        "confidence": "0.95",
+                        "reason": "Объём покрытия установлен из полного контекста.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь нового покрытия",
+                                "quantity_type": (
+                                    "TOTAL"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT"
+                                ),
+                                "relation_kind": (
+                                    "TOTAL_FOR"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT_OF"
+                                ),
+                                "related_quantity_candidate_ids": (
+                                    ["quantity-north", "quantity-south"]
+                                    if row["candidate_id"] == "candidate-total"
+                                    else ["quantity-total"]
+                                ),
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": (
+                                    True if row["candidate_id"] == "candidate-total" else None
+                                ),
+                                "reason": "Итог и все составляющие явно перечислены.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"roadworks": "Дорожные работы"},
+        facilities=[],
+    )
+
+    assert budgets == [1_620, 5_000]
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == ["qwen_semantic_response_output_exhausted"]
+    assert all(
+        review["relationship_reviewed"] is True
         for observation in result["observations"]
         for review in observation["quantity_reviews"]
     )

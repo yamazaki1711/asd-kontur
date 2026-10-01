@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v18"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v19"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -33,6 +33,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v15",
     "qwen-project-work-reconciliation-v16",
     "qwen-project-work-reconciliation-v17",
+    "qwen-project-work-reconciliation-v18",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@15.0.0"
@@ -136,6 +137,7 @@ class QwenProjectWorkReconciler:
         relationship_review: bool,
         single_retry_available: bool = True,
         relationship_context_complete: bool = True,
+        expanded_relationship_budget: bool = False,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
         input_ids = tuple(str(row["candidate_id"]) for row in rows)
         quantity_ids_by_work = {
@@ -149,7 +151,9 @@ class QwenProjectWorkReconciler:
         try:
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             output_budget = (
-                max(1_600, min(5_000, len(rows) * 360 + quantity_count * 180))
+                5_000
+                if relationship_review and expanded_relationship_budget
+                else max(1_600, min(5_000, len(rows) * 360 + quantity_count * 180))
                 if relationship_review
                 else max(1_400, min(4_000, len(rows) * 320 + quantity_count * 140))
             )
@@ -191,6 +195,28 @@ class QwenProjectWorkReconciler:
         except QwenSemanticFailure as exc:
             if exc.code not in _RECOVERABLE_RESPONSE_FAILURES:
                 raise
+            # A relationship review loses its cross-row authority when recursive
+            # recovery splits the batch.  Real project observations showed that a
+            # valid three/four-row relationship response can exhaust the compact
+            # first-pass budget.  Retry that exact bounded context once with the
+            # established ceiling before falling back to the safe, uncertified
+            # split path.
+            if (
+                relationship_review
+                and relationship_context_complete
+                and not expanded_relationship_budget
+                and exc.code == "qwen_semantic_response_output_exhausted"
+            ):
+                observations, call_count, codes = self._reconcile_rows(
+                    rows,
+                    work_families=work_families,
+                    facilities=facilities,
+                    relationship_review=relationship_review,
+                    single_retry_available=single_retry_available,
+                    relationship_context_complete=True,
+                    expanded_relationship_budget=True,
+                )
+                return observations, call_count + 1, [exc.code, *codes]
             if len(rows) == 1:
                 if not single_retry_available:
                     return (
