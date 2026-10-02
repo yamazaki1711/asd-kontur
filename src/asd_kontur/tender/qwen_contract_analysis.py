@@ -91,6 +91,7 @@ _CUSTOMER_TERMS = ("заказчик", "customer", "client", "employer")
 _EARLY_PERFORMANCE_TERMS = ("досроч", "early performance", "early completion")
 _UNVERIFIED_LEGAL_AUTHORITY_ASSERTION = re.compile(
     r"(?:противореч\w*\s+(?:закону|законодательств\w*|(?:правов\w*\s+)?принцип\w*|стать\w*|норм\w*)|"
+    r"(?:исключа|отменя)\w*.{0,50}(?:применени\w*\s+)?(?:правов\w*\s+)?принцип\w*|"
     r"(?:являет\w*|услови\w*)\s+(?:незакон\w*|недействительн\w*|ничтожн\w*)|"
     r"наруша\w*\s+(?:закон\w*|законодательств\w*|стать\w*|норм\w*)|"
     r"(?:illegal|unlawful|invalid|unenforceable|contrary to (?:law|statute|legal principle)|"
