@@ -942,3 +942,46 @@ mutation was part of this release.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Scaled estimate-unit safety and autonomous profile convergence — release 47d4e63
+
+The next blind-project quantity pass exposed a generic estimate-unit defect.
+The source estimate expressed waterproofing in `100 m2`, while the extracted
+row value was `8.339`. Treating that row as plain square metres produced a
+false 825.561 m2 discrepancy against the 833.9 m2 VOR value. The runtime now
+allows Qwen to preserve an exact source unit only when that unit occurs in the
+bounded source context, validates the dimension and supported scale
+deterministically, and performs the multiplication outside model inference.
+Legacy semantic reviews cannot authorize a newly introduced unlocated
+same-scope comparison. Until current-profile review is available, the model
+keeps the quantity visible but suppresses the professional discrepancy.
+
+The first scaled-unit release was rolled back immediately after the false
+finding appeared. Release `6ce5959d3ec8b72be7a2c92cc37a2ffc226154ab`
+restored the safe boundary. Live model `project-engineering-model-v61` has
+fingerprint
+`sha256:076b325e7c292de10f22c629a079fe8357b992cb372e3eff862fbefd01a31e3f`
+and publishes only two then-defensible comparisons: the 2.2 versus 4 month
+duration difference and the matching 219 m metal-fencing scope. It does not
+publish the false waterproofing discrepancy.
+
+Autonomous review could not initially reach profile
+`qwen-project-work-reconciliation-v21` because nine unclaimed jobs from v8,
+v10, v15 and v20 remained queued and were counted as outstanding work. Commit
+`47d4e63cf01ca636ef7d4c5797217b4760280d01` adds durable profile supersession
+to the normal reconciliation refill path. It cancels only unclaimed queued
+older-profile jobs, writes their cancellation records and terminal receipts,
+and leaves running and immutable terminal history unchanged.
+
+Exact-SHA CI run `37034912026` passed. After activating the new orchestrator,
+the supervised sweep cancelled all nine obsolete queued jobs at
+2026-10-03 04:44:49+12 and autonomously created four v21 batches for the real
+blind workspace at 04:44:50+12. No developer enqueue, retry, refill or row
+patch was used. API readiness passed on migration
+`0107_contract_directed_change_risk`; Qwen PID `93554` and NTD worker PID
+`98263` were preserved. The document worker was allowed to finish its active
+bounded v21 request rather than being interrupted; its launchd definition is
+pinned to the new release for the next controlled restart.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.

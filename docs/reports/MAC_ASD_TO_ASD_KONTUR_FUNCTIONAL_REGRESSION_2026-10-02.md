@@ -363,6 +363,15 @@ candidates for human/legal review; the runtime does not claim verified legal
 authority for unqualified legacy citations. The broader generalized Tender
 harness and the complete four-mode product remain incomplete.
 
+The latest verified real-contract artifact set is recorded by manifest
+SHA-256
+`4fba33a4142463231c8c0c0fb07d222c332976fec8c75a62e8f723c9ce108813`.
+It contains the editable analysis, disagreement protocol and exact-source
+revised-contract candidate described in
+`docs/implementation/GENERALIZED_CONTRACT_ANALYSIS_01.md`. This later
+qualification strengthens the recovered user-result evidence without changing
+the original regression classifications or importing legacy legal authority.
+
 `ContractAnalysisOperational=true`
 
 `ProtocolOfDisagreementsOperational=true`

@@ -964,3 +964,34 @@ patching: 36 queued older-profile jobs were cancelled with durable supersession
 receipts, while jobs already terminal remain immutable history. A further 24
 old-profile claims failed fast with the typed supersession outcome rather than
 consuming Qwen inference. Current-profile work continued autonomously.
+
+## 2026-10-03 editable real-contract artifact checkpoint
+
+The current real blind-contract projection remains `drafted` with a complete
+assessment. It identifies `Проект_контракта.docx` and
+`Описание объекта закупки.docx` as its contract sources and exposes 307
+clauses, seven structured contractor issues, five disagreement items and five
+proposed revisions. The exact-source revised-contract candidate applies three
+revisions that belong to the governing contract. Two proposals grounded in an
+attachment remain in the protocol and are deliberately excluded from the
+contract body under the explicit limitation
+`REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS`.
+
+The application-generated qualification set is stored at
+`~/.asd-kontur/qualification/contract-analysis-20261003/01a0eba7-70ba-7770-9601-1a713dd359cf/v10`:
+
+- `contract-analysis.docx`, SHA-256
+  `4cb4f396cbc468855d3cb0490ba5053474493ae78c8d270012758665ddc8af69`;
+- `disagreement-protocol.docx`, SHA-256
+  `432eaf8ba780a3285dc5f09a30ab7a38dbec03fe6ad63ddf9ac8d08f33d6135d`;
+- `revised-contract-candidate.docx`, SHA-256
+  `7f0bb076a1a27c9ae0288b0a2d037f257e182776170539da4632a11af8d0468e`.
+
+The manifest SHA-256 is
+`4fba33a4142463231c8c0c0fb07d222c332976fec8c75a62e8f723c9ce108813`.
+ZIP-package integrity and macOS text extraction passed for all three files.
+Quick Look thumbnails of the first page were visually inspected: both analysis
+tables are readable and the revised candidate preserves the admitted source
+layout. A complete multi-page render and XSD validation are not claimed in
+this checkpoint because the available environment lacks LibreOffice and the
+validator environment lacks `lxml`.
