@@ -290,6 +290,9 @@ def _gap_summary(value: Any) -> str:
             "в обработанной части договора риски не установлены"
         ),
         "CONTRACT_SOURCE_CLASSIFICATION_IN_PROGRESS": "уточняется назначение документов",
+        "CONTRACT_SOURCE_RECLASSIFICATION_PENDING": (
+            "назначение ранее найденного проекта договора уточняется повторно"
+        ),
         "DRAFT_CONTRACT_SOURCE_UNAVAILABLE": "проект договора не найден среди документов",
         "PROFESSIONAL_REVIEW_REQUIRED": "требуется профессиональная юридическая проверка",
     }

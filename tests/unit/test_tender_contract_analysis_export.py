@@ -75,6 +75,26 @@ def test_contract_analysis_export_preserves_lineage_and_neutralizes_formulas() -
     assert revised["revised_clause_text"] == "Pay retained amount within ten working days."
 
 
+def test_contract_report_explains_role_reclassification_in_product_language() -> None:
+    content = render_tender_contract_analysis_docx(
+        {
+            "status": "analysis_pending",
+            "clauses": [],
+            "issues": [],
+            "disagreement_items": [],
+            "revised_clauses": [],
+            "deliverables": [],
+            "gaps": ["CONTRACT_SOURCE_RECLASSIFICATION_PENDING"],
+        }
+    )
+
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+
+    assert "назначение ранее найденного проекта договора уточняется повторно" in report_xml
+    assert "CONTRACT_SOURCE_RECLASSIFICATION_PENDING" not in report_xml
+
+
 def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() -> None:
     view = {
         "status": "drafted",
