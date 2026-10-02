@@ -661,11 +661,13 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
                         "candidate_id": "design-mixed",
                         "document_role": "КР",
                         "document": "Конструкции.pdf",
+                        "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
                     },
                     {
                         "candidate_id": "commercial-mixed",
                         "document_role": "ВОР",
                         "document": "Объёмы.pdf",
+                        "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
                     },
                 ]
             },
@@ -674,6 +676,30 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
 
     assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
     assert mixed == {"design-mixed", "commercial-mixed"}
+
+
+def test_mixed_source_classification_batch_is_not_relationship_authority() -> None:
+    attempted, mixed = _work_reconciliation_attempt_sets(
+        [
+            {
+                "work_observations": [
+                    {
+                        "candidate_id": "design-row",
+                        "document_role": "ПД",
+                        "document": "Design.pdf",
+                    },
+                    {
+                        "candidate_id": "commercial-row",
+                        "document_role": "ВОР",
+                        "document": "Commercial.pdf",
+                    },
+                ]
+            }
+        ]
+    )
+
+    assert attempted == {"design-row", "commercial-row"}
+    assert mixed == set()
 
 
 def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
@@ -714,6 +740,37 @@ def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
     assert context_only is True
     assert selected_after_mixed == []
     assert context_after_mixed is False
+
+
+def test_current_profile_quantity_missing_relationship_is_context_only() -> None:
+    quantity = {
+        "candidate_id": "quantity-current-single-source",
+        "version": 1,
+        "normalized_value": "83.4",
+        "normalized_unit": "m3",
+    }
+    existing = {
+        "candidate_version": 2,
+        "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "quantity-current-single-source",
+                "status": "WORK_QUANTITY",
+                "semantic_scope": "Объём земляных работ",
+                "relationship_reviewed": False,
+            }
+        ],
+    }
+
+    selected, context_only = _quantity_comparison_context_policy(
+        existing=existing,
+        candidate_version=2,
+        linked_quantities=[quantity],
+        mixed_source_reviewed=False,
+    )
+
+    assert selected == [quantity]
+    assert context_only is True
 
 
 def test_older_quantity_meaning_is_selected_for_current_cross_document_review() -> None:

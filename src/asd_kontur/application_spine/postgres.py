@@ -611,7 +611,11 @@ def _work_reconciliation_attempt_sets(
             if (side := document_comparison_side(value.get("document_role"), value.get("document")))
             is not None
         }
-        if sides == {"design", "commercial"}:
+        relationship_task = bool(rows) and all(
+            str(value.get("analysis_task") or "") == "QUANTITY_RELATIONSHIP_ANALYSIS"
+            for value in rows
+        )
+        if relationship_task and sides == {"design", "commercial"}:
             mixed_source_reviewed.update(candidate_ids)
     return attempted, mixed_source_reviewed
 
@@ -630,6 +634,14 @@ def _quantity_comparison_context_policy(
         return quantities, False
     profile = str(existing.get("profile_version") or "")
     pending = _quantities_requiring_semantic_review(quantities, existing)
+    # A successful current-profile single-source pass may have established the
+    # meaning of a value without establishing its relationship to another
+    # document.  Return that accepted value only as bounded relationship
+    # context.  Treating it as ordinary unresolved work either replays the same
+    # one-sided job or, because its manifest is already recorded as attempted,
+    # prevents the design/commercial pass permanently.
+    if profile == PROJECT_WORK_RECONCILIATION_PROFILE and pending:
+        return pending, True
     context_only = bool(
         profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
         and quantities
