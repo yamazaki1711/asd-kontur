@@ -3534,6 +3534,8 @@ def _isolated_unassigned_comparison(work: Mapping[str, Any], comparison: Mapping
     right_role = str(dict(comparison.get("right") or {}).get("document_role") or "")
     if not left_role or not right_role:
         return False
+    if _comparison_has_reviewed_quantity_identity(work, comparison, left_role, right_role):
+        return True
     # Two commercial rows with no facility can describe different estimate
     # chapters even when their normalized operation is identical.  A VOR ↔
     # estimate finding therefore requires a resolved location/scope.
@@ -3544,6 +3546,50 @@ def _isolated_unassigned_comparison(work: Mapping[str, Any], comparison: Mapping
     return all(
         len(list(sources.get(role) or ())) == 1 and len(list(wordings.get(role) or ())) == 1
         for role in (left_role, right_role)
+    )
+
+
+def _comparison_has_reviewed_quantity_identity(
+    work: Mapping[str, Any],
+    comparison: Mapping[str, Any],
+    left_role: str,
+    right_role: str,
+) -> bool:
+    """Accept an unlocated pair only when Qwen linked the exact quantity identities.
+
+    A work family may contain several rows from each document. Counting source
+    rows then rejects a valid pair even when bounded semantic review explicitly
+    linked two quantity candidates as the same engineering scope. Preserve the
+    conservative fallback, but let that reviewed identity relation establish
+    the comparison boundary.
+    """
+
+    semantic_scope = _normalized(comparison.get("semantic_scope"))
+    if not semantic_scope:
+        return False
+    quantities = dict(work.get("quantities_by_document") or {})
+
+    def matching(role: str) -> list[dict[str, Any]]:
+        return [
+            dict(value)
+            for value in quantities.get(role) or ()
+            if isinstance(value, Mapping)
+            and _normalized(value.get("semantic_scope")) == semantic_scope
+            and value.get("relationship_reviewed") is True
+            and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE
+            and value.get("quantity_candidate_id")
+        ]
+
+    left_values = matching(left_role)
+    right_values = matching(right_role)
+    if len(left_values) != 1 or len(right_values) != 1:
+        return False
+    left = left_values[0]
+    right = right_values[0]
+    left_id = str(left["quantity_candidate_id"])
+    right_id = str(right["quantity_candidate_id"])
+    return right_id in set(left.get("related_quantity_candidate_ids") or ()) or left_id in set(
+        right.get("related_quantity_candidate_ids") or ()
     )
 
 

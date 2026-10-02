@@ -32,6 +32,7 @@ from asd_kontur.tender.project_engineering import (
     _tender_context,
     _tender_context_comparisons,
     _unique_values,
+    _validated_scope_quantity_comparisons,
     _work_schedule,
     build_project_engineering_model,
     classify_work_family,
@@ -763,6 +764,80 @@ def test_contract_estimate_is_a_commercial_quantity_source() -> None:
         "unit": "м3",
     }
     assert comparisons[0]["difference"] == "6.5"
+
+
+def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "foundation-preparation-z17",
+                "facility_id": None,
+                "facility": "Location unresolved",
+                "family_key": "pit_preparation",
+                "work_family": "Foundation preparation",
+                "work_name": "Prepare crushed-stone base",
+                "semantic_resolution_by_document": {
+                    "ПД": ["MATCHED"],
+                    "ВОР": ["MATCHED"],
+                    "Смета": ["MATCHED"],
+                },
+                "sources_by_document": {
+                    "ПД": [{"source_locator_id": "design-a"}, {"source_locator_id": "design-b"}],
+                    "ВОР": [{"source_locator_id": "vor"}],
+                    "Смета": [{"source_locator_id": "estimate"}],
+                },
+                "project_wording_by_document": {
+                    "ПД": ["Base under structure", "Base around piles"],
+                    "ВОР": ["Crushed-stone base"],
+                    "Смета": ["Crushed-stone base"],
+                },
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "design-area",
+                            "value": "240",
+                            "unit": "м2",
+                            "semantic_scope": "Base area",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                        },
+                        {
+                            "quantity_candidate_id": "design-volume",
+                            "value": "68.4",
+                            "unit": "м3",
+                            "semantic_scope": "Crushed-stone base volume",
+                            "relation_kind": "DUPLICATE_OF",
+                            "related_quantity_candidate_ids": ["estimate-volume"],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                        },
+                    ],
+                    "Смета": [
+                        {
+                            "quantity_candidate_id": "estimate-volume",
+                            "value": "61.2",
+                            "unit": "м3",
+                            "semantic_scope": "Crushed-stone base volume",
+                            "relation_kind": "DUPLICATE_OF",
+                            "related_quantity_candidate_ids": ["design-volume"],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "QUANTITY_DIFFERENCE"
+    assert comparisons[0]["left"] == {"document_role": "ПД", "value": "68.4", "unit": "м3"}
+    assert comparisons[0]["right"] == {
+        "document_role": "Смета",
+        "value": "61.2",
+        "unit": "м3",
+    }
+    assert comparisons[0]["difference"] == "7.2"
 
 
 def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
