@@ -1126,3 +1126,51 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Reviewed source-value recovery — release 4499d8f
+
+The live estimate corpus exposed a generic column-alignment defect after the
+scaled-unit correction. A quantity candidate could retain the unit-column token
+as its extracted value while the actual numeric quantity was present in the
+same bounded source row. Profile `qwen-project-work-reconciliation-v24` permits
+the semantic reviewer to copy one exact numeric token from that bounded source
+context. Deterministic validation requires the returned token to occur in the
+source and records both the extracted and reviewed values; deterministic code
+continues to perform all scaling and arithmetic. The contract does not permit
+the model to derive or invent a corrected number.
+
+Commit `4499d8f1d10cc17f755efe9b3f3eea0198f6c034` passed exact-SHA CI run
+`37056211705`. The public backup is
+`~/.asd-kontur/public-demo/backups/pre-0111-source-value-20261003T0742/public-before-0111.dump`
+with SHA-256
+`5fc84a8f1691e3ac97e5e7e3d3ec37a9014d6542598abcfb8be704031ad92882`.
+The real backup passed a separate restore, upgrade, downgrade and re-upgrade
+before the public database advanced to
+`0111_reviewed_quantity_source_value`.
+
+API, document worker, project orchestrator and assistant worker now run from
+the immutable release
+`~/.asd-kontur/public-demo/releases/20261003-4499d8f-source-value-v24`.
+Qwen PID `93554` and NTD worker PID `98263` were not restarted. The supervised
+orchestrator superseded unclaimed v23 work and created v24 work without a
+developer queue, retry or successor command.
+
+The first durable v24 result,
+`01a0fe30-df0d-7063-afce-9e31040f8525`, completed in 46.096338 seconds with
+one Qwen call, no recovery code and terminal result digest
+`sha256:6750768cfc94a3113ba8a763a64fe7012106840cffd25c4d229b37a9bf23fb63`.
+It preserved two distinct waterproofing scopes rather than comparing an area
+with a count. During the service drain, launchd briefly respawned the v23
+worker before bootout completed; its last request finished in Qwen but the
+worker was no longer present to persist it. The durable stale claim was then
+terminally accounted for by the normal profile-supersession path as
+`work_reconciliation_profile_superseded`; Qwen itself was not interrupted.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`d5f3b1d71d63a6ba8c8d5f0895550ada60a75251a4d4cf1a1d95fede1c2112be`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
