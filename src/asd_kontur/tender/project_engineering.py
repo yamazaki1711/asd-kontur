@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v61"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v62"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -55,6 +55,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v21",
         "qwen-project-work-reconciliation-v22",
         "qwen-project-work-reconciliation-v23",
+        "qwen-project-work-reconciliation-v24",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -2961,6 +2962,12 @@ def _work_schedule(
                     }
                 )
                 quantity["semantic_review_profile"] = resolution.get("profile_version")
+                if reviewed_source_value := _reviewed_source_quantity_value(review):
+                    quantity["extracted_normalized_value"] = quantity.get(
+                        "normalized_value", quantity.get("value")
+                    )
+                    quantity["normalized_value"] = reviewed_source_value
+                    quantity["source_value_basis"] = review.get("source_value")
                 if scaled_unit := _reviewed_scaled_quantity_unit(quantity, review):
                     quantity["comparison_unit"] = scaled_unit
                     quantity["source_unit_basis"] = review.get("source_unit")
@@ -2969,6 +2976,8 @@ def _work_schedule(
                 {
                     "quantity_candidate_id": quantity_id,
                     "value": quantity.get("normalized_value", quantity.get("value")),
+                    "extracted_value": quantity.get("extracted_normalized_value"),
+                    "source_value_basis": quantity.get("source_value_basis"),
                     "unit": quantity.get(
                         "comparison_unit",
                         quantity.get(
@@ -6163,6 +6172,19 @@ def _reviewed_scaled_quantity_unit(
     if candidate_unit != scaled.group("unit"):
         return None
     return f"{scaled.group('factor')} {scaled.group('unit')}"
+
+
+def _reviewed_source_quantity_value(review: Mapping[str, Any]) -> str | None:
+    """Normalize an exact source token already validated by the Qwen boundary."""
+
+    source_value = str(review.get("source_value") or "").strip()
+    if not source_value:
+        return None
+    try:
+        value = Decimal(source_value.replace("\xa0", "").replace(" ", "").replace(",", "."))
+    except InvalidOperation:
+        return None
+    return _decimal_text(value)
 
 
 def _duration_unit(value: object) -> bool:

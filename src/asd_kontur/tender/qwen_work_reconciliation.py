@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v23"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v24"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -38,9 +38,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v20",
     "qwen-project-work-reconciliation-v21",
     "qwen-project-work-reconciliation-v22",
+    "qwen-project-work-reconciliation-v23",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@16.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -440,6 +441,7 @@ def _prompt(
 "facility":"одно допустимое сооружение или null","confidence":"0.00..1.00",
 "reason":"краткая инженерная причина","quantity_reviews":[{{
 "quantity_candidate_id":"...","status":"WORK_QUANTITY|DIMENSION|DURATION|RESOURCE_OR_RATE|UNRELATED|AMBIGUOUS",
+"source_value":"точное числовое значение из источника или null",
 "source_unit":"точная единица из источника, включая масштаб 10/100/1000, или null",
 "semantic_scope":"что именно измеряет значение","quantity_type":"TOTAL|SUBTOTAL|COMPONENT|STANDALONE|DIMENSION|DURATION|RESOURCE_OR_RATE|UNKNOWN",
 "relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
@@ -462,6 +464,9 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 source_unit копируйте из ближайшего исходного контекста дословно. Сохраняйте масштаб единицы:
 `100 м2`, `10 м3` и `1000 м3` нельзя сокращать до `м2` или `м3`. Если ближайший контекст не
 показывает более точную единицу, повторите переданную unit; не вычисляйте физический объём.
+source_value указывайте только когда переданное value ошибочно захватило число из единицы или
+соседнего столбца, а правильное значение этой же строки дословно присутствует в ближайшем
+контексте. Копируйте один исходный числовой токен без арифметики; иначе укажите null.
 Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
@@ -709,6 +714,7 @@ def _parse_quantity_reviews(
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         candidate_id = str(value.get("quantity_candidate_id") or "")
         status = str(value.get("status") or "")
+        source_value = " ".join(str(value.get("source_value") or "").split()) or None
         source_unit = " ".join(str(value.get("source_unit") or "").split()) or None
         semantic_scope = " ".join(str(value.get("semantic_scope") or "").split())
         quantity_type = str(value.get("quantity_type") or "")
@@ -738,6 +744,10 @@ def _parse_quantity_reviews(
                 or not normalized_source_unit
                 or normalized_source_unit not in normalized_context
             ):
+                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        if source_value is not None:
+            context = (source_context_by_id or {}).get(candidate_id, "")
+            if len(source_value) > 80 or not _source_numeric_token_present(source_value, context):
                 raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         if relationship_review:
             if relation_kind == QuantityRelation.TOTAL_FOR:
@@ -774,6 +784,8 @@ def _parse_quantity_reviews(
         }
         if source_unit is not None:
             reviews[candidate_id]["source_unit"] = source_unit
+        if source_value is not None:
+            reviews[candidate_id]["source_value"] = source_value
         if relationship_review:
             reviews[candidate_id]["relationship_reviewed"] = True
             reviews[candidate_id]["component_set_complete"] = component_set_complete
@@ -793,3 +805,24 @@ def _normalized_unit_evidence(value: object) -> str:
     normalized = re.sub(r"\bш\s+т\b", "шт", normalized)
     normalized = re.sub(r"\b([мm])\s+([23])\b", r"\1\2", normalized)
     return normalized
+
+
+def _source_numeric_token_present(value: object, context: object) -> bool:
+    """Require a copied source number; model-derived arithmetic is never accepted."""
+
+    candidate = str(value or "").strip().replace("\xa0", " ")
+    token_pattern = r"[-+]?(?:\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,]\d+)?"
+    if not re.fullmatch(token_pattern, candidate):
+        return False
+    try:
+        expected = Decimal(candidate.replace(" ", "").replace(",", "."))
+    except InvalidOperation:
+        return False
+    for token in re.findall(rf"(?<![\w]){token_pattern}(?![\w])", str(context or "")):
+        try:
+            observed = Decimal(token.replace("\xa0", "").replace(" ", "").replace(",", "."))
+        except InvalidOperation:
+            continue
+        if observed == expected:
+            return True
+    return False

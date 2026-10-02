@@ -29,6 +29,7 @@ from asd_kontur.tender.project_engineering import (
     _qualified_participant_context,
     _resolution_establishes_page_scope,
     _reviewed_scaled_quantity_unit,
+    _reviewed_source_quantity_value,
     _scope_comparisons,
     _semantic_work_consensus,
     _sheet_pile_profiles,
@@ -1031,6 +1032,12 @@ def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
         )
         == "100 м2"
     )
+
+
+def test_reviewed_source_value_is_normalized_without_arithmetic() -> None:
+    assert _reviewed_source_quantity_value({"source_value": "2,113"}) == "2.113"
+    assert _reviewed_source_quantity_value({"source_value": "1 250,50"}) == "1250.5"
+    assert _reviewed_source_quantity_value({}) is None
     assert (
         _reviewed_scaled_quantity_unit(
             {"normalized_unit": "m3"},
@@ -2353,7 +2360,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v61"
+    assert model["model_version"] == "project-engineering-model-v62"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

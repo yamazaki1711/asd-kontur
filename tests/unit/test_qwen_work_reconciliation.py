@@ -8,6 +8,7 @@ from typing import Any
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import (
     QwenProjectWorkReconciler,
+    _source_numeric_token_present,
     potential_work_description,
 )
 
@@ -98,7 +99,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v23"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v24"
 
 
 def test_quantity_review_preserves_scaled_source_unit_without_model_arithmetic(
@@ -226,6 +227,82 @@ def test_qwen_work_reconciliation_accepts_professional_unit_spelling_from_split_
     review = result["observations"][0]["quantity_reviews"][0]
     assert review["source_unit"] == "100 шт"
     assert review["relationship_reviewed"] is True
+
+
+def test_quantity_review_can_correct_a_misaligned_estimate_value_from_exact_source(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "source_value" in prompt
+        assert "100 м 3 2,113" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "wall-row",
+                        "status": "MATCHED",
+                        "family_key": "reinforced_concrete",
+                        "operation": "Устройство железобетонных стен",
+                        "facility": None,
+                        "confidence": "0.97",
+                        "reason": "Строка содержит физическую работу и её сметный объём.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "wall-volume",
+                                "status": "WORK_QUANTITY",
+                                "source_value": "2,113",
+                                "source_unit": "100 м3",
+                                "semantic_scope": "Объём железобетонных стен",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": (
+                                    "Число 100 относится к единице, объём строки равен 2,113."
+                                ),
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "wall-row",
+                "wording": "Устройство железобетонных стен",
+                "analysis_task": "QUANTITY_SCOPE_INTERPRETATION",
+                "nearby_context": "Устройство стен 100 м 3 2,113 1 2,113",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "wall-volume",
+                        "value": "100",
+                        "unit": "м3",
+                        "nearby_context": "Устройство стен 100 м 3 2,113 1 2,113",
+                    }
+                ],
+            }
+        ],
+        work_families={"reinforced_concrete": "Бетонные и железобетонные работы"},
+        facilities=[],
+    )
+
+    review = result["observations"][0]["quantity_reviews"][0]
+    assert review["source_value"] == "2,113"
+    assert review["source_unit"] == "100 м3"
+
+
+def test_source_value_evidence_rejects_model_arithmetic() -> None:
+    context = "Устройство стен 100 м3 2,113 1 2,113"
+
+    assert _source_numeric_token_present("2,113", context)
+    assert not _source_numeric_token_present("211,3", context)
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(
