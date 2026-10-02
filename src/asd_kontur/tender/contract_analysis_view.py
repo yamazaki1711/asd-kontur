@@ -15,6 +15,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
 )
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
+    contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
 )
 
@@ -379,6 +380,18 @@ class TenderContractAnalysisRepository:
                 risk_clause_id = clause_ids.get(clause_ref)
                 if risk_clause_id is None:
                     continue
+                source_clause = next(
+                    (item for item in clauses if str(item.get("clause_id")) == risk_clause_id),
+                    None,
+                )
+                proposed = risk.get("proposed_contractor_wording")
+                proposed_is_grounded = bool(
+                    proposed
+                    and source_clause is not None
+                    and contract_proposed_wording_is_grounded(
+                        str(source_clause.get("source_text") or ""), str(proposed)
+                    )
+                )
                 issue_id = str(
                     uuid5(
                         workspace_id,
@@ -397,7 +410,12 @@ class TenderContractAnalysisRepository:
                     "applicability": "candidate",
                     "clause_id": risk_clause_id,
                     "clause_version": 1,
-                    "uncertainty_code": risk.get("uncertainty"),
+                    "uncertainty_code": risk.get("uncertainty")
+                    or (
+                        None
+                        if not proposed or proposed_is_grounded
+                        else "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+                    ),
                     "description": risk.get("description"),
                     "recommendation_text": risk.get("recommended_action"),
                     "consequence_code": risk.get("practical_consequence"),
@@ -405,8 +423,7 @@ class TenderContractAnalysisRepository:
                     "authority": risk.get("authority"),
                 }
                 issues.append(issue)
-                proposed = risk.get("proposed_contractor_wording")
-                if risk.get("disagreement_required") is True and proposed:
+                if risk.get("disagreement_required") is True and proposed and proposed_is_grounded:
                     item_id = str(uuid5(workspace_id, f"contract-disagreement:{issue_id}"))
                     disagreement_items.append(
                         {

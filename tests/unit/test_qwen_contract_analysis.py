@@ -10,6 +10,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_contract_analysis import (
     QwenContractAnalyzer,
     _contract_output_token_budget,
+    contract_proposed_wording_is_grounded,
     parse_contract_analysis,
 )
 
@@ -518,6 +519,66 @@ def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:
     result = parse_contract_analysis(raw, allowed_text_by_locator=source)
 
     assert result["risks"][0]["kind"] == "unpaid_change"
+
+
+def test_contract_analysis_withholds_revision_with_invented_numeric_deadline() -> None:
+    source = {
+        "loc-remedy": (
+            "Заказчик устанавливает Подрядчику срок устранения подтверждённых недостатков."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "8.2",
+                    "source_text": source["loc-remedy"],
+                    "source_locator_ids": ["loc-remedy"],
+                    "category": "warranty",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "8.2",
+                    "kind": "uncontrolled_obligation",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_deadline",
+                    "trigger_text": "Заказчик устанавливает Подрядчику срок",
+                    "adverse_effect_text": "срок устранения подтверждённых недостатков",
+                    "severity": "medium",
+                    "description": "Заказчик единолично определяет срок устранения.",
+                    "practical_consequence": "Срок может не учитывать сложность работ.",
+                    "recommended_action": "Согласовывать технически обоснованный срок.",
+                    "replacement_source_text": source["loc-remedy"],
+                    "proposed_contractor_wording": (
+                        "Стороны устанавливают срок не менее 20 календарных дней."
+                    ),
+                    "disagreement_required": True,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    risk = result["risks"][0]
+    assert risk["disagreement_required"] is False
+    assert risk["proposed_contractor_wording"] is None
+    assert risk["replacement_source_text"] is None
+    assert risk["uncertainty"] == "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
+
+
+def test_contract_revision_numeric_terms_must_come_from_replaced_clause() -> None:
+    assert contract_proposed_wording_is_grounded(
+        "Оплата производится в течение 14 дней, неустойка составляет 0,1 процента.",
+        "Оплата производится в течение 14 дней; неустойка составляет 0.1 процента.",
+    )
+    assert not contract_proposed_wording_is_grounded(
+        "Срок устранения определяется Заказчиком.",
+        "Срок устранения составляет 25 дней.",
+    )
 
 
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:

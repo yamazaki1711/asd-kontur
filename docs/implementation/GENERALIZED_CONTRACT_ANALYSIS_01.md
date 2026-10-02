@@ -605,3 +605,17 @@ exact selected text explicitly concerns payment for additional or changed
 work. The rule is independent of clause numbering, parties, project identity
 and quantities. A changed restitution example is rejected, while a changed
 example that explicitly denies payment for additional work remains accepted.
+
+The live candidate wording exposed a separate output-safety gap: two otherwise
+useful risks contained proposed revisions with new five-day and thirty-day
+deadlines that were absent from the clauses being replaced. V8 now instructs
+the model not to introduce new amounts, percentages, durations or other
+numeric thresholds. Deterministic validation independently enforces the rule.
+If a proposed revision introduces a numeric contract term not present in the
+exact replacement source, the risk is retained but the disagreement/revised
+clause is withheld and marked
+`PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED`. The same rule is applied at read
+time to historical v7 output. Against the current blind projection this keeps
+all five grounded risk findings while reducing the negotiation-ready rows from
+five to three; no invented numeric term can enter the protocol merely because
+it was fluent model output.

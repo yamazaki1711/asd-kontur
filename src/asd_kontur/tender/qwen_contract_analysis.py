@@ -117,6 +117,10 @@ _CHANGED_WORK_PAYMENT_EXPOSURE = re.compile(
     r"(?:additional|changed|varied).{0,35}work)",
     flags=re.IGNORECASE,
 )
+_NUMERIC_CONTRACT_TERM = re.compile(
+    r"(?<![\w])\d+(?:[.,]\d+)*(?:\s*(?:%|процент\w*|percent\w*))?",
+    flags=re.IGNORECASE,
+)
 _CUSTOMER_CONTROL_ACTION = re.compile(
     r"(?:заказчик\w*.{0,80}(?:устанавлива|определя|утвержда|изменя|назнача|"
     r"согласов|задерж|переда|предоставля|подписыва)|"
@@ -296,6 +300,7 @@ def parse_contract_analysis(
             raise QwenSemanticFailure("qwen_contract_risk_controller_not_grounded")
         disagreement = raw_risk.get("disagreement_required")
         proposed = _optional_text(raw_risk.get("proposed_contractor_wording"))
+        uncertainty = _optional_text(raw_risk.get("uncertainty"))
         replacement_source_text = _optional_text(raw_risk.get("replacement_source_text"))
         exact_replacement_source = (
             _resolve_exact_source_quote(
@@ -310,6 +315,16 @@ def parse_contract_analysis(
             or (disagreement and clause_ref in disagreement_clause_refs)
         ):
             raise QwenSemanticFailure("qwen_contract_risk_revision_invalid")
+        if disagreement and not contract_proposed_wording_is_grounded(
+            exact_replacement_source or "", proposed or ""
+        ):
+            # Preserve the exact-source commercial risk but do not publish a
+            # negotiation proposal containing a new amount, percentage or
+            # deadline invented outside the admitted clause.
+            disagreement = False
+            proposed = None
+            exact_replacement_source = None
+            uncertainty = uncertainty or "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
         if disagreement:
             disagreement_clause_refs.add(clause_ref)
         risks.append(
@@ -328,7 +343,7 @@ def parse_contract_analysis(
                 "replacement_source_text": exact_replacement_source,
                 "disagreement_required": disagreement,
                 "confidence": float(confidence),
-                "uncertainty": _optional_text(raw_risk.get("uncertainty")),
+                "uncertainty": uncertainty,
                 "authority": "contract_commercial_risk",
             }
         )
@@ -391,6 +406,18 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
     if mechanism in {"customer_controlled_acceptance", "customer_controlled_deadline"}:
         return bool(_CUSTOMER_CONTROL_ACTION.search(combined))
     return True
+
+
+def contract_proposed_wording_is_grounded(source_text: str, proposed_text: str) -> bool:
+    """Reject new numeric commercial terms absent from the clause being replaced."""
+
+    def terms(value: str) -> set[str]:
+        return {
+            "".join(match.group(0).casefold().split()).replace(",", ".")
+            for match in _NUMERIC_CONTRACT_TERM.finditer(value)
+        }
+
+    return terms(proposed_text).issubset(terms(source_text))
 
 
 _SOURCE_QUOTE_TRANSLATION = str.maketrans(
@@ -505,7 +532,7 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 Короткий срок, установленный самому Заказчику для передачи площадки, документов, согласования или иного действия, не является риском Подрядчика сам по себе: не предполагай заранее, что Заказчик нарушит свою обязанность. Обычное право направить требование о неустойке за нарушение обязательств, прямо предусмотренных договором, не является неограниченной ответственностью без отдельной формулировки о неограниченном или несоразмерном последствии. Односторонний акт контроля не является самостоятельным риском, если данный фрагмент только требует направить его Подрядчику и не устанавливает для него неблагоприятное последствие. Расходы Подрядчика на вскрытие или исправление, прямо вызванные его собственным нарушением обязанности предъявить работы или устранить свой дефект, являются обычной ответственностью и не отмечаются как риск, если условие не распространяет расходы на случаи надлежащего исполнения Подрядчиком.
 CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта, раздела или приложения не попало в CONTEXT. Этот этап принимает только риск, который прямо создаётся формулировкой условия в CONTEXT. Отсутствующий во всём договоре механизм проверяется отдельным итоговым этапом после анализа всех частей.
 Для каждого риска basis должен быть только explicit_clause_text. trigger_text — дословная непрерывная цитата формулировки, запускающей риск. adverse_effect_text — дословная непрерывная цитата из того же source_text, которая прямо устанавливает неблагоприятное последствие, обязанность, зависимость или меру для Подрядчика. Если неблагоприятное последствие можно только предположить из возможного будущего нарушения Заказчиком, не добавляй риск. Число, объём или цена сами по себе не доказывают отсутствие порядка их изменения. Если точных trigger_text и adverse_effect_text нет, не добавляй риск.
-Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту.
+Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту. Не вводи новую сумму, процент, количество дней или иной числовой порог, которого нет в заменяемом source_text; используй ненумерованное проверяемое условие или оставь proposed_contractor_wording=null и disagreement_required=false.
 Для disagreement_required=true укажи replacement_source_text: дословный непрерывный фрагмент source_text, который полностью заменяется proposed_contractor_wording. Если один пункт содержит несколько связанных рисков, верни один объединённый риск и одну согласованную редакцию этого пункта; не создавай две замены одного clause_ref.
 
 Верни только JSON:
