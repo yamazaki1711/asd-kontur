@@ -403,3 +403,50 @@ inputs, the orchestrator created 50 immutable v7 inputs for the real blind
 contract, and Qwen completed the first three before starting batch 4. Those
 three results contained two exact clauses and no risks, which is appropriate
 for the opening document context rather than a manufactured finding.
+
+## 2026-10-02 v7 professional-output checkpoint
+
+The autonomous v7 run produced its first risk-bearing result without a manual
+queue, retry or model command. Batch 9 contains two defensible contractor
+exposures from the admitted `Проект_контракта.docx`:
+
+1. clause 2.5 makes payment conditional on budget limits made available to the
+   Customer;
+2. clause 2.5.2 permits advance repayment after partial performance without an
+   explicit link to the value of work already performed and accepted.
+
+Both results contain exact trigger text, separate exact adverse-effect text,
+the practical consequence, recommended action, proposed Contractor wording
+and the source clause. The live candidate projection exposed 15 clauses, two
+risks, two disagreement rows and two revised-clause candidates. The invalid
+batch-8 and batch-10 outputs failed closed on exact-source validation; the
+supervised orchestrator independently created bounded replacement work while
+the worker continued with the next batch. At the 17:52 +12 observation Qwen
+reported 463 completed requests, `QWEN_GENERATING`, and no runtime error.
+
+Visual inspection of the live partial disagreement protocol exposed a separate
+product-language defect: the professional `Источник` column included source
+version UUIDs, fragment UUIDs and the internal `qwen_contract_candidate`
+authority label. The renderer now keeps those identities in structured CSV/API
+lineage but shows only the admitted document name and page/sheet in the Word
+report and standalone protocol. The same change translates processing status
+and known gaps into ordinary Russian professional language and removes the
+draft process UUID from the report body. The regenerated live protocol passes
+the application DOCX structural validator and Quick Look renders a readable
+landscape table with no UUID or candidate terminology.
+
+The document-role run also established a remaining generalized scope issue:
+`Описание объекта закупки.docx` is a contract attachment/technical
+specification with explicit Contractor obligations, but the current bounded
+profile assigns the coarse role `contract`. It is useful to review that source
+for Contractor exposure, but a completed product must distinguish the main
+agreement from amendable attachments so attachment proposals cannot suppress
+or contaminate a revised-main-contract candidate. No project-specific filename
+rule has been added; this remains a generic role/output-scope correction after
+the current v7 checkpoint completes.
+
+The post-migration Knowledge Gateway canary successfully retrieved the verified
+provision `external/page:1/clause:1` from edition
+`991a1cff-4967-560f-be70-be902b92b7b0` with `status=ok`. The provision remains
+not activated for a workspace and has no verified deterministic rule candidate,
+which is reported as a gap rather than promoted into a contract conclusion.

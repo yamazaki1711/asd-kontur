@@ -89,6 +89,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "clause_version": 2,
                 "clause_key": "payment.acceptance",
                 "source_name": "Changed-contract-terms.docx",
+                "source_page": 12,
                 "source_version_id": "source-independent-91",
                 "source_locator_id": "locator-independent-311",
                 "evidence_link_id": "evidence-independent-808",
@@ -184,13 +185,15 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert 'w:footer="720"' in document
         assert 'w:gutter="0"' in document
         assert "Accept completed work within seven working days." in document
-        assert "source-independent-91" in document
         assert "Changed-contract-terms.docx" in document
-        assert "locator-independent-311" in document
+        assert "стр./лист: 12" in document
         assert "ООО «Северный заказчик»" in document
-        assert "evidence-independent-808" in document
-        assert "PROFESSIONAL_REVIEW_REQUIRED" in document
-        assert "не заменяет юридическое заключение" in document
+        assert "source-independent-91" not in document
+        assert "locator-independent-311" not in document
+        assert "evidence-independent-808" not in document
+        assert "qwen_contract_candidate" not in document
+        assert "требуется профессиональная юридическая проверка" in document
+        assert "не является подписанным соглашением сторон" in document
         assert "Обоснование / практическая причина" in document
         assert "Acceptance depends on an undefined Customer review period." in document
         assert "Customer accepts work after its internal review." in document
@@ -208,6 +211,9 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "Accept completed work within seven working days." in document
         assert "Acceptance depends on an undefined Customer review period." in document
         assert "Changed-contract-terms.docx" in document
-        assert "locator-independent-311" in document
+        assert "стр./лист: 12" in document
+        assert "source-independent-91" not in document
+        assert "locator-independent-311" not in document
+        assert "evidence-independent-808" not in document
         assert "ООО «Северный заказчик»" in document
         assert "Объект и стороны" in document

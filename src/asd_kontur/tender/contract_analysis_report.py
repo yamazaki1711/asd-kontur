@@ -97,23 +97,20 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         )
     ]
     process = _mapping(view.get("process"))
-    gaps = _joined(view.get("gaps")) or "Нет зарегистрированных пробелов"
+    status = _status_label(view.get("status"))
+    gaps = _gap_summary(view.get("gaps"))
     body = [
         _heading("Протокол разногласий и предложения по переработке договора", "Title"),
-        _paragraph(f"Состояние Tender-процесса: {view.get('status', 'не указано')}"),
+        _paragraph(f"Состояние анализа: {status}."),
         _paragraph(
-            "Граница полномочий: документ является редактируемой проекцией канонических "
-            "записей и не заменяет юридическое заключение, согласование или подписание."
+            "Рабочий документ Подрядчика. Требует профессиональной юридической проверки "
+            "и согласования; не является подписанным соглашением сторон."
         ),
-        _paragraph(f"Пробелы и ограничения: {gaps}"),
+        _paragraph(f"Ограничения результата: {gaps}"),
     ]
     if process:
-        body.append(
-            _paragraph(
-                "Идентификатор процесса: "
-                f"{process.get('tender_process_id', '')}; ревизия: {process.get('revision', '')}."
-            )
-        )
+        if process.get("revision"):
+            body.append(_paragraph(f"Редакция анализа: {process.get('revision')}."))
     else:
         body.append(
             _paragraph(
@@ -260,14 +257,48 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
 
 
 def _source_reference(clause: Mapping[str, Any]) -> str:
+    """Return a professional source label without exposing internal identifiers."""
+
     values = (
         ("Документ", clause.get("source_name")),
-        ("Версия источника", clause.get("source_version_id")),
-        ("Фрагмент", clause.get("source_locator_id")),
-        ("Доказательство", clause.get("evidence_link_id")),
-        ("Уровень полномочий", clause.get("authority_layer")),
+        ("стр./лист", clause.get("source_page") or clause.get("page_number")),
     )
-    return "; ".join(f"{label}: {value}" for label, value in values if value) or "Не привязан"
+    return (
+        "; ".join(f"{label}: {value}" for label, value in values if value)
+        or "Источник доступен по ссылке результата"
+    )
+
+
+def _status_label(value: Any) -> str:
+    labels = {
+        "analysis_pending": "анализ ожидает запуска",
+        "analyzing": "анализ договора выполняется",
+        "drafted": "предварительный анализ подготовлен",
+        "contract_clause_extraction_pending": "извлекаются условия договора",
+        "contract_input_unavailable": "проект договора не найден",
+    }
+    return labels.get(str(value or ""), "состояние требует уточнения")
+
+
+def _gap_summary(value: Any) -> str:
+    labels = {
+        "CONTRACT_ANALYSIS_IN_PROGRESS": "анализ продолжается; документ будет дополнен",
+        "CONTRACT_ANALYSIS_BATCH_FAILURES": (
+            "часть условий пока не удалось интерпретировать; доступные выводы сохранены"
+        ),
+        "CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES": (
+            "в обработанной части договора риски не установлены"
+        ),
+        "CONTRACT_SOURCE_CLASSIFICATION_IN_PROGRESS": "уточняется назначение документов",
+        "DRAFT_CONTRACT_SOURCE_UNAVAILABLE": "проект договора не найден среди документов",
+        "PROFESSIONAL_REVIEW_REQUIRED": "требуется профессиональная юридическая проверка",
+    }
+    raw = value if isinstance(value, (list, tuple, set)) else ()
+    result = [
+        labels.get(str(item), "есть ограничение обработки; подробности в диагностике")
+        for item in raw
+    ]
+    return "; ".join(dict.fromkeys(result)) or "существенные ограничения не зарегистрированы"
 
 
 def _contract_key_facts(project_context: Mapping[str, Any]) -> list[Mapping[str, Any]]:

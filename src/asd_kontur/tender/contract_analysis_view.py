@@ -60,7 +60,25 @@ class TenderContractAnalysisRepository:
             clauses = list(
                 session.execute(
                     sa.text(
-                        "SELECT DISTINCT ON (clause_id) clause_id,clause_version,clause_key,locator_label,authority_layer,source_version_id,source_locator_id,evidence_link_id FROM workspace.tender_clause_versions WHERE organization_id=:o AND workspace_id=:w AND tender_process_id=:p ORDER BY clause_id,clause_version DESC"
+                        "SELECT DISTINCT ON (clause.clause_id) clause.clause_id,"
+                        "clause.clause_version,clause.clause_key,clause.locator_label,"
+                        "clause.authority_layer,clause.source_version_id,"
+                        "clause.source_locator_id,clause.evidence_link_id,"
+                        "source.safe_display_name AS source_name,element.page_number AS source_page "
+                        "FROM workspace.tender_clause_versions clause "
+                        "LEFT JOIN workspace.document_versions source ON "
+                        "source.organization_id=clause.organization_id AND "
+                        "source.workspace_id=clause.workspace_id AND "
+                        "source.source_version_id=clause.source_version_id "
+                        "LEFT JOIN LATERAL (SELECT layout.page_number FROM "
+                        "workspace.native_layout_element_versions layout WHERE "
+                        "layout.organization_id=clause.organization_id AND "
+                        "layout.workspace_id=clause.workspace_id AND "
+                        "layout.source_locator_id=clause.source_locator_id "
+                        "ORDER BY layout.version DESC LIMIT 1) element ON TRUE WHERE "
+                        "clause.organization_id=:o AND clause.workspace_id=:w AND "
+                        "clause.tender_process_id=:p ORDER BY clause.clause_id,"
+                        "clause.clause_version DESC"
                     ),
                     {"o": organization_id, "w": workspace_id, "p": process_id},
                 ).mappings()
@@ -276,6 +294,19 @@ class TenderContractAnalysisRepository:
             str(source["source_version_id"]): str(source["safe_display_name"])
             for source in contract_sources
         }
+        source_ids = [UUID(value) for value in source_name_by_id]
+        locator_page_by_id = {
+            str(row["source_locator_id"]): int(row["page_number"])
+            for row in session.execute(
+                sa.text(
+                    "SELECT DISTINCT ON (source_locator_id) source_locator_id,page_number "
+                    "FROM workspace.native_layout_element_versions WHERE organization_id=:o "
+                    "AND workspace_id=:w AND source_version_id=ANY(:sources) "
+                    "ORDER BY source_locator_id,version DESC"
+                ),
+                {"o": organization_id, "w": workspace_id, "sources": source_ids},
+            ).mappings()
+        }
         clauses: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
         disagreement_items: list[dict[str, Any]] = []
@@ -313,6 +344,9 @@ class TenderContractAnalysisRepository:
                         "source_name": source_name_by_id.get(str(result["source_version_id"])),
                         "source_locator_id": locator_ids[0] if locator_ids else None,
                         "source_locator_ids": locator_ids,
+                        "source_page": (
+                            locator_page_by_id.get(locator_ids[0]) if locator_ids else None
+                        ),
                         "source_text": clause.get("source_text"),
                         "category": clause.get("category"),
                         "customer_obligation": clause.get("customer_obligation"),
