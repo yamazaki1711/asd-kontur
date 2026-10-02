@@ -139,8 +139,16 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                         )
                     )
                 )
-                assert claim_definition.index("CASE WHEN (") < (
-                    claim_definition.index("SELECT max(served.started_at)")
+                contract_priority = claim_definition.index(
+                    "CASE WHEN j.job_kind='CONTRACT_ANALYSIS' THEN 3"
+                )
+                primary_facts_priority = claim_definition.index(
+                    "EXISTS (\n                 SELECT 1\n"
+                    "                   FROM workspace.document_versions active_version"
+                )
+                assert contract_priority < primary_facts_priority
+                assert primary_facts_priority < claim_definition.index(
+                    "SELECT max(served.started_at)"
                 )
                 assert "PROJECT_DEFINITION_EXTRACTION" in claim_definition
                 assert "count(*) FILTER" not in claim_definition
