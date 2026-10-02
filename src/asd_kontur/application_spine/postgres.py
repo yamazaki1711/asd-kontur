@@ -196,7 +196,12 @@ _CONTRACT_ANALYSIS_PRIORITY = 188
 # minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
 _PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
 _CONTRACT_CONTEXT_SEGMENT_CHARS = 10_000
-_CONTRACT_CONTEXT_MAX_LOCATORS = 12
+# Real contract-analysis receipts showed that every v7 validation failure used
+# the twelve-locator ceiling.  Those failures averaged 528.6 seconds, compared
+# with 182.8 seconds for accepted twelve-locator batches.  Keep the source
+# context useful, but bound strict clause/risk JSON fan-out before relying on
+# the analyzer's recursive recovery path.
+_CONTRACT_CONTEXT_MAX_LOCATORS = 8
 _CONTRACT_CONTEXT_MAX_CHARS = 12_000
 
 

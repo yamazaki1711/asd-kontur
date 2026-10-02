@@ -657,3 +657,26 @@ payment denial before accepting `unpaid_change`. Changed examples cover both
 rejection of a termination-cost misclassification and preservation of a real
 additional-work nonpayment clause. The live read projection consequently
 retains five correctly typed risks and three grounded disagreement rows.
+
+## 2026-10-02 measured contract-batch bound staged
+
+The autonomous v7 run established that the sustained MBP load was real local
+Qwen inference rather than an idle spin, but also exposed avoidable work in the
+strict-output path. Across the first 27 original real-contract batches, all
+seven terminal failures used the twelve-locator ceiling. Those failures
+averaged 528.6 seconds. The seventeen successful twelve-locator batches
+averaged 182.8 seconds. Five failures were exact-source quotation failures,
+one was an invalid risk structure, and a later exact-source failure completed
+after 718.7 seconds. The supervised orchestrator correctly scheduled bounded
+lineage replacements, but repeating a large strict-JSON task is an expensive
+recovery strategy.
+
+V8 therefore limits a newly scheduled contract-analysis context to eight
+source locators. The character ceiling and atomic table-row behavior are
+unchanged, and an oversized table row remains explicitly incomplete rather
+than being treated as evidence of absence. This is a general throughput and
+availability correction derived from terminal receipts; it does not encode a
+document name, clause, party, quantity or expected finding. Recursive
+source-preserving recovery remains available for an eight-locator batch that
+still fails validation. A changed-seventeen-clause unit case proves the
+default `8 + 8 + 1` packing behavior.

@@ -136,6 +136,25 @@ def test_contract_context_marks_oversized_table_row_incomplete() -> None:
     assert all(batch["context_complete"] is False for batch in batches)
 
 
+def test_contract_context_default_bounds_strict_output_to_eight_locators() -> None:
+    rows = [
+        {
+            "source_locator_id": f"clause-{index}",
+            "page_number": 1,
+            "reading_order": index,
+            "element_kind": "paragraph",
+            "row_index": None,
+            "source_text": f"Условие договора {index}",
+        }
+        for index in range(1, 18)
+    ]
+
+    batches = _contract_context_batches(rows)
+
+    assert [len(batch["rows"]) for batch in batches] == [8, 8, 1]
+    assert all(batch["context_complete"] is True for batch in batches)
+
+
 def _work_batch_row(
     candidate_id: str,
     *,
