@@ -496,14 +496,14 @@ def _engineering_comparison_rows(model: Mapping[str, Any]) -> list[tuple[str, st
     return rows
 
 
-def _contract_issue_rows(contract: Mapping[str, Any]) -> list[dict[str, str]]:
+def _contract_issue_rows(contract: Mapping[str, Any]) -> list[dict[str, Any]]:
     clauses = {
         str(row.get("clause_id")): dict(row)
         for value in contract.get("clauses") or ()
         if isinstance(value, Mapping)
         for row in (dict(value),)
     }
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     for value in contract.get("issues") or ():
         if not isinstance(value, Mapping):
             continue
@@ -521,9 +521,9 @@ def _contract_issue_rows(contract: Mapping[str, Any]) -> list[dict[str, str]]:
                 "severity": str(issue.get("severity") or ""),
                 "uncertainty": str(issue.get("uncertainty_code") or ""),
                 "source_version_id": str(clause.get("source_version_id") or ""),
-                "source_locator_ids": "; ".join(
+                "source_locator_ids": [
                     str(item) for item in clause.get("source_locator_ids") or ()
-                ),
+                ],
             }
         )
     return rows
@@ -566,7 +566,7 @@ def _contract_proposed_change_rows(contract: Mapping[str, Any]) -> list[dict[str
     return rows
 
 
-def _contract_finding_rows(model: Mapping[str, Any]) -> list[dict[str, str]]:
+def _contract_finding_rows(model: Mapping[str, Any]) -> list[dict[str, Any]]:
     return [
         {
             "kind": "Договорный риск",

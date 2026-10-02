@@ -248,6 +248,7 @@ def test_primary_tender_outputs_include_candidate_contract_risks_and_revisions()
     assert contract_row["Практическое последствие"] == (
         "Подрядчик несёт риск срока вне своего контроля."
     )
+    assert contract_row["Источники / source_references"] == "page-12"
 
     payload = render_engineering_tender_report_docx(value)
     with zipfile.ZipFile(io.BytesIO(payload)) as document:
