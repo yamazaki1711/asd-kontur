@@ -153,6 +153,7 @@ class DocumentWorker:
         self._workspace_id = workspace_id
         self._stopping = False
         self._next_idle_refill_at = 0.0
+        self._next_model_retry_at = 0.0
         self._semantic_processing_enabled = qwen_semantic_url is not None
         self._understanding = IndustrialDocumentUnderstandingPipeline(
             IndustrialUnderstandingRepository(repository.engine),
@@ -172,6 +173,8 @@ class DocumentWorker:
         signal.signal(signal.SIGINT, lambda *_: self.request_stop())
 
     def run_once(self) -> WorkerOutcome | None:
+        if time.monotonic() < getattr(self, "_next_model_retry_at", 0.0):
+            return None
         foreground_check = getattr(self._repository, "assistant_foreground_active", None)
         if (
             self._organization_id is not None
@@ -306,11 +309,19 @@ class DocumentWorker:
             result = self._execute(claimed)
             keepalive.raise_if_lost()
         except RetryableJobFailure as exc:
+            retry_delay = min(2**claimed.attempt_number, 30)
+            if exc.code in _RETRYABLE_STAGE_FAILURES:
+                # One local Qwen process serves every semantic workload.  A
+                # runtime outage (including a generation left completing at a
+                # safe worker-restart boundary) must not consume the retry
+                # budget of every queued model job in a tight loop.
+                retry_delay = 30
+                self._next_model_retry_at = time.monotonic() + retry_delay
             scheduled = self._repository.retry_job(
                 claimed,
                 worker_identity=self._worker_identity,
                 failure_code=exc.code,
-                delay_seconds=min(2**claimed.attempt_number, 30),
+                delay_seconds=retry_delay,
             )
             if scheduled:
                 return WorkerOutcome(str(claimed.job_id), JobState.QUEUED, exc.code)

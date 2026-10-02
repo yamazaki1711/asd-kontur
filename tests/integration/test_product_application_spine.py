@@ -664,6 +664,7 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
     organization_id = UUID(workspace["organization_id"])
     workspace_id = UUID(workspace["workspace_id"])
     failed_job_id = uuid4()
+    exhausted_job_id = uuid4()
     with postgres_environment.owner_engine.begin() as connection:
         owner = connection.scalar(
             sa.text(
@@ -696,6 +697,56 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
                 "owner": owner,
             },
         )
+        exhausted_manifest = {"synthetic": "retry-exhausted-model-outage"}
+        exhausted_digest = semantic_digest(exhausted_manifest)
+        terminal_receipt_id = uuid4()
+        terminal_manifest = {"last_failure_code": "qwen_semantic_runtime_unavailable"}
+        terminal_digest = semantic_digest(
+            {
+                "job_id": str(exhausted_job_id),
+                "terminal_state": "reconciliation_required",
+                "typed_outcome_code": "retry_exhausted",
+                "result_manifest": terminal_manifest,
+            }
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,job_kind,"
+                "input_manifest,input_digest,idempotency_key,state,completed_at,priority,max_attempts,"
+                "retry_policy_version,typed_failure_code,provenance,correlation_id,"
+                "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                "'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),:digest,:key,"
+                "'reconciliation_required',CURRENT_TIMESTAMP,188,3,'synthetic-retry-v1',"
+                "'retry_exhausted',CAST(:provenance AS jsonb),:correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": exhausted_job_id,
+                "manifest": json.dumps(exhausted_manifest),
+                "digest": exhausted_digest,
+                "key": "synthetic-retry-exhausted-model-failure",
+                "provenance": json.dumps({"contract": "synthetic-autonomy-test@1.0.0"}),
+                "correlation": uuid4(),
+                "owner": owner,
+            },
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.job_terminal_receipts (organization_id,workspace_id,"
+                "terminal_receipt_id,job_id,lease_generation,terminal_state,typed_outcome_code,"
+                "result_manifest,result_digest) VALUES (:organization,:workspace,:receipt,:job,0,"
+                "'reconciliation_required','retry_exhausted',CAST(:manifest AS jsonb),:digest)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "receipt": terminal_receipt_id,
+                "job": exhausted_job_id,
+                "manifest": json.dumps(terminal_manifest),
+                "digest": terminal_digest,
+            },
+        )
 
     repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
     scopes = repository.autonomous_project_processing_scopes()
@@ -709,25 +760,27 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
         workspace_id=workspace_id,
     )
 
-    assert len(first) == 1
+    assert len(first) == 2
     assert second == ()
     with postgres_environment.owner_engine.connect() as connection:
-        replacement = (
+        replacements = (
             connection.execute(
                 sa.text(
                     "SELECT state,causation_id,input_digest,provenance FROM workspace.durable_jobs "
                     "WHERE organization_id=:organization AND workspace_id=:workspace "
-                    "AND job_id=:job"
+                    "AND job_id=ANY(:jobs) ORDER BY causation_id"
                 ),
-                {"organization": organization_id, "workspace": workspace_id, "job": first[0]},
+                {"organization": organization_id, "workspace": workspace_id, "jobs": list(first)},
             )
             .mappings()
-            .one()
+            .all()
         )
-    assert replacement["state"] == "queued"
-    assert replacement["causation_id"] == failed_job_id
-    assert replacement["input_digest"] == semantic_digest(manifest)
-    assert replacement["provenance"]["autonomous_retry_generation"] == 1
+    assert {item["causation_id"] for item in replacements} == {failed_job_id, exhausted_job_id}
+    assert all(item["state"] == "queued" for item in replacements)
+    by_cause = {item["causation_id"]: item for item in replacements}
+    assert by_cause[failed_job_id]["input_digest"] == semantic_digest(manifest)
+    assert by_cause[exhausted_job_id]["input_digest"] == exhausted_digest
+    assert all(item["provenance"]["autonomous_retry_generation"] == 1 for item in replacements)
 
 
 def test_autonomous_work_reconciliation_bootstraps_without_prior_work_job(
