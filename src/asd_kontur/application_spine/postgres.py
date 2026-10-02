@@ -6201,14 +6201,13 @@ class SpinePostgresRepository:
                         ),
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
-                        "relationship_review_needed": bool(row.get("comparison_context_only"))
-                        or any(
-                            prior_quantity_reviews.get(
-                                str(value.get("candidate_id") or ""), {}
-                            ).get("relationship_reviewed")
-                            is not True
-                            for value in selected_quantities
-                        ),
+                        # ``linked_quantities`` has already been reduced by
+                        # the current-profile policy. Every selected value is
+                        # therefore outstanding work or settled context for
+                        # one missing cross-document pass. Re-reading an older
+                        # profile's ``relationship_reviewed`` flag here would
+                        # suppress that intentional design/commercial upgrade.
+                        "relationship_review_needed": bool(selected_quantities),
                         "comparison_context_only": bool(row.get("comparison_context_only")),
                     }
                 )

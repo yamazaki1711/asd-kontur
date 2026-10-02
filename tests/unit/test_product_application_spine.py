@@ -716,6 +716,38 @@ def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
     assert context_after_mixed is False
 
 
+def test_older_quantity_meaning_is_selected_for_current_cross_document_review() -> None:
+    quantity = {
+        "candidate_id": "quantity-old-profile",
+        "version": 1,
+        "normalized_value": "186.4",
+        "normalized_unit": "m",
+    }
+    existing = {
+        "candidate_version": 3,
+        "profile_version": "qwen-project-work-reconciliation-v20",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "quantity-old-profile",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "semantic_scope": "Длина проектируемого участка",
+            }
+        ],
+    }
+
+    selected, context_only = _quantity_comparison_context_policy(
+        existing=existing,
+        candidate_version=3,
+        linked_quantities=[quantity],
+        mixed_source_reviewed=False,
+    )
+
+    assert selected == [quantity]
+    assert context_only is False
+    assert bool(selected) is True
+
+
 def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:
     combined = _merged_quantity_reviews(
         (
