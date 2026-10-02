@@ -2704,6 +2704,9 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
+  const revisedContracts = value.revised_contracts as Array<
+    Record<string, unknown>
+  >;
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
   if (value.status === "contract_input_unavailable") {
     return (
@@ -2736,6 +2739,17 @@ function TenderContractAnalysisBody({
         >
           Скачать договорный анализ (CSV)
         </a>
+        {revisedContracts.some(
+          (candidate) =>
+            String(candidate.state) === "exact_source_candidate_available",
+        ) ? (
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract.docx`}
+          >
+            Скачать редакцию договора Подрядчика (Word)
+          </a>
+        ) : null}
       </div>
       <section className="metrics" aria-label="Состояние договорного анализа">
         <Metric label="Положений" value={clauses.length} />

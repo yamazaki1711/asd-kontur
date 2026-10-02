@@ -37,6 +37,11 @@ The cross-repository user-result audit is recorded in
   “Проект договора не найден среди загруженных документов.”
 - Extended the editable DOCX so the protocol includes the exact customer clause,
   proposed contractor wording, source, practical consequence, and uncertainty.
+- Added a separate format-aware revised-contract candidate for admitted DOCX
+  contracts. It copies the source package and replaces only an exact, uniquely
+  matched full clause paragraph. Missing, partial, duplicate, multi-source, or
+  unsupported-format matches fail closed and leave the clause-change schedule
+  available; untouched package members and contract paragraphs remain unchanged.
 - Joined candidate contract risks and proposed Contractor wording into the
   primary Tender findings schedule, report, and analysis archive. The join is
   transient and workspace-scoped; it does not promote model output into the
@@ -96,8 +101,9 @@ The remaining acceptance work is:
    DOCX;
 3. perform a visual page qualification of the generated protocol when an
    approved local renderer is available;
-4. implement and qualify a format-aware full revised-contract candidate if the
-   source format supports exact clause replacement.
+4. qualify the format-aware revised-contract candidate against the real blind
+   DOCX contract; a controlled changed-project fixture already proves exact
+   replacement, untouched-paragraph preservation, and ambiguous-match refusal.
 
 Until those runtime gates pass:
 

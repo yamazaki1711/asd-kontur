@@ -1602,6 +1602,35 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("document_not_found")
         return str(value)
 
+    def get_workspace_source_object(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        source_version_id: UUID,
+    ) -> dict[str, Any]:
+        """Resolve one admitted workspace source through the owner-scoped boundary."""
+
+        organization_id = self.resolve_scope(owner_identity_id, workspace_id)
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            row = session.execute(
+                sa.text(
+                    "SELECT source_version_id,object_key,media_type,size_bytes,content_digest,"
+                    "safe_display_name FROM workspace.document_versions WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "source_version_id=:source"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "source": source_version_id,
+                },
+            ).mappings().one_or_none()
+        if row is None:
+            raise SpinePersistenceError("document_source_not_found")
+        return dict(row)
+
     def claim_next_job(
         self,
         *,

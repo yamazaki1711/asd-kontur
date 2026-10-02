@@ -49,6 +49,10 @@ from asd_kontur.tender.facility_work_projection import (
 )
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
+from asd_kontur.tender.revised_contract_candidate import (
+    RevisedContractCandidateError,
+    render_revised_contract_candidate_docx,
+)
 from asd_kontur.tender.scope_schedule import render_tender_scope_schedule_csv
 from asd_kontur.tender.structure_identity_schedule import (
     render_tender_structure_identity_schedule_csv,
@@ -586,9 +590,41 @@ class ProductSpineService:
     def tender_contract_analysis(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> dict[str, Any]:
-        return self._tender_contract_analysis.latest(
+        view = self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        if any(
+            str(item.get("state")) == "source_format_supported"
+            for item in view.get("revised_contracts", ())
+            if isinstance(item, dict)
+        ):
+            try:
+                self._render_revised_contract_candidate(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                    view=view,
+                )
+            except RevisedContractCandidateError as exc:
+                view["revised_contracts"] = []
+                gap = str(exc)
+                if gap not in view["gaps"]:
+                    view["gaps"].append(gap)
+                for deliverable in view.get("deliverables", ()):
+                    if (
+                        isinstance(deliverable, dict)
+                        and deliverable.get("deliverable_kind") == "revised_contract"
+                    ):
+                        deliverable["state"] = "candidate_clause_schedule"
+            else:
+                for candidate in view["revised_contracts"]:
+                    candidate["state"] = "exact_source_candidate_available"
+                for deliverable in view.get("deliverables", ()):
+                    if (
+                        isinstance(deliverable, dict)
+                        and deliverable.get("deliverable_kind") == "revised_contract"
+                    ):
+                        deliverable["state"] = "exact_source_candidate_available"
+        return view
 
     def tender_contract_analysis_export(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -629,6 +665,83 @@ class ProductSpineService:
             len(data),
             (data,),
         )
+
+    def tender_revised_contract_candidate(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Apply exact proposed revisions to one admitted DOCX contract source."""
+
+        view = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data, safe_display_name = self._render_revised_contract_candidate(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            view=view,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        stem = safe_display_name[:-5] if safe_display_name.lower().endswith(".docx") else "contract"
+        return DocumentContent(
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            len(data),
+            digest,
+            f"{stem}-contractor-revision-candidate.docx",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def _render_revised_contract_candidate(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        view: dict[str, Any],
+    ) -> tuple[bytes, str]:
+        clauses = {
+            (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item
+            for item in view.get("clauses", ())
+            if isinstance(item, dict)
+        }
+        source_ids = {
+            str(clause.get("source_version_id"))
+            for revision in view.get("revised_clauses", ())
+            if isinstance(revision, dict)
+            and (
+                clause := clauses.get(
+                    (
+                        str(revision.get("source_clause_id", "")),
+                        str(revision.get("source_clause_version", "")),
+                    )
+                )
+            )
+            and clause.get("source_version_id")
+        }
+        if len(source_ids) != 1:
+            raise RevisedContractCandidateError(
+                "revised_contract_requires_one_exact_source"
+            )
+        source_version_id = UUID(next(iter(source_ids)))
+        source = self._repository.get_workspace_source_object(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            source_version_id=source_version_id,
+        )
+        media_type = str(source["media_type"])
+        safe_display_name = str(source["safe_display_name"])
+        if media_type != (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        ) and not (
+            media_type == "application/octet-stream"
+            and safe_display_name.lower().endswith(".docx")
+        ):
+            raise RevisedContractCandidateError(
+                "revised_contract_source_format_unsupported"
+            )
+        with self._object_store.open(str(source["object_key"])) as source_file:
+            source_docx = source_file.read()
+        data = render_revised_contract_candidate_docx(source_docx, view)
+        return data, safe_display_name
 
     def project_understanding(
         self,

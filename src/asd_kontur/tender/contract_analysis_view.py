@@ -187,7 +187,7 @@ class TenderContractAnalysisRepository:
         contract_sources = list(
             session.execute(
                 sa.text(
-                    "SELECT DISTINCT v.source_version_id,v.safe_display_name FROM "
+                    "SELECT DISTINCT v.source_version_id,v.safe_display_name,v.media_type FROM "
                     "workspace.document_versions v JOIN workspace.document_role_decisions role ON "
                     "role.organization_id=v.organization_id AND role.workspace_id=v.workspace_id AND "
                     "role.document_id=v.document_id AND role.document_version=v.version WHERE "
@@ -366,6 +366,36 @@ class TenderContractAnalysisRepository:
             gaps.append("CONTRACT_ANALYSIS_BATCH_FAILURES")
         if results and not issues:
             gaps.append("CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES")
+        revised_source_ids = {
+            str(clause.get("source_version_id"))
+            for revision in revised_clauses
+            if (
+                clause := next(
+                    (
+                        item
+                        for item in clauses
+                        if str(item.get("clause_id")) == str(revision.get("source_clause_id"))
+                        and str(item.get("clause_version"))
+                        == str(revision.get("source_clause_version"))
+                    ),
+                    None,
+                )
+            )
+            and clause.get("source_version_id")
+        }
+        revised_sources = [
+            source
+            for source in contract_sources
+            if str(source["source_version_id"]) in revised_source_ids
+        ]
+        revised_contract_available = len(revised_sources) == 1 and (
+            str(revised_sources[0]["media_type"])
+            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            or (
+                str(revised_sources[0]["media_type"]) == "application/octet-stream"
+                and str(revised_sources[0]["safe_display_name"]).lower().endswith(".docx")
+            )
+        )
         return {
             "status": status,
             "process": {
@@ -380,12 +410,33 @@ class TenderContractAnalysisRepository:
                 "available_source_classes": ["draft_contract"],
                 "missing_source_classes": [],
                 "source_names": [str(source["safe_display_name"]) for source in contract_sources],
+                "sources": [
+                    {
+                        "source_version_id": str(source["source_version_id"]),
+                        "safe_display_name": str(source["safe_display_name"]),
+                        "media_type": str(source["media_type"]),
+                    }
+                    for source in contract_sources
+                ],
             },
             "clauses": clauses,
             "issues": issues,
             "protocols": [],
             "disagreement_items": disagreement_items,
-            "revised_contracts": [],
+            "revised_contracts": (
+                [
+                    {
+                        "revised_contract_id": f"candidate:{workspace_id}",
+                        "revised_contract_version": 1,
+                        "source_contract_version_id": str(
+                            revised_sources[0]["source_version_id"]
+                        ),
+                        "state": "source_format_supported",
+                    }
+                ]
+                if revised_contract_available
+                else []
+            ),
             "revised_clauses": revised_clauses,
             "deliverables": [
                 {
@@ -396,7 +447,13 @@ class TenderContractAnalysisRepository:
                 },
                 {
                     "deliverable_kind": "revised_contract",
-                    "state": "candidate_clause_schedule" if revised_clauses else "pending",
+                    "state": (
+                        "source_format_supported"
+                        if revised_contract_available
+                        else "candidate_clause_schedule"
+                        if revised_clauses
+                        else "pending"
+                    ),
                     "blocker_issue_ids": [],
                     "uncertainty_issue_ids": [],
                 },
