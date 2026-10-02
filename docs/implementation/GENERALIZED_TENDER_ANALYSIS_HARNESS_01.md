@@ -985,3 +985,42 @@ pinned to the new release for the next controlled restart.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Scaled-unit schema admission and productive-runtime checkpoint — release 01aff39
+
+The first autonomous v21 requests exposed a release-boundary defect rather
+than a semantic-model defect. Qwen completed the bounded reconciliation work,
+but PostgreSQL migration `0107_contract_directed_change_risk` admitted only
+profiles v3 through v20 in
+`project_work_reconciliation_results_profile_version_check`. Each v21 result
+therefore reached a durable `reconciliation_required` terminal state with
+SQLSTATE-family failure code `gkpj`. The model was doing real inference, but
+the accepted output could not be persisted.
+
+Migration `0108_scaled_quantity_unit_profile` adds only the current v21
+profile to that constraint. A physical public-database backup was written to
+`~/.asd-kontur/public-demo/backups/pre-0108-scaled-quantity-20261003T0455/`
+with SHA-256
+`582cece6273b7fe7644333bb28aa43fe241e8b9120e81eb37287c72e98c80a35`.
+A separate restore passed upgrade, downgrade and re-upgrade before the live
+database was migrated. Exact-SHA CI run `37037048423` passed for commit
+`01aff39f56763581d2a5d70862d1200d1021c134`.
+
+The active API, worker, orchestrator and assistant worker now run from the
+immutable release
+`~/.asd-kontur/public-demo/releases/20261003-01aff39-scaled-unit-schema`.
+Qwen PID `93554` and NTD worker PID `98263` were not restarted. The first
+post-migration v21 job, `01a0fd71-6381-7dea-961a-acb52e10ad25`, completed at
+2026-10-03 05:06:08+12 and persisted result digest
+`sha256:2503c030567c44aedb5dc75c4885f965adc9f1f64cb42aab15095559d47e76f0`.
+The worker immediately claimed the next eligible semantic job without a
+developer queue, retry or successor command.
+
+The all-history platform-memory fingerprint remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`.
+The NTD ledger remained exactly 319 succeeded jobs, and the independent NTD
+worker remained supervised and unchanged. The release receipt SHA-256 is
+`98fb45aebb07391042b6b985205cc7211c777411e1770fbc82f8b8273dd3319c`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
