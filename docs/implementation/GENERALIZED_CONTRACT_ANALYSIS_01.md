@@ -619,3 +619,13 @@ time to historical v7 output. Against the current blind projection this keeps
 all five grounded risk findings while reducing the negotiation-ready rows from
 five to three; no invented numeric term can enter the protocol merely because
 it was fluent model output.
+
+Changed-corpus verification also found that a previously identified contract
+could temporarily disappear as “contract not found” after the global document
+role profile advanced. The current projection deliberately does not reuse an
+old role decision as current authority, but it now distinguishes an active
+historical contract awaiting current-profile classification from a corpus in
+which no contract exists. The user sees analysis/reclassification pending
+until autonomous reconciliation produces the current role decision. Combined
+with the rotating active-workspace scheduler, this removes the false missing-
+input state without accepting a superseded classification as final.

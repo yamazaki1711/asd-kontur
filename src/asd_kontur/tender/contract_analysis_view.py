@@ -234,6 +234,40 @@ class TenderContractAnalysisRepository:
             ).mappings()
         )
         if not contract_sources:
+            historical_contract_awaiting_current_profile = bool(
+                session.scalar(
+                    sa.text(
+                        "SELECT EXISTS (SELECT 1 FROM workspace.document_versions v JOIN "
+                        "workspace.document_role_decisions historical ON "
+                        "historical.organization_id=v.organization_id AND "
+                        "historical.workspace_id=v.workspace_id AND "
+                        "historical.document_id=v.document_id AND "
+                        "historical.document_version=v.version WHERE v.organization_id=:o AND "
+                        "v.workspace_id=:w AND historical.validator_version<>:role_profile AND "
+                        "'contract'=ANY(historical.selected_roles) AND EXISTS (SELECT 1 FROM "
+                        "workspace.document_version_activation_decisions active WHERE "
+                        "active.organization_id=v.organization_id AND "
+                        "active.workspace_id=v.workspace_id AND active.document_id=v.document_id "
+                        "AND active.selected_document_version=v.version AND NOT EXISTS (SELECT 1 "
+                        "FROM workspace.document_version_activation_decisions newer WHERE "
+                        "newer.organization_id=active.organization_id AND "
+                        "newer.workspace_id=active.workspace_id AND "
+                        "newer.document_id=active.document_id AND "
+                        "newer.decision_version>active.decision_version)) AND NOT EXISTS (SELECT 1 "
+                        "FROM workspace.document_role_decisions current_decision WHERE "
+                        "current_decision.organization_id=v.organization_id AND "
+                        "current_decision.workspace_id=v.workspace_id AND "
+                        "current_decision.document_id=v.document_id AND "
+                        "current_decision.document_version=v.version AND "
+                        "current_decision.validator_version=:role_profile))"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                    },
+                )
+            )
             role_analysis_active = bool(
                 session.scalar(
                     sa.text(
@@ -254,6 +288,11 @@ class TenderContractAnalysisRepository:
                 return _empty_candidate_projection(
                     status="analysis_pending",
                     gaps=["CONTRACT_SOURCE_CLASSIFICATION_IN_PROGRESS"],
+                )
+            if historical_contract_awaiting_current_profile:
+                return _empty_candidate_projection(
+                    status="analysis_pending",
+                    gaps=["CONTRACT_SOURCE_RECLASSIFICATION_PENDING"],
                 )
             return _empty_candidate_projection(
                 status="contract_input_unavailable",
