@@ -406,8 +406,10 @@ def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: 
 
 
 def _row(values: Sequence[str], widths: Sequence[int], *, header: bool) -> str:
-    run_properties = "<w:rPr><w:b/><w:sz w:val=\"16\"/></w:rPr>" if header else (
-        '<w:rPr><w:sz w:val="16"/></w:rPr>'
+    run_properties = (
+        '<w:rPr><w:b/><w:sz w:val="16"/></w:rPr>'
+        if header
+        else ('<w:rPr><w:sz w:val="16"/></w:rPr>')
     )
     cell_shading = '<w:shd w:val="clear" w:color="auto" w:fill="E7EDF3"/>' if header else ""
     cells = "".join(

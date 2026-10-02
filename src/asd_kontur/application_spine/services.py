@@ -1864,12 +1864,7 @@ def _contract_clause_key_facts(value: object) -> list[dict[str, Any]]:
             part.isdigit() for part in numeric_ref.split(".")
         )
         source_text = str(item.get("source_text") or "").strip()
-        if (
-            label is None
-            or not clause_ref
-            or not is_numbered_clause
-            or not source_text
-        ):
+        if label is None or not clause_ref or not is_numbered_clause or not source_text:
             continue
         part_count = len(numeric_ref.split("."))
         # Two-part references are normally primary contract clauses. A single
