@@ -575,3 +575,13 @@ revisions and nine source records. These counts document the current partial
 v7 projection; they are not final acceptance because v8 is expected to reject
 unsupported v7 candidates after autonomous replacement. No runtime job was
 created, retried or changed by this check.
+
+The continued v7 run also classified an optional mechanism for accepting and
+paying early-completed work by mutual agreement as a restriction on ordinary
+payment. The selected wording did not alter payment for work completed on the
+normal schedule, so this is not a Contractor risk by itself. V8 now states that
+boundary explicitly and validates it deterministically: a
+`customer_controlled_payment` result based only on mutual early performance is
+rejected unless the exact selected text also denies or conditions ordinary
+payment. A changed-clause regression case proves the rule without using the
+blind contract wording.

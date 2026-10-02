@@ -103,6 +103,24 @@ def test_work_observation_plan_rejects_unbounded_or_unknown_arguments() -> None:
         )
 
 
+def test_contract_analysis_plan_accepts_only_bounded_professional_focus() -> None:
+    plan = parse_search_plan(
+        '{"intent":"workspace","needs_clarification":false,'
+        '"clarifying_question":null,"steps":[{"tool":'
+        '"consultant.get_contract_analysis","arguments":{"focus":"revisions",'
+        '"limit":8},"reason":"Нужна редакция Подрядчика"}]}'
+    )
+
+    assert plan.steps[0].arguments == {"focus": "revisions", "limit": 8}
+    with pytest.raises(ValueError, match="assistant_plan_contract_analysis_arguments_invalid"):
+        parse_search_plan(
+            '{"intent":"workspace","needs_clarification":false,'
+            '"clarifying_question":null,"steps":[{"tool":'
+            '"consultant.get_contract_analysis","arguments":{"focus":"all_raw",'
+            '"limit":100},"reason":"Весь договор"}]}'
+        )
+
+
 def test_clarification_required_intent_requires_one_clarification_without_tools() -> None:
     plan = parse_search_plan(
         '{"intent":"clarification_required","needs_clarification":true,'

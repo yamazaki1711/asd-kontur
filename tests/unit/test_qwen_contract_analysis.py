@@ -338,6 +338,52 @@ def test_contract_analysis_rejects_unsupported_customer_control_over_ordinary_ac
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
+def test_contract_analysis_rejects_optional_mutual_early_payment_as_risk() -> None:
+    source = {
+        "loc-early": (
+            "При наличии финансирования Заказчик по согласованию с Подрядчиком "
+            "принимает досрочно выполненные работы и оплачивает их."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "4.2",
+                    "source_text": source["loc-early"],
+                    "source_locator_ids": ["loc-early"],
+                    "category": "payment",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "4.2",
+                    "kind": "payment_dependency",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": "При наличии финансирования",
+                    "adverse_effect_text": (
+                        "Заказчик по согласованию с Подрядчиком принимает досрочно "
+                        "выполненные работы и оплачивает их"
+                    ),
+                    "severity": "medium",
+                    "description": "Досрочная оплата якобы ограничивает обычную оплату.",
+                    "practical_consequence": "Предполагается задержка обычной оплаты.",
+                    "recommended_action": "Обязать Заказчика оплачивать работы досрочно.",
+                    "replacement_source_text": source["loc-early"],
+                    "proposed_contractor_wording": "Заказчик всегда оплачивает работы досрочно.",
+                    "disagreement_required": True,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
     source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
     clause = {
