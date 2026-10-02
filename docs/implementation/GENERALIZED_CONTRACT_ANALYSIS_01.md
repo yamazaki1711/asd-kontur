@@ -639,3 +639,11 @@ release tied to an established contractual deadline unless the exact wording
 also denies or conditions payment. The prompt carries the same general rule.
 Read-time filtering removes the historical candidate while retaining the five
 other grounded risks and three numerically grounded disagreement rows.
+
+One later v7 batch terminated with `qwen_contract_risk_invalid` after its
+bounded repair attempt, discarding any otherwise valid clauses in that batch.
+V8 now treats this validator failure like the existing output-exhaustion,
+exact-quote and revision-shape failures: a multi-source batch is divided into
+smaller source-preserving groups, each group retains the same bounded repair
+budget, and results are merged deterministically. A changed two-source test
+proves recovery without relaxing risk validation or adding an unbounded retry.
