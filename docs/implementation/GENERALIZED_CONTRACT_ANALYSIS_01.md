@@ -647,3 +647,13 @@ exact-quote and revision-shape failures: a multi-source batch is divided into
 smaller source-preserving groups, each group retains the same bounded repair
 budget, and results are merged deterministically. A changed two-source test
 proves recovery without relaxing risk validation or adding an unbounded retry.
+
+A subsequent candidate used `unpaid_change` for expert-cost reimbursement in
+an unilateral-termination cure clause. The clause may warrant review under a
+termination/remedy category, but it contains no changed work and must not be
+presented as unpaid construction scope. The deterministic taxonomy guard now
+requires both explicit additional/changed/excess-work language and explicit
+payment denial before accepting `unpaid_change`. Changed examples cover both
+rejection of a termination-cost misclassification and preservation of a real
+additional-work nonpayment clause. The live read projection consequently
+retains five correctly typed risks and three grounded disagreement rows.

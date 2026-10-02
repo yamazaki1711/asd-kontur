@@ -473,6 +473,51 @@ def test_contract_analysis_rejects_overpayment_restitution_as_unpaid_changed_wor
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
+def test_contract_analysis_rejects_termination_cost_as_unpaid_changed_work() -> None:
+    source = {
+        "loc-termination": (
+            "Заказчик отменяет решение об одностороннем отказе после устранения нарушения "
+            "и компенсации Подрядчиком подтверждённых затрат на экспертизу."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "12.6",
+                    "source_text": source["loc-termination"],
+                    "source_locator_ids": ["loc-termination"],
+                    "category": "termination",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "12.6",
+                    "kind": "unpaid_change",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "asymmetric_remedy",
+                    "trigger_text": "после устранения нарушения",
+                    "adverse_effect_text": (
+                        "компенсации Подрядчиком подтверждённых затрат на экспертизу"
+                    ),
+                    "severity": "medium",
+                    "description": "Расходы ошибочно названы неоплатой изменённых работ.",
+                    "practical_consequence": "Подрядчик возмещает подтверждённые расходы.",
+                    "recommended_action": "Проверить порядок подтверждения расходов.",
+                    "replacement_source_text": source["loc-termination"],
+                    "proposed_contractor_wording": None,
+                    "disagreement_required": False,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
 def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:
     source = {
         "loc-change": (

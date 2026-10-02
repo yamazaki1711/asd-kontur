@@ -97,25 +97,21 @@ _MUTUAL_AGREEMENT_TERMS = (
 )
 _ORDINARY_PAYMENT_DENIAL_TERMS = (
     "не подлежит оплате",
+    "не подлежат оплате",
+    "оплате не подлежит",
+    "оплате не подлежат",
     "оплата не производится",
     "отказ в оплате",
     "not payable",
     "payment shall not be made",
 )
-_OVERPAYMENT_RESTITUTION_TERMS = (
-    "излишне",
-    "переплат",
-    "сверх фактического объема",
-    "сверх фактического объёма",
-    "завышен",
-    "overpayment",
-    "overpaid",
-    "excess payment",
-)
 _CHANGED_WORK_PAYMENT_EXPOSURE = re.compile(
     r"(?:дополнительн\w*.{0,35}работ|измененн\w*.{0,35}работ|"
     r"изменени\w*.{0,20}объ[её]м\w*.{0,20}работ|"
-    r"(?:additional|changed|varied).{0,35}work)",
+    r"превыс\w*.{0,30}объ[её]м\w*.{0,30}работ|"
+    r"несогласованн\w*.{0,30}работ|"
+    r"(?:additional|changed|varied).{0,35}work|"
+    r"excess\w*.{0,30}(?:quantity|volume).{0,30}work)",
     flags=re.IGNORECASE,
 )
 _NUMERIC_CONTRACT_TERM = re.compile(
@@ -387,15 +383,14 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
             str(risk.get("adverse_effect_text") or ""),
         )
     ).casefold()
-    if (
-        str(risk.get("kind") or "") == "unpaid_change"
-        and any(term in combined for term in _OVERPAYMENT_RESTITUTION_TERMS)
-        and not _CHANGED_WORK_PAYMENT_EXPOSURE.search(combined)
+    if str(risk.get("kind") or "") == "unpaid_change" and not (
+        _CHANGED_WORK_PAYMENT_EXPOSURE.search(combined)
+        and any(term in combined for term in _ORDINARY_PAYMENT_DENIAL_TERMS)
     ):
-        # A duty to return a measured overpayment is ordinary restitution. It
-        # does not establish that additional or changed work will go unpaid.
-        # The latter risk needs explicit changed-work payment language in the
-        # exact source selected by the model.
+        # This professional category is reserved for an exact combination of
+        # changed/additional/excess work scope and an explicit payment denial.
+        # Restitution, termination, warranty and other cost clauses must use
+        # their own risk kind even when they have a financial consequence.
         return False
     if (
         str(risk.get("kind") or "") == "customer_input_dependency"
