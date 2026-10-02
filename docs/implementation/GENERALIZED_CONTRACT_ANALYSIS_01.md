@@ -761,3 +761,15 @@ outcome on the first claim was autonomously requeued; the same job then
 succeeded on attempt two, followed by further successful jobs. This is direct
 evidence that v8 discovery, scheduling, retry and Qwen dispatch belong to the
 runtime rather than to Codex.
+
+The live professional projection also demonstrated that accepted clauses could
+exist while the `Ключевые условия` summary remained empty whenever the broader
+project model had not yet supplied contract facts. A staged generic projection
+now selects bounded headline conditions from accepted Qwen clause categories
+and their exact source text. It admits actual numeric clause references, rejects
+schedule/table identifiers such as `item_*`, prefers primary two-part clauses
+over subordinate obligations and keeps existing project facts first. It does
+not infer contract meaning from keywords or replace missing participant/project
+facts. Changed-name tests prove the fallback and source navigation. This change
+is not deployed into the active v8 run; it is staged for the next controlled
+release after the current immutable checkpoint reaches terminal state.

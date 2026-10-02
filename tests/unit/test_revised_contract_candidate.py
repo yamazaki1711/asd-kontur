@@ -388,3 +388,75 @@ def test_product_projection_joins_contract_parties_and_project_wide_conditions()
     assert [
         item["issue_id"] for item in projected["project_context"]["project_contract_findings"]
     ] == ["duration-72"]
+
+
+def test_product_projection_summarizes_numbered_contract_clauses_without_project_facts() -> None:
+    view = _view("3.1. Цена договора составляет 27 500 000 рублей.")
+    view.update(
+        {
+            "clauses": [
+                {
+                    "category": "price",
+                    "clause_ref": "item_17",
+                    "source_text": "17 Плита сборная шт 8 125000,00",
+                    "source_name": "Изменённый договор.docx",
+                    "source_page": 2,
+                },
+                {
+                    "category": "price",
+                    "clause_ref": "3.1",
+                    "source_text": "3.1. Цена договора составляет 27 500 000 рублей.",
+                    "source_name": "Изменённый договор.docx",
+                    "source_page": 4,
+                    "source_version_id": "source-contract-91",
+                    "source_locator_id": "locator-price-91",
+                },
+                {
+                    "category": "payment",
+                    "clause_ref": "4.7",
+                    "source_text": "4.7. Оплата производится в течение 12 рабочих дней.",
+                    "source_name": "Изменённый договор.docx",
+                    "source_page": 5,
+                },
+                {
+                    "category": "payment",
+                    "clause_ref": "4.8",
+                    "source_text": "4.8. Аванс засчитывается при окончательном расчёте.",
+                    "source_name": "Изменённый договор.docx",
+                    "source_page": 5,
+                },
+            ],
+            "revised_contracts": [],
+            "deliverables": [],
+            "gaps": [],
+        }
+    )
+    service = _service(_source_docx("3.1. Цена договора."), view)
+
+    projected = service.tender_contract_analysis(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+    )
+
+    assert [
+        (item["field"], item["label"], item["value"])
+        for item in projected["project_context"]["key_conditions"]
+    ] == [
+        (
+            "contract_clause_price",
+            "Цена договора (п. 3.1)",
+            "3.1. Цена договора составляет 27 500 000 рублей.",
+        ),
+        (
+            "contract_clause_payment",
+            "Порядок оплаты (п. 4.7)",
+            "4.7. Оплата производится в течение 12 рабочих дней.",
+        ),
+    ]
+    assert projected["project_context"]["key_conditions"][0]["sources"] == [
+        {
+            "source_version_id": "source-contract-91",
+            "source_locator_id": "locator-price-91",
+            "document": "Изменённый договор.docx",
+            "page": 4,
+        }
+    ]

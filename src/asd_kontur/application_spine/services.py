@@ -644,18 +644,19 @@ class ProductSpineService:
     ) -> dict[str, Any]:
         """Join contract-scoped project facts into the professional read result."""
 
+        clause_conditions = _contract_clause_key_facts(contract_view.get("clauses"))
         project_reader = getattr(self._repository, "project_understanding_view", None)
         if not callable(project_reader):
-            return {}
+            return _contract_context_with_clause_fallback(clause_conditions)
         project_view = project_reader(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
         )
         if not isinstance(project_view, dict):
-            return {}
+            return _contract_context_with_clause_fallback(clause_conditions)
         engineering = project_view.get("project_engineering")
         if not isinstance(engineering, dict):
-            return {}
+            return _contract_context_with_clause_fallback(clause_conditions)
         assessment = contract_view.get("assessment")
         assessment = assessment if isinstance(assessment, dict) else {}
         source_ids = {
@@ -672,6 +673,7 @@ class ProductSpineService:
             for locator_id in finding.get("source_locator_ids") or ()
             if locator_id
         }
+        project_conditions = _project_facts(engineering.get("contract_conditions"))
         return {
             "participants": _facts_for_sources(engineering.get("participants"), source_ids),
             # Contract parties stay tied to the admitted contract sources, but
@@ -679,7 +681,7 @@ class ProductSpineService:
             # Tender package.  Otherwise NMCK/procurement facts and a POS ↔
             # contract duration conflict disappear from the contract review
             # merely because they live in different source documents.
-            "key_conditions": _project_facts(engineering.get("contract_conditions")),
+            "key_conditions": _merge_professional_facts(project_conditions, clause_conditions),
             "time_requirements": _facts_for_sources_or_locators(
                 engineering.get("time_requirements"), source_ids, finding_locator_ids
             ),
@@ -1825,6 +1827,111 @@ def _project_facts(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, (list, tuple)):
         return []
     return [dict(item) for item in value if isinstance(item, dict)]
+
+
+_CONTRACT_KEY_FACT_LABELS = {
+    "price": "Цена договора",
+    "payment": "Порядок оплаты",
+    "deadline": "Срок выполнения",
+    "acceptance": "Порядок приёмки",
+    "warranty": "Гарантия",
+    "security": "Обеспечение",
+    "change_procedure": "Изменение объёма и условий",
+    "insurance": "Страхование",
+}
+
+
+def _contract_clause_key_facts(value: object) -> list[dict[str, Any]]:
+    """Project accepted semantic clauses into a bounded professional summary.
+
+    Clause meaning remains Qwen-derived and source-bound. This deterministic
+    view only selects one actual numbered clause per professional category;
+    table/schedule rows use ``item_*`` references and must not become headline
+    contract conditions merely because they carry a price or quantity.
+    """
+
+    if not isinstance(value, (list, tuple)):
+        return []
+    candidates: dict[str, tuple[tuple[int, int], dict[str, Any], str, str]] = {}
+    for index, item in enumerate(value):
+        if not isinstance(item, dict):
+            continue
+        category = str(item.get("category") or "")
+        label = _CONTRACT_KEY_FACT_LABELS.get(category)
+        clause_ref = str(item.get("clause_ref") or item.get("clause_key") or "").strip()
+        numeric_ref = clause_ref.removesuffix("_dup")
+        is_numbered_clause = bool(numeric_ref) and all(
+            part.isdigit() for part in numeric_ref.split(".")
+        )
+        source_text = str(item.get("source_text") or "").strip()
+        if (
+            label is None
+            or not clause_ref
+            or not is_numbered_clause
+            or not source_text
+        ):
+            continue
+        part_count = len(numeric_ref.split("."))
+        # Two-part references are normally primary contract clauses. A single
+        # integer is frequently a schedule/table ordinal, while deeper
+        # references are usually subordinate obligations rather than the
+        # headline commercial condition.
+        rank = (0 if part_count == 2 else 1 if part_count > 2 else 2, index)
+        current = candidates.get(category)
+        if current is None or rank < current[0]:
+            candidates[category] = (rank, item, clause_ref, source_text)
+    result: list[dict[str, Any]] = []
+    for category, label in _CONTRACT_KEY_FACT_LABELS.items():
+        selected = candidates.get(category)
+        if selected is None:
+            continue
+        _, item, clause_ref, source_text = selected
+        source: dict[str, Any] = {
+            "source_version_id": item.get("source_version_id"),
+            "source_locator_id": item.get("source_locator_id"),
+            "document": item.get("source_name"),
+            "page": item.get("source_page"),
+        }
+        result.append(
+            {
+                "field": f"contract_clause_{category}",
+                "label": f"{label} (п. {clause_ref})",
+                "value": source_text,
+                "sources": [
+                    {key: source_value for key, source_value in source.items() if source_value}
+                ],
+            }
+        )
+    return result
+
+
+def _merge_professional_facts(
+    primary: list[dict[str, Any]], fallback: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Keep authoritative project facts first and add non-duplicate clause facts."""
+
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in (*primary, *fallback):
+        identity = (str(item.get("field") or ""), str(item.get("value") or ""))
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(dict(item))
+    return result
+
+
+def _contract_context_with_clause_fallback(
+    clause_conditions: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "participants": [],
+        "key_conditions": clause_conditions,
+        "time_requirements": [],
+        "commercial_conditions": [],
+        "procurement_requirements": [],
+        "project_contract_findings": [],
+    }
 
 
 def _facts_for_sources_or_locators(
