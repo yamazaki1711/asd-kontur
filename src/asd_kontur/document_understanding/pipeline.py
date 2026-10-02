@@ -820,15 +820,52 @@ class IndustrialDocumentUnderstandingPipeline:
         if not isinstance(raw_locator_ids, list) or not raw_locator_ids:
             raise UnderstandingStageFailure("contract_analysis_manifest_invalid")
         expected = {str(value) for value in raw_locator_ids}
-        fragments = [
-            {
-                "source_locator_id": str(element.locator.source_locator_id),
-                "page": element.locator.page_number,
-                "text": element.raw_text,
-            }
+        elements = {
+            str(element.locator.source_locator_id): element
             for element in self._repository.load_elements(claimed)
-            if str(element.locator.source_locator_id) in expected and element.raw_text.strip()
-        ]
+            if str(element.locator.source_locator_id) in expected
+        }
+        raw_segments = manifest.get("source_segments")
+        fragments: list[dict[str, object]] = []
+        if isinstance(raw_segments, list) and raw_segments:
+            for raw_segment in raw_segments:
+                if not isinstance(raw_segment, dict):
+                    raise UnderstandingStageFailure("contract_analysis_manifest_invalid")
+                locator_id = str(raw_segment.get("source_locator_id") or "")
+                element = elements.get(locator_id)
+                start = raw_segment.get("start")
+                end = raw_segment.get("end")
+                source_text = ""
+                if element is not None:
+                    source_text = element.raw_text or element.normalized_text
+                if (
+                    element is None
+                    or not isinstance(start, int)
+                    or isinstance(start, bool)
+                    or not isinstance(end, int)
+                    or isinstance(end, bool)
+                    or start < 0
+                    or end <= start
+                    or end > len(source_text)
+                ):
+                    raise UnderstandingStageFailure("contract_analysis_source_context_incomplete")
+                fragments.append(
+                    {
+                        "source_locator_id": locator_id,
+                        "page": element.locator.page_number,
+                        "text": source_text[start:end],
+                    }
+                )
+        else:
+            fragments = [
+                {
+                    "source_locator_id": locator_id,
+                    "page": element.locator.page_number,
+                    "text": element.raw_text or element.normalized_text,
+                }
+                for locator_id, element in elements.items()
+                if (element.raw_text or element.normalized_text).strip()
+            ]
         if {str(value["source_locator_id"]) for value in fragments} != expected:
             raise UnderstandingStageFailure("contract_analysis_source_context_incomplete")
         try:

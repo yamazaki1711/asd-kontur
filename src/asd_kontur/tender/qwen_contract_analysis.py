@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v1"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v2"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {

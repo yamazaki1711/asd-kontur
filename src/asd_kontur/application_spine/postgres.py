@@ -182,6 +182,48 @@ _CONTRACT_ANALYSIS_PRIORITY = 188
 # Live terminal receipts showed an 8-row long tail of 7-13 model calls and 8-19
 # minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
 _PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
+_CONTRACT_CONTEXT_SEGMENT_CHARS = 10_000
+
+
+def _contract_text_segments(
+    source_text: str, *, max_chars: int = _CONTRACT_CONTEXT_SEGMENT_CHARS
+) -> tuple[tuple[int, int], ...]:
+    """Return stable source ranges that keep one contract context bounded.
+
+    Native office extraction may legitimately represent a whole document as
+    one layout element. Prefer paragraph and sentence boundaries near the hard
+    limit, but never alter or synthesize source text.
+    """
+
+    if max_chars < 2:
+        raise ValueError("contract_context_segment_limit_invalid")
+    if len(source_text) <= max_chars:
+        return ((0, len(source_text)),) if source_text else ()
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    minimum_break = max_chars // 2
+    while start < len(source_text):
+        hard_end = min(start + max_chars, len(source_text))
+        if hard_end == len(source_text):
+            end = hard_end
+        else:
+            search_start = min(start + minimum_break, hard_end)
+            paragraph = source_text.rfind("\n", search_start, hard_end)
+            sentence = source_text.rfind(". ", search_start, hard_end)
+            whitespace = source_text.rfind(" ", search_start, hard_end)
+            if paragraph >= search_start:
+                end = paragraph + 1
+            elif sentence >= search_start:
+                end = sentence + 1
+            elif whitespace >= search_start:
+                end = whitespace + 1
+            else:
+                end = hard_end
+        if end <= start:
+            end = hard_end
+        ranges.append((start, end))
+        start = end
+    return tuple(ranges)
 
 
 def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
@@ -4834,28 +4876,53 @@ class SpinePostgresRepository:
                     str(row["source_locator_id"]),
                 )
             )
+            segmented_rows: list[dict[str, Any]] = []
+            for row in rows:
+                source_text = str(row["source_text"])
+                for segment_start, segment_end in _contract_text_segments(source_text):
+                    segment_row = dict(row)
+                    segment_row["source_text"] = source_text[segment_start:segment_end]
+                    segment_row["segment_start"] = segment_start
+                    segment_row["segment_end"] = segment_end
+                    segmented_rows.append(segment_row)
             batches: list[list[Mapping[str, Any]]] = []
             current: list[Mapping[str, Any]] = []
             current_chars = 0
-            for row in rows:
-                text_value = " ".join(str(row["source_text"]).split())
+            for bounded_row in segmented_rows:
+                text_value = " ".join(str(bounded_row["source_text"]).split())
                 if not text_value:
                     continue
-                if current and (len(current) >= 24 or current_chars + len(text_value) > 12_000):
+                locator_repeated = any(
+                    value["source_locator_id"] == bounded_row["source_locator_id"]
+                    for value in current
+                )
+                if current and (
+                    locator_repeated
+                    or len(current) >= 24
+                    or current_chars + len(text_value) > 12_000
+                ):
                     batches.append(current)
                     current = []
                     current_chars = 0
-                current.append(dict(row))
+                current.append(dict(bounded_row))
                 current_chars += len(text_value)
             if current:
                 batches.append(current)
             for ordinal, batch in enumerate(batches, start=1):
                 locator_ids = [str(row["source_locator_id"]) for row in batch]
+                source_segments = [
+                    {
+                        "source_locator_id": str(row["source_locator_id"]),
+                        "start": int(row["segment_start"]),
+                        "end": int(row["segment_end"]),
+                    }
+                    for row in batch
+                ]
                 batch_digest = semantic_digest(
                     {
                         "profile": CONTRACT_ANALYSIS_PROFILE,
                         "source_version_id": str(source_version_id),
-                        "source_locator_ids": locator_ids,
+                        "source_segments": source_segments,
                     }
                 )
                 key = f"contract-analysis:{source_version_id}:{CONTRACT_ANALYSIS_PROFILE}:{batch_digest}"
@@ -4892,6 +4959,7 @@ class SpinePostgresRepository:
                     "batch_ordinal": ordinal,
                     "batch_digest": batch_digest,
                     "source_locator_ids": locator_ids,
+                    "source_segments": source_segments,
                     "model_identity": "local-qwen3.8-27b",
                 }
                 session.execute(
