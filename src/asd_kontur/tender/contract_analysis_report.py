@@ -71,6 +71,30 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         )
         for ordinal, item in enumerate(_records(view.get("deliverables")), start=1)
     ]
+    project_context = _mapping(view.get("project_context"))
+    key_condition_rows = [
+        (
+            str(ordinal),
+            str(item.get("label") or item.get("field") or "Условие"),
+            str(item.get("value") or "Требует уточнения"),
+            _fact_source_reference(item),
+        )
+        for ordinal, item in enumerate(_contract_key_facts(project_context), start=1)
+    ]
+    project_finding_rows = [
+        (
+            str(ordinal),
+            str(item.get("kind") or item.get("finding_kind") or "Вопрос"),
+            str(item.get("subject") or "Объект в целом"),
+            str(item.get("description") or "Требует уточнения"),
+            str(item.get("practical_consequence") or "Не указано"),
+            str(item.get("recommended_action") or "Получить письменное уточнение"),
+            _finding_source_reference(item),
+        )
+        for ordinal, item in enumerate(
+            _records(project_context.get("project_contract_findings")), start=1
+        )
+    ]
     process = _mapping(view.get("process"))
     gaps = _joined(view.get("gaps")) or "Нет зарегистрированных пробелов"
     body = [
@@ -99,6 +123,26 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
 
     body.extend(
         (
+            _heading("Ключевые условия договора и закупки", "Heading1"),
+            _table(
+                ("№", "Условие", "Значение", "Источник"),
+                key_condition_rows,
+                "Ключевые условия ещё извлекаются.",
+            ),
+            _heading("Связь договора с проектом", "Heading1"),
+            _table(
+                (
+                    "№",
+                    "Вопрос",
+                    "Предмет",
+                    "Расхождение или неопределённость",
+                    "Последствие для Подрядчика",
+                    "Рекомендуемое действие",
+                    "Источники",
+                ),
+                project_finding_rows,
+                "Связанные проектно-договорные расхождения пока не установлены.",
+            ),
             _heading("Предложения для протокола разногласий", "Heading1"),
             _table(
                 (
@@ -147,6 +191,37 @@ def _source_reference(clause: Mapping[str, Any]) -> str:
         ("Уровень полномочий", clause.get("authority_layer")),
     )
     return "; ".join(f"{label}: {value}" for label, value in values if value) or "Не привязан"
+
+
+def _contract_key_facts(project_context: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    result: list[Mapping[str, Any]] = []
+    for key in (
+        "participants",
+        "commercial_conditions",
+        "time_requirements",
+        "key_conditions",
+        "procurement_requirements",
+    ):
+        result.extend(_records(project_context.get(key)))
+    return result
+
+
+def _fact_source_reference(item: Mapping[str, Any]) -> str:
+    references = []
+    for source in _records(item.get("sources")):
+        name = str(source.get("document") or "Документ")
+        page = source.get("page")
+        references.append(f"{name}, стр./лист {page}" if page else name)
+    return "; ".join(references) or "Источник указан во внутренней ссылке"
+
+
+def _finding_source_reference(item: Mapping[str, Any]) -> str:
+    references = []
+    for source in _records(item.get("sources")):
+        name = str(source.get("document") or "Документ")
+        page = source.get("page")
+        references.append(f"{name}, стр./лист {page}" if page else name)
+    return "; ".join(references) or "Источники доступны по ссылкам результата"
 
 
 def _disagreement_basis(issue: Mapping[str, Any], item: Mapping[str, Any]) -> str:

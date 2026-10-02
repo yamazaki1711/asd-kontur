@@ -104,7 +104,24 @@ class _ProjectContextRepository(_SourceRepository):
                 ],
                 "time_requirements": [],
                 "commercial_conditions": [],
-                "issues": [],
+                "issues": [
+                    {
+                        "issue_id": "duration-72",
+                        "finding_kind": "DURATION_MISMATCH",
+                        "kind": "Расхождение продолжительности",
+                        "description": "ПОС: 3 месяца; закупка: 5 месяцев.",
+                        "sources": [
+                            {"source_version_id": "source-design-72"},
+                            {"source_version_id": "source-procurement-72"},
+                        ],
+                    },
+                    {
+                        "issue_id": "material-72",
+                        "finding_kind": "MATERIAL_MISMATCH",
+                        "kind": "Различие материала",
+                        "sources": [{"source_version_id": "source-design-72"}],
+                    },
+                ],
             }
         }
 
@@ -271,3 +288,6 @@ def test_product_projection_joins_only_contract_scoped_project_facts() -> None:
         "АО Заказчик-72"
     ]
     assert projected["project_context"]["key_conditions"][0]["value"] == "24 месяца"
+    assert [
+        item["issue_id"] for item in projected["project_context"]["project_contract_findings"]
+    ] == ["duration-72"]

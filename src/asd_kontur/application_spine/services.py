@@ -47,6 +47,7 @@ from asd_kontur.tender.facility_scope_schedule import render_tender_facility_sco
 from asd_kontur.tender.facility_work_projection import (
     render_facility_work_candidate_schedule_csv,
 )
+from asd_kontur.tender.finding_model import ProfessionalFindingKind
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
 from asd_kontur.tender.revised_contract_candidate import (
@@ -671,16 +672,9 @@ class ProductSpineService:
                 engineering.get("commercial_conditions"), source_ids
             ),
             "procurement_requirements": list(engineering.get("procurement_requirements") or ()),
-            "project_contract_findings": [
-                dict(item)
-                for item in engineering.get("issues") or ()
-                if isinstance(item, dict)
-                and any(
-                    str(source.get("source_version_id")) in source_ids
-                    for source in item.get("sources") or ()
-                    if isinstance(source, dict)
-                )
-            ],
+            "project_contract_findings": _contract_related_project_findings(
+                engineering.get("issues"), source_ids
+            ),
         }
 
     def tender_contract_analysis_export(
@@ -1792,3 +1786,34 @@ def _facts_for_sources(value: object, source_ids: set[str]) -> list[dict[str, An
             if isinstance(source, dict)
         )
     ]
+
+
+def _contract_related_project_findings(value: object, source_ids: set[str]) -> list[dict[str, Any]]:
+    """Expose project conditions that materially affect the contract review.
+
+    A duration or procurement conflict can matter to the Contractor even when
+    neither side of the comparison is the draft-contract file itself.  Keep
+    those typed project-wide findings beside findings that cite a contract
+    source, while excluding unrelated engineering differences from this view.
+    """
+
+    if not isinstance(value, (list, tuple)):
+        return []
+    project_wide_kinds = {
+        ProfessionalFindingKind.DURATION_MISMATCH.value,
+        ProfessionalFindingKind.CONTRACT_RISK.value,
+        ProfessionalFindingKind.PROCUREMENT_RISK.value,
+        ProfessionalFindingKind.REVISION_CONFLICT.value,
+    }
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        cites_contract_source = any(
+            str(source.get("source_version_id")) in source_ids
+            for source in item.get("sources") or ()
+            if isinstance(source, dict)
+        )
+        if cites_contract_source or str(item.get("finding_kind")) in project_wide_kinds:
+            result.append(dict(item))
+    return result

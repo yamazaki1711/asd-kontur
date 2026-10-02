@@ -2727,6 +2727,8 @@ function TenderContractAnalysisBody({
       Record<string, unknown>
     >),
   ];
+  const projectContractFindings = (projectContext.project_contract_findings ??
+    []) as Array<Record<string, unknown>>;
   if (value.status === "contract_input_unavailable") {
     return (
       <InfoNotice>
@@ -2826,6 +2828,37 @@ function TenderContractAnalysisBody({
           </div>
         ) : (
           <p>Ключевые условия договора ещё извлекаются.</p>
+        )}
+      </section>
+      <section className="panel">
+        <h2>Связь договора с проектом</h2>
+        {projectContractFindings.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Вопрос</th>
+                  <th>Что установлено</th>
+                  <th>Риск для Подрядчика</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projectContractFindings.map((finding, index) => (
+                  <tr
+                    key={`${displayValue(finding.issue_id, "finding")}-${String(index)}`}
+                  >
+                    <td>{displayValue(finding.kind, "Требует уточнения")}</td>
+                    <td>{displayValue(finding.description, "—")}</td>
+                    <td>{displayValue(finding.practical_consequence, "—")}</td>
+                    <td>{displayValue(finding.recommended_action, "—")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Связанные проектно-договорные расхождения пока не установлены.</p>
         )}
       </section>
       <section className="panel">

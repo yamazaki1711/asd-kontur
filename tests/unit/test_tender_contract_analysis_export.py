@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001 -- Russian product document assertions are intentional.
 from __future__ import annotations
 
 import csv
@@ -129,6 +130,25 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "uncertainty_issue_ids": ["issue-independent-11"],
             }
         ],
+        "project_context": {
+            "time_requirements": [
+                {
+                    "label": "Срок выполнения работ",
+                    "value": "5 месяцев",
+                    "sources": [{"document": "Условия закупки.pdf", "page": 4}],
+                }
+            ],
+            "project_contract_findings": [
+                {
+                    "kind": "Расхождение продолжительности",
+                    "subject": "Срок выполнения работ",
+                    "description": "ПОС: 3 месяца; закупка: 5 месяцев.",
+                    "practical_consequence": "Требуется согласовать календарный график.",
+                    "recommended_action": "Подтвердить обязательный срок.",
+                    "sources": [{"document": "ПОС.pdf", "page": 18}],
+                }
+            ],
+        },
         "gaps": ["PROFESSIONAL_REVIEW_REQUIRED"],
     }
 
@@ -147,3 +167,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "Обоснование / практическая причина" in document
         assert "Acceptance depends on an undefined Customer review period." in document
         assert "Define one evidence-backed acceptance period." in document
+        assert "Ключевые условия договора и закупки" in document
+        assert "5 месяцев" in document
+        assert "Связь договора с проектом" in document
+        assert "ПОС: 3 месяца; закупка: 5 месяцев." in document

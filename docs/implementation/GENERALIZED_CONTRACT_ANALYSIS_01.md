@@ -96,6 +96,13 @@ The cross-repository user-result audit is recorded in
   primary Tender findings schedule, report, and analysis archive. The join is
   transient and workspace-scoped; it does not promote model output into the
   finalized legal tables.
+- Joined typed project-wide duration, procurement, revision, and contract-risk
+  findings into the contract-analysis result even when the conflicting project
+  and procurement sources are not the draft-contract file itself. The Russian
+  UI and editable contract-analysis DOCX now show key contract/procurement
+  conditions and the practical project-to-contract consistency schedule before
+  the disagreement rows. Unrelated engineering findings remain in the main
+  Tender analysis instead of polluting the contract review.
 - Corrected the read projection to use only the current versioned semantic-role
   profile. A superseded historical `contract` label can no longer keep a false
   contract source active after reclassification.
