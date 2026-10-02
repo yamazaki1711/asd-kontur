@@ -93,6 +93,7 @@ ASSISTANT_TOOLS = frozenset(
         "consultant.get_work_packages",
         "consultant.get_requirement_matrix",
         "consultant.get_discrepancies",
+        "consultant.get_contract_analysis",
         "consultant.get_id_package",
         "consultant.get_mode_result",
         "consultant.get_information_gaps",
