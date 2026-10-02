@@ -134,6 +134,11 @@ TOOL_DEFINITIONS: tuple[dict[str, Any], ...] = (
         "schema": {},
     },
     {
+        "name": "consultant.get_contract_analysis",
+        "description": "Получить подготовленный анализ условий договора, риски Подрядчика и предлагаемые изменения.",
+        "schema": {"focus": "overview|risks|revisions", "limit": "integer 1..12"},
+    },
+    {
         "name": "consultant.get_id_package",
         "description": "Получить состав и комплектность исполнительной документации.",
         "schema": {},
@@ -201,6 +206,7 @@ _WORKSPACE_METADATA_TOOLS = frozenset(
         "consultant.get_work_packages",
         "consultant.get_requirement_matrix",
         "consultant.get_discrepancies",
+        "consultant.get_contract_analysis",
         "consultant.get_id_package",
         "consultant.get_mode_result",
         "consultant.get_information_gaps",
@@ -645,6 +651,7 @@ def validate_answer(
         "consultant.get_work_packages",
         "consultant.get_requirement_matrix",
         "consultant.get_discrepancies",
+        "consultant.get_contract_analysis",
         "consultant.get_id_package",
         "consultant.get_mode_result",
         "consultant.get_information_gaps",
@@ -659,6 +666,7 @@ def validate_answer(
         "consultant.get_project_entity_inventory",
         "consultant.get_work_packages",
         "consultant.get_discrepancies",
+        "consultant.get_contract_analysis",
         "consultant.get_information_gaps",
         "consultant.search_workspace_documents",
         "consultant.get_workspace_fragment",
@@ -801,6 +809,16 @@ def _validate_arguments(tool: str, arguments: dict[str, Any]) -> None:
             raise ValueError("assistant_plan_work_packages_arguments_invalid")
         if not isinstance(limit, int) or not 1 <= limit <= 20:
             raise ValueError("assistant_plan_work_packages_arguments_invalid")
+        return
+    if tool == "consultant.get_contract_analysis":
+        if set(arguments) - {"focus", "limit"}:
+            raise ValueError("assistant_plan_contract_analysis_arguments_invalid")
+        focus = arguments.get("focus", "overview")
+        limit = arguments.get("limit", 8)
+        if focus not in {"overview", "risks", "revisions"}:
+            raise ValueError("assistant_plan_contract_analysis_arguments_invalid")
+        if not isinstance(limit, int) or not 1 <= limit <= 12:
+            raise ValueError("assistant_plan_contract_analysis_arguments_invalid")
         return
     if tool == "consultant.get_project_entity_inventory":
         if set(arguments) - {"kind", "query", "limit"}:

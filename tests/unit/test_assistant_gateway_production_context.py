@@ -10,6 +10,7 @@ from sqlalchemy import Engine
 from asd_kontur.assistant.gateway import (
     ASSISTANT_TOOL,
     ProfessionalAssistantKnowledgeQuery,
+    _assistant_contract_analysis,
     _assistant_engineering_for_query,
     _project_pit_unresolved_inventory,
     _public_inventory_candidate,
@@ -46,6 +47,67 @@ def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> No
         is False
     )
     assert _semantic_coverage_complete([{"status": "complete"}]) is False
+
+
+def test_assistant_contract_projection_keeps_professional_facts_not_process_ids() -> None:
+    locator_id = uuid4()
+    clause_id = uuid4()
+    issue_id = uuid4()
+    projected = _assistant_contract_analysis(
+        {
+            "status": "analyzing",
+            "process": {"tender_process_id": str(uuid4())},
+            "assessment": {"source_names": ["Draft agreement RA-62.docx"]},
+            "clauses": [
+                {
+                    "clause_id": str(clause_id),
+                    "clause_key": "8.4",
+                    "locator_label": "Payment",
+                    "source_name": "Draft agreement RA-62.docx",
+                    "source_page": 17,
+                    "source_text": "Payment depends on an approval controlled by the Customer.",
+                    "category": "payment",
+                    "source_locator_ids": [str(locator_id)],
+                }
+            ],
+            "issues": [
+                {
+                    "issue_id": str(issue_id),
+                    "clause_id": str(clause_id),
+                    "subject": "customer_controlled_payment",
+                    "severity": "high",
+                    "description": "The Customer controls a condition precedent to payment.",
+                    "consequence_code": "Payment may be delayed after accepted performance.",
+                    "recommendation_text": "Add an objective payment deadline.",
+                }
+            ],
+            "disagreement_items": [
+                {
+                    "issue_id": str(issue_id),
+                    "clause_id": str(clause_id),
+                    "replacement_source_text": "Payment depends on Customer approval.",
+                    "proposed_clause_text": "Pay accepted work within 15 calendar days.",
+                }
+            ],
+            "deliverables": [
+                {"deliverable_kind": "disagreement_protocol", "state": "partial_draft"}
+            ],
+            "gaps": ["CONTRACT_ANALYSIS_IN_PROGRESS"],
+            "authority_boundary": "human legal review required",
+        }
+    )
+
+    assert projected["summary"] == {
+        "clause_count": 1,
+        "contractor_risk_count": 1,
+        "proposed_revision_count": 1,
+    }
+    assert projected["contractor_risks"][0]["clause"] == "8.4"
+    assert projected["contractor_risks"][0]["source_locator_ids"] == [str(locator_id)]
+    assert projected["proposed_revisions"][0]["contractor_wording"].startswith("Pay accepted")
+    assert "process" not in projected
+    assert str(clause_id) not in str(projected)
+    assert str(issue_id) not in str(projected)
 
 
 def test_public_inventory_candidate_preserves_evidence_sources_not_internal_ids() -> None:

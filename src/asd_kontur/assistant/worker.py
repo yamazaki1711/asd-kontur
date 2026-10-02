@@ -75,6 +75,30 @@ class _QwenStreamInterrupted(Exception):
     """The loopback inference stream ended without a terminal response."""
 
 
+def _asks_for_contract_analysis(normalized_question: str) -> bool:
+    return any(
+        marker in normalized_question for marker in ("договор", "контракт", "протокол разноглас")
+    ) and any(
+        marker in normalized_question
+        for marker in (
+            "анализ",
+            "риск",
+            "услов",
+            "измен",
+            "редакц",
+            "протокол",
+            "оплат",
+            "срок",
+            "штраф",
+            "ответствен",
+            "гарант",
+            "обеспеч",
+            "прием",
+            "приём",
+        )
+    )
+
+
 def _direct_project_result_plan(question: str) -> SearchPlan | None:
     """Route exact prepared-result questions without model planning or adequacy calls.
 
@@ -91,6 +115,7 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
     asks_for_contractor_risks = "риск" in normalized and any(
         marker in normalized for marker in ("подрядчик", "подрядчика")
     )
+    asks_for_contract_analysis = _asks_for_contract_analysis(normalized)
     discrepancy_markers = ("расхожд", "противореч", "отлич", "не совпад", "сравн")
     document_role_markers = ("проект", "пд", "рд", "спецификац", "вор", "смет")
     asks_for_document_discrepancies = (
@@ -244,9 +269,34 @@ def _direct_project_result_plan(question: str) -> SearchPlan | None:
                 ),
             ),
         )
+    if asks_for_contract_analysis:
+        requests_revisions = any(
+            marker in normalized for marker in ("измен", "редакц", "протокол", "разноглас")
+        )
+        requests_risks = "риск" in normalized
+        focus = (
+            "overview"
+            if requests_revisions and requests_risks
+            else "revisions"
+            if requests_revisions
+            else "risks"
+        )
+        return SearchPlan(
+            intent="workspace",
+            needs_clarification=False,
+            clarifying_question=None,
+            steps=(
+                PlannedToolCall(
+                    "consultant.get_contract_analysis",
+                    {"focus": focus, "limit": 12},
+                    "Использовать подготовленный анализ договора и изменения в интересах Подрядчика.",
+                ),
+            ),
+        )
     if not (
         asks_for_customer_questions
         or asks_for_contractor_risks
+        or asks_for_contract_analysis
         or asks_for_document_discrepancies
         or asks_for_missing_commercial_work
         or asks_for_material_discrepancies
@@ -1566,6 +1616,10 @@ def _append_prepared_project_result(
     normalized = " ".join(question.casefold().replace("ё", "е").split())
     asks_for_customer_questions = "вопрос" in normalized and "заказчик" in normalized
     asks_for_contractor_risks = "риск" in normalized and "подрядчик" in normalized
+    asks_for_contract_analysis = _asks_for_contract_analysis(normalized)
+    asks_for_contract_revisions = asks_for_contract_analysis and any(
+        marker in normalized for marker in ("измен", "редакц", "протокол", "разноглас")
+    )
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -2129,15 +2183,21 @@ def _append_prepared_project_result(
                 ("Нормативные требования, которые нужно проверить:", requirement_rows)
             )
     for receipt in receipts:
-        if receipt.get("tool") != "consultant.get_discrepancies":
+        if receipt.get("tool") not in {
+            "consultant.get_discrepancies",
+            "consultant.get_contract_analysis",
+        }:
             continue
         response = receipt.get("response")
         if not isinstance(response, dict):
             continue
         value = response.get("value")
         engineering = value.get("project_engineering") if isinstance(value, dict) else None
-        if not isinstance(engineering, dict):
+        contract_analysis = value.get("contract_analysis") if isinstance(value, dict) else None
+        if not isinstance(engineering, dict) and not isinstance(contract_analysis, dict):
             continue
+        if not isinstance(engineering, dict):
+            engineering = {}
         for source in response.get("sources") or ():
             if not isinstance(source, dict) or not source.get("source_id"):
                 continue
@@ -2160,7 +2220,47 @@ def _append_prepared_project_result(
                 if isinstance(item, dict) and str(item.get("risk") or "").strip()
             ]
             headings_and_rows.append(("Полный перечень установленных рисков:", rows))
-        if not asks_for_customer_questions and not asks_for_contractor_risks:
+        if isinstance(contract_analysis, dict) and (
+            asks_for_contract_analysis or asks_for_contractor_risks
+        ):
+            contract_risk_rows = []
+            for item in contract_analysis.get("contractor_risks") or ():
+                if not isinstance(item, dict):
+                    continue
+                clause = str(item.get("clause") or "Пункт требует уточнения").strip()
+                description = str(
+                    item.get("description") or item.get("practical_consequence") or ""
+                ).strip()
+                action = str(item.get("recommended_action") or "").strip()
+                if not description:
+                    continue
+                row = f"Пункт {clause}: {description}"
+                if action:
+                    row += f" Рекомендуемое действие: {action}"
+                contract_risk_rows.append(row)
+            if contract_risk_rows:
+                headings_and_rows.append(("Договорные риски Подрядчика:", contract_risk_rows))
+            if asks_for_contract_revisions:
+                revision_rows = []
+                for item in contract_analysis.get("proposed_revisions") or ():
+                    if not isinstance(item, dict):
+                        continue
+                    clause = str(item.get("clause") or "Пункт требует уточнения").strip()
+                    wording = str(item.get("contractor_wording") or "").strip()
+                    reason = str(item.get("practical_reason") or "").strip()
+                    if not wording:
+                        continue
+                    row = f"Пункт {clause}: {wording}"
+                    if reason:
+                        row += f" Основание: {reason}"
+                    revision_rows.append(row)
+                if revision_rows:
+                    headings_and_rows.append(("Предлагаемая редакция Подрядчика:", revision_rows))
+        if (
+            not asks_for_customer_questions
+            and not asks_for_contractor_risks
+            and not asks_for_contract_analysis
+        ):
             rows = []
             for item in engineering.get("issues") or ():
                 if not isinstance(item, dict):
@@ -2272,9 +2372,10 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
     priority = {
         "consultant.get_project_entity_inventory": 0,
         "consultant.get_work_packages": 1,
-        "consultant.get_discrepancies": 2,
-        "consultant.get_information_gaps": 3,
-        "consultant.get_workspace_overview": 4,
+        "consultant.get_contract_analysis": 2,
+        "consultant.get_discrepancies": 3,
+        "consultant.get_information_gaps": 4,
+        "consultant.get_workspace_overview": 5,
     }
     ordered = sorted(receipts, key=lambda receipt: priority.get(str(receipt.get("tool")), 10))
     for receipt in ordered:
@@ -2308,6 +2409,7 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         structured_project_tool = receipt.get("tool") in {
             "consultant.get_work_packages",
             "consultant.get_discrepancies",
+            "consultant.get_contract_analysis",
             "consultant.get_information_gaps",
             "consultant.get_workspace_overview",
         }
@@ -2340,7 +2442,10 @@ def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> di
     """Keep professional results ahead of verbose model internals in the prompt."""
 
     value = response.get("value")
+    if tool == "consultant.get_contract_analysis":
+        return response
     engineering = value.get("project_engineering") if isinstance(value, dict) else None
+    contract_analysis = value.get("contract_analysis") if isinstance(value, dict) else None
     if not isinstance(engineering, dict):
         return response
     common = {
@@ -2392,8 +2497,11 @@ def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> di
             "facilities": engineering.get("facilities") or [],
             "issues": engineering.get("issues") or [],
         }
+    projected_value: dict[str, Any] = {"project_engineering": projected}
+    if isinstance(contract_analysis, dict) and contract_analysis:
+        projected_value["contract_analysis"] = contract_analysis
     return {key: item for key, item in response.items() if key != "value"} | {
-        "value": {"project_engineering": projected}
+        "value": projected_value
     }
 
 

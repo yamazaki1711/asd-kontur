@@ -7,9 +7,102 @@ from asd_kontur.assistant.worker import (
     _answer_budget,
     _append_prepared_project_result,
     _direct_project_result_plan,
+    _structured_project_prompt_result,
     _tool_results_for_prompt,
     _with_structured_project_fact_checks,
 )
+
+
+def test_structured_project_prompt_preserves_contract_analysis() -> None:
+    response = _structured_project_prompt_result(
+        "consultant.get_discrepancies",
+        {
+            "contract": "construction-consultant-tools@2.8.0",
+            "value": {
+                "project_engineering": {
+                    "model_version": "project-engineering-model-v2",
+                    "summary": {"facility_count": 2},
+                    "issues": [],
+                },
+                "contract_analysis": {
+                    "status": "analyzing",
+                    "contractor_risks": [
+                        {
+                            "clause": "8.4",
+                            "practical_consequence": "Payment may be delayed.",
+                        }
+                    ],
+                    "proposed_revisions": [
+                        {
+                            "clause": "8.4",
+                            "contractor_wording": "Pay within 15 calendar days.",
+                        }
+                    ],
+                },
+            },
+        },
+    )
+
+    assert response["value"]["contract_analysis"]["contractor_risks"][0]["clause"] == "8.4"
+    assert (
+        response["value"]["contract_analysis"]["proposed_revisions"][0]["contractor_wording"]
+        == "Pay within 15 calendar days."
+    )
+
+
+def test_contract_questions_use_prepared_analysis_and_preserve_exact_revisions() -> None:
+    plan = _direct_project_result_plan(
+        "Какие риски содержит договор и какую редакцию включить в протокол разногласий?"
+    )
+
+    assert plan is not None
+    assert plan.steps[0].tool == "consultant.get_contract_analysis"
+
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Проект договора проанализирован.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Договорные риски.",
+            ("договор",),
+        ),
+        [
+            {
+                "tool": "consultant.get_contract_analysis",
+                "response": {
+                    "value": {
+                        "project_engineering": {"issues": []},
+                        "contract_analysis": {
+                            "contractor_risks": [
+                                {
+                                    "clause": "8.4",
+                                    "description": "Заказчик контролирует условие оплаты.",
+                                    "recommended_action": "Установить объективный срок оплаты.",
+                                }
+                            ],
+                            "proposed_revisions": [
+                                {
+                                    "clause": "8.4",
+                                    "contractor_wording": (
+                                        "Оплата производится в течение 15 календарных дней."
+                                    ),
+                                    "practical_reason": "Исключение неопределённой отсрочки.",
+                                }
+                            ],
+                        },
+                    },
+                    "sources": [{"source_id": "contract-source"}],
+                },
+            }
+        ],
+        "Какие риски содержит договор и какую редакцию включить в протокол разногласий?",
+    )
+
+    assert "Договорные риски Подрядчика" in completed.answer
+    assert "Заказчик контролирует условие оплаты" in completed.answer
+    assert "Оплата производится в течение 15 календарных дней" in completed.answer
+    assert completed.used_source_ids == ("contract-source",)
 
 
 def test_explicit_normative_question_has_budget_for_complete_evidence_bound_answer() -> None:

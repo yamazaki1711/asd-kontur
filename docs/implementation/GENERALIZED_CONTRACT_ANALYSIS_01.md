@@ -530,6 +530,13 @@ when that context is at most 3,000 characters and token overlap is at least
 throughput correction cannot turn paraphrased model prose into a professional
 finding.
 
+At the 18:24 +12 measurement point, the eleven successful v7 jobs averaged
+123.5 seconds with a 41.5-second median, while the four exact-source failures
+averaged 483.5 seconds with a 487.2-second median. The failed quotation path was
+therefore consuming roughly four times the average successful-job duration and
+more than eleven times the successful median. This is measured live workload,
+not a theoretical optimization target.
+
 V7 batch 15 then labelled a return-of-overpayment clause as `unpaid_change`,
 inferred possible internal auditors/SRO actors not present in the source, and
 proposed making a court judgment the only basis for recovery. It is retained in
@@ -540,3 +547,31 @@ unreviewable unilateral mechanism; it forbids inventing the identity of a
 control body and reserves `unpaid_change` for actual additional/changed-work
 payment exposure. The correction is a general contract-review rule rather than
 a clause-number or corpus-specific exception.
+
+## 2026-10-02 consultant contract-model integration staged
+
+The professional consultant previously received the project-engineering model
+but not the contract-analysis projection. It could therefore describe general
+Tender engineering risks while omitting contract clauses, Contractor exposure
+and proposed wording already available on the contract screen. This was a
+product inconsistency rather than a model-capacity issue.
+
+The Knowledge Gateway now projects a bounded contract context alongside the
+same workspace engineering model. It contains admitted source document names,
+exact issue-linked clause wording, page and locator references, grounded
+Contractor risks, practical consequences, recommended actions, proposed
+Contractor wording, deliverable state and explicit gaps. Tender process, issue,
+clause and job identifiers are excluded from the professional prompt. The
+assistant prompt compactor preserves this contract block, and direct contract
+questions route to the prepared discrepancy/risk result rather than asking the
+model to rediscover the contract from raw search fragments. A deterministic
+publication guard appends grounded contract risks and requested protocol
+wording if the narrative model omits them.
+
+The staged code was exercised read-only against the live blind workspace. It
+returned the active `analyzing` state, both admitted contract-role sources, 70
+extracted clauses, eight then-visible v7 risk candidates, eight proposed
+revisions and nine source records. These counts document the current partial
+v7 projection; they are not final acceptance because v8 is expected to reject
+unsupported v7 candidates after autonomous replacement. No runtime job was
+created, retried or changed by this check.

@@ -26,6 +26,7 @@ from asd_kontur.knowledge.gateway import (
 )
 from asd_kontur.ntd.search_corpus import normalize_designation
 from asd_kontur.support.production_postgres import SupportProductionRepository
+from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisRepository
 from asd_kontur.tender.facility_work_projection import select_facility_work_candidates
 
 from .engineering_gateway import execute_early_strength
@@ -230,6 +231,7 @@ class ProfessionalAssistantKnowledgeQuery:
                     "name": workspace["name"],
                     "project_definition": workspace["project_definition"],
                     "project_engineering": workspace.get("project_engineering", {}),
+                    "contract_analysis": workspace.get("contract_analysis", {}),
                     "documents": workspace["documents"],
                     "structure_dossiers": workspace["structure_dossiers"],
                     "structure_identity_candidates": workspace.get(
@@ -257,6 +259,7 @@ class ProfessionalAssistantKnowledgeQuery:
                 },
                 "consultant.get_discrepancies": {
                     "project_engineering": workspace.get("project_engineering", {}),
+                    "contract_analysis": workspace.get("contract_analysis", {}),
                     "engineering_issues": workspace.get("project_engineering", {}).get(
                         "issues", []
                     ),
@@ -265,9 +268,15 @@ class ProfessionalAssistantKnowledgeQuery:
                     ),
                     "discrepancies": workspace["discrepancies"],
                 },
+                "consultant.get_contract_analysis": {
+                    "contract_analysis": _focused_contract_analysis(
+                        workspace.get("contract_analysis", {}), payload
+                    )
+                },
                 "consultant.get_mode_result": {"mode_result": workspace["mode_result"]},
                 "consultant.get_information_gaps": {
                     "project_engineering": workspace.get("project_engineering", {}),
+                    "contract_analysis": workspace.get("contract_analysis", {}),
                     "engineering_questions": workspace.get("project_engineering", {}).get(
                         "customer_questions", []
                     ),
@@ -293,11 +302,17 @@ class ProfessionalAssistantKnowledgeQuery:
                 "consultant.get_requirement_matrix": workspace.get("work_package_source_items", []),
                 "consultant.get_discrepancies": [
                     *workspace.get("discrepancy_source_items", []),
+                    *workspace.get("contract_source_items", []),
                     *workspace.get("overview_source_items", []),
                 ],
-                "consultant.get_mode_result": workspace.get("overview_source_items", []),
+                "consultant.get_contract_analysis": workspace.get("contract_source_items", []),
+                "consultant.get_mode_result": [
+                    *workspace.get("contract_source_items", []),
+                    *workspace.get("overview_source_items", []),
+                ],
                 "consultant.get_information_gaps": [
                     *workspace.get("gap_source_items", []),
+                    *workspace.get("contract_source_items", []),
                     *workspace.get("overview_source_items", []),
                 ],
             }[tool]
@@ -633,6 +648,8 @@ class ProfessionalAssistantKnowledgeQuery:
         facility_work_candidate_groups: list[dict[str, Any]] = []
         facility_work_selection: dict[str, Any] = {}
         facility_work_coverage: dict[str, Any] = {}
+        contract_analysis: dict[str, Any] = {}
+        contract_source_items: list[dict[str, Any]] = []
         if owner_identity_id is not None:
             from asd_kontur.application_spine.postgres import SpinePostgresRepository
 
@@ -737,6 +754,15 @@ class ProfessionalAssistantKnowledgeQuery:
             discrepancy_source_items = evidence_items(
                 {str(locator_id) for row in defects for locator_id in row["source_locator_ids"]}
             )
+            if mode == "Tender":
+                contract_view = TenderContractAnalysisRepository(self._engine).latest(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                )
+                contract_analysis = _assistant_contract_analysis(contract_view)
+                contract_source_items = evidence_items(
+                    _nested_source_locator_ids(contract_analysis)
+                )
         gap_source_items = [
             *dossier_source_items,
             *work_package_source_items,
@@ -766,6 +792,7 @@ class ProfessionalAssistantKnowledgeQuery:
             "facility_work_selection": _public_value(facility_work_selection),
             "facility_work_coverage": _public_value(facility_work_coverage),
             "project_engineering": _public_value(assistant_engineering),
+            "contract_analysis": _public_value(contract_analysis),
             "materialization": _public_value(dict((model_view or {}).get("materialization", {}))),
             "semantic_coverage": _public_value(
                 list((model_view or {}).get("semantic_coverage", []))
@@ -785,10 +812,20 @@ class ProfessionalAssistantKnowledgeQuery:
                 "cross_source_identity_candidate_count": len(overview_identities),
                 "meaning": "Извлечённые кандидаты не являются подтверждёнными фактами или полным перечнем.",
             },
-            "source_items": [*source_items, *dossier_source_items, *engineering_source_items],
-            "overview_source_items": [*dossier_source_items, *engineering_source_items][:60],
+            "source_items": [
+                *source_items,
+                *dossier_source_items,
+                *engineering_source_items,
+                *contract_source_items,
+            ],
+            "overview_source_items": [
+                *dossier_source_items,
+                *engineering_source_items,
+                *contract_source_items,
+            ][:60],
             "work_package_source_items": work_package_source_items,
             "discrepancy_source_items": discrepancy_source_items,
+            "contract_source_items": contract_source_items,
             "gap_source_items": gap_source_items,
         }
 
@@ -2221,6 +2258,162 @@ _SHEET_PILE_QUERY_MARKERS = (
     "распор",
     "двутавр",
 )
+
+
+def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) -> dict[str, Any]:
+    """Project contract analysis as bounded professional facts for the consultant.
+
+    The Tender projection contains immutable process identifiers and complete
+    delivery history.  The consultant needs the opposite shape: exact clause
+    wording, grounded risks, proposed contractor wording, source locations and
+    explicit gaps.  Keep locator identities only for source navigation and do
+    not expose process/job identities as project content.
+    """
+
+    clauses = [dict(item) for item in view.get("clauses") or () if isinstance(item, Mapping)]
+    issues = [dict(item) for item in view.get("issues") or () if isinstance(item, Mapping)]
+    disagreements = [
+        dict(item) for item in view.get("disagreement_items") or () if isinstance(item, Mapping)
+    ]
+    clause_by_id = {
+        str(item.get("clause_id")): item for item in clauses if item.get("clause_id") is not None
+    }
+    issue_by_id = {
+        str(item.get("issue_id")): item for item in issues if item.get("issue_id") is not None
+    }
+    referenced_clause_ids = {
+        str(item.get("clause_id"))
+        for item in [*issues, *disagreements]
+        if item.get("clause_id") is not None
+    }
+    selected_clauses = [
+        item for item in clauses if str(item.get("clause_id")) in referenced_clause_ids
+    ]
+    if not selected_clauses:
+        selected_clauses = clauses[: min(limit, 8)]
+
+    def source_locator_ids(clause: Mapping[str, Any]) -> list[str]:
+        values = [
+            str(value) for value in clause.get("source_locator_ids") or () if value is not None
+        ]
+        singular = clause.get("source_locator_id")
+        if singular is not None and str(singular) not in values:
+            values.append(str(singular))
+        return values
+
+    def professional_clause(clause: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "clause": clause.get("clause_key"),
+            "section": clause.get("locator_label"),
+            "source_document": clause.get("source_name"),
+            "source_page": clause.get("source_page"),
+            "source_text": clause.get("source_text"),
+            "category": clause.get("category"),
+            "customer_obligation": clause.get("customer_obligation"),
+            "contractor_obligation": clause.get("contractor_obligation"),
+            "condition": clause.get("condition"),
+            "source_locator_ids": source_locator_ids(clause),
+        }
+
+    professional_risks: list[dict[str, Any]] = []
+    for issue in issues[:limit]:
+        clause = clause_by_id.get(str(issue.get("clause_id")), {})
+        professional_risks.append(
+            {
+                "kind": issue.get("subject") or issue.get("issue_kind"),
+                "severity": issue.get("severity"),
+                "clause": clause.get("clause_key"),
+                "source_document": clause.get("source_name"),
+                "source_page": clause.get("source_page"),
+                "risk_mechanism": issue.get("risk_mechanism"),
+                "trigger": issue.get("trigger_text"),
+                "adverse_effect": issue.get("adverse_effect_text"),
+                "description": issue.get("description"),
+                "practical_consequence": issue.get("consequence_code"),
+                "recommended_action": issue.get("recommendation_text"),
+                "uncertainty": issue.get("uncertainty_code"),
+                "source_locator_ids": source_locator_ids(clause),
+            }
+        )
+
+    proposed_revisions: list[dict[str, Any]] = []
+    for disagreement in disagreements[:limit]:
+        clause = clause_by_id.get(str(disagreement.get("clause_id")), {})
+        issue = issue_by_id.get(str(disagreement.get("issue_id")), {})
+        proposed_revisions.append(
+            {
+                "clause": clause.get("clause_key"),
+                "source_document": clause.get("source_name"),
+                "source_page": clause.get("source_page"),
+                "customer_wording": disagreement.get("replacement_source_text")
+                or clause.get("source_text"),
+                "contractor_wording": disagreement.get("proposed_clause_text"),
+                "practical_reason": issue.get("description") or issue.get("consequence_code"),
+                "source_locator_ids": source_locator_ids(clause),
+            }
+        )
+
+    assessment = view.get("assessment")
+    assessment_mapping = dict(assessment) if isinstance(assessment, Mapping) else {}
+    return {
+        "status": view.get("status"),
+        "source_documents": list(assessment_mapping.get("source_names") or ()),
+        "summary": {
+            "clause_count": len(clauses),
+            "contractor_risk_count": len(issues),
+            "proposed_revision_count": len(disagreements),
+        },
+        "relevant_clauses": [professional_clause(item) for item in selected_clauses[:limit]],
+        "contractor_risks": professional_risks,
+        "proposed_revisions": proposed_revisions,
+        "deliverables": [
+            {
+                "kind": item.get("deliverable_kind"),
+                "state": item.get("state"),
+            }
+            for item in view.get("deliverables") or ()
+            if isinstance(item, Mapping)
+        ],
+        "gaps": list(view.get("gaps") or ()),
+        "authority_boundary": view.get("authority_boundary"),
+    }
+
+
+def _focused_contract_analysis(
+    contract_analysis: Mapping[str, Any], payload: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Select one bounded contract-analysis task without discarding its denominator."""
+
+    focus = str(payload.get("focus") or "overview")
+    raw_limit = payload.get("limit", 8)
+    limit = raw_limit if isinstance(raw_limit, int) and not isinstance(raw_limit, bool) else 8
+    limit = max(1, min(limit, 12))
+    common = {
+        key: contract_analysis.get(key)
+        for key in (
+            "status",
+            "source_documents",
+            "summary",
+            "deliverables",
+            "gaps",
+            "authority_boundary",
+        )
+    }
+    if focus == "risks":
+        return {
+            **common,
+            "contractor_risks": list(contract_analysis.get("contractor_risks") or ())[:limit],
+        }
+    if focus == "revisions":
+        return {
+            **common,
+            "proposed_revisions": list(contract_analysis.get("proposed_revisions") or ())[:limit],
+        }
+    return {
+        **common,
+        "contractor_risks": list(contract_analysis.get("contractor_risks") or ())[:limit],
+        "proposed_revisions": list(contract_analysis.get("proposed_revisions") or ())[:limit],
+    }
 
 
 def _assistant_engineering_for_query(
