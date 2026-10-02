@@ -348,7 +348,7 @@ class TenderContractAnalysisRepository:
                 }
                 issues.append(issue)
                 proposed = risk.get("proposed_contractor_wording")
-                if analysis_complete and risk.get("disagreement_required") is True and proposed:
+                if risk.get("disagreement_required") is True and proposed:
                     item_id = str(uuid5(workspace_id, f"contract-disagreement:{issue_id}"))
                     disagreement_items.append(
                         {
@@ -407,12 +407,16 @@ class TenderContractAnalysisRepository:
             for source in contract_sources
             if str(source["source_version_id"]) in revised_source_ids
         ]
-        revised_contract_available = len(revised_sources) == 1 and (
-            str(revised_sources[0]["media_type"])
-            == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            or (
-                str(revised_sources[0]["media_type"]) == "application/octet-stream"
-                and str(revised_sources[0]["safe_display_name"]).lower().endswith(".docx")
+        revised_contract_available = (
+            analysis_complete
+            and len(revised_sources) == 1
+            and (
+                str(revised_sources[0]["media_type"])
+                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                or (
+                    str(revised_sources[0]["media_type"]) == "application/octet-stream"
+                    and str(revised_sources[0]["safe_display_name"]).lower().endswith(".docx")
+                )
             )
         )
         return {
@@ -458,7 +462,13 @@ class TenderContractAnalysisRepository:
             "deliverables": [
                 {
                     "deliverable_kind": "disagreement_protocol",
-                    "state": "draft" if disagreement_items else "pending",
+                    "state": (
+                        "draft"
+                        if disagreement_items and analysis_complete
+                        else "partial_draft"
+                        if disagreement_items
+                        else "pending"
+                    ),
                     "blocker_issue_ids": [],
                     "uncertainty_issue_ids": [],
                 },
