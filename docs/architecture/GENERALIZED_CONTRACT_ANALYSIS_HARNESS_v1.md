@@ -22,13 +22,16 @@ results; promotion/finalization remains an explicit qualified action.
    bounded content and source metadata.
 2. The supervised project orchestrator reads durable active-source state and
    creates missing `CONTRACT_ANALYSIS` batches idempotently.
-3. Exact native-layout locators form bounded contexts (at most 24 locators and
+3. Exact native-layout locators form bounded contexts (at most 12 locators and
    12,000 normalized characters per batch).
 4. The existing persistent local Qwen service returns strict clause and risk
    JSON. It does not perform arithmetic or alter global knowledge.
 5. Deterministic validation rejects unknown locators, invented source text,
    invalid enums, missing risk explanations, and disagreement proposals without
-   concrete replacement wording. One bounded schema repair is permitted.
+   concrete replacement wording. Every risk must identify both its exact
+   triggering wording and the exact wording that creates the adverse Contractor
+   effect, obligation, dependency or measure. One bounded schema repair is
+   permitted.
 6. Immutable result manifests are stored in the workspace and projected into
    clauses, contractor risks, proposed changes, an editable disagreement
    protocol, and a candidate clause-replacement schedule.
@@ -60,8 +63,14 @@ and otherwise terminates with a typed failure visible in the project state.
 
 ## Deliverable boundary
 
-The first revision generates an editable disagreement protocol and an explicit
-candidate schedule of revised clauses. A byte-preserving full revised-contract
-document requires format-aware clause replacement and remains a separate
-acceptance item; the product must not label the schedule as a complete revised
+The harness generates an editable disagreement protocol and an explicit
+candidate schedule of revised clauses. For one admitted DOCX contract, the
+application may also generate a format-preserving revised-contract candidate
+when every proposed replacement maps to exactly one source fragment inside one
+paragraph. Missing or ambiguous matches fail closed and remain a clause
+schedule. Untouched package members and untouched paragraphs remain unchanged;
+source namespace declarations used by Word compatibility metadata are
+preserved. Generated protocol/report packages must pass OOXML validation, and
+visual qualification remains a separate release gate. Every artifact remains a
+candidate for professional legal review rather than an approved or signed
 contract.
