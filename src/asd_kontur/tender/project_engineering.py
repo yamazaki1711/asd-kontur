@@ -1171,13 +1171,13 @@ def _qualified_participant_context(
         ranked = sorted(
             rows,
             key=lambda row: (
-                len(row.get("source_locator_ids") or ()),
+                _participant_source_count(row),
                 _participant_display_score(row.get("value")),
             ),
             reverse=True,
         )
-        leader_count = len(ranked[0].get("source_locator_ids") or ())
-        runner_count = len(ranked[1].get("source_locator_ids") or ()) if len(ranked) > 1 else 0
+        leader_count = _participant_source_count(ranked[0])
+        runner_count = _participant_source_count(ranked[1]) if len(ranked) > 1 else 0
         if len(ranked) > 1 and leader_count >= 2 and leader_count > runner_count:
             established.append(ranked[0])
             for row in ranked[1:]:
@@ -1196,6 +1196,17 @@ def _qualified_participant_context(
     established.sort(key=lambda row: (str(row.get("label")), str(row.get("value"))))
     ambiguities.sort(key=lambda row: (str(row.get("label")), str(row.get("value"))))
     return established, ambiguities
+
+
+def _participant_source_count(row: Mapping[str, Any]) -> int:
+    source_versions = {
+        str(source.get("source_version_id"))
+        for source in row.get("sources") or ()
+        if isinstance(source, Mapping) and source.get("source_version_id")
+    }
+    if source_versions:
+        return len(source_versions)
+    return len({str(value) for value in row.get("source_locator_ids") or () if value})
 
 
 def _participant_identity(value: object) -> str:
