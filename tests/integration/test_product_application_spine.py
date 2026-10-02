@@ -665,6 +665,7 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
     workspace_id = UUID(workspace["workspace_id"])
     failed_job_id = uuid4()
     exhausted_job_id = uuid4()
+    clause_source_job_id = uuid4()
     with postgres_environment.owner_engine.begin() as connection:
         owner = connection.scalar(
             sa.text(
@@ -693,6 +694,35 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
                 "digest": semantic_digest(manifest),
                 "key": "synthetic-historical-transient-failure",
                 "provenance": json.dumps({"contract": "synthetic-autonomy-test@1.0.0"}),
+                "correlation": uuid4(),
+                "owner": owner,
+            },
+        )
+        clause_manifest = {"synthetic": "contract-source-typography-recovery"}
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,job_kind,"
+                "input_manifest,input_digest,idempotency_key,state,completed_at,priority,max_attempts,"
+                "retry_policy_version,typed_failure_code,provenance,correlation_id,"
+                "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                "'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),:digest,:key,"
+                "'failed',CURRENT_TIMESTAMP,188,3,'synthetic-retry-v1',"
+                "'qwen_contract_clause_source_not_exact',CAST(:provenance AS jsonb),"
+                ":correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": clause_source_job_id,
+                "manifest": json.dumps(clause_manifest),
+                "digest": semantic_digest(clause_manifest),
+                "key": "synthetic-contract-source-typography-failure",
+                "provenance": json.dumps(
+                    {
+                        "contract": "synthetic-autonomy-test@1.0.0",
+                        "autonomous_retry_generation": 1,
+                    }
+                ),
                 "correlation": uuid4(),
                 "owner": owner,
             },
@@ -760,7 +790,7 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
         workspace_id=workspace_id,
     )
 
-    assert len(first) == 2
+    assert len(first) == 3
     assert second == ()
     with postgres_environment.owner_engine.connect() as connection:
         replacements = (
@@ -775,12 +805,19 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
             .mappings()
             .all()
         )
-    assert {item["causation_id"] for item in replacements} == {failed_job_id, exhausted_job_id}
+    assert {item["causation_id"] for item in replacements} == {
+        failed_job_id,
+        exhausted_job_id,
+        clause_source_job_id,
+    }
     assert all(item["state"] == "queued" for item in replacements)
     by_cause = {item["causation_id"]: item for item in replacements}
     assert by_cause[failed_job_id]["input_digest"] == semantic_digest(manifest)
     assert by_cause[exhausted_job_id]["input_digest"] == exhausted_digest
-    assert all(item["provenance"]["autonomous_retry_generation"] == 1 for item in replacements)
+    assert by_cause[clause_source_job_id]["input_digest"] == semantic_digest(clause_manifest)
+    assert by_cause[failed_job_id]["provenance"]["autonomous_retry_generation"] == 1
+    assert by_cause[exhausted_job_id]["provenance"]["autonomous_retry_generation"] == 1
+    assert by_cause[clause_source_job_id]["provenance"]["autonomous_retry_generation"] == 2
 
 
 def test_autonomous_work_reconciliation_bootstraps_without_prior_work_job(

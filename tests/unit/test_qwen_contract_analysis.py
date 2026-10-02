@@ -109,6 +109,40 @@ def test_contract_analysis_rejects_invented_source_text() -> None:
         )
 
 
+def test_contract_analysis_resolves_typographic_variant_to_exact_admitted_text() -> None:
+    source = {
+        "loc-typography": (
+            "Подрядчик выполняет работы в соответствии с разделом «Проект» — без "
+            "изменения исходного объёма."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "1.2",
+                    "section": "Предмет",
+                    "source_text": (
+                        'Подрядчик выполняет работы в соответствии с разделом "Проект" - без '
+                        "изменения исходного объёма."
+                    ),
+                    "source_locator_ids": ["loc-typography"],
+                    "category": "scope",
+                    "customer_obligation": None,
+                    "contractor_obligation": "Выполнить работы",
+                    "condition": None,
+                }
+            ],
+            "risks": [],
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    assert result["clauses"][0]["source_text"] == source["loc-typography"]
+
+
 def test_contract_analysis_requires_wording_for_disagreement() -> None:
     source = {"loc-z": "10.2. Заказчик вправе отказаться от договора в любое время."}
     raw = json.dumps(

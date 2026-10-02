@@ -9,6 +9,7 @@ identities, persistence and all numeric/date arithmetic remain deterministic.
 from __future__ import annotations
 
 import json
+import unicodedata
 from collections.abc import Iterable, Mapping
 
 from asd_kontur.application_spine.models import semantic_digest
@@ -149,14 +150,15 @@ def parse_contract_analysis(
         if any(value not in allowed_text_by_locator for value in normalized_locators):
             raise QwenSemanticFailure("qwen_contract_clause_evidence_invalid")
         allowed_source = " ".join(allowed_text_by_locator[value] for value in normalized_locators)
-        if not source_text or source_text.casefold() not in allowed_source.casefold():
+        exact_source_text = _resolve_exact_source_quote(source_text, allowed_source)
+        if exact_source_text is None:
             raise QwenSemanticFailure("qwen_contract_clause_source_not_exact")
         seen_clause_ids.add(clause_ref)
         clauses.append(
             {
                 "clause_ref": clause_ref,
                 "section": _optional_text(raw_clause.get("section")),
-                "source_text": source_text,
+                "source_text": exact_source_text,
                 "source_locator_ids": normalized_locators,
                 "category": category,
                 "customer_obligation": _optional_text(raw_clause.get("customer_obligation")),
@@ -227,6 +229,48 @@ def _contract_output_token_budget(total_chars: int) -> int:
 def _optional_text(value: object) -> str | None:
     normalized = " ".join(str(value or "").split())
     return normalized or None
+
+
+_SOURCE_QUOTE_TRANSLATION = str.maketrans(
+    {
+        "«": '"',
+        "»": '"',
+        "“": '"',
+        "”": '"',
+        "„": '"',
+        "‘": "'",
+        "’": "'",
+        "‐": "-",
+        "‑": "-",
+        "‒": "-",
+        "–": "-",
+        "—": "-",
+        "−": "-",
+    }
+)
+
+
+def _resolve_exact_source_quote(candidate: str, allowed_source: str) -> str | None:
+    """Resolve harmless typography variants back to the admitted exact text.
+
+    Qwen may replace a typographic quote or dash while otherwise copying a
+    clause verbatim. The one-character translation keeps offsets stable, so a
+    successful match is persisted as the original admitted source slice. Any
+    lexical change or paraphrase remains rejected.
+    """
+
+    if not candidate:
+        return None
+    folded_candidate = unicodedata.normalize("NFC", candidate).translate(
+        _SOURCE_QUOTE_TRANSLATION
+    ).lower()
+    folded_source = unicodedata.normalize("NFC", allowed_source).translate(
+        _SOURCE_QUOTE_TRANSLATION
+    ).lower()
+    start = folded_source.find(folded_candidate)
+    if start < 0:
+        return None
+    return allowed_source[start : start + len(candidate)]
 
 
 def _prompt(rows: list[dict[str, object]]) -> str:
