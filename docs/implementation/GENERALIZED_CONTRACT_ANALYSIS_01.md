@@ -450,3 +450,33 @@ provision `external/page:1/clause:1` from edition
 `991a1cff-4967-560f-be70-be902b92b7b0` with `status=ok`. The provision remains
 not activated for a workspace and has no verified deterministic rule candidate,
 which is reported as a gap rather than promoted into a contract conclusion.
+
+## 2026-10-02 professional UI activation
+
+Exact-SHA CI run `36971548250` passed for
+`8a3bd1b47478bc33afc752bdbcce2c09d6d933af`, including PostgreSQL integration,
+frontend production build and browser E2E. The API and frontend were activated
+from the pinned release
+`~/.asd-kontur/public-demo/releases/20261002-8a3bd1b-contract-professional-ui`.
+The database remained at migration `0104_contract_adverse_effect_text`.
+
+This was deliberately an API/frontend-only activation. The document/project
+worker, autonomous project orchestrator, assistant worker, Qwen service and NTD
+worker were not restarted. During the activation the live blind-contract run
+advanced from nine to ten successful v7 batches and Qwen remained in
+`QWEN_GENERATING`, demonstrating that the deployment did not make Codex the
+runtime scheduler. The served JavaScript artifact is `index-B4n-g9mB.js` with
+SHA-256
+`f3e4a5394a2377107e1932715a0c2bebe370179de6e5318d6918c3358efa235a`.
+
+The first launchd activation attempt was rejected during immediate service
+teardown. The old API was restored and verified healthy before a second
+controlled attempt. A later readiness guard initially used a startup window
+that was shorter than the service preflight and therefore rolled back safely.
+The final activation used an explicit unload wait and a sufficient readiness
+window. No background analysis service or project data was affected.
+
+After activation the all-history platform-memory fingerprint remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD processing state remained exactly 319 succeeded jobs. The release
+receipt records the split API/background release boundary explicitly.
