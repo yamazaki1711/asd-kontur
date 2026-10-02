@@ -37,6 +37,13 @@ The cross-repository user-result audit is recorded in
   “Проект договора не найден среди загруженных документов.”
 - Extended the editable DOCX so the protocol includes the exact customer clause,
   proposed contractor wording, source, practical consequence, and uncertainty.
+- Joined candidate contract risks and proposed Contractor wording into the
+  primary Tender findings schedule, report, and analysis archive. The join is
+  transient and workspace-scoped; it does not promote model output into the
+  finalized legal tables.
+- Corrected the read projection to use only the current versioned semantic-role
+  profile. A superseded historical `contract` label can no longer keep a false
+  contract source active after reclassification.
 
 ## Safety and reuse decision
 
@@ -47,31 +54,57 @@ citations, whole-contract unbounded prompts, keyword-only authority, or stale
 legal conclusions. The old RKB remains a review backlog until each pattern is
 classified for current, generic use.
 
-## Validation state
+## Live validation state
 
 The pure structured-output validator has changed, project-independent tests for
 a genuine contractor dependency risk, a benign payment clause, invented source
-text rejection, and mandatory replacement wording. Full unit and frontend
-checks pass at this checkpoint.
+text rejection, mandatory replacement wording, primary-report integration, and
+exact source-locator preservation. Exact-SHA CI passed for
+`41848b9b89f1481afb474c7ebf7f8bb20770db1d` in run `36943782110`, including
+PostgreSQL integration and browser E2E.
+
+The same autonomous engine completed a live changed control contract in
+workspace `01a0f54f-10b8-7d51-8a9a-ef6fdefc0f2c` without a manual queue or
+model command. Qwen classified `W95_private_bid_terms.pdf` as `contract` under
+the current v3 role profile, extracted six exact clauses, and recorded three
+contractor risks with three proposed disagreement rows. The ordinary 24-month
+warranty and 4% performance-security clauses were extracted but not flagged.
+This supplies a live benign-clause false-positive control.
+
+The generated control-project DOCX passed ZIP/package integrity and macOS text
+extraction. The local machine does not currently provide LibreOffice, Pandoc or
+the lxml dependency used by the optional skill validator, so page-image visual
+qualification remains explicitly not performed.
+
+Release `41848b9` is active for API, project worker, assistant worker, and
+project orchestrator at migration `0097_autonomous_contract_analysis`. The
+persistent Qwen process and independent NTD worker were preserved. After the
+project-worker restart at an idle model boundary, Qwen resumed new generations
+without a developer progression command.
+
+On the real blind workspace, v3 document-role reclassification is still
+running autonomously. No owner-known finding or document-specific rule has
+been introduced. The actual draft contract has not yet completed its v3 role
+decision at this observation point, so a real blind contract finding cannot
+yet be claimed.
 
 The remaining acceptance work is:
 
-1. migrate a disposable PostgreSQL database through 0097 and verify downgrade /
-   upgrade reproducibility;
-2. deploy the release without interrupting active Qwen work;
-3. observe autonomous contract discovery and multiple live Qwen batches on the
+1. observe autonomous contract discovery and multiple live Qwen batches on the
    current blind project, with no manual queue command;
-4. inspect the independently generated findings and editable DOCX;
-5. run a changed controlled contract with a benign clause and a substantive
-   risk, without a production code change;
-6. integrate accepted draft contract findings into the primary Tender summary;
-7. implement and qualify a format-aware full revised-contract candidate if the
+2. inspect the independently generated blind-project findings and editable
+   DOCX;
+3. perform a visual page qualification of the generated protocol when an
+   approved local renderer is available;
+4. implement and qualify a format-aware full revised-contract candidate if the
    source format supports exact clause replacement.
 
 Until those runtime gates pass:
 
-- `ContractAnalysisOperational=false`
-- `ProtocolOfDisagreementsOperational=false`
+- `ContractAnalysisOperational=false` until the autonomous real blind-project
+  result is inspected and accepted (the control-corpus engine path passes)
+- `ProtocolOfDisagreementsOperational=false` until the real blind-project
+  protocol passes content acceptance (the editable control artifact passes)
 - `GeneralizedTenderHarness=false`
-- `AutonomousProjectProcessing=true` (preserved baseline, subject to release smoke)
+- `AutonomousProjectProcessing=true`
 - `ProductReady=false`
