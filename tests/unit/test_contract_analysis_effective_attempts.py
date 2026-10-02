@@ -27,19 +27,19 @@ def test_current_contract_profile_switches_atomically_across_changed_batch_bound
             "job_id": "old-batch-1",
             "source_version_id": "source-a",
             "batch_ordinal": 1,
-            "profile_version": "qwen-contract-analysis-v7",
+            "profile_version": "qwen-contract-analysis-v8",
         },
         {
             "job_id": "old-batch-2",
             "source_version_id": "source-a",
             "batch_ordinal": 2,
-            "profile_version": "qwen-contract-analysis-v7",
+            "profile_version": "qwen-contract-analysis-v8",
         },
         {
             "job_id": "new-batch-1",
             "source_version_id": "source-a",
             "batch_ordinal": 1,
-            "profile_version": "qwen-contract-analysis-v8",
+            "profile_version": "qwen-contract-analysis-v9",
         },
     ]
 
@@ -61,7 +61,7 @@ def test_new_contract_without_prior_profile_remains_progressive() -> None:
             "job_id": "new-batch-1",
             "source_version_id": "source-a",
             "batch_ordinal": 1,
-            "profile_version": "qwen-contract-analysis-v8",
+            "profile_version": "qwen-contract-analysis-v9",
         }
     ]
 
@@ -74,14 +74,14 @@ def test_contract_transition_retains_prior_progress_until_current_run_starts() -
             "job_id": "old-running",
             "input_digest": "sha256:old",
             "state": "running",
-            "profile_version": "qwen-contract-analysis-v7",
+            "profile_version": "qwen-contract-analysis-v8",
         }
     ]
     current = {
         "job_id": "new-queued",
         "input_digest": "sha256:new",
         "state": "queued",
-        "profile_version": "qwen-contract-analysis-v8",
+        "profile_version": "qwen-contract-analysis-v9",
     }
 
     assert [job["job_id"] for job in _effective_profile_jobs(prior)] == ["old-running"]

@@ -10,6 +10,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_contract_analysis import (
     QwenContractAnalyzer,
     _contract_output_token_budget,
+    _merge_contract_analysis_parts,
     contract_commercial_narrative_without_unverified_authority,
     contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
@@ -990,3 +991,158 @@ def test_contract_analysis_splits_batch_after_revision_shape_repair_fails(
     assert len(calls) == 4
     assert [item["clause_ref"] for item in result["clauses"]] == ["7.1", "7.2"]
     assert [item["clause_ref"] for item in result["risks"]] == ["7.1", "7.2"]
+
+
+def test_contract_analysis_tolerant_controller_keeps_grounded_result() -> None:
+    source = {
+        "loc-risk": (
+            "4.8. Оплата производится только после поступления финансирования от Инвестора."
+        ),
+        "loc-benign": (
+            "9.5. Заказчик возвращает обеспечение в срок, установленный договором."
+        ),
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "4.8",
+                    "source_text": source["loc-risk"],
+                    "source_locator_ids": ["loc-risk"],
+                    "category": "payment",
+                },
+                {
+                    "clause_ref": "9.5",
+                    "source_text": source["loc-benign"],
+                    "source_locator_ids": ["loc-benign"],
+                    "category": "security",
+                },
+            ],
+            "risks": [
+                {
+                    "clause_ref": "4.8",
+                    "kind": "payment_dependency",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "uncontrolled_third_party_dependency",
+                    "trigger_text": "только после поступления финансирования от Инвестора",
+                    "adverse_effect_text": (
+                        "Оплата производится только после поступления финансирования от Инвестора"
+                    ),
+                    "severity": "high",
+                    "description": "Оплата зависит от финансирования третьего лица.",
+                    "practical_consequence": "Срок оплаты не контролируется Подрядчиком.",
+                    "recommended_action": "Исключить внешнюю зависимость оплаты.",
+                    "proposed_contractor_wording": None,
+                    "replacement_source_text": None,
+                    "disagreement_required": False,
+                    "confidence": 0.95,
+                },
+                {
+                    "clause_ref": "9.5",
+                    "kind": "customer_input_dependency",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": "Заказчик возвращает обеспечение",
+                    "adverse_effect_text": "в срок, установленный договором",
+                    "severity": "medium",
+                    "description": "Предполагается задержка возврата.",
+                    "practical_consequence": "Предполагается отвлечение средств.",
+                    "recommended_action": "Изменить срок.",
+                    "proposed_contractor_wording": None,
+                    "replacement_source_text": None,
+                    "disagreement_required": False,
+                    "confidence": 0.8,
+                },
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    result = parse_contract_analysis(
+        raw,
+        allowed_text_by_locator=source,
+        discard_controller_ungrounded_risks=True,
+    )
+
+    assert [item["clause_ref"] for item in result["clauses"]] == ["4.8", "9.5"]
+    assert [item["clause_ref"] for item in result["risks"]] == ["4.8"]
+    assert result["discarded_risk_count"] == 1
+    assert result["analysis_warnings"] == ["controller_ungrounded_risk_discarded"]
+
+
+def test_contract_analyzer_salvages_repaired_batch_after_controller_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_text = "9.5. Заказчик возвращает обеспечение в срок, установленный договором."
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "9.5",
+                    "source_text": source_text,
+                    "source_locator_ids": ["loc-security"],
+                    "category": "security",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "9.5",
+                    "kind": "customer_input_dependency",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": "Заказчик возвращает обеспечение",
+                    "adverse_effect_text": "в срок, установленный договором",
+                    "severity": "medium",
+                    "description": "Предполагается задержка возврата.",
+                    "practical_consequence": "Предполагается отвлечение средств.",
+                    "recommended_action": "Изменить срок.",
+                    "proposed_contractor_wording": None,
+                    "replacement_source_text": None,
+                    "disagreement_required": False,
+                    "confidence": 0.8,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+    calls = 0
+
+    def complete(*args: object, **kwargs: object) -> str:
+        nonlocal calls
+        del args, kwargs
+        calls += 1
+        return raw
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_analysis._complete", complete)
+    result = QwenContractAnalyzer("http://127.0.0.1:8790/v1/chat/completions").analyze(
+        [{"source_locator_id": "loc-security", "page": 1, "text": source_text}]
+    )
+
+    assert calls == 2
+    assert len(result["clauses"]) == 1
+    assert result["risks"] == []
+    assert result["discarded_risk_count"] == 1
+
+
+def test_contract_analysis_merge_preserves_recovery_diagnostics() -> None:
+    merged = _merge_contract_analysis_parts(
+        {
+            "clauses": [{"clause_ref": "1.1"}],
+            "risks": [],
+            "discarded_risk_count": 2,
+            "analysis_warnings": ["controller_ungrounded_risk_discarded"],
+        },
+        {
+            "clauses": [{"clause_ref": "1.1"}],
+            "risks": [],
+            "discarded_risk_count": 1,
+            "analysis_warnings": ["controller_ungrounded_risk_discarded"],
+        },
+    )
+
+    assert merged["discarded_risk_count"] == 3
+    assert merged["analysis_warnings"] == ["controller_ungrounded_risk_discarded"]
+    assert [item["clause_ref"] for item in merged["clauses"]] == ["1.1", "1.1 [2.2]"]

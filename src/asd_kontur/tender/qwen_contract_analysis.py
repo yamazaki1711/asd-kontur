@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v8"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v9"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -230,12 +230,28 @@ class QwenContractAnalyzer:
                 self._timeout_seconds,
                 max_tokens=output_tokens,
             )
-            parsed = parse_contract_analysis(repaired, allowed_text_by_locator=allowed)
+            try:
+                parsed = parse_contract_analysis(repaired, allowed_text_by_locator=allowed)
+            except QwenSemanticFailure as repair_exc:
+                if repair_exc.code != "qwen_contract_risk_controller_not_grounded":
+                    raise
+                # A controller-rejected risk must not discard otherwise valid
+                # exact-source clauses or other grounded risks from the batch.
+                # This fallback is deliberately narrow: malformed structure,
+                # invented source text and invalid revisions remain fatal.
+                parsed = parse_contract_analysis(
+                    repaired,
+                    allowed_text_by_locator=allowed,
+                    discard_controller_ungrounded_risks=True,
+                )
         return parsed
 
 
 def parse_contract_analysis(
-    raw: str, *, allowed_text_by_locator: Mapping[str, str]
+    raw: str,
+    *,
+    allowed_text_by_locator: Mapping[str, str],
+    discard_controller_ungrounded_risks: bool = False,
 ) -> dict[str, object]:
     """Validate model JSON against exact bounded input identities and source text."""
 
@@ -286,6 +302,7 @@ def parse_contract_analysis(
     if not isinstance(risks_raw, list):
         raise QwenSemanticFailure("qwen_contract_risks_invalid")
     risks: list[dict[str, object]] = []
+    discarded_risk_count = 0
     disagreement_clause_refs: set[str] = set()
     source_text_by_clause = {str(item["clause_ref"]): str(item["source_text"]) for item in clauses}
     for raw_risk in risks_raw:
@@ -332,6 +349,9 @@ def parse_contract_analysis(
                 "adverse_effect_text": adverse_effect_text,
             }
         ):
+            if discard_controller_ungrounded_risks:
+                discarded_risk_count += 1
+                continue
             raise QwenSemanticFailure("qwen_contract_risk_controller_not_grounded")
         disagreement = raw_risk.get("disagreement_required")
         proposed = _optional_text(raw_risk.get("proposed_contractor_wording"))
@@ -382,7 +402,11 @@ def parse_contract_analysis(
                 "authority": "contract_commercial_risk",
             }
         )
-    return {"clauses": clauses, "risks": risks}
+    result: dict[str, object] = {"clauses": clauses, "risks": risks}
+    if discarded_risk_count:
+        result["discarded_risk_count"] = discarded_risk_count
+        result["analysis_warnings"] = ["controller_ungrounded_risk_discarded"]
+    return result
 
 
 def _contract_output_token_budget(total_chars: int) -> int:
@@ -576,6 +600,8 @@ def _merge_contract_analysis_parts(
 
     clauses: list[dict[str, object]] = []
     risks: list[dict[str, object]] = []
+    discarded_risk_count = 0
+    analysis_warnings: list[str] = []
     used_refs: set[str] = set()
     for part_index, part in enumerate(parts, start=1):
         ref_map: dict[str, str] = {}
@@ -602,7 +628,20 @@ def _merge_contract_analysis_parts(
             old_ref = str(risk.get("clause_ref") or "")
             risk["clause_ref"] = ref_map.get(old_ref, old_ref)
             risks.append(risk)
-    return {"clauses": clauses, "risks": risks}
+        raw_discarded = part.get("discarded_risk_count", 0)
+        if isinstance(raw_discarded, int) and raw_discarded > 0:
+            discarded_risk_count += raw_discarded
+        raw_warnings = part.get("analysis_warnings")
+        for warning in raw_warnings if isinstance(raw_warnings, list | tuple) else ():
+            normalized = str(warning)
+            if normalized and normalized not in analysis_warnings:
+                analysis_warnings.append(normalized)
+    result: dict[str, object] = {"clauses": clauses, "risks": risks}
+    if discarded_risk_count:
+        result["discarded_risk_count"] = discarded_risk_count
+    if analysis_warnings:
+        result["analysis_warnings"] = analysis_warnings
+    return result
 
 
 def _prompt(rows: list[dict[str, object]]) -> str:

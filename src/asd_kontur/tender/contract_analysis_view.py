@@ -20,7 +20,11 @@ from asd_kontur.tender.qwen_contract_analysis import (
     contract_risk_controller_is_grounded,
 )
 
-_CONTRACT_ANALYSIS_READ_PROFILES = (CONTRACT_ANALYSIS_PROFILE, "qwen-contract-analysis-v7")
+_CONTRACT_ANALYSIS_READ_PROFILES = (
+    CONTRACT_ANALYSIS_PROFILE,
+    "qwen-contract-analysis-v8",
+    "qwen-contract-analysis-v7",
+)
 
 _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 _GOVERNING_CONTRACT_CATEGORIES = frozenset(

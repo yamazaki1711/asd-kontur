@@ -830,3 +830,35 @@ source layout and does not inject the two attachment-specific proposals into
 the contract body. Full multi-page visual qualification remains a release gate
 because the configured environment does not currently provide the bundled
 LibreOffice renderer required by `render_docx.py`.
+
+## 2026-10-03 changed-contract recovery defect and v9 design
+
+The autonomous changed-contract acceptance reached all four v8 analysis
+batches without a developer progression command. Three batches succeeded; the
+batch containing the remaining liability/change clauses became terminal with
+`qwen_contract_risk_controller_not_grounded`. The immutable pre-oracle blind
+snapshot has SHA-256
+`d33d4bc12dc7379bec099dd60fa1c8f536de3834531a8d2407a8d393815877b3`.
+It contained nine accepted clauses and one grounded payment-dependency risk,
+but no publishable revision because the proposed wording introduced an
+unsupported numeric deadline. The external control manifest was inspected
+only after that snapshot.
+
+The failure was systemic rather than corpus-specific: one risk rejected by the
+deterministic commercial-risk controller caused the parser to reject the
+entire repaired batch, including exact-source clauses and any other grounded
+risks. Recursive splitting reduced the context but could not make the invalid
+candidate valid. Profile v9 keeps strict validation as the first path and
+retains the existing bounded repair call. Only when the repaired response still
+fails specifically on controller grounding does a narrow recovery pass discard
+the rejected risk while preserving validated clauses and grounded sibling
+risks. Invalid JSON, malformed risk structure, invented source text and invalid
+contract revisions remain terminal. The accepted result records the discarded
+risk count and a typed analysis warning.
+
+Migration `0106_contract_partial_risk_recovery` admits v9 results. The read
+projection retains complete v8 output until the autonomous v9 run reaches its
+effective terminal boundary, so deployment cannot temporarily replace a useful
+contract result with a partial new profile. Generalized changed-contract
+acceptance remains open until v9 is deployed and independently produces a
+grounded revision while leaving the declared benign clauses unflagged.
