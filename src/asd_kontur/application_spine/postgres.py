@@ -5862,6 +5862,27 @@ class SpinePostgresRepository:
             prior = self._project_work_resolution_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            inflight_candidate_ids = {
+                str(value)
+                for value in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT observation->>'candidate_id' FROM "
+                        "workspace.durable_jobs job CROSS JOIN LATERAL "
+                        "jsonb_array_elements(COALESCE(job.input_manifest->"
+                        "'work_observations','[]'::jsonb)) observation WHERE "
+                        "job.organization_id=:o AND job.workspace_id=:w AND "
+                        "job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
+                        "job.state IN ('queued','leased','running') AND "
+                        "job.input_manifest->>'work_reconciliation_profile'=:profile AND "
+                        "observation->>'candidate_id' IS NOT NULL"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    },
+                ).scalars()
+            }
             quantities_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for raw_quantity in candidates.get("quantities", []):
                 quantity = dict(raw_quantity)
@@ -5875,7 +5896,12 @@ class SpinePostgresRepository:
                 deterministic_family = classify_work_family(wording)
                 linked_quantities = quantities_by_work.get(candidate_id, [])
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
-                if not candidate_id or not wording or non_work_reason(wording) is not None:
+                if (
+                    not candidate_id
+                    or candidate_id in inflight_candidate_ids
+                    or not wording
+                    or non_work_reason(wording) is not None
+                ):
                     continue
                 existing = prior.get(candidate_id)
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
