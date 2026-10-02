@@ -529,3 +529,14 @@ when that context is at most 3,000 characters and token overlap is at least
 `adverse_effect_text` continue to require exact source substrings, so this
 throughput correction cannot turn paraphrased model prose into a professional
 finding.
+
+V7 batch 15 then labelled a return-of-overpayment clause as `unpaid_change`,
+inferred possible internal auditors/SRO actors not present in the source, and
+proposed making a court judgment the only basis for recovery. It is retained in
+immutable v7 history but is not accepted as a final professional finding. The
+v8 task now treats restitution of objectively verified overpayment or
+unauthorized material/method as ordinary unless the clause itself creates an
+unreviewable unilateral mechanism; it forbids inventing the identity of a
+control body and reserves `unpaid_change` for actual additional/changed-work
+payment exposure. The correction is a general contract-review rule rather than
+a clause-number or corpus-specific exception.
