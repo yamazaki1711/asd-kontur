@@ -304,9 +304,7 @@ def test_contract_analysis_rejects_unsupported_customer_control_over_ordinary_ac
         ensure_ascii=False,
     )
 
-    with pytest.raises(
-        QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"
-    ):
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
