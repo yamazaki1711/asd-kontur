@@ -51,6 +51,7 @@ from asd_kontur.tender.project_engineering import (
     professional_work_name,
     work_reconciliation_priority,
 )
+from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
 
 def test_page_role_decision_overrides_fragment_local_document_role() -> None:
@@ -907,7 +908,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "semantic_scope": "Base area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
-                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         },
                         {
                             "quantity_candidate_id": "design-volume",
@@ -918,7 +919,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "related_quantity_candidate_ids": ["estimate-volume"],
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
-                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         },
                     ],
                     "Смета": [
@@ -931,7 +932,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "related_quantity_candidate_ids": ["design-volume"],
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
-                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
                 },
@@ -972,7 +973,7 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "semantic_scope": "Waterproofed surface area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
-                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
                     "Смета": [
@@ -983,7 +984,7 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "semantic_scope": "Waterproofed surface area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
-                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
                 },

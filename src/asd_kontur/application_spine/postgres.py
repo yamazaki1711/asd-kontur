@@ -187,14 +187,14 @@ _CANDIDATE_PERSISTENCE_RECOVERY_PRIORITY = 180
 # prevents a large new package from starving other projects.
 _PROJECT_WORK_RECONCILIATION_PRIORITY = 175
 _CONTRACT_ANALYSIS_PRIORITY = 188
-# Live project receipts showed that twelve-row strict-JSON batches required
-# recursive repair in 72 of 78 cases (3.72 model calls on average).  Eight-row
-# batches preserve bounded semantic context while materially reducing repair
-# calls and time to an accepted project result.
-# Four rows keep the single local model available at useful project boundaries.
-# Live terminal receipts showed an 8-row long tail of 7-13 model calls and 8-19
-# minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
-_PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
+# Production v21 receipts showed that relationship-review fan-out, rather than
+# the prompt input size, dominates strict-JSON reliability.  Two-row batches
+# completed in one call for all 9 measured jobs (58.1 s average), while only
+# 4/11 four-row jobs completed cleanly (249.2 s and 2.82 calls on average).
+# Keep paired design/commercial context while avoiding expensive recursive
+# repair.  The profile version makes the scheduling-policy change explicit and
+# lets the autonomous reconciler supersede queued larger batches safely.
+_PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 2
 _CONTRACT_CONTEXT_SEGMENT_CHARS = 10_000
 # Real contract-analysis receipts showed that every v7 validation failure used
 # the twelve-locator ceiling.  Those failures averaged 528.6 seconds, compared

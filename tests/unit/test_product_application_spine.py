@@ -21,6 +21,7 @@ from asd_kontur.application_spine.object_store import (
     sanitize_relative_path,
 )
 from asd_kontur.application_spine.postgres import (
+    _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
     SpinePersistenceError,
     SpinePostgresRepository,
     _contract_context_batches,
@@ -42,6 +43,10 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_default_work_reconciliation_batch_matches_measured_production_policy() -> None:
+    assert _PROJECT_WORK_RECONCILIATION_BATCH_SIZE == 2
 
 
 def test_semantic_recovery_continues_while_accepted_coverage_advances() -> None:

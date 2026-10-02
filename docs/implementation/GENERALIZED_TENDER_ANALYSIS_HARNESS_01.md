@@ -1024,3 +1024,32 @@ worker remained supervised and unchanged. The release receipt SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Measured quantity-relationship batch policy — pending release 0109
+
+Forty successful production receipts from
+`qwen-project-work-reconciliation-v21` established that four-row relationship
+reviews were keeping the local model busy with structured-output repair rather
+than useful new project interpretation. Across those receipts, two-row batches
+completed in one call for all nine measured jobs, averaging 58.1 seconds. The
+eleven four-row jobs averaged 249.2 seconds and 2.82 calls; only four completed
+without repair. Overall, 40 jobs used 67 model calls, including ten output
+exhaustions and seven invalid quantity-output recoveries.
+
+The generic scheduling policy is therefore reduced from four observations to
+two while retaining a design/commercial pair in one bounded semantic context.
+Profile `qwen-project-work-reconciliation-v22` makes that policy change durable
+and lets the existing autonomous supersession mechanism retire only unclaimed
+queued v21 batches. Migration `0109_bounded_quantity_relationship_batches`
+admits v22 persistence. No facility name, document name, project value or
+expected blind-corpus conclusion is encoded in the change.
+
+Focused work-reconciliation, document-understanding and application-spine
+tests passed (195 tests), project-engineering and generalized-harness tests
+passed (116 tests), and the full migration upgrade/downgrade/re-upgrade gate
+passed on a disposable PostgreSQL database. The active production release was
+not interrupted while these checks ran; activation remains pending a safe
+bounded Qwen job boundary.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
