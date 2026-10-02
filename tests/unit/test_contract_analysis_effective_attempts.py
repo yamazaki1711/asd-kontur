@@ -21,7 +21,7 @@ def test_latest_contract_attempt_replaces_historical_failure_without_hiding_othe
     assert [job["job_id"] for job in effective] == ["replacement", "other"]
 
 
-def test_current_contract_profile_progressively_replaces_prior_profile_batches() -> None:
+def test_current_contract_profile_switches_atomically_across_changed_batch_boundaries() -> None:
     results = [
         {
             "job_id": "old-batch-1",
@@ -43,12 +43,29 @@ def test_current_contract_profile_progressively_replaces_prior_profile_batches()
         },
     ]
 
-    preferred = _preferred_contract_results(results)
+    while_incomplete = _preferred_contract_results(results, current_run_complete=False)
+    after_completion = _preferred_contract_results(results, current_run_complete=True)
 
-    assert {(item["batch_ordinal"], item["job_id"]) for item in preferred} == {
-        (1, "new-batch-1"),
+    assert {(item["batch_ordinal"], item["job_id"]) for item in while_incomplete} == {
+        (1, "old-batch-1"),
         (2, "old-batch-2"),
     }
+    assert [(item["batch_ordinal"], item["job_id"]) for item in after_completion] == [
+        (1, "new-batch-1")
+    ]
+
+
+def test_new_contract_without_prior_profile_remains_progressive() -> None:
+    current = [
+        {
+            "job_id": "new-batch-1",
+            "source_version_id": "source-a",
+            "batch_ordinal": 1,
+            "profile_version": "qwen-contract-analysis-v8",
+        }
+    ]
+
+    assert _preferred_contract_results(current, current_run_complete=False) == current
 
 
 def test_contract_transition_retains_prior_progress_until_current_run_starts() -> None:

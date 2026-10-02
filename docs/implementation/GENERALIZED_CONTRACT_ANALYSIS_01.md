@@ -505,12 +505,15 @@ autonomous v7 checkpoint has completed, so the current worker and Qwen run are
 not interrupted.
 
 The read projection is also version-transition safe. While v8 is being built,
-it prefers each completed v8 source batch but retains the corresponding v7
-batch for coverage until its replacement succeeds. The counterparty-grounding
-guard is applied to both profiles at read time, so an unsupported historical
-Customer-control inference cannot remain in the UI, report or disagreement
-schedule during the transition. This avoids replacing a useful contract review
-with an empty screen merely because a safer profile has started.
+it retains the complete v7 professional projection until the effective v8 run
+is terminal-successful, then switches profiles atomically. Batch ordinals are
+not treated as source-coverage identities because a new profile may change its
+context size or table packing. A new project without a prior profile still
+appears progressively. The counterparty-grounding and professional-authority
+guards are applied to both profiles at read time, so an unsupported historical
+inference cannot remain in the UI, report or disagreement schedule during the
+transition. This avoids both an empty screen and duplicated/lost clauses while
+a safer profile is running.
 Until the first v8 job is actually created, the projection also retains the v7
 run state, so an actively generating v7 analysis remains `analyzing` rather
 than being misreported as a completed draft. Against the live database the
