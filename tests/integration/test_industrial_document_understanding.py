@@ -312,6 +312,15 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             report_xml = package.read("word/document.xml").decode("utf-8")
         assert "Проект договора не найден" in report_xml
         assert "DRAFT_CONTRACT_SOURCE_UNAVAILABLE" in report_xml
+        protocol = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/disagreement-protocol.docx")
+        assert protocol.status_code == 200, protocol.text
+        assert protocol.headers["content-type"] == (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+        with zipfile.ZipFile(io.BytesIO(protocol.content)) as package:
+            protocol_xml = package.read("word/document.xml").decode("utf-8")
+        assert "ПРОТОКОЛ РАЗНОГЛАСИЙ" in protocol_xml
+        assert "Обоснованные предложения" in protocol_xml
         hidden_export = other.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.csv")
         assert hidden_export.status_code == 404, hidden_export.text
         hidden_report = other.get(

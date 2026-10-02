@@ -2752,8 +2752,16 @@ function TenderContractAnalysisBody({
           className="button-link secondary"
           href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.docx`}
         >
-          Скачать протокол и предложения (Word)
+          Скачать договорный анализ (Word)
         </a>
+        {disagreementItems.length ? (
+          <a
+            className="button-link secondary"
+            href={`/api/v1/workspaces/${workspaceId}/tender/disagreement-protocol.docx`}
+          >
+            Скачать протокол разногласий (Word)
+          </a>
+        ) : null}
         <a
           className="button-link secondary"
           href={`/api/v1/workspaces/${workspaceId}/tender/contract-analysis.csv`}

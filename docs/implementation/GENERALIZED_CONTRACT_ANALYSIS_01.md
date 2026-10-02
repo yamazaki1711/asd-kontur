@@ -205,3 +205,37 @@ Until those runtime gates pass:
 - `GeneralizedTenderHarness=false`
 - `AutonomousProjectProcessing=true`
 - `ProductReady=false`
+
+## 2026-10-02 contract/project context and standalone protocol checkpoint
+
+The contract projection now joins source-grounded project commercial facts and
+typed project/contract findings. Contract-source participants remain isolated
+to the contract corpus; project-wide price, procurement and schedule facts may
+appear when they are established elsewhere in the admitted Tender package.
+The time schedule is limited to explicit contract terms and facts participating
+in typed project/contract findings, preventing unrelated date-like drawing
+references from appearing as contract conditions.
+
+ASD-KONTUR now exposes a separate editable
+`tender/disagreement-protocol.docx` product result in addition to the broader
+contract-analysis report. Its table contains the exact Customer clause,
+Contractor wording, practical basis and source reference. The Russian contract
+screen offers this artifact as soon as at least one defensible disagreement is
+available. The renderer does not invent parties, signatories or missing
+contract details and retains the professional-review boundary.
+
+At the 2026-10-02 16:19 +12 observation, the autonomous v6 blind-project run
+had 9 effective successful batches, 1 running batch and 40 queued batches. It
+had persisted 24 exact clauses and 6 contractor-risk findings. The running job
+had a fresh durable heartbeat and the supervised Qwen status was
+`QWEN_GENERATING`; no manual queue or successor command was issued. Historical
+failed and reconciliation-required jobs remain immutable ledger entries, while
+the product projection selects the newest effective attempt per exact input.
+
+The active API release is
+`81834608e76a038a5f9f4df3a0e8338095db629c`. The worker, assistant worker and
+project orchestrator remain on
+`b6a293e5137389ccbaf4a57c4b21fa318635af4d`; Qwen and the independent NTD
+worker were not restarted. Exact-SHA CI run `36963161384` passed for the active
+API release. The standalone protocol change is locally qualified but not yet
+deployed at this observation.

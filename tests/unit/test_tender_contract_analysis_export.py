@@ -6,7 +6,10 @@ import io
 import zipfile
 
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
-from asd_kontur.tender.contract_analysis_report import render_tender_contract_analysis_docx
+from asd_kontur.tender.contract_analysis_report import (
+    render_tender_contract_analysis_docx,
+    render_tender_disagreement_protocol_docx,
+)
 
 
 def test_contract_analysis_export_preserves_lineage_and_neutralizes_formulas() -> None:
@@ -171,3 +174,12 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "5 месяцев" in document
         assert "Связь договора с проектом" in document
         assert "ПОС: 3 месяца; закупка: 5 месяцев." in document
+
+    protocol = render_tender_disagreement_protocol_docx(view)
+    with zipfile.ZipFile(io.BytesIO(protocol)) as package:
+        document = package.read("word/document.xml").decode("utf-8")
+        assert "ПРОТОКОЛ РАЗНОГЛАСИЙ" in document
+        assert "Accept completed work within seven working days." in document
+        assert "Acceptance depends on an undefined Customer review period." in document
+        assert "Changed-contract-terms.docx" in document
+        assert "locator-independent-311" in document

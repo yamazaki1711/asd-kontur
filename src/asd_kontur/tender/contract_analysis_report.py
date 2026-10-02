@@ -182,6 +182,64 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     return _docx_package(_document_xml(body))
 
 
+def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
+    """Render the contractor's editable disagreement protocol as a standalone artifact."""
+
+    clauses = {
+        (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item
+        for item in _records(view.get("clauses"))
+    }
+    issues = {
+        (str(item.get("issue_id", "")), str(item.get("issue_version", ""))): item
+        for item in _records(view.get("issues"))
+    }
+    revisions = {
+        str(item.get("disagreement_item_id", "")): item
+        for item in _records(view.get("revised_clauses"))
+    }
+    rows: list[tuple[str, str, str, str, str, str]] = []
+    for ordinal, item in enumerate(_records(view.get("disagreement_items")), start=1):
+        clause = clauses.get(
+            (str(item.get("clause_id", "")), str(item.get("clause_version", ""))), {}
+        )
+        issue = issues.get((str(item.get("issue_id", "")), str(item.get("issue_version", ""))), {})
+        revision = revisions.get(str(item.get("item_id", "")), {})
+        rows.append(
+            (
+                str(ordinal),
+                str(clause.get("clause_key") or "Не указано"),
+                str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
+                str(revision.get("revised_text") or item.get("proposed_clause_text") or ""),
+                _disagreement_basis(issue, item),
+                _source_reference(clause),
+            )
+        )
+
+    assessment = _mapping(view.get("assessment"))
+    source_names = _joined(assessment.get("source_names")) or "Источник договора не указан"
+    body = [
+        _heading("ПРОТОКОЛ РАЗНОГЛАСИЙ", "Title"),
+        _paragraph(f"Исходные документы: {source_names}."),
+        _paragraph(
+            "Рабочая редакция Подрядчика. Документ подготовлен для профессиональной "
+            "юридической проверки и согласования; он не является подписанным соглашением сторон."
+        ),
+        _table(
+            (
+                "№",
+                "Пункт договора",
+                "Редакция Заказчика",
+                "Редакция Подрядчика",
+                "Обоснование / практическая причина",
+                "Источник",
+            ),
+            rows,
+            "Обоснованные предложения для протокола разногласий пока не подготовлены.",
+        ),
+    ]
+    return _docx_package(_document_xml(body))
+
+
 def _source_reference(clause: Mapping[str, Any]) -> str:
     values = (
         ("Документ", clause.get("source_name")),
