@@ -397,6 +397,7 @@ class TenderContractAnalysisRepository:
                 isinstance(input_manifest, dict) and input_manifest.get("context_complete") is True
             )
             clause_ids: dict[str, str] = {}
+            clause_source_by_ref: dict[str, str] = {}
             for clause in manifest.get("clauses") or ():
                 if not isinstance(clause, dict):
                     continue
@@ -409,6 +410,7 @@ class TenderContractAnalysisRepository:
                     )
                 )
                 clause_ids[clause_ref] = clause_id
+                clause_source_by_ref[clause_ref] = str(clause.get("source_text") or "")
                 locator_ids = [str(value) for value in clause.get("source_locator_ids") or ()]
                 clauses.append(
                     {
@@ -436,7 +438,12 @@ class TenderContractAnalysisRepository:
                     continue
                 if not context_complete:
                     continue
-                if not contract_risk_controller_is_grounded(risk):
+                clause_ref = str(risk.get("clause_ref") or "")
+                controller_input = {
+                    **risk,
+                    "source_text": clause_source_by_ref.get(clause_ref, ""),
+                }
+                if not contract_risk_controller_is_grounded(controller_input):
                     continue
                 description = contract_commercial_narrative_without_unverified_authority(
                     risk.get("description")
@@ -449,7 +456,6 @@ class TenderContractAnalysisRepository:
                 )
                 if not description or not consequence or not recommendation:
                     continue
-                clause_ref = str(risk.get("clause_ref") or "")
                 risk_clause_id = clause_ids.get(clause_ref)
                 if risk_clause_id is None:
                     continue
