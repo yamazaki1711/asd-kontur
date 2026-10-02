@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v62"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v63"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -2968,8 +2968,8 @@ def _work_schedule(
                     )
                     quantity["normalized_value"] = reviewed_source_value
                     quantity["source_value_basis"] = review.get("source_value")
-                if scaled_unit := _reviewed_scaled_quantity_unit(quantity, review):
-                    quantity["comparison_unit"] = scaled_unit
+                if reviewed_unit := _reviewed_quantity_unit(quantity, review):
+                    quantity["comparison_unit"] = reviewed_unit
                     quantity["source_unit_basis"] = review.get("source_unit")
                 accepted_quantities.append(quantity)
             quantity_interpretations.append(
@@ -6172,6 +6172,24 @@ def _reviewed_scaled_quantity_unit(
     if candidate_unit != scaled.group("unit"):
         return None
     return f"{scaled.group('factor')} {scaled.group('unit')}"
+
+
+def _reviewed_quantity_unit(quantity: Mapping[str, Any], review: Mapping[str, Any]) -> str | None:
+    """Prefer an exact reviewed physical unit over a truncated extraction.
+
+    The Qwen boundary has already required ``source_unit`` to occur verbatim in
+    the bounded source context. Scaled estimate units retain the stricter
+    dimension-preservation rule because applying their multiplier changes the
+    numeric value. An unscaled physical unit only corrects the unit spelling or
+    dimension attached to the unchanged extracted value.
+    """
+
+    if scaled := _reviewed_scaled_quantity_unit(quantity, review):
+        return scaled
+    source_unit = _normalized_unit(review.get("source_unit"))
+    if source_unit in {"м", "мм", "м2", "м3", "т", "кг", "шт"}:
+        return source_unit
+    return None
 
 
 def _reviewed_source_quantity_value(review: Mapping[str, Any]) -> str | None:

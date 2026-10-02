@@ -1034,6 +1034,32 @@ def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
     )
 
 
+def test_reviewed_exact_base_unit_repairs_truncated_candidate_dimension() -> None:
+    from asd_kontur.tender.project_engineering import _reviewed_quantity_unit
+
+    assert (
+        _reviewed_quantity_unit(
+            {"normalized_unit": "m"},
+            {"source_unit": "м³"},
+        )
+        == "м3"
+    )
+    assert (
+        _reviewed_quantity_unit(
+            {"normalized_unit": "m3"},
+            {"source_unit": "100 м²"},
+        )
+        is None
+    )
+    assert (
+        _reviewed_quantity_unit(
+            {"normalized_unit": "piece"},
+            {"source_unit": "%"},
+        )
+        is None
+    )
+
+
 def test_reviewed_source_value_is_normalized_without_arithmetic() -> None:
     assert _reviewed_source_quantity_value({"source_value": "2,113"}) == "2.113"
     assert _reviewed_source_quantity_value({"source_value": "1 250,50"}) == "1250.5"
@@ -2360,7 +2386,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v62"
+    assert model["model_version"] == "project-engineering-model-v63"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
