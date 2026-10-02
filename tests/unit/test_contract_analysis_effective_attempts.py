@@ -43,14 +43,14 @@ def test_current_contract_profile_switches_atomically_across_changed_batch_bound
         },
     ]
 
-    while_incomplete = _preferred_contract_results(results, current_run_complete=False)
-    after_completion = _preferred_contract_results(results, current_run_complete=True)
+    while_incomplete = _preferred_contract_results(results, current_run_terminal=False)
+    after_terminal = _preferred_contract_results(results, current_run_terminal=True)
 
     assert {(item["batch_ordinal"], item["job_id"]) for item in while_incomplete} == {
         (1, "old-batch-1"),
         (2, "old-batch-2"),
     }
-    assert [(item["batch_ordinal"], item["job_id"]) for item in after_completion] == [
+    assert [(item["batch_ordinal"], item["job_id"]) for item in after_terminal] == [
         (1, "new-batch-1")
     ]
 
@@ -65,7 +65,7 @@ def test_new_contract_without_prior_profile_remains_progressive() -> None:
         }
     ]
 
-    assert _preferred_contract_results(current, current_run_complete=False) == current
+    assert _preferred_contract_results(current, current_run_terminal=False) == current
 
 
 def test_contract_transition_retains_prior_progress_until_current_run_starts() -> None:

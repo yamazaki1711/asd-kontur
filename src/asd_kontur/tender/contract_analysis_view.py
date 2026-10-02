@@ -323,7 +323,7 @@ class TenderContractAnalysisRepository:
             for job in effective_jobs
             if str(job["state"]) in {"failed", "reconciliation_required"}
         ]
-        effective_run_complete = bool(effective_jobs) and not active and not failed
+        effective_run_terminal = bool(effective_jobs) and not active
         results = list(
             session.execute(
                 sa.text(
@@ -344,8 +344,8 @@ class TenderContractAnalysisRepository:
                 },
             ).mappings()
         )
-        results = _preferred_contract_results(results, current_run_complete=effective_run_complete)
-        analysis_complete = bool(results) and effective_run_complete
+        results = _preferred_contract_results(results, current_run_terminal=effective_run_terminal)
+        analysis_complete = bool(results) and effective_run_terminal and not failed
         source_name_by_id = {
             str(source["source_version_id"]): str(source["safe_display_name"])
             for source in contract_sources
@@ -645,7 +645,7 @@ def _row(value: Any) -> dict[str, Any]:
     return {key: str(item) if isinstance(item, UUID) else item for key, item in dict(value).items()}
 
 
-def _preferred_contract_results(results: list[Any], *, current_run_complete: bool) -> list[Any]:
+def _preferred_contract_results(results: list[Any], *, current_run_terminal: bool) -> list[Any]:
     """Switch profiles atomically when their batch boundaries may differ.
 
     A profile may change context size or table packing, so equal batch ordinals
@@ -660,7 +660,7 @@ def _preferred_contract_results(results: list[Any], *, current_run_complete: boo
     prior = [
         result for result in results if str(result["profile_version"]) != CONTRACT_ANALYSIS_PROFILE
     ]
-    if current and (current_run_complete or not prior):
+    if current and (current_run_terminal or not prior):
         return current
     return prior
 

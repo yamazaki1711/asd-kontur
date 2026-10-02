@@ -506,7 +506,9 @@ not interrupted.
 
 The read projection is also version-transition safe. While v8 is being built,
 it retains the complete v7 professional projection until the effective v8 run
-is terminal-successful, then switches profiles atomically. Batch ordinals are
+has no active work, then switches profiles atomically. A terminal partial run
+switches with an explicit batch-failure gap and cannot enable the exact revised
+contract; it does not leave the older profile visible indefinitely. Batch ordinals are
 not treated as source-coverage identities because a new profile may change its
 context size or table packing. A new project without a prior profile still
 appears progressively. The counterparty-grounding and professional-authority
