@@ -662,15 +662,14 @@ class ProductSpineService:
         }
         return {
             "participants": _facts_for_sources(engineering.get("participants"), source_ids),
-            "key_conditions": _facts_for_sources(
-                engineering.get("contract_conditions"), source_ids
-            ),
-            "time_requirements": _facts_for_sources(
-                engineering.get("time_requirements"), source_ids
-            ),
-            "commercial_conditions": _facts_for_sources(
-                engineering.get("commercial_conditions"), source_ids
-            ),
+            # Contract parties stay tied to the admitted contract sources, but
+            # price, time and acceptance conditions must cover the complete
+            # Tender package.  Otherwise NMCK/procurement facts and a POS ↔
+            # contract duration conflict disappear from the contract review
+            # merely because they live in different source documents.
+            "key_conditions": _project_facts(engineering.get("contract_conditions")),
+            "time_requirements": _project_facts(engineering.get("time_requirements")),
+            "commercial_conditions": _project_facts(engineering.get("commercial_conditions")),
             "procurement_requirements": list(engineering.get("procurement_requirements") or ()),
             "project_contract_findings": _contract_related_project_findings(
                 engineering.get("issues"), source_ids
@@ -1786,6 +1785,14 @@ def _facts_for_sources(value: object, source_ids: set[str]) -> list[dict[str, An
             if isinstance(source, dict)
         )
     ]
+
+
+def _project_facts(value: object) -> list[dict[str, Any]]:
+    """Copy source-grounded project facts into a related professional view."""
+
+    if not isinstance(value, (list, tuple)):
+        return []
+    return [dict(item) for item in value if isinstance(item, dict)]
 
 
 def _contract_related_project_findings(value: object, source_ids: set[str]) -> list[dict[str, Any]]:

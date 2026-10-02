@@ -103,7 +103,14 @@ class _ProjectContextRepository(_SourceRepository):
                     }
                 ],
                 "time_requirements": [],
-                "commercial_conditions": [],
+                "commercial_conditions": [
+                    {
+                        "field": "nmck",
+                        "label": "НМЦК",
+                        "value": "98 765 432,10 руб.",
+                        "sources": [{"source_version_id": "source-procurement-72"}],
+                    }
+                ],
                 "issues": [
                     {
                         "issue_id": "duration-72",
@@ -265,7 +272,7 @@ def test_product_projection_keeps_ambiguous_source_as_clause_schedule() -> None:
     assert "revised_contract_clause_match_not_unique" in projected["gaps"]
 
 
-def test_product_projection_joins_only_contract_scoped_project_facts() -> None:
+def test_product_projection_joins_contract_parties_and_project_wide_conditions() -> None:
     view = _view("1.1. Предмет договора.")
     view.update(
         {
@@ -288,6 +295,9 @@ def test_product_projection_joins_only_contract_scoped_project_facts() -> None:
         "АО Заказчик-72"
     ]
     assert projected["project_context"]["key_conditions"][0]["value"] == "24 месяца"
+    assert projected["project_context"]["commercial_conditions"][0]["value"] == (
+        "98 765 432,10 руб."
+    )
     assert [
         item["issue_id"] for item in projected["project_context"]["project_contract_findings"]
     ] == ["duration-72"]

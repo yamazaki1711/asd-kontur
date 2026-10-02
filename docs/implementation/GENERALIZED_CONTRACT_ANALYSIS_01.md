@@ -103,6 +103,11 @@ The cross-repository user-result audit is recorded in
   conditions and the practical project-to-contract consistency schedule before
   the disagreement rows. Unrelated engineering findings remain in the main
   Tender analysis instead of polluting the contract review.
+- Kept party identities tied to admitted contract sources while expanding the
+  professional contract view to all source-grounded project price, schedule,
+  procurement and acceptance conditions. This prevents NMCK or a POS versus
+  procurement duration conflict from disappearing merely because it is stated
+  outside the draft-contract file.
 - Corrected the read projection to use only the current versioned semantic-role
   profile. A superseded historical `contract` label can no longer keep a false
   contract source active after reclassification.
