@@ -914,3 +914,31 @@ visual authenticated application pass is not claimed.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Professional summary checkpoint — release fab716f
+
+The editable primary Tender report now presents a bounded section named
+`Ключевые выводы для участия в тендере` before its long engineering schedules.
+The section is assembled only from persisted structured engineering issues and
+source-bound contract-analysis issues. It includes each issue's location or
+contract clause, professional description and recommended action. Exact
+duplicate conclusions are suppressed in the synopsis while their detailed
+records remain unchanged.
+
+The real blind-project artifact contains four engineering/commercial
+conclusions followed by six distinct contractor contract risks. Both editable
+DOCX artifacts passed OOXML validation, and the primary report passed macOS
+Quick Look rendering. The independent `BLIND_TENDER_ANALYSIS_SNAPSHOT_v5`
+manifest SHA-256 is
+`974541e21783a262f6c8060afe16d062b75e7987b037e9c8284ba2b73b3fec3e`.
+
+Exact-SHA CI run `37028408423` passed for
+`fab716f53a84a5143e9b87917b8c3b95004dd2cc`. API, document worker, project
+orchestrator and assistant worker run from the immutable release
+`~/.asd-kontur/public-demo/releases/20261003-fab716f-tender-summary` on the
+unchanged migration `0107_contract_directed_change_risk`. Qwen PID `93554` and
+NTD worker PID `98263` were preserved. No database or platform-knowledge
+mutation was part of this release.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.

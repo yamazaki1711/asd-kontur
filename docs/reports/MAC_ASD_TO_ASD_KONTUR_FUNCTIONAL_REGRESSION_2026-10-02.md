@@ -7,7 +7,7 @@
   `84099c3bc46c74bff13067c0b9e680e737baa7e0`
 - Current evidence point: ASD-KONTUR branch
   `implementation/ntd-canonical-memory-build-01`, inspected through commit
-  `2d64726d96248558b9c543e5fc1aa4d28c5d897a`
+  `fab716f53a84a5143e9b87917b8c3b95004dd2cc`
 - Reuse policy: the accepted
   `docs/architecture/LEGACY_COMPONENT_DECISION_MATRIX_v1.md`
 - Scope: direct Tender and construction-professional results. This is a
@@ -84,6 +84,26 @@ price, payment term, duration, SRO/experience requirements, security and
 warranty facts. Participant role resolution is still incomplete where an
 organization is assigned a plausible but conflicting role; those alternatives
 are not silently discarded.
+
+### Professional first-result checkpoint — 2026-10-03 03:49 +12
+
+The adaptive primary Tender report now places a bounded professional synopsis
+before the detailed schedules. On the blind project, the synopsis contains the
+four structured engineering/commercial conclusions already accepted by the
+project model and six distinct contractor-facing contract risks with their
+recommended actions. Identical contract conclusions are deduplicated in the
+synopsis without removing their source-bound records from the detailed
+contract section.
+
+This changes the direct user result: an engineer opening the editable report
+can immediately see what needs clarification or contractual protection before
+reviewing the underlying facility, work and quantity schedules. No generic
+boilerplate or project-specific expected answer is introduced. The frozen
+`BLIND_TENDER_ANALYSIS_SNAPSHOT_v5` manifest has SHA-256
+`974541e21783a262f6c8060afe16d062b75e7987b037e9c8284ba2b73b3fec3e`.
+The construction Tender report remains `PRESERVED_BUT_INCOMPLETE` because
+facility/work consolidation and project-wide design/commercial comparison are
+not yet complete.
 
 ## Method and evidence boundary
 
