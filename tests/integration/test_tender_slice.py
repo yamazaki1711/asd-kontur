@@ -643,8 +643,8 @@ def test_at_pe_41_tender_end_to_end_lineage_authority_archive_and_reset(
     with zipfile.ZipFile(io.BytesIO(rendered_contract)) as report:
         contract_xml = report.read("word/document.xml").decode("utf-8")
     assert "Synthetic revised payment condition." in contract_xml
-    assert str(locator) in contract_xml
-    assert str(evidence) in contract_xml
+    assert str(locator) not in contract_xml
+    assert str(evidence) not in contract_xml
 
     archive_service = PortableArchiveService()
     tender_manifest = json.dumps(
