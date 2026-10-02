@@ -1,3 +1,5 @@
+# ruff: noqa: RUF001 -- Russian contract examples are intentional.
+
 from __future__ import annotations
 
 import json
@@ -57,6 +59,8 @@ def test_contract_analysis_accepts_risk_and_leaves_benign_clause_unflagged() -> 
                 {
                     "clause_ref": "7.4",
                     "kind": "customer_input_dependency",
+                    "basis": "explicit_clause_text",
+                    "trigger_text": "включая задержку передачи Заказчиком рабочей документации",
                     "severity": "high",
                     "description": "Ответственность включает задержку исходных данных Заказчика.",
                     "practical_consequence": "Подрядчик несёт риск срока по неуправляемой причине.",
@@ -121,6 +125,8 @@ def test_contract_analysis_requires_wording_for_disagreement() -> None:
                 {
                     "clause_ref": "10.2",
                     "kind": "asymmetric_termination",
+                    "basis": "explicit_clause_text",
+                    "trigger_text": "Заказчик вправе отказаться от договора в любое время",
                     "severity": "medium",
                     "description": "Односторонний отказ не содержит компенсационного механизма.",
                     "practical_consequence": "Подрядчик может понести неподтверждённые затраты.",
@@ -135,4 +141,39 @@ def test_contract_analysis_requires_wording_for_disagreement() -> None:
     )
 
     with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_revision_invalid"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_analysis_rejects_missing_term_inference_from_bounded_context() -> None:
+    source = {"loc-q": "Объём демонтажа конструкций составляет 36 м3."}
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "2",
+                    "source_text": source["loc-q"],
+                    "source_locator_ids": ["loc-q"],
+                    "category": "scope",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "2",
+                    "kind": "missing_price_adjustment",
+                    "basis": "missing_term_candidate",
+                    "trigger_text": "Объём демонтажа конструкций составляет 36 м3",
+                    "severity": "medium",
+                    "description": "В ограниченном контексте не найден порядок изменения цены.",
+                    "practical_consequence": "Возможен спор об оплате.",
+                    "recommended_action": "Проверить договор целиком.",
+                    "proposed_contractor_wording": "Оплачивать фактический объём.",
+                    "disagreement_required": True,
+                    "confidence": 0.8,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_invalid"):
         parse_contract_analysis(raw, allowed_text_by_locator=source)

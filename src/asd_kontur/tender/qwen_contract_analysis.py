@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v4"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v5"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -168,6 +168,7 @@ def parse_contract_analysis(
     if not isinstance(risks_raw, list):
         raise QwenSemanticFailure("qwen_contract_risks_invalid")
     risks: list[dict[str, object]] = []
+    source_text_by_clause = {str(item["clause_ref"]): str(item["source_text"]) for item in clauses}
     for raw_risk in risks_raw:
         if not isinstance(raw_risk, dict):
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
@@ -175,10 +176,15 @@ def parse_contract_analysis(
         kind = str(raw_risk.get("kind") or "")
         severity = str(raw_risk.get("severity") or "")
         confidence = raw_risk.get("confidence")
+        basis = str(raw_risk.get("basis") or "")
+        trigger_text = " ".join(str(raw_risk.get("trigger_text") or "").split())
         if (
             clause_ref not in seen_clause_ids
             or kind not in _RISK_KINDS
             or severity not in _SEVERITIES
+            or basis != "explicit_clause_text"
+            or not trigger_text
+            or trigger_text.casefold() not in source_text_by_clause[clause_ref].casefold()
             or not isinstance(confidence, (int, float))
             or not 0 <= float(confidence) <= 1
         ):
@@ -194,6 +200,8 @@ def parse_contract_analysis(
             {
                 "clause_ref": clause_ref,
                 "kind": kind,
+                "basis": basis,
+                "trigger_text": trigger_text,
                 "severity": severity,
                 "description": _optional_text(raw_risk.get("description")),
                 "practical_consequence": _optional_text(raw_risk.get("practical_consequence")),
@@ -227,11 +235,12 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 Выдели самостоятельные условия договора. source_text должен быть дословной непрерывной цитатой из одного или нескольких указанных фрагментов (нормализация пробелов допустима).
 Оценивай практический риск: исполнимость обязательства, зависимость оплаты/приёмки от Заказчика, изменение объёмов и РД, сроки, ответственность, гарантию, расторжение и исходные данные.
 Обычные сбалансированные условия не отмечай как риск. Не выдавай коммерческую оценку за подтверждённое юридическое заключение.
-CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта или приложения не попало в CONTEXT.
+CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта, раздела или приложения не попало в CONTEXT. Этот этап принимает только риск, который прямо создаётся формулировкой условия в CONTEXT. Отсутствующий во всём договоре механизм проверяется отдельным итоговым этапом после анализа всех частей.
+Для каждого риска basis должен быть только explicit_clause_text, а trigger_text — дословная непрерывная цитата именно той формулировки source_text, которая создаёт риск. Число, объём или цена сами по себе не доказывают отсутствие порядка их изменения. Если точного trigger_text нет, не добавляй риск.
 Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту.
 
 Верни только JSON:
-{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
+{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","basis":"explicit_clause_text","trigger_text":"точная опасная формулировка из source_text","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
 
 CONTEXT:
 {json.dumps(rows, ensure_ascii=False, separators=(",", ":"))}
