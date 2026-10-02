@@ -2707,6 +2707,13 @@ function TenderContractAnalysisBody({
   const revisedContracts = value.revised_contracts as Array<
     Record<string, unknown>
   >;
+  const exactRevisedContract = revisedContracts.find(
+    (candidate) =>
+      String(candidate.state) === "exact_source_candidate_available",
+  );
+  const externalRevisionCount = Number(
+    exactRevisedContract?.external_revision_count ?? 0,
+  );
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
   const projectContext = (value.project_context ?? {}) as Record<
     string,
@@ -2780,6 +2787,18 @@ function TenderContractAnalysisBody({
           </a>
         ) : null}
       </div>
+      {exactRevisedContract && externalRevisionCount > 0 ? (
+        <InfoNotice>
+          Редакция основного договора подготовлена только по изменениям,
+          относящимся к этому документу. Ещё {externalRevisionCount}{" "}
+          {externalRevisionCount === 1
+            ? "предложение относится"
+            : "предложения относятся"}{" "}
+          к приложениям или другим договорным документам.{" "}
+          {externalRevisionCount === 1 ? "Оно сохранено" : "Они сохранены"} в
+          протоколе разногласий.
+        </InfoNotice>
+      ) : null}
       <section className="metrics" aria-label="Состояние договорного анализа">
         <Metric label="Положений" value={clauses.length} />
         <Metric label="Вопросов и рисков" value={issues.length} />
