@@ -581,6 +581,49 @@ def test_contract_revision_numeric_terms_must_come_from_replaced_clause() -> Non
     )
 
 
+def test_contract_analysis_rejects_assumed_delay_of_fixed_term_security_return() -> None:
+    source = {
+        "loc-security": (
+            "По заявлению Исполнителя Заказчик возвращает уменьшенную часть обеспечения "
+            "в срок, установленный пунктом 9.3 договора."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "9.5",
+                    "source_text": source["loc-security"],
+                    "source_locator_ids": ["loc-security"],
+                    "category": "security",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "9.5",
+                    "kind": "customer_input_dependency",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": "Заказчик возвращает уменьшенную часть обеспечения",
+                    "adverse_effect_text": "в срок, установленный пунктом 9.3 договора",
+                    "severity": "medium",
+                    "description": "Предполагается, что Заказчик задержит возврат.",
+                    "practical_consequence": "Предполагается заморозка средств.",
+                    "recommended_action": "Установить новый срок возврата.",
+                    "replacement_source_text": source["loc-security"],
+                    "proposed_contractor_wording": None,
+                    "disagreement_required": False,
+                    "confidence": 0.85,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
     source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
     clause = {

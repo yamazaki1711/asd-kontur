@@ -629,3 +629,13 @@ which no contract exists. The user sees analysis/reclassification pending
 until autonomous reconciliation produces the current role decision. Combined
 with the rotating active-workspace scheduler, this removes the false missing-
 input state without accepting a superseded classification as final.
+
+The next live blind batch treated release of contract security as a Customer-
+controlled payment risk even though the exact clause requires return within a
+term already established by another contract clause. Its adverse scenario was
+an assumed future Customer delay, not an adverse condition stated by the
+source. V8 now rejects a `customer_input_dependency` based only on a return or
+release tied to an established contractual deadline unless the exact wording
+also denies or conditions payment. The prompt carries the same general rule.
+Read-time filtering removes the historical candidate while retaining the five
+other grounded risks and three numerically grounded disagreement rows.
