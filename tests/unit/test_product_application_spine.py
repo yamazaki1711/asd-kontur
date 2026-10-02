@@ -535,6 +535,45 @@ def test_quantity_relationship_batches_group_by_engineering_context_not_number()
     assert selected == {"design", "commercial"}
 
 
+def test_quantity_relationship_batches_prefer_opposite_document_sides() -> None:
+    rows = [
+        _work_batch_row(
+            "design-high",
+            facility="",
+            family="reinforced_concrete",
+            document_role="Рабочая документация",
+            wording="Бетонирование стены",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "design-low",
+            facility="",
+            family="reinforced_concrete",
+            document_role="Проектная документация",
+            wording="Монолитная стена",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "commercial",
+            facility="",
+            family="reinforced_concrete",
+            document_role="Локальная смета",
+            wording="Устройство железобетонной стены",
+            quantity_count=1,
+        ),
+    ]
+    for index, row in enumerate(rows):
+        row["relationship_review_needed"] = True
+        row["semantic_priority"] = (100 - index, 1, 1)
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [
+        ["design-high", "commercial"]
+    ]
+    assert selected == {"design-high", "commercial"}
+
+
 def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:
     combined = _merged_quantity_reviews(
         (

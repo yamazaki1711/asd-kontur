@@ -519,16 +519,44 @@ def _quantity_relationship_batches(
         ordered = sorted(
             values,
             key=lambda row: (
+                tuple(-part for part in tuple(row.get("semantic_priority") or (0, 0, 0))),
                 str(row.get("document_role") or ""),
                 int(row.get("page") or 0),
                 str(row.get("candidate_id") or ""),
             ),
         )
+        # A two-row relationship batch is most useful when it carries both
+        # sides of a potential design/commercial comparison.  Alphabetical
+        # document-role ordering could otherwise spend the entire bounded
+        # batch on two design rows while a commercial row from the same
+        # engineering family remained available.  This is only context
+        # assembly: Qwen must still return DIFFERENT_SCOPE/INCOMPARABLE when
+        # the source context does not establish semantic compatibility.
+        seeds: list[dict[str, Any]] = []
+        for side in ("design", "commercial"):
+            match = next(
+                (
+                    row
+                    for row in ordered
+                    if document_comparison_side(row.get("document_role"), row.get("document"))
+                    == side
+                ),
+                None,
+            )
+            if match is not None:
+                seeds.append(match)
         batch: list[dict[str, Any]] = []
         quantity_count = 0
-        for row in ordered:
+        for row in [*seeds, *ordered]:
             candidate_id = str(row.get("candidate_id") or "")
-            if not candidate_id or candidate_id in selected or len(batch) >= batch_size:
+            if (
+                not candidate_id
+                or candidate_id in selected
+                or any(
+                    candidate_id == str(existing.get("candidate_id") or "") for existing in batch
+                )
+                or len(batch) >= batch_size
+            ):
                 continue
             row_quantity_count = len(row.get("quantity_observations") or ())
             if row_quantity_count == 0 or (batch and quantity_count + row_quantity_count > 16):
