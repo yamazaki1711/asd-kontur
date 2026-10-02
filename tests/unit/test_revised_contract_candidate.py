@@ -425,6 +425,15 @@ def test_product_projection_summarizes_numbered_contract_clauses_without_project
                     "source_name": "Изменённый договор.docx",
                     "source_page": 5,
                 },
+                {
+                    "category": "security",
+                    "clause_ref": "6.10_dup",
+                    "source_text": (
+                        "6.10. Обеспечение гарантийных обязательств составляет 3 процента."
+                    ),
+                    "source_name": "Изменённый договор.docx",
+                    "source_page": 8,
+                },
             ],
             "revised_contracts": [],
             "deliverables": [],
@@ -450,6 +459,11 @@ def test_product_projection_summarizes_numbered_contract_clauses_without_project
             "contract_clause_payment",
             "Порядок оплаты (п. 4.7)",
             "4.7. Оплата производится в течение 12 рабочих дней.",
+        ),
+        (
+            "contract_clause_security",
+            "Обеспечение (п. 6.10)",
+            "6.10. Обеспечение гарантийных обязательств составляет 3 процента.",
         ),
     ]
     assert projected["project_context"]["key_conditions"][0]["sources"] == [

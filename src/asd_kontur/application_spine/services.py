@@ -1859,7 +1859,10 @@ def _contract_clause_key_facts(value: object) -> list[dict[str, Any]]:
         category = str(item.get("category") or "")
         label = _CONTRACT_KEY_FACT_LABELS.get(category)
         clause_ref = str(item.get("clause_ref") or item.get("clause_key") or "").strip()
-        numeric_ref = clause_ref.removesuffix("_dup")
+        # A repeated semantic clause may carry an internal ``_dup`` suffix so
+        # its immutable identity remains distinct.  The suffix is not part of
+        # the source contract and must not leak into professional labels.
+        numeric_ref = clause_ref.split("_dup", 1)[0]
         is_numbered_clause = bool(numeric_ref) and all(
             part.isdigit() for part in numeric_ref.split(".")
         )
@@ -1881,6 +1884,7 @@ def _contract_clause_key_facts(value: object) -> list[dict[str, Any]]:
         if selected is None:
             continue
         _, item, clause_ref, source_text = selected
+        display_ref = clause_ref.split("_dup", 1)[0]
         source: dict[str, Any] = {
             "source_version_id": item.get("source_version_id"),
             "source_locator_id": item.get("source_locator_id"),
@@ -1890,7 +1894,7 @@ def _contract_clause_key_facts(value: object) -> list[dict[str, Any]]:
         result.append(
             {
                 "field": f"contract_clause_{category}",
-                "label": f"{label} (п. {clause_ref})",
+                "label": f"{label} (п. {display_ref})",
                 "value": source_text,
                 "sources": [
                     {key: source_value for key, source_value in source.items() if source_value}
