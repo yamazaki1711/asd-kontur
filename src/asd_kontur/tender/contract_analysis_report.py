@@ -345,23 +345,41 @@ def _paragraph(text: str) -> str:
 def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: str) -> str:
     if not rows:
         return _paragraph(empty_text)
-    width = max(900, 15100 // len(headers))
+    total_width = 15100
+    if len(headers) > 1 and headers[0] == "№":
+        widths = (600,) + ((total_width - 600) // (len(headers) - 1),) * (len(headers) - 1)
+    else:
+        widths = (max(900, total_width // len(headers)),) * len(headers)
     values = (headers, *rows)
-    grid = "".join(f'<w:gridCol w:w="{width}"/>' for _value in headers)
+    grid = "".join(f'<w:gridCol w:w="{width}"/>' for width in widths)
     return (
         "<w:tbl>"
-        '<w:tblPr><w:tblW w:w="15100" w:type="dxa"/>'
-        '<w:tblLayout w:type="fixed"/></w:tblPr>'
-        f"<w:tblGrid>{grid}</w:tblGrid>" + "".join(_row(row, width) for row in values) + "</w:tbl>"
+        f'<w:tblPr><w:tblW w:w="{total_width}" w:type="dxa"/>'
+        '<w:tblBorders><w:top w:val="single" w:sz="4" w:color="808080"/>'
+        '<w:left w:val="single" w:sz="4" w:color="808080"/>'
+        '<w:bottom w:val="single" w:sz="4" w:color="808080"/>'
+        '<w:right w:val="single" w:sz="4" w:color="808080"/>'
+        '<w:insideH w:val="single" w:sz="3" w:color="B7B7B7"/>'
+        '<w:insideV w:val="single" w:sz="3" w:color="B7B7B7"/></w:tblBorders>'
+        '<w:tblLayout w:type="fixed"/>'
+        '<w:tblCellMar><w:top w:w="90" w:type="dxa"/><w:left w:w="90" w:type="dxa"/>'
+        '<w:bottom w:w="90" w:type="dxa"/><w:right w:w="90" w:type="dxa"/>'
+        "</w:tblCellMar></w:tblPr>"
+        f"<w:tblGrid>{grid}</w:tblGrid>"
+        + "".join(_row(row, widths, header=index == 0) for index, row in enumerate(values))
+        + "</w:tbl>"
     )
 
 
-def _row(values: Sequence[str], width: int) -> str:
+def _row(values: Sequence[str], widths: Sequence[int], *, header: bool) -> str:
+    run_properties = "<w:rPr><w:b/></w:rPr>" if header else ""
+    cell_shading = '<w:shd w:val="clear" w:color="auto" w:fill="E7EDF3"/>' if header else ""
     cells = "".join(
         "<w:tc><w:tcPr>"
-        f'<w:tcW w:w="{width}" w:type="dxa"/></w:tcPr>'
-        f'<w:p><w:r><w:t xml:space="preserve">{escape(value)}</w:t></w:r></w:p></w:tc>'
-        for value in values
+        f'<w:tcW w:w="{width}" w:type="dxa"/>{cell_shading}</w:tcPr>'
+        f'<w:p><w:r>{run_properties}<w:t xml:space="preserve">{escape(value)}</w:t>'
+        "</w:r></w:p></w:tc>"
+        for value, width in zip(values, widths, strict=True)
     )
     return f"<w:tr>{cells}</w:tr>"
 

@@ -323,3 +323,14 @@ candidate produced an 86,767-byte document with 566/566 paragraphs and no new
 schema/package errors against the original contract. A generic changed-contract
 test covers an unused `w15` extension namespace so this behavior is independent
 of the blind corpus.
+
+macOS Quick Look is available as a bounded local visual renderer even though
+LibreOffice is absent. Visual inspection of the schema-valid controlled
+protocol showed that the first minimal table was readable but insufficiently
+professional: headings ran together and cells had no visible boundaries. The
+generic renderer now emits a narrow ordinal column, fixed table grid, cell
+padding, grey borders and a shaded bold header. The restyled controlled
+protocol remains schema-valid and its 1600-pixel landscape preview is readable
+without overlapping columns. The real blind-project protocol must be
+regenerated from the qualified release before its own visual acceptance is
+claimed.
