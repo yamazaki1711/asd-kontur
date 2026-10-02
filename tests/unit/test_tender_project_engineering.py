@@ -2386,7 +2386,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v63"
+    assert model["model_version"] == "project-engineering-model-v64"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -3159,6 +3159,153 @@ def test_unassigned_generic_operations_do_not_form_one_project_wide_scope() -> N
         ("Монтаж полиэтиленового трубопровода",),
         ("Монтаж трубопровода из стальных труб",),
     }
+
+
+def test_current_reviewed_scope_connects_unassigned_work_wording_one_to_one() -> None:
+    model = build_project_engineering_model(
+        workspace_id="workspace-alpha",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "design-wall",
+                    "version": 1,
+                    "value": "Монолитная стена из бетона класса В30",
+                    "source_version_id": "source-design",
+                    "source_locator_id": "design-work",
+                    "source_role": "project_documentation",
+                },
+                {
+                    "candidate_id": "commercial-wall",
+                    "version": 1,
+                    "value": "Устройство железобетонной стены",
+                    "source_version_id": "source-commercial",
+                    "source_locator_id": "commercial-work",
+                    "source_role": "bill_of_quantities",
+                },
+                {
+                    "candidate_id": "commercial-foundation",
+                    "version": 1,
+                    "value": "Устройство железобетонного фундамента",
+                    "source_version_id": "source-foundation",
+                    "source_locator_id": "foundation-work",
+                    "source_role": "bill_of_quantities",
+                },
+            ],
+            "quantities": [
+                {
+                    "candidate_id": "design-wall-volume",
+                    "work_candidate_id": "design-wall",
+                    "normalized_value": "142.6",
+                    "normalized_unit": "м3",
+                    "source_locator_id": "design-quantity",
+                },
+                {
+                    "candidate_id": "commercial-wall-volume",
+                    "work_candidate_id": "commercial-wall",
+                    "normalized_value": "137.4",
+                    "normalized_unit": "м3",
+                    "source_locator_id": "commercial-quantity",
+                },
+                {
+                    "candidate_id": "commercial-foundation-volume",
+                    "work_candidate_id": "commercial-foundation",
+                    "normalized_value": "55.2",
+                    "normalized_unit": "м3",
+                    "source_locator_id": "foundation-quantity",
+                },
+            ],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=dict(
+            [
+                _source("design-work", "Design.pdf", 12),
+                _source("commercial-work", "Quantities.pdf", 4),
+                _source("foundation-work", "Quantities.pdf", 7),
+                _source("design-quantity", "Design.pdf", 12),
+                _source("commercial-quantity", "Quantities.pdf", 4),
+                _source("foundation-quantity", "Quantities.pdf", 7),
+            ]
+        ),
+        work_resolutions={
+            "design-wall": {
+                "candidate_version": 1,
+                "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "status": "MATCHED",
+                "family_key": "reinforced_concrete",
+                "operation": "Железобетонные конструкции",
+                "quantity_reviews": [
+                    {
+                        "quantity_candidate_id": "design-wall-volume",
+                        "status": "WORK_QUANTITY",
+                        "semantic_scope": "Объём бетона стены секции R-4",
+                        "quantity_type": "TOTAL",
+                        "relation_kind": "NONE",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "relationship_reviewed": True,
+                    }
+                ],
+            },
+            "commercial-wall": {
+                "candidate_version": 1,
+                "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "status": "MATCHED",
+                "family_key": "reinforced_concrete",
+                "operation": "Железобетонные конструкции",
+                "quantity_reviews": [
+                    {
+                        "quantity_candidate_id": "commercial-wall-volume",
+                        "status": "WORK_QUANTITY",
+                        "semantic_scope": "Объём бетона стены секции R-4",
+                        "quantity_type": "TOTAL",
+                        "relation_kind": "NONE",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "relationship_reviewed": True,
+                    }
+                ],
+            },
+            "commercial-foundation": {
+                "candidate_version": 1,
+                "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "status": "MATCHED",
+                "family_key": "reinforced_concrete",
+                "operation": "Железобетонные конструкции",
+                "quantity_reviews": [
+                    {
+                        "quantity_candidate_id": "commercial-foundation-volume",
+                        "status": "WORK_QUANTITY",
+                        "semantic_scope": "Объём бетона фундамента секции R-4",
+                        "quantity_type": "TOTAL",
+                        "relation_kind": "NONE",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "relationship_reviewed": True,
+                    }
+                ],
+            },
+        },
+    )
+
+    assert len(model["works"]) == 2
+    assert len(model["quantity_comparisons"]) == 1
+    comparison = model["quantity_comparisons"][0]
+    assert comparison["left"] == {"document_role": "ПД", "value": "142.6", "unit": "м3"}
+    assert comparison["right"] == {"document_role": "ВОР", "value": "137.4", "unit": "м3"}
+    assert comparison["difference"] == "5.2"
+    compared_work = next(
+        work for work in model["works"] if set(work["document_roles"]) == {"ПД", "ВОР"}
+    )
+    assert {
+        value["semantic_review_profile"]
+        for values in compared_work["quantities_by_document"].values()
+        for value in values
+    } == {PROJECT_WORK_RECONCILIATION_PROFILE}
 
 
 def test_broad_unassigned_family_is_not_reported_as_a_commercial_match() -> None:

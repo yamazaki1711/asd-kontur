@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v63"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v64"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3005,6 +3005,20 @@ def _work_schedule(
             source_locator_id=locator_id,
             source_context=source_context,
         )
+        reviewed_scope_quantities = [
+            value
+            for value in accepted_quantities
+            if value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
+            and value.get("relationship_reviewed") is True
+            and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value
+            and _normalized(value.get("semantic_scope"))
+            and value.get("candidate_id")
+        ]
+        reviewed_unassigned_scope = (
+            _normalized(reviewed_scope_quantities[0].get("semantic_scope"))
+            if len(reviewed_scope_quantities) == 1
+            else None
+        )
         observation = {
             "candidate_id": candidate_id,
             "project_wording": name,
@@ -3048,6 +3062,7 @@ def _work_schedule(
             ),
             "semantic_resolution_status": resolution.get("status"),
             "semantic_resolution_reason": resolution.get("reason"),
+            "_reviewed_unassigned_scope": reviewed_unassigned_scope,
         }
         # Resource codes, headings and pure quantity rows are not construction
         # operations even when their description contains a family keyword
@@ -3149,12 +3164,17 @@ def _work_schedule(
         # wording until a real location/scope relationship is established.
         # Specific operations (for example ``Демонтаж светильников``) may
         # still reconcile across roles through the validated semantic result.
-        unassigned_scope = (
-            _normalized(observation.get("project_wording"))
-            if facility_key == "unassigned"
+        unassigned_scope = ""
+        if (
+            facility_key == "unassigned"
             and str(observation["operation_name"]) in _UNSCOPED_GENERIC_OPERATIONS
-            else ""
-        )
+        ):
+            reviewed_scope = str(observation.get("_reviewed_unassigned_scope") or "")
+            unassigned_scope = (
+                f"reviewed:{reviewed_scope}"
+                if reviewed_scope
+                else _normalized(observation.get("project_wording"))
+            )
         grouped[
             (
                 facility_key,
@@ -5985,6 +6005,7 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                 for review_field in (
                     "relationship_reviewed",
                     "component_set_complete",
+                    "semantic_review_profile",
                 ):
                     if row.get(review_field) is not None:
                         semantics[review_field] = row.get(review_field)
