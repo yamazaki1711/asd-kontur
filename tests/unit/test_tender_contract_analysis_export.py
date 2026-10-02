@@ -84,6 +84,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "clause_id": "clause-independent-7",
                 "clause_version": 2,
                 "clause_key": "payment.acceptance",
+                "source_name": "Changed-contract-terms.docx",
                 "source_version_id": "source-independent-91",
                 "source_locator_id": "locator-independent-311",
                 "evidence_link_id": "evidence-independent-808",
@@ -138,6 +139,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         document = package.read("word/document.xml").decode("utf-8")
         assert "Accept completed work within seven working days." in document
         assert "source-independent-91" in document
+        assert "Changed-contract-terms.docx" in document
         assert "locator-independent-311" in document
         assert "evidence-independent-808" in document
         assert "PROFESSIONAL_REVIEW_REQUIRED" in document

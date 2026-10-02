@@ -140,8 +140,9 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
 
 def _source_reference(clause: Mapping[str, Any]) -> str:
     values = (
+        ("Документ", clause.get("source_name")),
         ("Версия источника", clause.get("source_version_id")),
-        ("Локатор", clause.get("source_locator_id")),
+        ("Фрагмент", clause.get("source_locator_id")),
         ("Доказательство", clause.get("evidence_link_id")),
         ("Уровень полномочий", clause.get("authority_layer")),
     )

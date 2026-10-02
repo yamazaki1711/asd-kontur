@@ -272,6 +272,10 @@ class TenderContractAnalysisRepository:
             if str(job["state"]) in {"failed", "reconciliation_required"}
         ]
         analysis_complete = bool(results) and not active and not failed
+        source_name_by_id = {
+            str(source["source_version_id"]): str(source["safe_display_name"])
+            for source in contract_sources
+        }
         clauses: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
         disagreement_items: list[dict[str, Any]] = []
@@ -306,6 +310,7 @@ class TenderContractAnalysisRepository:
                         "locator_label": str(clause.get("section") or ""),
                         "authority_layer": "qwen_contract_candidate",
                         "source_version_id": str(result["source_version_id"]),
+                        "source_name": source_name_by_id.get(str(result["source_version_id"])),
                         "source_locator_id": locator_ids[0] if locator_ids else None,
                         "source_locator_ids": locator_ids,
                         "source_text": clause.get("source_text"),
