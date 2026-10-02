@@ -7,7 +7,7 @@
   `84099c3bc46c74bff13067c0b9e680e737baa7e0`
 - Current evidence point: ASD-KONTUR branch
   `implementation/ntd-canonical-memory-build-01`, inspected through commit
-  `9c57aa60deaa3bd23976b2d156f8d46c2d408073`
+  `2d64726d96248558b9c543e5fc1aa4d28c5d897a`
 - Reuse policy: the accepted
   `docs/architecture/LEGACY_COMPONENT_DECISION_MATRIX_v1.md`
 - Scope: direct Tender and construction-professional results. This is a
@@ -67,6 +67,24 @@ comparison: 904 work descriptions remain unclassified and only 31 observations
 have a sufficiently grounded facility association. The relevant rows therefore
 remain `PRESERVED_BUT_INCOMPLETE`.
 
+### Procurement-context checkpoint — 2026-10-03 03:33 +12
+
+The primary Tender result now rejects title-block signatories misclassified as
+project organizations, consolidates formatting aliases using distinct source
+documents as corroboration, and moves weaker conflicting participant labels to
+the report's uncertainty section. Estimate price-base dates and drawing marks
+are no longer presented as construction start/completion dates. Numeric VAT
+rates and amounts remain, while untyped prose such as “with VAT” is no longer
+misreported as a VAT amount.
+
+On the blind project this reduces the principal participant table to four
+source-corroborated roles and localizes five one-source alternatives. The
+procurement summary continues to show the independently extracted contract
+price, payment term, duration, SRO/experience requirements, security and
+warranty facts. Participant role resolution is still incomplete where an
+organization is assigned a plausible but conflicting role; those alternatives
+are not silently discarded.
+
 ## Method and evidence boundary
 
 The audit inspected the legacy source, tests and product documents named in the
@@ -114,7 +132,7 @@ current schema or projection is treated as proof that an analysis engine exists.
 | VOR-to-estimate delta | Legacy skills compared VOR and estimate positions and described volume/price deltas. | The same current engine now treats `Смета контракта` as a commercial source and produces a real VOR/estimate compatible-scope comparison. A project-wide result and price delta remain incomplete. | B | Extend the current scope compatibility and unit model. Add price arithmetic only where real rate/price inputs exist. | P1 |
 | Estimate calculation / local estimate generation | Legacy `SmetaCalc` and `SmetaEngine` could calculate direct costs, overhead, profit, VAT and output estimate artifacts from supplied rates. | ASD-KONTUR does not provide an equivalent general estimate-calculation workflow. | D for the direct user task; E for reuse as-is | Legacy tests embed historical methods, rates, regional zones and tax assumptions. A future engine needs versioned price bases, territory/date, calculation method and qualified output. Do not put it on the contract P0 path. | P2 |
 | NMCK and profitability analysis | Legacy Tender helpers extracted NMCK, compared it with a calculated cost and produced participate/do-not-participate signals. | Current generalized commercial extraction can represent NMCK and conditions, but there is no qualified profitability calculation or dependable Tender decision based on current prices. | D; legacy implementation partly E | Reimplement only after a qualified cost basis exists. Reject hardcoded VAT, rates, regional coefficients and company thresholds. | P2 |
-| Procurement requirements summary | Legacy helpers extracted procurement intake, profile/experience constraints, deadline and conditions. | Generic `PROCUREMENT_SUMMARY`, participant and commercial-condition tasks exist; the primary report can display facts, but real-corpus coverage is incomplete. | B | Complete structured extraction with document role and source scope. Do not assume 44-FZ/223-FZ when the corpus is private procurement. | P1 |
+| Procurement requirements summary | Legacy helpers extracted procurement intake, profile/experience constraints, deadline and conditions. | The primary report now displays independently extracted price/payment, schedule, SRO, experience, security and warranty facts. It filters type-confused dates/signatories, consolidates corroborated aliases and preserves conflicting roles as explicit uncertainties. Broader real-corpus coverage remains incomplete. | B, with materially restored user result | Continue semantic participant-role resolution and source-scoped condition consolidation. Do not assume 44-FZ/223-FZ when the corpus is private procurement. | P1 |
 | Tender decision support | Legacy helpers aggregated NMCK, conditions, contract risks and company profile into a verdict. | Current product exposes issues/questions/risks but not a dependable contractor bid decision supported by complete cost, contract and engineering inputs. | D; old verdict logic E as-is | Build an explainable decision only from qualified sub-results. Missing cost/contract inputs must be explicit, not silently defaulted. | P2 |
 | Omitted-work detection | Legacy VOR/PD comparison emitted unmatched rows, including false-positive-prone fuzzy results. | Current scope-aware comparison now produces a real commercial-only work finding when a facility-bound commercial position lacks an established design basis. It asks for the project basis or removal from the commercial scope. Design-work omissions still depend on incomplete consolidation. | B, with mechanism A | Keep the scope guard and extend grounded design-to-commercial work sets; never promote unmatched text alone to an omission. | P1 |
 | Construction Tender report | Legacy documents described an executive result assembled by agents and helpers; reliability varied. | Current ASD-KONTUR automatically produces an adaptive project-first Tender report from the structured model, but contract sections remain empty without the missing engine. | B | Feed canonical contract findings into the existing primary report; do not create a second report stack. | P0/P1 |

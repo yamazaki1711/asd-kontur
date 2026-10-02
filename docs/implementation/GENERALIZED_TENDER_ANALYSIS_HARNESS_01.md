@@ -868,3 +868,49 @@ association is still sparse.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Procurement and participant-context checkpoint — release 2d64726
+
+The next P1 slice addresses professional-report contamination that was visible
+in the blind result rather than adding a new architecture layer:
+
+- values shaped like personal names from drawing title blocks are no longer
+  asserted as customer, designer, developer or contractor organizations;
+- formatting aliases within one participant role are consolidated, and
+  corroboration counts distinct source documents rather than repeated pages;
+- when one participant is corroborated by several documents and competing
+  role labels occur only once, the primary table shows the corroborated value
+  and the alternatives move to “uncertainties / missing information”;
+- schedule dates require a schedule-bearing document role and a complete date,
+  month/year or source-relative contract expression, so price-base dates,
+  bare years and drawing marks do not become start/completion dates;
+- VAT rates written with a percent sign or the word “percent” normalize to one
+  rate, numeric VAT amounts remain amounts, and untyped prose is rejected.
+
+The live blind model `project-engineering-model-v59` has fingerprint
+`sha256:626cfd8677aa313062c1951f6e2f552049add325a992ee21bb8898ffd45157c6`.
+Its primary report now contains four principal participant rows and five
+localized participant ambiguities. The independently extracted procurement and
+contract facts remain available: price, payment terms, real schedule values,
+SRO and experience requirements, execution security and warranty conditions.
+The false `8.22`/bare-year schedule values are absent. The independent
+`BLIND_TENDER_ANALYSIS_SNAPSHOT_v4` manifest SHA-256 is
+`90b45865b162fd5fcc4ecfc737893c1f9d3e028f580d1b426c8dec7b3a2d7352`.
+
+Exact-SHA CI run `37026446815` passed for
+`2d64726d96248558b9c543e5fc1aa4d28c5d897a`. API, document worker, project
+orchestrator and assistant worker run from
+`~/.asd-kontur/public-demo/releases/20261003-2d64726-tender-context` on the
+unchanged migration `0107_contract_directed_change_risk`. Qwen PID `93554` and
+NTD worker PID `98263` were preserved; the NTD ledger remains exactly
+`319 succeeded`. Autonomous blind-project progress reached 1,219 effective
+successful jobs immediately after activation, and Qwen continued receiving
+work from the supervised runtime.
+
+The v4 primary Tender and contract-analysis DOCX artifacts pass OOXML
+validation; the primary report also passes macOS Quick Look rendering. The
+browser connector still exposes no available signed-in browser instance, so a
+visual authenticated application pass is not claimed.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
