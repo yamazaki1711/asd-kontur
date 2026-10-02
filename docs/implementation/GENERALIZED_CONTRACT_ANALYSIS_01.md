@@ -251,3 +251,50 @@ preserved suffix carry the same terminal mark. Re-running the real candidate
 produced a valid 86,683-byte DOCX with five exact proposed changes while
 retaining the rest of `Проект_контракта.docx`. ZIP integrity and macOS text
 extraction passed; visual page qualification remains pending.
+
+## 2026-10-02 adverse-effect qualification checkpoint
+
+The autonomous v6 blind-project run exposed a generic professional-quality
+defect that exact source quoting alone does not prevent. Three exact contract
+fragments were incorrectly interpreted as Contractor risks:
+
+1. a three-working-day duty imposed on the Customer to transfer the site and
+   documents was treated as Contractor deadline exposure based on a hypothetical
+   future Customer breach;
+2. the Customer's ordinary right to demand a contractual penalty for a proven
+   Contractor breach was treated as unlimited liability without text creating
+   an unlimited or disproportionate consequence;
+3. a duty to send a unilateral control act to the Contractor was treated as an
+   acceptance risk even though the bounded fragment stated no adverse effect of
+   that act.
+
+These are false positives, not disagreement-protocol rows. The v7 contract
+analysis contract therefore requires two independently inspectable exact source
+quotes for every proposed risk: the triggering wording and the wording that
+establishes the adverse Contractor effect, obligation, dependency or measure.
+Both quotes must resolve to admitted clause text. The bounded prompt also
+instructs Qwen not to infer Contractor exposure solely from a short Customer
+deadline, an ordinary contractual remedy, a control act without a stated
+effect, or remediation costs caused only by the Contractor's own breach.
+
+Migration `0104_contract_adverse_effect_text` admits the versioned v7 result
+profile without altering historical v1-v6 results. Focused formatting, lint,
+typing and 20 contract tests pass. The disposable migration round-trip was not
+run in the development shell because `ASD_TEST_DATABASE_URL` was absent; it
+remains an exact-SHA CI and controlled pre-deployment gate.
+
+The v7 release is intentionally not deployed while the autonomous v6 run is
+active. At 2026-10-02 16:37 +12, v6 had 10 effective successful batches, one
+running batch with a fresh heartbeat, and 39 queued batches. It had persisted
+33 exact clauses and nine raw risk candidates. Qwen reported
+`QWEN_GENERATING`, 397 completed requests and no error. The API reported ready
+at migration `0103_contract_risk_mechanism`. No manual queue, retry or successor
+command was issued. Exact-SHA CI passed for all four preceding artifact commits,
+including `75391ca45c326b4b2f961198e304924e72b242f1`.
+
+Promotion of v7 requires a live changed-contract false-positive acceptance in
+addition to schema and parser tests. In particular, benign Customer duties,
+ordinary breach remedies and ordinary warranty/security terms must remain
+unflagged while an explicit Contractor exposure in the same controlled corpus
+must still produce a source-grounded risk and, where justified, a disagreement
+row.

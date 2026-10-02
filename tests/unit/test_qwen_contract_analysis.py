@@ -63,6 +63,7 @@ def test_contract_analysis_accepts_risk_and_leaves_benign_clause_unflagged() -> 
                     "basis": "explicit_clause_text",
                     "risk_mechanism": "contractor_bears_customer_cause",
                     "trigger_text": "включая задержку передачи Заказчиком рабочей документации",
+                    "adverse_effect_text": "Подрядчик отвечает за задержку",
                     "severity": "high",
                     "description": "Ответственность включает задержку исходных данных Заказчика.",
                     "practical_consequence": "Подрядчик несёт риск срока по неуправляемой причине.",
@@ -165,6 +166,7 @@ def test_contract_analysis_requires_wording_for_disagreement() -> None:
                     "basis": "explicit_clause_text",
                     "risk_mechanism": "asymmetric_remedy",
                     "trigger_text": "Заказчик вправе отказаться от договора в любое время",
+                    "adverse_effect_text": "Заказчик вправе отказаться от договора в любое время",
                     "severity": "medium",
                     "description": "Односторонний отказ не содержит компенсационного механизма.",
                     "practical_consequence": "Подрядчик может понести неподтверждённые затраты.",
@@ -201,6 +203,7 @@ def test_contract_analysis_rejects_missing_term_inference_from_bounded_context()
                     "kind": "missing_price_adjustment",
                     "basis": "missing_term_candidate",
                     "trigger_text": "Объём демонтажа конструкций составляет 36 м3",
+                    "adverse_effect_text": "Объём демонтажа конструкций составляет 36 м3",
                     "severity": "medium",
                     "description": "В ограниченном контексте не найден порядок изменения цены.",
                     "practical_consequence": "Возможен спор об оплате.",
@@ -208,6 +211,48 @@ def test_contract_analysis_rejects_missing_term_inference_from_bounded_context()
                     "proposed_contractor_wording": "Оплачивать фактический объём.",
                     "disagreement_required": True,
                     "confidence": 0.8,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_invalid"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_analysis_requires_exact_adverse_effect_text() -> None:
+    source = {
+        "loc-customer-duty": (
+            "3.2. Заказчик передаёт площадку Подрядчику в течение трёх рабочих дней."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "3.2",
+                    "source_text": source["loc-customer-duty"],
+                    "source_locator_ids": ["loc-customer-duty"],
+                    "category": "customer_obligation",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "3.2",
+                    "kind": "deadline_exposure",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_deadline",
+                    "trigger_text": "в течение трёх рабочих дней",
+                    "adverse_effect_text": "Подрядчик отвечает за задержку Заказчика",
+                    "severity": "high",
+                    "description": "Заказчик может задержать передачу площадки.",
+                    "practical_consequence": "Подрядчик может поздно начать работы.",
+                    "recommended_action": "Предусмотреть продление срока.",
+                    "replacement_source_text": source["loc-customer-duty"],
+                    "proposed_contractor_wording": "Срок продлевается при задержке Заказчика.",
+                    "disagreement_required": True,
+                    "confidence": 0.9,
                 }
             ],
         },
@@ -232,6 +277,7 @@ def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() ->
         "basis": "explicit_clause_text",
         "risk_mechanism": "customer_controlled_deadline",
         "trigger_text": "Заказчик единолично устанавливает срок устранения недостатков",
+        "adverse_effect_text": "Заказчик единолично устанавливает срок устранения недостатков",
         "severity": "medium",
         "description": "Срок определяется одной стороной.",
         "practical_consequence": "Срок может быть технически неисполнимым.",

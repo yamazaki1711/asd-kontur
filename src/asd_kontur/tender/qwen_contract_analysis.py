@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v6"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v7"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -215,6 +215,7 @@ def parse_contract_analysis(
         basis = str(raw_risk.get("basis") or "")
         risk_mechanism = str(raw_risk.get("risk_mechanism") or "")
         trigger_text = " ".join(str(raw_risk.get("trigger_text") or "").split())
+        adverse_effect_text = " ".join(str(raw_risk.get("adverse_effect_text") or "").split())
         if (
             clause_ref not in seen_clause_ids
             or kind not in _RISK_KINDS
@@ -223,6 +224,8 @@ def parse_contract_analysis(
             or risk_mechanism not in _RISK_MECHANISMS
             or not trigger_text
             or trigger_text.casefold() not in source_text_by_clause[clause_ref].casefold()
+            or not adverse_effect_text
+            or adverse_effect_text.casefold() not in source_text_by_clause[clause_ref].casefold()
             or not isinstance(confidence, (int, float))
             or not 0 <= float(confidence) <= 1
         ):
@@ -255,6 +258,7 @@ def parse_contract_analysis(
                 "basis": basis,
                 "risk_mechanism": risk_mechanism,
                 "trigger_text": trigger_text,
+                "adverse_effect_text": adverse_effect_text,
                 "severity": severity,
                 "description": _optional_text(raw_risk.get("description")),
                 "practical_consequence": _optional_text(raw_risk.get("practical_consequence")),
@@ -368,13 +372,14 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 Оценивай практический риск: исполнимость обязательства, зависимость оплаты/приёмки от Заказчика, изменение объёмов и РД, сроки, ответственность, гарантию, расторжение и исходные данные.
 Обычные сбалансированные условия не отмечай как риск. Не выдавай коммерческую оценку за подтверждённое юридическое заключение.
 Не отмечай риск только потому, что условие возлагает на Подрядчика обычную обязанность по исправлению дефектов, допущенных Подрядчиком; передаёт Заказчику более длительную гарантию производителя; требует установленный законом способ или ограниченный срок обеспечения; либо автоматически следует обязательному изменению закона. Для риска должна быть прямо сформулированная управленческая причина: зависимость от решения/действия Заказчика, неограниченный объём или срок, ответственность за причину вне контроля Подрядчика, односторонняя мера без проверяемого ограничения, либо явный конфликт с фактами проекта.
+Короткий срок, установленный самому Заказчику для передачи площадки, документов, согласования или иного действия, не является риском Подрядчика сам по себе: не предполагай заранее, что Заказчик нарушит свою обязанность. Обычное право направить требование о неустойке за нарушение обязательств, прямо предусмотренных договором, не является неограниченной ответственностью без отдельной формулировки о неограниченном или несоразмерном последствии. Односторонний акт контроля не является самостоятельным риском, если данный фрагмент только требует направить его Подрядчику и не устанавливает для него неблагоприятное последствие. Расходы Подрядчика на вскрытие или исправление, прямо вызванные его собственным нарушением обязанности предъявить работы или устранить свой дефект, являются обычной ответственностью и не отмечаются как риск, если условие не распространяет расходы на случаи надлежащего исполнения Подрядчиком.
 CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта, раздела или приложения не попало в CONTEXT. Этот этап принимает только риск, который прямо создаётся формулировкой условия в CONTEXT. Отсутствующий во всём договоре механизм проверяется отдельным итоговым этапом после анализа всех частей.
-Для каждого риска basis должен быть только explicit_clause_text, а trigger_text — дословная непрерывная цитата именно той формулировки source_text, которая создаёт риск. Число, объём или цена сами по себе не доказывают отсутствие порядка их изменения. Если точного trigger_text нет, не добавляй риск.
+Для каждого риска basis должен быть только explicit_clause_text. trigger_text — дословная непрерывная цитата формулировки, запускающей риск. adverse_effect_text — дословная непрерывная цитата из того же source_text, которая прямо устанавливает неблагоприятное последствие, обязанность, зависимость или меру для Подрядчика. Если неблагоприятное последствие можно только предположить из возможного будущего нарушения Заказчиком, не добавляй риск. Число, объём или цена сами по себе не доказывают отсутствие порядка их изменения. Если точных trigger_text и adverse_effect_text нет, не добавляй риск.
 Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту.
 Для disagreement_required=true укажи replacement_source_text: дословный непрерывный фрагмент source_text, который полностью заменяется proposed_contractor_wording. Если один пункт содержит несколько связанных рисков, верни один объединённый риск и одну согласованную редакцию этого пункта; не создавай две замены одного clause_ref.
 
 Верни только JSON:
-{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","basis":"explicit_clause_text","risk_mechanism":"customer_controlled_payment|customer_controlled_acceptance|customer_controlled_deadline|unbounded_scope|unbounded_duration|contractor_bears_customer_cause|asymmetric_remedy|uncontrolled_third_party_dependency|project_facts_conflict|other_explicit_exposure","trigger_text":"точная опасная формулировка из source_text","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","replacement_source_text":"точный заменяемый фрагмент source_text или null","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
+{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","basis":"explicit_clause_text","risk_mechanism":"customer_controlled_payment|customer_controlled_acceptance|customer_controlled_deadline|unbounded_scope|unbounded_duration|contractor_bears_customer_cause|asymmetric_remedy|uncontrolled_third_party_dependency|project_facts_conflict|other_explicit_exposure","trigger_text":"точная запускающая формулировка из source_text","adverse_effect_text":"точная формулировка неблагоприятного последствия для Подрядчика из source_text","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","replacement_source_text":"точный заменяемый фрагмент source_text или null","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
 
 CONTEXT:
 {json.dumps(rows, ensure_ascii=False, separators=(",", ":"))}
