@@ -11,6 +11,7 @@ import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
+from sqlalchemy.orm import Session
 
 from asd_kontur.application_spine.config import SessionProfile, SpineSettings
 from asd_kontur.application_spine.models import ClaimedJob, JobKind, JobState, semantic_digest
@@ -30,6 +31,105 @@ from asd_kontur.web_app import create_app
 from .conftest import PostgreSQLEnvironment
 
 pytestmark = pytest.mark.postgres
+
+
+def test_contract_profile_upgrade_cancels_only_older_queued_model_work(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="profile-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Profile owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "profile-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Changed contract profile"},
+            headers=_csrf(client),
+        ).json()
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    old_job_id = uuid4()
+    current_job_id = uuid4()
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = connection.scalar(
+            sa.text(
+                "SELECT created_by_identity_id FROM workspace.workspaces "
+                "WHERE organization_id=:organization AND workspace_id=:workspace"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        )
+        for job_id, profile in (
+            (old_job_id, "qwen-contract-analysis-v9"),
+            (current_job_id, CONTRACT_ANALYSIS_PROFILE),
+        ):
+            manifest = {"contract_analysis_profile": profile, "synthetic": True}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                    "'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),:digest,:key,'queued',188,3,"
+                    "'synthetic-retry-v1',CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "manifest": json.dumps(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": f"synthetic-contract-profile:{profile}",
+                    "provenance": json.dumps({"contract": "synthetic-profile-test@1.0.0"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    with Session(postgres_environment.document_worker_engine) as session, session.begin():
+        session.execute(
+            sa.select(
+                sa.func.set_config("asd.organization_id", str(organization_id), True),
+                sa.func.set_config("asd.workspace_id", str(workspace_id), True),
+            )
+        ).one()
+        assert (
+            repository._supersede_queued_contract_analysis_profiles(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            )
+            == 1
+        )
+
+    with postgres_environment.owner_engine.connect() as connection:
+        states = dict(
+            connection.execute(
+                sa.text("SELECT job_id,state FROM workspace.durable_jobs WHERE job_id=ANY(:jobs)"),
+                {"jobs": [old_job_id, current_job_id]},
+            ).tuples().all()
+        )
+        receipt = (
+            connection.execute(
+                sa.text(
+                    "SELECT terminal_state,typed_outcome_code,result_manifest FROM "
+                    "workspace.job_terminal_receipts WHERE job_id=:job"
+                ),
+                {"job": old_job_id},
+            )
+            .mappings()
+            .one()
+        )
+
+    assert states == {old_job_id: "cancelled", current_job_id: "queued"}
+    assert receipt["terminal_state"] == "cancelled"
+    assert receipt["typed_outcome_code"] == "superseded_contract_analysis_profile"
+    assert receipt["result_manifest"]["replacement_profile"] == CONTRACT_ANALYSIS_PROFILE
 
 
 def _database_url(engine: sa.Engine) -> str:

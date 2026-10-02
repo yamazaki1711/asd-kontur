@@ -899,3 +899,14 @@ continue to reject overpayment restitution, ordinary cure costs and Customer
 mentions that do not confer control. Migration
 `0107_contract_directed_change_risk` admits the new profile. Live v10
 acceptance remains required before the generalized contract gate can pass.
+
+The same live transition exposed avoidable model work: after a newer contract
+profile was admitted, unclaimed batches for the prior profile remained queued
+even though the atomic read projection would never select their eventual
+output. The v10 scheduler now terminally cancels only queued older-profile
+contract jobs when it has eligible sources for the current profile. Every such
+job receives a cancellation request, terminal receipt, typed reason and event.
+Running jobs and all completed immutable results are preserved. A PostgreSQL
+integration test proves that an older queued job is cancelled while a queued
+current-profile job remains runnable. This is runtime convergence, not manual
+queue cleanup.
