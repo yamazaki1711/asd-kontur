@@ -334,3 +334,30 @@ protocol remains schema-valid and its 1600-pixel landscape preview is readable
 without overlapping columns. The real blind-project protocol must be
 regenerated from the qualified release before its own visual acceptance is
 claimed.
+
+## 2026-10-02 v7 pre-deployment database rehearsal
+
+The adverse-effect profile remains staged rather than active while the
+autonomous v6 blind-contract run is in progress. A fresh physical backup was
+created before any public migration at
+`~/.asd-kontur/public-demo/backups/pre-0104-contract-adverse-20261002T1705/public-before-0104.dump`.
+Its SHA-256 is
+`a16437f17c688c7c83863a22cb01b4a1a651994691bcdb1f3f4a7d68dee89e60`.
+
+The dump restored separately as `asd_kontur_restore_0104_20261002` at migration
+`0103_contract_risk_mechanism`. Source and restored databases had the same
+all-history platform-memory fingerprint,
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the same NTD processing state: 319 succeeded jobs and no other NTD job
+state. The disposable restore passed upgrade to
+`0104_contract_adverse_effect_text`, fail-closed downgrade without the explicit
+disposable-database flag, flagged downgrade to 0103, and re-upgrade to 0104.
+The platform-memory fingerprint and NTD job state remained exactly equal after
+the round trip. The live database and supervised services were not changed by
+this rehearsal.
+
+At 17:02 +12 the v6 run still had 13 successful effective batches, one running
+batch, and 36 queued batches. Qwen's completed-request counter advanced from
+414 to 419 during observation and it remained in `QWEN_GENERATING`; this is a
+productive bounded repair/analysis sequence, not an idle or hung model. No
+manual successor, retry, reconciliation, or queue-refill command was issued.
