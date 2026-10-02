@@ -391,6 +391,48 @@ def test_prior_profile_quantity_reviews_are_requeued_for_current_scope_policy() 
     assert _quantities_requiring_semantic_review(quantities, prior) == quantities
 
 
+def test_compatible_terminal_non_quantity_reviews_are_not_reprocessed() -> None:
+    quantities = [
+        {"candidate_id": "rate"},
+        {"candidate_id": "dimension"},
+        {"candidate_id": "unrelated"},
+        {"candidate_id": "work"},
+        {"candidate_id": "duration"},
+        {"candidate_id": "ambiguous"},
+    ]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v23",
+        "quantity_reviews": [
+            {"quantity_candidate_id": "rate", "status": "RESOURCE_OR_RATE"},
+            {"quantity_candidate_id": "dimension", "status": "DIMENSION"},
+            {"quantity_candidate_id": "unrelated", "status": "UNRELATED"},
+            {"quantity_candidate_id": "work", "status": "WORK_QUANTITY"},
+            {"quantity_candidate_id": "duration", "status": "DURATION"},
+            {"quantity_candidate_id": "ambiguous", "status": "AMBIGUOUS"},
+        ],
+    }
+
+    remaining = _quantities_requiring_semantic_review(quantities, prior)
+
+    assert [value["candidate_id"] for value in remaining] == [
+        "work",
+        "duration",
+        "ambiguous",
+    ]
+
+
+def test_incompatible_terminal_non_quantity_reviews_are_reprocessed() -> None:
+    quantities = [{"candidate_id": "rate"}]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v2",
+        "quantity_reviews": [
+            {"quantity_candidate_id": "rate", "status": "RESOURCE_OR_RATE"},
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == quantities
+
+
 def test_quantity_relationship_batches_group_by_engineering_context_not_number() -> None:
     rows = [
         _work_batch_row(

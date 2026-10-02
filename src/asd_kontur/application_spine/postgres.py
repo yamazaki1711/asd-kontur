@@ -8900,25 +8900,38 @@ def _quantities_requiring_semantic_review(
         for value in existing_resolution.get("quantity_reviews") or ()
         if isinstance(value, Mapping) and value.get("quantity_candidate_id")
     }
-    current_profile_reviewed = (
-        existing_resolution.get("profile_version") == PROJECT_WORK_RECONCILIATION_PROFILE
+    existing_profile = str(existing_resolution.get("profile_version") or "")
+    current_profile_reviewed = existing_profile == PROJECT_WORK_RECONCILIATION_PROFILE
+    compatible_profile_reviewed = (
+        existing_profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
     )
+    # These decisions describe what a numeric token is *not*.  Later scope-
+    # relationship prompt revisions cannot turn a unit price, dimension, or
+    # unrelated number into a work quantity without a changed source
+    # observation.  Preserve those validated terminal decisions across the
+    # explicitly compatible profile family instead of repeatedly sending them
+    # through the heavy model after every relationship-policy release.
+    stable_non_quantity_statuses = {"RESOURCE_OR_RATE", "DIMENSION", "UNRELATED"}
     result: list[dict[str, Any]] = []
     for value in linked_quantities:
         row = dict(value)
         review = reviews.get(str(row.get("candidate_id") or ""))
+        if review is None:
+            result.append(row)
+            continue
         if (
-            review is None
-            or not current_profile_reviewed
+            compatible_profile_reviewed
+            and str(review.get("status") or "") in stable_non_quantity_statuses
+        ):
+            continue
+        if not current_profile_reviewed:
+            result.append(row)
+            continue
+        if review.get("status") in {"WORK_QUANTITY", "DURATION"} and (
+            review.get("relationship_reviewed") is not True
             or (
-                review.get("status") in {"WORK_QUANTITY", "DURATION"}
-                and (
-                    review.get("relationship_reviewed") is not True
-                    or (
-                        review.get("relation_kind") in {"TOTAL_FOR", "COMPONENT_OF", "SUBTOTAL_OF"}
-                        and "component_set_complete" not in review
-                    )
-                )
+                review.get("relation_kind") in {"TOTAL_FOR", "COMPONENT_OF", "SUBTOTAL_OF"}
+                and "component_set_complete" not in review
             )
         ):
             result.append(row)
