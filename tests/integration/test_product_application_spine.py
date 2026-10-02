@@ -2456,9 +2456,7 @@ def test_redundant_project_refreshes_are_terminally_superseded(
                     "manifest": json.dumps(manifest),
                     "digest": semantic_digest(manifest),
                     "key": f"synthetic-project-refresh-{job_id}",
-                    "provenance": json.dumps(
-                        {"contract": "project-understanding.command@1.0.0"}
-                    ),
+                    "provenance": json.dumps({"contract": "project-understanding.command@1.0.0"}),
                     "ordinal": ordinal,
                     "correlation": uuid4(),
                     "owner": owner,

@@ -6287,11 +6287,7 @@ class SpinePostgresRepository:
 
         session.execute(
             sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
-            {
-                "key": (
-                    f"project-reconciliation:{organization_id}:{workspace_id}:{job_kind.value}"
-                )
-            },
+            {"key": (f"project-reconciliation:{organization_id}:{workspace_id}:{job_kind.value}")},
         )
 
     @staticmethod
