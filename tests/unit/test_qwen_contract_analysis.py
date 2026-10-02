@@ -267,3 +267,59 @@ def test_contract_analysis_splits_output_exhausted_batch_and_preserves_sources(
         "1.1. Условие Б.",
     ]
     assert len({item["clause_ref"] for item in result["clauses"]}) == 2
+
+
+def test_contract_analysis_splits_multi_source_batch_after_exact_quote_repair_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def complete(
+        endpoint: str,
+        prompt: str,
+        timeout_seconds: float,
+        *,
+        max_tokens: int,
+    ) -> str:
+        del endpoint, timeout_seconds, max_tokens
+        calls.append(prompt)
+        if '"loc-a"' in prompt and '"loc-b"' in prompt:
+            source_text = "Перефразированный общий текст."
+            locator = "loc-a"
+        else:
+            locator = "loc-a" if '"loc-a"' in prompt else "loc-b"
+            source_text = "2.1. Условие А." if locator == "loc-a" else "2.2. Условие Б."
+        return json.dumps(
+            {
+                "clauses": [
+                    {
+                        "clause_ref": "2.1" if locator == "loc-a" else "2.2",
+                        "section": "Условия",
+                        "source_text": source_text,
+                        "source_locator_ids": [locator],
+                        "category": "other",
+                        "customer_obligation": None,
+                        "contractor_obligation": None,
+                        "condition": None,
+                    }
+                ],
+                "risks": [],
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_analysis._complete", complete)
+    analyzer = QwenContractAnalyzer("http://127.0.0.1:8790/v1/chat/completions")
+
+    result = analyzer.analyze(
+        [
+            {"source_locator_id": "loc-a", "page": 1, "text": "2.1. Условие А."},
+            {"source_locator_id": "loc-b", "page": 2, "text": "2.2. Условие Б."},
+        ]
+    )
+
+    assert len(calls) == 4
+    assert [item["source_text"] for item in result["clauses"]] == [
+        "2.1. Условие А.",
+        "2.2. Условие Б.",
+    ]

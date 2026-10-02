@@ -55,6 +55,12 @@ _RISK_KINDS = frozenset(
     }
 )
 _SEVERITIES = frozenset({"low", "medium", "high", "critical"})
+_SPLITTABLE_BATCH_FAILURES = frozenset(
+    {
+        "qwen_semantic_response_output_exhausted",
+        "qwen_contract_clause_source_not_exact",
+    }
+)
 
 
 class QwenContractAnalyzer:
@@ -73,7 +79,7 @@ class QwenContractAnalyzer:
         try:
             parsed = self._analyze_once(values)
         except QwenSemanticFailure as exc:
-            if exc.code != "qwen_semantic_response_output_exhausted" or len(values) < 2:
+            if exc.code not in _SPLITTABLE_BATCH_FAILURES or len(values) < 2:
                 raise
             midpoint = len(values) // 2
             parsed = _merge_contract_analysis_parts(
