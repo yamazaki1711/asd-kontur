@@ -15,6 +15,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
 )
 from asd_kontur.tender.qwen_contract_analysis import (
     CONTRACT_ANALYSIS_PROFILE,
+    contract_commercial_narrative_without_unverified_authority,
     contract_proposed_wording_is_grounded,
     contract_risk_controller_is_grounded,
 )
@@ -415,6 +416,17 @@ class TenderContractAnalysisRepository:
                     continue
                 if not contract_risk_controller_is_grounded(risk):
                     continue
+                description = contract_commercial_narrative_without_unverified_authority(
+                    risk.get("description")
+                )
+                consequence = contract_commercial_narrative_without_unverified_authority(
+                    risk.get("practical_consequence")
+                )
+                recommendation = contract_commercial_narrative_without_unverified_authority(
+                    risk.get("recommended_action")
+                )
+                if not description or not consequence or not recommendation:
+                    continue
                 clause_ref = str(risk.get("clause_ref") or "")
                 risk_clause_id = clause_ids.get(clause_ref)
                 if risk_clause_id is None:
@@ -455,9 +467,9 @@ class TenderContractAnalysisRepository:
                         if not proposed or proposed_is_grounded
                         else "PROPOSED_WORDING_NUMERIC_TERM_UNGROUNDED"
                     ),
-                    "description": risk.get("description"),
-                    "recommendation_text": risk.get("recommended_action"),
-                    "consequence_code": risk.get("practical_consequence"),
+                    "description": description,
+                    "recommendation_text": recommendation,
+                    "consequence_code": consequence,
                     "confidence": risk.get("confidence"),
                     "authority": risk.get("authority"),
                 }
@@ -474,7 +486,7 @@ class TenderContractAnalysisRepository:
                             "issue_version": 1,
                             "proposed_clause_text": proposed,
                             "replacement_source_text": risk.get("replacement_source_text"),
-                            "consequence_code": risk.get("practical_consequence"),
+                            "consequence_code": consequence,
                             "uncertainty_issue_ids": [],
                         }
                     )

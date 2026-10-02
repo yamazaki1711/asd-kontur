@@ -10,6 +10,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_contract_analysis import (
     QwenContractAnalyzer,
     _contract_output_token_budget,
+    contract_commercial_narrative_without_unverified_authority,
     contract_proposed_wording_is_grounded,
     parse_contract_analysis,
 )
@@ -20,6 +21,25 @@ def test_contract_output_budget_scales_for_long_bounded_context() -> None:
     assert _contract_output_token_budget(4_000) == 3_200
     assert _contract_output_token_budget(10_000) == 5_000
     assert _contract_output_token_budget(12_000) == 5_000
+
+
+def test_contract_commercial_narrative_removes_unverified_legal_authority() -> None:
+    value = (
+        "Условие не содержит зачёта стоимости принятых работ. "
+        "Это несправедливо и противоречит правовому принципу возмещения убытков. "
+        "Подрядчику необходимо уточнить порядок расчёта."
+    )
+
+    assert contract_commercial_narrative_without_unverified_authority(value) == (
+        "Условие не содержит зачёта стоимости принятых работ. "
+        "Подрядчику необходимо уточнить порядок расчёта."
+    )
+    assert (
+        contract_commercial_narrative_without_unverified_authority(
+            "The clause is contrary to legal principle."
+        )
+        is None
+    )
 
 
 def test_contract_analysis_accepts_risk_and_leaves_benign_clause_unflagged() -> None:

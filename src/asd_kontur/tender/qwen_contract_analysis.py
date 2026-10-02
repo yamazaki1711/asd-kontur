@@ -89,6 +89,14 @@ _CUSTOMER_CONTROLLED_MECHANISMS = frozenset(
 )
 _CUSTOMER_TERMS = ("заказчик", "customer", "client", "employer")
 _EARLY_PERFORMANCE_TERMS = ("досроч", "early performance", "early completion")
+_UNVERIFIED_LEGAL_AUTHORITY_ASSERTION = re.compile(
+    r"(?:противореч\w*\s+(?:закону|законодательств\w*|(?:правов\w*\s+)?принцип\w*|стать\w*|норм\w*)|"
+    r"(?:являет\w*|услови\w*)\s+(?:незакон\w*|недействительн\w*|ничтожн\w*)|"
+    r"наруша\w*\s+(?:закон\w*|законодательств\w*|стать\w*|норм\w*)|"
+    r"(?:illegal|unlawful|invalid|unenforceable|contrary to (?:law|statute|legal principle)|"
+    r"violates? (?:the )?(?:law|statute|legal principle)))",
+    flags=re.IGNORECASE,
+)
 _MUTUAL_AGREEMENT_TERMS = (
     "по согласованию с подрядчиком",
     "по соглашению сторон",
@@ -291,8 +299,16 @@ def parse_contract_analysis(
             or not 0 <= float(confidence) <= 1
         ):
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
-        required = ("description", "practical_consequence", "recommended_action")
-        if any(not _optional_text(raw_risk.get(key)) for key in required):
+        description = contract_commercial_narrative_without_unverified_authority(
+            raw_risk.get("description")
+        )
+        practical_consequence = contract_commercial_narrative_without_unverified_authority(
+            raw_risk.get("practical_consequence")
+        )
+        recommended_action = contract_commercial_narrative_without_unverified_authority(
+            raw_risk.get("recommended_action")
+        )
+        if not description or not practical_consequence or not recommended_action:
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
         if not contract_risk_controller_is_grounded(
             {
@@ -341,9 +357,9 @@ def parse_contract_analysis(
                 "trigger_text": trigger_text,
                 "adverse_effect_text": adverse_effect_text,
                 "severity": severity,
-                "description": _optional_text(raw_risk.get("description")),
-                "practical_consequence": _optional_text(raw_risk.get("practical_consequence")),
-                "recommended_action": _optional_text(raw_risk.get("recommended_action")),
+                "description": description,
+                "practical_consequence": practical_consequence,
+                "recommended_action": recommended_action,
                 "proposed_contractor_wording": proposed,
                 "replacement_source_text": exact_replacement_source,
                 "disagreement_required": disagreement,
@@ -366,6 +382,30 @@ def _contract_output_token_budget(total_chars: int) -> int:
 def _optional_text(value: object) -> str | None:
     normalized = " ".join(str(value or "").split())
     return normalized or None
+
+
+def contract_commercial_narrative_without_unverified_authority(
+    value: object,
+) -> str | None:
+    """Remove unsupported legal conclusions from commercial contract review.
+
+    Contract risk analysis is useful without claiming that a clause is illegal,
+    invalid or contrary to a legal principle. Verified legal conclusions belong
+    to a separately qualified authority path. Keep the remaining practical
+    sentences exactly as model-authored apart from whitespace normalization.
+    """
+
+    normalized = _optional_text(value)
+    if normalized is None:
+        return None
+    sentences = re.split(r"(?<=[.!?])\s+", normalized)
+    qualified = [
+        sentence
+        for sentence in sentences
+        if sentence and not _UNVERIFIED_LEGAL_AUTHORITY_ASSERTION.search(sentence)
+    ]
+    result = " ".join(qualified).strip()
+    return result or None
 
 
 def _mentions_customer(value: str) -> bool:

@@ -691,3 +691,16 @@ deterministic validation failure is terminally accounted instead of repeating
 the entire task twice more. This preserves recovery from transient service
 loss while preventing an accepted current recovery strategy from creating a
 new expensive retry chain.
+
+The live projection also exposed an authority-boundary defect in otherwise
+useful model prose: a source-grounded advance-repayment risk was followed by an
+unsupported assertion that the clause contradicted a legal principle. Contract
+analysis in this path has `contract_commercial_risk` authority, not verified
+legal authority. A generic deterministic publication filter now removes
+sentences that assert illegality, invalidity, unenforceability or conflict with
+law/legal principles without a separately qualified authority source. It keeps
+the practical commercial explanation and action; if no usable commercial text
+remains, the risk fails closed. The same filter applies at parse time for v8
+and at read time for historical candidates. Against the blind projection it
+retained all five grounded commercial risks and three disagreement rows while
+removing the unsupported legal sentence.
