@@ -8990,7 +8990,13 @@ function formatBytes(value: number) {
 }
 
 function humanizeStatus(value: string) {
-  if (value.toLowerCase().includes("candidate")) return "Требует подтверждения";
+  if (
+    value.toLowerCase().includes("candidate") &&
+    !["exact_source_candidate_available", "candidate_clause_schedule"].includes(
+      value,
+    )
+  )
+    return "Требует подтверждения";
   const labels: Record<string, string> = {
     ACTIVE: "В работе",
     active: "Действует",
@@ -9023,6 +9029,15 @@ function humanizeStatus(value: string) {
     authoritative: "Официальное основание",
     verified: "Проверено",
     pending: "Ожидает загрузки",
+    analyzing: "Выполняется анализ договора",
+    analysis_pending: "Анализ договора ожидает обработки",
+    drafted: "Рабочий анализ подготовлен",
+    contract_input_unavailable: "Проект договора не найден",
+    partial_draft: "Подготовлен частичный рабочий проект",
+    source_format_supported: "Можно подготовить редакцию исходного договора",
+    exact_source_candidate_available:
+      "Редакция договора Подрядчика подготовлена",
+    candidate_clause_schedule: "Подготовлен перечень предлагаемых изменений",
     duplicate: "Повторный файл",
     processing: "Обрабатывается",
     candidate: "Требует подтверждения",
