@@ -152,6 +152,34 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert "PROJECT_WORK_RECONCILIATION" in fairness_definition
                 assert "CONTRACT_ANALYSIS" in fairness_definition
                 assert "DOCUMENT_HASH" not in fairness_definition
+                contract_profile_constraint = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid='workspace.contract_analysis_results'::regclass "
+                            "AND conname='contract_analysis_results_profile_version_check'"
+                        )
+                    )
+                )
+                assert "qwen-contract-analysis-v1" in contract_profile_constraint
+                assert "qwen-contract-analysis-v2" in contract_profile_constraint
+                assert "qwen-contract-analysis-v3" in contract_profile_constraint
+                expected_claim_indexes = {
+                    "ix_durable_jobs_successor_lineage",
+                    "ix_durable_jobs_workspace_model_service",
+                    "ix_project_stage_source_terminal",
+                    "ix_assistant_turns_workspace_active",
+                }
+                actual_claim_indexes = set(
+                    connection.scalars(
+                        sa.text(
+                            "SELECT indexname FROM pg_indexes WHERE schemaname='workspace' "
+                            "AND indexname=ANY(:indexes)"
+                        ),
+                        {"indexes": sorted(expected_claim_indexes)},
+                    )
+                )
+                assert actual_claim_indexes == expected_claim_indexes
 
             # 0045 must restore the 0044 wrapper AND retain its v1 implementation.
             run_migration(str(repository_root), database_url, "0044_dep_recovery_idempotency")
