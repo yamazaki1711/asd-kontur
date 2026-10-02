@@ -113,6 +113,36 @@ def test_contract_analysis_rejects_invented_source_text() -> None:
         )
 
 
+def test_contract_analysis_falls_back_to_exact_locator_text_for_high_overlap_quote() -> None:
+    source = {
+        "loc-source": (
+            "6.3. Подрядчик обязан передать исполнительную документацию Заказчику "
+            "в течение пяти рабочих дней после завершения работ."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "6.3",
+                    "source_text": (
+                        "Подрядчик должен передать исполнительную документацию Заказчику "
+                        "в течение пяти рабочих дней после завершения работ"
+                    ),
+                    "source_locator_ids": ["loc-source"],
+                    "category": "documentation",
+                }
+            ],
+            "risks": [],
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    assert result["clauses"][0]["source_text"] == source["loc-source"]
+
+
 def test_contract_analysis_resolves_typographic_variant_to_exact_admitted_text() -> None:
     source = {
         "loc-typography": (

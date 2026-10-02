@@ -9,6 +9,7 @@ identities, persistence and all numeric/date arithmetic remain deterministic.
 from __future__ import annotations
 
 import json
+import re
 import unicodedata
 from collections.abc import Iterable, Mapping
 
@@ -194,7 +195,7 @@ def parse_contract_analysis(
         if any(value not in allowed_text_by_locator for value in normalized_locators):
             raise QwenSemanticFailure("qwen_contract_clause_evidence_invalid")
         allowed_source = " ".join(allowed_text_by_locator[value] for value in normalized_locators)
-        exact_source_text = _resolve_exact_source_quote(source_text, allowed_source)
+        exact_source_text = _resolve_grounded_clause_source(source_text, allowed_source)
         if exact_source_text is None:
             raise QwenSemanticFailure("qwen_contract_clause_source_not_exact")
         seen_clause_ids.add(clause_ref)
@@ -367,6 +368,27 @@ def _resolve_exact_source_quote(candidate: str, allowed_source: str) -> str | No
     if start < 0:
         return None
     return allowed_source[start : start + len(candidate)]
+
+
+def _resolve_grounded_clause_source(candidate: str, allowed_source: str) -> str | None:
+    """Return exact admitted text, using bounded locator context when overlap is strong."""
+
+    exact = _resolve_exact_source_quote(candidate, allowed_source)
+    if exact is not None:
+        return exact
+    if not candidate or len(allowed_source) > 3_000:
+        return None
+    candidate_tokens = _source_tokens(candidate)
+    source_tokens = set(_source_tokens(allowed_source))
+    if len(candidate_tokens) < 4:
+        return None
+    overlap = sum(token in source_tokens for token in candidate_tokens) / len(candidate_tokens)
+    return allowed_source if overlap >= 0.8 else None
+
+
+def _source_tokens(value: str) -> list[str]:
+    folded = unicodedata.normalize("NFC", value).translate(_SOURCE_QUOTE_TRANSLATION).casefold()
+    return re.findall(r"[\w]+", folded, flags=re.UNICODE)
 
 
 def _merge_contract_analysis_parts(

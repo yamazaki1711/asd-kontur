@@ -517,3 +517,15 @@ than being misreported as a completed draft. Against the live database the
 transition projection preserved 35 extracted clauses, removed the unsupported
 fourth risk, retained three grounded disagreement candidates and continued to
 show `CONTRACT_ANALYSIS_IN_PROGRESS`.
+
+The same live run exposed a performance/availability bottleneck in exact clause
+quotation. Four of the first fourteen v7 batches ended with
+`qwen_contract_clause_source_not_exact` after approximately 5–11 minutes of
+generation and bounded repair. V8 now first resolves an exact quote as before;
+when Qwen has selected valid durable locators but makes a small lexical change,
+the validator may fall back to the complete exact admitted locator context only
+when that context is at most 3,000 characters and token overlap is at least
+80%. Low-overlap invented wording remains rejected. Risk `trigger_text` and
+`adverse_effect_text` continue to require exact source substrings, so this
+throughput correction cannot turn paraphrased model prose into a professional
+finding.
