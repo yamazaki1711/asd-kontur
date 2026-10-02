@@ -203,6 +203,30 @@ promote the attached legal statement, severity, threshold, court citation or
 proposed wording. The modern catalog must version the pattern, jurisdiction,
 review status and authority references separately.
 
+### Entry-by-entry disposition
+
+The source inventory was read directly from
+`traps/default_traps.yaml` at
+`sha256:b2c988fe52b255ed56e6f40f449b64abccd8d68abce25586451845073f0ec97f`.
+All 100 identifiers are assigned exactly once: 30 safe generic problem
+patterns, 34 patterns requiring neutral commercial rewording, 27 requiring
+current legal verification, 8 project-specific patterns and 1 incorrect
+authority rule. No entry was proven obsolete from repository evidence alone.
+
+| Disposition | Legacy entry IDs |
+|---|---|
+| `SAFE_GENERIC_PATTERN` (30) | `scope_01`–`scope_07`; `liability_01`–`liability_06`; `audit_traps_01`, `audit_traps_02`, `audit_traps_07`, `audit_traps_08`, `audit_traps_11`, `audit_traps_12`; `restoration_traps_02`, `restoration_traps_05`, `restoration_traps_06`, `restoration_traps_07`, `restoration_traps_09`, `restoration_traps_10`, `restoration_traps_11`; `construction_traps_02`, `construction_traps_06`, `construction_traps_09`, `construction_traps_15` |
+| `NEEDS_REWORDING` (34) | `payment_01`–`payment_08`; `acceptance_01`–`acceptance_07`; `BA-203`; `subcontractor_01`–`subcontractor_05`; `BA-202`; `insurance_01`–`insurance_03`; `audit_traps_03`, `audit_traps_04`, `audit_traps_06`, `audit_traps_09`; `restoration_traps_01`, `restoration_traps_03`; `construction_traps_04`, `construction_traps_14`; `ICR-01` |
+| `NEEDS_CURRENT_LEGAL_VERIFICATION` (27) | `penalty_01`–`penalty_07`; `warranty_01`–`warranty_06`; `termination_01`–`termination_04`; `BA-204`; `audit_traps_05`, `audit_traps_10`; `restoration_traps_04`; `construction_traps_01`, `construction_traps_05`, `construction_traps_07`, `construction_traps_08`, `construction_traps_11`, `construction_traps_13` |
+| `PROJECT_SPECIFIC` (8) | `corporate_policy_01`–`corporate_policy_05`; `construction_traps_03`, `construction_traps_10`, `construction_traps_12` |
+| `INCORRECT` (1) | `restoration_traps_08`: model confidence alone cannot establish factual or professional authority |
+
+This disposition classifies only the reusable *problem pattern*. It explicitly
+does not approve the legacy legal citations, court decisions, numeric
+thresholds, severity, recommendation text or proposed clause wording. Entries
+outside Tender P0 remain reference material for their named future mode and are
+not promoted into the contract runtime.
+
 ## Legacy Component Decision Gate records
 
 | Legacy source | Capability | Ownership/license | Current validity and generality | Security/dependencies | Characterization | Decision |

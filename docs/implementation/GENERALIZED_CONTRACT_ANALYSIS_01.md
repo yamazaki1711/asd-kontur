@@ -123,7 +123,12 @@ No legacy component was reused as-is. In particular, ASD-KONTUR does not restore
 approved-on-model-failure behavior, placeholder parties, blanket statutory
 citations, whole-contract unbounded prompts, keyword-only authority, or stale
 legal conclusions. The old RKB remains a review backlog until each pattern is
-classified for current, generic use.
+classified for current, generic use. The source-level audit now classifies all
+100 legacy identifiers exactly once (30 `SAFE_GENERIC_PATTERN`, 34
+`NEEDS_REWORDING`, 27 `NEEDS_CURRENT_LEGAL_VERIFICATION`, 8
+`PROJECT_SPECIFIC`, and 1 `INCORRECT`) in the functional regression register.
+This is a reuse decision record, not a runtime import: no legacy citation,
+threshold, severity, recommendation or proposed wording has been promoted.
 
 ## Live validation state
 
