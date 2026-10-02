@@ -310,3 +310,16 @@ Both a contract report and a standalone disagreement protocol generated after
 the fix pass the DOCX XSD/package validator. LibreOffice is not installed, so a
 page-image visual qualification remains explicitly outstanding; schema success
 does not claim visual acceptance.
+
+The format-preserving revised-contract editor had a separate serializer defect.
+Python `xml.etree` retained the `mc:Ignorable` attribute but removed namespace
+declarations for extension prefixes used only inside that attribute. The
+admitted source contract validates, while the earlier 86,683-byte revised
+candidate therefore failed namespace validation despite preserving all 566
+paragraphs. The editor now records the admitted source namespace map and
+restores only the declarations referenced by `mc:Ignorable`, failing closed if
+the admitted package did not define one. Applying the fix to the same real
+candidate produced an 86,767-byte document with 566/566 paragraphs and no new
+schema/package errors against the original contract. A generic changed-contract
+test covers an unused `w15` extension namespace so this behavior is independent
+of the blind corpus.

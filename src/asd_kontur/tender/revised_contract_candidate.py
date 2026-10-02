@@ -10,6 +10,7 @@ from typing import Any, cast
 from xml.etree import ElementTree as ET
 
 _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+_MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
 
@@ -58,7 +59,7 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
     if document is None:
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
 
-    _register_source_namespaces(document)
+    source_namespaces = _register_source_namespaces(document)
     try:
         root = ET.fromstring(document)
     except ET.ParseError as exc:
@@ -89,7 +90,11 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         _replace_paragraph_text(paragraphs[paragraph_index], revised_paragraph)
         paragraph_texts[paragraph_index] = revised_paragraph
 
-    payloads["word/document.xml"] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    serialized_document = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    payloads["word/document.xml"] = _restore_ignorable_namespaces(
+        serialized_document,
+        source_namespaces=source_namespaces,
+    )
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as target:
         for info in infos:
@@ -134,11 +139,58 @@ def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, in
     return matches[0].span()
 
 
-def _register_source_namespaces(document: bytes) -> None:
+def _register_source_namespaces(document: bytes) -> dict[str, str]:
+    namespaces: dict[str, str] = {}
     for _, namespace in ET.iterparse(io.BytesIO(document), events=("start-ns",)):
         prefix, uri = cast(tuple[str, str], namespace)
+        namespaces[prefix] = uri
         if prefix != "xml":
             ET.register_namespace(prefix or "", uri)
+    return namespaces
+
+
+def _restore_ignorable_namespaces(
+    document: bytes,
+    *,
+    source_namespaces: Mapping[str, str],
+) -> bytes:
+    """Keep namespace declarations referenced only by ``mc:Ignorable``.
+
+    ``xml.etree`` drops unused namespace declarations during serialization. In
+    Word documents some extension prefixes are intentionally used only as
+    tokens in ``mc:Ignorable``; dropping their declarations makes an otherwise
+    unchanged DOCX schema-invalid. Restore only those declarations from the
+    admitted source package and fail closed if the source did not define one.
+    """
+
+    text = document.decode("utf-8")
+    root_match = re.search(r"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?document\b", text)
+    if root_match is None:
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+    root_end = text.find(">", root_match.start())
+    if root_end < 0:
+        raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+    root_opening = text[root_match.start() : root_end]
+    mc_prefix = next(
+        (prefix for prefix, uri in source_namespaces.items() if uri == _MARKUP_COMPATIBILITY_NS),
+        None,
+    )
+    if not mc_prefix:
+        return document
+    match = re.search(rf'\s{re.escape(mc_prefix)}:Ignorable="([^"]*)"', root_opening)
+    if match is None:
+        return document
+    additions: list[str] = []
+    for prefix in match.group(1).split():
+        if re.search(rf"\sxmlns:{re.escape(prefix)}=", root_opening):
+            continue
+        uri = source_namespaces.get(prefix)
+        if uri is None or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]*", prefix):
+            raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
+        additions.append(f' xmlns:{prefix}="{uri}"')
+    if not additions:
+        return document
+    return (text[:root_end] + "".join(additions) + text[root_end:]).encode("utf-8")
 
 
 def _records(value: Any) -> tuple[Mapping[str, Any], ...]:

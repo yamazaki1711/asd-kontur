@@ -34,6 +34,22 @@ def _source_docx(*paragraphs: str) -> bytes:
     return output.getvalue()
 
 
+def _source_docx_with_ignorable_namespace(paragraph: str) -> bytes:
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:document xmlns:w="{_WORD_NS}" '
+        'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+        'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml" '
+        'mc:Ignorable="w15"><w:body>'
+        f'<w:p><w:r><w:t xml:space="preserve">{paragraph}</w:t></w:r></w:p>'
+        "</w:body></w:document>"
+    ).encode()
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w") as package:
+        package.writestr("word/document.xml", document)
+    return output.getvalue()
+
+
 def _view(source_text: str) -> dict[str, Any]:
     return {
         "clauses": [
@@ -265,6 +281,18 @@ def test_revised_contract_does_not_duplicate_boundary_punctuation() -> None:
     revised = render_revised_contract_candidate_docx(source, view)
 
     assert _paragraphs(revised) == ["3.5. Расходы распределяются по установленной причине."]
+
+
+def test_revised_contract_preserves_ignorable_namespace_declarations() -> None:
+    original_clause = "4.2. Заказчик передаёт площадку после подписания договора."
+    source = _source_docx_with_ignorable_namespace(original_clause)
+
+    revised = render_revised_contract_candidate_docx(source, _view(original_clause))
+
+    with zipfile.ZipFile(io.BytesIO(revised)) as package:
+        document = package.read("word/document.xml").decode("utf-8")
+    assert 'mc:Ignorable="w15"' in document
+    assert 'xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"' in document
 
 
 def test_product_projection_advertises_only_verified_exact_candidate() -> None:
