@@ -24,6 +24,7 @@ from asd_kontur.assistant.models import AssistantMode
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.document_understanding.models import StructureIdentityCandidate
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
@@ -666,6 +667,7 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
     failed_job_id = uuid4()
     exhausted_job_id = uuid4()
     clause_source_job_id = uuid4()
+    current_profile_validation_job_id = uuid4()
     with postgres_environment.owner_engine.begin() as connection:
         owner = connection.scalar(
             sa.text(
@@ -693,6 +695,33 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
                 "manifest": json.dumps(manifest),
                 "digest": semantic_digest(manifest),
                 "key": "synthetic-historical-transient-failure",
+                "provenance": json.dumps({"contract": "synthetic-autonomy-test@1.0.0"}),
+                "correlation": uuid4(),
+                "owner": owner,
+            },
+        )
+        current_profile_manifest = {
+            "synthetic": "current-profile-source-validation",
+            "contract_analysis_profile": CONTRACT_ANALYSIS_PROFILE,
+        }
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,job_kind,"
+                "input_manifest,input_digest,idempotency_key,state,completed_at,priority,max_attempts,"
+                "retry_policy_version,typed_failure_code,provenance,correlation_id,"
+                "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                "'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),:digest,:key,"
+                "'failed',CURRENT_TIMESTAMP,188,3,'synthetic-retry-v1',"
+                "'qwen_contract_clause_source_not_exact',CAST(:provenance AS jsonb),"
+                ":correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": current_profile_validation_job_id,
+                "manifest": json.dumps(current_profile_manifest),
+                "digest": semantic_digest(current_profile_manifest),
+                "key": "synthetic-current-contract-validation-failure",
                 "provenance": json.dumps({"contract": "synthetic-autonomy-test@1.0.0"}),
                 "correlation": uuid4(),
                 "owner": owner,
@@ -815,6 +844,7 @@ def test_autonomous_orchestrator_retries_historical_transient_model_failure_once
     assert by_cause[failed_job_id]["input_digest"] == semantic_digest(manifest)
     assert by_cause[exhausted_job_id]["input_digest"] == exhausted_digest
     assert by_cause[clause_source_job_id]["input_digest"] == semantic_digest(clause_manifest)
+    assert current_profile_validation_job_id not in by_cause
     assert by_cause[failed_job_id]["provenance"]["autonomous_retry_generation"] == 1
     assert by_cause[exhausted_job_id]["provenance"]["autonomous_retry_generation"] == 1
     assert by_cause[clause_source_job_id]["provenance"]["autonomous_retry_generation"] == 2

@@ -2122,19 +2122,25 @@ class SpinePostgresRepository:
                         "'qwen_semantic_runtime_unavailable',"
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
+                        "'qwen_vision_runtime_unavailable') OR ("
+                        "failed.typed_failure_code IN ("
                         "'qwen_contract_clause_source_not_exact',"
                         "'qwen_contract_risk_controller_not_grounded',"
-                        "'qwen_semantic_response_output_exhausted',"
-                        "'qwen_vision_runtime_unavailable') OR ("
+                        "'qwen_semantic_response_output_exhausted') AND "
+                        "COALESCE(failed.input_manifest->>'contract_analysis_profile','')<>"
+                        ":current_contract_profile) OR ("
                         "failed.typed_failure_code='retry_exhausted' AND "
-                        "terminal.result_manifest->>'last_failure_code' IN ("
+                        "(terminal.result_manifest->>'last_failure_code' IN ("
                         "'qwen_semantic_runtime_unavailable',"
                         "'qwen_work_reconciliation_runtime_unavailable',"
                         "'qwen_contract_analysis_runtime_unavailable',"
+                        "'qwen_vision_runtime_unavailable') OR ("
+                        "terminal.result_manifest->>'last_failure_code' IN ("
                         "'qwen_contract_clause_source_not_exact',"
                         "'qwen_contract_risk_controller_not_grounded',"
-                        "'qwen_semantic_response_output_exhausted',"
-                        "'qwen_vision_runtime_unavailable'))) "
+                        "'qwen_semantic_response_output_exhausted') AND "
+                        "COALESCE(failed.input_manifest->>'contract_analysis_profile','')<>"
+                        ":current_contract_profile)))) "
                         "AND COALESCE((failed.provenance->>'autonomous_retry_generation')::integer,0)<2 "
                         "AND NOT EXISTS (SELECT 1 FROM workspace.durable_jobs replacement WHERE "
                         "replacement.organization_id=failed.organization_id AND "
@@ -2148,6 +2154,7 @@ class SpinePostgresRepository:
                         "organization": organization_id,
                         "workspace": workspace_id,
                         "limit": limit,
+                        "current_contract_profile": CONTRACT_ANALYSIS_PROFILE,
                     },
                 )
                 .mappings()

@@ -680,3 +680,14 @@ document name, clause, party, quantity or expected finding. Recursive
 source-preserving recovery remains available for an eight-locator batch that
 still fails validation. A changed-seventeen-clause unit case proves the
 default `8 + 8 + 1` packing behavior.
+
+The autonomous replacement policy is now profile-aware as well. Runtime
+unavailability remains retryable for every profile. Exact-source,
+controller-grounding and output-budget failures remain eligible for bounded
+replacement when they came from an older profile that lacked current
+source-preserving recovery. If the current v8 analyzer has already exhausted
+its repair and recursive split down to the smallest bounded context, the same
+deterministic validation failure is terminally accounted instead of repeating
+the entire task twice more. This preserves recovery from transient service
+loss while preventing an accepted current recovery strategy from creating a
+new expensive retry chain.
