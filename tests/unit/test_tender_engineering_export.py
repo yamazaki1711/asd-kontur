@@ -107,6 +107,16 @@ def _model() -> dict[str, object]:
         "requirements": {"professional_summary": "Применимость нормы уточняется."},
         "documents": [{"name": "КР.pdf", "version": 2, "document_role": "РД"}],
         "unclassified_works": [],
+        "unresolved": {
+            "participants": [
+                {
+                    "reason": (
+                        "Для роли «Заказчик» встречается альтернативное указание "
+                        "«ГУП Городские сети», но оно требует уточнения."
+                    )
+                }
+            ]
+        },
     }
 
 
@@ -150,6 +160,7 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Требуется распределить коммерческий объём: 1 поз." in xml
     assert "Нормативные вопросы" in xml
     assert "Неопределённости / недостающие данные" in xml
+    assert "ГУП Городские сети" in xml
     assert "Вопросы Заказчику" in xml
     assert 'w:header="708"' in xml
     assert 'w:footer="708"' in xml
