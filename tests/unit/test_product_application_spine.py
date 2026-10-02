@@ -295,6 +295,66 @@ def test_cross_document_work_batches_preserve_quantity_context_bound() -> None:
     assert selected == {"design", "commercial"}
 
 
+def test_cross_document_work_batches_review_exact_wording_without_location() -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility="",
+            family="structural_steel",
+            document_role="Рабочая документация",
+            wording="Монтаж стальных балок покрытия",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "commercial",
+            facility="",
+            family="structural_steel",
+            document_role="Смета",
+            wording="Монтаж стальных балок покрытия",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "other-commercial",
+            facility="",
+            family="structural_steel",
+            document_role="Смета",
+            wording="Монтаж связей покрытия",
+            quantity_count=1,
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
+
+    assert [[value["candidate_id"] for value in batch] for batch in batches] == [
+        ["design", "commercial"]
+    ]
+    assert selected == {"design", "commercial"}
+
+
+def test_cross_document_work_batches_keep_unlocated_different_wording_separate() -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility="",
+            family="waterproofing",
+            document_role="Проектная документация",
+            wording="Гидроизоляция фундаментной плиты",
+        ),
+        _work_batch_row(
+            "commercial",
+            facility="",
+            family="waterproofing",
+            document_role="Ведомость объемов работ",
+            wording="Гидроизоляция наружных стен",
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
+
+    assert batches == []
+    assert selected == set()
+
+
 def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
     family = ("pipeline", "Трубопроводы и сети")
 

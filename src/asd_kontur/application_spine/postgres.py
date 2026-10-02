@@ -381,19 +381,34 @@ def _cross_document_work_batches(
     """Select bounded design/commercial contexts for one engineering scope.
 
     The grouping keys are deterministic context established before Qwen: one
-    exact facility hint and one construction family. Qwen receives both sides
-    and decides normalized meaning; this helper never declares equivalence.
+    exact facility hint and one construction family, or (when location remains
+    unresolved) one exact normalized source wording and construction family.
+    Qwen receives both sides and decides normalized meaning; this helper never
+    declares equivalence. Exact wording is only a safe context-assembly key,
+    not comparison authority.
     """
 
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for raw in rows:
         row = dict(raw)
-        hints = [str(value) for value in row.get("facility_hints") or ()]
+        hints = [
+            str(value).strip()
+            for value in row.get("facility_hints") or ()
+            if str(value).strip()
+        ]
         family = str(row.get("deterministic_family_hint") or "")
         side = document_comparison_side(row.get("document_role"), row.get("document"))
-        if len(hints) == 1 and family and side in {"design", "commercial"}:
-            row["comparison_side"] = side
-            groups[(hints[0], family)].append(row)
+        wording = " ".join(str(row.get("wording") or "").casefold().split())
+        if not family or side not in {"design", "commercial"}:
+            continue
+        if len(hints) == 1:
+            scope_key = ("facility", hints[0], family)
+        elif not hints and wording:
+            scope_key = ("wording", wording, family)
+        else:
+            continue
+        row["comparison_side"] = side
+        groups[scope_key].append(row)
 
     eligible = [
         (key, values)
@@ -426,7 +441,7 @@ def _cross_document_work_batches(
             for side in ("design", "commercial")
         ]
         batch: list[dict[str, Any]] = []
-        seen_wordings: set[str] = set()
+        seen_side_wordings: set[tuple[str, str]] = set()
         quantity_count = 0
         for value in [*seed, *ordered]:
             candidate_id = str(value.get("candidate_id") or "")
@@ -435,8 +450,9 @@ def _cross_document_work_batches(
             ):
                 continue
             wording = " ".join(str(value.get("wording") or "").casefold().split())
+            side_wording = (str(value.get("comparison_side") or ""), wording)
             row_quantity_count = len(value.get("quantity_observations") or ())
-            if wording in seen_wordings or len(batch) >= batch_size:
+            if side_wording in seen_side_wordings or len(batch) >= batch_size:
                 continue
             if batch and quantity_count + row_quantity_count > 16:
                 continue
@@ -444,7 +460,7 @@ def _cross_document_work_batches(
             cleaned.pop("semantic_priority", None)
             cleaned.pop("comparison_side", None)
             batch.append(cleaned)
-            seen_wordings.add(wording)
+            seen_side_wordings.add(side_wording)
             quantity_count += row_quantity_count
         if {
             document_comparison_side(value.get("document_role"), value.get("document"))
