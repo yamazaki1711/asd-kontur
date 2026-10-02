@@ -26,6 +26,7 @@ from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.document_understanding.models import StructureIdentityCandidate
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 from asd_kontur.web_app import create_app
 
 from .conftest import PostgreSQLEnvironment
@@ -132,6 +133,110 @@ def test_contract_profile_upgrade_cancels_only_older_queued_model_work(
     assert receipt["terminal_state"] == "cancelled"
     assert receipt["typed_outcome_code"] == "superseded_contract_analysis_profile"
     assert receipt["result_manifest"]["replacement_profile"] == CONTRACT_ANALYSIS_PROFILE
+
+
+def test_work_profile_upgrade_cancels_only_older_queued_model_work(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="work-profile-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Work profile owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "work-profile-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Changed work profile"},
+            headers=_csrf(client),
+        ).json()
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    old_job_id = uuid4()
+    current_job_id = uuid4()
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = connection.scalar(
+            sa.text(
+                "SELECT created_by_identity_id FROM workspace.workspaces "
+                "WHERE organization_id=:organization AND workspace_id=:workspace"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        )
+        for job_id, profile in (
+            (old_job_id, "qwen-project-work-reconciliation-v20"),
+            (current_job_id, PROJECT_WORK_RECONCILIATION_PROFILE),
+        ):
+            manifest = {"work_reconciliation_profile": profile, "synthetic": True}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                    "'PROJECT_WORK_RECONCILIATION',CAST(:manifest AS jsonb),:digest,:key,"
+                    "'queued',175,3,'synthetic-retry-v1',CAST(:provenance AS jsonb),"
+                    ":correlation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "manifest": json.dumps(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": f"synthetic-work-profile:{profile}",
+                    "provenance": json.dumps({"contract": "synthetic-profile-test@1.0.0"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    with Session(postgres_environment.document_worker_engine) as session, session.begin():
+        session.execute(
+            sa.select(
+                sa.func.set_config("asd.organization_id", str(organization_id), True),
+                sa.func.set_config("asd.workspace_id", str(workspace_id), True),
+            )
+        ).one()
+        assert (
+            repository._supersede_queued_work_reconciliation_profiles(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            )
+            == 1
+        )
+
+    with postgres_environment.owner_engine.connect() as connection:
+        states = dict(
+            connection.execute(
+                sa.text("SELECT job_id,state FROM workspace.durable_jobs WHERE job_id=ANY(:jobs)"),
+                {"jobs": [old_job_id, current_job_id]},
+            )
+            .tuples()
+            .all()
+        )
+        receipt = (
+            connection.execute(
+                sa.text(
+                    "SELECT terminal_state,typed_outcome_code,result_manifest FROM "
+                    "workspace.job_terminal_receipts WHERE job_id=:job"
+                ),
+                {"job": old_job_id},
+            )
+            .mappings()
+            .one()
+        )
+
+    assert states == {old_job_id: "cancelled", current_job_id: "queued"}
+    assert receipt["terminal_state"] == "cancelled"
+    assert receipt["typed_outcome_code"] == "superseded_work_reconciliation_profile"
+    assert receipt["result_manifest"]["replacement_profile"] == (
+        PROJECT_WORK_RECONCILIATION_PROFILE
+    )
 
 
 def _database_url(engine: sa.Engine) -> str:

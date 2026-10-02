@@ -5449,6 +5449,116 @@ class SpinePostgresRepository:
             )
         return len(rows)
 
+    def _supersede_queued_work_reconciliation_profiles(
+        self,
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        limit: int = 256,
+    ) -> int:
+        """Terminally account for unclaimed work from superseded Qwen profiles."""
+
+        rows = session.execute(
+            sa.text(
+                "SELECT job_id,lease_generation,input_manifest->>"
+                "'work_reconciliation_profile' AS prior_profile FROM workspace.durable_jobs "
+                "WHERE organization_id=:organization AND workspace_id=:workspace AND "
+                "job_kind='PROJECT_WORK_RECONCILIATION' AND state='queued' AND "
+                "COALESCE(input_manifest->>'work_reconciliation_profile','')<>:profile "
+                "ORDER BY created_at,job_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "limit": limit,
+            },
+        ).all()
+        for row in rows:
+            job_id = UUID(str(row.job_id))
+            reason_code = "superseded_work_reconciliation_profile"
+            cancellation_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_cancellations "
+                    "(organization_id,workspace_id,cancellation_id,job_id,"
+                    "requested_by_identity_id,reason_code,cancellation_digest) VALUES "
+                    "(:organization,:workspace,:cancellation,:job,"
+                    "'system:project-orchestrator',:reason,:digest)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "cancellation": cancellation_id,
+                    "job": job_id,
+                    "reason": reason_code,
+                    "digest": semantic_digest(
+                        {
+                            "cancellation_id": cancellation_id,
+                            "job_id": job_id,
+                            "reason_code": reason_code,
+                        }
+                    ),
+                },
+            )
+            result = {
+                "semantic_effect": False,
+                "reason": reason_code,
+                "prior_profile": str(row.prior_profile or ""),
+                "replacement_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+            }
+            receipt_id = uuid7()
+            session.execute(
+                sa.text(
+                    "INSERT INTO workspace.job_terminal_receipts "
+                    "(organization_id,workspace_id,terminal_receipt_id,job_id,"
+                    "lease_generation,terminal_state,typed_outcome_code,result_manifest,"
+                    "result_digest) VALUES (:organization,:workspace,:receipt,:job,"
+                    ":generation,'cancelled',:reason,CAST(:result AS jsonb),:digest)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "receipt": receipt_id,
+                    "job": job_id,
+                    "generation": int(row.lease_generation),
+                    "reason": reason_code,
+                    "result": _json(result),
+                    "digest": semantic_digest(
+                        {"job_id": job_id, "state": "cancelled", "result": result}
+                    ),
+                },
+            )
+            session.execute(
+                sa.text(
+                    "UPDATE workspace.durable_jobs SET state='cancelled',"
+                    "cancellation_state='acknowledged',completed_at=CURRENT_TIMESTAMP,"
+                    "typed_failure_code=:reason,result_receipt_id=:receipt WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "job_id=:job AND state='queued'"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "reason": reason_code,
+                    "receipt": receipt_id,
+                },
+            )
+            self._append_event(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_id=job_id,
+                event_type="job.cancelled",
+                safe_message_code=reason_code,
+                current=1,
+                total=1,
+                terminal=True,
+            )
+        return len(rows)
+
     def start_project_understanding(
         self,
         *,
@@ -6223,6 +6333,11 @@ class SpinePostgresRepository:
                 session, organization_id=organization_id, workspace_id=workspace_id
             ):
                 return ()
+            self._supersede_queued_work_reconciliation_profiles(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            )
             outstanding = int(
                 session.execute(
                     sa.text(
