@@ -244,8 +244,12 @@ def parse_contract_analysis(
         required = ("description", "practical_consequence", "recommended_action")
         if any(not _optional_text(raw_risk.get(key)) for key in required):
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
-        if risk_mechanism in _CUSTOMER_CONTROLLED_MECHANISMS and not _mentions_customer(
-            " ".join((trigger_text, adverse_effect_text))
+        if not contract_risk_controller_is_grounded(
+            {
+                "risk_mechanism": risk_mechanism,
+                "trigger_text": trigger_text,
+                "adverse_effect_text": adverse_effect_text,
+            }
         ):
             raise QwenSemanticFailure("qwen_contract_risk_controller_not_grounded")
         disagreement = raw_risk.get("disagreement_required")
@@ -305,6 +309,22 @@ def _optional_text(value: object) -> str | None:
 def _mentions_customer(value: str) -> bool:
     folded = value.casefold()
     return any(term in folded for term in _CUSTOMER_TERMS)
+
+
+def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
+    """Reject a Customer-controlled mechanism without an explicit Customer actor."""
+
+    mechanism = str(risk.get("risk_mechanism") or "")
+    if mechanism not in _CUSTOMER_CONTROLLED_MECHANISMS:
+        return True
+    return _mentions_customer(
+        " ".join(
+            (
+                str(risk.get("trigger_text") or ""),
+                str(risk.get("adverse_effect_text") or ""),
+            )
+        )
+    )
 
 
 _SOURCE_QUOTE_TRANSLATION = str.maketrans(

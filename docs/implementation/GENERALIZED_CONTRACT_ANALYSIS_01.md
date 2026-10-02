@@ -503,3 +503,11 @@ Migration `0105_contract_controller_grounding` admits the versioned v8 result
 profile. This correction is staged only: it will not be activated until the
 autonomous v7 checkpoint has completed, so the current worker and Qwen run are
 not interrupted.
+
+The read projection is also version-transition safe. While v8 is being built,
+it prefers each completed v8 source batch but retains the corresponding v7
+batch for coverage until its replacement succeeds. The counterparty-grounding
+guard is applied to both profiles at read time, so an unsupported historical
+Customer-control inference cannot remain in the UI, report or disagreement
+schedule during the transition. This avoids replacing a useful contract review
+with an empty screen merely because a safer profile has started.

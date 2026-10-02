@@ -13,7 +13,12 @@ from sqlalchemy.orm import Session
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
-from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_contract_analysis import (
+    CONTRACT_ANALYSIS_PROFILE,
+    contract_risk_controller_is_grounded,
+)
+
+_CONTRACT_ANALYSIS_READ_PROFILES = (CONTRACT_ANALYSIS_PROFILE, "qwen-contract-analysis-v7")
 
 
 class TenderContractAnalysisError(RuntimeError):
@@ -266,23 +271,27 @@ class TenderContractAnalysisRepository:
             ).mappings()
         )
         effective_jobs = _latest_job_attempts(jobs)
-        effective_job_ids = {str(job["job_id"]) for job in effective_jobs}
         results = list(
             session.execute(
                 sa.text(
                     "SELECT result.job_id,result.source_version_id,result.batch_ordinal,"
-                    "result.result_manifest,result.recorded_at,job.input_manifest "
+                    "result.profile_version,result.result_manifest,result.recorded_at,"
+                    "job.input_manifest "
                     "FROM workspace.contract_analysis_results result "
                     "JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id AND "
                     "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
                     "result.organization_id=:o AND result.workspace_id=:w AND job.state='succeeded' "
-                    "AND result.profile_version=:profile "
+                    "AND result.profile_version=ANY(:profiles) "
                     "ORDER BY result.source_version_id,result.batch_ordinal,result.recorded_at"
                 ),
-                {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "profiles": list(_CONTRACT_ANALYSIS_READ_PROFILES),
+                },
             ).mappings()
         )
-        results = [result for result in results if str(result["job_id"]) in effective_job_ids]
+        results = _preferred_contract_results(results)
         active = any(str(job["state"]) in {"queued", "leased", "running"} for job in effective_jobs)
         failed = [
             job
@@ -358,6 +367,8 @@ class TenderContractAnalysisRepository:
                 if not isinstance(risk, dict):
                     continue
                 if not context_complete:
+                    continue
+                if not contract_risk_controller_is_grounded(risk):
                     continue
                 clause_ref = str(risk.get("clause_ref") or "")
                 risk_clause_id = clause_ids.get(clause_ref)
@@ -558,6 +569,27 @@ def _set_scope(session: Session, organization_id: UUID, workspace_id: UUID) -> N
 
 def _row(value: Any) -> dict[str, Any]:
     return {key: str(item) if isinstance(item, UUID) else item for key, item in dict(value).items()}
+
+
+def _preferred_contract_results(results: list[Any]) -> list[Any]:
+    """Prefer the current profile while retaining safe prior-profile coverage."""
+
+    selected: dict[tuple[str, int], Any] = {}
+    for result in results:
+        key = (str(result["source_version_id"]), int(result["batch_ordinal"]))
+        current = selected.get(key)
+        current_profile = str(current["profile_version"]) if current is not None else None
+        result_profile = str(result["profile_version"])
+        if (
+            current is None
+            or current_profile == result_profile
+            or (
+                current_profile != CONTRACT_ANALYSIS_PROFILE
+                and result_profile == CONTRACT_ANALYSIS_PROFILE
+            )
+        ):
+            selected[key] = result
+    return list(selected.values())
 
 
 def _latest_job_attempts(jobs: list[Any]) -> list[Any]:

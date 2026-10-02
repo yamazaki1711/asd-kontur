@@ -1,4 +1,7 @@
-from asd_kontur.tender.contract_analysis_view import _latest_job_attempts
+from asd_kontur.tender.contract_analysis_view import (
+    _latest_job_attempts,
+    _preferred_contract_results,
+)
 
 
 def test_latest_contract_attempt_replaces_historical_failure_without_hiding_other_input() -> None:
@@ -15,3 +18,33 @@ def test_latest_contract_attempt_replaces_historical_failure_without_hiding_othe
     effective = _latest_job_attempts(jobs)
 
     assert [job["job_id"] for job in effective] == ["replacement", "other"]
+
+
+def test_current_contract_profile_progressively_replaces_prior_profile_batches() -> None:
+    results = [
+        {
+            "job_id": "old-batch-1",
+            "source_version_id": "source-a",
+            "batch_ordinal": 1,
+            "profile_version": "qwen-contract-analysis-v7",
+        },
+        {
+            "job_id": "old-batch-2",
+            "source_version_id": "source-a",
+            "batch_ordinal": 2,
+            "profile_version": "qwen-contract-analysis-v7",
+        },
+        {
+            "job_id": "new-batch-1",
+            "source_version_id": "source-a",
+            "batch_ordinal": 1,
+            "profile_version": "qwen-contract-analysis-v8",
+        },
+    ]
+
+    preferred = _preferred_contract_results(results)
+
+    assert {(item["batch_ordinal"], item["job_id"]) for item in preferred} == {
+        (1, "new-batch-1"),
+        (2, "old-batch-2"),
+    }
