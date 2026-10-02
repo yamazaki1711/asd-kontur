@@ -112,7 +112,9 @@ def test_contract_profile_upgrade_cancels_only_older_queued_model_work(
             connection.execute(
                 sa.text("SELECT job_id,state FROM workspace.durable_jobs WHERE job_id=ANY(:jobs)"),
                 {"jobs": [old_job_id, current_job_id]},
-            ).tuples().all()
+            )
+            .tuples()
+            .all()
         )
         receipt = (
             connection.execute(
