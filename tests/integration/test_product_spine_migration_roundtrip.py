@@ -164,6 +164,7 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert "qwen-contract-analysis-v1" in contract_profile_constraint
                 assert "qwen-contract-analysis-v2" in contract_profile_constraint
                 assert "qwen-contract-analysis-v3" in contract_profile_constraint
+                assert "qwen-contract-analysis-v4" in contract_profile_constraint
                 expected_claim_indexes = {
                     "ix_durable_jobs_successor_lineage",
                     "ix_durable_jobs_workspace_model_service",

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 
 
 class TenderContractAnalysisError(RuntimeError):
@@ -239,24 +240,31 @@ class TenderContractAnalysisRepository:
                 sa.text(
                     "SELECT job_id,state,typed_failure_code,created_at,completed_at FROM "
                     "workspace.durable_jobs WHERE organization_id=:o AND workspace_id=:w "
-                    "AND job_kind='CONTRACT_ANALYSIS' ORDER BY created_at,job_id"
+                    "AND job_kind='CONTRACT_ANALYSIS' AND "
+                    "input_manifest->>'contract_analysis_profile'=:profile "
+                    "ORDER BY created_at,job_id"
                 ),
-                {"o": organization_id, "w": workspace_id},
+                {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
             ).mappings()
         )
         results = list(
             session.execute(
                 sa.text(
                     "SELECT result.job_id,result.source_version_id,result.batch_ordinal,"
-                    "result.result_manifest,result.recorded_at FROM workspace.contract_analysis_results result "
+                    "result.result_manifest,result.recorded_at,job.input_manifest "
+                    "FROM workspace.contract_analysis_results result "
                     "JOIN workspace.durable_jobs job ON job.organization_id=result.organization_id AND "
                     "job.workspace_id=result.workspace_id AND job.job_id=result.job_id WHERE "
                     "result.organization_id=:o AND result.workspace_id=:w AND job.state='succeeded' "
+                    "AND result.profile_version=:profile "
                     "ORDER BY result.source_version_id,result.batch_ordinal,result.recorded_at"
                 ),
-                {"o": organization_id, "w": workspace_id},
+                {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
             ).mappings()
         )
+        active = any(str(job["state"]) in {"queued", "leased", "running"} for job in jobs)
+        failed = [job for job in jobs if str(job["state"]) in {"failed", "reconciliation_required"}]
+        analysis_complete = bool(results) and not active and not failed
         clauses: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
         disagreement_items: list[dict[str, Any]] = []
@@ -265,6 +273,10 @@ class TenderContractAnalysisRepository:
             manifest = result["result_manifest"]
             if not isinstance(manifest, dict):
                 continue
+            input_manifest = result["input_manifest"]
+            context_complete = bool(
+                isinstance(input_manifest, dict) and input_manifest.get("context_complete") is True
+            )
             clause_ids: dict[str, str] = {}
             for clause in manifest.get("clauses") or ():
                 if not isinstance(clause, dict):
@@ -299,6 +311,8 @@ class TenderContractAnalysisRepository:
             for risk in manifest.get("risks") or ():
                 if not isinstance(risk, dict):
                     continue
+                if not context_complete:
+                    continue
                 clause_ref = str(risk.get("clause_ref") or "")
                 risk_clause_id = clause_ids.get(clause_ref)
                 if risk_clause_id is None:
@@ -327,7 +341,7 @@ class TenderContractAnalysisRepository:
                 }
                 issues.append(issue)
                 proposed = risk.get("proposed_contractor_wording")
-                if risk.get("disagreement_required") is True and proposed:
+                if analysis_complete and risk.get("disagreement_required") is True and proposed:
                     item_id = str(uuid5(workspace_id, f"contract-disagreement:{issue_id}"))
                     disagreement_items.append(
                         {
@@ -356,8 +370,6 @@ class TenderContractAnalysisRepository:
                             "revised_text": proposed,
                         }
                     )
-        active = any(str(job["state"]) in {"queued", "leased", "running"} for job in jobs)
-        failed = [job for job in jobs if str(job["state"]) in {"failed", "reconciliation_required"}]
         status = "analyzing" if active else "drafted" if results else "analysis_pending"
         gaps: list[str] = []
         if active:

@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid5
 
 import sqlalchemy as sa
@@ -196,6 +196,8 @@ _CONTRACT_ANALYSIS_PRIORITY = 188
 # minutes, while recent 4-row receipts completed in one call in 71-81 seconds.
 _PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 4
 _CONTRACT_CONTEXT_SEGMENT_CHARS = 10_000
+_CONTRACT_CONTEXT_MAX_LOCATORS = 12
+_CONTRACT_CONTEXT_MAX_CHARS = 12_000
 
 
 def _contract_text_segments(
@@ -237,6 +239,120 @@ def _contract_text_segments(
         ranges.append((start, end))
         start = end
     return tuple(ranges)
+
+
+def _contract_context_batches(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    max_locators: int = _CONTRACT_CONTEXT_MAX_LOCATORS,
+    max_chars: int = _CONTRACT_CONTEXT_MAX_CHARS,
+) -> tuple[dict[str, object], ...]:
+    """Pack bounded contract context without splitting ordinary table rows.
+
+    A cell-level native layout must not let a batch boundary turn the first cell
+    of a commercial row into an apparent missing quantity or price.  Table rows
+    are therefore atomic whenever they fit the bounded model context.  An
+    exceptionally large row is still processed in bounded chunks, but those
+    chunks are explicitly marked incomplete so their local absence claims can
+    never become a professional disagreement.
+    """
+
+    if max_locators < 1 or max_chars < 1:
+        raise ValueError("contract_context_batch_limit_invalid")
+    prepared: list[dict[str, Any]] = []
+    for source in sorted(
+        (dict(value) for value in rows),
+        key=lambda value: (
+            int(value.get("page_number") or 0),
+            int(value.get("reading_order") or 0),
+            str(value.get("source_locator_id") or ""),
+        ),
+    ):
+        source_text = str(source.get("source_text") or "")
+        segments = _contract_text_segments(source_text)
+        for segment_start, segment_end in segments:
+            segment = dict(source)
+            segment["source_text"] = source_text[segment_start:segment_end]
+            segment["segment_start"] = segment_start
+            segment["segment_end"] = segment_end
+            segment["table_row_atomic"] = bool(
+                len(segments) == 1
+                and str(source.get("element_kind") or "") == "table_cell"
+                and source.get("row_index") is not None
+            )
+            prepared.append(segment)
+
+    units: list[list[dict[str, Any]]] = []
+    for row in prepared:
+        key: tuple[object, ...]
+        if row["table_row_atomic"]:
+            key = ("table", int(row.get("page_number") or 0), int(row["row_index"]))
+        else:
+            key = (
+                "element",
+                str(row.get("source_locator_id") or ""),
+                int(row["segment_start"]),
+            )
+        if units and units[-1][0]["_context_unit_key"] == key:
+            units[-1].append({**row, "_context_unit_key": key})
+        else:
+            units.append([{**row, "_context_unit_key": key}])
+
+    batches: list[dict[str, object]] = []
+    current: list[dict[str, Any]] = []
+    current_chars = 0
+
+    def append_batch(values: list[dict[str, Any]], *, context_complete: bool) -> None:
+        if not values:
+            return
+        batches.append(
+            {
+                "rows": tuple(
+                    {key: value for key, value in row.items() if key != "_context_unit_key"}
+                    for row in values
+                ),
+                "context_complete": context_complete,
+            }
+        )
+
+    for unit in units:
+        unit_chars = sum(len(" ".join(str(row["source_text"]).split())) for row in unit)
+        unit_ids = {str(row["source_locator_id"]) for row in unit}
+        oversized = len(unit) > max_locators or unit_chars > max_chars
+        conflicts = any(str(row["source_locator_id"]) in unit_ids for row in current)
+        if current and (
+            conflicts
+            or oversized
+            or len(current) + len(unit) > max_locators
+            or current_chars + unit_chars > max_chars
+        ):
+            append_batch(current, context_complete=True)
+            current = []
+            current_chars = 0
+        if oversized:
+            partial: list[dict[str, Any]] = []
+            partial_chars = 0
+            for row in unit:
+                row_chars = len(" ".join(str(row["source_text"]).split()))
+                if partial and (
+                    len(partial) >= max_locators
+                    or partial_chars + row_chars > max_chars
+                    or any(
+                        str(value["source_locator_id"]) == str(row["source_locator_id"])
+                        for value in partial
+                    )
+                ):
+                    append_batch(partial, context_complete=False)
+                    partial = []
+                    partial_chars = 0
+                partial.append(row)
+                partial_chars += row_chars
+            append_batch(partial, context_complete=False)
+            continue
+        current.extend(unit)
+        current_chars += unit_chars
+    append_batch(current, context_complete=True)
+    return tuple(batches)
 
 
 def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
@@ -4870,6 +4986,7 @@ class SpinePostgresRepository:
                     sa.text(
                         "SELECT DISTINCT ON (element.source_locator_id) "
                         "element.source_locator_id,element.page_number,element.reading_order,"
+                        "element.element_kind,element.row_index,element.column_index,"
                         "COALESCE(NULLIF(element.raw_text,''),element.normalized_text) AS source_text "
                         "FROM workspace.native_layout_element_versions element WHERE "
                         "element.organization_id=:o AND element.workspace_id=:w AND "
@@ -4880,46 +4997,10 @@ class SpinePostgresRepository:
                     {"o": organization_id, "w": workspace_id, "source": source_version_id},
                 ).mappings()
             )
-            rows.sort(
-                key=lambda row: (
-                    int(row["page_number"]),
-                    int(row["reading_order"]),
-                    str(row["source_locator_id"]),
-                )
-            )
-            segmented_rows: list[dict[str, Any]] = []
-            for row in rows:
-                source_text = str(row["source_text"])
-                for segment_start, segment_end in _contract_text_segments(source_text):
-                    segment_row = dict(row)
-                    segment_row["source_text"] = source_text[segment_start:segment_end]
-                    segment_row["segment_start"] = segment_start
-                    segment_row["segment_end"] = segment_end
-                    segmented_rows.append(segment_row)
-            batches: list[list[Mapping[str, Any]]] = []
-            current: list[Mapping[str, Any]] = []
-            current_chars = 0
-            for bounded_row in segmented_rows:
-                text_value = " ".join(str(bounded_row["source_text"]).split())
-                if not text_value:
-                    continue
-                locator_repeated = any(
-                    value["source_locator_id"] == bounded_row["source_locator_id"]
-                    for value in current
-                )
-                if current and (
-                    locator_repeated
-                    or len(current) >= 24
-                    or current_chars + len(text_value) > 12_000
-                ):
-                    batches.append(current)
-                    current = []
-                    current_chars = 0
-                current.append(dict(bounded_row))
-                current_chars += len(text_value)
-            if current:
-                batches.append(current)
-            for ordinal, batch in enumerate(batches, start=1):
+            batches = _contract_context_batches([dict(row) for row in rows])
+            for ordinal, context_batch in enumerate(batches, start=1):
+                batch = cast(tuple[dict[str, Any], ...], context_batch["rows"])
+                context_complete = bool(context_batch["context_complete"])
                 locator_ids = [str(row["source_locator_id"]) for row in batch]
                 source_segments = [
                     {
@@ -4934,6 +5015,7 @@ class SpinePostgresRepository:
                         "profile": CONTRACT_ANALYSIS_PROFILE,
                         "source_version_id": str(source_version_id),
                         "source_segments": source_segments,
+                        "context_complete": context_complete,
                     }
                 )
                 key = f"contract-analysis:{source_version_id}:{CONTRACT_ANALYSIS_PROFILE}:{batch_digest}"
@@ -4971,6 +5053,7 @@ class SpinePostgresRepository:
                     "batch_digest": batch_digest,
                     "source_locator_ids": locator_ids,
                     "source_segments": source_segments,
+                    "context_complete": context_complete,
                     "model_identity": "local-qwen3.8-27b",
                 }
                 session.execute(

@@ -23,6 +23,7 @@ from asd_kontur.application_spine.object_store import (
 from asd_kontur.application_spine.postgres import (
     SpinePersistenceError,
     SpinePostgresRepository,
+    _contract_context_batches,
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
@@ -77,6 +78,62 @@ def test_semantic_recovery_stops_for_every_no_progress_coverage_state(
         accepted_fragment_count=0 if coverage_state != "complete" else 8,
         previous_accepted_fragment_count=0 if coverage_state != "complete" else 8,
     )
+
+
+def test_contract_context_batch_keeps_table_row_atomic_at_locator_boundary() -> None:
+    rows = [
+        {
+            "source_locator_id": f"paragraph-{index}",
+            "page_number": 1,
+            "reading_order": index,
+            "element_kind": "paragraph",
+            "row_index": None,
+            "source_text": f"Пункт {index}",
+        }
+        for index in range(1, 23)
+    ]
+    rows.extend(
+        {
+            "source_locator_id": f"cell-{column}",
+            "page_number": 1,
+            "reading_order": 22 + column,
+            "element_kind": "table_cell",
+            "row_index": 7,
+            "column_index": column,
+            "source_text": value,
+        }
+        for column, value in enumerate(
+            ("Работа", "м3", "36", "6013,83", "216497,88", "Россия"), start=1
+        )
+    )
+
+    batches = _contract_context_batches(rows, max_locators=24, max_chars=12_000)
+
+    assert [len(batch["rows"]) for batch in batches] == [22, 6]
+    assert all(batch["context_complete"] is True for batch in batches)
+    assert [row["source_locator_id"] for row in batches[1]["rows"]] == [
+        f"cell-{column}" for column in range(1, 7)
+    ]
+
+
+def test_contract_context_marks_oversized_table_row_incomplete() -> None:
+    rows = [
+        {
+            "source_locator_id": f"cell-{column}",
+            "page_number": 2,
+            "reading_order": column,
+            "element_kind": "table_cell",
+            "row_index": 3,
+            "column_index": column,
+            "source_text": f"Значение {column}",
+        }
+        for column in range(1, 7)
+    ]
+
+    batches = _contract_context_batches(rows, max_locators=3, max_chars=12_000)
+
+    assert [len(batch["rows"]) for batch in batches] == [3, 3]
+    assert all(batch["context_complete"] is False for batch in batches)
 
 
 def _work_batch_row(

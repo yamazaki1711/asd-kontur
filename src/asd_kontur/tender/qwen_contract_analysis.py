@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v3"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v4"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -227,6 +227,7 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 Выдели самостоятельные условия договора. source_text должен быть дословной непрерывной цитатой из одного или нескольких указанных фрагментов (нормализация пробелов допустима).
 Оценивай практический риск: исполнимость обязательства, зависимость оплаты/приёмки от Заказчика, изменение объёмов и РД, сроки, ответственность, гарантию, расторжение и исходные данные.
 Обычные сбалансированные условия не отмечай как риск. Не выдавай коммерческую оценку за подтверждённое юридическое заключение.
+CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта или приложения не попало в CONTEXT.
 Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту.
 
 Верни только JSON:
