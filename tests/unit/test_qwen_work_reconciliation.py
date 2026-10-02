@@ -312,6 +312,7 @@ def test_qwen_work_reconciliation_preserves_material_resource_semantics(
         del max_tokens
         assert "material_reviews" in prompt
         assert "Материальная позиция" in prompt
+        assert "до 180 знаков" in prompt
         return json.dumps(
             {
                 "observations": [
