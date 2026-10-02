@@ -573,8 +573,7 @@ def _quantity_relationship_batches(
         # not replay it in another one-sided quantity batch: classification
         # and single-source quantity meaning are already durable.
         if any(bool(row.get("comparison_context_only")) for row in ordered) and {
-            document_comparison_side(row.get("document_role"), row.get("document"))
-            for row in batch
+            document_comparison_side(row.get("document_role"), row.get("document")) for row in batch
         } != {"design", "commercial"}:
             continue
         batches.append(batch)
@@ -603,19 +602,13 @@ def _work_reconciliation_attempt_sets(
             continue
         rows = [dict(value) for value in observations if isinstance(value, Mapping)]
         candidate_ids = {
-            str(value.get("candidate_id") or "")
-            for value in rows
-            if value.get("candidate_id")
+            str(value.get("candidate_id") or "") for value in rows if value.get("candidate_id")
         }
         attempted.update(candidate_ids)
         sides = {
             side
             for value in rows
-            if (
-                side := document_comparison_side(
-                    value.get("document_role"), value.get("document")
-                )
-            )
+            if (side := document_comparison_side(value.get("document_role"), value.get("document")))
             is not None
         }
         if sides == {"design", "commercial"}:
@@ -5975,11 +5968,7 @@ class SpinePostgresRepository:
                 all_linked_quantities = quantities_by_work.get(candidate_id, [])
                 linked_quantities = all_linked_quantities
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
-                if (
-                    not candidate_id
-                    or not wording
-                    or non_work_reason(wording) is not None
-                ):
+                if not candidate_id or not wording or non_work_reason(wording) is not None:
                     continue
                 existing = prior.get(candidate_id)
                 comparison_context_only = candidate_id in attempted_candidate_ids
@@ -6194,9 +6183,7 @@ class SpinePostgresRepository:
                         ),
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
-                        "relationship_review_needed": bool(
-                            row.get("comparison_context_only")
-                        )
+                        "relationship_review_needed": bool(row.get("comparison_context_only"))
                         or any(
                             prior_quantity_reviews.get(
                                 str(value.get("candidate_id") or ""), {}
@@ -6204,9 +6191,7 @@ class SpinePostgresRepository:
                             is not True
                             for value in selected_quantities
                         ),
-                        "comparison_context_only": bool(
-                            row.get("comparison_context_only")
-                        ),
+                        "comparison_context_only": bool(row.get("comparison_context_only")),
                     }
                 )
             frequency: dict[str, int] = defaultdict(int)
