@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+import pytest
+
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
@@ -3847,6 +3849,16 @@ def test_reconciliation_prioritizes_scoped_design_commercial_pair() -> None:
     assert document_comparison_side("project_documentation", "КР.pdf") == "design"
     assert document_comparison_side("project_documentation", "005.2-2025-СМ4.pdf") == "commercial"
     assert document_comparison_side("bill_of_quantities", "ВОР.xlsx") == "commercial"
+
+
+@pytest.mark.parametrize("role", ("ПД", "РД", "КР", "АР", "Спецификация", "Расчёт"))
+def test_professional_design_roles_are_comparison_inputs(role: str) -> None:
+    assert document_comparison_side(role, "generic-source.bin") == "design"
+
+
+@pytest.mark.parametrize("role", ("ВОР", "Смета", "Смета контракта"))
+def test_professional_commercial_roles_are_comparison_inputs(role: str) -> None:
+    assert document_comparison_side(role, "generic-source.bin") == "commercial"
 
 
 def test_document_composition_exposes_contract_and_customer_requirements() -> None:
