@@ -61,6 +61,7 @@ from asd_kontur.document_understanding.qwen_semantic import (
     _engineering_batches,
     _engineering_prompt,
     _fragments,
+    _sample_pages,
     _SemanticFragment,
     _split_engineering_batch,
     _split_output_exhausted_fragment,
@@ -1318,6 +1319,35 @@ def test_qwen_semantic_classification_accepts_only_returned_evidence_locators() 
     assert result.candidates[0].role is DocumentRole.EXPLANATORY_NOTE
     assert result.candidates[0].locators[0].source_locator_id == UUID(locator_id)
     assert result.decisions[0].decision_code == "qwen_bounded_document_semantic"
+
+
+def test_qwen_classification_stratifies_one_long_logical_page() -> None:
+    commercial_appendix = (
+        "Таблица стоимости работ: позиция, единица измерения, количество, цена. " * 240
+    )
+    contract_terms = (
+        "ПОРЯДОК РАСТОРЖЕНИЯ. Заказчик и Подрядчик вправе расторгнуть договор при "
+        "существенном нарушении обязательств. ОПЛАТА И ПРИЁМКА. Заказчик оплачивает "
+        "принятые работы в течение десяти рабочих дней. "
+    ) * 8
+    document = _extract_csv(commercial_appendix + contract_terms)
+    fragments = _sample_pages(document.pages[0].elements)
+    locator_id = str(document.pages[0].elements[0].locator.source_locator_id)
+    adapter = QwenDocumentSemanticAdapter("http://127.0.0.1:8790/generate")
+
+    with patch(
+        "asd_kontur.document_understanding.qwen_semantic._complete",
+        return_value=json.dumps({"roles": ["contract"], "locator_ids": [locator_id]}),
+    ) as complete:
+        result = adapter.classify(document.pages[0].elements)
+
+    prompt = complete.call_args.args[1]
+    assert 2 <= len(fragments) <= 6
+    assert len({fragment.character_start for fragment in fragments}) == len(fragments)
+    assert sum(len(fragment.text) for fragment in fragments) <= 4_800
+    assert "Таблица стоимости работ" in prompt
+    assert "ПОРЯДОК РАСТОРЖЕНИЯ" in prompt
+    assert result.candidates[0].role is DocumentRole.CONTRACT
 
 
 @pytest.mark.parametrize(

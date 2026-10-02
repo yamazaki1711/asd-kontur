@@ -40,7 +40,7 @@ from .models import (
 )
 from .semantic import StructuredCandidates, normalize_unit, parse_exact_decimal
 
-QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v3"
+QWEN_SEMANTIC_CLASSIFICATION_PROFILE = "qwen-document-semantic-v4"
 QWEN_ENGINEERING_EXTRACTION_PROFILE = "qwen-engineering-extraction-v18"
 QWEN_STRUCTURE_IDENTITY_PROFILE = STRUCTURE_IDENTITY_RECONCILIATION_PROFILE_VERSION
 QWEN_PIT_OBSERVATION_PROFILE = PIT_OBSERVATION_RECONCILIATION_PROFILE_VERSION
@@ -1265,18 +1265,47 @@ def _sample_pages(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment,
     for element in elements:
         if element.normalized_text:
             by_page[element.locator.page_number].append(element)
+    if not by_page:
+        return ()
     sampled: list[_SemanticFragment] = []
-    used = 0
-    for page_number in sorted(by_page)[:_MAX_PAGES]:
+    page_numbers = _stratified_positions(len(by_page), min(_MAX_PAGES, len(by_page)))
+    selected_pages = [sorted(by_page)[index] for index in page_numbers]
+    base_windows, extra_windows = divmod(_MAX_PAGES, len(selected_pages))
+    for selected_index, page_number in enumerate(selected_pages):
         page_elements = by_page[page_number]
         text = " ".join(item.normalized_text for item in page_elements)
         if not text:
             continue
-        if used + min(len(text), _MAX_CHARS_PER_PAGE) > _MAX_PROMPT_CHARS:
-            break
-        sampled.append(_SemanticFragment(page_elements[0].locator, text[:_MAX_CHARS_PER_PAGE]))
-        used += min(len(text), _MAX_CHARS_PER_PAGE)
+        window_count = base_windows + (1 if selected_index < extra_windows else 0)
+        for start in _stratified_window_starts(text, window_count):
+            end = min(start + _MAX_CHARS_PER_PAGE, len(text))
+            sampled.append(
+                _SemanticFragment(
+                    page_elements[0].locator,
+                    text[start:end],
+                    character_start=start,
+                    character_end=end,
+                )
+            )
     return tuple(sampled)
+
+
+def _stratified_positions(population: int, count: int) -> tuple[int, ...]:
+    if population <= 0 or count <= 0:
+        return ()
+    if population <= count:
+        return tuple(range(population))
+    if count == 1:
+        return (0,)
+    return tuple(round(index * (population - 1) / (count - 1)) for index in range(count))
+
+
+def _stratified_window_starts(text: str, count: int) -> tuple[int, ...]:
+    if not text or count <= 0:
+        return ()
+    maximum = max(0, len(text) - _MAX_CHARS_PER_PAGE)
+    raw = _stratified_positions(maximum + 1, count)
+    return tuple(dict.fromkeys(raw))
 
 
 def _fragments(elements: Iterable[LayoutElement]) -> tuple[_SemanticFragment, ...]:
@@ -2083,6 +2112,8 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         {
             "page": item.locator.page_number,
             "locator_id": str(item.locator.source_locator_id),
+            "character_start": item.character_start,
+            "character_end": item.character_end,
             "text": item.text,
         }
         for item in elements
@@ -2093,7 +2124,11 @@ def _prompt(elements: tuple[_SemanticFragment, ...]) -> str:
         "без Markdown: "
         '{"roles":["..."],"locator_ids":["..."]}. '
         "Классифицируй назначение самого документа, а не отдельные упомянутые в нём "
-        "приложения. contract выбирай только для проекта/текста договора, содержащего "
+        "приложения. Фрагменты длинного документа выбраны из его начала, середины и конца; "
+        "оцени их совместно. Таблица цен или объёмов может быть приложением к договору и сама "
+        "по себе не отменяет договорную роль, если другие фрагменты прямо содержат условия "
+        "сторон. Одно упоминание слова «договор» без таких условий роли contract не доказывает. "
+        "contract выбирай только для проекта/текста договора, содержащего "
         "согласуемые условия сторон, предмет, обязательства, оплату, приёмку, ответственность "
         "или расторжение. Инструкция участнику закупки, извещение и требования к заявке — "
         "procurement_notice, а не contract. Смета/расчёт цены контракта без условий сторон — "

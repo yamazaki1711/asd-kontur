@@ -24,6 +24,14 @@ The cross-repository user-result audit is recorded in
   containing negotiable party obligations from procurement instructions and
   price calculations. Existing sources are autonomously reclassified under the
   versioned profile; no filename or project-specific exception was added.
+- The real blind DOCX then exposed a second generic classification defect: its
+  single logical native page contained a long commercial table before the
+  contract clauses, while the classifier saw only the first 800 characters and
+  returned `local_estimate`. Profile v4 uses a bounded stratified sample across
+  the beginning, middle, and end of long logical pages (and across long
+  multi-page documents). The prompt treats price tables as possible appendices
+  but still requires explicit party obligations for the `contract` role. No
+  filename, clause, project name, or expected blind finding is encoded.
 - Added strict local-Qwen clause/risk analysis with exact locator and source-text
   validation, reusable risk categories, benign-clause support, and one bounded
   JSON repair.

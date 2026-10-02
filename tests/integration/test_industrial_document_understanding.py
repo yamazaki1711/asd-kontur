@@ -335,7 +335,7 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
                     "manifest": json.dumps(
                         {
                             "classification_profile": (
-                                "document-page-role-v0.1+qwen-document-semantic-v3"
+                                "document-page-role-v0.1+qwen-document-semantic-v4"
                             )
                         }
                     ),
