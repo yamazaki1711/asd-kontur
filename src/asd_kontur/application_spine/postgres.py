@@ -5925,6 +5925,7 @@ class SpinePostgresRepository:
         batch_size: int = _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
         max_batches: int = 4,
         _resolved_organization_id: UUID | None = None,
+        _require_idle: bool = False,
     ) -> tuple[JobSummary, ...]:
         """Queue bounded Qwen interpretation of still-unclassified work rows.
 
@@ -5953,6 +5954,26 @@ class SpinePostgresRepository:
                 if _resolved_organization_id is not None:
                     return ()
                 raise SpinePersistenceError("workspace_not_writable")
+            self._lock_project_reconciliation_scheduler(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_kind=JobKind.PROJECT_WORK_RECONCILIATION,
+            )
+            if _require_idle:
+                outstanding = int(
+                    session.execute(
+                        sa.text(
+                            "SELECT count(*) FROM workspace.durable_jobs WHERE "
+                            "organization_id=:o AND workspace_id=:w AND "
+                            "job_kind='PROJECT_WORK_RECONCILIATION' AND "
+                            "state IN ('queued','leased','running')"
+                        ),
+                        {"o": organization_id, "w": workspace_id},
+                    ).scalar_one()
+                )
+                if outstanding:
+                    return ()
             candidates = self._project_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
@@ -6526,6 +6547,7 @@ class SpinePostgresRepository:
             batch_size=batch_size,
             max_batches=max_batches,
             _resolved_organization_id=organization_id,
+            _require_idle=True,
         )
 
     def _ensure_structure_reconciliation_job(

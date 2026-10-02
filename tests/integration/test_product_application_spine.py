@@ -1109,6 +1109,7 @@ def test_autonomous_work_reconciliation_bootstraps_without_prior_work_job(
         )
 
     repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    original_start = repository.start_project_work_reconciliation
     captured: dict[str, object] = {}
 
     def start_project_work_reconciliation(**kwargs: object) -> tuple[object, ...]:
@@ -1131,6 +1132,45 @@ def test_autonomous_work_reconciliation_bootstraps_without_prior_work_job(
     assert captured["owner_identity_id"] == owner_identity_id
     assert captured["workspace_id"] == workspace_id
     assert captured["_resolved_organization_id"] == organization_id
+    assert captured["_require_idle"] is True
+
+    active_manifest = {
+        "work_reconciliation_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+        "work_observations": [{"candidate_id": "active-bounded-work"}],
+    }
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                "job_kind,input_manifest,input_digest,idempotency_key,state,priority,max_attempts,"
+                "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                "(:organization,:workspace,:job,'PROJECT_WORK_RECONCILIATION',"
+                "CAST(:manifest AS jsonb),:digest,:key,'queued',115,3,'synthetic',"
+                "CAST(:provenance AS jsonb),:correlation,:owner)"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": uuid4(),
+                "manifest": json.dumps(active_manifest),
+                "digest": semantic_digest(active_manifest),
+                "key": "synthetic-active-project-work",
+                "provenance": json.dumps({"contract": "synthetic"}),
+                "correlation": uuid4(),
+                "owner": owner_identity_id,
+            },
+        )
+
+    assert (
+        original_start(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            correlation_id=uuid4(),
+            _resolved_organization_id=organization_id,
+            _require_idle=True,
+        )
+        == ()
+    )
 
 
 def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
