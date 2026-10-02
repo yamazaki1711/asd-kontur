@@ -862,3 +862,40 @@ effective terminal boundary, so deployment cannot temporarily replace a useful
 contract result with a partial new profile. Generalized changed-contract
 acceptance remains open until v9 is deployed and independently produces a
 grounded revision while leaving the declared benign clauses unflagged.
+
+## 2026-10-03 autonomous v9 control result and directed-change gap
+
+Exact-SHA CI run `37014230765` passed for commit
+`aa1704d145b8199abaf7af4a6862367bff225b13`. Backup, separate restore,
+`0105 -> 0106`, disposable downgrade and re-upgrade all passed with platform
+fingerprint
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`
+and 319 succeeded NTD jobs unchanged. Release
+`20261003-aa1704d-contract-v9` activated API, document worker, orchestrator and
+assistant worker without restarting Qwen or the NTD worker.
+
+The supervised orchestrator created all v9 work without a developer queue
+command. The changed control contract reached four of four succeeded batches,
+retained 14 clauses and one grounded payment-dependency risk, and discarded
+one controller-ungrounded candidate without losing its five-clause batch. None
+of the declared benign control clauses became a professional issue. Workspace
+fairness was also observed: the worker served the changed control workspace
+while the larger blind contract still had more than 60 queued v9 batches.
+
+The control still produced no protocol item. The remaining source clause
+describes work carried out on the Customer's written direction before a
+contract change is formalized and then expressly denies payment. Qwen selected
+it as a risk, but the controller's `unpaid_change` guard recognized only an
+explicit “additional/changed work” phrase. That is a generic contract-analysis
+gap: the same commercial mechanism is often expressed as instructed work
+pending a change order or addendum.
+
+Profile v10 extends the generic guard only when the exact full clause jointly
+contains all four semantic controls: work scope, Customer direction, contract
+change formalization, and explicit payment denial. The rule contains no
+project name, clause number, party name, document name or expected value.
+Changed-name tests prove the mechanism, while existing false-positive tests
+continue to reject overpayment restitution, ordinary cure costs and Customer
+mentions that do not confer control. Migration
+`0107_contract_directed_change_risk` admits the new profile. Live v10
+acceptance remains required before the generalized contract gate can pass.

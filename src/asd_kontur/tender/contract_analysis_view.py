@@ -22,6 +22,7 @@ from asd_kontur.tender.qwen_contract_analysis import (
 
 _CONTRACT_ANALYSIS_READ_PROFILES = (
     CONTRACT_ANALYSIS_PROFILE,
+    "qwen-contract-analysis-v9",
     "qwen-contract-analysis-v8",
     "qwen-contract-analysis-v7",
 )

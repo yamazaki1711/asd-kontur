@@ -16,7 +16,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v9"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v10"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -87,7 +87,7 @@ _CUSTOMER_CONTROLLED_MECHANISMS = frozenset(
         "contractor_bears_customer_cause",
     }
 )
-_CUSTOMER_TERMS = ("заказчик", "customer", "client", "employer")
+_CUSTOMER_TERMS = ("заказчик", "клиент", "customer", "client", "employer")
 _EARLY_PERFORMANCE_TERMS = ("досроч", "early performance", "early completion")
 _UNVERIFIED_LEGAL_AUTHORITY_ASSERTION = re.compile(
     r"(?:противореч\w*\s+(?:закону|законодательств\w*|(?:правов\w*\s+)?принцип\w*|стать\w*|норм\w*)|"
@@ -121,6 +121,22 @@ _CHANGED_WORK_PAYMENT_EXPOSURE = re.compile(
     r"несогласованн\w*.{0,30}работ|"
     r"(?:additional|changed|varied).{0,35}work|"
     r"excess\w*.{0,30}(?:quantity|volume).{0,30}work)",
+    flags=re.IGNORECASE,
+)
+_WORK_SCOPE_TERM = re.compile(r"(?:работ\w*|works?)", flags=re.IGNORECASE)
+_CUSTOMER_WORK_DIRECTION = re.compile(
+    r"(?:(?:распоряж|поручен|указан|задан|требован|инструкц)\w*.{0,70}"
+    r"(?:заказчик|клиент|представител\w*\s+(?:заказчик|клиент))|"
+    r"(?:заказчик|клиент|представител\w*\s+(?:заказчик|клиент)).{0,70}"
+    r"(?:распоряж|поручен|указан|задан|требован|инструкц)\w*|"
+    r"(?:order|direction|instruction|request)\w*.{0,70}(?:customer|client|employer)|"
+    r"(?:customer|client|employer).{0,70}"
+    r"(?:order|direction|instruction|request)\w*)",
+    flags=re.IGNORECASE,
+)
+_CHANGE_FORMALIZATION = re.compile(
+    r"(?:дополнительн\w*.{0,30}соглашен\w*|изменени\w*.{0,30}договор\w*|"
+    r"change\s+order|contract\s+amendment|written\s+amendment|variation\s+order)",
     flags=re.IGNORECASE,
 )
 _NUMERIC_CONTRACT_TERM = re.compile(
@@ -347,6 +363,7 @@ def parse_contract_analysis(
                 "risk_mechanism": risk_mechanism,
                 "trigger_text": trigger_text,
                 "adverse_effect_text": adverse_effect_text,
+                "source_text": source_text_by_clause[clause_ref],
             }
         ):
             if discard_controller_ungrounded_risks:
@@ -462,9 +479,17 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
             str(risk.get("adverse_effect_text") or ""),
         )
     ).casefold()
+    source_context = " ".join((combined, str(risk.get("source_text") or ""))).casefold()
     if kind == "unpaid_change" and not (
-        _CHANGED_WORK_PAYMENT_EXPOSURE.search(combined)
-        and any(term in combined for term in _ORDINARY_PAYMENT_DENIAL_TERMS)
+        (
+            _CHANGED_WORK_PAYMENT_EXPOSURE.search(source_context)
+            or (
+                _WORK_SCOPE_TERM.search(source_context)
+                and _CUSTOMER_WORK_DIRECTION.search(source_context)
+                and _CHANGE_FORMALIZATION.search(source_context)
+            )
+        )
+        and any(term in source_context for term in _ORDINARY_PAYMENT_DENIAL_TERMS)
     ):
         # This professional category is reserved for an exact combination of
         # changed/additional/excess work scope and an explicit payment denial.

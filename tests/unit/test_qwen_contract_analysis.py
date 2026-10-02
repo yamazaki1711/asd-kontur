@@ -622,6 +622,54 @@ def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:
     assert result["risks"][0]["kind"] == "unpaid_change"
 
 
+def test_contract_analysis_keeps_customer_directed_work_pending_change_order_risk() -> None:
+    source = {
+        "loc-directed": (
+            "Монтажные работы, выполненные Исполнителем по письменному поручению представителя "
+            "Клиента до оформления изменения договора, оплате не подлежат."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "5.12",
+                    "source_text": source["loc-directed"],
+                    "source_locator_ids": ["loc-directed"],
+                    "category": "change_procedure",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "5.12",
+                    "kind": "unpaid_change",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": "по письменному поручению представителя Клиента",
+                    "adverse_effect_text": "оплате не подлежат",
+                    "severity": "high",
+                    "description": "Порученная Клиентом работа может остаться неоплаченной.",
+                    "practical_consequence": "Исполнитель несёт риск неоплаченного объёма.",
+                    "recommended_action": "Связать оплату с подтверждённым поручением Клиента.",
+                    "replacement_source_text": source["loc-directed"],
+                    "proposed_contractor_wording": (
+                        "Монтажные работы по письменному поручению Клиента подлежат оплате "
+                        "после оформления изменения договора."
+                    ),
+                    "disagreement_required": True,
+                    "confidence": 0.94,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    assert result["risks"][0]["kind"] == "unpaid_change"
+    assert result["risks"][0]["disagreement_required"] is True
+
+
 def test_contract_analysis_withholds_revision_with_invented_numeric_deadline() -> None:
     source = {
         "loc-remedy": (
