@@ -70,6 +70,25 @@ class QwenContractAnalyzer:
         values = [dict(item) for item in fragments]
         if not 1 <= len(values) <= 32:
             raise QwenSemanticFailure("qwen_contract_analysis_batch_size_invalid")
+        try:
+            parsed = self._analyze_once(values)
+        except QwenSemanticFailure as exc:
+            if exc.code != "qwen_semantic_response_output_exhausted" or len(values) < 2:
+                raise
+            midpoint = len(values) // 2
+            parsed = _merge_contract_analysis_parts(
+                self.analyze(values[:midpoint]),
+                self.analyze(values[midpoint:]),
+            )
+        result: dict[str, object] = {
+            "contract": CONTRACT_ANALYSIS_CONTRACT,
+            "profile_version": CONTRACT_ANALYSIS_PROFILE,
+            **parsed,
+        }
+        result["result_digest"] = semantic_digest(result)
+        return result
+
+    def _analyze_once(self, values: list[dict[str, object]]) -> dict[str, object]:
         allowed: dict[str, str] = {}
         prompt_rows: list[dict[str, object]] = []
         total_chars = 0
@@ -109,13 +128,7 @@ class QwenContractAnalyzer:
                 max_tokens=output_tokens,
             )
             parsed = parse_contract_analysis(repaired, allowed_text_by_locator=allowed)
-        result: dict[str, object] = {
-            "contract": CONTRACT_ANALYSIS_CONTRACT,
-            "profile_version": CONTRACT_ANALYSIS_PROFILE,
-            **parsed,
-        }
-        result["result_digest"] = semantic_digest(result)
-        return result
+        return parsed
 
 
 def parse_contract_analysis(
@@ -271,6 +284,42 @@ def _resolve_exact_source_quote(candidate: str, allowed_source: str) -> str | No
     if start < 0:
         return None
     return allowed_source[start : start + len(candidate)]
+
+
+def _merge_contract_analysis_parts(
+    *parts: Mapping[str, object],
+) -> dict[str, object]:
+    """Merge recursively split model results without conflating clause identities."""
+
+    clauses: list[dict[str, object]] = []
+    risks: list[dict[str, object]] = []
+    used_refs: set[str] = set()
+    for part_index, part in enumerate(parts, start=1):
+        ref_map: dict[str, str] = {}
+        raw_clauses = part.get("clauses")
+        for raw_clause in raw_clauses if isinstance(raw_clauses, list | tuple) else ():
+            if not isinstance(raw_clause, Mapping):
+                continue
+            clause = dict(raw_clause)
+            old_ref = str(clause.get("clause_ref") or "")
+            new_ref = old_ref
+            suffix = 1
+            while new_ref in used_refs:
+                suffix += 1
+                new_ref = f"{old_ref} [{part_index}.{suffix}]"
+            clause["clause_ref"] = new_ref
+            used_refs.add(new_ref)
+            ref_map[old_ref] = new_ref
+            clauses.append(clause)
+        raw_risks = part.get("risks")
+        for raw_risk in raw_risks if isinstance(raw_risks, list | tuple) else ():
+            if not isinstance(raw_risk, Mapping):
+                continue
+            risk = dict(raw_risk)
+            old_ref = str(risk.get("clause_ref") or "")
+            risk["clause_ref"] = ref_map.get(old_ref, old_ref)
+            risks.append(risk)
+    return {"clauses": clauses, "risks": risks}
 
 
 def _prompt(rows: list[dict[str, object]]) -> str:

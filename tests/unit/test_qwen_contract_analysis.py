@@ -8,6 +8,7 @@ import pytest
 
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_contract_analysis import (
+    QwenContractAnalyzer,
     _contract_output_token_budget,
     parse_contract_analysis,
 )
@@ -211,3 +212,58 @@ def test_contract_analysis_rejects_missing_term_inference_from_bounded_context()
 
     with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_invalid"):
         parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_analysis_splits_output_exhausted_batch_and_preserves_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def complete(
+        endpoint: str,
+        prompt: str,
+        timeout_seconds: float,
+        *,
+        max_tokens: int,
+    ) -> str:
+        del endpoint, timeout_seconds, max_tokens
+        calls.append(prompt)
+        if '"loc-a"' in prompt and '"loc-b"' in prompt:
+            raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
+        locator = "loc-a" if '"loc-a"' in prompt else "loc-b"
+        text = "1.1. Условие А." if locator == "loc-a" else "1.1. Условие Б."
+        return json.dumps(
+            {
+                "clauses": [
+                    {
+                        "clause_ref": "1.1",
+                        "section": "Условия",
+                        "source_text": text,
+                        "source_locator_ids": [locator],
+                        "category": "other",
+                        "customer_obligation": None,
+                        "contractor_obligation": None,
+                        "condition": None,
+                    }
+                ],
+                "risks": [],
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_analysis._complete", complete)
+    analyzer = QwenContractAnalyzer("http://127.0.0.1:8790/v1/chat/completions")
+
+    result = analyzer.analyze(
+        [
+            {"source_locator_id": "loc-a", "page": 1, "text": "1.1. Условие А."},
+            {"source_locator_id": "loc-b", "page": 2, "text": "1.1. Условие Б."},
+        ]
+    )
+
+    assert len(calls) == 3
+    assert [item["source_text"] for item in result["clauses"]] == [
+        "1.1. Условие А.",
+        "1.1. Условие Б.",
+    ]
+    assert len({item["clause_ref"] for item in result["clauses"]}) == 2
