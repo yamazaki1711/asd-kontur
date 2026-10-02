@@ -162,3 +162,41 @@ Known limitations after acceptance:
 Final operational status for this release:
 `AutonomousProjectProcessing=true`. This does not imply
 `GeneralizedTenderHarness=true` or `ProductReady=true`.
+
+## 11. Reconciliation queue amplification correction — 2026-10-02
+
+A thermal/load investigation of the real blind Tender workspace found a
+healthy active Qwen request but an unhealthy durable backlog. The running
+contract job renewed its lease every few seconds and completed successive
+batches, while the workspace had accumulated 10,026 time-eligible queued jobs:
+5,928 structure reconciliations and 3,867 project-understanding
+reconciliations accounted for nearly all of them. One source had 449 completed
+and 983 queued project refreshes. This was scheduling amplification, not a
+stuck model process.
+
+The event path previously assigned a unique project refresh to every completed
+semantic job. Each project refresh could then create a structure refresh and a
+post-structure project refresh. In parallel, the 30-second safety sweep
+included transient job identities and states in its semantic fingerprint.
+Thus all individual actions were durable and idempotent by their own identity,
+but the chosen identity was too fine-grained for a workspace materialized
+view.
+
+The corrected policy is workspace/stage coalescing:
+
+- one queued refresh absorbs newly accepted workspace state;
+- a leased or running refresh is never cancelled or replaced;
+- event-driven completion and the periodic sweep serialize their active-job
+  decision with a transaction-scoped advisory lock;
+- the newest pending project and structure snapshots are retained;
+- older queued snapshots receive immutable cancellation and terminal receipts
+  with `superseded_project_reconciliation` rather than being deleted;
+- a project refresh required by a retained nonterminal structure job is not
+  superseded.
+
+Supersession is bounded per workspace and sweep, so a large historical backlog
+converges without a single unbounded transaction. Accepted results, running
+jobs, source versions, NTD memory and global knowledge are not changed. A
+disposable PostgreSQL acceptance creates three project snapshots and three
+dependent structure snapshots, retains the newest coherent pair, and verifies
+four terminal supersession receipts.

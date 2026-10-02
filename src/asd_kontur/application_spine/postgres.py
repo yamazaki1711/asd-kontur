@@ -2489,6 +2489,20 @@ class SpinePostgresRepository:
                 semantic_profile = str(stage["profile_version"])
             if not semantic_profile.startswith("qwen-engineering-extraction-"):
                 return None
+            self._lock_project_reconciliation_scheduler(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            active = self._active_project_reconciliation_job_id(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            if active is not None:
+                return active
             source_manifest = dict(source["input_manifest"])
             manifest = {
                 "document_id": str(source_manifest["document_id"]),
@@ -2624,6 +2638,20 @@ class SpinePostgresRepository:
             }
             if not required.issubset(source_manifest):
                 raise SpinePersistenceError("structure_reconciliation_source_manifest_invalid")
+            self._lock_project_reconciliation_scheduler(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            active = self._active_project_reconciliation_job_id(
+                session,
+                organization_id=claimed.organization_id,
+                workspace_id=claimed.workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            if active is not None:
+                return active
             manifest = {
                 key: source_manifest[key]
                 for key in (
@@ -3400,6 +3428,162 @@ class SpinePostgresRepository:
                 )
                 or 0
             )
+
+    def supersede_redundant_project_reconciliations(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        limit_per_kind: int = 256,
+    ) -> int:
+        """Terminally account for queued refresh snapshots superseded by newer state.
+
+        Project and structure reconciliation read the current accepted workspace
+        model when they execute.  Keeping every intermediate snapshot queued does
+        not preserve additional facts; it only repeats the same materialization.
+        The newest queued snapshot is retained, as are all leased/running jobs and
+        any project refresh still required by a retained structure job.  Historical
+        rows remain immutable and receive an explicit cancellation receipt.
+        """
+
+        if not 1 <= limit_per_kind <= 1024:
+            raise ValueError("project reconciliation supersession limit is invalid")
+        superseded = 0
+        with Session(self._engine) as session, session.begin():
+            _set_scope(session, organization_id, workspace_id)
+            if not self._workspace_accepts_jobs(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            ):
+                return 0
+            for job_kind in (
+                JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+                JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            ):
+                self._lock_project_reconciliation_scheduler(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    job_kind=job_kind,
+                )
+                rows = session.execute(
+                    sa.text(
+                        "WITH ranked AS (SELECT job_id,row_number() OVER (ORDER BY "
+                        "created_at DESC,job_id DESC) AS queue_rank FROM workspace.durable_jobs "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind=:kind AND state='queued' AND ((:kind="
+                        "'PROJECT_STRUCTURE_RECONCILIATION' AND provenance->>'contract'="
+                        "'project-structure-reconciliation.command@1.0.0') OR (:kind="
+                        "'PROJECT_UNDERSTANDING_RECONCILIATION' AND provenance->>'contract' IN ("
+                        "'project-understanding.command@1.0.0',"
+                        "'project-understanding.incremental-reconciliation@1.0.0',"
+                        "'project-understanding.post-structure-reconciliation@1.0.0')))"
+                        "), candidates AS (SELECT target.job_id,"
+                        "target.lease_generation FROM workspace.durable_jobs target JOIN ranked "
+                        "ON ranked.job_id=target.job_id WHERE target.organization_id=:organization "
+                        "AND target.workspace_id=:workspace AND ranked.queue_rank>1 AND ("
+                        ":kind<>'PROJECT_UNDERSTANDING_RECONCILIATION' OR NOT EXISTS (SELECT 1 "
+                        "FROM workspace.durable_job_dependencies dependency JOIN "
+                        "workspace.durable_jobs dependent ON dependent.organization_id="
+                        "dependency.organization_id AND dependent.workspace_id="
+                        "dependency.workspace_id AND dependent.job_id=dependency.job_id WHERE "
+                        "dependency.organization_id=target.organization_id AND "
+                        "dependency.workspace_id=target.workspace_id AND "
+                        "dependency.depends_on_job_id=target.job_id AND dependent.state IN "
+                        "('queued','leased','running'))) ORDER BY target.created_at,target.job_id "
+                        "LIMIT :limit FOR UPDATE OF target SKIP LOCKED) SELECT * FROM candidates"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "kind": job_kind.value,
+                        "limit": limit_per_kind,
+                    },
+                ).all()
+                for row in rows:
+                    job_id = UUID(str(row.job_id))
+                    reason_code = "superseded_project_reconciliation"
+                    cancellation_id = uuid7()
+                    session.execute(
+                        sa.text(
+                            "INSERT INTO workspace.job_cancellations "
+                            "(organization_id,workspace_id,cancellation_id,job_id,"
+                            "requested_by_identity_id,reason_code,cancellation_digest) VALUES "
+                            "(:organization,:workspace,:cancellation,:job,"
+                            "'system:project-orchestrator',:reason,:digest)"
+                        ),
+                        {
+                            "organization": organization_id,
+                            "workspace": workspace_id,
+                            "cancellation": cancellation_id,
+                            "job": job_id,
+                            "reason": reason_code,
+                            "digest": semantic_digest(
+                                {
+                                    "cancellation_id": cancellation_id,
+                                    "job_id": job_id,
+                                    "reason_code": reason_code,
+                                }
+                            ),
+                        },
+                    )
+                    result = {
+                        "semantic_effect": False,
+                        "reason": reason_code,
+                        "superseded_job_kind": job_kind.value,
+                    }
+                    receipt_id = uuid7()
+                    session.execute(
+                        sa.text(
+                            "INSERT INTO workspace.job_terminal_receipts "
+                            "(organization_id,workspace_id,terminal_receipt_id,job_id,"
+                            "lease_generation,terminal_state,typed_outcome_code,result_manifest,"
+                            "result_digest) VALUES (:organization,:workspace,:receipt,:job,"
+                            ":generation,'cancelled',:reason,CAST(:result AS jsonb),:digest)"
+                        ),
+                        {
+                            "organization": organization_id,
+                            "workspace": workspace_id,
+                            "receipt": receipt_id,
+                            "job": job_id,
+                            "generation": int(row.lease_generation),
+                            "reason": reason_code,
+                            "result": _json(result),
+                            "digest": semantic_digest(
+                                {"job_id": job_id, "state": "cancelled", "result": result}
+                            ),
+                        },
+                    )
+                    session.execute(
+                        sa.text(
+                            "UPDATE workspace.durable_jobs SET state='cancelled',"
+                            "cancellation_state='acknowledged',completed_at=CURRENT_TIMESTAMP,"
+                            "typed_failure_code=:reason,result_receipt_id=:receipt WHERE "
+                            "organization_id=:organization AND workspace_id=:workspace AND "
+                            "job_id=:job AND state='queued'"
+                        ),
+                        {
+                            "organization": organization_id,
+                            "workspace": workspace_id,
+                            "job": job_id,
+                            "reason": reason_code,
+                            "receipt": receipt_id,
+                        },
+                    )
+                    self._append_event(
+                        session,
+                        organization_id=organization_id,
+                        workspace_id=workspace_id,
+                        job_id=job_id,
+                        event_type="job.cancelled",
+                        safe_message_code=reason_code,
+                        current=1,
+                        total=1,
+                        terminal=True,
+                    )
+                    superseded += 1
+        return superseded
 
     def recover_dependents_from_success(self, claimed: ClaimedJob) -> int:
         """Reconnect only terminal dependents of this accepted causal lineage.
@@ -5239,6 +5423,41 @@ class SpinePostgresRepository:
             idempotency_key = (
                 f"project-understanding:{PROJECT_RECONCILIATION_PROFILE_VERSION}:{semantic_input}"
             )
+            self._lock_project_reconciliation_scheduler(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            active = self._active_project_reconciliation_job_id(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                job_kind=JobKind.PROJECT_UNDERSTANDING_RECONCILIATION,
+            )
+            if active is not None:
+                row = session.execute(
+                    sa.text(
+                        "SELECT * FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND job_id=:job"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": active,
+                    },
+                ).one()
+                self._ensure_structure_reconciliation_job(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    owner_identity_id=owner_identity_id,
+                    correlation_id=correlation_id,
+                    project_job_id=active,
+                    document=dict(document),
+                    semantic_input=semantic_input,
+                )
+                return _job_summary(row)
             existing = session.execute(
                 sa.text(
                     "SELECT * FROM workspace.durable_jobs WHERE organization_id=:organization "
@@ -5929,6 +6148,20 @@ class SpinePostgresRepository:
         consumes the published source-scoped observations and may fail partially
         without suppressing the already useful project view.
         """
+        self._lock_project_reconciliation_scheduler(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            job_kind=JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        )
+        active = self._active_project_reconciliation_job_id(
+            session,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            job_kind=JobKind.PROJECT_STRUCTURE_RECONCILIATION,
+        )
+        if active is not None:
+            return active
         idempotency_key = (
             "project-structure-reconciliation:"
             f"{STRUCTURE_IDENTITY_GROUPING_POLICY_VERSION}:"
@@ -6036,6 +6269,62 @@ class SpinePostgresRepository:
             terminal=False,
         )
         return job_id
+
+    @staticmethod
+    def _lock_project_reconciliation_scheduler(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        job_kind: JobKind,
+    ) -> None:
+        """Serialize the active-refresh decision for one workspace and stage.
+
+        Event-driven completion and the periodic safety sweep may evaluate the
+        same workspace concurrently.  A transaction-scoped advisory lock closes
+        the check/insert race without holding a durable worker lease.
+        """
+
+        session.execute(
+            sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:key,0))"),
+            {
+                "key": (
+                    f"project-reconciliation:{organization_id}:{workspace_id}:{job_kind.value}"
+                )
+            },
+        )
+
+    @staticmethod
+    def _active_project_reconciliation_job_id(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        job_kind: JobKind,
+    ) -> UUID | None:
+        """Return the one refresh that should absorb newly accepted state."""
+
+        active = session.scalar(
+            sa.text(
+                "SELECT job_id FROM workspace.durable_jobs WHERE "
+                "organization_id=:organization AND workspace_id=:workspace AND "
+                "job_kind=:kind AND state IN ('queued','leased','running') AND ((:kind="
+                "'PROJECT_STRUCTURE_RECONCILIATION' AND provenance->>'contract'="
+                "'project-structure-reconciliation.command@1.0.0') OR (:kind="
+                "'PROJECT_UNDERSTANDING_RECONCILIATION' AND provenance->>'contract' IN ("
+                "'project-understanding.command@1.0.0',"
+                "'project-understanding.incremental-reconciliation@1.0.0',"
+                "'project-understanding.post-structure-reconciliation@1.0.0'))) ORDER BY "
+                "CASE WHEN state IN ('leased','running') THEN 0 ELSE 1 END,"
+                "created_at DESC,job_id DESC LIMIT 1"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "kind": job_kind.value,
+            },
+        )
+        return UUID(str(active)) if active is not None else None
 
     def review_project_candidate(
         self,

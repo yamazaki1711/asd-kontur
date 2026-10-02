@@ -84,6 +84,10 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
             self.calls.append("retry_transient")
             return (UUID("018f5c3e-7b00-7000-8000-000000001804"),)
 
+        def supersede_redundant_project_reconciliations(self, **_kwargs: object) -> int:
+            self.calls.append("supersede_reconciliations")
+            return 7
+
         def start_project_understanding(self, **kwargs: object) -> object:
             assert kwargs["_resolved_organization_id"] == ORGANIZATION_ID
             self.calls.append("ensure_project_model")
@@ -99,12 +103,14 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
     assert result.dependency_failures_marked == 120
     assert result.dependency_replacements_queued == 3
     assert result.transient_retries_queued == 1
+    assert result.superseded_reconciliations == 7
     assert result.work_batches_queued == 2
     assert repository.calls == [
         "mark_blocked",
         "recover_dependencies",
         "recover_leases",
         "retry_transient",
+        "supersede_reconciliations",
         "ensure_project_model",
         "refill_work",
         "recover_dependencies",

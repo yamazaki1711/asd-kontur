@@ -25,6 +25,7 @@ class OrchestrationSweep:
     dependency_failures_marked: int
     dependency_replacements_queued: int
     transient_retries_queued: int
+    superseded_reconciliations: int
     project_models_ensured: int
     work_batches_queued: int
     scope_failures: tuple[dict[str, str], ...]
@@ -36,6 +37,7 @@ class OrchestrationSweep:
                 self.dependency_failures_marked,
                 self.dependency_replacements_queued,
                 self.transient_retries_queued,
+                self.superseded_reconciliations,
                 self.work_batches_queued,
             )
         )
@@ -72,6 +74,7 @@ class ProjectOrchestrator:
         dependency_replacements = self._repository.recover_dependency_terminal_failures()
         scopes = self._repository.autonomous_project_processing_scopes(limit=self._scope_limit)
         retries = 0
+        superseded = 0
         models = 0
         work_batches = 0
         failures: list[dict[str, str]] = []
@@ -86,6 +89,10 @@ class ProjectOrchestrator:
                         organization_id=organization_id,
                         workspace_id=workspace_id,
                     )
+                )
+                superseded += self._repository.supersede_redundant_project_reconciliations(
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
                 )
                 self._repository.start_project_understanding(
                     owner_identity_id=owner_identity_id,
@@ -118,6 +125,7 @@ class ProjectOrchestrator:
             dependency_failures_marked=dependency_failures,
             dependency_replacements_queued=dependency_replacements,
             transient_retries_queued=retries,
+            superseded_reconciliations=superseded,
             project_models_ensured=models,
             work_batches_queued=work_batches,
             scope_failures=tuple(failures),

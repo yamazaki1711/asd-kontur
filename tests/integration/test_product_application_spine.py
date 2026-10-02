@@ -2216,6 +2216,28 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
                 },
             )
         repository = SpinePostgresRepository(postgres_environment.application_engine)
+        with postgres_environment.owner_engine.connect() as connection:
+            preexisting_refreshes = [
+                UUID(str(value))
+                for value in connection.scalars(
+                    sa.text(
+                        "SELECT job_id FROM workspace.durable_jobs WHERE "
+                        "organization_id=:organization AND workspace_id=:workspace AND "
+                        "job_kind='PROJECT_UNDERSTANDING_RECONCILIATION' AND state='queued'"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace["workspace_id"],
+                    },
+                )
+            ]
+        for preexisting_refresh in preexisting_refreshes:
+            repository.request_cancellation(
+                owner_identity_id=str(row["created_by_identity_id"]),
+                workspace_id=workspace_id,
+                job_id=preexisting_refresh,
+                reason_code="synthetic_preexisting_refresh",
+            )
         first = repository.schedule_incremental_project_reconciliation(claimed)
         second = repository.schedule_incremental_project_reconciliation(claimed)
         assert first is not None and first == second
@@ -2240,6 +2262,26 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
         assert refresh["priority"] == 165
         assert refresh["causation_id"] == semantic_job_id
         assert refresh["contract"] == "project-understanding.incremental-reconciliation@1.0.0"
+
+        refresh_worker_claim = worker_repository.claim_next_job(
+            worker_identity="synthetic-project-refresh-worker",
+            lease_seconds=600,
+            organization_id=UUID(workspace["organization_id"]),
+            workspace_id=workspace_id,
+        )
+        assert refresh_worker_claim is not None
+        assert refresh_worker_claim.job_id == first
+        worker_repository.mark_job_running(
+            refresh_worker_claim,
+            worker_identity="synthetic-project-refresh-worker",
+        )
+        worker_repository.finish_job(
+            refresh_worker_claim,
+            terminal_state=JobState.SUCCEEDED,
+            outcome_code="synthetic_project_refresh_succeeded",
+            result_manifest={"project_model": "accepted"},
+            worker_identity="synthetic-project-refresh-worker",
+        )
 
         structure_job_id = uuid4()
         structure_manifest = dict(row["input_manifest"])
@@ -2360,6 +2402,153 @@ def test_completed_semantic_source_queues_one_incremental_model_refresh(
             )
         assert "completed_version" in str(claim_definition)
         assert "incremental_source_job_id" not in str(claim_definition)
+
+
+def test_redundant_project_refreshes_are_terminally_superseded(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="refresh-convergence-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Refresh convergence owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "refresh-convergence-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Refresh convergence"},
+            headers=_csrf(client),
+        ).json()
+
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    project_jobs = [uuid4() for _ in range(3)]
+    structure_jobs = [uuid4() for _ in range(3)]
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = str(
+            connection.scalar(
+                sa.text(
+                    "SELECT created_by_identity_id FROM workspace.workspaces WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+        )
+        for ordinal, job_id in enumerate(project_jobs, start=1):
+            manifest = {"synthetic_refresh": ordinal}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,created_at,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                    "'PROJECT_UNDERSTANDING_RECONCILIATION',CAST(:manifest AS jsonb),:digest,"
+                    ":key,'queued',120,clock_timestamp()+make_interval(secs=>:ordinal),3,"
+                    "'synthetic',CAST(:provenance AS jsonb),:correlation,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "manifest": json.dumps(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": f"synthetic-project-refresh-{job_id}",
+                    "provenance": json.dumps(
+                        {"contract": "project-understanding.command@1.0.0"}
+                    ),
+                    "ordinal": ordinal,
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
+        for ordinal, (job_id, project_job_id) in enumerate(
+            zip(structure_jobs, project_jobs, strict=True), start=1
+        ):
+            manifest = {"synthetic_structure_refresh": ordinal}
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,created_at,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,causation_id,"
+                    "created_by_identity_id) VALUES (:organization,:workspace,:job,"
+                    "'PROJECT_STRUCTURE_RECONCILIATION',CAST(:manifest AS jsonb),:digest,:key,"
+                    "'queued',110,clock_timestamp()+make_interval(secs=>:ordinal),3,'synthetic',"
+                    "CAST(:provenance AS jsonb),:correlation,:project,:owner)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "manifest": json.dumps(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": f"synthetic-structure-refresh-{job_id}",
+                    "provenance": json.dumps(
+                        {"contract": "project-structure-reconciliation.command@1.0.0"}
+                    ),
+                    "ordinal": ordinal,
+                    "correlation": uuid4(),
+                    "project": project_job_id,
+                    "owner": owner,
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_job_dependencies (organization_id,workspace_id,"
+                    "job_id,depends_on_job_id,dependency_kind) VALUES "
+                    "(:organization,:workspace,:job,:project,'success_required')"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "project": project_job_id,
+                },
+            )
+
+    repository = SpinePostgresRepository(postgres_environment.application_engine)
+    assert (
+        repository.supersede_redundant_project_reconciliations(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+        )
+        == 4
+    )
+    with postgres_environment.owner_engine.connect() as connection:
+        states = dict(
+            connection.execute(
+                sa.text(
+                    "SELECT job_id,state FROM workspace.durable_jobs WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "job_id=ANY(:jobs)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "jobs": project_jobs + structure_jobs,
+                },
+            ).all()
+        )
+        receipts = int(
+            connection.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.job_terminal_receipts WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace AND "
+                    "typed_outcome_code='superseded_project_reconciliation'"
+                ),
+                {"organization": organization_id, "workspace": workspace_id},
+            )
+            or 0
+        )
+    assert states[project_jobs[0]] == "cancelled"
+    assert states[project_jobs[1]] == "cancelled"
+    assert states[project_jobs[2]] == "queued"
+    assert states[structure_jobs[0]] == "cancelled"
+    assert states[structure_jobs[1]] == "cancelled"
+    assert states[structure_jobs[2]] == "queued"
+    assert receipts == 4
 
 
 def test_foreground_yield_preserves_attempt_ledger_and_retry_budget(
