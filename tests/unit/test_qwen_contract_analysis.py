@@ -453,9 +453,7 @@ def test_contract_analysis_rejects_overpayment_restitution_as_unpaid_changed_wor
                     "basis": "explicit_clause_text",
                     "risk_mechanism": "other_explicit_exposure",
                     "trigger_text": "Подрядчик возвращает излишне полученную оплату",
-                    "adverse_effect_text": (
-                        "фактически выполненный объём меньше оплаченного"
-                    ),
+                    "adverse_effect_text": ("фактически выполненный объём меньше оплаченного"),
                     "severity": "medium",
                     "description": "Возврат переплаты ошибочно принят за неоплату изменений.",
                     "practical_consequence": "Ошибочно предполагается неоплата работ.",
@@ -498,8 +496,7 @@ def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:
                     "basis": "explicit_clause_text",
                     "risk_mechanism": "customer_controlled_payment",
                     "trigger_text": (
-                        "Дополнительные работы, выполненные без письменного согласования "
-                        "Заказчика"
+                        "Дополнительные работы, выполненные без письменного согласования Заказчика"
                     ),
                     "adverse_effect_text": "не подлежат оплате",
                     "severity": "high",
