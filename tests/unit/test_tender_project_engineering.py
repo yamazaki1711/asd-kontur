@@ -1038,6 +1038,13 @@ def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
         )
         is None
     )
+    assert (
+        _reviewed_scaled_quantity_unit(
+            {"normalized_unit": "piece"},
+            {"source_unit": "100 шт"},
+        )
+        == "100 шт"
+    )
 
 
 def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:

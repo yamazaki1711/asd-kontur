@@ -98,7 +98,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v22"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v23"
 
 
 def test_quantity_review_preserves_scaled_source_unit_without_model_arithmetic(
@@ -162,6 +162,70 @@ def test_quantity_review_preserves_scaled_source_unit_without_model_arithmetic(
     )
 
     assert result["observations"][0]["quantity_reviews"][0]["source_unit"] == "100 м2"
+
+
+def test_qwen_work_reconciliation_accepts_professional_unit_spelling_from_split_ocr(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "foundation-blocks",
+                        "status": "MATCHED",
+                        "family_key": "foundation_slab",
+                        "operation": "Укладка фундаментных блоков",
+                        "facility": None,
+                        "confidence": "0.96",
+                        "reason": "Сметная строка содержит физическую строительную работу.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "foundation-block-count",
+                                "status": "WORK_QUANTITY",
+                                "source_unit": "100 шт",
+                                "semantic_scope": "Количество фундаментных блоков",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": None,
+                                "reason": "Количество задано в сотнях штук.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "foundation-blocks",
+                "wording": "Укладка фундаментных блоков",
+                "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                "nearby_context": "Укладка блоков 100 ш т 0,6 1 0,6",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "foundation-block-count",
+                        "value": "0.6",
+                        "unit": "piece",
+                        "nearby_context": "Укладка блоков 100 ш т 0,6 1 0,6",
+                    }
+                ],
+            }
+        ],
+        work_families={"foundation_slab": "Фундаменты и плиты"},
+        facilities=[],
+    )
+
+    review = result["observations"][0]["quantity_reviews"][0]
+    assert review["source_unit"] == "100 шт"
+    assert review["relationship_reviewed"] is True
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(

@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v22"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v23"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -37,6 +37,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v19",
     "qwen-project-work-reconciliation-v20",
     "qwen-project-work-reconciliation-v21",
+    "qwen-project-work-reconciliation-v22",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@16.0.0"
@@ -782,6 +783,13 @@ def _parse_quantity_reviews(
 
 
 def _normalized_unit_evidence(value: object) -> str:
-    return " ".join(
+    normalized = " ".join(
         str(value or "").casefold().replace("²", "2").replace("³", "3").replace("\xa0", " ").split()
     )
+    # Native PDF extraction and OCR commonly separate glyphs inside compact
+    # Russian units (``ш т``, ``м 2`` and ``м 3``).  Qwen correctly returns the
+    # professional spelling; normalize only these established unit tokens so
+    # source evidence remains strict without rejecting an orthographic repair.
+    normalized = re.sub(r"\bш\s+т\b", "шт", normalized)
+    normalized = re.sub(r"\b([мm])\s+([23])\b", r"\1\2", normalized)
+    return normalized

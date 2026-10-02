@@ -54,6 +54,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v20",
         "qwen-project-work-reconciliation-v21",
         "qwen-project-work-reconciliation-v22",
+        "qwen-project-work-reconciliation-v23",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -6151,8 +6152,13 @@ def _reviewed_scaled_quantity_unit(
     scaled = re.fullmatch(r"(?P<factor>10|100|1000)\s*(?P<unit>м[23]|м|шт)", source_unit)
     if scaled is None:
         return None
-    candidate_unit = _normalized_unit(
+    raw_candidate_unit = (
         quantity.get("normalized_unit") or quantity.get("unit") or quantity.get("raw_unit")
+    )
+    candidate_unit = (
+        "шт"
+        if str(raw_candidate_unit or "").casefold() == "piece"
+        else _normalized_unit(raw_candidate_unit)
     )
     if candidate_unit != scaled.group("unit"):
         return None
