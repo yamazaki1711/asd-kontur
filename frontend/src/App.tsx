@@ -2678,7 +2678,7 @@ function TenderContractAnalysisPage() {
   return (
     <Page
       title="Договорный анализ"
-      lead="Проверяемая проекция договорных оснований, рисков и подготовленных результатов Tender-процесса."
+      lead="Ключевые условия договора, риски Подрядчика и предложения по их снижению."
     >
       <QueryState query={analysis}>
         {(value) => (
@@ -2708,6 +2708,25 @@ function TenderContractAnalysisBody({
     Record<string, unknown>
   >;
   const deliverables = value.deliverables as Array<Record<string, unknown>>;
+  const projectContext = (value.project_context ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const keyFacts = [
+    ...((projectContext.participants ?? []) as Array<Record<string, unknown>>),
+    ...((projectContext.time_requirements ?? []) as Array<
+      Record<string, unknown>
+    >),
+    ...((projectContext.key_conditions ?? []) as Array<
+      Record<string, unknown>
+    >),
+    ...((projectContext.commercial_conditions ?? []) as Array<
+      Record<string, unknown>
+    >),
+    ...((projectContext.procurement_requirements ?? []) as Array<
+      Record<string, unknown>
+    >),
+  ];
   if (value.status === "contract_input_unavailable") {
     return (
       <InfoNotice>
@@ -2763,6 +2782,51 @@ function TenderContractAnalysisBody({
           label="Переработанных положений"
           value={revisedClauses.length}
         />
+      </section>
+      <section className="panel">
+        <h2>Ключевые условия</h2>
+        {keyFacts.length ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Условие</th>
+                  <th>Значение</th>
+                  <th>Документ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keyFacts.map((fact, index) => {
+                  const sources = (fact.sources ?? []) as Array<
+                    Record<string, unknown>
+                  >;
+                  const source = sources[0];
+                  const sourceText = source
+                    ? [
+                        displayValue(source.document, ""),
+                        displayValue(source.page, "")
+                          ? `лист/страница ${displayValue(source.page, "")}`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(", ")
+                    : "Источник не указан";
+                  return (
+                    <tr
+                      key={`${displayValue(fact.field, "fact")}-${String(index)}`}
+                    >
+                      <td>{displayValue(fact.label, "Условие договора")}</td>
+                      <td>{displayValue(fact.value, "Требует уточнения")}</td>
+                      <td>{sourceText}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p>Ключевые условия договора ещё извлекаются.</p>
+        )}
       </section>
       <section className="panel">
         <h2>Протокол разногласий и переработанные положения</h2>

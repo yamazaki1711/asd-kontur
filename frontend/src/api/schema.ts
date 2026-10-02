@@ -2861,6 +2861,10 @@ export interface components {
             process: {
                 [key: string]: unknown;
             } | null;
+            /** Project Context */
+            project_context?: {
+                [key: string]: unknown;
+            };
             /** Protocols */
             protocols: {
                 [key: string]: unknown;

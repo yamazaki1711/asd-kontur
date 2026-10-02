@@ -542,6 +542,7 @@ class TenderContractAnalysisView(ApiModel):
     revised_contracts: list[dict[str, Any]]
     revised_clauses: list[dict[str, Any]]
     deliverables: list[dict[str, Any]]
+    project_context: dict[str, Any] = Field(default_factory=dict)
     gaps: list[str]
     authority_boundary: str
 

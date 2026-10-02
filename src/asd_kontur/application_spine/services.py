@@ -593,6 +593,11 @@ class ProductSpineService:
         view = self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        view["project_context"] = self._contract_project_context(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            contract_view=view,
+        )
         if any(
             str(item.get("state")) == "source_format_supported"
             for item in view.get("revised_contracts", ())
@@ -625,6 +630,58 @@ class ProductSpineService:
                     ):
                         deliverable["state"] = "exact_source_candidate_available"
         return view
+
+    def _contract_project_context(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        contract_view: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Join contract-scoped project facts into the professional read result."""
+
+        project_reader = getattr(self._repository, "project_understanding_view", None)
+        if not callable(project_reader):
+            return {}
+        project_view = project_reader(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        if not isinstance(project_view, dict):
+            return {}
+        engineering = project_view.get("project_engineering")
+        if not isinstance(engineering, dict):
+            return {}
+        assessment = contract_view.get("assessment")
+        assessment = assessment if isinstance(assessment, dict) else {}
+        source_ids = {
+            str(source.get("source_version_id"))
+            for source in assessment.get("sources") or ()
+            if isinstance(source, dict) and source.get("source_version_id")
+        }
+        return {
+            "participants": _facts_for_sources(engineering.get("participants"), source_ids),
+            "key_conditions": _facts_for_sources(
+                engineering.get("contract_conditions"), source_ids
+            ),
+            "time_requirements": _facts_for_sources(
+                engineering.get("time_requirements"), source_ids
+            ),
+            "commercial_conditions": _facts_for_sources(
+                engineering.get("commercial_conditions"), source_ids
+            ),
+            "procurement_requirements": list(engineering.get("procurement_requirements") or ()),
+            "project_contract_findings": [
+                dict(item)
+                for item in engineering.get("issues") or ()
+                if isinstance(item, dict)
+                and any(
+                    str(source.get("source_version_id")) in source_ids
+                    for source in item.get("sources") or ()
+                    if isinstance(source, dict)
+                )
+            ],
+        }
 
     def tender_contract_analysis_export(
         self, *, owner_identity_id: str, workspace_id: UUID
@@ -1720,3 +1777,18 @@ def _manifest_ordinal(item: dict[str, object]) -> int:
     if not isinstance(value, int):
         raise ValueError("manifest_ordinal_invalid")
     return value
+
+
+def _facts_for_sources(value: object, source_ids: set[str]) -> list[dict[str, Any]]:
+    if not source_ids or not isinstance(value, (list, tuple)):
+        return []
+    return [
+        dict(item)
+        for item in value
+        if isinstance(item, dict)
+        and any(
+            str(source.get("source_version_id")) in source_ids
+            for source in item.get("sources") or ()
+            if isinstance(source, dict)
+        )
+    ]

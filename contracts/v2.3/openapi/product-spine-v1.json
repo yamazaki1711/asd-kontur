@@ -3815,6 +3815,11 @@
             ],
             "title": "Process"
           },
+          "project_context": {
+            "additionalProperties": true,
+            "title": "Project Context",
+            "type": "object"
+          },
           "protocols": {
             "items": {
               "additionalProperties": true,

@@ -1,3 +1,4 @@
+# ruff: noqa: RUF001 -- Russian contract examples are intentional.
 from __future__ import annotations
 
 import io
@@ -72,6 +73,39 @@ class _SourceRepository:
                 "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             ),
             "safe_display_name": "changed-project-contract.docx",
+        }
+
+
+class _ProjectContextRepository(_SourceRepository):
+    def project_understanding_view(self, **_: object) -> dict[str, object]:
+        return {
+            "project_engineering": {
+                "participants": [
+                    {
+                        "field": "customer",
+                        "label": "Заказчик",
+                        "value": "АО Заказчик-72",
+                        "sources": [{"source_version_id": "source-contract-72"}],
+                    },
+                    {
+                        "field": "designer",
+                        "label": "Проектировщик",
+                        "value": "Не относится к договору",
+                        "sources": [{"source_version_id": "source-design-72"}],
+                    },
+                ],
+                "contract_conditions": [
+                    {
+                        "field": "warranty_period",
+                        "label": "Гарантийный срок",
+                        "value": "24 месяца",
+                        "sources": [{"source_version_id": "source-contract-72"}],
+                    }
+                ],
+                "time_requirements": [],
+                "commercial_conditions": [],
+                "issues": [],
+            }
         }
 
 
@@ -192,3 +226,28 @@ def test_product_projection_keeps_ambiguous_source_as_clause_schedule() -> None:
     assert projected["revised_contracts"] == []
     assert projected["deliverables"][0]["state"] == "candidate_clause_schedule"
     assert "revised_contract_clause_match_not_unique" in projected["gaps"]
+
+
+def test_product_projection_joins_only_contract_scoped_project_facts() -> None:
+    view = _view("1.1. Предмет договора.")
+    view.update(
+        {
+            "assessment": {
+                "sources": [{"source_version_id": "source-contract-72"}],
+            },
+            "revised_contracts": [],
+            "deliverables": [],
+            "gaps": [],
+        }
+    )
+    service = _service(_source_docx("1.1. Предмет договора."), view)
+    service._repository = _ProjectContextRepository()  # type: ignore[assignment]
+
+    projected = service.tender_contract_analysis(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=74)
+    )
+
+    assert [item["value"] for item in projected["project_context"]["participants"]] == [
+        "АО Заказчик-72"
+    ]
+    assert projected["project_context"]["key_conditions"][0]["value"] == "24 месяца"
