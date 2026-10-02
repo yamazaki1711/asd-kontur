@@ -288,7 +288,7 @@ def test_analysis_archive_keeps_editable_outputs_and_partial_coverage_boundary()
     assert "state: partial" in status
     assert "SEMANTIC_COVERAGE_PARTIAL" in status
     assert manifest["candidate_boundary"] is True
-    assert manifest["contract"] == "tender.analysis-delivery@1.5.0"
+    assert manifest["contract"] == "tender.analysis-delivery@1.6.0"
     assert (
         manifest["entries"][0]["sha256"] == "sha256:" + hashlib.sha256(b"docx-payload").hexdigest()
     )
@@ -318,6 +318,28 @@ def test_professional_archive_places_disagreement_protocol_before_internal_sched
         ]
         assert exported.read("04_disagreement_protocol_candidate.docx") == b"protocol-docx"
         assert "09_delivery_manifest.json" in exported.namelist()
+
+
+def test_professional_archive_includes_exact_source_revised_contract() -> None:
+    archive = build_tender_analysis_archive(
+        findings_report=b"engineering-report",
+        findings_schedule=b"findings-csv",
+        scope_schedule=b"scope-csv",
+        structure_identity_schedule=b"identity-csv",
+        facility_scope_schedule=b"facility-work-csv",
+        facility_candidate_schedule=b"facility-candidate-csv",
+        document_coverage_schedule=b"coverage-csv",
+        materialization={"state": "partial", "gaps": []},
+        professional=True,
+        disagreement_protocol=b"protocol-docx",
+        revised_contract=b"revised-contract-docx",
+    )
+
+    with zipfile.ZipFile(io.BytesIO(archive)) as exported:
+        assert exported.read("04_disagreement_protocol_candidate.docx") == b"protocol-docx"
+        assert exported.read("05_revised_contract_candidate.docx") == b"revised-contract-docx"
+        assert "06_structure_identity_candidates.csv" in exported.namelist()
+        assert "10_delivery_manifest.json" in exported.namelist()
 
 
 def test_structure_identity_schedule_keeps_each_source_observation_unmerged() -> None:

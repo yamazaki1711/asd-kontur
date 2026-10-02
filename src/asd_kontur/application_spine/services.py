@@ -1020,6 +1020,19 @@ class ProductSpineService:
             engineering.get("works")
             or dict(engineering.get("contract_analysis") or {}).get("issues")
         )
+        revised_contract: bytes | None = None
+        contract_view = dict(engineering.get("contract_analysis") or {})
+        if professional and contract_view.get("revised_contracts"):
+            try:
+                revised_contract, _display_name = self._render_revised_contract_candidate(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                    view=contract_view,
+                )
+            except RevisedContractCandidateError:
+                # Exact-source revision is optional. The remaining Tender
+                # deliverables stay available when safe replacement is not.
+                revised_contract = None
         common = {
             "materialization_state": str(materialization.get("state", "not_requested")),
             "coverage_gaps": materialization.get("gaps", []),
@@ -1081,6 +1094,7 @@ class ProductSpineService:
                 if professional and engineering.get("issues")
                 else None
             ),
+            revised_contract=revised_contract,
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(

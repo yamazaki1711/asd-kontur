@@ -24,6 +24,7 @@ def build_tender_analysis_archive(
     materialization: Mapping[str, Any],
     professional: bool = False,
     disagreement_protocol: bytes | None = None,
+    revised_contract: bytes | None = None,
 ) -> bytes:
     """Return a stable editable Tender deliverable without changing findings.
 
@@ -34,11 +35,14 @@ def build_tender_analysis_archive(
 
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as archive:
-        professional_entries = (
-            (("04_disagreement_protocol_candidate.docx", disagreement_protocol),)
-            if professional and disagreement_protocol
-            else ()
-        )
+        professional_entries: tuple[tuple[str, bytes], ...] = ()
+        if professional and disagreement_protocol:
+            professional_entries += (
+                ("04_disagreement_protocol_candidate.docx", disagreement_protocol),
+            )
+        if professional and revised_contract:
+            professional_entries += (("05_revised_contract_candidate.docx", revised_contract),)
+        professional_offset = 1 if professional and revised_contract else 0
         entries = (
             (
                 "01_tender_engineering_report.docx"
@@ -60,25 +64,25 @@ def build_tender_analysis_archive(
             ),
             *professional_entries,
             (
-                "05_structure_identity_candidates.csv"
+                f"{5 + professional_offset:02d}_structure_identity_candidates.csv"
                 if professional
                 else "04_structure_identity_candidates.csv",
                 structure_identity_schedule,
             ),
             (
-                "06_facility_work_observation_candidates.csv"
+                f"{6 + professional_offset:02d}_facility_work_observation_candidates.csv"
                 if professional
                 else "05_facility_work_observation_candidates.csv",
                 facility_scope_schedule,
             ),
             (
-                "07_facility_work_candidate_groups.csv"
+                f"{7 + professional_offset:02d}_facility_work_candidate_groups.csv"
                 if professional
                 else "06_facility_work_candidate_groups.csv",
                 facility_candidate_schedule,
             ),
             (
-                "08_document_processing_coverage.csv"
+                f"{8 + professional_offset:02d}_document_processing_coverage.csv"
                 if professional
                 else "07_document_processing_coverage.csv",
                 document_coverage_schedule,
@@ -88,7 +92,11 @@ def build_tender_analysis_archive(
         for name, payload in (
             *entries,
             (
-                "09_delivery_manifest.json" if professional else "08_delivery_manifest.json",
+                (
+                    f"{9 + professional_offset:02d}_delivery_manifest.json"
+                    if professional
+                    else "08_delivery_manifest.json"
+                ),
                 manifest,
             ),
             ("99_analysis_status.txt", _status_text(materialization, professional=professional)),
@@ -106,7 +114,7 @@ def _delivery_manifest(
     """Bind this download to exact candidate projections and coverage state."""
 
     payload = {
-        "contract": "tender.analysis-delivery@1.5.0",
+        "contract": "tender.analysis-delivery@1.6.0",
         "candidate_boundary": True,
         "materialization": {
             "state": str(materialization.get("state") or "not_requested"),
