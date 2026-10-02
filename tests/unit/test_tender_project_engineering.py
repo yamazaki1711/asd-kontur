@@ -7,6 +7,7 @@ from decimal import Decimal
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
     _attach_pit_work_scopes,
+    _comparison_has_reviewed_quantity_identity,
     _comparison_row,
     _comparisons,
     _component_total_comparisons,
@@ -994,6 +995,31 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
     assert comparisons[0]["classification"] == "MATCH"
     assert comparisons[0]["left"]["value"] == "833.9"
     assert comparisons[0]["right"]["value"] == "833.9"
+
+
+def test_legacy_quantity_review_cannot_authorize_new_unlocated_comparison() -> None:
+    quantity = {
+        "quantity_candidate_id": "legacy-area",
+        "value": "8.339",
+        "unit": "м2",
+        "semantic_scope": "Coated surface area",
+        "scope_compatibility": "SAME_SCOPE",
+        "relationship_reviewed": True,
+        "semantic_review_profile": "qwen-project-work-reconciliation-v20",
+    }
+    work = {
+        "quantities_by_document": {
+            "ВОР": [{**quantity, "quantity_candidate_id": "legacy-vor"}],
+            "Смета": [quantity],
+        }
+    }
+
+    assert not _comparison_has_reviewed_quantity_identity(
+        work,
+        {"semantic_scope": "Coated surface area"},
+        "ВОР",
+        "Смета",
+    )
 
 
 def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
