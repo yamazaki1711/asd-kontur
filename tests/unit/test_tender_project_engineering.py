@@ -1906,6 +1906,33 @@ def test_facility_reclamation_omission_becomes_a_customer_action() -> None:
     assert "Рекультивация" in issue["recommended_action"]
 
 
+def test_commercial_only_work_becomes_a_project_basis_question() -> None:
+    issues = _issues(
+        defects=[],
+        comparisons=[],
+        scope_comparisons=[
+            {
+                "scope_comparison_id": "commercial-only-loading",
+                "classification": "COMMERCIAL_ONLY_WORK",
+                "facility_id": "wall-z17",
+                "facility": "Retaining wall Z-17",
+                "family_key": "soil_disposal",
+                "work": "Load excavated soil",
+                "conclusion": "The commercial item is not linked to an established design scope.",
+                "source_locator_ids": ["contract-estimate-loading"],
+            }
+        ],
+        sheet_pile_schedule=[],
+        works=[],
+        source_context={},
+    )
+
+    assert len(issues) == 1
+    assert issues[0]["finding_kind"] == "COMMERCIAL_SCOPE_WITHOUT_DESIGN_BASIS"
+    assert issues[0]["location"] == "Retaining wall Z-17"
+    assert "проектный документ-основание" in issues[0]["recommended_action"]
+
+
 def test_sheet_pile_omission_becomes_an_issue_but_embedded_operations_do_not() -> None:
     issues = _issues(
         defects=[],

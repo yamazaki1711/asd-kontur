@@ -4738,6 +4738,34 @@ def _issues(
                 "status": "Возможное отсутствие — требуется подтверждение Заказчика",
             }
         )
+    for comparison in scope_comparisons:
+        if comparison.get("classification") != "COMMERCIAL_ONLY_WORK":
+            continue
+        if not comparison.get("facility_id"):
+            continue
+        locators = [str(value) for value in comparison.get("source_locator_ids") or ()]
+        issues.append(
+            {
+                "issue_id": str(comparison["scope_comparison_id"]),
+                "finding_kind": ProfessionalFindingKind.COMMERCIAL_SCOPE_WITHOUT_DESIGN_BASIS,
+                "kind": "Коммерческая позиция без установленного проектного основания",
+                "location": comparison.get("facility"),
+                "subject": comparison.get("work"),
+                "description": str(comparison.get("conclusion") or ""),
+                "practical_consequence": (
+                    "Без установленного проектного основания остаются неясными границы, "
+                    "необходимость и порядок приёмки этой коммерческой позиции."
+                ),
+                "recommended_action": (
+                    f"Просим указать проектный документ-основание для работы "
+                    f"«{comparison.get('work')}» на {comparison.get('facility')} либо "
+                    "подтвердить её исключение из коммерческого состава."
+                ),
+                "source_locator_ids": locators,
+                "sources": _source_refs(locators, source_context),
+                "status": "Требуется подтверждение проектного основания",
+            }
+        )
 
     profile_rows_by_facility: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for raw in sheet_pile_schedule:
