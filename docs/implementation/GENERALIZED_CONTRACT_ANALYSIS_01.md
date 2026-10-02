@@ -714,3 +714,50 @@ remains, the risk fails closed. The same filter applies at parse time for v8
 and at read time for historical candidates. Against the blind projection it
 retained all five grounded commercial risks and three disagreement rows while
 removing the unsupported legal sentence.
+
+## 2026-10-02 v7 terminal checkpoint and v8 controlled activation
+
+The real blind workspace completed its autonomous v7 run before activation was
+attempted. The terminal set contained 39 successful and 29 failed contract jobs,
+with no queued or running v7 work. It persisted 201 exact clause units and 18 raw
+risk candidates. The professional read projection retained six grounded risks
+and four disagreement/revised-clause candidates; terminal batch failures kept
+the exact revised-contract deliverable disabled. Twenty-seven failures were
+strict exact-source quotation failures, one was invalid clause evidence and one
+was an invalid risk. Original and bounded replacement failures each consumed a
+median of roughly 8.5 minutes, confirming the need for the smaller v8 contexts
+and current-profile terminal accounting.
+
+The application worker was then disabled and sent `SIGTERM` through launchd.
+Its signal handler finished the already leased project-work reconciliation job
+`01a0fa68-72d1-7626-9fe2-8397a70b96ee`, recorded successful receipt
+`01a0fc47-465b-7d8b-8aa4-007fbccae58f`, and exited without abandoning a lease.
+The API, assistant worker and orchestrator were subsequently drained. Qwen and
+the independent NTD worker were neither signalled nor restarted.
+
+Before migration, a PostgreSQL custom-format backup was written to
+`pre-f6ff30a-contract-v8-20261002T2302/public-before-f6ff30a.dump` with SHA-256
+`dbaa126c6772748fa150974c279e64552f29674ee0dfd77ea050db4299b2035a`.
+A separate restored database proved `0104 -> 0105`, fail-closed downgrade,
+explicit destructive downgrade to `0104`, and re-upgrade to `0105`. The
+all-history platform-memory fingerprint remained
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`
+and all 319 NTD processing jobs remained succeeded throughout rehearsal and
+public migration.
+
+Pinned release `20261002-f6ff30a-contract-v8` now serves commit
+`f6ff30a34f080fa11c2601a3d0ed18f2d4cd12c2` on migration
+`0105_contract_controller_grounding`. Packaging verification caught and fixed
+two release-construction defects before activation: editable-install metadata
+and command shebangs still referenced the temporary staging directory. The
+final environment was rebuilt in the pinned release path and imports only that
+path. Exact-SHA CI run `36981605417` passed before deployment.
+
+After launchd activation, `/api/v1/health/ready` reported `ready`, the expected
+frontend asset returned HTTP 200, and the platform-memory/NTD checks remained
+exact. Without a developer queue command, the supervised orchestrator created
+78 v8 contract-analysis jobs for the blind workspace. A transient Qwen-busy
+outcome on the first claim was autonomously requeued; the same job then
+succeeded on attempt two, followed by further successful jobs. This is direct
+evidence that v8 discovery, scheduling, retry and Qwen dispatch belong to the
+runtime rather than to Codex.
