@@ -235,6 +235,38 @@ def test_revised_contract_uses_explicit_replacement_source_span() -> None:
     ]
 
 
+def test_revised_contract_replaces_one_exact_fragment_inside_paragraph() -> None:
+    prefix = "3.4. Подрядчик выполняет работы. "
+    unsafe = "Оплата зависит от внутреннего решения Заказчика."
+    suffix = " Остальные условия пункта сохраняются."
+    source = _source_docx(prefix + unsafe + suffix)
+    view = _view(prefix + unsafe + suffix)
+    revisions = view["revised_clauses"]
+    assert isinstance(revisions, list)
+    revisions[0]["replacement_source_text"] = unsafe
+    revisions[0]["revised_text"] = "Оплата производится в течение семи рабочих дней."
+
+    revised = render_revised_contract_candidate_docx(source, view)
+
+    assert _paragraphs(revised) == [
+        prefix + "Оплата производится в течение семи рабочих дней." + suffix
+    ]
+
+
+def test_revised_contract_does_not_duplicate_boundary_punctuation() -> None:
+    unsafe = "3.5. Расходы во всех случаях несёт Подрядчик"
+    source = _source_docx(unsafe + ".")
+    view = _view(unsafe)
+    revisions = view["revised_clauses"]
+    assert isinstance(revisions, list)
+    revisions[0]["replacement_source_text"] = unsafe
+    revisions[0]["revised_text"] = "3.5. Расходы распределяются по установленной причине."
+
+    revised = render_revised_contract_candidate_docx(source, view)
+
+    assert _paragraphs(revised) == ["3.5. Расходы распределяются по установленной причине."]
+
+
 def test_product_projection_advertises_only_verified_exact_candidate() -> None:
     original_clause = "7.3. Заказчик передаёт исходные данные после подписания договора."
     source_id = "71000000-0000-4000-8000-000000000091"

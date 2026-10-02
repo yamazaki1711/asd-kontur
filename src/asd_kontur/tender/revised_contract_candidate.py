@@ -66,19 +66,28 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
 
     paragraphs = list(root.iter(_PARAGRAPH))
     paragraph_texts = [_paragraph_text(paragraph) for paragraph in paragraphs]
-    used_paragraphs: set[int] = set()
     for source_text, revised_text in replacements:
-        normalized_source = _normalized(source_text)
         matches = [
-            index
+            (index, span)
             for index, paragraph_text in enumerate(paragraph_texts)
-            if _normalized(paragraph_text) == normalized_source
+            if (span := _exact_fragment_span(paragraph_text, source_text)) is not None
         ]
-        if len(matches) != 1 or matches[0] in used_paragraphs:
+        if len(matches) != 1:
             raise RevisedContractCandidateError("revised_contract_clause_match_not_unique")
-        paragraph_index = matches[0]
-        _replace_paragraph_text(paragraphs[paragraph_index], revised_text)
-        used_paragraphs.add(paragraph_index)
+        paragraph_index, (start, end) = matches[0]
+        original_paragraph = paragraph_texts[paragraph_index]
+        suffix = original_paragraph[end:]
+        normalized_revision = revised_text.strip()
+        if (
+            normalized_revision
+            and suffix
+            and normalized_revision[-1] == suffix[0]
+            and suffix[0] in ".;:!?"
+        ):
+            suffix = suffix[1:]
+        revised_paragraph = original_paragraph[:start] + normalized_revision + suffix
+        _replace_paragraph_text(paragraphs[paragraph_index], revised_paragraph)
+        paragraph_texts[paragraph_index] = revised_paragraph
 
     payloads["word/document.xml"] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     output = io.BytesIO()
@@ -112,8 +121,17 @@ def _paragraph_text(paragraph: ET.Element) -> str:
     return "".join(node.text or "" for node in paragraph.iter(_TEXT))
 
 
-def _normalized(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip()
+def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, int] | None:
+    """Locate one exact source fragment while tolerating Word whitespace runs."""
+
+    words = source_text.split()
+    if not words:
+        return None
+    pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
+    matches = list(pattern.finditer(paragraph_text))
+    if len(matches) != 1:
+        return None
+    return matches[0].span()
 
 
 def _register_source_namespaces(document: bytes) -> None:
