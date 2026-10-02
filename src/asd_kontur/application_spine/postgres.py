@@ -5862,7 +5862,7 @@ class SpinePostgresRepository:
             prior = self._project_work_resolution_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
-            inflight_candidate_ids = {
+            attempted_candidate_ids = {
                 str(value)
                 for value in session.execute(
                     sa.text(
@@ -5872,7 +5872,6 @@ class SpinePostgresRepository:
                         "'work_observations','[]'::jsonb)) observation WHERE "
                         "job.organization_id=:o AND job.workspace_id=:w AND "
                         "job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
-                        "job.state IN ('queued','leased','running') AND "
                         "job.input_manifest->>'work_reconciliation_profile'=:profile AND "
                         "observation->>'candidate_id' IS NOT NULL"
                     ),
@@ -5898,7 +5897,13 @@ class SpinePostgresRepository:
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
                 if (
                     not candidate_id
-                    or candidate_id in inflight_candidate_ids
+                    # A current-profile durable job already owns this candidate.
+                    # Active jobs must not consume another selection slot, and
+                    # terminal failures are advanced only by the bounded
+                    # retry/replacement policy. Treating an existing terminal
+                    # idempotency row as newly scheduled starves untouched
+                    # candidates while overstating queue progress.
+                    or candidate_id in attempted_candidate_ids
                     or not wording
                     or non_work_reason(wording) is not None
                 ):
