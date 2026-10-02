@@ -265,9 +265,7 @@ class TenderContractAnalysisRepository:
             ).mappings()
         )
         results = [result for result in results if str(result["job_id"]) in effective_job_ids]
-        active = any(
-            str(job["state"]) in {"queued", "leased", "running"} for job in effective_jobs
-        )
+        active = any(str(job["state"]) in {"queued", "leased", "running"} for job in effective_jobs)
         failed = [
             job
             for job in effective_jobs

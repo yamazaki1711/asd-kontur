@@ -261,12 +261,12 @@ def _resolve_exact_source_quote(candidate: str, allowed_source: str) -> str | No
 
     if not candidate:
         return None
-    folded_candidate = unicodedata.normalize("NFC", candidate).translate(
-        _SOURCE_QUOTE_TRANSLATION
-    ).lower()
-    folded_source = unicodedata.normalize("NFC", allowed_source).translate(
-        _SOURCE_QUOTE_TRANSLATION
-    ).lower()
+    folded_candidate = (
+        unicodedata.normalize("NFC", candidate).translate(_SOURCE_QUOTE_TRANSLATION).lower()
+    )
+    folded_source = (
+        unicodedata.normalize("NFC", allowed_source).translate(_SOURCE_QUOTE_TRANSLATION).lower()
+    )
     start = folded_source.find(folded_candidate)
     if start < 0:
         return None
