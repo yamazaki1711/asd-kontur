@@ -3169,15 +3169,11 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
         for estimate_role in ("Смета", "Смета контракта"):
             estimate_by_scope = scoped.get(estimate_role) or {}
             for scope in sorted(set(vor_by_scope).intersection(estimate_by_scope)):
-                for unit in sorted(
-                    set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])
-                ):
+                for unit in sorted(set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])):
                     vor = (vor_by_scope[scope][unit], unit)
                     estimate = (estimate_by_scope[scope][unit], unit)
                     difference = vor[0] - estimate[0]
-                    estimate_label = (
-                        "сметы" if estimate_role == "Смета" else "сметы контракта"
-                    )
+                    estimate_label = "сметы" if estimate_role == "Смета" else "сметы контракта"
                     conclusion = (
                         f"Значения ВОР и {estimate_label} совпадают"
                         if difference == 0
@@ -4089,14 +4085,10 @@ def _sheet_pile_schedule(
             }
             schedule_materials = materials
         project_roles = {
-            key: value
-            for key, value in quantities.items()
-            if key in _DESIGN_QUANTITY_ROLE_SET
+            key: value for key, value in quantities.items() if key in _DESIGN_QUANTITY_ROLE_SET
         }
         commercial_roles = {
-            key: value
-            for key, value in quantities.items()
-            if key in _COMMERCIAL_QUANTITY_ROLE_SET
+            key: value for key, value in quantities.items() if key in _COMMERCIAL_QUANTITY_ROLE_SET
         }
         result.append(
             {
@@ -4811,9 +4803,7 @@ def _issues(
         roles = set(dict(work.get("quantities_by_document") or {})) | set(
             dict(work.get("materials_by_document") or {})
         )
-        if work.get("facility_id") is None and roles.intersection(
-            _COMMERCIAL_QUANTITY_ROLE_SET
-        ):
+        if work.get("facility_id") is None and roles.intersection(_COMMERCIAL_QUANTITY_ROLE_SET):
             commercial_unassigned[str(work.get("family_key") or "")].append(work)
     for work in work_rows:
         family = str(work.get("family_key") or "")
@@ -4930,9 +4920,10 @@ def _professional_quantity_issue_comparisons(
             continue
         left = dict(row.get("left") or {})
         right = dict(row.get("right") or {})
-        if row.get("classification") != "QUANTITY_DIFFERENCE" or str(
-            right.get("document_role") or ""
-        ) not in _COMMERCIAL_QUANTITY_ROLE_SET:
+        if (
+            row.get("classification") != "QUANTITY_DIFFERENCE"
+            or str(right.get("document_role") or "") not in _COMMERCIAL_QUANTITY_ROLE_SET
+        ):
             passthrough.append(row)
             continue
         key = (
@@ -5011,10 +5002,7 @@ def _quantity_difference_professional_text(
     description = f"{left_role}: {left_value}; {right_role}: {right_value}. "
     design_roles = _DESIGN_QUANTITY_ROLE_SET
     commercial_roles = _COMMERCIAL_QUANTITY_ROLE_SET | {"ВОР/Смета"}
-    if (
-        left_role in _COMMERCIAL_QUANTITY_ROLE_SET
-        and right_role in _COMMERCIAL_QUANTITY_ROLE_SET
-    ):
+    if left_role in _COMMERCIAL_QUANTITY_ROLE_SET and right_role in _COMMERCIAL_QUANTITY_ROLE_SET:
         right_location = {"Смета": "смете", "ВОР": "ВОР"}.get(right_role, right_role)
         left_object = {"Смета": "смету", "ВОР": "ВОР"}.get(left_role, left_role)
         right_object = {"Смета": "смету", "ВОР": "ВОР"}.get(right_role, right_role)

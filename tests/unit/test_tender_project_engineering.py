@@ -1548,9 +1548,7 @@ def test_contract_estimate_defines_commercial_scope_for_omission_analysis() -> N
         ]
     )
 
-    waterproofing = next(
-        value for value in comparisons if value["family_key"] == "waterproofing"
-    )
+    waterproofing = next(value for value in comparisons if value["family_key"] == "waterproofing")
     assert waterproofing["classification"] == "WORK_MISSING_IN_COMMERCIAL"
 
 
