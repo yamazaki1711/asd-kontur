@@ -101,6 +101,16 @@ _ORDINARY_PAYMENT_DENIAL_TERMS = (
     "not payable",
     "payment shall not be made",
 )
+_CUSTOMER_CONTROL_ACTION = re.compile(
+    r"(?:заказчик\w*.{0,80}(?:устанавлива|определя|утвержда|изменя|назнача|"
+    r"согласов|задерж|переда|предоставля|подписыва)|"
+    r"(?:установлен|определен|утвержден|изменен|назначен|согласован|подписан)\w*.{0,40}"
+    r"заказчик(?:ом|ем)|(?:customer|client|employer).{0,80}(?:sets?|determines?|approves?|"
+    r"changes?|appoints?|controls?|delays?|provides?|signs?)|"
+    r"(?:set|determined|approved|changed|appointed|controlled|delayed|provided|signed)"
+    r".{0,40}by (?:the )?(?:customer|client|employer))",
+    flags=re.IGNORECASE,
+)
 
 
 class QwenContractAnalyzer:
@@ -349,7 +359,11 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
         return False
     if mechanism not in _CUSTOMER_CONTROLLED_MECHANISMS:
         return True
-    return _mentions_customer(combined)
+    if not _mentions_customer(combined):
+        return False
+    if mechanism in {"customer_controlled_acceptance", "customer_controlled_deadline"}:
+        return bool(_CUSTOMER_CONTROL_ACTION.search(combined))
+    return True
 
 
 _SOURCE_QUOTE_TRANSLATION = str.maketrans(

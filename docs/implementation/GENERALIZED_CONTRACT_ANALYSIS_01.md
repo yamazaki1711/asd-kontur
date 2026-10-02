@@ -585,3 +585,14 @@ boundary explicitly and validates it deterministically: a
 rejected unless the exact selected text also denies or conditions ordinary
 payment. A changed-clause regression case proves the rule without using the
 blind contract wording.
+
+A separate v7 row treated a one-hour Contractor signing obligation as a
+`customer_controlled_deadline` merely because the resulting notice is sent to
+the Customer. Mentioning the Customer as recipient is not proof that the
+Customer controls the deadline. The grounding validator now requires an
+explicit Customer action for Customer-controlled acceptance/deadline
+mechanisms, including active wording (the Customer sets, approves, changes or
+delays) and correctly formed passive wording (set or approved by the Customer).
+A changed notice-delivery case proves that a dative recipient reference cannot
+pass as Customer control, while the existing unilateral-deadline controls
+remain accepted.

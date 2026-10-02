@@ -384,6 +384,51 @@ def test_contract_analysis_rejects_optional_mutual_early_payment_as_risk() -> No
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
+def test_contract_analysis_rejects_customer_deadline_without_customer_control() -> None:
+    source = {
+        "loc-notice": (
+            "Подрядчик подписывает уведомление в течение одного часа после размещения "
+            "и направляет подписанное уведомление Заказчику."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "6.3",
+                    "source_text": source["loc-notice"],
+                    "source_locator_ids": ["loc-notice"],
+                    "category": "deadline",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "6.3",
+                    "kind": "deadline_exposure",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_deadline",
+                    "trigger_text": "Подрядчик подписывает уведомление в течение одного часа",
+                    "adverse_effect_text": "направляет подписанное уведомление Заказчику",
+                    "severity": "medium",
+                    "description": "Срок якобы контролируется Заказчиком.",
+                    "practical_consequence": (
+                        "Предполагается ответственность за задержку Заказчика."
+                    ),
+                    "recommended_action": "Перенести управление сроком Заказчику.",
+                    "replacement_source_text": source["loc-notice"],
+                    "proposed_contractor_wording": "Заказчик определяет новый срок.",
+                    "disagreement_required": True,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
     source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
     clause = {
