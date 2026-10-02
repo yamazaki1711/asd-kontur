@@ -1174,3 +1174,47 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Reviewed physical-unit authority — release 11c927c
+
+The v24 source-value recovery made a second generic bridge defect visible. A
+reviewed quantity could carry an exact physical unit from its bounded source
+row while the earlier native extractor retained a truncated unit token. The
+project model therefore continued to represent an otherwise understood cubic
+volume as a linear measure and correctly refused a cross-document comparison.
+
+Commit `11c927c2a31d64eaee1955c9c34fa617de12de8c` changes only the deterministic
+project-model projection. It accepts an exact reviewed unscaled physical unit
+from the closed set `м`, `мм`, `м2`, `м3`, `т`, `кг`, `шт`; retains the stricter
+scaled-unit rules; and rejects percentage or unrelated units. It does not add
+project names, document names, expected values or corpus-specific decisions.
+Older semantic results that predate the durable `source_unit` field remain
+unchanged until the autonomous current-profile reconciliation revisits them.
+
+Exact-SHA CI run `37059213284` passed. This was a code-only release over the
+already qualified migration head `0111_reviewed_quantity_source_value`; the
+existing pre-0111 backup and restore/downgrade evidence therefore remain the
+database recovery basis. API, document worker, project orchestrator and
+assistant worker now run from
+`~/.asd-kontur/public-demo/releases/20261003-11c927c-reviewed-unit-v25`.
+Qwen PID `93554` and NTD worker PID `98263` were not restarted.
+
+The existing v24 semantic queue continued without a manual queue, retry,
+successor or priority command. The first post-activation result,
+`01a0fe31-5a6f-7afa-928e-95dd2b7fc502`, completed in 61.901934 seconds with one
+Qwen call, no recovery code and result digest
+`sha256:f8bf461a64d65cd769d0271e69f1bba57f6670ca0c174ed207bea16d4aa5a89d`.
+The worker immediately claimed the next existing batch.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the lifecycle platform fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`c454f902fd051237a9b221da22987abed12c0370462a7fae33d6edc4f1770e9e`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
