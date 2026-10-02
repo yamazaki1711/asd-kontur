@@ -5,7 +5,17 @@ import json
 import pytest
 
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
-from asd_kontur.tender.qwen_contract_analysis import parse_contract_analysis
+from asd_kontur.tender.qwen_contract_analysis import (
+    _contract_output_token_budget,
+    parse_contract_analysis,
+)
+
+
+def test_contract_output_budget_scales_for_long_bounded_context() -> None:
+    assert _contract_output_token_budget(500) == 1_800
+    assert _contract_output_token_budget(4_000) == 3_200
+    assert _contract_output_token_budget(10_000) == 5_000
+    assert _contract_output_token_budget(12_000) == 5_000
 
 
 def test_contract_analysis_accepts_risk_and_leaves_benign_clause_unflagged() -> None:

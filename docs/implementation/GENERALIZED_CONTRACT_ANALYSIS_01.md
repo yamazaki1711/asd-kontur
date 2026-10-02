@@ -50,6 +50,22 @@ The cross-repository user-result audit is recorded in
   matched full clause paragraph. Missing, partial, duplicate, multi-source, or
   unsupported-format matches fail closed and leave the clause-change schedule
   available; untouched package members and contract paragraphs remain unchanged.
+- Added the verified exact-source revised contract to the standard editable
+  Tender archive beside the disagreement protocol. If exact replacement fails
+  closed, the report, schedules, and clause-change protocol remain downloadable.
+- Corrected a third generic long-document defect before blind contract analysis:
+  office extraction may represent a complete contract as one native layout
+  element. The real blind source contains one 89,087-character element, while
+  the analysis contract permits at most 12,000 normalized characters. Contract
+  profile v3 deterministically divides any oversized element into exact,
+  contiguous source ranges (10,000 characters maximum, preferring paragraph or
+  sentence boundaries), records those ranges in each durable job, and reconstructs
+  only the selected range for Qwen. Qwen still cites the original locator, and
+  no text, clause, or project answer is synthesized by the splitter.
+- Contract profile v3 also scales the strict-JSON response budget with bounded
+  source length (1,800 to 5,000 tokens). A single long source range no longer
+  receives the same output allowance as one short clause; the limit remains
+  finite and is reused for the one permitted schema-repair attempt.
 - Joined candidate contract risks and proposed Contractor wording into the
   primary Tender findings schedule, report, and analysis archive. The join is
   transient and workspace-scoped; it does not promote model output into the
@@ -89,17 +105,19 @@ extraction. The local machine does not currently provide LibreOffice, Pandoc or
 the lxml dependency used by the optional skill validator, so page-image visual
 qualification remains explicitly not performed.
 
-Release `41848b9` is active for API, project worker, assistant worker, and
-project orchestrator at migration `0097_autonomous_contract_analysis`. The
-persistent Qwen process and independent NTD worker were preserved. After the
-project-worker restart at an idle model boundary, Qwen resumed new generations
-without a developer progression command.
+Release `9ac03000411f9be1cd8f2b05605c46b3be34a12c` is active for API,
+project worker, assistant worker, and project orchestrator at migration
+`0097_autonomous_contract_analysis`. Exact-SHA CI run `36948272996` passed.
+The persistent Qwen process and independent NTD worker were preserved. After
+the project-worker restart at an idle model boundary, v4 document-role work
+continued without a developer progression command.
 
-On the real blind workspace, v3 document-role reclassification is still
-running autonomously. No owner-known finding or document-specific rule has
-been introduced. The actual draft contract has not yet completed its v3 role
-decision at this observation point, so a real blind contract finding cannot
-yet be claimed.
+On the real blind workspace, v4 document-role reclassification is still
+running autonomously. The orchestrator created 20 recovery jobs after the v4
+release; ten had succeeded at the 2026-10-02 01:02 UTC observation. No
+owner-known finding or document-specific rule has been introduced. The actual
+draft contract has not yet completed its v4 role decision at this observation
+point, so a real blind contract finding cannot yet be claimed.
 
 The remaining acceptance work is:
 

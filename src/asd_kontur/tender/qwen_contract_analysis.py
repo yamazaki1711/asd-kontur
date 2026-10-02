@@ -14,7 +14,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v2"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v3"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -89,11 +89,12 @@ class QwenContractAnalyzer:
                 }
             )
         prompt = _prompt(prompt_rows)
+        output_tokens = _contract_output_token_budget(total_chars)
         raw = _complete(
             self._endpoint,
             prompt,
             self._timeout_seconds,
-            max_tokens=max(1800, min(5000, 700 + len(prompt_rows) * 180)),
+            max_tokens=output_tokens,
         )
         try:
             parsed = parse_contract_analysis(raw, allowed_text_by_locator=allowed)
@@ -104,7 +105,7 @@ class QwenContractAnalyzer:
                 self._endpoint,
                 _repair_prompt(prompt_rows, raw, exc.code),
                 self._timeout_seconds,
-                max_tokens=max(1800, min(5000, 700 + len(prompt_rows) * 180)),
+                max_tokens=output_tokens,
             )
             parsed = parse_contract_analysis(repaired, allowed_text_by_locator=allowed)
         result: dict[str, object] = {
@@ -205,6 +206,14 @@ def parse_contract_analysis(
             }
         )
     return {"clauses": clauses, "risks": risks}
+
+
+def _contract_output_token_budget(total_chars: int) -> int:
+    """Scale strict-JSON capacity with bounded source size, never without limit."""
+
+    if total_chars < 0:
+        raise ValueError("contract_context_size_invalid")
+    return max(1_800, min(5_000, 1_200 + total_chars // 2))
 
 
 def _optional_text(value: object) -> str | None:
