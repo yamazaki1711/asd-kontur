@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v64"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v65"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -6176,21 +6176,37 @@ def _normalized_unit(value: object) -> str:
 def _reviewed_scaled_quantity_unit(
     quantity: Mapping[str, Any], review: Mapping[str, Any]
 ) -> str | None:
-    """Accept an exact source scale only when it preserves the candidate dimension."""
+    """Accept source scaling only with a trustworthy numeric/unit pairing.
+
+    A reviewed scaled unit changes the physical value shown to the user.  If
+    extraction captured only an unscaled unit, the review must therefore also
+    carry the exact validated source value.  Otherwise a nearby estimate scale
+    could multiply an unrelated extracted number.  An already-scaled extracted
+    unit is safe to retain without repeating the numeric token in the review.
+    """
 
     source_unit = _normalized_unit(review.get("source_unit"))
     scaled = re.fullmatch(r"(?P<factor>10|100|1000)\s*(?P<unit>м[23]|м|шт)", source_unit)
     if scaled is None:
         return None
-    raw_candidate_unit = (
-        quantity.get("normalized_unit") or quantity.get("unit") or quantity.get("raw_unit")
-    )
-    candidate_unit = (
-        "шт"
-        if str(raw_candidate_unit or "").casefold() == "piece"
-        else _normalized_unit(raw_candidate_unit)
-    )
-    if candidate_unit != scaled.group("unit"):
+
+    candidate_units = {
+        "шт" if str(value).casefold() == "piece" else _normalized_unit(value)
+        for value in (
+            quantity.get("normalized_unit"),
+            quantity.get("unit"),
+            quantity.get("raw_unit"),
+        )
+        if value
+    }
+    candidate_units.discard("")
+    candidate_dimensions: set[str] = set()
+    for unit in candidate_units:
+        candidate_scale = re.fullmatch(r"(?:10|100|1000)\s*(м[23]|м|шт)", unit)
+        candidate_dimensions.add(candidate_scale.group(1) if candidate_scale else unit)
+    if scaled.group("unit") not in candidate_dimensions:
+        return None
+    if source_unit not in candidate_units and _reviewed_source_quantity_value(review) is None:
         return None
     return f"{scaled.group('factor')} {scaled.group('unit')}"
 

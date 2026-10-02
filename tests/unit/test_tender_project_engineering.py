@@ -1024,10 +1024,30 @@ def test_legacy_quantity_review_cannot_authorize_new_unlocated_comparison() -> N
     )
 
 
-def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
+def test_reviewed_scaled_unit_requires_source_value_when_extraction_is_unscaled() -> None:
     assert (
         _reviewed_scaled_quantity_unit(
             {"normalized_unit": "m2"},
+            {"source_unit": "100 м²"},
+        )
+        is None
+    )
+
+
+def test_reviewed_scaled_unit_accepts_validated_source_value() -> None:
+    assert (
+        _reviewed_scaled_quantity_unit(
+            {"normalized_unit": "m2"},
+            {"source_unit": "100 м²", "source_value": "3,27"},
+        )
+        == "100 м2"
+    )
+
+
+def test_reviewed_scaled_unit_retains_already_scaled_extraction() -> None:
+    assert (
+        _reviewed_scaled_quantity_unit(
+            {"normalized_unit": "m2", "raw_unit": "100 м²"},
             {"source_unit": "100 м²"},
         )
         == "100 м2"
@@ -1074,7 +1094,7 @@ def test_reviewed_source_value_is_normalized_without_arithmetic() -> None:
     assert (
         _reviewed_scaled_quantity_unit(
             {"normalized_unit": "piece"},
-            {"source_unit": "100 шт"},
+            {"source_unit": "100 шт", "source_value": "7,4"},
         )
         == "100 шт"
     )
@@ -2386,7 +2406,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v64"
+    assert model["model_version"] == "project-engineering-model-v65"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
