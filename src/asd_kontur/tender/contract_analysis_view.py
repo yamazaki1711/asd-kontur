@@ -261,16 +261,21 @@ class TenderContractAnalysisRepository:
         jobs = list(
             session.execute(
                 sa.text(
-                    "SELECT job_id,input_digest,state,typed_failure_code,created_at,completed_at FROM "
+                    "SELECT job_id,input_digest,state,typed_failure_code,created_at,completed_at,"
+                    "input_manifest->>'contract_analysis_profile' AS profile_version FROM "
                     "workspace.durable_jobs WHERE organization_id=:o AND workspace_id=:w "
                     "AND job_kind='CONTRACT_ANALYSIS' AND "
-                    "input_manifest->>'contract_analysis_profile'=:profile "
+                    "input_manifest->>'contract_analysis_profile'=ANY(:profiles) "
                     "ORDER BY created_at DESC,job_id DESC"
                 ),
-                {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "profiles": list(_CONTRACT_ANALYSIS_READ_PROFILES),
+                },
             ).mappings()
         )
-        effective_jobs = _latest_job_attempts(jobs)
+        effective_jobs = _effective_profile_jobs(jobs)
         results = list(
             session.execute(
                 sa.text(
@@ -590,6 +595,13 @@ def _preferred_contract_results(results: list[Any]) -> list[Any]:
         ):
             selected[key] = result
     return list(selected.values())
+
+
+def _effective_profile_jobs(jobs: list[Any]) -> list[Any]:
+    """Use the current run when started, otherwise retain prior-run progress."""
+
+    current_jobs = [job for job in jobs if str(job["profile_version"]) == CONTRACT_ANALYSIS_PROFILE]
+    return _latest_job_attempts(current_jobs or jobs)
 
 
 def _latest_job_attempts(jobs: list[Any]) -> list[Any]:

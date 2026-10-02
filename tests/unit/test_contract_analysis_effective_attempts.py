@@ -1,4 +1,5 @@
 from asd_kontur.tender.contract_analysis_view import (
+    _effective_profile_jobs,
     _latest_job_attempts,
     _preferred_contract_results,
 )
@@ -48,3 +49,23 @@ def test_current_contract_profile_progressively_replaces_prior_profile_batches()
         (1, "new-batch-1"),
         (2, "old-batch-2"),
     }
+
+
+def test_contract_transition_retains_prior_progress_until_current_run_starts() -> None:
+    prior = [
+        {
+            "job_id": "old-running",
+            "input_digest": "sha256:old",
+            "state": "running",
+            "profile_version": "qwen-contract-analysis-v7",
+        }
+    ]
+    current = {
+        "job_id": "new-queued",
+        "input_digest": "sha256:new",
+        "state": "queued",
+        "profile_version": "qwen-contract-analysis-v8",
+    }
+
+    assert [job["job_id"] for job in _effective_profile_jobs(prior)] == ["old-running"]
+    assert [job["job_id"] for job in _effective_profile_jobs([current, *prior])] == ["new-queued"]

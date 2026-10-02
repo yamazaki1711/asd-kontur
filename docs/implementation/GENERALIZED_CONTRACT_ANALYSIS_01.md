@@ -511,3 +511,9 @@ guard is applied to both profiles at read time, so an unsupported historical
 Customer-control inference cannot remain in the UI, report or disagreement
 schedule during the transition. This avoids replacing a useful contract review
 with an empty screen merely because a safer profile has started.
+Until the first v8 job is actually created, the projection also retains the v7
+run state, so an actively generating v7 analysis remains `analyzing` rather
+than being misreported as a completed draft. Against the live database the
+transition projection preserved 35 extracted clauses, removed the unsupported
+fourth risk, retained three grounded disagreement candidates and continued to
+show `CONTRACT_ANALYSIS_IN_PROGRESS`.
