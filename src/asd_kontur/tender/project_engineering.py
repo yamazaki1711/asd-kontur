@@ -27,8 +27,9 @@ from .quantity_semantics import (
     ScopeCompatibility,
     evaluate_component_total,
 )
+from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v60"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v61"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -2957,6 +2958,7 @@ def _work_schedule(
                         if review.get(key) is not None
                     }
                 )
+                quantity["semantic_review_profile"] = resolution.get("profile_version")
                 if scaled_unit := _reviewed_scaled_quantity_unit(quantity, review):
                     quantity["comparison_unit"] = scaled_unit
                     quantity["source_unit_basis"] = review.get("source_unit")
@@ -3819,6 +3821,7 @@ def _comparison_has_reviewed_quantity_identity(
             and value.get("relationship_reviewed") is True
             and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE
             and value.get("quantity_candidate_id")
+            and value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
         ]
 
     left_values = matching(left_role)

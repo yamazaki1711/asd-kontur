@@ -906,6 +906,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "semantic_scope": "Base area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
                         },
                         {
                             "quantity_candidate_id": "design-volume",
@@ -916,6 +917,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "related_quantity_candidate_ids": ["estimate-volume"],
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
                         },
                     ],
                     "Смета": [
@@ -928,6 +930,7 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "related_quantity_candidate_ids": ["design-volume"],
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
                         }
                     ],
                 },
@@ -968,6 +971,7 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "semantic_scope": "Waterproofed surface area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
                         }
                     ],
                     "Смета": [
@@ -978,6 +982,7 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "semantic_scope": "Waterproofed surface area",
                             "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v21",
                         }
                     ],
                 },
@@ -2314,7 +2319,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v60"
+    assert model["model_version"] == "project-engineering-model-v61"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
