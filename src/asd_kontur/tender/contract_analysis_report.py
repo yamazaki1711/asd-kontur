@@ -100,7 +100,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     status = _status_label(view.get("status"))
     gaps = _gap_summary(view.get("gaps"))
     body = [
-        _heading("Протокол разногласий и предложения по переработке договора", "Title"),
+        _heading("Договорный анализ и предложения Подрядчика", "Title"),
         _paragraph(f"Состояние анализа: {status}."),
         _paragraph(
             "Рабочий документ Подрядчика. Требует профессиональной юридической проверки "
@@ -406,7 +406,9 @@ def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: 
 
 
 def _row(values: Sequence[str], widths: Sequence[int], *, header: bool) -> str:
-    run_properties = "<w:rPr><w:b/></w:rPr>" if header else ""
+    run_properties = "<w:rPr><w:b/><w:sz w:val=\"16\"/></w:rPr>" if header else (
+        '<w:rPr><w:sz w:val="16"/></w:rPr>'
+    )
     cell_shading = '<w:shd w:val="clear" w:color="auto" w:fill="E7EDF3"/>' if header else ""
     cells = "".join(
         "<w:tc><w:tcPr>"
@@ -440,7 +442,8 @@ def _docx_package(document: bytes) -> bytes:
         "word/styles.xml": (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             b'<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
-            b'<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/></w:style>'
+            b'<w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/>'
+            b'<w:rPr><w:sz w:val="20"/></w:rPr></w:style>'
             b'<w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/>'
             b'<w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>'
             b'<w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/>'

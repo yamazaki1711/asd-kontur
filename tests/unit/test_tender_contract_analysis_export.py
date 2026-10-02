@@ -201,6 +201,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "http://schemas.openxmlformats.org/package/2006/relationships" in relationships
         assert "<w:tblPr>" in document
         assert "<w:tblGrid>" in document
+        assert "Договорный анализ и предложения Подрядчика" in document
+        assert '<w:sz w:val="16"/>' in document
         assert 'w:header="720"' in document
         assert 'w:footer="720"' in document
         assert 'w:gutter="0"' in document

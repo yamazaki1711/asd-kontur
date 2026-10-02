@@ -773,3 +773,12 @@ not infer contract meaning from keywords or replace missing participant/project
 facts. Changed-name tests prove the fallback and source navigation. This change
 is not deployed into the active v8 run; it is staged for the next controlled
 release after the current immutable checkpoint reaches terminal state.
+
+Quick Look visual inspection of both editable Word outputs found that the
+general analysis artifact was incorrectly titled as though it were the
+standalone disagreement protocol, and its dense tables used default body
+typography. The staged renderer now calls the general artifact
+`Договорный анализ и предложения Подрядчика`, preserves the separate
+`ПРОТОКОЛ РАЗНОГЛАСИЙ` title, and uses compact table text in the existing A4
+landscape layout. Re-rendered source/proposed-wording tables are materially more
+readable without removing source references or professional-review warnings.
