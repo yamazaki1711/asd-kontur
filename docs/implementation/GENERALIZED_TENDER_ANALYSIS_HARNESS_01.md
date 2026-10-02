@@ -1078,3 +1078,51 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## OCR-spaced scaled-unit normalization — release 1b329e4
+
+The first blind-workspace v22 quantity review isolated a generic source-
+validation defect. The source page contained the unit text `100 ш т`, while
+Qwen correctly returned the professional unit `100 шт`. The deterministic
+validator compared only globally collapsed whitespace, so it rejected the
+model result four times even though the bounded source context supported it.
+The quantity therefore remained unresolved and the productive model spent
+five calls on a two-observation job.
+
+Release `1b329e47a8852bb84407772e8856b395d8fa18c5` canonicalizes whitespace
+inside the compact OCR unit tokens `шт`, `м2` and `м3` before evidence
+validation. It also maps the internal `piece` dimension to `шт`, so code—not
+Qwen—can evaluate a supported scaled source quantity such as
+`0.6 × 100 шт = 60 шт`. The logic contains no workspace, document, facility or
+expected project value. Profile `qwen-project-work-reconciliation-v23` and
+migration `0110_ocr_spaced_quantity_units` make the new validation contract
+durable.
+
+The public database backup is
+`~/.asd-kontur/public-demo/backups/pre-0110-ocr-units-20261003T0715/public-before-0110.dump`
+with SHA-256
+`988511f62b3a7ea06b6e46e190ef1938b8bfca75a4416bd1ede83b9052b1d154`.
+The real backup passed a separate restore, upgrade, downgrade and re-upgrade
+before live migration. Exact-SHA CI run `37052684072` passed.
+
+The API, worker, project orchestrator and assistant worker now run from the
+immutable release
+`~/.asd-kontur/public-demo/releases/20261003-1b329e4-ocr-unit-v23`. Qwen PID
+`93554` and NTD worker PID `98263` were preserved. The worker completed its
+accepted v22 request before stopping; no model request was interrupted. The
+autonomous orchestrator superseded the remaining unclaimed v22 work and
+created v23 batches without a queue, retry or successor command.
+
+The first durable v23 result,
+`01a0fe12-ee6c-7fe3-abca-0982570706f2`, completed in 46.983643 seconds with
+one Qwen call, no recovery codes and terminal result digest
+`sha256:8d5cf1a6a8c32d35dce1fbad910a99bc6469a22bc013ecf96060668a09c46bbe`.
+The worker immediately claimed the next v23 batch. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`33c3141bdb4a7da240400292366198af8e9ae1d1a861731b9be8bc2456e19e6b`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
