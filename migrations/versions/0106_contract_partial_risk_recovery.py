@@ -34,7 +34,9 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     if os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE") != "1":
-        raise RuntimeError("Contract partial-risk recovery downgrade requires a disposable database")
+        raise RuntimeError(
+            "Contract partial-risk recovery downgrade requires a disposable database"
+        )
     op.execute(
         "ALTER TABLE workspace.contract_analysis_results "
         "DROP CONSTRAINT contract_analysis_results_profile_version_check"
