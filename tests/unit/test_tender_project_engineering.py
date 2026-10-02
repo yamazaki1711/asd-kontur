@@ -725,6 +725,46 @@ def test_vor_and_estimate_quantities_are_compared_for_the_same_scope() -> None:
     assert comparisons[0]["conclusion"] == "Значения ВОР и сметы совпадают"
 
 
+def test_contract_estimate_is_a_commercial_quantity_source() -> None:
+    comparisons = _comparisons(
+        [
+            {
+                "work_scope_id": "changed-scope",
+                "facility": "Сооружение Z-17",
+                "work_name": "Устройство основания",
+                "quantities_by_document": {
+                    "РД": [
+                        {
+                            "value": "82.5",
+                            "unit": "м3",
+                            "semantic_scope": "Объём основания сооружения Z-17",
+                            "scope_compatibility": "SAME_SCOPE",
+                        }
+                    ],
+                    "Смета контракта": [
+                        {
+                            "value": "76.0",
+                            "unit": "м3",
+                            "semantic_scope": "Объём основания сооружения Z-17",
+                            "scope_compatibility": "SAME_SCOPE",
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "QUANTITY_DIFFERENCE"
+    assert comparisons[0]["left"] == {"document_role": "РД", "value": "82.5", "unit": "м3"}
+    assert comparisons[0]["right"] == {
+        "document_role": "Смета контракта",
+        "value": "76",
+        "unit": "м3",
+    }
+    assert comparisons[0]["difference"] == "6.5"
+
+
 def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
     comparisons = _comparisons(
         [
@@ -1409,6 +1449,36 @@ def test_project_work_is_called_omitted_only_after_commercial_scope_is_classifie
     assert formwork["classification"] == "WORK_MISSING_IN_COMMERCIAL"
 
 
+def test_contract_estimate_defines_commercial_scope_for_omission_analysis() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-waterproofing",
+                "facility_id": "reservoir-z17",
+                "facility": "Reservoir Z-17",
+                "family_key": "waterproofing",
+                "work_name": "Apply waterproofing membrane",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-waterproofing"],
+            },
+            {
+                "work_scope_id": "commercial-concrete",
+                "facility_id": "reservoir-z17",
+                "facility": "Reservoir Z-17",
+                "family_key": "reinforced_concrete",
+                "work_name": "Cast reservoir slab",
+                "document_roles": ["Смета контракта"],
+                "source_locator_ids": ["contract-estimate-concrete"],
+            },
+        ]
+    )
+
+    waterproofing = next(
+        value for value in comparisons if value["family_key"] == "waterproofing"
+    )
+    assert waterproofing["classification"] == "WORK_MISSING_IN_COMMERCIAL"
+
+
 def test_unclassified_commercial_row_at_another_facility_does_not_block_omission() -> None:
     comparisons = _scope_comparisons(
         [
@@ -1976,7 +2046,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v57"
+    assert model["model_version"] == "project-engineering-model-v58"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4047,6 +4117,50 @@ def test_semantic_material_resource_comparison_survives_non_work_source_rows() -
     ]
     assert "2.4 mm" in comparisons[0]["description"]
     assert "1.8 mm" in comparisons[0]["description"]
+
+
+def test_contract_estimate_material_participates_in_design_comparison() -> None:
+    source_context = dict(
+        [
+            _source("design-pipe", "Hydraulic design.pdf", 11),
+            _source("contract-estimate-pipe", "Commercial schedule.docx", 4),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": "facility:z17",
+                "facility": "Facility Z-17",
+                "work": "Install drainage pipe",
+                "document_role": "ПД",
+                "name": "Drainage pipe",
+                "material_kind": "pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "160", "unit": "mm"}],
+                "source_locator_id": "design-pipe",
+            },
+            {
+                "location_scope_id": "facility:z17",
+                "facility": "Facility Z-17",
+                "work": "Install drainage pipe",
+                "document_role": "Смета контракта",
+                "name": "Drainage pipe",
+                "material_kind": "pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "225", "unit": "mm"}],
+                "source_locator_id": "contract-estimate-pipe",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATERIAL_DIFFERENCE"
+    assert comparisons[0]["commercial_roles"] == ["Смета контракта"]
+    assert comparisons[0]["property_differences"] == [
+        {"property": "DIAMETER", "design": ["160 mm"], "commercial": ["225 mm"]}
+    ]
 
 
 def test_project_level_material_comparison_requires_isolated_sources() -> None:
