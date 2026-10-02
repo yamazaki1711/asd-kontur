@@ -108,6 +108,10 @@ The cross-repository user-result audit is recorded in
   procurement and acceptance conditions. This prevents NMCK or a POS versus
   procurement duration conflict from disappearing merely because it is stated
   outside the draft-contract file.
+- Limited the contract-view time schedule to explicit contract-source terms and
+  project time facts that participate in a typed contract/project finding. Raw
+  date-like observations that are unrelated to an established comparison no
+  longer appear as key contract conditions.
 - Corrected the read projection to use only the current versioned semantic-role
   profile. A superseded historical `contract` label can no longer keep a false
   contract source active after reclassification.

@@ -660,6 +660,15 @@ class ProductSpineService:
             for source in assessment.get("sources") or ()
             if isinstance(source, dict) and source.get("source_version_id")
         }
+        project_contract_findings = _contract_related_project_findings(
+            engineering.get("issues"), source_ids
+        )
+        finding_locator_ids = {
+            str(locator_id)
+            for finding in project_contract_findings
+            for locator_id in finding.get("source_locator_ids") or ()
+            if locator_id
+        }
         return {
             "participants": _facts_for_sources(engineering.get("participants"), source_ids),
             # Contract parties stay tied to the admitted contract sources, but
@@ -668,12 +677,12 @@ class ProductSpineService:
             # contract duration conflict disappear from the contract review
             # merely because they live in different source documents.
             "key_conditions": _project_facts(engineering.get("contract_conditions")),
-            "time_requirements": _project_facts(engineering.get("time_requirements")),
+            "time_requirements": _facts_for_sources_or_locators(
+                engineering.get("time_requirements"), source_ids, finding_locator_ids
+            ),
             "commercial_conditions": _project_facts(engineering.get("commercial_conditions")),
             "procurement_requirements": list(engineering.get("procurement_requirements") or ()),
-            "project_contract_findings": _contract_related_project_findings(
-                engineering.get("issues"), source_ids
-            ),
+            "project_contract_findings": project_contract_findings,
         }
 
     def tender_contract_analysis_export(
@@ -1793,6 +1802,30 @@ def _project_facts(value: object) -> list[dict[str, Any]]:
     if not isinstance(value, (list, tuple)):
         return []
     return [dict(item) for item in value if isinstance(item, dict)]
+
+
+def _facts_for_sources_or_locators(
+    value: object, source_ids: set[str], locator_ids: set[str]
+) -> list[dict[str, Any]]:
+    """Select contract facts plus facts used by an established comparison."""
+
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        item_source_ids = {
+            str(source.get("source_version_id"))
+            for source in item.get("sources") or ()
+            if isinstance(source, dict) and source.get("source_version_id")
+        }
+        item_locator_ids = {
+            str(locator_id) for locator_id in item.get("source_locator_ids") or () if locator_id
+        }
+        if item_source_ids & source_ids or item_locator_ids & locator_ids:
+            result.append(dict(item))
+    return result
 
 
 def _contract_related_project_findings(value: object, source_ids: set[str]) -> list[dict[str, Any]]:

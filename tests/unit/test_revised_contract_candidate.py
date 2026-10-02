@@ -102,7 +102,29 @@ class _ProjectContextRepository(_SourceRepository):
                         "sources": [{"source_version_id": "source-contract-72"}],
                     }
                 ],
-                "time_requirements": [],
+                "time_requirements": [
+                    {
+                        "field": "completion_date",
+                        "label": "Окончание работ",
+                        "value": "31 августа 2031 года",
+                        "source_locator_ids": ["contract-date-72"],
+                        "sources": [{"source_version_id": "source-contract-72"}],
+                    },
+                    {
+                        "field": "work_duration",
+                        "label": "Срок выполнения работ",
+                        "value": "3 месяца",
+                        "source_locator_ids": ["design-duration-72"],
+                        "sources": [{"source_version_id": "source-design-72"}],
+                    },
+                    {
+                        "field": "start_date",
+                        "label": "Начало работ",
+                        "value": "несвязанная дата",
+                        "source_locator_ids": ["unrelated-date-72"],
+                        "sources": [{"source_version_id": "source-design-72"}],
+                    },
+                ],
                 "commercial_conditions": [
                     {
                         "field": "nmck",
@@ -117,6 +139,7 @@ class _ProjectContextRepository(_SourceRepository):
                         "finding_kind": "DURATION_MISMATCH",
                         "kind": "Расхождение продолжительности",
                         "description": "ПОС: 3 месяца; закупка: 5 месяцев.",
+                        "source_locator_ids": ["design-duration-72"],
                         "sources": [
                             {"source_version_id": "source-design-72"},
                             {"source_version_id": "source-procurement-72"},
@@ -298,6 +321,10 @@ def test_product_projection_joins_contract_parties_and_project_wide_conditions()
     assert projected["project_context"]["commercial_conditions"][0]["value"] == (
         "98 765 432,10 руб."
     )
+    assert [item["value"] for item in projected["project_context"]["time_requirements"]] == [
+        "31 августа 2031 года",
+        "3 месяца",
+    ]
     assert [
         item["issue_id"] for item in projected["project_context"]["project_contract_findings"]
     ] == ["duration-72"]
