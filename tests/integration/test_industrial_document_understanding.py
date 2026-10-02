@@ -310,6 +310,44 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis.docx"
         )
         assert hidden_report.status_code == 404, hidden_report.text
+
+        pending_job_id = uuid7()
+        with postgres_environment.owner_engine.begin() as connection:
+            organization_id = connection.scalar(
+                sa.text(
+                    "SELECT organization_id FROM workspace.workspaces WHERE workspace_id=:workspace"
+                ),
+                {"workspace": UUID(workspace_id)},
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                    "retry_policy_version,provenance,correlation_id,created_by_identity_id) VALUES "
+                    "(:organization,:workspace,:job,'DOCUMENT_PAGE_CLASSIFICATION',"
+                    "CAST(:manifest AS jsonb),:digest,:key,'queued',180,'spine-retry-v0.1',"
+                    "CAST('{}' AS jsonb),:correlation,'owner:test')"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": UUID(workspace_id),
+                    "job": pending_job_id,
+                    "manifest": json.dumps(
+                        {
+                            "classification_profile": (
+                                "document-page-role-v0.1+qwen-document-semantic-v3"
+                            )
+                        }
+                    ),
+                    "digest": "sha256:" + "7" * 64,
+                    "key": f"test-current-role:{pending_job_id}",
+                    "correlation": uuid7(),
+                },
+            )
+        pending = owner.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert pending.status_code == 200, pending.text
+        assert pending.json()["status"] == "analysis_pending"
+        assert pending.json()["gaps"] == ["CONTRACT_SOURCE_CLASSIFICATION_IN_PROGRESS"]
         assert other_csrf["X-CSRF-Token"]
 
 

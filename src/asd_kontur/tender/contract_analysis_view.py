@@ -209,6 +209,27 @@ class TenderContractAnalysisRepository:
             ).mappings()
         )
         if not contract_sources:
+            role_analysis_active = bool(
+                session.scalar(
+                    sa.text(
+                        "SELECT EXISTS (SELECT 1 FROM workspace.durable_jobs WHERE "
+                        "organization_id=:o AND workspace_id=:w AND "
+                        "job_kind='DOCUMENT_PAGE_CLASSIFICATION' AND "
+                        "state IN ('queued','leased','running') AND "
+                        "input_manifest->>'classification_profile' LIKE '%' || :role_profile)"
+                    ),
+                    {
+                        "o": organization_id,
+                        "w": workspace_id,
+                        "role_profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                    },
+                )
+            )
+            if role_analysis_active:
+                return _empty_candidate_projection(
+                    status="analysis_pending",
+                    gaps=["CONTRACT_SOURCE_CLASSIFICATION_IN_PROGRESS"],
+                )
             return _empty_candidate_projection(
                 status="contract_input_unavailable",
                 gaps=["DRAFT_CONTRACT_SOURCE_UNAVAILABLE"],
