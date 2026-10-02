@@ -1617,21 +1617,6 @@ def document_comparison_side(source_role: object, display_name: object) -> str |
         "сводный сметный расчёт",
     }:
         return "commercial"
-    if role in {
-        "пд",
-        "рд",
-        "кр",
-        "ар",
-        "пзу",
-        "пос",
-        "иос",
-        "спецификация",
-        "пояснительная записка",
-        "расчёт",
-        "расчет",
-        "чертежи / схемы",
-    }:
-        return "design"
     if (
         "вор" in name
         or ("ведомост" in name and ("объем" in name or "объём" in name))
@@ -1654,6 +1639,21 @@ def document_comparison_side(source_role: object, display_name: object) -> str |
         }
     ):
         return "commercial"
+    if role in {
+        "пд",
+        "рд",
+        "кр",
+        "ар",
+        "пзу",
+        "пос",
+        "иос",
+        "спецификация",
+        "пояснительная записка",
+        "расчёт",
+        "расчет",
+        "чертежи / схемы",
+    }:
+        return "design"
     if role in {
         "project documentation",
         "working documentation",

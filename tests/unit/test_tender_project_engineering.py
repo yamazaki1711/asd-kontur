@@ -3861,6 +3861,10 @@ def test_professional_commercial_roles_are_comparison_inputs(role: str) -> None:
     assert document_comparison_side(role, "generic-source.bin") == "commercial"
 
 
+def test_specific_commercial_filename_overrides_broad_design_role() -> None:
+    assert document_comparison_side("ПД", "Локальная смета № 7.pdf") == "commercial"
+
+
 def test_document_composition_exposes_contract_and_customer_requirements() -> None:
     model = build_project_engineering_model(
         workspace_id="workspace-procurement",
