@@ -18,9 +18,7 @@ class RevisedContractCandidateError(ValueError):
     """A full revised contract cannot be produced without changing unsupported content."""
 
 
-def render_revised_contract_candidate_docx(
-    source_docx: bytes, view: Mapping[str, Any]
-) -> bytes:
+def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str, Any]) -> bytes:
     """Apply only exact, uniquely located clause replacements to the source DOCX.
 
     The source package remains the document of record.  A candidate is emitted only
@@ -43,9 +41,7 @@ def render_revised_contract_candidate_docx(
         source_text = "" if clause is None else str(clause.get("source_text") or "")
         revised_text = str(revision.get("revised_text") or "")
         if not source_text.strip() or not revised_text.strip():
-            raise RevisedContractCandidateError(
-                "revised_contract_exact_clause_text_unavailable"
-            )
+            raise RevisedContractCandidateError("revised_contract_exact_clause_text_unavailable")
         replacements.append((source_text, revised_text))
     if not replacements:
         raise RevisedContractCandidateError("revised_contract_revisions_unavailable")
@@ -82,9 +78,7 @@ def render_revised_contract_candidate_docx(
         _replace_paragraph_text(paragraphs[paragraph_index], revised_text)
         used_paragraphs.add(paragraph_index)
 
-    payloads["word/document.xml"] = ET.tostring(
-        root, encoding="utf-8", xml_declaration=True
-    )
+    payloads["word/document.xml"] = ET.tostring(root, encoding="utf-8", xml_declaration=True)
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as target:
         for info in infos:

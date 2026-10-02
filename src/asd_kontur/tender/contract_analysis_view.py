@@ -428,9 +428,7 @@ class TenderContractAnalysisRepository:
                     {
                         "revised_contract_id": f"candidate:{workspace_id}",
                         "revised_contract_version": 1,
-                        "source_contract_version_id": str(
-                            revised_sources[0]["source_version_id"]
-                        ),
+                        "source_contract_version_id": str(revised_sources[0]["source_version_id"]),
                         "state": "source_format_supported",
                     }
                 ]

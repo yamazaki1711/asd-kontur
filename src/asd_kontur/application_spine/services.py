@@ -718,9 +718,7 @@ class ProductSpineService:
             and clause.get("source_version_id")
         }
         if len(source_ids) != 1:
-            raise RevisedContractCandidateError(
-                "revised_contract_requires_one_exact_source"
-            )
+            raise RevisedContractCandidateError("revised_contract_requires_one_exact_source")
         source_version_id = UUID(next(iter(source_ids)))
         source = self._repository.get_workspace_source_object(
             owner_identity_id=owner_identity_id,
@@ -732,12 +730,9 @@ class ProductSpineService:
         if media_type != (
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         ) and not (
-            media_type == "application/octet-stream"
-            and safe_display_name.lower().endswith(".docx")
+            media_type == "application/octet-stream" and safe_display_name.lower().endswith(".docx")
         ):
-            raise RevisedContractCandidateError(
-                "revised_contract_source_format_unsupported"
-            )
+            raise RevisedContractCandidateError("revised_contract_source_format_unsupported")
         with self._object_store.open(str(source["object_key"])) as source_file:
             source_docx = source_file.read()
         data = render_revised_contract_candidate_docx(source_docx, view)

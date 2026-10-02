@@ -20,8 +20,7 @@ _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 def _source_docx(*paragraphs: str) -> bytes:
     body = "".join(
-        f'<w:p><w:r><w:t xml:space="preserve">{value}</w:t></w:r></w:p>'
-        for value in paragraphs
+        f'<w:p><w:r><w:t xml:space="preserve">{value}</w:t></w:r></w:p>' for value in paragraphs
     )
     document = (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -160,9 +159,7 @@ def test_product_projection_advertises_only_verified_exact_candidate() -> None:
         owner_identity_id="owner:changed", workspace_id=UUID(int=72)
     )
 
-    assert projected["revised_contracts"][0]["state"] == (
-        "exact_source_candidate_available"
-    )
+    assert projected["revised_contracts"][0]["state"] == ("exact_source_candidate_available")
     assert projected["deliverables"][0]["state"] == "exact_source_candidate_available"
     assert candidate.safe_display_name == (
         "changed-project-contract-contractor-revision-candidate.docx"
