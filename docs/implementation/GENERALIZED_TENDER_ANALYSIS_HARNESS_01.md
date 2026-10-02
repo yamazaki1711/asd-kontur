@@ -813,3 +813,58 @@ successor command.
 
 Current status: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Commercial comparison recovery checkpoint — release 9c57aa6
+
+The next regression-register slice repaired three generic bridges that were
+preventing accepted project facts from becoming a professional commercial
+result:
+
+1. `Смета контракта` now participates in the same centralized commercial-role
+   policy as VOR and estimate sources for quantities, materials and work scope.
+2. An explicit reviewed Qwen `SAME_SCOPE` relationship between source quantity
+   identities can establish the comparison boundary even when an unlocated
+   work group contains several observations. Labels and numeric similarity do
+   not establish this authority.
+3. A facility-bound commercial work scope without an established design basis
+   now becomes a professional issue, customer question and contractor risk.
+   Material differences without an established location are deliberately
+   qualified as possible differences and require location confirmation first.
+
+No project name, project code, document filename, known blind-project value or
+expected finding was added to runtime code. Generic regression cases vary
+project names, structures, source roles and values. A production-code search
+found no OZERO or current blind-project identifiers in `src`, `frontend`,
+`contracts` or `migrations`.
+
+On the frozen blind project, model `project-engineering-model-v58` now contains
+four quantity comparisons (three construction quantities and one duration),
+15 material comparisons and four professional issues/questions/risks. The
+independent `BLIND_TENDER_ANALYSIS_SNAPSHOT_v3` was persisted before any owner
+comparison with model fingerprint
+`sha256:3731259a4fc3f1e3344dae474017fa286dd3a489535c1e21394424ee166f5c56`
+and manifest SHA-256
+`be09ee67613a3ff48d232ef5372f18ad13090899d14af51164c3ebfb92df86e4`.
+The snapshot includes the structured model and editable primary Tender and
+contract-analysis DOCX artifacts; both DOCX packages passed OOXML validation
+and the primary report passed macOS Quick Look rendering.
+
+Exact-SHA CI run `37022885723` passed for
+`9c57aa60deaa3bd23976b2d156f8d46c2d408073`. API, document worker, project
+orchestrator and assistant worker run from the immutable release
+`~/.asd-kontur/public-demo/releases/20261003-9c57aa6-tender-commercial` on
+migration `0107_contract_directed_change_risk`. Qwen PID `93554` and NTD worker
+PID `98263` were not restarted; the NTD job ledger remains exactly
+`319 succeeded`. Autonomous blind-project progress increased from 1,191 to
+1,204 effective succeeded jobs across the release window and Qwen immediately
+continued receiving work from the supervised runtime.
+
+The in-app browser connector had no available browser instance at this
+checkpoint, so a signed-in visual pass is not claimed. Readiness, live service
+projection, structured project result, artifact generation and autonomous
+continuation were verified directly. The P1 capability remains incomplete
+because 904 source work descriptions remain unclassified and facility
+association is still sparse.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
