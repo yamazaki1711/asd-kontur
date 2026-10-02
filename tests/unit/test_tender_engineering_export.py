@@ -156,6 +156,8 @@ def test_tender_report_is_reopenable_editable_docx_with_engineering_sections() -
     assert "Фундаментная плита, Напорный трубопровод" in xml
     assert "Производительность КНС-7: 42 л/с" in xml
     assert "Возможные неучтённые работы" in xml
+    assert "Ключевые выводы для участия в тендере" in xml
+    assert "Запросить подтверждение объёма" in xml
     assert "доказанные неучтённые работы не выявлены" in xml
     assert "Требуется распределить коммерческий объём: 1 поз." in xml
     assert "Нормативные вопросы" in xml
@@ -238,7 +240,16 @@ def test_primary_tender_outputs_include_candidate_contract_risks_and_revisions()
                 "consequence_code": "Подрядчик несёт риск срока вне своего контроля.",
                 "recommendation_text": "Предусмотреть продление срока при задержке Заказчика.",
                 "severity": "high",
-            }
+            },
+            {
+                "issue_id": "risk-17-duplicate",
+                "clause_id": "clause-17",
+                "subject": "Одностороннее распределение риска задержки",
+                "description": "Условие не учитывает задержку исходных данных Заказчиком.",
+                "consequence_code": "Подрядчик несёт риск срока вне своего контроля.",
+                "recommendation_text": "Предусмотреть продление срока при задержке Заказчика.",
+                "severity": "high",
+            },
         ],
         "disagreement_items": [
             {
@@ -266,6 +277,10 @@ def test_primary_tender_outputs_include_candidate_contract_risks_and_revisions()
         xml = document.read("word/document.xml").decode("utf-8")
     assert "Договорные риски Подрядчика" in xml
     assert "Условие не учитывает задержку исходных данных Заказчиком." in xml
+    summary_xml = xml.split("Ключевые выводы для участия в тендере", 1)[1].split(
+        "Состав объекта", 1
+    )[0]
+    assert summary_xml.count("Условие не учитывает задержку исходных данных Заказчиком.") == 1
     assert "Предлагаемые изменения договора" in xml
     assert "Срок продлевается на период задержки исходных данных Заказчиком." in xml
 

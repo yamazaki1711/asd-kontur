@@ -174,6 +174,13 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     add_context_section("procurement_requirements", "Требования закупки")
     add_context_section("contract_conditions", "Договорные условия и гарантии")
 
+    primary_findings = _primary_tender_conclusions(model)
+    if primary_findings:
+        add_section(
+            "Ключевые выводы для участия в тендере",
+            [_bullet_list(primary_findings, empty="")],
+        )
+
     facilities = list(model.get("facilities") or ())
     if facilities:
         add_section(
@@ -476,6 +483,41 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         "</w:sectPr></w:body></w:document>"
     )
     return _docx_package(document.encode())
+
+
+def _primary_tender_conclusions(model: Mapping[str, Any]) -> list[str]:
+    """Return a bounded professional synopsis before the detailed schedules."""
+
+    rows: list[str] = []
+    seen: set[str] = set()
+
+    def add(row: str) -> None:
+        key = " ".join(row.casefold().split())
+        if key and key not in seen:
+            seen.add(key)
+            rows.append(row)
+
+    for raw in model.get("issues") or ():
+        if not isinstance(raw, Mapping):
+            continue
+        kind = str(raw.get("kind") or "Технический вопрос").strip()
+        location = str(raw.get("location") or "").strip()
+        description = str(raw.get("description") or "").strip()
+        action = str(raw.get("recommended_action") or "").strip()
+        if not description:
+            continue
+        prefix = f"{kind} ({location})" if location else kind
+        add(f"{prefix}: {description}" + (f" Действие: {action}" if action else ""))
+    contract = dict(model.get("contract_analysis") or {})
+    for row in _contract_issue_rows(contract):
+        clause = str(row.get("clause_label") or "").strip()
+        description = str(row.get("description") or "").strip()
+        action = str(row.get("recommended_action") or "").strip()
+        if not description:
+            continue
+        prefix = f"Договор, пункт {clause}" if clause else "Договорный риск"
+        add(f"{prefix}: {description}" + (f" Действие: {action}" if action else ""))
+    return rows[:10]
 
 
 def _engineering_comparison_rows(model: Mapping[str, Any]) -> list[tuple[str, str, str, str]]:
