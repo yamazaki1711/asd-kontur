@@ -22,7 +22,7 @@ results; promotion/finalization remains an explicit qualified action.
    bounded content and source metadata.
 2. The supervised project orchestrator reads durable active-source state and
    creates missing `CONTRACT_ANALYSIS` batches idempotently.
-3. Exact native-layout locators form bounded contexts (at most 12 locators and
+3. Exact native-layout locators form bounded contexts (at most 8 locators and
    12,000 normalized characters per batch).
 4. The existing persistent local Qwen service returns strict clause and risk
    JSON. It does not perform arithmetic or alter global knowledge.
@@ -31,7 +31,10 @@ results; promotion/finalization remains an explicit qualified action.
    concrete replacement wording. Every risk must identify both its exact
    triggering wording and the exact wording that creates the adverse Contractor
    effect, obligation, dependency or measure. One bounded schema repair is
-   permitted.
+   permitted. If that repair contains one controller-ungrounded risk, a narrow
+   fallback may discard only that risk and retain independently valid clauses
+   and grounded sibling risks; malformed structure and invented source remain
+   fatal.
 6. Immutable result manifests are stored in the workspace and projected into
    clauses, contractor risks, proposed changes, an editable disagreement
    protocol, and a candidate clause-replacement schedule.
@@ -60,6 +63,10 @@ analysis profile, and exact locator-set digest. Worker/API/orchestrator restarts
 therefore do not duplicate accepted output. Temporary Qwen unavailability uses
 the durable worker retry policy. Invalid model output receives one bounded repair
 and otherwise terminates with a typed failure visible in the project state.
+When a new analysis profile is admitted, the scheduler durably cancels only
+unclaimed jobs for older profiles and records their supersession. Running and
+terminal immutable history is preserved. This prevents obsolete batches from
+consuming the single local model after a controlled release.
 
 ## Deliverable boundary
 

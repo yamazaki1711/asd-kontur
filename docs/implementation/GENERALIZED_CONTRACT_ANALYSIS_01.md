@@ -910,3 +910,57 @@ Running jobs and all completed immutable results are preserved. A PostgreSQL
 integration test proves that an older queued job is cancelled while a queued
 current-profile job remains runnable. This is runtime convergence, not manual
 queue cleanup.
+
+## 2026-10-03 v10 release and changed-contract acceptance
+
+Commit `702551bd8c5c2bea08d4f749570c7bb783982a0f` passed exact-SHA CI run
+`37017462813` and was activated as release
+`20261003-702551b-contract-v10` at migration
+`0107_contract_directed_change_risk`. The pre-release database backup has
+SHA-256 `2fbb8cdcd74c259c303a3c9f5ce91daf13acc84107916896b488dfb23254f57d`.
+Separate restore, upgrade, downgrade and re-upgrade checks passed before the
+controlled public database was migrated.
+
+The activation restarted only the API, document worker, project orchestrator
+and assistant worker. Qwen and the NTD worker were not restarted. The canonical
+platform-memory fingerprint remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD job ledger remained at 319 succeeded jobs.
+
+The supervised runtime created and completed all four v10 batches for the
+changed contract without a developer queue, retry or successor command. The
+effective professional result contains 14 clauses and two contractor risks:
+
+- clause 4.8 makes payment depend on receipt of investor financing. The risk is
+  retained, but the proposed wording is not published because Qwen introduced
+  an unsupported numeric payment deadline;
+- clause 6.7 denies payment for work performed on the Customer's written
+  direction before formal execution of the contract amendment. Its exact-source
+  grounded revision is retained as one disagreement item and one revised clause.
+
+None of the declared benign control clauses was projected as a professional
+issue. This proves that the system can retain a real contractor risk without
+turning every Customer-favourable or ordinary clause into a disagreement.
+
+In-memory application generation produced three valid OOXML packages:
+
+- analysis report: 5,488 bytes, SHA-256
+  `2c6b279d18332ebdf798eb581d2a2950d2005e073e3b8e61c9cb59cfe6298154`;
+- disagreement protocol: 3,460 bytes, SHA-256
+  `20478bac36939860f09649b8674682795e8903ddf20a19614a25333fe655e05d`;
+- exact-source revised contract: 38,323 bytes, SHA-256
+  `92447fda9fcb7109d897e80493a11dadfbb325318d4d9cc5fa78f76000a13b5d`.
+
+The real blind contract had already reached a terminal autonomous v8 result
+with 307 clauses, seven retained risks and five disagreement items. The changed
+contract v10 result provides the independent generalization and false-positive
+control. Full multi-page visual qualification of generated Word documents
+remains an output-release limitation because the configured environment lacks
+the required LibreOffice renderer; OOXML structure, application generation,
+source-preserving revision and browser export routes are qualified.
+
+The v10 transition also converged obsolete queued work without manual row
+patching: 36 queued older-profile jobs were cancelled with durable supersession
+receipts, while jobs already terminal remain immutable history. A further 24
+old-profile claims failed fast with the typed supersession outcome rather than
+consuming Qwen inference. Current-profile work continued autonomously.

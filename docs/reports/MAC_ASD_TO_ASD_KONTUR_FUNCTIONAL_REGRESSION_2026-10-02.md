@@ -279,16 +279,37 @@ editing the analysis result must not require signature authority.
 ## Audit conclusion
 
 Contract analysis is a confirmed functional regression, not a cosmetic UI gap.
-ASD-KONTUR preserved and improved the reliability envelope and output
-projection, but the professional task is unavailable until the autonomous
-semantic engine populates that projection. The safest recovery strategy is
-selective semantic reimplementation using the current durable orchestrator,
-local Qwen task harness, project model, canonical Tender store and existing
-editable exports.
+At the audit baseline ASD-KONTUR preserved the reliability envelope and output
+projection but lacked the autonomous semantic engine that populated the
+professional result. That regression has now been repaired through selective
+semantic reimplementation on the current durable orchestrator, local Qwen task
+harness, project model, canonical Tender store and editable exports.
 
-`ContractAnalysisOperational=false`
+The real blind contract was identified and analyzed autonomously into 307
+clauses, seven retained contractor risks, five grounded disagreement items and
+five proposed revisions. The exact-format revised governing-contract candidate
+applies its three source-compatible revisions while keeping two attachment
+revisions in the protocol instead of silently inserting them into the wrong
+document.
 
-`ProtocolOfDisagreementsOperational=false`
+A changed controlled contract then ran with no production-code change and no
+developer progression command. It produced 14 clauses, two professional risks,
+one grounded disagreement proposal and one exact-source revised clause. Six
+declared benign clauses were not flagged. The analysis report, disagreement
+protocol and revised-contract candidate are generated as editable DOCX through
+the application. Exact-SHA release, database restore/downgrade checks and
+platform-memory integrity evidence are recorded in
+`docs/implementation/GENERALIZED_CONTRACT_ANALYSIS_01.md`.
+
+This closes the contract-analysis and disagreement-protocol regressions at the
+current product authority boundary. The documents remain professional
+candidates for human/legal review; the runtime does not claim verified legal
+authority for unqualified legacy citations. The broader generalized Tender
+harness and the complete four-mode product remain incomplete.
+
+`ContractAnalysisOperational=true`
+
+`ProtocolOfDisagreementsOperational=true`
 
 `GeneralizedTenderHarness=false`
 
