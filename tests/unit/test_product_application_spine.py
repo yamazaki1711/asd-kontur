@@ -32,6 +32,7 @@ from asd_kontur.application_spine.postgres import (
     _quantity_relationship_batches,
     _semantic_extraction_priority,
     _semantic_recovery_stalled,
+    _work_reconciliation_attempt_sets,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
@@ -572,6 +573,106 @@ def test_quantity_relationship_batches_prefer_opposite_document_sides() -> None:
         ["design-high", "commercial"]
     ]
     assert selected == {"design-high", "commercial"}
+
+
+def test_quantity_relationship_batches_reuse_settled_context_only_for_mixed_review() -> None:
+    design = _work_batch_row(
+        "settled-design",
+        facility="",
+        family="structural_steel",
+        document_role="ПД",
+        wording="Монтаж балок покрытия",
+        quantity_count=1,
+    )
+    design.update(
+        relationship_review_needed=True,
+        comparison_context_only=True,
+        semantic_priority=(100, 1, 1),
+    )
+    commercial = _work_batch_row(
+        "new-commercial",
+        facility="",
+        family="structural_steel",
+        document_role="Смета контракта",
+        wording="Монтаж стальных балок",
+        quantity_count=1,
+    )
+    commercial.update(relationship_review_needed=True, semantic_priority=(80, 1, 1))
+
+    batches, selected = _quantity_relationship_batches(
+        [design, commercial], batch_size=2, max_batches=1
+    )
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [
+        ["settled-design", "new-commercial"]
+    ]
+    assert selected == {"settled-design", "new-commercial"}
+    assert all("comparison_context_only" not in item for item in batches[0])
+
+
+def test_quantity_relationship_batches_do_not_replay_one_sided_settled_context() -> None:
+    rows = [
+        _work_batch_row(
+            "settled-a",
+            facility="",
+            family="pipeline",
+            document_role="РД",
+            wording="Прокладка участка А",
+            quantity_count=1,
+        ),
+        _work_batch_row(
+            "settled-b",
+            facility="",
+            family="pipeline",
+            document_role="ПД",
+            wording="Прокладка участка Б",
+            quantity_count=1,
+        ),
+    ]
+    for row in rows:
+        row.update(
+            relationship_review_needed=True,
+            comparison_context_only=True,
+            semantic_priority=(50, 1, 1),
+        )
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert batches == []
+    assert selected == set()
+
+
+def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() -> None:
+    attempted, mixed = _work_reconciliation_attempt_sets(
+        [
+            {
+                "work_observations": [
+                    {
+                        "candidate_id": "design-only",
+                        "document_role": "ПД",
+                        "document": "Том 1.pdf",
+                    }
+                ]
+            },
+            {
+                "work_observations": [
+                    {
+                        "candidate_id": "design-mixed",
+                        "document_role": "КР",
+                        "document": "Конструкции.pdf",
+                    },
+                    {
+                        "candidate_id": "commercial-mixed",
+                        "document_role": "ВОР",
+                        "document": "Объёмы.pdf",
+                    },
+                ]
+            },
+        ]
+    )
+
+    assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
+    assert mixed == {"design-mixed", "commercial-mixed"}
 
 
 def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:

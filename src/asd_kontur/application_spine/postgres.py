@@ -457,6 +457,7 @@ def _cross_document_work_batches(
             cleaned = dict(value)
             cleaned.pop("semantic_priority", None)
             cleaned.pop("comparison_side", None)
+            cleaned.pop("comparison_context_only", None)
             batch.append(cleaned)
             seen_side_wordings.add(side_wording)
             quantity_count += row_quantity_count
@@ -561,13 +562,65 @@ def _quantity_relationship_batches(
             row_quantity_count = len(row.get("quantity_observations") or ())
             if row_quantity_count == 0 or (batch and quantity_count + row_quantity_count > 16):
                 continue
-            batch.append({**row, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"})
+            cleaned = {**row, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"}
+            cleaned.pop("comparison_context_only", None)
+            batch.append(cleaned)
             quantity_count += row_quantity_count
         if quantity_count < 2:
+            continue
+        # A previously reviewed observation may be supplied again only as
+        # bounded context for a missing design/commercial relationship.  Do
+        # not replay it in another one-sided quantity batch: classification
+        # and single-source quantity meaning are already durable.
+        if any(bool(row.get("comparison_context_only")) for row in ordered) and {
+            document_comparison_side(row.get("document_role"), row.get("document"))
+            for row in batch
+        } != {"design", "commercial"}:
             continue
         batches.append(batch)
         selected.update(str(row["candidate_id"]) for row in batch)
     return batches, selected
+
+
+def _work_reconciliation_attempt_sets(
+    manifests: Iterable[Mapping[str, Any]],
+) -> tuple[set[str], set[str]]:
+    """Return all attempted candidates and those given mixed-source context.
+
+    Candidate-level attempt accounting prevents ordinary accepted semantic
+    work from being replayed.  Cross-document quantity compatibility is a
+    separate question, however: two individually reviewed rows may never have
+    appeared together.  The second set records the durable proof that a
+    candidate has already received a bounded design/commercial relationship
+    pass, without deriving authority from the model result itself.
+    """
+
+    attempted: set[str] = set()
+    mixed_source_reviewed: set[str] = set()
+    for raw_manifest in manifests:
+        observations = raw_manifest.get("work_observations") or ()
+        if not isinstance(observations, list):
+            continue
+        rows = [dict(value) for value in observations if isinstance(value, Mapping)]
+        candidate_ids = {
+            str(value.get("candidate_id") or "")
+            for value in rows
+            if value.get("candidate_id")
+        }
+        attempted.update(candidate_ids)
+        sides = {
+            side
+            for value in rows
+            if (
+                side := document_comparison_side(
+                    value.get("document_role"), value.get("document")
+                )
+            )
+            is not None
+        }
+        if sides == {"design", "commercial"}:
+            mixed_source_reviewed.update(candidate_ids)
+    return attempted, mixed_source_reviewed
 
 
 def _deterministic_scope_requires_semantic_review(
@@ -5890,26 +5943,24 @@ class SpinePostgresRepository:
             prior = self._project_work_resolution_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
-            attempted_candidate_ids = {
-                str(value)
-                for value in session.execute(
-                    sa.text(
-                        "SELECT DISTINCT observation->>'candidate_id' FROM "
-                        "workspace.durable_jobs job CROSS JOIN LATERAL "
-                        "jsonb_array_elements(COALESCE(job.input_manifest->"
-                        "'work_observations','[]'::jsonb)) observation WHERE "
-                        "job.organization_id=:o AND job.workspace_id=:w AND "
-                        "job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
-                        "job.input_manifest->>'work_reconciliation_profile'=:profile AND "
-                        "observation->>'candidate_id' IS NOT NULL"
-                    ),
-                    {
-                        "o": organization_id,
-                        "w": workspace_id,
-                        "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
-                    },
-                ).scalars()
-            }
+            attempted_candidate_ids, mixed_source_reviewed_candidate_ids = (
+                _work_reconciliation_attempt_sets(
+                    dict(value)
+                    for value in session.execute(
+                        sa.text(
+                            "SELECT input_manifest FROM workspace.durable_jobs WHERE "
+                            "organization_id=:o AND workspace_id=:w AND "
+                            "job_kind='PROJECT_WORK_RECONCILIATION' AND "
+                            "input_manifest->>'work_reconciliation_profile'=:profile"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        },
+                    ).scalars()
+                )
+            )
             quantities_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for raw_quantity in candidates.get("quantities", []):
                 quantity = dict(raw_quantity)
@@ -5921,30 +5972,37 @@ class SpinePostgresRepository:
                 version = int(row.get("version") or 0)
                 wording = str(row.get("value") or row.get("label") or "").strip()
                 deterministic_family = classify_work_family(wording)
-                linked_quantities = quantities_by_work.get(candidate_id, [])
+                all_linked_quantities = quantities_by_work.get(candidate_id, [])
+                linked_quantities = all_linked_quantities
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
                 if (
                     not candidate_id
-                    # A current-profile durable job already owns this candidate.
-                    # Active jobs must not consume another selection slot, and
-                    # terminal failures are advanced only by the bounded
-                    # retry/replacement policy. Treating an existing terminal
-                    # idempotency row as newly scheduled starves untouched
-                    # candidates while overstating queue progress.
-                    or candidate_id in attempted_candidate_ids
                     or not wording
                     or non_work_reason(wording) is not None
                 ):
                     continue
                 existing = prior.get(candidate_id)
+                comparison_context_only = candidate_id in attempted_candidate_ids
+                if comparison_context_only:
+                    # Ordinary semantic work remains single-pass. A settled
+                    # row may return exactly once as context when no durable
+                    # mixed design/commercial job has considered its quantity
+                    # scope. Failed work remains with bounded recovery.
+                    if (
+                        candidate_id in mixed_source_reviewed_candidate_ids
+                        or existing is None
+                        or not all_linked_quantities
+                    ):
+                        continue
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
                     existing_profile = str(existing.get("profile_version") or "")
                     existing_status = str(existing.get("status") or "")
-                    linked_quantities = _quantities_requiring_semantic_review(
-                        linked_quantities, existing
-                    )
+                    if not comparison_context_only:
+                        linked_quantities = _quantities_requiring_semantic_review(
+                            linked_quantities, existing
+                        )
                     if existing_profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES:
-                        if not linked_quantities:
+                        if not linked_quantities and not comparison_context_only:
                             continue
                     # A prior negative decision or a work already tied to a
                     # facility remains compatible.  V5 revisits a semantically
@@ -5984,6 +6042,7 @@ class SpinePostgresRepository:
                 )
                 row["linked_quantities"] = linked_quantities
                 row["prior_resolution"] = existing or {}
+                row["comparison_context_only"] = comparison_context_only
                 unresolved.append(row)
             if not unresolved:
                 return ()
@@ -6135,12 +6194,18 @@ class SpinePostgresRepository:
                         ),
                         "source_version_id": str(row.get("source_version_id") or ""),
                         "source_locator_id": str(row.get("source_locator_id") or ""),
-                        "relationship_review_needed": any(
+                        "relationship_review_needed": bool(
+                            row.get("comparison_context_only")
+                        )
+                        or any(
                             prior_quantity_reviews.get(
                                 str(value.get("candidate_id") or ""), {}
                             ).get("relationship_reviewed")
                             is not True
                             for value in selected_quantities
+                        ),
+                        "comparison_context_only": bool(
+                            row.get("comparison_context_only")
                         ),
                     }
                 )
@@ -6193,7 +6258,10 @@ class SpinePostgresRepository:
             selected_candidate_ids = relationship_candidate_ids | cross_document_candidate_ids
             by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in prepared:
-                if str(row["candidate_id"]) in selected_candidate_ids:
+                if (
+                    str(row["candidate_id"]) in selected_candidate_ids
+                    or row.get("comparison_context_only") is True
+                ):
                     continue
                 by_source[str(row["source_version_id"])].append(row)
             for rows in by_source.values():
