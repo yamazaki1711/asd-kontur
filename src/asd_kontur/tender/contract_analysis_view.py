@@ -341,6 +341,8 @@ class TenderContractAnalysisRepository:
                     "issue_kind": "contract_risk",
                     "subject": risk.get("kind"),
                     "risk_mechanism": risk.get("risk_mechanism"),
+                    "trigger_text": risk.get("trigger_text"),
+                    "adverse_effect_text": risk.get("adverse_effect_text"),
                     "severity": risk.get("severity"),
                     "applicability": "candidate",
                     "clause_id": risk_clause_id,

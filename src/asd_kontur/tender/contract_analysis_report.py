@@ -55,6 +55,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             str(item.get("issue_kind") or "Не указано"),
             str(item.get("subject") or "Не указано"),
             str(item.get("description") or "Не указано"),
+            _risk_source_wording(item),
             str(item.get("applicability") or "Не указано"),
             str(item.get("recommendation_text") or "Требуется уточнение"),
             str(item.get("consequence_code") or "Не указано"),
@@ -164,6 +165,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                     "Вид",
                     "Предмет",
                     "Риск для Подрядчика",
+                    "Точная формулировка риска",
                     "Применимость",
                     "Рекомендация",
                     "Последствие",
@@ -297,6 +299,14 @@ def _finding_source_reference(item: Mapping[str, Any]) -> str:
         page = source.get("page")
         references.append(f"{name}, стр./лист {page}" if page else name)
     return "; ".join(references) or "Источники доступны по ссылкам результата"
+
+
+def _risk_source_wording(issue: Mapping[str, Any]) -> str:
+    values = (
+        ("Условие", issue.get("trigger_text")),
+        ("Последствие", issue.get("adverse_effect_text")),
+    )
+    return "; ".join(f"{label}: {value}" for label, value in values if value) or "Не указано"
 
 
 def _disagreement_basis(issue: Mapping[str, Any], item: Mapping[str, Any]) -> str:

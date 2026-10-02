@@ -102,6 +102,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "issue_kind": "contract_risk",
                 "subject": "Acceptance deadline",
                 "description": "Acceptance depends on an undefined Customer review period.",
+                "trigger_text": "Customer accepts work after its internal review.",
+                "adverse_effect_text": "Payment is due only after Customer acceptance.",
                 "applicability": "applicable",
                 "recommendation_text": "Define one evidence-backed acceptance period.",
                 "consequence_code": "payment_delay",
@@ -164,6 +166,13 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
 
     content = render_tender_contract_analysis_docx(view)
 
+    csv_rows = list(
+        csv.DictReader(io.StringIO(render_tender_contract_analysis_csv(view).decode("utf-8-sig")))
+    )
+    issue_row = next(row for row in csv_rows if row["row_kind"] == "issue")
+    assert issue_row["trigger_text"] == "Customer accepts work after its internal review."
+    assert issue_row["adverse_effect_text"] == ("Payment is due only after Customer acceptance.")
+
     with zipfile.ZipFile(io.BytesIO(content)) as package:
         assert "word/document.xml" in package.namelist()
         document = package.read("word/document.xml").decode("utf-8")
@@ -177,6 +186,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "не заменяет юридическое заключение" in document
         assert "Обоснование / практическая причина" in document
         assert "Acceptance depends on an undefined Customer review period." in document
+        assert "Customer accepts work after its internal review." in document
+        assert "Payment is due only after Customer acceptance." in document
         assert "Define one evidence-backed acceptance period." in document
         assert "Ключевые условия договора и закупки" in document
         assert "5 месяцев" in document
