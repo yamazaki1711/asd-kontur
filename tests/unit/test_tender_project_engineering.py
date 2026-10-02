@@ -27,6 +27,7 @@ from asd_kontur.tender.project_engineering import (
     _project_scope_facility_label,
     _qualified_participant_context,
     _resolution_establishes_page_scope,
+    _reviewed_scaled_quantity_unit,
     _scope_comparisons,
     _semantic_work_consensus,
     _sheet_pile_profiles,
@@ -943,6 +944,68 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
         "unit": "м3",
     }
     assert comparisons[0]["difference"] == "7.2"
+
+
+def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_relation_ids() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "waterproofing-scope",
+                "facility_id": None,
+                "facility": "Location unresolved",
+                "work_name": "Apply waterproofing",
+                "project_wording_by_document": {
+                    "ВОР": ["Apply waterproofing"],
+                    "Смета": ["Apply waterproofing"],
+                },
+                "semantic_resolution_by_document": {"ВОР": ["MATCHED"], "Смета": ["MATCHED"]},
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "vor-area",
+                            "value": "833.9",
+                            "unit": "м2",
+                            "semantic_scope": "Waterproofed surface area",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                        }
+                    ],
+                    "Смета": [
+                        {
+                            "quantity_candidate_id": "estimate-area",
+                            "value": "8.339",
+                            "unit": "100 м2",
+                            "semantic_scope": "Waterproofed surface area",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+    assert comparisons[0]["left"]["value"] == "833.9"
+    assert comparisons[0]["right"]["value"] == "833.9"
+
+
+def test_reviewed_scaled_unit_must_preserve_candidate_dimension() -> None:
+    assert (
+        _reviewed_scaled_quantity_unit(
+            {"normalized_unit": "m2"},
+            {"source_unit": "100 м²"},
+        )
+        == "100 м2"
+    )
+    assert (
+        _reviewed_scaled_quantity_unit(
+            {"normalized_unit": "m3"},
+            {"source_unit": "100 м²"},
+        )
+        is None
+    )
 
 
 def test_quantity_comparison_normalizes_russian_unit_inflections() -> None:
@@ -2251,7 +2314,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v59"
+    assert model["model_version"] == "project-engineering-model-v60"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

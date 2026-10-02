@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v20"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v21"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -35,9 +35,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v17",
     "qwen-project-work-reconciliation-v18",
     "qwen-project-work-reconciliation-v19",
+    "qwen-project-work-reconciliation-v20",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@15.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@16.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -151,6 +152,18 @@ class QwenProjectWorkReconciler:
             )
             for row in rows
         }
+        quantity_context_by_id = {
+            str(value.get("quantity_candidate_id") or ""): " ".join(
+                str(item or "")
+                for item in (
+                    value.get("unit"),
+                    value.get("nearby_context"),
+                )
+            )
+            for row in rows
+            for value in row.get("quantity_observations") or ()
+            if isinstance(value, Mapping) and value.get("quantity_candidate_id")
+        }
         try:
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             output_budget = (
@@ -186,6 +199,7 @@ class QwenProjectWorkReconciler:
                         for row in rows
                     },
                     quantity_ids_by_work=quantity_ids_by_work,
+                    quantity_context_by_id=quantity_context_by_id,
                     work_families=work_families,
                     facilities=facilities,
                     relationship_review=relationship_review,
@@ -424,6 +438,7 @@ def _prompt(
 "facility":"одно допустимое сооружение или null","confidence":"0.00..1.00",
 "reason":"краткая инженерная причина","quantity_reviews":[{{
 "quantity_candidate_id":"...","status":"WORK_QUANTITY|DIMENSION|DURATION|RESOURCE_OR_RATE|UNRELATED|AMBIGUOUS",
+"source_unit":"точная единица из источника, включая масштаб 10/100/1000, или null",
 "semantic_scope":"что именно измеряет значение","quantity_type":"TOTAL|SUBTOTAL|COMPONENT|STANDALONE|DIMENSION|DURATION|RESOURCE_OR_RATE|UNKNOWN",
 "relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
 "related_quantity_candidate_ids":["..."],"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
@@ -442,6 +457,9 @@ family_key. AMBIGUOUS/UNCLASSIFIED не должны угадывать family_k
 означает объём именно этой строительной операции. Размер, отметка, мощность, расход, процент,
 продолжительность, цена и ресурс нормы не являются объёмом работы. Если табличная связь нарушена
 или значение нельзя отнести без догадки, используйте AMBIGUOUS, а не WORK_QUANTITY.
+source_unit копируйте из ближайшего исходного контекста дословно. Сохраняйте масштаб единицы:
+`100 м2`, `10 м3` и `1000 м3` нельзя сокращать до `м2` или `м3`. Если ближайший контекст не
+показывает более точную единицу, повторите переданную unit; не вычисляйте физический объём.
 Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
@@ -500,6 +518,7 @@ def _parse(
     input_ids: tuple[str, ...],
     wording_by_id: Mapping[str, str],
     quantity_ids_by_work: Mapping[str, tuple[str, ...]],
+    quantity_context_by_id: Mapping[str, str],
     work_families: Mapping[str, str],
     facilities: tuple[str, ...],
     relationship_review: bool,
@@ -571,6 +590,7 @@ def _parse(
         quantity_reviews = _parse_quantity_reviews(
             raw_quantity_reviews,
             quantity_ids,
+            source_context_by_id=quantity_context_by_id,
             allowed_related_ids=all_quantity_ids,
             relationship_review=mark_relationship_reviewed,
         )
@@ -669,6 +689,7 @@ def _parse_quantity_reviews(
     raw: object,
     input_ids: tuple[str, ...],
     *,
+    source_context_by_id: Mapping[str, str] | None = None,
     allowed_related_ids: set[str] | None = None,
     relationship_review: bool = False,
 ) -> list[dict[str, Any]]:
@@ -686,6 +707,7 @@ def _parse_quantity_reviews(
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         candidate_id = str(value.get("quantity_candidate_id") or "")
         status = str(value.get("status") or "")
+        source_unit = " ".join(str(value.get("source_unit") or "").split()) or None
         semantic_scope = " ".join(str(value.get("semantic_scope") or "").split())
         quantity_type = str(value.get("quantity_type") or "")
         relation_kind = str(value.get("relation_kind") or "")
@@ -705,6 +727,16 @@ def _parse_quantity_reviews(
             or not reason
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+        if source_unit is not None:
+            context = (source_context_by_id or {}).get(candidate_id, "")
+            normalized_context = _normalized_unit_evidence(context)
+            normalized_source_unit = _normalized_unit_evidence(source_unit)
+            if (
+                len(source_unit) > 40
+                or not normalized_source_unit
+                or normalized_source_unit not in normalized_context
+            ):
+                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
         if relationship_review:
             if relation_kind == QuantityRelation.TOTAL_FOR:
                 if not isinstance(component_set_complete, bool):
@@ -738,9 +770,17 @@ def _parse_quantity_reviews(
             "scope_compatibility": scope_compatibility,
             "reason": reason[:500],
         }
+        if source_unit is not None:
+            reviews[candidate_id]["source_unit"] = source_unit
         if relationship_review:
             reviews[candidate_id]["relationship_reviewed"] = True
             reviews[candidate_id]["component_set_complete"] = component_set_complete
     if set(reviews) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_incomplete")
     return [reviews[candidate_id] for candidate_id in input_ids]
+
+
+def _normalized_unit_evidence(value: object) -> str:
+    return " ".join(
+        str(value or "").casefold().replace("²", "2").replace("³", "3").replace("\xa0", " ").split()
+    )

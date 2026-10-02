@@ -98,7 +98,70 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v20"
+    assert result["profile_version"] == "qwen-project-work-reconciliation-v21"
+
+
+def test_quantity_review_preserves_scaled_source_unit_without_model_arithmetic(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "100 м2" in prompt
+        assert "нельзя сокращать" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "waterproofing-row",
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Обмазочная гидроизоляция",
+                        "facility": None,
+                        "confidence": "0.96",
+                        "reason": "Работа и единица указаны в строке сметы.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "waterproofing-area",
+                                "status": "WORK_QUANTITY",
+                                "source_unit": "100 м2",
+                                "semantic_scope": "Площадь обмазочной гидроизоляции",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Сметная строка измеряется сотнями квадратных метров.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "waterproofing-row",
+                "wording": "Гидроизоляция боковая обмазочная",
+                "nearby_context": "Гидроизоляция боковая обмазочная 100 м2 8,339",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "waterproofing-area",
+                        "value": "8.339",
+                        "unit": "м2",
+                        "nearby_context": "Формула объема = 833,9:100; единица 100 м2",
+                    }
+                ],
+            }
+        ],
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    assert result["observations"][0]["quantity_reviews"][0]["source_unit"] == "100 м2"
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(

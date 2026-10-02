@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v59"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v60"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -51,6 +51,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v18",
         "qwen-project-work-reconciliation-v19",
         "qwen-project-work-reconciliation-v20",
+        "qwen-project-work-reconciliation-v21",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
@@ -2956,14 +2957,20 @@ def _work_schedule(
                         if review.get(key) is not None
                     }
                 )
+                if scaled_unit := _reviewed_scaled_quantity_unit(quantity, review):
+                    quantity["comparison_unit"] = scaled_unit
+                    quantity["source_unit_basis"] = review.get("source_unit")
                 accepted_quantities.append(quantity)
             quantity_interpretations.append(
                 {
                     "quantity_candidate_id": quantity_id,
                     "value": quantity.get("normalized_value", quantity.get("value")),
                     "unit": quantity.get(
-                        "normalized_unit",
-                        quantity.get("unit", quantity.get("raw_unit")),
+                        "comparison_unit",
+                        quantity.get(
+                            "normalized_unit",
+                            quantity.get("unit", quantity.get("raw_unit")),
+                        ),
                     ),
                     "status": review.get("status"),
                     "semantic_scope": review.get("semantic_scope"),
@@ -3435,32 +3442,44 @@ def _validated_scope_quantity_comparisons(
         work = dict(raw)
         exact_cross_role_wording = _exact_cross_role_work_wording(work)
         semantic_cross_role_operation = _semantic_cross_role_work_operation(work)
-        if (
-            not work.get("facility_id")
-            and exact_cross_role_wording is None
-            and semantic_cross_role_operation is None
-        ):
-            continue
-        basis = (
-            "Совпадают сооружение, вид работы и строительная операция; "
-            "связанные числовые значения проверены по смыслу."
-            if work.get("facility_id")
-            else (
-                "В проектном и коммерческом документах дословно совпадает операция "
-                f"«{exact_cross_role_wording}»; связанные числовые значения проверены по смыслу."
-            )
-            if exact_cross_role_wording is not None
-            else (
-                "Локальная модель отнесла проектную и коммерческую позиции к одной "
-                f"операции «{semantic_cross_role_operation}»; связанные числовые "
-                "значения проверены по смыслу."
-            )
-        )
         for comparison in _comparisons([work]):
+            left_role = str(dict(comparison.get("left") or {}).get("document_role") or "")
+            right_role = str(dict(comparison.get("right") or {}).get("document_role") or "")
+            reviewed_identity = _comparison_has_reviewed_quantity_identity(
+                work, comparison, left_role, right_role
+            )
+            if (
+                not work.get("facility_id")
+                and exact_cross_role_wording is None
+                and semantic_cross_role_operation is None
+                and not reviewed_identity
+            ):
+                continue
             if not work.get("facility_id") and not _isolated_unassigned_comparison(
                 work, comparison
             ):
                 continue
+            basis = (
+                "Совпадают сооружение, вид работы и строительная операция; "
+                "связанные числовые значения проверены по смыслу."
+                if work.get("facility_id")
+                else (
+                    "Локальная модель независимо подтвердила, что по одному числовому "
+                    "значению в каждом документе относятся к одному инженерному объёму."
+                )
+                if reviewed_identity
+                else (
+                    "В проектном и коммерческом документах дословно совпадает операция "
+                    f"«{exact_cross_role_wording}»; связанные числовые значения "
+                    "проверены по смыслу."
+                )
+                if exact_cross_role_wording is not None
+                else (
+                    "Локальная модель отнесла проектную и коммерческую позиции к одной "
+                    f"операции «{semantic_cross_role_operation}»; связанные числовые "
+                    "значения проверены по смыслу."
+                )
+            )
             result.append({**comparison, "scope_match_basis": basis})
     return result
 
@@ -3776,13 +3795,14 @@ def _comparison_has_reviewed_quantity_identity(
     left_role: str,
     right_role: str,
 ) -> bool:
-    """Accept an unlocated pair only when Qwen linked the exact quantity identities.
+    """Accept an unlocated pair only after a complete exact-identity scope review.
 
     A work family may contain several rows from each document. Counting source
     rows then rejects a valid pair even when bounded semantic review explicitly
-    linked two quantity candidates as the same engineering scope. Preserve the
-    conservative fallback, but let that reviewed identity relation establish
-    the comparison boundary.
+    marked one exact quantity on each side as the same engineering scope.
+    Preserve the conservative fallback, but let that reviewed one-to-one scope
+    decision establish the comparison boundary. Component/duplicate relations
+    retain their separate relation-id contract.
     """
 
     semantic_scope = _normalized(comparison.get("semantic_scope"))
@@ -3805,13 +3825,12 @@ def _comparison_has_reviewed_quantity_identity(
     right_values = matching(right_role)
     if len(left_values) != 1 or len(right_values) != 1:
         return False
-    left = left_values[0]
-    right = right_values[0]
-    left_id = str(left["quantity_candidate_id"])
-    right_id = str(right["quantity_candidate_id"])
-    return right_id in set(left.get("related_quantity_candidate_ids") or ()) or left_id in set(
-        right.get("related_quantity_candidate_ids") or ()
-    )
+    # SAME_SCOPE is the explicit cross-document comparison decision produced
+    # by the complete bounded relationship review. A relation id is required
+    # for COMPONENT_OF/DUPLICATE_OF semantics, but not for two independent
+    # statements about the same engineering scope. Exact uniqueness on both
+    # sides prevents one reviewed row from authorizing a project-wide group.
+    return True
 
 
 def _exact_cross_role_work_wording(work: Mapping[str, Any]) -> str | None:
@@ -5924,6 +5943,7 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                 else row.get("value")
             )
             raw_unit = row.get("normalized_unit") or row.get("unit") or row.get("raw_unit")
+            raw_unit = row.get("comparison_unit") or raw_unit
             display_value, display_unit = _display_quantity(raw_value, raw_unit)
             payload = {
                 "value": display_value,
@@ -5985,7 +6005,10 @@ def _one_comparable_quantity(values: Iterable[Mapping[str, Any]]) -> tuple[Decim
             else value.get("value")
         )
         unit = _normalized_unit(
-            value.get("normalized_unit") or value.get("unit") or value.get("raw_unit")
+            value.get("comparison_unit")
+            or value.get("normalized_unit")
+            or value.get("unit")
+            or value.get("raw_unit")
         )
         if raw is None or not unit:
             continue
@@ -6093,7 +6116,15 @@ def _quantity_scope_qualifiers(values: Iterable[object]) -> tuple[str, ...]:
 
 
 def _normalized_unit(value: object) -> str:
-    normalized = " ".join(str(value or "").replace("\xa0", " ").strip().casefold().split())
+    normalized = " ".join(
+        str(value or "")
+        .replace("\xa0", " ")
+        .replace("²", "2")
+        .replace("³", "3")
+        .strip()
+        .casefold()
+        .split()
+    )
     normalized = normalized.rstrip(".")
     canonical = _normalize_source_unit(normalized)
     return {
@@ -6105,6 +6136,23 @@ def _normalized_unit(value: object) -> str:
         "kg": "кг",
         "piece": "шт",
     }.get(canonical or "", normalized)
+
+
+def _reviewed_scaled_quantity_unit(
+    quantity: Mapping[str, Any], review: Mapping[str, Any]
+) -> str | None:
+    """Accept an exact source scale only when it preserves the candidate dimension."""
+
+    source_unit = _normalized_unit(review.get("source_unit"))
+    scaled = re.fullmatch(r"(?P<factor>10|100|1000)\s*(?P<unit>м[23]|м|шт)", source_unit)
+    if scaled is None:
+        return None
+    candidate_unit = _normalized_unit(
+        quantity.get("normalized_unit") or quantity.get("unit") or quantity.get("raw_unit")
+    )
+    if candidate_unit != scaled.group("unit"):
+        return None
+    return f"{scaled.group('factor')} {scaled.group('unit')}"
 
 
 def _duration_unit(value: object) -> bool:
