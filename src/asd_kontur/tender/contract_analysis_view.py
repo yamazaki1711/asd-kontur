@@ -238,15 +238,17 @@ class TenderContractAnalysisRepository:
         jobs = list(
             session.execute(
                 sa.text(
-                    "SELECT job_id,state,typed_failure_code,created_at,completed_at FROM "
+                    "SELECT job_id,input_digest,state,typed_failure_code,created_at,completed_at FROM "
                     "workspace.durable_jobs WHERE organization_id=:o AND workspace_id=:w "
                     "AND job_kind='CONTRACT_ANALYSIS' AND "
                     "input_manifest->>'contract_analysis_profile'=:profile "
-                    "ORDER BY created_at,job_id"
+                    "ORDER BY created_at DESC,job_id DESC"
                 ),
                 {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
             ).mappings()
         )
+        effective_jobs = _latest_job_attempts(jobs)
+        effective_job_ids = {str(job["job_id"]) for job in effective_jobs}
         results = list(
             session.execute(
                 sa.text(
@@ -262,8 +264,15 @@ class TenderContractAnalysisRepository:
                 {"o": organization_id, "w": workspace_id, "profile": CONTRACT_ANALYSIS_PROFILE},
             ).mappings()
         )
-        active = any(str(job["state"]) in {"queued", "leased", "running"} for job in jobs)
-        failed = [job for job in jobs if str(job["state"]) in {"failed", "reconciliation_required"}]
+        results = [result for result in results if str(result["job_id"]) in effective_job_ids]
+        active = any(
+            str(job["state"]) in {"queued", "leased", "running"} for job in effective_jobs
+        )
+        failed = [
+            job
+            for job in effective_jobs
+            if str(job["state"]) in {"failed", "reconciliation_required"}
+        ]
         analysis_complete = bool(results) and not active and not failed
         clauses: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
@@ -497,6 +506,20 @@ def _set_scope(session: Session, organization_id: UUID, workspace_id: UUID) -> N
 
 def _row(value: Any) -> dict[str, Any]:
     return {key: str(item) if isinstance(item, UUID) else item for key, item in dict(value).items()}
+
+
+def _latest_job_attempts(jobs: list[Any]) -> list[Any]:
+    """Return the newest immutable attempt for each exact analysis input.
+
+    The query supplies newest attempts first. Historical failures remain in the
+    ledger, but a later autonomous replacement with the same input digest is
+    the effective attempt for product progress and deliverable readiness.
+    """
+
+    latest: dict[str, Any] = {}
+    for job in jobs:
+        latest.setdefault(str(job["input_digest"]), job)
+    return list(latest.values())
 
 
 def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, Any]:
