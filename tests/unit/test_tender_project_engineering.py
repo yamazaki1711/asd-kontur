@@ -111,12 +111,12 @@ def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> N
         [
             {
                 "label": "initial_contract_price",
-                "value": "41 573 447,08",
+                "value": "57 812 903,44",
                 "source_locator_id": "nmck-a",
             },
             {
                 "label": "initial_contract_price",
-                "value": "41573447.08",
+                "value": "57812903.44",
                 "source_locator_id": "nmck-b",
             },
             {
@@ -134,7 +134,7 @@ def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> N
     )
 
     assert [(row["field"], row["value"]) for row in context["commercial_conditions"]] == [
-        ("initial_contract_price", "41 573 447,08 руб.")
+        ("initial_contract_price", "57 812 903,44 руб.")
     ]
 
 
@@ -272,7 +272,7 @@ def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
             "time_requirements": [
                 {
                     "field": "construction_duration",
-                    "value": "2,2 месяца",
+                    "value": "3,5 месяца",
                     "source_locator_ids": ["pos"],
                 },
                 {
@@ -296,7 +296,7 @@ def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
     ]
     assert comparisons[0]["left"]["document_role"] == "Смета"
     assert comparisons[0]["right"]["document_role"] == "Договор"
-    assert comparisons[1]["left"]["value"] == "2.2"
+    assert comparisons[1]["left"]["value"] == "3.5"
     assert comparisons[1]["right"]["value"] == "4"
 
 
