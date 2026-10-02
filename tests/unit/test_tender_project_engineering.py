@@ -2199,35 +2199,35 @@ def test_project_overview_consolidates_professional_field_aliases() -> None:
                 {
                     "candidate_id": "name-project",
                     "label": "project_name",
-                    "value": "Капитальный ремонт подпорной стены",
+                    "value": "Реконструкция водопропускной трубы",
                     "source_version_id": "source-a",
                     "source_locator_id": "name-a",
                 },
                 {
                     "candidate_id": "name-construction",
                     "label": "construction_name",
-                    "value": "Капитальный ремонт подпорной стены",
+                    "value": "Реконструкция водопропускной трубы",
                     "source_version_id": "source-b",
                     "source_locator_id": "name-b",
                 },
                 {
                     "candidate_id": "description",
                     "label": "object_description",
-                    "value": "Подпорная стена на свайном основании длиной 219 м",
+                    "value": "Водопропускная труба из сборных секций длиной 48 м",
                     "source_version_id": "source-a",
                     "source_locator_id": "description",
                 },
                 {
                     "candidate_id": "location",
                     "label": "location",
-                    "value": "г. Петропавловск-Камчатский, ул. Океанская",
+                    "value": "г. Новоград, ул. Речная",
                     "source_version_id": "source-b",
                     "source_locator_id": "location",
                 },
                 {
                     "candidate_id": "foundation",
                     "label": "foundation_type",
-                    "value": "Подпорная стена на свайном основании",
+                    "value": "Сборная труба на щебёночном основании",
                     "source_version_id": "source-a",
                     "source_locator_id": "foundation",
                 },
@@ -2246,19 +2246,19 @@ def test_project_overview_consolidates_professional_field_aliases() -> None:
     )
 
     assert model["project"]["name"] == {
-        "value": "Капитальный ремонт подпорной стены",
+        "value": "Реконструкция водопропускной трубы",
         "status": "Установлено по нескольким документам",
         "source_count": 2,
         "source_locator_ids": ["name-a", "name-b"],
     }
-    assert model["project"]["description"]["value"].startswith("Подпорная стена")
+    assert model["project"]["description"]["value"].startswith("Водопропускная труба")
     assert model["project"]["purpose"] == {
-        "value": "Капитальный ремонт подпорной стены",
+        "value": "Реконструкция водопропускной трубы",
         "status": "Назначение установлено из наименования объекта",
         "source_locator_ids": ["name-a", "name-b"],
     }
-    assert model["project"]["location"]["value"].startswith("г. Петропавловск")
-    assert model["project"]["foundation"]["value"] == ("Подпорная стена на свайном основании")
+    assert model["project"]["location"]["value"].startswith("г. Новоград")
+    assert model["project"]["foundation"]["value"] == ("Сборная труба на щебёночном основании")
 
 
 def test_project_status_becomes_established_after_composition_is_assembled() -> None:
@@ -3562,18 +3562,18 @@ def test_repeated_addressed_structures_form_distinct_incremental_project_cards()
         {
             "structure_node_id": f"wall-{address}-{source}",
             "node_kind": "structure",
-            "raw_name": f"Подпорная стена по ул. Океанская, {address}",
+            "raw_name": f"Пешеходная эстакада по ул. Садовая, {address}",
             "source_version_id": source,
             "source_locator_id": f"locator-{address}-{source}",
         }
-        for address in ("63/1", "65/1")
+        for address in ("14/2", "16/2")
         for source in ("pz", "kr")
     ]
     nodes.extend(
         {
             "structure_node_id": f"combined-{source}",
             "node_kind": "structure",
-            "raw_name": "Подпорные стены по ул. Океанская, 63/1, ул. Океанская, 65/1",
+            "raw_name": "Пешеходные эстакады по ул. Садовая, 14/2, ул. Садовая, 16/2",
             "source_version_id": source,
             "source_locator_id": f"combined-locator-{source}",
         }
@@ -3594,16 +3594,16 @@ def test_repeated_addressed_structures_form_distinct_incremental_project_cards()
 
     assert len(model["facilities"]) == 2
     assert {row["name"] for row in model["facilities"]} == {
-        "Подпорная стена по ул. Океанская, 63/1",
-        "Подпорная стена по ул. Океанская, 65/1",
+        "Пешеходная эстакада по ул. Садовая, 14/2",
+        "Пешеходная эстакада по ул. Садовая, 16/2",
     }
     assert {row["status"] for row in model["facilities"]} == {
         "Установлено по одинаковому адресу в нескольких документах"
     }
     assert all(len(row["member_structure_node_ids"]) == 2 for row in model["facilities"])
     assert established_facility_designations([], structure_nodes=nodes) == (
-        "Подпорная стена по ул. Океанская, 63/1",
-        "Подпорная стена по ул. Океанская, 65/1",
+        "Пешеходная эстакада по ул. Садовая, 14/2",
+        "Пешеходная эстакада по ул. Садовая, 16/2",
     )
 
 
