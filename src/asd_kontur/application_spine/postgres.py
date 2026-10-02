@@ -120,7 +120,13 @@ def _effective_project_processing_job_sql(alias: str) -> str:
         "newer.input_manifest->>'source_version_id'="
         "job.input_manifest->>'source_version_id' AND "
         "newer.input_manifest->>'engineering_semantic_profile'="
-        ":current_engineering_profile))"
+        ":current_engineering_profile)) AND "
+        "NOT (job.job_kind IN ('PROJECT_UNDERSTANDING_RECONCILIATION',"
+        "'PROJECT_STRUCTURE_RECONCILIATION') AND job.state IN ('queued','leased','running') "
+        "AND EXISTS (SELECT 1 FROM workspace.durable_jobs newer WHERE "
+        "newer.organization_id=job.organization_id AND newer.workspace_id=job.workspace_id "
+        "AND newer.job_kind=job.job_kind AND newer.state IN ('queued','leased','running') "
+        "AND (newer.created_at,newer.job_id)>(job.created_at,job.job_id)))"
     )
 
 
@@ -133,10 +139,17 @@ def _semantic_recovery_stalled(
     accepted_fragment_count: int,
     previous_accepted_fragment_count: int,
 ) -> bool:
-    """Stop retrying a partial semantic source only after a no-progress recovery."""
+    """Stop retrying a semantic source after one bounded no-progress recovery.
+
+    Recovery used to advance its attempt counter only for ``partial`` coverage.
+    Sources that remained ``not_started`` and sources whose accepted coverage was
+    complete but whose persistence receipt stayed incomplete therefore created a
+    fresh attempt on every orchestrator sweep.  Coverage state is diagnostic; the
+    durable no-progress decision applies to every state.
+    """
     return (
         latest_state == "succeeded"
-        and coverage_state == "partial"
+        and coverage_state in {"not_started", "failed", "partial", "complete"}
         and recovery_contract == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
         and recovery_attempt >= 1
         and accepted_fragment_count <= previous_accepted_fragment_count
@@ -4577,11 +4590,9 @@ class SpinePostgresRepository:
             coverage_state = str(coverage["state"]) if coverage is not None else "not_started"
             next_recovery_attempt = (
                 recovery_attempt + 1
-                if coverage is not None
-                and coverage_state == "partial"
-                and latest_provenance.get("semantic_coverage_recovery_contract")
+                if latest_provenance.get("semantic_coverage_recovery_contract")
                 == ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
-                else int(coverage is not None and coverage_state == "partial")
+                else 1
             )
             recovery_reason = (
                 "accepted_batches_pending_persistence"

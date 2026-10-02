@@ -169,6 +169,7 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                     "ix_durable_jobs_workspace_model_service",
                     "ix_project_stage_source_terminal",
                     "ix_assistant_turns_workspace_active",
+                    "ix_durable_jobs_active_project_recency",
                 }
                 actual_claim_indexes = set(
                     connection.scalars(

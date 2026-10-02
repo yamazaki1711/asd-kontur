@@ -65,6 +65,20 @@ def test_semantic_recovery_stops_after_bounded_no_progress_attempt() -> None:
     )
 
 
+@pytest.mark.parametrize("coverage_state", ["not_started", "failed", "complete"])
+def test_semantic_recovery_stops_for_every_no_progress_coverage_state(
+    coverage_state: str,
+) -> None:
+    assert _semantic_recovery_stalled(
+        latest_state="succeeded",
+        coverage_state=coverage_state,
+        recovery_contract="engineering-leaf-recovery-v6",
+        recovery_attempt=1,
+        accepted_fragment_count=0 if coverage_state != "complete" else 8,
+        previous_accepted_fragment_count=0 if coverage_state != "complete" else 8,
+    )
+
+
 def _work_batch_row(
     candidate_id: str,
     *,
