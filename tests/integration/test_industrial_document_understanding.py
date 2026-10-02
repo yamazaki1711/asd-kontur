@@ -284,6 +284,14 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
             "revised_contracts": [],
             "revised_clauses": [],
             "deliverables": [],
+            "project_context": {
+                "participants": [],
+                "key_conditions": [],
+                "time_requirements": [],
+                "commercial_conditions": [],
+                "procurement_requirements": [],
+                "project_contract_findings": [],
+            },
             "gaps": ["DRAFT_CONTRACT_SOURCE_UNAVAILABLE"],
             "authority_boundary": "read_only_projection",
         }
