@@ -2898,6 +2898,17 @@ function TenderContractAnalysisBody({
                     sourceClause?.source_locator_id,
                     "",
                   );
+                  const sourceName = displayValue(
+                    sourceClause?.source_name,
+                    "",
+                  );
+                  const sourcePage = displayValue(
+                    sourceClause?.source_page,
+                    "",
+                  );
+                  const sourceLabel = sourceName
+                    ? `${sourceName}${sourcePage ? `, лист/страница ${sourcePage}` : ""}`
+                    : "Открыть исходный фрагмент";
                   return (
                     <tr key={String(item.item_id)}>
                       <td>
@@ -2911,7 +2922,7 @@ function TenderContractAnalysisBody({
                                 `/evidence/locators/${locator}`,
                               )}
                             >
-                              Открыть исходный фрагмент
+                              {sourceLabel}
                             </Link>
                           </small>
                         ) : null}
@@ -2964,6 +2975,11 @@ function TenderContractAnalysisBody({
               <tbody>
                 {clauses.map((clause) => {
                   const locator = displayValue(clause.source_locator_id, "");
+                  const sourceName = displayValue(clause.source_name, "");
+                  const sourcePage = displayValue(clause.source_page, "");
+                  const sourceLabel = sourceName
+                    ? `${sourceName}${sourcePage ? `, лист/страница ${sourcePage}` : ""}`
+                    : "Открыть фрагмент";
                   return (
                     <tr key={String(clause.clause_id)}>
                       <td>{displayValue(clause.clause_key, "—")}</td>
@@ -2980,7 +2996,7 @@ function TenderContractAnalysisBody({
                               `/evidence/locators/${locator}`,
                             )}
                           >
-                            Открыть фрагмент
+                            {sourceLabel}
                           </Link>
                         ) : (
                           "Источник не привязан"
@@ -3016,7 +3032,7 @@ function TenderContractAnalysisBody({
                     <td>
                       {humanizeStatus(displayValue(issue.issue_kind, "—"))}
                     </td>
-                    <td>{displayValue(issue.subject, "—")}</td>
+                    <td>{humanizeStatus(displayValue(issue.subject, "—"))}</td>
                     <td>
                       {displayValue(issue.trigger_text, "Требует уточнения")}
                       {displayValue(issue.adverse_effect_text, "") ? (
@@ -9083,6 +9099,21 @@ function humanizeStatus(value: string) {
     analyzing: "Выполняется анализ договора",
     analysis_pending: "Анализ договора ожидает обработки",
     drafted: "Рабочий анализ подготовлен",
+    contract_risk: "Договорный риск",
+    payment_dependency: "Зависимость оплаты от внешнего условия",
+    uncontrolled_obligation: "Обязательство вне контроля Подрядчика",
+    unclear_acceptance: "Неопределённый порядок приёмки",
+    unpaid_change: "Риск неоплачиваемого изменения объёма",
+    deadline_exposure: "Риск нарушения сроков",
+    one_sided_liability: "Односторонняя ответственность",
+    excessive_warranty: "Чрезмерное гарантийное обязательство",
+    unlimited_liability: "Неограниченная ответственность",
+    asymmetric_termination: "Несбалансированное расторжение",
+    missing_price_adjustment: "Неопределённость изменения цены",
+    customer_input_dependency: "Зависимость от исходных данных Заказчика",
+    open_ended_documentation: "Открытый состав документации",
+    project_contract_conflict: "Противоречие договора и проекта",
+    other_contract_risk: "Иной договорный риск",
     contract_input_unavailable: "Проект договора не найден",
     partial_draft: "Подготовлен частичный рабочий проект",
     source_format_supported: "Можно подготовить редакцию исходного договора",
