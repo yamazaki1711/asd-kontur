@@ -22,6 +22,22 @@ from asd_kontur.tender.qwen_contract_analysis import (
 
 _CONTRACT_ANALYSIS_READ_PROFILES = (CONTRACT_ANALYSIS_PROFILE, "qwen-contract-analysis-v7")
 
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_GOVERNING_CONTRACT_CATEGORIES = frozenset(
+    {
+        "payment",
+        "acceptance",
+        "liability",
+        "warranty",
+        "security",
+        "termination",
+        "change_procedure",
+    }
+)
+_COMMERCIAL_CONTRACT_CATEGORIES = frozenset(
+    {"payment", "security", "termination", "change_procedure"}
+)
+
 
 class TenderContractAnalysisError(RuntimeError):
     """A scoped Tender projection could not be read."""
@@ -536,18 +552,29 @@ class TenderContractAnalysisRepository:
             for source in contract_sources
             if str(source["source_version_id"]) in revised_source_ids
         ]
+        primary_revised_source = _select_primary_revised_contract_source(
+            revised_sources,
+            clauses=clauses,
+        )
+        selected_source_id = (
+            str(primary_revised_source["source_version_id"])
+            if primary_revised_source is not None
+            else None
+        )
+        included_revision_count = sum(
+            1
+            for revision in revised_clauses
+            if _revision_source_id(revision, clauses) == selected_source_id
+        )
+        external_revision_count = len(revised_clauses) - included_revision_count
         revised_contract_available = (
             analysis_complete
-            and len(revised_sources) == 1
-            and (
-                str(revised_sources[0]["media_type"])
-                == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                or (
-                    str(revised_sources[0]["media_type"]) == "application/octet-stream"
-                    and str(revised_sources[0]["safe_display_name"]).lower().endswith(".docx")
-                )
-            )
+            and primary_revised_source is not None
+            and _is_docx_source(primary_revised_source)
+            and included_revision_count > 0
         )
+        if revised_contract_available and external_revision_count:
+            gaps.append("REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS")
         return {
             "status": status,
             "process": {
@@ -580,8 +607,15 @@ class TenderContractAnalysisRepository:
                     {
                         "revised_contract_id": f"candidate:{workspace_id}",
                         "revised_contract_version": 1,
-                        "source_contract_version_id": str(revised_sources[0]["source_version_id"]),
+                        "source_contract_version_id": selected_source_id,
                         "state": "source_format_supported",
+                        "scope": (
+                            "primary_contract_with_external_revision_schedule"
+                            if external_revision_count
+                            else "complete_revision_set"
+                        ),
+                        "included_revision_count": included_revision_count,
+                        "external_revision_count": external_revision_count,
                     }
                 ]
                 if revised_contract_available
@@ -630,6 +664,69 @@ class TenderContractAnalysisRepository:
         if value is None:
             raise TenderContractAnalysisError("workspace_not_found")
         return UUID(str(value))
+
+
+def _select_primary_revised_contract_source(
+    revised_sources: list[Any],
+    *,
+    clauses: list[dict[str, Any]],
+) -> Any | None:
+    """Select one governing contract without relying on filenames.
+
+    A single revised source is unambiguous.  When revisions also belong to a
+    technical assignment or other attachment, the governing contract must
+    demonstrate materially broader contract mechanics.  A close score remains
+    unresolved so the product keeps a clause schedule instead of rewriting the
+    wrong source document.
+    """
+
+    supported = [source for source in revised_sources if _is_docx_source(source)]
+    if len(supported) == 1:
+        return supported[0]
+    if len(supported) < 2:
+        return None
+
+    categories_by_source: dict[str, set[str]] = {}
+    for clause in clauses:
+        source_id = str(clause.get("source_version_id") or "")
+        category = str(clause.get("category") or "").strip().lower()
+        if source_id and category:
+            categories_by_source.setdefault(source_id, set()).add(category)
+
+    ranked: list[tuple[int, int, Any]] = []
+    for source in supported:
+        categories = categories_by_source.get(str(source["source_version_id"]), set())
+        governing = categories & _GOVERNING_CONTRACT_CATEGORIES
+        commercial = categories & _COMMERCIAL_CONTRACT_CATEGORIES
+        ranked.append((len(governing), len(commercial), source))
+    ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    best, runner_up = ranked[0], ranked[1]
+    if best[0] < 4 or best[1] < 1 or best[0] - runner_up[0] < 2:
+        return None
+    if len(ranked) > 2 and (best[0], best[1]) == (ranked[2][0], ranked[2][1]):
+        return None
+    return best[2]
+
+
+def _revision_source_id(revision: dict[str, Any], clauses: list[dict[str, Any]]) -> str | None:
+    source_clause_id = str(revision.get("source_clause_id") or "")
+    source_clause_version = str(revision.get("source_clause_version") or "")
+    for clause in clauses:
+        if str(clause.get("clause_id") or "") != source_clause_id:
+            continue
+        if str(clause.get("clause_version") or "") != source_clause_version:
+            continue
+        value = clause.get("source_version_id")
+        return str(value) if value else None
+    return None
+
+
+def _is_docx_source(source: Any) -> bool:
+    media_type = str(source["media_type"])
+    return media_type == _DOCX_MEDIA_TYPE or (
+        media_type == "application/octet-stream"
+        and str(source["safe_display_name"]).lower().endswith(".docx")
+    )
 
 
 def _set_scope(session: Session, organization_id: UUID, workspace_id: UUID) -> None:

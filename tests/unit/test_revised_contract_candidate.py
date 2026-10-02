@@ -11,6 +11,7 @@ from xml.etree import ElementTree as ET
 import pytest
 
 from asd_kontur.application_spine.services import ProductSpineService
+from asd_kontur.tender.contract_analysis_view import _select_primary_revised_contract_source
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
@@ -90,6 +91,26 @@ class _SourceRepository:
             ),
             "safe_display_name": "changed-project-contract.docx",
         }
+
+
+class _SourceByIdRepository(_SourceRepository):
+    def get_workspace_source_object(self, **values: object) -> dict[str, object]:
+        source_version_id = str(values["source_version_id"])
+        return {
+            "object_key": source_version_id,
+            "media_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+            "safe_display_name": f"source-{source_version_id[-2:]}.docx",
+        }
+
+
+class _ObjectStoreByKey:
+    def __init__(self, payloads: dict[str, bytes]) -> None:
+        self.payloads = payloads
+
+    def open(self, key: str) -> io.BytesIO:
+        return io.BytesIO(self.payloads[key])
 
 
 class _ProjectContextRepository(_SourceRepository):
@@ -304,7 +325,12 @@ def test_product_projection_advertises_only_verified_exact_candidate() -> None:
     clauses[0]["source_version_id"] = source_id
     view.update(
         {
-            "revised_contracts": [{"state": "source_format_supported"}],
+            "revised_contracts": [
+                {
+                    "state": "source_format_supported",
+                    "source_contract_version_id": source_id,
+                }
+            ],
             "deliverables": [
                 {"deliverable_kind": "revised_contract", "state": "source_format_supported"}
             ],
@@ -337,7 +363,12 @@ def test_product_projection_keeps_ambiguous_source_as_clause_schedule() -> None:
     clauses[0]["source_version_id"] = source_id
     view.update(
         {
-            "revised_contracts": [{"state": "source_format_supported"}],
+            "revised_contracts": [
+                {
+                    "state": "source_format_supported",
+                    "source_contract_version_id": source_id,
+                }
+            ],
             "deliverables": [
                 {"deliverable_kind": "revised_contract", "state": "source_format_supported"}
             ],
@@ -353,6 +384,133 @@ def test_product_projection_keeps_ambiguous_source_as_clause_schedule() -> None:
     assert projected["revised_contracts"] == []
     assert projected["deliverables"][0]["state"] == "candidate_clause_schedule"
     assert "revised_contract_clause_match_not_unique" in projected["gaps"]
+
+
+def test_primary_contract_source_uses_broad_governing_clause_semantics() -> None:
+    primary_id = "71000000-0000-4000-8000-000000000093"
+    attachment_id = "71000000-0000-4000-8000-000000000094"
+    sources = [
+        {
+            "source_version_id": primary_id,
+            "safe_display_name": "document-a.docx",
+            "media_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        },
+        {
+            "source_version_id": attachment_id,
+            "safe_display_name": "document-b.docx",
+            "media_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        },
+    ]
+    clauses = [
+        {"source_version_id": primary_id, "category": category}
+        for category in (
+            "payment",
+            "acceptance",
+            "liability",
+            "warranty",
+            "security",
+            "termination",
+            "change_procedure",
+        )
+    ] + [
+        {"source_version_id": attachment_id, "category": category}
+        for category in ("scope", "contractor_obligation", "liability")
+    ]
+
+    selected = _select_primary_revised_contract_source(sources, clauses=clauses)
+
+    assert selected is not None
+    assert str(selected["source_version_id"]) == primary_id
+
+
+def test_primary_contract_source_fails_closed_for_semantically_close_sources() -> None:
+    first_id = "71000000-0000-4000-8000-000000000095"
+    second_id = "71000000-0000-4000-8000-000000000096"
+    sources = [
+        {
+            "source_version_id": source_id,
+            "safe_display_name": f"document-{ordinal}.docx",
+            "media_type": (
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ),
+        }
+        for ordinal, source_id in enumerate((first_id, second_id), start=1)
+    ]
+    clauses = [
+        {"source_version_id": source_id, "category": category}
+        for source_id in (first_id, second_id)
+        for category in ("payment", "acceptance", "liability", "warranty")
+    ]
+
+    assert _select_primary_revised_contract_source(sources, clauses=clauses) is None
+
+
+def test_exact_candidate_changes_only_primary_contract_source_revisions() -> None:
+    primary_id = "71000000-0000-4000-8000-000000000097"
+    attachment_id = "71000000-0000-4000-8000-000000000098"
+    primary_clause = "2.4. Оплата зависит от лимитов финансирования Заказчика."
+    attachment_clause = "3.2. Подрядчик предоставляет транспорт для выезда Заказчика."
+    view = {
+        "clauses": [
+            {
+                "clause_id": "primary-clause",
+                "clause_version": 1,
+                "source_version_id": primary_id,
+                "source_text": primary_clause,
+            },
+            {
+                "clause_id": "attachment-clause",
+                "clause_version": 1,
+                "source_version_id": attachment_id,
+                "source_text": attachment_clause,
+            },
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "primary-clause",
+                "source_clause_version": 1,
+                "revised_text": "2.4. Оплата производится после приёмки выполненных работ.",
+            },
+            {
+                "source_clause_id": "attachment-clause",
+                "source_clause_version": 1,
+                "revised_text": "3.2. Транспорт предоставляет сторона, инициировавшая выезд.",
+            },
+        ],
+        "revised_contracts": [
+            {
+                "state": "source_format_supported",
+                "source_contract_version_id": primary_id,
+                "included_revision_count": 1,
+                "external_revision_count": 1,
+            }
+        ],
+        "deliverables": [
+            {"deliverable_kind": "revised_contract", "state": "source_format_supported"}
+        ],
+        "gaps": ["REVISED_CONTRACT_EXCLUDES_NON_PRIMARY_SOURCE_REVISIONS"],
+    }
+    service = ProductSpineService.__new__(ProductSpineService)
+    service._tender_contract_analysis = _ContractProjection(view)  # type: ignore[assignment]
+    service._repository = _SourceByIdRepository()  # type: ignore[assignment]
+    service._object_store = _ObjectStoreByKey(  # type: ignore[assignment]
+        {
+            primary_id: _source_docx(primary_clause),
+            attachment_id: _source_docx(attachment_clause),
+        }
+    )
+
+    candidate = service.tender_revised_contract_candidate(
+        owner_identity_id="owner:changed", workspace_id=UUID(int=75)
+    )
+
+    assert _paragraphs(b"".join(candidate.chunks)) == [
+        "2.4. Оплата производится после приёмки выполненных работ."
+    ]
 
 
 def test_product_projection_joins_contract_parties_and_project_wide_conditions() -> None:

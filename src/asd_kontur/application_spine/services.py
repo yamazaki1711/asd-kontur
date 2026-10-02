@@ -787,8 +787,16 @@ class ProductSpineService:
             for item in view.get("clauses", ())
             if isinstance(item, dict)
         }
-        source_ids = {
-            str(clause.get("source_version_id"))
+        candidates = [
+            item
+            for item in view.get("revised_contracts", ())
+            if isinstance(item, dict) and item.get("source_contract_version_id")
+        ]
+        if len(candidates) != 1:
+            raise RevisedContractCandidateError("revised_contract_requires_one_exact_source")
+        source_version_id = UUID(str(candidates[0]["source_contract_version_id"]))
+        selected_revisions = [
+            revision
             for revision in view.get("revised_clauses", ())
             if isinstance(revision, dict)
             and (
@@ -799,11 +807,10 @@ class ProductSpineService:
                     )
                 )
             )
-            and clause.get("source_version_id")
-        }
-        if len(source_ids) != 1:
-            raise RevisedContractCandidateError("revised_contract_requires_one_exact_source")
-        source_version_id = UUID(next(iter(source_ids)))
+            and str(clause.get("source_version_id") or "") == str(source_version_id)
+        ]
+        if not selected_revisions:
+            raise RevisedContractCandidateError("revised_contract_revisions_unavailable")
         source = self._repository.get_workspace_source_object(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
@@ -819,7 +826,9 @@ class ProductSpineService:
             raise RevisedContractCandidateError("revised_contract_source_format_unsupported")
         with self._object_store.open(str(source["object_key"])) as source_file:
             source_docx = source_file.read()
-        data = render_revised_contract_candidate_docx(source_docx, view)
+        candidate_view = dict(view)
+        candidate_view["revised_clauses"] = selected_revisions
+        data = render_revised_contract_candidate_docx(source_docx, candidate_view)
         return data, safe_display_name
 
     def project_understanding(

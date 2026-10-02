@@ -782,3 +782,51 @@ typography. The staged renderer now calls the general artifact
 `ПРОТОКОЛ РАЗНОГЛАСИЙ` title, and uses compact table text in the existing A4
 landscape layout. Re-rendered source/proposed-wording tables are materially more
 readable without removing source references or professional-review warnings.
+
+## 2026-10-03 v8 terminal professional result
+
+The real blind workspace reached a terminal v8 state without developer runtime
+progression. All 78 effective `qwen-contract-analysis-v8` jobs succeeded; none
+remained queued, running, failed or reconciliation-required. The autonomous run
+started recording results at `2026-10-02 23:09:09 +12` and recorded its last
+result at `2026-10-03 00:46:44 +12`. It persisted 307 clause units and nine raw
+risk candidates. The current commercial-authority and controller-grounding
+policies retain seven professional risks, five grounded disagreement items and
+five proposed clause revisions.
+
+Two raw candidates were rejected by generic post-model controls. An ordinary
+cure/expert-cost clause was not allowed to become an asymmetric-termination
+risk, and a contract-bounded cure obligation was not allowed to become an
+unbounded-scope risk. The controls require the adverse mechanism asserted by
+the finding; they do not contain the project name, document name, clause number
+or wording from the blind corpus.
+
+The accepted revisions belong to two admitted DOCX sources. Three revisions
+belong to the governing contract; two belong to its technical description. A
+full-document candidate previously failed closed because it required every
+revision to have the same source. The generic source selector now uses the
+accepted clause semantics instead of filenames: a governing contract must have
+materially broader payment, acceptance, liability, warranty, security,
+termination and change-procedure coverage than a competing revised attachment.
+A close or weak result remains unresolved. The exact candidate applies only the
+three revisions belonging to the selected governing contract. Both attachment
+revisions remain in the five-item protocol and clause schedule, and the
+projection records their exclusion explicitly.
+
+Read-only staged generation against the live immutable v8 results produced:
+
+- a contract analysis report with 307 clauses and seven retained risks,
+  SHA-256 `cae2c7bf995f84d2b6bfb7cd627052059f175e0524bb0de32e629ba82f77c6f7`;
+- a five-item editable disagreement protocol, SHA-256
+  `240700e37fbe31b42d9b4307012db5750c5e3c2b5fe5f8fe37de3eca1b06893c`;
+- an exact-format revised governing-contract candidate containing its three
+  applicable revisions, SHA-256
+  `7f0bb076a1a27c9ae0288b0a2d037f257e182776170539da4632a11af8d0468e`.
+
+All three packages opened as valid OOXML. Quick Look rendered their first pages
+without clipping or corrupt glyphs. The analysis and protocol retain source
+navigation for all five revisions; the revised contract preserves the admitted
+source layout and does not inject the two attachment-specific proposals into
+the contract body. Full multi-page visual qualification remains a release gate
+because the configured environment does not currently provide the bundled
+LibreOffice renderer required by `render_docx.py`.
