@@ -73,6 +73,7 @@ _SPLITTABLE_BATCH_FAILURES = frozenset(
     {
         "qwen_semantic_response_output_exhausted",
         "qwen_contract_clause_source_not_exact",
+        "qwen_contract_risk_revision_invalid",
     }
 )
 

@@ -402,3 +402,76 @@ def test_contract_analysis_splits_multi_source_batch_after_exact_quote_repair_fa
         "2.1. Условие А.",
         "2.2. Условие Б.",
     ]
+
+
+def test_contract_analysis_splits_batch_after_revision_shape_repair_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+    source_by_locator = {
+        "loc-a": "7.1. Заказчик устанавливает срок устранения недостатков.",
+        "loc-b": "7.2. Подрядчик устраняет недостатки в установленный срок.",
+    }
+
+    def complete(
+        endpoint: str,
+        prompt: str,
+        timeout_seconds: float,
+        *,
+        max_tokens: int,
+    ) -> str:
+        del endpoint, timeout_seconds, max_tokens
+        calls.append(prompt)
+        combined = '"loc-a"' in prompt and '"loc-b"' in prompt
+        locator = "loc-a" if '"loc-a"' in prompt else "loc-b"
+        clause_ref = "7.1" if locator == "loc-a" else "7.2"
+        source_text = source_by_locator[locator]
+        risk = {
+            "clause_ref": clause_ref,
+            "kind": "uncontrolled_obligation",
+            "basis": "explicit_clause_text",
+            "risk_mechanism": "customer_controlled_deadline",
+            "trigger_text": source_text,
+            "adverse_effect_text": source_text,
+            "severity": "medium",
+            "description": "Срок определяется одной стороной.",
+            "practical_consequence": "Срок может быть технически неисполнимым.",
+            "recommended_action": "Согласовать объективный срок.",
+            "replacement_source_text": source_text,
+            "proposed_contractor_wording": "Стороны согласовывают разумный срок.",
+            "disagreement_required": True,
+            "confidence": 0.9,
+        }
+        risks = [risk, dict(risk)] if combined else [risk]
+        return json.dumps(
+            {
+                "clauses": [
+                    {
+                        "clause_ref": clause_ref,
+                        "section": "Гарантии",
+                        "source_text": source_text,
+                        "source_locator_ids": [locator],
+                        "category": "warranty",
+                        "customer_obligation": None,
+                        "contractor_obligation": None,
+                        "condition": None,
+                    }
+                ],
+                "risks": risks,
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_analysis._complete", complete)
+    analyzer = QwenContractAnalyzer("http://127.0.0.1:8790/v1/chat/completions")
+
+    result = analyzer.analyze(
+        [
+            {"source_locator_id": locator, "page": index, "text": text}
+            for index, (locator, text) in enumerate(source_by_locator.items(), start=1)
+        ]
+    )
+
+    assert len(calls) == 4
+    assert [item["clause_ref"] for item in result["clauses"]] == ["7.1", "7.2"]
+    assert [item["clause_ref"] for item in result["risks"]] == ["7.1", "7.2"]
