@@ -392,9 +392,7 @@ def _cross_document_work_batches(
     for raw in rows:
         row = dict(raw)
         hints = [
-            str(value).strip()
-            for value in row.get("facility_hints") or ()
-            if str(value).strip()
+            str(value).strip() for value in row.get("facility_hints") or () if str(value).strip()
         ]
         family = str(row.get("deterministic_family_hint") or "")
         side = document_comparison_side(row.get("document_role"), row.get("document"))
