@@ -25,6 +25,7 @@ from asd_kontur.tender.project_engineering import (
     _professional_material_values,
     _professional_quantity_issue_comparisons,
     _project_scope_facility_label,
+    _qualified_participant_context,
     _resolution_establishes_page_scope,
     _scope_comparisons,
     _semantic_work_consensus,
@@ -135,6 +136,110 @@ def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> N
     assert [(row["field"], row["value"]) for row in context["commercial_conditions"]] == [
         ("initial_contract_price", "41 573 447,08 руб.")
     ]
+
+
+def test_tender_context_rejects_signatories_and_non_schedule_dates() -> None:
+    source_context = dict(
+        [
+            _source("design", "Раздел ПД.pdf", 3),
+            _source("estimate", "ЛСР 04-01-02.pdf", 1),
+            _source("contract", "Проект контракта.pdf", 6),
+        ]
+    )
+    context = _tender_context(
+        [
+            {"label": "customer", "value": "Сидоров", "source_locator_id": "design"},
+            {
+                "label": "general_designer",
+                "value": "Петров А.Б.",
+                "source_locator_id": "design",
+            },
+            {
+                "label": "designer",
+                "value": "ООО «Геопроект»",
+                "source_locator_id": "design",
+            },
+            {
+                "label": "developer",
+                "value": "АО Мостпроект",
+                "source_locator_id": "design",
+            },
+            {
+                "label": "developer",
+                "value": "АО «Мостпроект»",
+                "source_locator_id": "contract",
+            },
+            {
+                "label": "customer",
+                "value": "Муниципальное учреждение «Дорожная дирекция»",
+                "source_locator_id": "contract",
+            },
+            {"label": "start_date", "value": "01.01.2001", "source_locator_id": "estimate"},
+            {"label": "completion_date", "value": "7.14", "source_locator_id": "design"},
+            {
+                "label": "start_date",
+                "value": "с даты подписания договора",
+                "source_locator_id": "contract",
+            },
+            {
+                "label": "completion_date",
+                "value": "30 ноября 2028 года",
+                "source_locator_id": "contract",
+            },
+            {"label": "vat", "value": "22 процентов", "source_locator_id": "contract"},
+            {"label": "vat", "value": "22%", "source_locator_id": "design"},
+            {"label": "vat", "value": "с НДС", "source_locator_id": "estimate"},
+        ],
+        source_context,
+    )
+
+    assert [(row["field"], row["value"]) for row in context["participants"]] == [
+        ("customer", "Муниципальное учреждение «Дорожная дирекция»"),
+        ("developer", "АО «Мостпроект»"),
+        ("designer", "ООО «Геопроект»"),
+    ]
+    assert len(context["participants"][1]["source_locator_ids"]) == 2
+    assert [(row["field"], row["value"]) for row in context["time_requirements"]] == [
+        ("start_date", "с даты подписания договора"),
+        ("completion_date", "30 ноября 2028 года"),
+    ]
+    assert [(row["label"], row["value"]) for row in context["commercial_conditions"]] == [
+        ("Ставка НДС", "22%")
+    ]
+
+
+def test_participant_context_localizes_uncorroborated_role_conflicts() -> None:
+    established, ambiguities = _qualified_participant_context(
+        [
+            {
+                "field": "customer",
+                "label": "Заказчик",
+                "value": "АО «Северная дирекция»",
+                "source_locator_ids": ["contract", "procurement", "design-title"],
+            },
+            {
+                "field": "customer",
+                "label": "Заказчик",
+                "value": "ГУП «Городские сети»",
+                "source_locator_ids": ["utility-note"],
+            },
+            {
+                "field": "designer",
+                "label": "Проектировщик",
+                "value": "ООО «Мостинжпроект»",
+                "source_locator_ids": ["design-title"],
+            },
+        ]
+    )
+
+    assert [(row["field"], row["value"]) for row in established] == [
+        ("customer", "АО «Северная дирекция»"),
+        ("designer", "ООО «Мостинжпроект»"),
+    ]
+    assert [(row["field"], row["value"]) for row in ambiguities] == [
+        ("customer", "ГУП «Городские сети»")
+    ]
+    assert "требует уточнения" in ambiguities[0]["reason"]
 
 
 def test_contract_estimate_filename_is_not_reduced_to_ordinary_estimate() -> None:
@@ -2146,7 +2251,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v58"
+    assert model["model_version"] == "project-engineering-model-v59"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

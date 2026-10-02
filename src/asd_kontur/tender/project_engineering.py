@@ -28,7 +28,7 @@ from .quantity_semantics import (
     evaluate_component_total,
 )
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v58"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v59"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -764,6 +764,9 @@ def build_project_engineering_model(
 
     project = _project_overview(project_definition, candidates.get("project_fields", ()))
     tender_context = _tender_context(candidates.get("project_fields", ()), source_context)
+    participants, participant_ambiguities = _qualified_participant_context(
+        tender_context["participants"]
+    )
     facilities, node_to_facility = _facilities(
         workspace_id,
         structure_nodes,
@@ -859,11 +862,12 @@ def build_project_engineering_model(
             )
         ],
         "requirements": list(requirements["unresolved"]),
+        "participants": participant_ambiguities,
     }
     model = {
         "model_version": PROJECT_ENGINEERING_MODEL_VERSION,
         "project": project,
-        "participants": tender_context["participants"],
+        "participants": participants,
         "commercial_conditions": tender_context["commercial_conditions"],
         "time_requirements": tender_context["time_requirements"],
         "procurement_requirements": tender_context["procurement_requirements"],
@@ -1011,7 +1015,12 @@ def _tender_context(
             label = fields.get(key)
             if label is None:
                 continue
-            identity = (section, key, _tender_context_identity_value(key, value))
+            identity_value = (
+                " ".join(value.casefold().split())
+                if section == "participants"
+                else _tender_context_identity_value(key, value)
+            )
+            identity = (section, key, identity_value)
             if identity in seen:
                 break
             seen.add(identity)
@@ -1026,6 +1035,7 @@ def _tender_context(
                 }
             )
             break
+    result["participants"] = _consolidate_participant_context(result["participants"])
     for values in result.values():
         values.sort(key=lambda item: (str(item["label"]), str(item["value"])))
     return result
@@ -1034,6 +1044,18 @@ def _tender_context(
 def _tender_context_value_is_plausible(key: str, value: str, document_role: str) -> bool:
     """Reject type-confused project fields before they reach the professional report."""
 
+    if key in _TENDER_PARTICIPANT_FIELDS and _looks_like_person_in_organization_role(value):
+        return False
+    if key in {"start_date", "completion_date", "contract_deadline"}:
+        return _professional_schedule_date_is_plausible(value, document_role)
+    if key == "vat":
+        if _vat_rate(value) is not None:
+            return True
+        compact_vat = value.replace("\u00a0", " ").strip()
+        return (
+            re.fullmatch(r"[0-9][0-9\s]*(?:[.,][0-9]{1,2})?(?:\s*(?:руб\.?|₽))?", compact_vat)
+            is not None
+        )
     if key not in {"nmck", "initial_contract_price", "contract_price"}:
         return True
     if document_role not in {"Закупочная документация", "Договор", "Смета контракта"}:
@@ -1047,9 +1069,186 @@ def _tender_context_value_is_plausible(key: str, value: str, document_role: str)
     return len(digits) >= 5
 
 
+_TENDER_PARTICIPANT_FIELDS = {
+    "customer",
+    "client",
+    "developer",
+    "technical_customer",
+    "designer",
+    "general_designer",
+    "general_contractor",
+    "contractor",
+}
+_ORGANIZATION_MARKER = re.compile(
+    r"(?:\b(?:ооо|ао|пао|зао|оао|мку|мб[ду]о?|гбу|кгуп|фгуп|ип|нко|ано)\b|"
+    r"учрежден|общество|предприят|организац|компан|администрац|управлен|служб|"
+    r"дирекц|министерств|департамент|фонд|округ|муницип|государствен|"
+    r"\b(?:llc|ltd|inc|corp|company)\b)",
+    re.IGNORECASE,
+)
+_RUSSIAN_MONTH = (
+    r"(?:январ[ья]|феврал[ья]|март[а]?|апрел[ья]|ма[йя]|июн[ья]|июл[ья]|"
+    r"август[а]?|сентябр[ья]|октябр[ья]|ноябр[ья]|декабр[ья])"
+)
+
+
+def _looks_like_person_in_organization_role(value: str) -> bool:
+    """Reject title-block signatories mislabelled as project organizations."""
+
+    compact = " ".join(value.split()).strip(" ,;:")
+    if not compact or _ORGANIZATION_MARKER.search(compact):
+        return False
+    if any(mark in compact for mark in ("«", "»", '"')):
+        return False
+    tokens = compact.split()
+    if not 1 <= len(tokens) <= 4:
+        return False
+    return all(
+        re.fullmatch(
+            r"[А-ЯЁ][а-яё-]+|[А-ЯЁ](?:\.)?|[А-ЯЁ](?:\.[А-ЯЁ])+\.?|[А-ЯЁ]{1,3}",
+            token,
+        )
+        is not None
+        for token in tokens
+    )
+
+
+def _consolidate_participant_context(
+    values: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Merge formatting aliases within one professional participant role."""
+
+    grouped: dict[tuple[str, str], dict[str, Any]] = {}
+    for raw in values:
+        row = dict(raw)
+        identity = (str(row.get("field") or ""), _participant_identity(row.get("value")))
+        current = grouped.get(identity)
+        if current is None:
+            grouped[identity] = row
+            continue
+        if _participant_display_score(row.get("value")) > _participant_display_score(
+            current.get("value")
+        ):
+            selected, other = row, current
+        else:
+            selected, other = current, row
+        selected["source_locator_ids"] = list(
+            dict.fromkeys(
+                str(locator_id)
+                for locator_id in [
+                    *(selected.get("source_locator_ids") or ()),
+                    *(other.get("source_locator_ids") or ()),
+                ]
+                if locator_id
+            )
+        )
+        sources = [
+            *[dict(value) for value in selected.get("sources") or ()],
+            *[dict(value) for value in other.get("sources") or ()],
+        ]
+        selected["sources"] = list(
+            {
+                str(source.get("source_locator_id") or semantic_digest(source)): source
+                for source in sources
+            }.values()
+        )
+        grouped[identity] = selected
+    return list(grouped.values())
+
+
+def _qualified_participant_context(
+    values: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Keep a corroborated primary role and localize weak conflicting labels."""
+
+    by_field: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for value in values:
+        row = dict(value)
+        by_field[str(row.get("field") or "")].append(row)
+    established: list[dict[str, Any]] = []
+    ambiguities: list[dict[str, Any]] = []
+    for rows in by_field.values():
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                len(row.get("source_locator_ids") or ()),
+                _participant_display_score(row.get("value")),
+            ),
+            reverse=True,
+        )
+        leader_count = len(ranked[0].get("source_locator_ids") or ())
+        runner_count = len(ranked[1].get("source_locator_ids") or ()) if len(ranked) > 1 else 0
+        if len(ranked) > 1 and leader_count >= 2 and leader_count > runner_count:
+            established.append(ranked[0])
+            for row in ranked[1:]:
+                ambiguities.append(
+                    {
+                        **row,
+                        "reason": (
+                            f"Для роли «{row.get('label')}» встречается альтернативное указание "
+                            f"«{row.get('value')}», но оно не подтверждено повторно и требует "
+                            "уточнения."
+                        ),
+                    }
+                )
+        else:
+            established.extend(ranked)
+    established.sort(key=lambda row: (str(row.get("label")), str(row.get("value"))))
+    ambiguities.sort(key=lambda row: (str(row.get("label")), str(row.get("value"))))
+    return established, ambiguities
+
+
+def _participant_identity(value: object) -> str:
+    compact = _normalized(value)
+    compact = re.sub(
+        r"^(?:общество с ограниченной ответственностью|акционерное общество|"
+        r"публичное акционерное общество|муниципальное казенное учреждение|"
+        r"государственное бюджетное учреждение|ооо|ао|пао|зао|оао|мку|гбу|"
+        r"кгуп|фгуп|ип)\s+",
+        "",
+        compact,
+    )
+    return re.sub(r"[^0-9a-zа-яё]+", "", compact)
+
+
+def _participant_display_score(value: object) -> tuple[int, int, str]:
+    text = " ".join(str(value or "").split())
+    return (int(_ORGANIZATION_MARKER.search(text) is not None), len(text), text)
+
+
+def _professional_schedule_date_is_plausible(value: str, document_role: str) -> bool:
+    """Keep schedule dates, rejecting estimate bases and drawing marks."""
+
+    if document_role not in {
+        "Договор",
+        "Закупочная документация",
+        "ПД",
+        "РД",
+        "Проектный документ",
+    }:
+        return False
+    compact = " ".join(value.casefold().split()).strip(" ,;:")
+    if re.search(r"\b(?:с|со)\s+дат[ыа]\b", compact) and re.search(
+        r"заключ|подпис|уведом|передач|получ", compact
+    ):
+        return True
+    if re.fullmatch(r"(?:0?[1-9]|[12]\d|3[01])[./-](?:0?[1-9]|1[0-2])[./-](?:19|20)\d{2}", compact):
+        return True
+    if re.fullmatch(
+        rf"(?:0?[1-9]|[12]\d|3[01])\s+{_RUSSIAN_MONTH}\s+(?:19|20)\d{{2}}(?:\s*г(?:ода|\.)?)?",
+        compact,
+    ):
+        return True
+    return (
+        re.fullmatch(rf"{_RUSSIAN_MONTH}\s+(?:19|20)\d{{2}}(?:\s*г(?:\.|ода)?)?", compact)
+        is not None
+    )
+
+
 def _tender_context_identity_value(key: str, value: str) -> str:
-    if key == "vat" and value.strip().endswith("%"):
-        return _normalized(value)
+    rate = _vat_rate(value) if key == "vat" else None
+    if rate is not None:
+        return f"vat-rate:{rate.normalize()}"
     if key not in {"nmck", "initial_contract_price", "contract_price", "vat"}:
         return _normalized(value)
     numeric = re.sub(r"\s*(?:руб\.?|₽)\s*$", "", value.replace("\u00a0", " ").strip())
@@ -1062,13 +1261,14 @@ def _tender_context_identity_value(key: str, value: str) -> str:
 
 def _professional_context_label(key: str, value: str, default: str) -> str:
     if key == "vat":
-        return "Ставка НДС" if value.strip().endswith("%") else "Сумма НДС"
+        return "Ставка НДС" if _vat_rate(value) is not None else "Сумма НДС"
     return default
 
 
 def _professional_context_value(key: str, value: str) -> str:
-    if key == "vat" and value.strip().endswith("%"):
-        return value
+    rate = _vat_rate(value) if key == "vat" else None
+    if rate is not None:
+        return f"{_decimal_text(rate)}%"
     if key not in {"nmck", "initial_contract_price", "contract_price", "vat"}:
         return value
     numeric = re.sub(r"\s*(?:руб\.?|₽)\s*$", "", value.replace("\u00a0", " ").strip())
@@ -1080,6 +1280,20 @@ def _professional_context_value(key: str, value: str) -> str:
     integer, fraction = f"{amount:.2f}".split(".")
     grouped = f"{int(integer):,}".replace(",", " ")
     return f"{grouped},{fraction} руб."
+
+
+def _vat_rate(value: object) -> Decimal | None:
+    match = re.fullmatch(
+        r"\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:%|процент(?:а|ов)?)\s*",
+        str(value or "").casefold(),
+    )
+    if match is None:
+        return None
+    try:
+        rate = Decimal(match.group(1).replace(",", "."))
+    except InvalidOperation:
+        return None
+    return rate if Decimal("0") <= rate <= Decimal("100") else None
 
 
 def facility_designation(value: object) -> str | None:

@@ -441,6 +441,10 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             for value in pits.get("requires_clarification") or ()
         ]
         + [str(value) for value in project.get("missing_information") or ()]
+        + [
+            str(value.get("reason") or "")
+            for value in dict(model.get("unresolved") or {}).get("participants") or ()
+        ]
         + _scope_comparison_uncertainties(scope_comparisons)
     )
     if any(uncertainties):
