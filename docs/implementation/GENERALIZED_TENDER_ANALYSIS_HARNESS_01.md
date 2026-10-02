@@ -1025,7 +1025,7 @@ worker remained supervised and unchanged. The release receipt SHA-256 is
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
-## Measured quantity-relationship batch policy — pending release 0109
+## Measured quantity-relationship batch policy — release 96be292
 
 Forty successful production receipts from
 `qwen-project-work-reconciliation-v21` established that four-row relationship
@@ -1047,9 +1047,34 @@ expected blind-corpus conclusion is encoded in the change.
 Focused work-reconciliation, document-understanding and application-spine
 tests passed (195 tests), project-engineering and generalized-harness tests
 passed (116 tests), and the full migration upgrade/downgrade/re-upgrade gate
-passed on a disposable PostgreSQL database. The active production release was
-not interrupted while these checks ran; activation remains pending a safe
-bounded Qwen job boundary.
+passed on a disposable PostgreSQL database. Exact-SHA CI run `37048233741`
+passed for `96be2927ca2641674cad2a4e066975a5e88f6d75`.
+
+The public database backup is
+`~/.asd-kontur/public-demo/backups/pre-0109-quantity-batches-20261003T0640/public-before-0109.dump`
+with SHA-256
+`1c7a701d8c2692ed98a89c4d77fb0892acab1655f3401187c201328384ea7d13`.
+The real backup passed a separate restore, 0108-to-0109 upgrade, downgrade and
+re-upgrade before the live database was migrated.
+
+API, worker, orchestrator and assistant worker now run from
+`~/.asd-kontur/public-demo/releases/20261003-96be292-quantity-batch-v22` on
+migration `0109_bounded_quantity_relationship_batches`. The running worker was
+given a graceful stop request and completed its accepted v21 job before the
+release boundary. Qwen PID `93554` and NTD worker PID `98263` were not
+restarted. The orchestrator automatically superseded three queued v21 jobs and
+created 42 two-row v22 jobs across active workspaces, including four for the
+blind project. No queue, retry or successor command was issued manually.
+
+The first v22 job, `01a0fdf2-c814-74c2-947c-d3b801de7309`, completed in
+68.974828 seconds with one model call, no repair codes and result digest
+`sha256:2a678bcd00b960349e624e3da1e1e2cb24cd5d07f6d8b8fae1a3e0293f4cfc15`.
+The worker immediately claimed the next autonomous v22 batch. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`182e2cff782719b35668598d2ab591b7957f2be2eb8967c5780fe71b4b247412`.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
