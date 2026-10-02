@@ -200,3 +200,22 @@ jobs, source versions, NTD memory and global knowledge are not changed. A
 disposable PostgreSQL acceptance creates three project snapshots and three
 dependent structure snapshots, retains the newest coherent pair, and verifies
 four terminal supersession receipts.
+
+## 12. Active-workspace fairness correction — 2026-10-02
+
+Changed-corpus contract acceptance exposed a separate scheduler fairness gap.
+The database contained 29 active project-processing scopes, but every sweep
+requested only the 16 most recently progressing scopes. Because the same
+ordered prefix was returned on every sweep, older active workspaces could
+remain indefinitely on a superseded semantic profile even though the current
+blind workspace continued correctly. This was not a Qwen or queue-claim
+failure; it was starvation in scope discovery.
+
+The orchestrator now discovers up to the existing hard bound of 64 active
+scopes and rotates a 16-workspace execution window on successive sweeps. The
+per-sweep database/model scheduling load remains bounded, while all currently
+discoverable active workspaces receive reconciliation. Restarting the
+supervised service resets only the cursor; the first and subsequent sweeps
+reconstruct work entirely from durable state. A changed three-workspace test
+with a two-workspace execution window proves that the second sweep visits the
+previously omitted workspace without any manual queue command.

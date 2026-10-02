@@ -115,3 +115,56 @@ def test_orchestrator_repairs_dependencies_and_ensures_successors() -> None:
         "refill_work",
         "recover_dependencies",
     ]
+
+
+def test_orchestrator_rotates_across_more_scopes_than_one_sweep() -> None:
+    workspaces = tuple(
+        UUID(f"018f5c3e-7b00-7000-8000-0000000018{index:02d}") for index in range(10, 13)
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.visited: list[UUID] = []
+
+        def reconcile_unclaimable_jobs(self) -> int:
+            return 0
+
+        def recover_dependency_terminal_failures(self) -> int:
+            return 0
+
+        def autonomous_project_processing_scopes(self, *, limit: int):
+            assert limit == 64
+            return tuple(
+                (ORGANIZATION_ID, workspace_id, "owner", datetime.now(UTC))
+                for workspace_id in workspaces
+            )
+
+        def reconcile_expired_exhausted_jobs(self, **_kwargs: object) -> int:
+            return 0
+
+        def schedule_autonomous_retry_replacements(self, **_kwargs: object):
+            return ()
+
+        def supersede_redundant_project_reconciliations(self, **_kwargs: object) -> int:
+            return 0
+
+        def start_project_understanding(self, **kwargs: object) -> object:
+            self.visited.append(kwargs["workspace_id"])  # type: ignore[arg-type]
+            return object()
+
+        def refill_workspace_project_work_reconciliation_if_idle(self, **_kwargs: object):
+            return ()
+
+    repository = Repository()
+    orchestrator = ProjectOrchestrator(  # type: ignore[arg-type]
+        repository,
+        interval_seconds=30,
+        scope_limit=2,
+    )
+
+    first = orchestrator.run_once()
+    second = orchestrator.run_once()
+
+    assert first.scopes == 2
+    assert second.scopes == 2
+    assert repository.visited == [workspaces[0], workspaces[1], workspaces[2], workspaces[0]]

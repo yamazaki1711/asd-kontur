@@ -12,6 +12,7 @@ import signal
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
+from uuid import UUID
 
 from asd_kontur.domain import uuid7
 
@@ -52,15 +53,35 @@ class ProjectOrchestrator:
         *,
         interval_seconds: float = 30.0,
         scope_limit: int = 16,
+        discovery_limit: int = 64,
     ) -> None:
         if interval_seconds < 1:
             raise ValueError("project orchestrator interval must be at least one second")
         if not 1 <= scope_limit <= 64:
             raise ValueError("project orchestrator scope limit is invalid")
+        if not scope_limit <= discovery_limit <= 64:
+            raise ValueError("project orchestrator discovery limit is invalid")
         self._repository = repository
         self._interval_seconds = interval_seconds
         self._scope_limit = scope_limit
+        self._discovery_limit = discovery_limit
+        self._scope_cursor = 0
         self._stopping = False
+
+    def _next_scopes(self) -> tuple[tuple[UUID, UUID, str, datetime], ...]:
+        discovered = self._repository.autonomous_project_processing_scopes(
+            limit=self._discovery_limit
+        )
+        if len(discovered) <= self._scope_limit:
+            self._scope_cursor = 0
+            return discovered
+        start = self._scope_cursor % len(discovered)
+        stop = start + self._scope_limit
+        selected = discovered[start:stop]
+        if stop > len(discovered):
+            selected += discovered[: stop - len(discovered)]
+        self._scope_cursor = stop % len(discovered)
+        return selected
 
     def request_stop(self) -> None:
         self._stopping = True
@@ -72,7 +93,7 @@ class ProjectOrchestrator:
     def run_once(self) -> OrchestrationSweep:
         dependency_failures = self._repository.reconcile_unclaimable_jobs()
         dependency_replacements = self._repository.recover_dependency_terminal_failures()
-        scopes = self._repository.autonomous_project_processing_scopes(limit=self._scope_limit)
+        scopes = self._next_scopes()
         retries = 0
         superseded = 0
         models = 0
