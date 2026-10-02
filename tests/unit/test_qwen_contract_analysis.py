@@ -263,6 +263,53 @@ def test_contract_analysis_requires_exact_adverse_effect_text() -> None:
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
+def test_contract_analysis_rejects_unsupported_customer_control_over_ordinary_act() -> None:
+    source = {
+        "loc-hidden-work": (
+            "Последующие работы допускаются после оформления и подписания акта "
+            "освидетельствования скрытых работ."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "4.6",
+                    "source_text": source["loc-hidden-work"],
+                    "source_locator_ids": ["loc-hidden-work"],
+                    "category": "acceptance",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "4.6",
+                    "kind": "deadline_exposure",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_deadline",
+                    "trigger_text": "после оформления и подписания акта",
+                    "adverse_effect_text": (
+                        "Последующие работы допускаются после оформления и подписания акта"
+                    ),
+                    "severity": "medium",
+                    "description": "Подписание якобы полностью контролируется Заказчиком.",
+                    "practical_consequence": "Предполагается простой.",
+                    "recommended_action": "Ввести одностороннюю приёмку.",
+                    "replacement_source_text": source["loc-hidden-work"],
+                    "proposed_contractor_wording": "Акт считается подписанным автоматически.",
+                    "disagreement_required": True,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(
+        QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"
+    ):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
     source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
     clause = {
@@ -410,7 +457,7 @@ def test_contract_analysis_splits_batch_after_revision_shape_repair_fails(
     calls: list[str] = []
     source_by_locator = {
         "loc-a": "7.1. Заказчик устанавливает срок устранения недостатков.",
-        "loc-b": "7.2. Подрядчик устраняет недостатки в установленный срок.",
+        "loc-b": "7.2. Заказчик единолично устанавливает срок замены элемента.",
     }
 
     def complete(

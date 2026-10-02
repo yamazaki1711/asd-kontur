@@ -15,7 +15,7 @@ from collections.abc import Iterable, Mapping
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 
-CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v7"
+CONTRACT_ANALYSIS_PROFILE = "qwen-contract-analysis-v8"
 CONTRACT_ANALYSIS_CONTRACT = "contract-analysis-candidate@1.0.0"
 _CLAUSE_CATEGORIES = frozenset(
     {
@@ -73,9 +73,19 @@ _SPLITTABLE_BATCH_FAILURES = frozenset(
     {
         "qwen_semantic_response_output_exhausted",
         "qwen_contract_clause_source_not_exact",
+        "qwen_contract_risk_controller_not_grounded",
         "qwen_contract_risk_revision_invalid",
     }
 )
+_CUSTOMER_CONTROLLED_MECHANISMS = frozenset(
+    {
+        "customer_controlled_payment",
+        "customer_controlled_acceptance",
+        "customer_controlled_deadline",
+        "contractor_bears_customer_cause",
+    }
+)
+_CUSTOMER_TERMS = ("заказчик", "customer", "client", "employer")
 
 
 class QwenContractAnalyzer:
@@ -234,6 +244,10 @@ def parse_contract_analysis(
         required = ("description", "practical_consequence", "recommended_action")
         if any(not _optional_text(raw_risk.get(key)) for key in required):
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
+        if risk_mechanism in _CUSTOMER_CONTROLLED_MECHANISMS and not _mentions_customer(
+            " ".join((trigger_text, adverse_effect_text))
+        ):
+            raise QwenSemanticFailure("qwen_contract_risk_controller_not_grounded")
         disagreement = raw_risk.get("disagreement_required")
         proposed = _optional_text(raw_risk.get("proposed_contractor_wording"))
         replacement_source_text = _optional_text(raw_risk.get("replacement_source_text"))
@@ -286,6 +300,11 @@ def _contract_output_token_budget(total_chars: int) -> int:
 def _optional_text(value: object) -> str | None:
     normalized = " ".join(str(value or "").split())
     return normalized or None
+
+
+def _mentions_customer(value: str) -> bool:
+    folded = value.casefold()
+    return any(term in folded for term in _CUSTOMER_TERMS)
 
 
 _SOURCE_QUOTE_TRANSLATION = str.maketrans(
@@ -372,6 +391,7 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 Выдели самостоятельные условия договора. source_text должен быть дословной непрерывной цитатой из одного или нескольких указанных фрагментов (нормализация пробелов допустима).
 Оценивай практический риск: исполнимость обязательства, зависимость оплаты/приёмки от Заказчика, изменение объёмов и РД, сроки, ответственность, гарантию, расторжение и исходные данные.
 Обычные сбалансированные условия не отмечай как риск. Не выдавай коммерческую оценку за подтверждённое юридическое заключение.
+Не приписывай Заказчику подписание акта, согласование, задержку или иное управляющее действие, если точная запускающая формулировка или точное неблагоприятное последствие прямо не называют Заказчика (Customer/Client/Employer). Само требование оформить или подписать акт не доказывает зависимость от Заказчика. Не предлагай перенос ответственности за качество работ на Заказчика как автоматическое последствие задержки документа или подписи.
 Не отмечай риск только потому, что условие возлагает на Подрядчика обычную обязанность по исправлению дефектов, допущенных Подрядчиком; передаёт Заказчику более длительную гарантию производителя; требует установленный законом способ или ограниченный срок обеспечения; либо автоматически следует обязательному изменению закона. Для риска должна быть прямо сформулированная управленческая причина: зависимость от решения/действия Заказчика, неограниченный объём или срок, ответственность за причину вне контроля Подрядчика, односторонняя мера без проверяемого ограничения, либо явный конфликт с фактами проекта.
 Короткий срок, установленный самому Заказчику для передачи площадки, документов, согласования или иного действия, не является риском Подрядчика сам по себе: не предполагай заранее, что Заказчик нарушит свою обязанность. Обычное право направить требование о неустойке за нарушение обязательств, прямо предусмотренных договором, не является неограниченной ответственностью без отдельной формулировки о неограниченном или несоразмерном последствии. Односторонний акт контроля не является самостоятельным риском, если данный фрагмент только требует направить его Подрядчику и не устанавливает для него неблагоприятное последствие. Расходы Подрядчика на вскрытие или исправление, прямо вызванные его собственным нарушением обязанности предъявить работы или устранить свой дефект, являются обычной ответственностью и не отмечаются как риск, если условие не распространяет расходы на случаи надлежащего исполнения Подрядчиком.
 CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта, раздела или приложения не попало в CONTEXT. Этот этап принимает только риск, который прямо создаётся формулировкой условия в CONTEXT. Отсутствующий во всём договоре механизм проверяется отдельным итоговым этапом после анализа всех частей.

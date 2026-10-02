@@ -480,3 +480,26 @@ After activation the all-history platform-memory fingerprint remained exactly
 `sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
 and the NTD processing state remained exactly 319 succeeded jobs. The release
 receipt records the split API/background release boundary explicitly.
+
+## 2026-10-02 counterparty-grounding correction staged
+
+The first four live risk candidates exposed one false-positive mechanism that
+the changed-contract controls did not yet cover. Clause 3.1.14 requires a
+hidden-work act before subsequent work but, in the extracted clause, does not
+identify the Customer as the party controlling signature. The v7 model inferred
+Customer delay and proposed deemed acceptance plus a transfer of quality risk.
+Those consequences are not grounded in the quoted clause and must not become a
+professional disagreement merely because signing an act is required.
+
+The generic v8 contract profile therefore requires an explicit Customer actor
+in the exact trigger/adverse-effect wording for
+`customer_controlled_payment`, `customer_controlled_acceptance`,
+`customer_controlled_deadline` and `contractor_bears_customer_cause`. The prompt
+also forbids attributing an act/signature to the Customer or transferring
+quality responsibility unless the supplied wording supports that relationship.
+A changed hidden-work-act test proves rejection without using the blind-project
+text, while the existing changed deadline and payment cases remain accepted.
+Migration `0105_contract_controller_grounding` admits the versioned v8 result
+profile. This correction is staged only: it will not be activated until the
+autonomous v7 checkpoint has completed, so the current worker and Qwen run are
+not interrupted.
