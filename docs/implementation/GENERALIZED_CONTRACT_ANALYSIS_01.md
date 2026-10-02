@@ -298,3 +298,15 @@ ordinary breach remedies and ordinary warranty/security terms must remain
 unflagged while an explicit Contractor exposure in the same controlled corpus
 must still produce a source-grounded risk and, where justified, a disagreement
 row.
+
+The mandatory Word-package validator then exposed defects that ZIP integrity
+and macOS text extraction had not detected in the generated contract report and
+standalone protocol: the minimal table omitted `tblPr`/`tblGrid`, section
+margins omitted required header/footer/gutter attributes, and the document
+relationship part used the office-document namespace instead of the package
+relationships namespace. The generic renderer now emits schema-valid fixed
+layout tables, complete section margins and the correct relationship namespace.
+Both a contract report and a standalone disagreement protocol generated after
+the fix pass the DOCX XSD/package validator. LibreOffice is not installed, so a
+page-image visual qualification remains explicitly outstanding; schema success
+does not claim visual acceptance.

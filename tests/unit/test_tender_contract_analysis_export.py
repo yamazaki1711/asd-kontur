@@ -176,6 +176,13 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
     with zipfile.ZipFile(io.BytesIO(content)) as package:
         assert "word/document.xml" in package.namelist()
         document = package.read("word/document.xml").decode("utf-8")
+        relationships = package.read("word/_rels/document.xml.rels").decode("utf-8")
+        assert "http://schemas.openxmlformats.org/package/2006/relationships" in relationships
+        assert "<w:tblPr>" in document
+        assert "<w:tblGrid>" in document
+        assert 'w:header="720"' in document
+        assert 'w:footer="720"' in document
+        assert 'w:gutter="0"' in document
         assert "Accept completed work within seven working days." in document
         assert "source-independent-91" in document
         assert "Changed-contract-terms.docx" in document

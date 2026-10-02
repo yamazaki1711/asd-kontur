@@ -325,7 +325,8 @@ def _document_xml(body: Iterable[str]) -> bytes:
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         f"<w:body>{content}"
         '<w:sectPr><w:pgSz w:w="16838" w:h="11906" w:orient="landscape"/>'
-        '<w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850"/>'
+        '<w:pgMar w:top="850" w:right="850" w:bottom="850" w:left="850" '
+        'w:header="720" w:footer="720" w:gutter="0"/>'
         "</w:sectPr></w:body></w:document>"
     )
     return document.encode("utf-8")
@@ -346,7 +347,13 @@ def _table(headers: tuple[str, ...], rows: Sequence[Sequence[str]], empty_text: 
         return _paragraph(empty_text)
     width = max(900, 15100 // len(headers))
     values = (headers, *rows)
-    return "<w:tbl>" + "".join(_row(row, width) for row in values) + "</w:tbl>"
+    grid = "".join(f'<w:gridCol w:w="{width}"/>' for _value in headers)
+    return (
+        "<w:tbl>"
+        '<w:tblPr><w:tblW w:w="15100" w:type="dxa"/>'
+        '<w:tblLayout w:type="fixed"/></w:tblPr>'
+        f"<w:tblGrid>{grid}</w:tblGrid>" + "".join(_row(row, width) for row in values) + "</w:tbl>"
+    )
 
 
 def _row(values: Sequence[str], width: int) -> str:
@@ -394,7 +401,7 @@ def _docx_package(document: bytes) -> bytes:
         ),
         "word/_rels/document.xml.rels": (
             b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-            b'<Relationships xmlns="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
             b'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
             b'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>'
             b"</Relationships>"
