@@ -3005,6 +3005,7 @@ function TenderContractAnalysisBody({
                 <tr>
                   <th>Вид</th>
                   <th>Предмет</th>
+                  <th>Формулировка риска</th>
                   <th>Применимость</th>
                   <th>Рекомендация и последствие</th>
                 </tr>
@@ -3016,6 +3017,15 @@ function TenderContractAnalysisBody({
                       {humanizeStatus(displayValue(issue.issue_kind, "—"))}
                     </td>
                     <td>{displayValue(issue.subject, "—")}</td>
+                    <td>
+                      {displayValue(issue.trigger_text, "Требует уточнения")}
+                      {displayValue(issue.adverse_effect_text, "") ? (
+                        <small>
+                          Неблагоприятное условие:{" "}
+                          {displayValue(issue.adverse_effect_text, "")}
+                        </small>
+                      ) : null}
+                    </td>
                     <td>
                       {humanizeStatus(displayValue(issue.applicability, "—"))}
                     </td>
