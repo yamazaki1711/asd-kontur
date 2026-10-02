@@ -239,3 +239,15 @@ project orchestrator remain on
 worker were not restarted. Exact-SHA CI run `36963161384` passed for the active
 API release. The standalone protocol change is locally qualified but not yet
 deployed at this observation.
+
+The first revised-contract attempt against the admitted blind-project DOCX
+failed closed because a proposed change identified an exact clause fragment
+inside a Word paragraph rather than the whole paragraph. The generic renderer
+now permits a replacement only when that exact fragment occurs once in one
+paragraph. It preserves the prefix, suffix, all untouched paragraphs and all
+unmodified package members; duplicate or missing matches still fail closed.
+It also prevents duplicated boundary punctuation when the replacement and
+preserved suffix carry the same terminal mark. Re-running the real candidate
+produced a valid 86,683-byte DOCX with five exact proposed changes while
+retaining the rest of `Проект_контракта.docx`. ZIP integrity and macOS text
+extraction passed; visual page qualification remains pending.
