@@ -12,6 +12,7 @@ from asd_kontur.tender.qwen_contract_analysis import (
     _contract_output_token_budget,
     contract_commercial_narrative_without_unverified_authority,
     contract_proposed_wording_is_grounded,
+    contract_risk_controller_is_grounded,
     parse_contract_analysis,
 )
 
@@ -537,6 +538,39 @@ def test_contract_analysis_rejects_termination_cost_as_unpaid_changed_work() -> 
 
     with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
         parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_controller_rejects_ordinary_cure_expert_cost_as_termination_risk() -> None:
+    assert not contract_risk_controller_is_grounded(
+        {
+            "kind": "asymmetric_termination",
+            "risk_mechanism": "asymmetric_remedy",
+            "trigger_text": (
+                "Подрядчиком устранено нарушение условий договора, а Заказчику "
+                "компенсированы затраты на проведение экспертизы"
+            ),
+            "adverse_effect_text": "Заказчик отменяет решение об одностороннем отказе",
+        }
+    )
+
+
+def test_contract_controller_requires_explicit_open_ended_scope() -> None:
+    assert not contract_risk_controller_is_grounded(
+        {
+            "kind": "uncontrolled_obligation",
+            "risk_mechanism": "unbounded_scope",
+            "trigger_text": "после устранения нарушений условий договора",
+            "adverse_effect_text": "Подрядчик отменяет решение об отказе",
+        }
+    )
+    assert contract_risk_controller_is_grounded(
+        {
+            "kind": "uncontrolled_obligation",
+            "risk_mechanism": "unbounded_scope",
+            "trigger_text": "Подрядчик выполняет любые иные работы по требованию Заказчика",
+            "adverse_effect_text": "без ограничения стоимости и срока",
+        }
+    )
 
 
 def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:

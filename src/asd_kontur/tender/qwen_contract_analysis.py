@@ -145,6 +145,19 @@ _CUSTOMER_CONTROL_ACTION = re.compile(
     r".{0,40}by (?:the )?(?:customer|client|employer))",
     flags=re.IGNORECASE,
 )
+_ORDINARY_CURE_EXPERT_COST = re.compile(
+    r"(?:(?:устран\w*.{0,40}наруш\w*|cur\w*.{0,40}(?:breach|default)).{0,180}"
+    r"(?:затрат\w*.{0,40}экспертиз\w*|expert\w*.{0,40}cost\w*)|"
+    r"(?:затрат\w*.{0,40}экспертиз\w*|expert\w*.{0,40}cost\w*).{0,180}"
+    r"(?:устран\w*.{0,40}наруш\w*|cur\w*.{0,40}(?:breach|default)))",
+    flags=re.IGNORECASE,
+)
+_EXPLICIT_UNBOUNDED_SCOPE = re.compile(
+    r"(?:люб\w*|все\s+иные|иные\s+работ\w*|по\s+требовани\w*|"
+    r"без\s+ограничени\w*|неогранич\w*|any\s+and\s+all|any\s+other|"
+    r"as\s+requested|without\s+limit)",
+    flags=re.IGNORECASE,
+)
 
 
 class QwenContractAnalyzer:
@@ -418,13 +431,14 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
     """Reject a Customer-controlled mechanism without an explicit Customer actor."""
 
     mechanism = str(risk.get("risk_mechanism") or "")
+    kind = str(risk.get("kind") or "")
     combined = " ".join(
         (
             str(risk.get("trigger_text") or ""),
             str(risk.get("adverse_effect_text") or ""),
         )
     ).casefold()
-    if str(risk.get("kind") or "") == "unpaid_change" and not (
+    if kind == "unpaid_change" and not (
         _CHANGED_WORK_PAYMENT_EXPOSURE.search(combined)
         and any(term in combined for term in _ORDINARY_PAYMENT_DENIAL_TERMS)
     ):
@@ -432,6 +446,21 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
         # changed/additional/excess work scope and an explicit payment denial.
         # Restitution, termination, warranty and other cost clauses must use
         # their own risk kind even when they have a financial consequence.
+        return False
+    if kind == "asymmetric_termination" and _ORDINARY_CURE_EXPERT_COST.search(combined):
+        # Cure of the Contractor's own breach plus reimbursement of the
+        # resulting expert cost is an ordinary remedial condition by itself.
+        # A bounded clause cannot become a disagreement merely by assuming the
+        # cost will be arbitrary or impossible to verify.
+        return False
+    if (
+        kind == "uncontrolled_obligation"
+        and mechanism == "unbounded_scope"
+        and not _EXPLICIT_UNBOUNDED_SCOPE.search(combined)
+    ):
+        # An obligation defined by the contract is not open-ended merely
+        # because the clause refers to its terms collectively.  Require an
+        # explicit unlimited/request-driven scope marker.
         return False
     if (
         str(risk.get("kind") or "") == "customer_input_dependency"
