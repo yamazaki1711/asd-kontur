@@ -869,6 +869,63 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Cross-document scheduling and serialized refill — releases v30–v36
+
+The blind-project queue exposed two generic barriers between accepted quantity
+meaning and an engineering comparison. First, professional source roles were
+not consistently reduced to design and commercial comparison sides, and a
+commercial filename could be weakened by an earlier generic role. Second,
+settled quantity observations were excluded from a later cross-document pass
+because their single-source semantic review was mistaken for proof that their
+relationship to another source had already been reviewed.
+
+Commits `6c7734e`, `123338a`, `2e3d570`, `65c29d7`, `7b54c18`, `ac05ced` and
+`aeb60ce` correct those generic selection rules. The scheduler now recognizes
+professional Russian document roles, preserves the stronger commercial role,
+reuses settled quantities as bounded semantic context, prioritizes
+design-commercial pairs within the same construction family, and keeps Qwen
+responsible for deciding whether the two scopes are actually comparable.
+Numeric similarity is never a scheduling or compatibility signal.
+
+The first autonomous mixed-source batch under this policy compared a design
+drilling count with a commercial Far North percentage. Qwen correctly returned
+`DIFFERENT_SCOPE`; no quantity discrepancy was created. A later autonomous
+`\u041f\u0414`/`\u0412\u041e\u0420` batch for asphalt-cover demolition established a
+`COMPONENT_VS_TOTAL` relationship and identified the transmitted `127.2 m2`
+value as a component of the stated `274.7 m2` total while explicitly noting
+that the other `147.5 m2` component was absent from the bounded batch.
+Deterministic arithmetic remains responsible for any eventual consistency
+decision.
+
+Runtime observation also found a scheduler race: the completion hook and the
+orchestrator safety sweep could both observe an idle workspace and each create
+four jobs. Commit `3a4c205067c67ab83293d7a1bf188e99104e85d8` serializes the
+refill decision with the existing transaction-scoped advisory lock and repeats
+the idle check inside that lock. Exact-SHA CI run `37077883733` passed.
+
+Release `tender-refill-lock-v36-model-v65` is active from
+`~/.asd-kontur/public-demo/releases/20261003-3a4c205-refill-lock-v36` at
+migration head `0111_reviewed_quantity_source_value`. The last v35 worker job
+was allowed to persist its terminal receipt before the worker switch. The first
+and second autonomous v36 refill cycles each created exactly four jobs, rather
+than the previous duplicated set of eight; Qwen claimed the jobs without a
+developer queue, retry or successor command. The first v36 cross-document
+result is job `01a0feff-6a03-7b3d-bfbe-6b9b7b0ed009`, result digest
+`sha256:385b6f9303a9d3b5dd7b3d7bed9c40e58d39d74e43d93aa8a6ea88216865882e`.
+
+Qwen PID `93554` and NTD worker PID `98263` were not restarted. The platform
+memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The v36 release receipt
+SHA-256 is
+`e0a1969f90e1c27216866460eded1cf3237f7c486c40b59c35b6fb1150c51c18`.
+
+This closes the observed refill race and proves autonomous mixed-source scope
+review. It does not yet prove a complete generalized Tender result or the
+independent unseen-project gate. Current status remains:
+`GeneralizedTenderHarness=false`, `AutonomousProjectProcessing=true`,
+`ProductReady=false`.
+
 ## Procurement and participant-context checkpoint — release 2d64726
 
 The next P1 slice addresses professional-report contamination that was visible
