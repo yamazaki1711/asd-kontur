@@ -69,6 +69,7 @@ def test_contract_analysis_accepts_risk_and_leaves_benign_clause_unflagged() -> 
                     "recommended_action": (
                         "Предусмотреть продление срока при задержке документации."
                     ),
+                    "replacement_source_text": source["loc-b"],
                     "proposed_contractor_wording": (
                         "Срок продлевается на период задержки передачи рабочей "
                         "документации Заказчиком."
@@ -168,6 +169,7 @@ def test_contract_analysis_requires_wording_for_disagreement() -> None:
                     "description": "Односторонний отказ не содержит компенсационного механизма.",
                     "practical_consequence": "Подрядчик может понести неподтверждённые затраты.",
                     "recommended_action": "Согласовать компенсацию подтверждённых затрат.",
+                    "replacement_source_text": source["loc-z"],
                     "proposed_contractor_wording": None,
                     "disagreement_required": True,
                     "confidence": 0.8,
@@ -213,6 +215,35 @@ def test_contract_analysis_rejects_missing_term_inference_from_bounded_context()
     )
 
     with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_invalid"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
+    source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
+    clause = {
+        "clause_ref": "8.1",
+        "source_text": source["loc-one"],
+        "source_locator_ids": ["loc-one"],
+        "category": "warranty",
+    }
+    risk = {
+        "clause_ref": "8.1",
+        "kind": "uncontrolled_obligation",
+        "basis": "explicit_clause_text",
+        "risk_mechanism": "customer_controlled_deadline",
+        "trigger_text": "Заказчик единолично устанавливает срок устранения недостатков",
+        "severity": "medium",
+        "description": "Срок определяется одной стороной.",
+        "practical_consequence": "Срок может быть технически неисполнимым.",
+        "recommended_action": "Согласовать объективный срок.",
+        "replacement_source_text": source["loc-one"],
+        "proposed_contractor_wording": "Стороны согласовывают разумный срок устранения.",
+        "disagreement_required": True,
+        "confidence": 0.9,
+    }
+    raw = json.dumps({"clauses": [clause], "risks": [risk, risk]}, ensure_ascii=False)
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_revision_invalid"):
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 

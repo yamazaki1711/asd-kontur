@@ -365,6 +365,7 @@ class TenderContractAnalysisRepository:
                             "issue_id": issue_id,
                             "issue_version": 1,
                             "proposed_clause_text": proposed,
+                            "replacement_source_text": risk.get("replacement_source_text"),
                             "consequence_code": risk.get("practical_consequence"),
                             "uncertainty_issue_ids": [],
                         }
@@ -381,6 +382,7 @@ class TenderContractAnalysisRepository:
                             "issue_version": 1,
                             "disagreement_item_id": item_id,
                             "revised_text": proposed,
+                            "replacement_source_text": risk.get("replacement_source_text"),
                         }
                     )
         status = "analyzing" if active else "drafted" if results else "analysis_pending"

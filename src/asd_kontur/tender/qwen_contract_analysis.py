@@ -203,6 +203,7 @@ def parse_contract_analysis(
     if not isinstance(risks_raw, list):
         raise QwenSemanticFailure("qwen_contract_risks_invalid")
     risks: list[dict[str, object]] = []
+    disagreement_clause_refs: set[str] = set()
     source_text_by_clause = {str(item["clause_ref"]): str(item["source_text"]) for item in clauses}
     for raw_risk in risks_raw:
         if not isinstance(raw_risk, dict):
@@ -231,8 +232,22 @@ def parse_contract_analysis(
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
         disagreement = raw_risk.get("disagreement_required")
         proposed = _optional_text(raw_risk.get("proposed_contractor_wording"))
-        if not isinstance(disagreement, bool) or (disagreement and not proposed):
+        replacement_source_text = _optional_text(raw_risk.get("replacement_source_text"))
+        exact_replacement_source = (
+            _resolve_exact_source_quote(
+                replacement_source_text or "", source_text_by_clause[clause_ref]
+            )
+            if replacement_source_text
+            else None
+        )
+        if (
+            not isinstance(disagreement, bool)
+            or (disagreement and (not proposed or exact_replacement_source is None))
+            or (disagreement and clause_ref in disagreement_clause_refs)
+        ):
             raise QwenSemanticFailure("qwen_contract_risk_revision_invalid")
+        if disagreement:
+            disagreement_clause_refs.add(clause_ref)
         risks.append(
             {
                 "clause_ref": clause_ref,
@@ -245,6 +260,7 @@ def parse_contract_analysis(
                 "practical_consequence": _optional_text(raw_risk.get("practical_consequence")),
                 "recommended_action": _optional_text(raw_risk.get("recommended_action")),
                 "proposed_contractor_wording": proposed,
+                "replacement_source_text": exact_replacement_source,
                 "disagreement_required": disagreement,
                 "confidence": float(confidence),
                 "uncertainty": _optional_text(raw_risk.get("uncertainty")),
@@ -355,9 +371,10 @@ def _prompt(rows: list[dict[str, object]]) -> str:
 CONTEXT является ограниченной частью документа. Отсутствие реквизита, условия или значения в CONTEXT не доказывает его отсутствие во всём договоре. Не формируй риск только на основании того, что продолжение таблицы, пункта, раздела или приложения не попало в CONTEXT. Этот этап принимает только риск, который прямо создаётся формулировкой условия в CONTEXT. Отсутствующий во всём договоре механизм проверяется отдельным итоговым этапом после анализа всех частей.
 Для каждого риска basis должен быть только explicit_clause_text, а trigger_text — дословная непрерывная цитата именно той формулировки source_text, которая создаёт риск. Число, объём или цена сами по себе не доказывают отсутствие порядка их изменения. Если точного trigger_text нет, не добавляй риск.
 Если нужна редакция Подрядчика, она должна быть конкретной и соответствовать исходному пункту.
+Для disagreement_required=true укажи replacement_source_text: дословный непрерывный фрагмент source_text, который полностью заменяется proposed_contractor_wording. Если один пункт содержит несколько связанных рисков, верни один объединённый риск и одну согласованную редакцию этого пункта; не создавай две замены одного clause_ref.
 
 Верни только JSON:
-{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","basis":"explicit_clause_text","risk_mechanism":"customer_controlled_payment|customer_controlled_acceptance|customer_controlled_deadline|unbounded_scope|unbounded_duration|contractor_bears_customer_cause|asymmetric_remedy|uncontrolled_third_party_dependency|project_facts_conflict|other_explicit_exposure","trigger_text":"точная опасная формулировка из source_text","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
+{{"clauses":[{{"clause_ref":"номер или локальная метка","section":"раздел или null","source_text":"точная цитата","source_locator_ids":["id"],"category":"scope|customer_obligation|contractor_obligation|deadline|payment|price|acceptance|liability|warranty|change_procedure|termination|security|insurance|documentation|other","customer_obligation":"... или null","contractor_obligation":"... или null","condition":"... или null"}}],"risks":[{{"clause_ref":"ссылка на clause_ref","kind":"payment_dependency|uncontrolled_obligation|unclear_acceptance|unpaid_change|deadline_exposure|one_sided_liability|excessive_warranty|unlimited_liability|asymmetric_termination|missing_price_adjustment|customer_input_dependency|open_ended_documentation|project_contract_conflict|other_contract_risk","basis":"explicit_clause_text","risk_mechanism":"customer_controlled_payment|customer_controlled_acceptance|customer_controlled_deadline|unbounded_scope|unbounded_duration|contractor_bears_customer_cause|asymmetric_remedy|uncontrolled_third_party_dependency|project_facts_conflict|other_explicit_exposure","trigger_text":"точная опасная формулировка из source_text","severity":"low|medium|high|critical","description":"что неясно или опасно","practical_consequence":"практическое последствие для Подрядчика","recommended_action":"что уточнить или изменить","replacement_source_text":"точный заменяемый фрагмент source_text или null","proposed_contractor_wording":"конкретная редакция или null","disagreement_required":true,"confidence":0.0,"uncertainty":"... или null"}}]}}
 
 CONTEXT:
 {json.dumps(rows, ensure_ascii=False, separators=(",", ":"))}

@@ -38,7 +38,9 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
             str(revision.get("source_clause_version", "")),
         )
         clause = clauses.get(identity)
-        source_text = "" if clause is None else str(clause.get("source_text") or "")
+        source_text = str(revision.get("replacement_source_text") or "")
+        if not source_text and clause is not None:
+            source_text = str(clause.get("source_text") or "")
         revised_text = str(revision.get("revised_text") or "")
         if not source_text.strip() or not revised_text.strip():
             raise RevisedContractCandidateError("revised_contract_exact_clause_text_unavailable")

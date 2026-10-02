@@ -168,6 +168,26 @@ def test_revised_contract_rejects_ambiguous_clause_match() -> None:
         render_revised_contract_candidate_docx(source, _view(repeated))
 
 
+def test_revised_contract_uses_explicit_replacement_source_span() -> None:
+    first = "5.5. Документ подписывается Подрядчиком не позднее одного часа."
+    continuation = "Датой поступления документа считается дата его размещения."
+    source = _source_docx(first, continuation)
+    view = _view(f"{first} {continuation}")
+    revisions = view["revised_clauses"]
+    assert isinstance(revisions, list)
+    revisions[0]["replacement_source_text"] = first
+
+    revised = render_revised_contract_candidate_docx(source, view)
+
+    assert _paragraphs(revised) == [
+        (
+            "4.2. Заказчик передаёт площадку не позднее пяти рабочих дней; "
+            "просрочка продлевает срок выполнения работ."
+        ),
+        continuation,
+    ]
+
+
 def test_product_projection_advertises_only_verified_exact_candidate() -> None:
     original_clause = "7.3. Заказчик передаёт исходные данные после подписания договора."
     source_id = "71000000-0000-4000-8000-000000000091"
