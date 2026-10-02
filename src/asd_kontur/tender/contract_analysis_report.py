@@ -217,6 +217,16 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
 
     assessment = _mapping(view.get("assessment"))
     source_names = _joined(assessment.get("source_names")) or "Источник договора не указан"
+    project_context = _mapping(view.get("project_context"))
+    participant_rows = [
+        (
+            str(ordinal),
+            str(item.get("label") or item.get("field") or "Участник"),
+            str(item.get("value") or "Требует уточнения"),
+            _fact_source_reference(item),
+        )
+        for ordinal, item in enumerate(_records(project_context.get("participants")), start=1)
+    ]
     body = [
         _heading("ПРОТОКОЛ РАЗНОГЛАСИЙ", "Title"),
         _paragraph(f"Исходные документы: {source_names}."),
@@ -224,6 +234,13 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
             "Рабочая редакция Подрядчика. Документ подготовлен для профессиональной "
             "юридической проверки и согласования; он не является подписанным соглашением сторон."
         ),
+        _heading("Объект и стороны", "Heading1"),
+        _table(
+            ("№", "Роль", "Наименование", "Источник"),
+            participant_rows,
+            "Сведения о сторонах требуют уточнения; отсутствующие реквизиты не подставлены.",
+        ),
+        _heading("Предлагаемые изменения", "Heading1"),
         _table(
             (
                 "№",

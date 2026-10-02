@@ -134,6 +134,13 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
             }
         ],
         "project_context": {
+            "participants": [
+                {
+                    "label": "Заказчик",
+                    "value": "ООО «Северный заказчик»",
+                    "sources": [{"document": "Changed-contract-terms.docx", "page": 1}],
+                }
+            ],
             "time_requirements": [
                 {
                     "label": "Срок выполнения работ",
@@ -164,6 +171,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "source-independent-91" in document
         assert "Changed-contract-terms.docx" in document
         assert "locator-independent-311" in document
+        assert "ООО «Северный заказчик»" in document
         assert "evidence-independent-808" in document
         assert "PROFESSIONAL_REVIEW_REQUIRED" in document
         assert "не заменяет юридическое заключение" in document
@@ -183,3 +191,5 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "Acceptance depends on an undefined Customer review period." in document
         assert "Changed-contract-terms.docx" in document
         assert "locator-independent-311" in document
+        assert "ООО «Северный заказчик»" in document
+        assert "Объект и стороны" in document
