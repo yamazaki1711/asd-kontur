@@ -69,8 +69,11 @@ class ProjectOrchestrator:
         self._stopping = False
 
     def _next_scopes(self) -> tuple[tuple[UUID, UUID, str, datetime], ...]:
-        discovered = self._repository.autonomous_project_processing_scopes(
-            limit=self._discovery_limit
+        discovered = tuple(
+            sorted(
+                self._repository.autonomous_project_processing_scopes(limit=self._discovery_limit),
+                key=lambda scope: (scope[0].int, scope[1].int),
+            )
         )
         if len(discovered) <= self._scope_limit:
             self._scope_cursor = 0

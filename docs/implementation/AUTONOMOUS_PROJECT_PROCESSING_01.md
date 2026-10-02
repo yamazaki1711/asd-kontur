@@ -212,7 +212,8 @@ blind workspace continued correctly. This was not a Qwen or queue-claim
 failure; it was starvation in scope discovery.
 
 The orchestrator now discovers up to the existing hard bound of 64 active
-scopes and rotates a 16-workspace execution window on successive sweeps. The
+scopes, applies a stable organization/workspace order and rotates a 16-workspace
+execution window on successive sweeps. The
 per-sweep database/model scheduling load remains bounded, while all currently
 discoverable active workspaces receive reconciliation. Restarting the
 supervised service resets only the cursor; the first and subsequent sweeps
