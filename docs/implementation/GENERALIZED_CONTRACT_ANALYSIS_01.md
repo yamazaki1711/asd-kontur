@@ -361,3 +361,45 @@ batch, and 36 queued batches. Qwen's completed-request counter advanced from
 414 to 419 during observation and it remained in `QWEN_GENERATING`; this is a
 productive bounded repair/analysis sequence, not an idle or hung model. No
 manual successor, retry, reconciliation, or queue-refill command was issued.
+
+## 2026-10-02 v7 controlled activation
+
+The later v6 observation exposed a second generic bounded-response failure:
+`qwen_contract_risk_revision_invalid` after the schema-repair pass. The v7
+analyzer now applies its existing recursive context split to that failure as
+well as source-quote and output-budget failures. Each child result still has to
+pass the complete exact-source, exact adverse-effect and single-revision
+validator; a one-locator invalid result still fails closed. A changed-clause
+test demonstrates two independent valid child revisions without using the
+blind corpus. Exact-SHA CI run `36968115791` passed for
+`f42324775dd7079d7f6e22a85ac06571686a0471`.
+
+Before public migration the application services were stopped and a fresh
+physical backup was created at
+`~/.asd-kontur/public-demo/backups/pre-f423247-contract-v7-20261002T1728/public-before-f423247.dump`.
+Its SHA-256 is
+`5d992e6425d9d22f364f5020c05a63bfa79243debbd470d6b8a2e61fbd212e46`.
+The public database then advanced transactionally from 0103 to
+`0104_contract_adverse_effect_text`. The platform-memory fingerprint remained
+exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and NTD remained exactly 319 succeeded jobs. Qwen PID 93554 and the independent
+NTD worker PID 98263 were not restarted.
+
+The worker's in-process SIGTERM handler did not provide a true launchd drain:
+`launchctl bootout` removed the process while it was waiting on batch 22. Qwen
+was not killed and completed the bounded request, but the disconnected result
+was not persisted. The expired durable lease is recoverable and this behavior
+is retained as an operational limitation rather than described as a graceful
+drain. No accepted result was lost.
+
+API, worker, assistant worker and project orchestrator now run from the pinned
+release
+`~/.asd-kontur/public-demo/releases/20261002-f423247-contract-v7` at exact SHA
+`f42324775dd7079d7f6e22a85ac06571686a0471`. Readiness returned HTTP 200 with
+migration 0104, and the built JavaScript asset returned HTTP 200. Without a
+manual queue or model command, the restarted worker terminalled superseded v6
+inputs, the orchestrator created 50 immutable v7 inputs for the real blind
+contract, and Qwen completed the first three before starting batch 4. Those
+three results contained two exact clauses and no risks, which is appropriate
+for the opening document context rather than a manufactured finding.
