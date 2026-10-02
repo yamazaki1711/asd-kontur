@@ -179,6 +179,19 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert "qwen-contract-analysis-v8" in contract_profile_constraint
                 assert "qwen-contract-analysis-v9" in contract_profile_constraint
                 assert "qwen-contract-analysis-v10" in contract_profile_constraint
+                work_profile_constraint = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid="
+                            "'workspace.project_work_reconciliation_results'::regclass "
+                            "AND conname="
+                            "'project_work_reconciliation_results_profile_version_check'"
+                        )
+                    )
+                )
+                assert "qwen-project-work-reconciliation-v20" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v21" in work_profile_constraint
                 expected_claim_indexes = {
                     "ix_durable_jobs_successor_lineage",
                     "ix_durable_jobs_workspace_model_service",
