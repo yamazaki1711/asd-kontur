@@ -1218,3 +1218,53 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Reviewed scaled-unit source-pair guard — release fac32ca
+
+The first autonomous blind-project result after the reviewed-unit release
+exposed a generic numeric safety defect. The semantic review correctly copied
+the exact estimate unit `100 m3`, but it did not return an exact source numeric
+token. The earlier extractor had retained an unscaled candidate value and unit.
+The project projection combined those independently sourced fields and rendered
+the value after applying the scale factor. This produced a false tenfold-scale
+professional quantity even though the same semantic result correctly marked the
+row as not comparable.
+
+Commit `fac32ca4fa01f97d4400a505ea879d470e3d7341` makes the deterministic
+projection conservative. A reviewed scaled unit may replace an unscaled
+extracted unit only when the review also contains an exact validated source
+value. If extraction already captured the identical scaled unit, retaining that
+scale remains valid. Reviewed unscaled physical-unit corrections continue to
+work, and percentages remain excluded. This policy is independent of project
+names, document names and expected values. The engineering model version is
+`project-engineering-model-v65`.
+
+The focused projection suite passed 120 tests, the full unit suite passed 1,136
+tests, and exact-SHA CI run `37063552877` passed including PostgreSQL integration
+and browser E2E. The immutable code-only release is
+`~/.asd-kontur/public-demo/releases/20261003-fac32ca-scaled-unit-guard-v26`;
+the migration head remains `0111_reviewed_quantity_source_value`.
+
+The same persisted blind-project observation that previously rendered a false
+`10000 m3` now renders conservatively as `100 m3`, retains no invented source
+value, and remains `DIFFERENT_SCOPE` until a later semantic review establishes a
+valid counterpart. The first autonomous post-activation job,
+`01a0fe30-e03d-75f3-a6a8-21769d7484e8`, completed in 54.308102 seconds with one
+Qwen call, no recovery code, and terminal result digest
+`sha256:b5734a0d65f164938eccfd6390cd33760d0da2f2894ca2f5b90e6688bc381108`.
+No developer queue, retry, successor or priority command was issued.
+
+Qwen PID `93554` and NTD worker PID `98263` were preserved. API readiness
+passes at migration head `0111_reviewed_quantity_source_value`. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the lifecycle platform fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`26c8169098e423775a71bb06551f056c998b4d44f2554a6bf059b24d4d2e8403`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
