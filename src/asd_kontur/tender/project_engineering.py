@@ -4618,26 +4618,41 @@ def _issues(
     for comparison in material_comparisons:
         if comparison.get("classification") == "MATERIAL_MATCH":
             continue
+        facility_established = bool(comparison.get("facility_id"))
+        material = str(comparison.get("material") or "материала")
+        facility = str(comparison.get("facility") or "место применения требует уточнения")
         locators = [str(value) for value in comparison.get("source_locator_ids") or ()]
         issues.append(
             {
                 "issue_id": str(comparison["material_comparison_id"]),
                 "finding_kind": ProfessionalFindingKind.MATERIAL_MISMATCH,
-                "kind": "Различие характеристик материала",
-                "location": comparison.get("facility"),
-                "subject": f"{comparison.get('work')} — {comparison.get('material')}",
+                "kind": (
+                    "Различие характеристик материала"
+                    if facility_established
+                    else "Возможное различие характеристик материала"
+                ),
+                "location": facility,
+                "subject": f"{comparison.get('work')} — {material}",
                 "description": comparison.get("description"),
                 "practical_consequence": (
-                    "Различие характеристик влияет на состав поставки, цену и приёмку материала."
+                    "После подтверждения единого места применения различие характеристик "
+                    "может повлиять на состав поставки, цену и приёмку материала."
+                    if not facility_established
+                    else "Различие характеристик влияет на состав поставки, цену и приёмку "
+                    "материала."
                 ),
                 "recommended_action": (
-                    f"Просим подтвердить требуемые характеристики {comparison.get('material')} "
-                    f"для {comparison.get('facility')} и привести к одному значению "
-                    "проект и ВОР/смету."
+                    f"Просим подтвердить, относятся ли указанные характеристики материала "
+                    f"«{material}» к одному месту применения ({facility}); при подтверждении "
+                    "привести проект и коммерческие документы к одному значению."
                 ),
                 "source_locator_ids": locators,
                 "sources": _source_refs(locators, source_context),
-                "status": "Установленное расхождение маркировки",
+                "status": (
+                    "Установленное расхождение маркировки"
+                    if facility_established
+                    else "Требуется подтвердить сопоставимость и место применения"
+                ),
             }
         )
     for comparison in _professional_quantity_issue_comparisons(comparisons):
