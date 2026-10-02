@@ -429,6 +429,100 @@ def test_contract_analysis_rejects_customer_deadline_without_customer_control() 
         parse_contract_analysis(raw, allowed_text_by_locator=source)
 
 
+def test_contract_analysis_rejects_overpayment_restitution_as_unpaid_changed_work() -> None:
+    source = {
+        "loc-restitution": (
+            "Подрядчик возвращает излишне полученную оплату, если контрольным обмером "
+            "установлен фактически выполненный объём меньше оплаченного."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "3.7",
+                    "source_text": source["loc-restitution"],
+                    "source_locator_ids": ["loc-restitution"],
+                    "category": "payment",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "3.7",
+                    "kind": "unpaid_change",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "other_explicit_exposure",
+                    "trigger_text": "Подрядчик возвращает излишне полученную оплату",
+                    "adverse_effect_text": (
+                        "фактически выполненный объём меньше оплаченного"
+                    ),
+                    "severity": "medium",
+                    "description": "Возврат переплаты ошибочно принят за неоплату изменений.",
+                    "practical_consequence": "Ошибочно предполагается неоплата работ.",
+                    "recommended_action": "Добавить отдельный порядок оплаты изменений.",
+                    "replacement_source_text": source["loc-restitution"],
+                    "proposed_contractor_wording": "Оплачивать все изменённые работы.",
+                    "disagreement_required": True,
+                    "confidence": 0.9,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_risk_controller_not_grounded"):
+        parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+
+def test_contract_analysis_keeps_explicit_unpaid_additional_work_risk() -> None:
+    source = {
+        "loc-change": (
+            "Дополнительные работы, выполненные без письменного согласования Заказчика, "
+            "не подлежат оплате."
+        )
+    }
+    raw = json.dumps(
+        {
+            "clauses": [
+                {
+                    "clause_ref": "4.4",
+                    "source_text": source["loc-change"],
+                    "source_locator_ids": ["loc-change"],
+                    "category": "change_procedure",
+                }
+            ],
+            "risks": [
+                {
+                    "clause_ref": "4.4",
+                    "kind": "unpaid_change",
+                    "basis": "explicit_clause_text",
+                    "risk_mechanism": "customer_controlled_payment",
+                    "trigger_text": (
+                        "Дополнительные работы, выполненные без письменного согласования "
+                        "Заказчика"
+                    ),
+                    "adverse_effect_text": "не подлежат оплате",
+                    "severity": "high",
+                    "description": "Оплата дополнительных работ зависит от согласования.",
+                    "practical_consequence": "Подрядчик может выполнить неоплаченный объём.",
+                    "recommended_action": "Установить письменную процедуру изменения объёма.",
+                    "replacement_source_text": source["loc-change"],
+                    "proposed_contractor_wording": (
+                        "Дополнительные работы выполняются после письменного изменения цены."
+                    ),
+                    "disagreement_required": True,
+                    "confidence": 0.95,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    result = parse_contract_analysis(raw, allowed_text_by_locator=source)
+
+    assert result["risks"][0]["kind"] == "unpaid_change"
+
+
 def test_contract_analysis_rejects_two_replacement_proposals_for_one_clause() -> None:
     source = {"loc-one": "8.1. Заказчик единолично устанавливает срок устранения недостатков."}
     clause = {

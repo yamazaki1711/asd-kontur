@@ -596,3 +596,12 @@ delays) and correctly formed passive wording (set or approved by the Customer).
 A changed notice-delivery case proves that a dative recipient reference cannot
 pass as Customer control, while the existing unilateral-deadline controls
 remain accepted.
+
+The return-of-overpayment false positive is now also blocked by deterministic
+source grounding rather than prompt wording alone. A result classified as
+`unpaid_change` cannot be accepted from text that only describes restitution
+of an overpayment or an amount above measured actual work, unless the same
+exact selected text explicitly concerns payment for additional or changed
+work. The rule is independent of clause numbering, parties, project identity
+and quantities. A changed restitution example is rejected, while a changed
+example that explicitly denies payment for additional work remains accepted.

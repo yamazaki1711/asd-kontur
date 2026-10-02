@@ -101,6 +101,22 @@ _ORDINARY_PAYMENT_DENIAL_TERMS = (
     "not payable",
     "payment shall not be made",
 )
+_OVERPAYMENT_RESTITUTION_TERMS = (
+    "излишне",
+    "переплат",
+    "сверх фактического объема",
+    "сверх фактического объёма",
+    "завышен",
+    "overpayment",
+    "overpaid",
+    "excess payment",
+)
+_CHANGED_WORK_PAYMENT_EXPOSURE = re.compile(
+    r"(?:дополнительн\w*.{0,35}работ|измененн\w*.{0,35}работ|"
+    r"изменени\w*.{0,20}объ[её]м\w*.{0,20}работ|"
+    r"(?:additional|changed|varied).{0,35}work)",
+    flags=re.IGNORECASE,
+)
 _CUSTOMER_CONTROL_ACTION = re.compile(
     r"(?:заказчик\w*.{0,80}(?:устанавлива|определя|утвержда|изменя|назнача|"
     r"согласов|задерж|переда|предоставля|подписыва)|"
@@ -271,6 +287,7 @@ def parse_contract_analysis(
             raise QwenSemanticFailure("qwen_contract_risk_invalid")
         if not contract_risk_controller_is_grounded(
             {
+                "kind": kind,
                 "risk_mechanism": risk_mechanism,
                 "trigger_text": trigger_text,
                 "adverse_effect_text": adverse_effect_text,
@@ -346,6 +363,16 @@ def contract_risk_controller_is_grounded(risk: Mapping[str, object]) -> bool:
             str(risk.get("adverse_effect_text") or ""),
         )
     ).casefold()
+    if (
+        str(risk.get("kind") or "") == "unpaid_change"
+        and any(term in combined for term in _OVERPAYMENT_RESTITUTION_TERMS)
+        and not _CHANGED_WORK_PAYMENT_EXPOSURE.search(combined)
+    ):
+        # A duty to return a measured overpayment is ordinary restitution. It
+        # does not establish that additional or changed work will go unpaid.
+        # The latter risk needs explicit changed-work payment language in the
+        # exact source selected by the model.
+        return False
     if (
         mechanism == "customer_controlled_payment"
         and any(term in combined for term in _EARLY_PERFORMANCE_TERMS)
