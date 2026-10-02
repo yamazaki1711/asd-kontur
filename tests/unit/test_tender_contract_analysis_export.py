@@ -93,8 +93,10 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         "issues": [
             {
                 "issue_id": "issue-independent-11",
+                "issue_version": 1,
                 "issue_kind": "contract_risk",
                 "subject": "Acceptance deadline",
+                "description": "Acceptance depends on an undefined Customer review period.",
                 "applicability": "applicable",
                 "recommendation_text": "Define one evidence-backed acceptance period.",
                 "consequence_code": "payment_delay",
@@ -105,6 +107,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "item_id": "item-independent-4",
                 "clause_id": "clause-independent-7",
                 "clause_version": 2,
+                "issue_id": "issue-independent-11",
+                "issue_version": 1,
                 "proposed_clause_text": "Accept within seven working days.",
                 "consequence_code": "payment_delay",
                 "uncertainty_issue_ids": ["issue-independent-11"],
@@ -138,3 +142,6 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "evidence-independent-808" in document
         assert "PROFESSIONAL_REVIEW_REQUIRED" in document
         assert "не заменяет юридическое заключение" in document
+        assert "Обоснование / практическая причина" in document
+        assert "Acceptance depends on an undefined Customer review period." in document
+        assert "Define one evidence-backed acceptance period." in document

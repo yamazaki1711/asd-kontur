@@ -24,12 +24,19 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         str(item.get("disagreement_item_id", "")): item
         for item in _records(view.get("revised_clauses"))
     }
+    issues = tuple(_records(view.get("issues")))
+    issue_by_identity = {
+        (str(item.get("issue_id", "")), str(item.get("issue_version", ""))): item for item in issues
+    }
     disagreement_rows: list[tuple[str, str, str, str, str, str, str]] = []
     for ordinal, item in enumerate(_records(view.get("disagreement_items")), start=1):
         clause = clause_by_identity.get(
             (str(item.get("clause_id", "")), str(item.get("clause_version", ""))), {}
         )
         revised = revised_by_item.get(str(item.get("item_id", "")), {})
+        issue = issue_by_identity.get(
+            (str(item.get("issue_id", "")), str(item.get("issue_version", ""))), {}
+        )
         disagreement_rows.append(
             (
                 str(ordinal),
@@ -37,7 +44,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 _source_reference(clause),
                 str(revised.get("revised_text") or item.get("proposed_clause_text") or ""),
-                str(item.get("consequence_code") or "Не указано"),
+                _disagreement_basis(issue, item),
                 _joined(item.get("uncertainty_issue_ids")) or "Нет зарегистрированных кодов",
             )
         )
@@ -52,7 +59,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             str(item.get("recommendation_text") or "Требуется уточнение"),
             str(item.get("consequence_code") or "Не указано"),
         )
-        for ordinal, item in enumerate(_records(view.get("issues")), start=1)
+        for ordinal, item in enumerate(issues, start=1)
     ]
     deliverable_rows = [
         (
@@ -100,7 +107,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                     "Редакция Заказчика",
                     "Источник",
                     "Предлагаемая редакция",
-                    "Практическое последствие",
+                    "Обоснование / практическая причина",
                     "Неопределённость",
                 ),
                 disagreement_rows,
@@ -139,6 +146,15 @@ def _source_reference(clause: Mapping[str, Any]) -> str:
         ("Уровень полномочий", clause.get("authority_layer")),
     )
     return "; ".join(f"{label}: {value}" for label, value in values if value) or "Не привязан"
+
+
+def _disagreement_basis(issue: Mapping[str, Any], item: Mapping[str, Any]) -> str:
+    values = (
+        ("Риск", issue.get("description")),
+        ("Практическое последствие", issue.get("consequence_code") or item.get("consequence_code")),
+        ("Рекомендуемое действие", issue.get("recommendation_text")),
+    )
+    return "; ".join(f"{label}: {value}" for label, value in values if value) or "Не указано"
 
 
 def _document_xml(body: Iterable[str]) -> bytes:
