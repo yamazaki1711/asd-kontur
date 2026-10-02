@@ -29,6 +29,7 @@ from asd_kontur.application_spine.postgres import (
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
     _quantities_requiring_semantic_review,
+    _quantity_comparison_context_policy,
     _quantity_relationship_batches,
     _semantic_extraction_priority,
     _semantic_recovery_stalled,
@@ -673,6 +674,46 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
 
     assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
     assert mixed == {"design-mixed", "commercial-mixed"}
+
+
+def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
+    quantity = {
+        "candidate_id": "quantity-design",
+        "version": 2,
+        "normalized_value": "74.25",
+        "normalized_unit": "m3",
+    }
+    existing = {
+        "candidate_version": 4,
+        "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "quantity-design",
+                "quantity_candidate_version": 2,
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "semantic_scope": "Объём монолитной плиты",
+            }
+        ],
+    }
+
+    selected, context_only = _quantity_comparison_context_policy(
+        existing=existing,
+        candidate_version=4,
+        linked_quantities=[quantity],
+        mixed_source_reviewed=False,
+    )
+    selected_after_mixed, context_after_mixed = _quantity_comparison_context_policy(
+        existing=existing,
+        candidate_version=4,
+        linked_quantities=[quantity],
+        mixed_source_reviewed=True,
+    )
+
+    assert selected == [quantity]
+    assert context_only is True
+    assert selected_after_mixed == []
+    assert context_after_mixed is False
 
 
 def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:

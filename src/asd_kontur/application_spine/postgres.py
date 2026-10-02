@@ -616,6 +616,29 @@ def _work_reconciliation_attempt_sets(
     return attempted, mixed_source_reviewed
 
 
+def _quantity_comparison_context_policy(
+    *,
+    existing: Mapping[str, Any] | None,
+    candidate_version: int,
+    linked_quantities: Iterable[Mapping[str, Any]],
+    mixed_source_reviewed: bool,
+) -> tuple[list[dict[str, Any]], bool]:
+    """Select outstanding quantities or reusable settled comparison context."""
+
+    quantities = [dict(value) for value in linked_quantities]
+    if existing is None or int(existing.get("candidate_version") or 0) != candidate_version:
+        return quantities, False
+    profile = str(existing.get("profile_version") or "")
+    pending = _quantities_requiring_semantic_review(quantities, existing)
+    context_only = bool(
+        profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
+        and quantities
+        and not pending
+        and not mixed_source_reviewed
+    )
+    return (quantities if context_only else pending), context_only
+
+
 def _deterministic_scope_requires_semantic_review(
     *,
     deterministic_family: tuple[str, str] | None,
@@ -5971,25 +5994,20 @@ class SpinePostgresRepository:
                 if not candidate_id or not wording or non_work_reason(wording) is not None:
                     continue
                 existing = prior.get(candidate_id)
-                comparison_context_only = candidate_id in attempted_candidate_ids
-                if comparison_context_only:
-                    # Ordinary semantic work remains single-pass. A settled
-                    # row may return exactly once as context when no durable
-                    # mixed design/commercial job has considered its quantity
-                    # scope. Failed work remains with bounded recovery.
-                    if (
-                        candidate_id in mixed_source_reviewed_candidate_ids
-                        or existing is None
-                        or not all_linked_quantities
-                    ):
-                        continue
+                linked_quantities, comparison_context_only = _quantity_comparison_context_policy(
+                    existing=existing,
+                    candidate_version=version,
+                    linked_quantities=all_linked_quantities,
+                    mixed_source_reviewed=(candidate_id in mixed_source_reviewed_candidate_ids),
+                )
+                if candidate_id in attempted_candidate_ids and not comparison_context_only:
+                    # Current-profile active/failed work remains the bounded
+                    # retry/replacement policy's responsibility. Do not turn
+                    # it into a second classification attempt.
+                    continue
                 if existing is not None and int(existing.get("candidate_version") or 0) == version:
                     existing_profile = str(existing.get("profile_version") or "")
                     existing_status = str(existing.get("status") or "")
-                    if not comparison_context_only:
-                        linked_quantities = _quantities_requiring_semantic_review(
-                            linked_quantities, existing
-                        )
                     if existing_profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES:
                         if not linked_quantities and not comparison_context_only:
                             continue
