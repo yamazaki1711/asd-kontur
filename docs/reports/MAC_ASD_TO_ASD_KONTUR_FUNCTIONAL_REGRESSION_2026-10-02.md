@@ -36,6 +36,19 @@ legacy code attempted to produce are absent or remain partial. Conversely,
 several legacy claims were demo-grade, synthetic, jurisdictionally stale, or
 unsafe and must not be restored as-is.
 
+### Restoration checkpoint — 2026-10-02 14:49 +12
+
+The P0 contract row is no longer a projection without an engine. The current
+autonomous Tender path identifies admitted contract documents by content,
+creates bounded local-Qwen clause/risk jobs, persists exact-source candidates,
+and progressively exposes contractor risks and proposed wording. The live blind
+contract has independently produced two source-bound risk/change proposals, and
+the partial editable disagreement protocol contains them. Completion remains
+`PRESERVED_BUT_INCOMPLETE` until the effective real-contract batch set
+converges, the complete protocol and revised-contract candidate pass content
+acceptance, and the signed-in browser flow is verified. The historical
+classification below is retained as the audit baseline rather than rewritten.
+
 ## Method and evidence boundary
 
 The audit inspected the legacy source, tests and product documents named in the

@@ -66,6 +66,32 @@ The cross-repository user-result audit is recorded in
   source length (1,800 to 5,000 tokens). A single long source range no longer
   receives the same output allowance as one short clause; the limit remains
   finite and is reused for the one permitted schema-repair attempt.
+- Contract profile v4 preserves native table rows as atomic semantic inputs.
+  The blind contract exposed a commercial row whose quantity and price columns
+  had previously been separated from its work description by generic layout
+  batching. The corrected context now keeps the full admitted row together;
+  no document name, work name, quantity, or expected finding is encoded.
+- Contract profile v5 accepts a risk only when it cites an explicit continuous
+  trigger from the admitted clause text. A bounded fragment's failure to mention
+  a price-adjustment or change mechanism is no longer treated as proof that the
+  complete contract omits it. Typographic quote/dash substitutions may be
+  resolved back to the exact admitted source slice; lexical changes and
+  paraphrases still fail closed.
+- Output-exhausted contract batches are recursively divided into smaller
+  source-preserving groups and their structured results are merged
+  deterministically. Duplicate local clause labels remain distinct during the
+  merge. Model arithmetic and unbounded output are not introduced.
+- The candidate projection now selects the newest immutable attempt for each
+  exact input digest. Historical retry-exhausted receipts remain queryable but
+  cannot permanently block a successful autonomous replacement. Proposed
+  Contractor wording appears progressively as a clearly marked partial draft;
+  the revised-contract file remains unavailable until all effective current
+  batches are terminal-successful.
+- A supervised-worker circuit breaker pauses further model claims after a local
+  Qwen runtime outage instead of consuming retry budgets across the queue. The
+  autonomous orchestrator creates bounded replacement attempts for historical
+  runtime outages, exact-source typography failures, and output exhaustion; it
+  never rewrites the failed attempt.
 - Joined candidate contract risks and proposed Contractor wording into the
   primary Tender findings schedule, report, and analysis archive. The join is
   transient and workspace-scoped; it does not promote model output into the
@@ -112,19 +138,42 @@ The persistent Qwen process and independent NTD worker were preserved. After
 the project-worker restart at an idle model boundary, v4 document-role work
 continued without a developer progression command.
 
-On the real blind workspace, v4 document-role reclassification is still
-running autonomously. The orchestrator created 20 recovery jobs after the v4
-release; ten had succeeded at the 2026-10-02 01:02 UTC observation. No
-owner-known finding or document-specific rule has been introduced. The actual
-draft contract has not yet completed its v4 role decision at this observation
-point, so a real blind contract finding cannot yet be claimed.
+On the real blind workspace, the actual `Проект_контракта.docx` was identified
+autonomously as a contract and scheduled as 50 bounded v5 analysis inputs. At
+the 2026-10-02 14:49 +12 observation, the effective current lineage contained
+8 succeeded inputs, 1 running input and 41 queued inputs, with no effective
+failed input. The ledger still retains the superseded outage failures. Qwen had
+persisted 16 exact clause candidates and two explicit contractor-risk
+candidates without a manual queue or model command:
+
+1. clause 2.5 makes payment conditional on budget limits made available to the
+   Customer, creating a payment/cash-flow exposure if those limits are absent
+   or insufficient;
+2. clause 2.5.2 uses “in full or the missing part” for advance repayment after
+   partial performance, without an explicit link to the value of work already
+   performed and accepted.
+
+Both findings carry the exact source clause, trigger text, consequence,
+recommended action and proposed Contractor wording. The current Russian DOCX
+projection re-opened successfully through macOS text extraction and contains
+both rows, while marking the protocol `partial_draft` and the revised contract
+as a clause-change schedule. ZIP/package integrity passed. Visual page
+rendering remains unverified because LibreOffice is not installed and the
+available Quick Look preview did not complete.
+
+API release `67264392fbcdc8369dcb655cf452903885e51773` exposes the progressive
+projection. Project worker, assistant worker and project orchestrator release
+`32a1e2402e4b06c00ec94d2edbcffcab24a876cf` performs bounded recovery and
+continued live v5 processing without restarting Qwen or the NTD worker.
+Exact-SHA CI run `36956436183` passed for the worker/orchestrator release;
+the progressive API release CI was still running at this observation.
 
 The remaining acceptance work is:
 
-1. observe autonomous contract discovery and multiple live Qwen batches on the
-   current blind project, with no manual queue command;
-2. inspect the independently generated blind-project findings and editable
-   DOCX;
+1. allow all effective v5 batches to converge and inspect the remaining
+   independently generated blind-project findings;
+2. generate and inspect the complete disagreement protocol and exact-source
+   revised-contract candidate after convergence;
 3. perform a visual page qualification of the generated protocol when an
    approved local renderer is available;
 4. qualify the format-aware revised-contract candidate against the real blind
