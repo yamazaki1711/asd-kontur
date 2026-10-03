@@ -2408,7 +2408,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v65"
+    assert model["model_version"] == "project-engineering-model-v66"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4584,6 +4584,58 @@ def test_concrete_material_comparison_is_scoped_by_facility_work_and_strength_cl
         "commercial-concrete",
         "design-concrete",
     ]
+
+
+def test_unassigned_exact_material_match_requires_isolated_source_rows() -> None:
+    source_context = dict(
+        [
+            _source("design-a", "Design A.pdf", 3),
+            _source("design-b", "Design B.pdf", 7),
+            _source("commercial", "Commercial schedule.pdf", 2),
+        ]
+    )
+    base_work = {
+        "work_scope_id": "unassigned-drainage",
+        "facility_id": None,
+        "facility": "Location unresolved",
+        "work_name": "Drainage bedding",
+    }
+
+    isolated = _material_comparisons(
+        [
+            {
+                **base_work,
+                "materials_by_document": {
+                    "РД": [{"name": "Washed gravel", "source_locator_id": "design-a"}],
+                    "ВОР": [
+                        {"name": "Washed gravel", "source_locator_id": "commercial"}
+                    ],
+                },
+            }
+        ],
+        source_context,
+    )
+    assert len(isolated) == 1
+    assert isolated[0]["classification"] == "MATERIAL_MATCH"
+
+    aggregated = _material_comparisons(
+        [
+            {
+                **base_work,
+                "materials_by_document": {
+                    "РД": [
+                        {"name": "Washed gravel", "source_locator_id": "design-a"},
+                        {"name": "Washed gravel", "source_locator_id": "design-b"},
+                    ],
+                    "ВОР": [
+                        {"name": "Washed gravel", "source_locator_id": "commercial"}
+                    ],
+                },
+            }
+        ],
+        source_context,
+    )
+    assert aggregated == []
 
 
 def test_semantic_material_resource_comparison_survives_non_work_source_rows() -> None:

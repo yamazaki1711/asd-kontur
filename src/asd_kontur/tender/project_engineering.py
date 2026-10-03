@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v65"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v66"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -4604,6 +4604,17 @@ def _material_comparisons(
                 for identity in sorted(identities):
                     design_values = exact_by_role[design_role][identity]
                     commercial_values = exact_by_role[commercial_role][identity]
+                    # A work family without an established location can collect
+                    # repeated material mentions from several structures.  An
+                    # exact normalized material name is not enough to make that
+                    # aggregate one engineering scope.  Retain the useful
+                    # project-level comparison only when each side is isolated;
+                    # otherwise wait for facility/scope reconciliation instead
+                    # of publishing a false material match.
+                    if not work.get("facility_id") and (
+                        len(design_values) != 1 or len(commercial_values) != 1
+                    ):
+                        continue
                     design_quantity = _one_material_quantity(design_values)
                     commercial_quantity = _one_material_quantity(commercial_values)
                     classification = "MATERIAL_MATCH"
