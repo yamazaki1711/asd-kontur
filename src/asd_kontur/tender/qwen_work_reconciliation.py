@@ -215,6 +215,7 @@ class QwenProjectWorkReconciler:
         single_retry_available: bool = True,
         relationship_context_complete: bool = True,
         expanded_relationship_budget: bool = False,
+        scope_repair_attempts_remaining: int = 2,
         relationship_schema_retry_available: bool = True,
         relationship_repair_code: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
@@ -319,18 +320,26 @@ class QwenProjectWorkReconciler:
         except QwenSemanticFailure as exc:
             if exc.code not in _RECOVERABLE_RESPONSE_FAILURES:
                 raise
-            # Cross-document authority belongs to the exact design/commercial
-            # pair.  The pair is indivisible for *every* recoverable response
-            # failure, including output exhaustion: singleton repair cannot
-            # establish a reciprocal scope decision.  First retry an exhausted
-            # response with the established bounded ceiling, then allow one
-            # schema-directed intact repair.  If both fail, preserve both rows
-            # as unresolved instead of spending inference on invalid singletons.
+            # A work-scope decision is defined by the exact design/commercial
+            # pair. Splitting a rejected pair into single rows can never produce
+            # reciprocal authority. Keep that pair intact and permit at most two
+            # bounded repairs (three model calls total). A second schema repair is
+            # useful only when validation has advanced to a different typed
+            # defect; repeating the same rejected shape would spend inference
+            # without adding authority. Output exhaustion may consume the first
+            # repair and switches the remaining calls to the established ceiling.
             if (
                 scope_review
                 and len(rows) == 2
-                and not expanded_relationship_budget
-                and exc.code == "qwen_semantic_response_output_exhausted"
+                and scope_repair_attempts_remaining > 0
+                and (
+                    relationship_repair_code is None
+                    or exc.code != relationship_repair_code
+                    or (
+                        exc.code == "qwen_semantic_response_output_exhausted"
+                        and not expanded_relationship_budget
+                    )
+                )
             ):
                 observations, call_count, codes = self._reconcile_rows(
                     rows,
@@ -340,23 +349,7 @@ class QwenProjectWorkReconciler:
                     single_retry_available=single_retry_available,
                     relationship_context_complete=relationship_context_complete,
                     expanded_relationship_budget=True,
-                    relationship_schema_retry_available=relationship_schema_retry_available,
-                    relationship_repair_code=exc.code,
-                )
-                return observations, call_count + 1, [exc.code, *codes]
-            # A work-scope decision is defined by the exact design/commercial
-            # pair. Splitting a rejected pair into single rows can never produce
-            # reciprocal authority, so repair the same two-row context once.
-            if scope_review and len(rows) == 2 and relationship_schema_retry_available:
-                observations, call_count, codes = self._reconcile_rows(
-                    rows,
-                    work_families=work_families,
-                    facilities=facilities,
-                    relationship_review=relationship_review,
-                    single_retry_available=single_retry_available,
-                    relationship_context_complete=relationship_context_complete,
-                    expanded_relationship_budget=True,
-                    relationship_schema_retry_available=False,
+                    scope_repair_attempts_remaining=scope_repair_attempts_remaining - 1,
                     relationship_repair_code=exc.code,
                 )
                 return observations, call_count + 1, [exc.code, *codes]

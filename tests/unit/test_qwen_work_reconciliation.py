@@ -196,6 +196,142 @@ def test_cross_document_scope_schema_repair_keeps_exact_pair_intact(
     assert all(value.get("work_scope_assertions") for value in result["observations"])
 
 
+def test_cross_document_scope_repairs_two_distinct_validation_failures(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        response_number = len(prompts)
+        compatibility = "SAME_SCOPE"
+        normalized_operation = (
+            "Восстановление покрытия моста" if response_number == 2 else "Bridge deck resurfacing"
+        )
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "roadworks",
+                        "operation": "Восстановление покрытия моста",
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": "Обе строки описывают восстановление покрытия моста.",
+                        **(
+                            {
+                                "work_scope_assertions": [
+                                    {
+                                        "related_candidate_id": (
+                                            "commercial-deck"
+                                            if candidate_id == "design-deck"
+                                            else "design-deck"
+                                        ),
+                                        "scope_compatibility": compatibility,
+                                        "normalized_operation": normalized_operation,
+                                        "reason": (
+                                            "Обе строки описывают один объём восстановления."
+                                        ),
+                                    }
+                                ]
+                            }
+                            if response_number > 1
+                            else {}
+                        ),
+                    }
+                    for candidate_id in ("design-deck", "commercial-deck")
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-deck",
+                "wording": "Bridge deck resurfacing",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-deck",
+                "wording": "Renew bridge deck surface",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"roadworks": "Road works"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 3
+    assert "qwen_work_reconciliation_work_scope_assertions_invalid" in prompts[1]
+    assert "qwen_work_reconciliation_work_scope_operation_ungrounded" in prompts[2]
+    assert result["inference_call_count"] == 3
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_work_scope_assertions_invalid",
+        "qwen_work_reconciliation_work_scope_operation_ungrounded",
+    ]
+    assert {
+        value["work_scope_assertions"][0]["scope_compatibility"] for value in result["observations"]
+    } == {"SAME_SCOPE"}
+
+
+def test_cross_document_scope_does_not_repeat_same_rejected_schema(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Монтаж стальных связей",
+                        "facility": None,
+                        "confidence": "0.90",
+                        "reason": "Обе строки относятся к стальным связям.",
+                    }
+                    for candidate_id in ("design-bracing", "commercial-bracing")
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-bracing",
+                "wording": "Steel cross bracing",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-bracing",
+                "wording": "Install steel diagonal bracing",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"structural_steel": "Structural steel"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_work_scope_assertions_invalid",
+        "qwen_work_reconciliation_work_scope_assertions_invalid",
+        "qwen_work_reconciliation_scope_pair_unresolved",
+    ]
+    assert all(value["status"] == "UNCLASSIFIED" for value in result["observations"])
+
+
 def test_cross_document_scope_rejects_operation_taken_only_from_nearby_context(
     monkeypatch: Any,
 ) -> None:
