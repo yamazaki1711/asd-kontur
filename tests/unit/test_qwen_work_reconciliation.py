@@ -831,9 +831,7 @@ def test_quantity_relationship_repairs_unsupported_numeric_alternative(
 
     assert len(prompts) == 2
     assert "Различие значений само по себе не является альтернативой" in prompts[1]
-    assert result["recovery_codes"] == [
-        "qwen_work_reconciliation_alternative_evidence_missing"
-    ]
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_alternative_evidence_missing"]
     assert {
         review["scope_compatibility"]
         for observation in result["observations"]
@@ -992,9 +990,7 @@ def test_quantity_relationship_repairs_same_scope_operation_mismatch(
     )
 
     assert len(prompts) == 2
-    assert result["recovery_codes"] == [
-        "qwen_work_reconciliation_same_scope_operation_mismatch"
-    ]
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_same_scope_operation_mismatch"]
     assert {observation["operation"] for observation in result["observations"]} == {
         "Гидроизоляция перекрытия"
     }

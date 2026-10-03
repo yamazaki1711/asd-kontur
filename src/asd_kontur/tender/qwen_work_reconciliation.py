@@ -751,8 +751,7 @@ def _validate_relationship_consistency(
                     str(value) for value in review.get("related_quantity_candidate_ids") or ()
                 )
                 evidence = " ".join(
-                    quantity_context_by_id.get(value, "")
-                    for value in (quantity_id, *related_ids)
+                    quantity_context_by_id.get(value, "") for value in (quantity_id, *related_ids)
                 )
                 if _EXPLICIT_ALTERNATIVE_EVIDENCE.search(evidence) is None:
                     raise QwenSemanticFailure(
@@ -763,7 +762,9 @@ def _validate_relationship_consistency(
                     str(review.get("semantic_scope") or "").casefold().split()
                 )
                 if semantic_scope and operation:
-                    same_scope_operations.setdefault(semantic_scope, set()).add(operation.casefold())
+                    same_scope_operations.setdefault(semantic_scope, set()).add(
+                        operation.casefold()
+                    )
     if any(len(operations) > 1 for operations in same_scope_operations.values()):
         raise QwenSemanticFailure("qwen_work_reconciliation_same_scope_operation_mismatch")
 
