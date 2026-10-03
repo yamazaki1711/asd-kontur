@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v27"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v28"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -42,6 +42,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v24",
     "qwen-project-work-reconciliation-v25",
     "qwen-project-work-reconciliation-v26",
+    "qwen-project-work-reconciliation-v27",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
@@ -84,6 +85,10 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_output_unexpected",
         "qwen_work_reconciliation_quantity_output_incomplete",
         "qwen_work_reconciliation_quantity_output_invalid",
+        "qwen_work_reconciliation_quantity_core_invalid",
+        "qwen_work_reconciliation_quantity_source_unit_invalid",
+        "qwen_work_reconciliation_quantity_source_value_invalid",
+        "qwen_work_reconciliation_quantity_relation_ids_invalid",
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_material_output_invalid",
         "qwen_semantic_response_incomplete",
@@ -251,6 +256,10 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_component_completeness_invalid",
                     "qwen_work_reconciliation_quantity_output_incomplete",
                     "qwen_work_reconciliation_quantity_output_invalid",
+                    "qwen_work_reconciliation_quantity_core_invalid",
+                    "qwen_work_reconciliation_quantity_source_unit_invalid",
+                    "qwen_work_reconciliation_quantity_source_value_invalid",
+                    "qwen_work_reconciliation_quantity_relation_ids_invalid",
                 }
             ):
                 observations, call_count, codes = self._reconcile_rows(
@@ -420,12 +429,31 @@ def _prompt(
     )
     relationship_repair_instruction = ""
     if relationship_repair_code:
+        repair_detail = {
+            "qwen_work_reconciliation_quantity_core_invalid": (
+                "Проверьте обязательные поля, перечисленные значения enum и уникальность "
+                "quantity_candidate_id."
+            ),
+            "qwen_work_reconciliation_quantity_source_unit_invalid": (
+                "source_unit либо дословно скопируйте из ближайшего контекста, либо верните null."
+            ),
+            "qwen_work_reconciliation_quantity_source_value_invalid": (
+                "source_value либо скопируйте как один числовой токен из ближайшего контекста "
+                "с исходным десятичным разделителем, либо верните null."
+            ),
+            "qwen_work_reconciliation_quantity_relation_ids_invalid": (
+                "В related_quantity_candidate_ids используйте только переданные UUID: для "
+                "TOTAL_FOR перечислите компоненты, для COMPONENT_OF/SUBTOTAL_OF — итог; для "
+                "NONE верните пустой список."
+            ),
+        }.get(relationship_repair_code, "")
         relationship_repair_instruction = (
             "Предыдущий ответ для ТОГО ЖЕ полного пакета отклонён валидатором схемы с кодом "
             f"{relationship_repair_code}. Не сокращайте и не разбивайте пакет. Верните все строки "
             "заново. Для TOTAL_FOR укажите непустые related_quantity_candidate_ids и булево "
             "component_set_complete. Для COMPONENT_OF/SUBTOTAL_OF укажите связанный итог и "
-            "component_set_complete=null. Для NONE список связей должен быть пустым."
+            "component_set_complete=null. Для NONE список связей должен быть пустым. "
+            f"{repair_detail}"
         )
     return f"""Вы анализируете извлечённые описания российского строительного проекта.
 Для КАЖДОЙ входной строки определите, является ли она строительной операцией, к какому виду работ
@@ -744,7 +772,7 @@ def _parse_quantity_reviews(
             or not isinstance(related, list)
             or not reason
         ):
-            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_core_invalid")
         if source_unit is not None:
             context = (source_context_by_id or {}).get(candidate_id, "")
             normalized_context = _normalized_unit_evidence(context)
@@ -754,11 +782,11 @@ def _parse_quantity_reviews(
                 or not normalized_source_unit
                 or normalized_source_unit not in normalized_context
             ):
-                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_source_unit_invalid")
         if source_value is not None:
             context = (source_context_by_id or {}).get(candidate_id, "")
             if len(source_value) > 80 or not _source_numeric_token_present(source_value, context):
-                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+                raise QwenSemanticFailure("qwen_work_reconciliation_quantity_source_value_invalid")
         if relationship_review:
             if relation_kind == QuantityRelation.TOTAL_FOR:
                 if not isinstance(component_set_complete, bool):
@@ -781,7 +809,7 @@ def _parse_quantity_reviews(
             or (relation_kind == QuantityRelation.NONE and related_ids)
             or (relation_kind != QuantityRelation.NONE and not related_ids)
         ):
-            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_output_invalid")
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_relation_ids_invalid")
         reviews[candidate_id] = {
             "quantity_candidate_id": candidate_id,
             "status": status,

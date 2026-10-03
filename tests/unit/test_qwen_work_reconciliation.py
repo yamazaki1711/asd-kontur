@@ -1532,7 +1532,76 @@ def test_qwen_work_reconciliation_rejects_invented_cross_row_quantity_identity(
     assert result["observations"][0]["status"] == "UNCLASSIFIED"
     assert result["observations"][0]["quantity_reviews"][0]["relation_kind"] == "NONE"
     assert result["observations"][0]["quantity_reviews"][0]["related_quantity_candidate_ids"] == []
-    assert "qwen_work_reconciliation_quantity_output_invalid" in result["recovery_codes"]
+    assert "qwen_work_reconciliation_quantity_relation_ids_invalid" in result["recovery_codes"]
+
+
+def test_quantity_relationship_repair_names_invalid_source_unit(monkeypatch: Any) -> None:
+    rows = [
+        {
+            "candidate_id": "candidate-total",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Общая площадь покрытия",
+            "deterministic_family_hint": "roadworks",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "quantity-total",
+                    "value": "45,0/2,25",
+                    "unit": "м2/м3",
+                    "nearby_context": "Общая площадь покрытия м2/м3 45,0/2,25",
+                }
+            ],
+        }
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        source_unit = "тонн" if len(prompts) == 1 else "м2"
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "candidate-total",
+                        "status": "MATCHED",
+                        "family_key": "roadworks",
+                        "operation": "Устройство покрытия",
+                        "facility": None,
+                        "confidence": "0.9",
+                        "reason": "Переданная операция сохранена.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "quantity-total",
+                                "status": "WORK_QUANTITY",
+                                "source_value": "45,0",
+                                "source_unit": source_unit,
+                                "semantic_scope": "Общая площадь покрытия",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Источник явно указывает площадь.",
+                            }
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"roadworks": "Дорожные работы"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert "qwen_work_reconciliation_quantity_source_unit_invalid" in prompts[1]
+    assert "source_unit либо дословно скопируйте" in prompts[1]
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_quantity_source_unit_invalid"]
+    assert result["observations"][0]["quantity_reviews"][0]["source_unit"] == "м2"
 
 
 def test_qwen_work_reconciliation_preserves_input_when_model_invents_identity(
