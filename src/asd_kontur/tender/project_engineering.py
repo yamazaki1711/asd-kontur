@@ -3138,9 +3138,7 @@ def _work_schedule(
                     "scope_compatibility": review.get("scope_compatibility"),
                     "relationship_reviewed": review.get("relationship_reviewed"),
                     "component_set_complete": review.get("component_set_complete"),
-                    "relationship_assertions": list(
-                        review.get("relationship_assertions") or ()
-                    ),
+                    "relationship_assertions": list(review.get("relationship_assertions") or ()),
                     "reason": review.get("reason"),
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
@@ -3740,10 +3738,7 @@ def _component_total_comparisons(
                         continue
                     related = tuple(
                         str(item)
-                        for item in relationship_value.get(
-                            "related_quantity_candidate_ids"
-                        )
-                        or ()
+                        for item in relationship_value.get("related_quantity_candidate_ids") or ()
                     )
                     if relation is QuantityRelation.NONE or not related:
                         continue

@@ -9917,13 +9917,9 @@ def _merged_quantity_reviews(
                     continue
                 relation_kind = str(source.get("relation_kind") or "NONE")
                 related_ids = tuple(
-                    str(item)
-                    for item in source.get("related_quantity_candidate_ids") or ()
-                    if item
+                    str(item) for item in source.get("related_quantity_candidate_ids") or () if item
                 )
-                compatibility = str(
-                    source.get("scope_compatibility") or "INSUFFICIENT_INFORMATION"
-                )
+                compatibility = str(source.get("scope_compatibility") or "INSUFFICIENT_INFORMATION")
                 if (
                     source.get("relationship_reviewed") is not True
                     or relation_kind == "NONE"
@@ -9937,11 +9933,7 @@ def _merged_quantity_reviews(
                     "related_quantity_candidate_ids": list(related_ids),
                     "scope_compatibility": compatibility,
                     "relationship_reviewed": True,
-                    **(
-                        {"component_set_complete": complete}
-                        if complete is not None
-                        else {}
-                    ),
+                    **({"component_set_complete": complete} if complete is not None else {}),
                 }
             if assertions:
                 combined["relationship_assertions"] = list(assertions.values())

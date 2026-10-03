@@ -1364,9 +1364,7 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
                                 },
                                 {
                                     "relation_kind": "DUPLICATE_OF",
-                                    "related_quantity_candidate_ids": [
-                                        "commercial-manual"
-                                    ],
+                                    "related_quantity_candidate_ids": ["commercial-manual"],
                                     "scope_compatibility": "SAME_SCOPE",
                                     "relationship_reviewed": True,
                                 },
