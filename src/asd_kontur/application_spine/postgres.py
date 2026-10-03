@@ -549,6 +549,7 @@ def _quantity_relationship_batches(
     *,
     batch_size: int,
     max_batches: int,
+    attempted_pairs: set[tuple[str, str]] | None = None,
 ) -> tuple[list[list[dict[str, Any]]], set[str]]:
     """Select bounded quantity groups for a dedicated semantic relation pass.
 
@@ -558,6 +559,7 @@ def _quantity_relationship_batches(
     used as evidence of compatibility.
     """
 
+    attempted_pairs = attempted_pairs or set()
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for raw in rows:
         row = dict(raw)
@@ -566,7 +568,9 @@ def _quantity_relationship_batches(
         family = str(row.get("deterministic_family_hint") or "")
         if not family:
             continue
-        hints = tuple(str(value) for value in row.get("facility_hints") or ())
+        hints = tuple(
+            str(value).strip() for value in row.get("facility_hints") or () if str(value).strip()
+        )
         location = hints[0] if len(hints) == 1 else "unassigned"
         groups[(location, family)].append(row)
 
@@ -587,7 +591,7 @@ def _quantity_relationship_batches(
     )
     batches: list[list[dict[str, Any]]] = []
     selected: set[str] = set()
-    for _key, values in ordered_groups:
+    for (location, _family), values in ordered_groups:
         if len(batches) >= max_batches:
             break
         ordered = sorted(
@@ -617,10 +621,27 @@ def _quantity_relationship_batches(
             if document_comparison_side(row.get("document_role"), row.get("document"))
             == "commercial"
         ]
+        eligible_pairs = [
+            (design, commercial)
+            for design in design_rows
+            for commercial in commercial_rows
+            if tuple(
+                sorted(
+                    (
+                        str(design.get("candidate_id") or ""),
+                        str(commercial.get("candidate_id") or ""),
+                    )
+                )
+            )
+            not in attempted_pairs
+            and (
+                location != "unassigned" or any(_relationship_pair_affinity(design, commercial)[:3])
+            )
+        ]
         seeds: list[dict[str, Any]] = []
-        if design_rows and commercial_rows:
+        if eligible_pairs:
             design_seed, commercial_seed = max(
-                ((design, commercial) for design in design_rows for commercial in commercial_rows),
+                eligible_pairs,
                 key=lambda pair: (
                     _relationship_pair_affinity(*pair),
                     str(pair[0].get("candidate_id") or ""),
@@ -628,8 +649,10 @@ def _quantity_relationship_batches(
                 ),
             )
             seeds.extend((design_seed, commercial_seed))
-        elif ordered:
+        elif not design_rows or not commercial_rows:
             seeds.append(ordered[0])
+        else:
+            continue
         batch: list[dict[str, Any]] = []
         quantity_count = 0
         for row in [*seeds, *ordered]:
@@ -667,19 +690,19 @@ def _quantity_relationship_batches(
 
 def _work_reconciliation_attempt_sets(
     manifests: Iterable[Mapping[str, Any]],
-) -> tuple[set[str], set[str]]:
-    """Return all attempted candidates and those given mixed-source context.
+) -> tuple[set[str], set[tuple[str, str]]]:
+    """Return attempted candidates and exact attempted relationship pairs.
 
     Candidate-level attempt accounting prevents ordinary accepted semantic
     work from being replayed.  Cross-document quantity compatibility is a
     separate question, however: two individually reviewed rows may never have
-    appeared together.  The second set records the durable proof that a
-    candidate has already received a bounded design/commercial relationship
-    pass, without deriving authority from the model result itself.
+    appeared together, and one rejected pair must not prevent either row from
+    being compared with another source. The second set therefore records exact
+    design/commercial pairs, not candidate-level completion authority.
     """
 
     attempted: set[str] = set()
-    mixed_source_reviewed: set[str] = set()
+    attempted_relationship_pairs: set[tuple[str, str]] = set()
     for raw_manifest in manifests:
         observations = raw_manifest.get("work_observations") or ()
         if not isinstance(observations, list):
@@ -700,8 +723,26 @@ def _work_reconciliation_attempt_sets(
             for value in rows
         )
         if relationship_task and sides == {"design", "commercial"}:
-            mixed_source_reviewed.update(candidate_ids)
-    return attempted, mixed_source_reviewed
+            design_ids = {
+                str(value.get("candidate_id"))
+                for value in rows
+                if document_comparison_side(value.get("document_role"), value.get("document"))
+                == "design"
+                and value.get("candidate_id")
+            }
+            commercial_ids = {
+                str(value.get("candidate_id"))
+                for value in rows
+                if document_comparison_side(value.get("document_role"), value.get("document"))
+                == "commercial"
+                and value.get("candidate_id")
+            }
+            attempted_relationship_pairs.update(
+                tuple(sorted((design_id, commercial_id)))
+                for design_id in design_ids
+                for commercial_id in commercial_ids
+            )
+    return attempted, attempted_relationship_pairs
 
 
 def _quantity_comparison_context_policy(
@@ -709,7 +750,6 @@ def _quantity_comparison_context_policy(
     existing: Mapping[str, Any] | None,
     candidate_version: int,
     linked_quantities: Iterable[Mapping[str, Any]],
-    mixed_source_reviewed: bool,
 ) -> tuple[list[dict[str, Any]], bool]:
     """Select outstanding quantities or reusable settled comparison context."""
 
@@ -727,10 +767,7 @@ def _quantity_comparison_context_policy(
     if profile == PROJECT_WORK_RECONCILIATION_PROFILE and pending:
         return pending, True
     context_only = bool(
-        profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
-        and quantities
-        and not pending
-        and not mixed_source_reviewed
+        profile in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES and quantities and not pending
     )
     return (quantities if context_only else pending), context_only
 
@@ -6076,7 +6113,7 @@ class SpinePostgresRepository:
             prior = self._project_work_resolution_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
-            attempted_candidate_ids, mixed_source_reviewed_candidate_ids = (
+            attempted_candidate_ids, attempted_relationship_pairs = (
                 _work_reconciliation_attempt_sets(
                     dict(value)
                     for value in session.execute(
@@ -6115,7 +6152,6 @@ class SpinePostgresRepository:
                     existing=existing,
                     candidate_version=version,
                     linked_quantities=all_linked_quantities,
-                    mixed_source_reviewed=(candidate_id in mixed_source_reviewed_candidate_ids),
                 )
                 if candidate_id in attempted_candidate_ids and not comparison_context_only:
                     # Current-profile active/failed work remains the bounded
@@ -6365,6 +6401,7 @@ class SpinePostgresRepository:
                 prepared,
                 batch_size=batch_size,
                 max_batches=max_batches,
+                attempted_pairs=attempted_relationship_pairs,
             )
             batches = list(relationship_batches)
             remaining_batch_capacity = max_batches - len(batches)

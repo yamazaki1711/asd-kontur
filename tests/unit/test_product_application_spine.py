@@ -672,6 +672,70 @@ def test_quantity_relationship_pair_ranking_never_uses_numeric_similarity() -> N
     ]
 
 
+def test_quantity_relationship_batches_do_not_repeat_attempted_pair() -> None:
+    design = _work_batch_row(
+        "design",
+        facility="",
+        family="pipeline",
+        document_role="ПД",
+        wording="Прокладка стального водовода",
+    )
+    commercial_a = _work_batch_row(
+        "commercial-a",
+        facility="",
+        family="pipeline",
+        document_role="ВОР",
+        wording="Монтаж стального водовода",
+    )
+    commercial_b = _work_batch_row(
+        "commercial-b",
+        facility="",
+        family="pipeline",
+        document_role="Смета",
+        wording="Прокладка водовода из стальных труб",
+    )
+    for row in (design, commercial_a, commercial_b):
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        row["quantity_observations"][0].update(unit="м")
+
+    batches, selected = _quantity_relationship_batches(
+        [design, commercial_a, commercial_b],
+        batch_size=2,
+        max_batches=1,
+        attempted_pairs={("commercial-a", "design")},
+    )
+
+    assert [item["candidate_id"] for item in batches[0]] == ["design", "commercial-b"]
+    assert selected == {"design", "commercial-b"}
+
+
+def test_quantity_relationship_batches_skip_weak_unassigned_family_pair() -> None:
+    design = _work_batch_row(
+        "design",
+        facility="",
+        family="demolition",
+        document_role="ПД",
+        wording="Разборка асфальтового покрытия",
+    )
+    commercial = _work_batch_row(
+        "commercial",
+        facility="",
+        family="demolition",
+        document_role="ВОР",
+        wording="Снос стены из крупных блоков",
+    )
+    for row in (design, commercial):
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        row["quantity_observations"][0].update(unit="м3")
+
+    batches, selected = _quantity_relationship_batches(
+        [design, commercial], batch_size=2, max_batches=1
+    )
+
+    assert batches == []
+    assert selected == set()
+
+
 def test_quantity_relationship_batches_reuse_settled_context_only_for_mixed_review() -> None:
     design = _work_batch_row(
         "settled-design",
@@ -771,7 +835,7 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
     )
 
     assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
-    assert mixed == {"design-mixed", "commercial-mixed"}
+    assert mixed == {("commercial-mixed", "design-mixed")}
 
 
 def test_mixed_source_classification_batch_is_not_relationship_authority() -> None:
@@ -798,7 +862,7 @@ def test_mixed_source_classification_batch_is_not_relationship_authority() -> No
     assert mixed == set()
 
 
-def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
+def test_settled_quantity_remains_available_for_distinct_cross_document_pairs() -> None:
     quantity = {
         "candidate_id": "quantity-design",
         "version": 2,
@@ -823,19 +887,10 @@ def test_settled_quantity_can_return_once_as_cross_document_context() -> None:
         existing=existing,
         candidate_version=4,
         linked_quantities=[quantity],
-        mixed_source_reviewed=False,
-    )
-    selected_after_mixed, context_after_mixed = _quantity_comparison_context_policy(
-        existing=existing,
-        candidate_version=4,
-        linked_quantities=[quantity],
-        mixed_source_reviewed=True,
     )
 
     assert selected == [quantity]
     assert context_only is True
-    assert selected_after_mixed == []
-    assert context_after_mixed is False
 
 
 def test_current_profile_quantity_missing_relationship_is_context_only() -> None:
@@ -862,7 +917,6 @@ def test_current_profile_quantity_missing_relationship_is_context_only() -> None
         existing=existing,
         candidate_version=2,
         linked_quantities=[quantity],
-        mixed_source_reviewed=False,
     )
 
     assert selected == [quantity]
@@ -893,7 +947,6 @@ def test_older_quantity_meaning_is_selected_for_current_cross_document_review() 
         existing=existing,
         candidate_version=3,
         linked_quantities=[quantity],
-        mixed_source_reviewed=False,
     )
 
     assert selected == [quantity]
