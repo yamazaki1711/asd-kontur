@@ -2408,7 +2408,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v67"
+    assert model["model_version"] == "project-engineering-model-v68"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4798,6 +4798,204 @@ def test_project_level_material_comparison_requires_isolated_sources() -> None:
         ],
     )
     assert ambiguous == []
+
+
+def test_project_material_comparison_collapses_repeated_same_page_assertion() -> None:
+    source_context = {
+        "design-east": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "safe_display_name": "Steel design.pdf",
+            "locator_value": {"page": 6},
+        },
+        "design-west": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "safe_display_name": "Steel design.pdf",
+            "locator_value": {"page": 6},
+        },
+        "commercial": {
+            "source_version_id": "source-commercial",
+            "document_version": 1,
+            "safe_display_name": "Commercial scope.pdf",
+            "locator_value": {"page": 2},
+        },
+    }
+    common = {
+        "material_kind": "structural steel",
+        "associated_work_family_key": "structural_steel",
+    }
+
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                **common,
+                "document_role": "РД",
+                "name": "steel",
+                "properties": [{"kind": "GRADE", "value": "S420", "unit": None}],
+                "source_locator_id": "design-east",
+            },
+            {
+                **common,
+                "document_role": "РД",
+                "name": "steel structures",
+                "properties": [{"kind": "GRADE", "value": "S420", "unit": None}],
+                "source_locator_id": "design-west",
+            },
+            {
+                **common,
+                "document_role": "ВОР",
+                "name": "fabricated steel",
+                "properties": [{"kind": "GRADE", "value": "S355", "unit": None}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATERIAL_DIFFERENCE"
+    assert comparisons[0]["property_differences"] == [
+        {"property": "GRADE", "design": ["S420"], "commercial": ["S355"]}
+    ]
+
+
+def test_project_material_comparison_keeps_distinct_same_page_properties_ambiguous() -> None:
+    source_context = {
+        "design-a": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "locator_value": {"page": 4},
+        },
+        "design-b": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "locator_value": {"page": 4},
+        },
+        "commercial": {
+            "source_version_id": "source-commercial",
+            "document_version": 1,
+            "locator_value": {"page": 3},
+        },
+    }
+    common = {
+        "material_kind": "pipe",
+        "associated_work_family_key": "pipeline",
+    }
+
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                **common,
+                "document_role": "ПД",
+                "name": "pipe A",
+                "properties": [{"kind": "DIAMETER", "value": "160", "unit": "mm"}],
+                "source_locator_id": "design-a",
+            },
+            {
+                **common,
+                "document_role": "ПД",
+                "name": "pipe B",
+                "properties": [{"kind": "DIAMETER", "value": "225", "unit": "mm"}],
+                "source_locator_id": "design-b",
+            },
+            {
+                **common,
+                "document_role": "Смета",
+                "name": "pipe",
+                "properties": [{"kind": "DIAMETER", "value": "180", "unit": "mm"}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+
+    assert comparisons == []
+
+
+def test_material_comparison_deduplicates_same_source_pages_across_kind_aliases() -> None:
+    source_context = {
+        "design-a": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "locator_value": {"page": 8},
+        },
+        "design-b": {
+            "source_version_id": "source-design",
+            "document_version": 1,
+            "locator_value": {"page": 8},
+        },
+        "specification": {
+            "source_version_id": "source-specification",
+            "document_version": 1,
+            "locator_value": {"page": 2},
+        },
+        "commercial": {
+            "source_version_id": "source-commercial",
+            "document_version": 1,
+            "locator_value": {"page": 3},
+        },
+    }
+
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "document_role": "РД",
+                "name": "steel",
+                "material_kind": "structural steel",
+                "associated_work_family_key": "structural_steel",
+                "work": "Steel erection",
+                "properties": [{"kind": "GRADE", "value": "S460", "unit": None}],
+                "source_locator_id": "design-a",
+            },
+            {
+                "document_role": "РД",
+                "name": "steelwork",
+                "material_kind": "steelwork",
+                "associated_work_family_key": "structural_steel",
+                "work": "Steel erection",
+                "properties": [{"kind": "GRADE", "value": "S460", "unit": None}],
+                "source_locator_id": "design-b",
+            },
+            {
+                "document_role": "Спецификация",
+                "name": "steel",
+                "material_kind": "structural steel",
+                "associated_work_family_key": "structural_steel",
+                "work": "Steel erection",
+                "properties": [{"kind": "GRADE", "value": "S460", "unit": None}],
+                "source_locator_id": "specification",
+            },
+            {
+                "document_role": "ВОР",
+                "name": "fabricated steel",
+                "material_kind": "structural steel",
+                "associated_work_family_key": "structural_steel",
+                "work": "Steel erection",
+                "properties": [{"kind": "GRADE", "value": "S355", "unit": None}],
+                "source_locator_id": "commercial",
+            },
+            {
+                "document_role": "ВОР",
+                "name": "steel structures",
+                "material_kind": "steelwork",
+                "associated_work_family_key": "structural_steel",
+                "work": "Steel erection",
+                "properties": [{"kind": "GRADE", "value": "S355", "unit": None}],
+                "source_locator_id": "commercial",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 2
+    assert {tuple(comparison["design_roles"]) for comparison in comparisons} == {
+        ("РД",),
+        ("Спецификация",),
+    }
 
 
 def test_non_work_material_resource_is_projected_into_material_schedule() -> None:

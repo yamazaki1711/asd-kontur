@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v67"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v68"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -4260,6 +4260,59 @@ def _scope_comparisons(
     return _deduplicate_dicts(result)
 
 
+def _deduplicate_material_comparisons(
+    comparisons: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Emit one property conflict for one pair of exact source pages.
+
+    Native material extraction and Qwen semantic material review can normalize
+    the same assertion under different material-kind wording. Exact source-page,
+    role, work and property-difference identity is sufficient to suppress that
+    duplicate result; comparisons against another design/specification source
+    remain separate.
+    """
+
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in comparisons:
+        comparison = dict(raw)
+        property_differences = comparison.get("property_differences")
+        if not property_differences:
+            identity = semantic_digest(comparison)
+        else:
+            source_pages = []
+            for locator_id in comparison.get("source_locator_ids") or ():
+                source = dict(source_context.get(str(locator_id)) or {})
+                locator_value = source.get("locator_value")
+                page = (
+                    dict(locator_value).get("page") if isinstance(locator_value, Mapping) else None
+                )
+                source_pages.append(
+                    (
+                        source.get("source_version_id") or str(locator_id),
+                        source.get("document_version"),
+                        page,
+                    )
+                )
+            identity = semantic_digest(
+                {
+                    "classification": comparison.get("classification"),
+                    "facility_id": comparison.get("facility_id"),
+                    "work": _normalized(comparison.get("work")),
+                    "design_roles": comparison.get("design_roles") or (),
+                    "commercial_roles": comparison.get("commercial_roles") or (),
+                    "property_differences": property_differences,
+                    "source_pages": sorted(source_pages),
+                }
+            )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(comparison)
+    return result
+
+
 def _design_scope_covers_commercial_operation(
     design: Mapping[str, Any], commercial: Mapping[str, Any]
 ) -> bool:
@@ -4814,8 +4867,12 @@ def _material_comparisons(
     ):
         for design_role in sorted(design_roles.intersection(values_by_role)):
             for commercial_role in sorted(commercial_roles.intersection(values_by_role)):
-                design_values = values_by_role[design_role]
-                commercial_values = values_by_role[commercial_role]
+                design_values = _deduplicate_material_assertions(
+                    values_by_role[design_role], source_context
+                )
+                commercial_values = _deduplicate_material_assertions(
+                    values_by_role[commercial_role], source_context
+                )
                 # A project-level material statement can legitimately have no
                 # resolved facility.  Compare that scope only when each side is
                 # isolated; otherwise identical material names from different
@@ -4889,7 +4946,61 @@ def _material_comparisons(
                         "sources": _source_refs(locator_ids, source_context),
                     }
                 )
-    return _deduplicate_dicts(result)
+    return _deduplicate_material_comparisons(result, source_context)
+
+
+def _deduplicate_material_assertions(
+    values: Iterable[Mapping[str, Any]],
+    source_context: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Collapse one repeated property assertion from the same source page.
+
+    Bounded Qwen work rows can legitimately share nearby context. When the same
+    material grade/profile is repeated for several component work rows, treating
+    those identical assertions as distinct material scopes blocks an otherwise
+    isolated design/commercial comparison. Distinct properties, pages, source
+    versions, work families, or locations remain separate; no semantic identity
+    is inferred from the numeric/property value itself.
+    """
+
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[object, ...]] = set()
+    for raw in values:
+        value = dict(raw)
+        locator_id = str(value.get("source_locator_id") or "")
+        source = dict(source_context.get(locator_id) or {})
+        locator_value = source.get("locator_value")
+        page = dict(locator_value).get("page") if isinstance(locator_value, Mapping) else None
+        properties = tuple(
+            sorted(
+                (
+                    str(item.get("kind") or ""),
+                    _normalized(item.get("value")),
+                    _normalized(item.get("unit")),
+                )
+                for item in value.get("properties") or ()
+                if isinstance(item, Mapping)
+            )
+        )
+        source_identity: tuple[object, ...] = (
+            source.get("source_version_id"),
+            source.get("document_version"),
+            page,
+        )
+        if not source.get("source_version_id"):
+            source_identity = (locator_id, None, None)
+        identity = (
+            *source_identity,
+            value.get("location_scope_id") or value.get("facility_id"),
+            str(value.get("associated_work_family_key") or ""),
+            _normalized(value.get("material_kind")),
+            properties,
+        )
+        if identity in seen:
+            continue
+        seen.add(identity)
+        result.append(value)
+    return result
 
 
 def _material_property_values(
