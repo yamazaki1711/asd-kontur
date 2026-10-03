@@ -732,6 +732,69 @@ def test_quantity_relationship_batches_rank_semantic_scope_before_unrelated_fami
     assert selected == {"design-fence", "commercial-fence"}
 
 
+def test_quantity_relationship_batch_keeps_related_components_with_selected_total() -> None:
+    component_a = _work_batch_row(
+        "component-a",
+        facility="",
+        family="demolition",
+        document_role="ПД",
+        wording="Демонтаж покрытия на участке сети",
+    )
+    component_a.update(page=21, relationship_review_needed=True, semantic_priority=(80, 1, 1))
+    component_a["quantity_observations"][0].update(
+        value="127.2", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+    )
+    component_b = _work_batch_row(
+        "component-b",
+        facility="",
+        family="demolition",
+        document_role="ПД",
+        wording="Демонтаж покрытия на участке сооружения",
+    )
+    component_b.update(page=21, relationship_review_needed=True, semantic_priority=(70, 1, 1))
+    component_b["quantity_observations"][0].update(
+        value="147.5", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+    )
+    stated_total = _work_batch_row(
+        "total",
+        facility="",
+        family="demolition",
+        document_role="ВОР",
+        wording="Демонтаж покрытия, всего",
+    )
+    stated_total.update(page=30, relationship_review_needed=True, semantic_priority=(100, 1, 1))
+    stated_total["quantity_observations"][0].update(
+        value="274.7", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+    )
+    unrelated = _work_batch_row(
+        "unrelated",
+        facility="",
+        family="demolition",
+        document_role="ПД",
+        wording="Демонтаж железобетонной стены",
+    )
+    unrelated.update(page=2, relationship_review_needed=True, semantic_priority=(99, 1, 1))
+    unrelated["quantity_observations"][0].update(
+        value="102", unit="м3", prior_semantic_scope="Объем демонтажа стены"
+    )
+    source_version = "source-project-package"
+    for row in (component_a, component_b, stated_total, unrelated):
+        row["source_version_id"] = source_version
+
+    batches, selected = _quantity_relationship_batches(
+        [unrelated, component_b, stated_total, component_a],
+        batch_size=3,
+        max_batches=1,
+    )
+
+    assert {item["candidate_id"] for item in batches[0]} == {
+        "component-a",
+        "component-b",
+        "total",
+    }
+    assert selected == {"component-a", "component-b", "total"}
+
+
 def test_quantity_relationship_pair_ranking_never_uses_numeric_similarity() -> None:
     design = _work_batch_row(
         "design",

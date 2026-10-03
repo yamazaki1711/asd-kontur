@@ -727,9 +727,42 @@ def _quantity_relationship_batches(
             )
         )
         seeds = [left_seed, right_seed]
+        # Once the strongest missing relation has selected the batch, keep the
+        # remaining context cohesive with that relation.  A total often needs
+        # two or more component rows; global semantic priority alone could
+        # otherwise fill the bounded batch with unrelated rows from the same
+        # broad work family before an adjacent component reached Qwen.
+        # Source/page proximity is only context assembly.  Qwen still decides
+        # whether any row is a component, duplicate, alternative, or unrelated.
+        context_rows = sorted(
+            ordered,
+            key=lambda row: (
+                max(
+                    (_relationship_pair_affinity(seed, row) for seed in seeds),
+                    default=(0, 0, 0, 0, ()),
+                ),
+                int(
+                    any(
+                        str(row.get("source_version_id") or "")
+                        == str(seed.get("source_version_id") or "")
+                        for seed in seeds
+                    )
+                ),
+                -min(
+                    (
+                        abs(int(row.get("page") or 0) - int(seed.get("page") or 0))
+                        for seed in seeds
+                    ),
+                    default=10**9,
+                ),
+                tuple(row.get("semantic_priority") or (0, 0, 0)),
+                str(row.get("candidate_id") or ""),
+            ),
+            reverse=True,
+        )
         batch: list[dict[str, Any]] = []
         quantity_count = 0
-        for row in [*seeds, *ordered]:
+        for row in [*seeds, *context_rows]:
             candidate_id = str(row.get("candidate_id") or "")
             if (
                 not candidate_id
