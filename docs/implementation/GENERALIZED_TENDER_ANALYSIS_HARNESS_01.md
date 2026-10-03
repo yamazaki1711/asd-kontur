@@ -869,6 +869,37 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Exact pair authority — read-side release 84b72a5
+
+Engineering model v77 closes a comparison-authority defect without changing
+the semantic queue or restarting the local model. For the current v32 semantic
+profile, a top-level `SAME_SCOPE` value no longer authorizes an arbitrary
+design/commercial pair: the two exact quantity candidates must carry reciprocal
+pair-specific `scope_assertions` with `SAME_SCOPE`. Historical accepted profiles
+retain their compatibility path.
+
+The blind workspace continues to expose 10 quantity comparisons, 4 material
+comparisons and 2 professional issues under v77; the stricter rule removed no
+currently accepted result. API and assistant projections run from immutable
+release
+`~/.asd-kontur/public-demo/releases/20261004-84b72a5-pair-authority-v72`.
+The document/project worker and autonomous orchestrator remain on v71 while
+their pre-existing bounded v32 queue drains, so the active Qwen generation was
+not interrupted. Qwen PID `85702` and NTD worker PID `98263` were preserved.
+
+Exact-SHA CI run `37128256620` passed. Migration head remains
+`0119_pair_specific_quantity_scope_profile`. The release receipt SHA-256 is
+`912ec45934c1eda466487b6f2ad82f17e239c13957680fd2ee70397887f449ea`.
+The all-history platform-memory and canonical NTD fingerprints remain
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`
+and
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+the NTD ledger remains exactly 319 succeeded jobs. No manual queue, retry,
+successor, priority or Qwen command was issued.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Pair-specific quantity scope and live persistence repair — release 0c6f880
 
 The user-visible result is that one quantity may now participate in several
