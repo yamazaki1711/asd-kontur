@@ -1481,3 +1481,43 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Cohesive component/total context — release 42aa6ad
+
+Four incremental commits (`ed9a776`, `0a270b2`, `24a48c2`, and `42aa6ad`)
+correct the generic relationship context assembled for quantity semantics.
+After the strongest professional pair is selected, remaining rows are ranked
+by semantic wording, work family, source role and source/page proximity rather
+than numeric similarity. A context containing a total and one established
+component now reserves room for an unresolved candidate, and the bounded
+relationship task may contain three or four rows. Numeric equality is never a
+scheduling signal and Qwen still has to establish every semantic relation.
+
+The current release autonomously scheduled four-row job
+`01a0ff65-d529-7e45-bde5-b5cdf5d9aa32` for the independent steel-gallery
+control workspace `01a0f605-1608-7c9a-8b8a-f13e83a11920`. Qwen identified
+10.1 t and 8.3 t as components of the same 18.4 t design total and marked the
+component set complete. Deterministic Decimal arithmetic then projected
+comparison `sha256:1104de824ab12427c0e56e5b3420e4ac82f364db9d50dd88bb13abbcf22c7795`
+as `MATCH` with zero difference. The same semantic context contained a 17.0 t
+commercial quantity and a different steel grade; Qwen classified it as an
+alternative scope, so deterministic comparison correctly did not manufacture
+a cross-document discrepancy without same-scope authority.
+
+Commit `42aa6add4560c37db7e7b8d9e6c96c86241d42b4` passed exact-SHA CI run
+`37085807855` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261003-42aa6ad-component-closure-v47`.
+The migration head remains `0111_reviewed_quantity_source_value`. Qwen PID
+`93554` and NTD worker PID `98263` were preserved. No developer queue, retry,
+successor, priority or Qwen command was issued. The release receipt SHA-256 is
+`db5fddc01419dc5669f53ef72af7097223549982905e5bcdb55bf9ece92ac864`.
+
+The real blind workspace continues through its pre-existing autonomous
+relationship queue. Its compound measurement case is not yet claimed as
+accepted: the current extractor retained a compound area/volume cell and the
+system must either establish a singular source measure through generic
+semantic review or leave the arithmetic unresolved. No project-specific
+quantity rule has been introduced.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
