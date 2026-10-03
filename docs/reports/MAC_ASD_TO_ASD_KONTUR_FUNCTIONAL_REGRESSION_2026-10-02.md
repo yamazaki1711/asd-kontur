@@ -400,3 +400,25 @@ the original regression classifications or importing legacy legal authority.
 `AutonomousProjectProcessing=true`
 
 `ProductReady=false`
+
+## Commercial-scope recovery checkpoint — release b8b7a9f
+
+The next ordered regression item is now materially cleaner from the user's
+perspective. The Tender work view no longer asks an engineer to interpret 493
+estimate totals, payroll/cost summaries, overhead norms and similar accounting
+rows as if they were construction works. The blind project's unclassified
+work set fell from 904 to 411 while real operations and material positions
+remained visible.
+
+ASD-KONTUR now also understands a full-form local-estimate heading that applies
+to several named facilities as one commercial project scope. It exposes 121
+commercial work scopes at that supported level. It deliberately does not
+pretend that the estimate allocates those items between individual facilities
+when the source does not. Therefore the current result improves the denominator
+for VOR/estimate delta and omitted-work analysis, but does not yet claim a
+facility-specific commercial omission that the documents cannot support.
+
+This is a partial recovery of the legacy VOR/estimate review task, not its
+closure. The remaining product work is to resolve compatible project-wide
+design/commercial scopes and produce professional delta or omission findings
+where the documents provide a defensible comparison.

@@ -869,6 +869,52 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Commercial estimate scope cleanup — release b8b7a9f
+
+Commit `b8b7a9f945c3ed6b311713a1f554959c9e4e1a9a` closes a generic
+commercial-scope defect exposed by the blind project. Estimate accounting
+rows—totals, subtotals, direct-cost summaries, payroll/overhead/profit lines
+and estimate norm references—were being presented as unclassified
+construction work. The deterministic classifier now excludes those rows while
+retaining actual construction operations and material positions. This reduced
+the blind project's unclassified set from 904 to 411: 493 false work rows
+were removed without inventing a work classification.
+
+The commercial-document context parser now recognizes full-form local estimate
+headings, not only abbreviated LSR/VOR labels, and retains the nearby project
+heading. When a heading explicitly addresses several facilities, the model can
+represent one project-wide commercial scope. It does not distribute that scope
+or its quantities among individual facilities unless the source does. The live
+v69 projection consequently contains 121 project-wide commercial work scopes
+and 135 scopes whose location remains unresolved. It produces one
+commercial-only comparison, six matches and 265 unresolved scope matches. No
+new omitted-work finding is claimed: the commercial documents name both
+addressed walls but do not provide a defensible wall-by-wall allocation.
+
+Focused project-engineering validation passed 147 tests, the unit suite passed
+1,209 tests, and mypy passed all 235 checked source files. The full local suite
+passed 1,210 tests with 113 skips; its only unavailable gate required the
+absent `ASD_TEST_DATABASE_URL`. Exact-SHA CI run `37106155942` passed every
+backend, frontend, browser, security and migration gate.
+
+The immutable active release is
+`~/.asd-kontur/public-demo/releases/20261003-b8b7a9f-estimate-scope-v57`.
+Migration head remains `0118_source_grounded_alternative_profile`. API,
+document/project worker, assistant worker and project orchestrator all import
+the release commit. Qwen PID `93554` and NTD worker PID `98263` were preserved.
+The release-receipt SHA-256 is
+`3e7095c14982728a95fb1a24fa0d9e163a17ab9c0eabfb8c3a1cd9f55ce089ed`.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. No developer queue,
+retry, successor, priority or Qwen command was issued.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Cross-document scheduling and serialized refill — releases v30–v36
 
 The blind-project queue exposed two generic barriers between accepted quantity
