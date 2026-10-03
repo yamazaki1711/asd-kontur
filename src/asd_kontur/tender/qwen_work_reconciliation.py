@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v28"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v29"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -43,6 +43,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v25",
     "qwen-project-work-reconciliation-v26",
     "qwen-project-work-reconciliation-v27",
+    "qwen-project-work-reconciliation-v28",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
@@ -390,6 +391,9 @@ def _prompt(
                     "prior_semantic_scope": value.get("prior_semantic_scope"),
                     "prior_quantity_type": value.get("prior_quantity_type"),
                     "prior_status": value.get("prior_status"),
+                    "available_source_measures": _source_measure_options(
+                        value.get("value"), value.get("unit")
+                    ),
                     "peer_quantity_candidate_ids": [
                         candidate_id
                         for candidate_id in all_quantity_candidate_ids
@@ -438,8 +442,11 @@ def _prompt(
                 "source_unit либо дословно скопируйте из ближайшего контекста, либо верните null."
             ),
             "qwen_work_reconciliation_quantity_source_value_invalid": (
-                "source_value либо скопируйте как один числовой токен из ближайшего контекста "
-                "с исходным десятичным разделителем, либо верните null."
+                "Для каждой строки сначала проверьте available_source_measures. Если список "
+                "непустой, source_value и source_unit скопируйте из ОДНОЙ его записи без "
+                "изменений либо верните null. Не возвращайте составную ячейку целиком. Если "
+                "список пуст, source_value либо скопируйте как один числовой токен из "
+                "ближайшего контекста с исходным десятичным разделителем, либо верните null."
             ),
             "qwen_work_reconciliation_quantity_relation_ids_invalid": (
                 "В related_quantity_candidate_ids используйте только переданные UUID: для "
@@ -502,6 +509,9 @@ source_value указывайте только когда переданное v
 выберите только тот числовой токен, который источник прямо связывает с выбранной единицей и
 инженерным смыслом. Копируйте один исходный числовой токен без арифметики; не вычисляйте и не
 выводите значение из формулы. Если точную пару число/единица выбрать нельзя, укажите null.
+available_source_measures содержит только дословные скалярные пары, которые детерминированно
+разделены из составной исходной ячейки. Это не готовый смысловой ответ: выберите запись по
+semantic_scope и инженерному контексту. source_value нельзя возвращать всей составной строкой.
 Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение
@@ -864,3 +874,34 @@ def _source_numeric_token_present(value: object, context: object) -> bool:
         if observed == expected:
             return True
     return False
+
+
+def _source_measure_options(value: object, unit: object) -> list[dict[str, str]]:
+    """Expose exact scalar choices from a compound source cell without interpreting them.
+
+    The separator and token order are native source structure.  This helper never
+    decides which measure is authoritative and never performs arithmetic; Qwen must
+    select a semantically compatible option and the regular source validator still
+    proves that the selected number occurs in bounded context.
+    """
+
+    value_text = " ".join(str(value or "").replace("\xa0", " ").split())
+    unit_text = " ".join(str(unit or "").replace("\xa0", " ").split())
+    if "/" not in value_text:
+        return []
+    value_parts = [part.strip() for part in value_text.split("/")]
+    numeric_pattern = r"[-+]?(?:\d{1,3}(?: \d{3})+|\d+)(?:[.,]\d+)?"
+    if len(value_parts) < 2 or any(
+        not part or re.fullmatch(numeric_pattern, part) is None for part in value_parts
+    ):
+        return []
+
+    unit_parts = [part.strip() for part in unit_text.split("/") if part.strip()]
+    if len(unit_parts) == 1:
+        unit_parts *= len(value_parts)
+    if len(unit_parts) != len(value_parts):
+        return []
+    return [
+        {"source_value": source_value, "source_unit": source_unit}
+        for source_value, source_unit in zip(value_parts, unit_parts, strict=True)
+    ]

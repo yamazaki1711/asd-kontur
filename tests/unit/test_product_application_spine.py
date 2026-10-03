@@ -524,6 +524,65 @@ def test_v24_compound_quantity_is_requeued_for_exact_measure_selection() -> None
     assert _quantities_requiring_semantic_review(quantities, prior) == quantities
 
 
+def test_v28_source_value_failure_requeues_only_unresolved_compound_measure() -> None:
+    quantities = [
+        {
+            "candidate_id": "compound-steel-measures",
+            "normalized_value": "18,6/2,48",
+            "raw_unit": "м/т",
+        },
+        {
+            "candidate_id": "settled-steel-length",
+            "normalized_value": "7,4",
+            "raw_unit": "м",
+        },
+    ]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v28",
+        "recovery_codes": ["qwen_work_reconciliation_quantity_source_value_invalid"],
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "compound-steel-measures",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": False,
+                "relation_kind": "NONE",
+            },
+            {
+                "quantity_candidate_id": "settled-steel-length",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": False,
+                "relation_kind": "NONE",
+            },
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == [quantities[0]]
+
+
+def test_v28_compound_uncertainty_without_typed_failure_is_not_replayed() -> None:
+    quantities = [
+        {
+            "candidate_id": "ambiguous-pipe-measures",
+            "normalized_value": "210/14",
+            "raw_unit": "м/шт",
+        }
+    ]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v28",
+        "recovery_codes": [],
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "ambiguous-pipe-measures",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "NONE",
+            }
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == []
+
+
 def test_incompatible_terminal_non_quantity_reviews_are_reprocessed() -> None:
     quantities = [{"candidate_id": "rate"}]
     prior = {

@@ -7530,6 +7530,14 @@ class SpinePostgresRepository:
                     "candidate_version": candidate_version,
                     "profile_version": str(row["profile_version"]),
                     "recorded_at": row["recorded_at"],
+                    "recovery_codes": list(
+                        dict.fromkeys(
+                            (
+                                *(compatible_current.get("recovery_codes") or ()),
+                                *(result.get("recovery_codes") or ()),
+                            )
+                        )
+                    ),
                 }
                 if (
                     same_candidate_version
@@ -9464,6 +9472,22 @@ def _quantities_requiring_semantic_review(
             and not _compound_quantity_measure_needs_review(row, review)
         ):
             continue
+        # V29 changes only the bounded repair contract for a compound source
+        # value. Preserve accepted v28 work and quantity decisions unless that
+        # exact batch recorded the typed source-value failure and this row still
+        # contains an unresolved compound measure. This avoids replaying every
+        # active qualification workspace for a targeted semantic repair.
+        if existing_profile == "qwen-project-work-reconciliation-v28" and str(
+            review.get("status") or ""
+        ) in {"WORK_QUANTITY", "DURATION"}:
+            source_value_repair_failed = (
+                "qwen_work_reconciliation_quantity_source_value_invalid"
+                in set(existing_resolution.get("recovery_codes") or ())
+            )
+            if not (
+                source_value_repair_failed and _compound_quantity_measure_needs_review(row, review)
+            ):
+                continue
         if not current_profile_reviewed:
             result.append(row)
             continue

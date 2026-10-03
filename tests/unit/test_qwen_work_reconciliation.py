@@ -9,6 +9,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
     QwenProjectWorkReconciler,
+    _source_measure_options,
     _source_numeric_token_present,
     potential_work_description,
 )
@@ -372,6 +373,91 @@ def test_quantity_review_can_select_one_exact_measure_from_compound_source_cell(
     review = result["observations"][0]["quantity_reviews"][0]
     assert review["source_value"] == "420,6"
     assert review["source_unit"] == "м2"
+
+
+def test_compound_source_measure_options_preserve_exact_scalar_pairs() -> None:
+    assert _source_measure_options("83,4/4,17", "м2 / м 3") == [
+        {"source_value": "83,4", "source_unit": "м2"},
+        {"source_value": "4,17", "source_unit": "м 3"},
+    ]
+    assert _source_measure_options("12 / 7", "шт") == [
+        {"source_value": "12", "source_unit": "шт"},
+        {"source_value": "7", "source_unit": "шт"},
+    ]
+    assert _source_measure_options("83,4+17,2", "м2") == []
+
+
+def test_quantity_source_value_repair_offers_exact_compound_measure_choices(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        source_value = "83,4/4,17" if len(prompts) == 1 else "83,4"
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "coating-row",
+                        "status": "MATCHED",
+                        "family_key": "demolition",
+                        "operation": "Разборка покрытия",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": "Источник содержит площадь и производный объём.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "coating-measures",
+                                "status": "WORK_QUANTITY",
+                                "source_value": source_value,
+                                "source_unit": "м2",
+                                "semantic_scope": "Площадь разбираемого покрытия",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": False,
+                                "reason": "Для площади выбрана исходная мера в м2.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "coating-row",
+                "wording": "Разборка покрытия",
+                "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                "nearby_context": "Разборка покрытия м2/м3 83,4/4,17",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "coating-measures",
+                        "value": "83,4/4,17",
+                        "unit": "м2/м3",
+                        "nearby_context": "Разборка покрытия м2/м3 83,4/4,17",
+                    }
+                ],
+            }
+        ],
+        work_families={"demolition": "Демонтажные работы"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert '"available_source_measures"' in prompts[0]
+    assert '"source_value":"83,4"' in prompts[0]
+    assert '"source_value":"4,17"' in prompts[0]
+    assert "Не возвращайте составную ячейку целиком" in prompts[1]
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_quantity_source_value_invalid"]
+    assert result["observations"][0]["quantity_reviews"][0]["source_value"] == "83,4"
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(
