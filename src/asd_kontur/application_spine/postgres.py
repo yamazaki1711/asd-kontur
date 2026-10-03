@@ -621,13 +621,16 @@ def _relationship_group_component_total_context_size(
     rows: Iterable[Mapping[str, Any]],
 ) -> int:
     values = list(rows)
-    quantity_types = {
-        str(quantity.get("prior_quantity_type") or "")
+    quantities = [
+        quantity
         for row in values
         for quantity in row.get("quantity_observations") or ()
         if isinstance(quantity, Mapping)
-    }
-    if "TOTAL" not in quantity_types or not quantity_types & {"COMPONENT", "SUBTOTAL"}:
+    ]
+    quantity_types = {str(quantity.get("prior_quantity_type") or "") for quantity in quantities}
+    if not any(_quantity_may_be_stated_total(value) for value in quantities) or not (
+        quantity_types & {"COMPONENT", "SUBTOTAL"}
+    ):
         return 0
     hinted_rows = sum(
         int(
@@ -643,6 +646,30 @@ def _relationship_group_component_total_context_size(
     # still-standalone row may complete the set.  Reserve that one bounded
     # context slot without assuming that the row is actually a component.
     return max(3, hinted_rows)
+
+
+_ADDITIVE_QUANTITY_FORMULA = re.compile(
+    r"(?:\d[\d\s.,]*\s*\+\s*\d[\d\s.,]*|(?:итого|всего|суммарн\w*|total)\s*[:=])",
+    re.IGNORECASE,
+)
+
+
+def _quantity_may_be_stated_total(quantity: Mapping[str, Any]) -> bool:
+    """Recognize a total candidate only to assemble semantic review context.
+
+    This is not quantity authority. An explicit prior TOTAL decision or source
+    text containing an additive/total expression permits a bounded Qwen review;
+    Qwen must still decide TOTAL_FOR/COMPONENT_OF and deterministic code must
+    still verify the arithmetic.
+    """
+
+    if str(quantity.get("prior_quantity_type") or "") in {"TOTAL", "SUBTOTAL"}:
+        return True
+    context = " ".join(
+        str(quantity.get(key) or "")
+        for key in ("prior_semantic_scope", "nearby_context")
+    )
+    return bool(_ADDITIVE_QUANTITY_FORMULA.search(context))
 
 
 def _relationship_quantity_ids(row: Mapping[str, Any]) -> set[str]:
@@ -711,13 +738,18 @@ def _quantity_relationship_batches(
     for family, values in family_rows.items():
         if len(family_locations[family]) < 2:
             continue
-        quantity_types = {
-            str(quantity.get("prior_quantity_type") or "")
+        quantities = [
+            quantity
             for row in values
             for quantity in row.get("quantity_observations") or ()
             if isinstance(quantity, Mapping)
+        ]
+        quantity_types = {
+            str(quantity.get("prior_quantity_type") or "") for quantity in quantities
         }
-        if "TOTAL" in quantity_types and quantity_types & {"COMPONENT", "SUBTOTAL"}:
+        if any(_quantity_may_be_stated_total(value) for value in quantities) and (
+            quantity_types & {"COMPONENT", "SUBTOTAL"}
+        ):
             groups[("project-wide", family)] = values
 
     ordered_groups = sorted(

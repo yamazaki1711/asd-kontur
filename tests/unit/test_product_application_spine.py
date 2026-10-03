@@ -936,6 +936,66 @@ def test_quantity_relationship_batch_can_review_total_across_facility_components
     assert "unrelated" not in selected
 
 
+def test_quantity_relationship_batch_uses_source_formula_when_prior_total_label_was_lost() -> None:
+    east = _work_batch_row(
+        "east-zone",
+        facility="Секция Восток",
+        family="roadworks",
+        document_role="Проектная документация",
+        wording="Разборка покрытия восточной секции",
+    )
+    east["quantity_observations"][0].update(
+        quantity_candidate_id="east-area",
+        value="83.6",
+        unit="м2",
+        prior_quantity_type="COMPONENT",
+        prior_semantic_scope="Площадь покрытия восточной секции",
+    )
+    west = _work_batch_row(
+        "west-zone",
+        facility="Секция Запад",
+        family="roadworks",
+        document_role="Проектная документация",
+        wording="Разборка покрытия западной секции",
+    )
+    west["source_version_id"] = east["source_version_id"]
+    west["quantity_observations"][0].update(
+        quantity_candidate_id="west-area",
+        value="41.4",
+        unit="м2",
+        prior_quantity_type="STANDALONE",
+        prior_semantic_scope="Площадь покрытия западной секции",
+    )
+    stated = _work_batch_row(
+        "stated-area-and-volume",
+        facility="",
+        family="roadworks",
+        document_role="Проектная документация",
+        wording="Разборка покрытия общей толщиной 0,08 м",
+    )
+    stated["source_version_id"] = east["source_version_id"]
+    stated["quantity_observations"][0].update(
+        quantity_candidate_id="compound-area-volume",
+        value="125,0/10,0",
+        unit="м2/м3",
+        prior_quantity_type="STANDALONE",
+        prior_semantic_scope="Площадь и объем разобранного покрытия",
+        nearby_context="(83,6 + 41,4) x 0,08 = 10,0 м3",
+    )
+    rows = [east, west, stated]
+    for row in rows:
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert {item["candidate_id"] for item in batches[0]} == {
+        "east-zone",
+        "west-zone",
+        "stated-area-and-volume",
+    }
+    assert selected == {"east-zone", "west-zone", "stated-area-and-volume"}
+
+
 def test_quantity_relationship_pair_ranking_never_uses_numeric_similarity() -> None:
     design = _work_batch_row(
         "design",

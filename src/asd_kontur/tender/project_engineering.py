@@ -57,6 +57,7 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v23",
         "qwen-project-work-reconciliation-v24",
         "qwen-project-work-reconciliation-v25",
+        "qwen-project-work-reconciliation-v26",
     }
 )
 _CANONICAL_SEMANTIC_OPERATION_FAMILIES = frozenset(
