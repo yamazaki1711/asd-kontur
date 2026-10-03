@@ -422,3 +422,25 @@ This is a partial recovery of the legacy VOR/estimate review task, not its
 closure. The remaining product work is to resolve compatible project-wide
 design/commercial scopes and produce professional delta or omission findings
 where the documents provide a defensible comparison.
+
+## Project-wide commercial comparison checkpoint — release 4db8b11
+
+The current application can now compare a supported project-wide VOR scope
+with the estimate even when the commercial source deliberately addresses more
+than one facility. It does not distribute the quantity between those
+facilities unless a source establishes that allocation.
+
+On the blind project, the user can now see that the VOR and estimate agree on
+`65.4 m3` of crushed-stone base, `8` removed shrubs and `219 m` of drainage
+collector. The established `63/1` facility also has a design-to-VOR match for
+`219 m` of metal fence. These are professional comparison results, not search
+hits. The changed-value false-positive control confirms that equal numbers for
+different semantic scopes are not compared.
+
+This advances the legacy VOR/estimate delta capability from an empty or noisy
+projection to a real reusable comparison path. It remains
+`PRESERVED_BUT_INCOMPLETE`: no price delta is calculated without rate/price
+authority, and a project-wide commercial amount is not misreported as a
+facility-specific omission. The next recovery step is a defensible omitted-work
+or quantity-difference finding from compatible design and commercial scopes,
+not a larger list of unresolved rows.

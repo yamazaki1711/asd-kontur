@@ -869,6 +869,54 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Project-wide VOR/estimate comparison — release 4db8b11
+
+Commit `4db8b114a8c32dc92eb740f76af7e40d7c84152a` advances the next
+contractor-facing task: compare established project-wide commercial scopes
+without inventing a facility allocation that the source does not contain.
+The source-context classifier now recognizes extended official VOR headings,
+including headings in which “ведомость объемов” and “работ” are separated by
+the described construction content. An explicit project-wide location is an
+established comparison scope, while a merely unresolved location remains
+ineligible. Already-normalized units and their Russian source forms are reduced
+to the same deterministic unit before arithmetic.
+
+The live blind-project model is `project-engineering-model-v70`, fingerprint
+`sha256:1d70ffd1ed96397307559df9a95f487ba71119df1552ec40cc47f8d73abbc48b`.
+It now presents 143 project-wide commercial work scopes and 115 work scopes
+whose location remains unresolved. Four real construction comparisons are
+available through the application:
+
+- crushed-stone base: VOR `65.4 m3` and estimate `65.4 m3` — match;
+- shrub removal: VOR `8 items` and estimate `8 items` — match;
+- metal fence at the established `63/1` structure: design `219 m` and VOR
+  `219 m` — match;
+- drainage collector: VOR `219 m` and estimate `219 m` — match.
+
+The result is useful even though it contains no new discrepancy: it proves that
+the same-scope denominator exists and tells the engineer that these four values
+agree. Numeric equality, similar labels and a shared document do not establish
+scope. A changed regression case with identical values but different semantic
+scope is rejected rather than emitted as a false comparison.
+
+The release was activated only after the document worker reached a boundary
+with no leased or running job. API, document/project worker, assistant worker
+and project orchestrator now import the immutable release
+`~/.asd-kontur/public-demo/releases/20261003-4db8b11-vor-estimate-scope-v58`.
+Qwen PID `93554` and NTD worker PID `98263` were preserved. No queue, retry,
+successor, priority or Qwen command was issued. Exact-SHA CI run `37107291207`
+passed. The release-receipt SHA-256 is
+`f71160287786561369da9ab1c8f1598f0eb067a27b4c7b2c271d2127f2454f6a`.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains exactly
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Commercial estimate scope cleanup — release b8b7a9f
 
 Commit `b8b7a9f945c3ed6b311713a1f554959c9e4e1a9a` closes a generic
