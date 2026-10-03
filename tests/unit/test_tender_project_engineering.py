@@ -2010,6 +2010,98 @@ def test_unallocated_same_family_commercial_work_keeps_design_scope_unresolved()
     assert enclosure["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
 
+def test_project_wide_commercial_scope_covers_only_its_exact_member_facilities() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-waterproofing-a",
+                "facility_id": "building-a",
+                "facility": "Building A",
+                "family_key": "waterproofing",
+                "work_name": "Apply foundation waterproofing",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-a"],
+            },
+            {
+                "work_scope_id": "design-waterproofing-c",
+                "facility_id": "building-c",
+                "facility": "Building C",
+                "family_key": "waterproofing",
+                "work_name": "Apply foundation waterproofing",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-c"],
+            },
+            {
+                "work_scope_id": "commercial-waterproofing-project",
+                "facility_id": None,
+                "facility": "Project total (Building A; Building B)",
+                "location_scope_kind": "project",
+                "location_scope_member_ids": ["building-a", "building-b"],
+                "family_key": "waterproofing",
+                "work_name": "Apply foundation waterproofing",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-project"],
+            },
+        ]
+    )
+
+    building_a = next(row for row in comparisons if row["facility"] == "Building A")
+    building_c = next(row for row in comparisons if row["facility"] == "Building C")
+    assert building_a["classification"] == "MATCH"
+    assert building_a["professional_status"] == (
+        "Коммерческий состав найден в общем объёме"
+    )
+    assert "распределение количества" in building_a["conclusion"]
+    assert building_c["classification"] == "UNRESOLVED_SCOPE_MATCH"
+
+    project_row = next(
+        row for row in comparisons if row["location_scope_kind"] == "project"
+    )
+    assert project_row["classification"] == "MATCH"
+    assert "коммерческий объём по сооружениям не распределён" in project_row["conclusion"]
+
+
+def test_unclassified_project_wide_commercial_scope_blocks_false_omission() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-formwork-a",
+                "facility_id": "building-a",
+                "facility": "Building A",
+                "family_key": "formwork",
+                "work_name": "Install wall formwork",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-formwork"],
+            },
+            {
+                "work_scope_id": "commercial-concrete-project",
+                "facility_id": None,
+                "facility": "Project total (Building A; Building B)",
+                "location_scope_kind": "project",
+                "location_scope_member_ids": ["building-a", "building-b"],
+                "family_key": "reinforced_concrete",
+                "work_name": "Cast concrete walls",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-concrete"],
+            },
+        ],
+        unclassified_works=[
+            {
+                "project_wording": "Unresolved project-wide commercial row",
+                "document_role": "Смета",
+                "location_scope_kind": "project",
+                "location_scope_member_ids": ["building-a", "building-b"],
+            }
+        ],
+    )
+
+    formwork = next(row for row in comparisons if row["family_key"] == "formwork")
+    assert formwork["classification"] == "UNRESOLVED_SCOPE_MATCH"
+    assert formwork["professional_status"] == (
+        "Сопоставление коммерческого состава не завершено"
+    )
+
+
 def test_generic_sheet_pile_design_scope_covers_driving_at_same_facility_only() -> None:
     comparisons = _scope_comparisons(
         [
@@ -2484,7 +2576,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v70"
+    assert model["model_version"] == "project-engineering-model-v71"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4305,6 +4397,9 @@ def test_commercial_heading_assigns_work_to_explicit_multi_facility_project_scop
         "Подпорная стена по ул. Северная, 12/1)"
     )
     assert model["works"][0]["location_scope_kind"] == "project"
+    assert set(model["works"][0]["location_scope_member_ids"]) == {
+        row["facility_id"] for row in model["facilities"]
+    }
     assert "всем установленным сооружениям" in model["works"][0]["status"]
 
 

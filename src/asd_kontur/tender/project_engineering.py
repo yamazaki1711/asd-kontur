@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v70"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v71"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -2314,6 +2314,25 @@ def _project_scope_facility_label(
 ) -> str | None:
     """Return a professional project-wide label only for an explicit all-site scope."""
 
+    members = _project_scope_facility_members(value, facilities)
+    if not members:
+        return None
+    names = sorted(str(item.get("name") or "") for item in members if item.get("name"))
+    return f"Объект в целом ({'; '.join(names)})"
+
+
+def _project_scope_facility_members(
+    value: object, facilities: Iterable[Mapping[str, Any]]
+) -> tuple[dict[str, Any], ...]:
+    """Return exact facilities covered by an explicit all-site source heading.
+
+    A commercial heading may cover several facilities without allocating its
+    rows between them. Preserve those members as scope, not as a fabricated
+    per-facility assignment. The scope is accepted only when the heading names
+    every established addressed facility; a partial or ambiguous heading
+    remains unresolved.
+    """
+
     rows = [dict(item) for item in facilities]
     facility_addresses = {
         address
@@ -2324,18 +2343,25 @@ def _project_scope_facility_label(
     # That generic card must not prevent an explicit heading which names every
     # addressed facility from establishing an all-site commercial scope.
     if len(facility_addresses) < 2:
-        return None
+        return ()
     scope_addresses = {
         " ".join(item.replace(",", " ").split()) for item in _street_addresses(value)
     }
     if not facility_addresses <= scope_addresses:
-        return None
-    names = sorted(
-        str(item.get("name") or "")
-        for item in rows
-        if item.get("name") and _specific_structure_key(item.get("name")) is not None
+        return ()
+    return tuple(
+        sorted(
+            (
+                item
+                for item in rows
+                if _specific_structure_key(item.get("name")) is not None
+            ),
+            key=lambda item: (
+                str(item.get("facility_id") or ""),
+                str(item.get("name") or ""),
+            ),
+        )
     )
-    return f"Объект в целом ({'; '.join(names)})"
 
 
 def _pits(
@@ -2815,6 +2841,7 @@ def _work_schedule(
     )
     commercial_facilities_by_scope: dict[str, set[str]] = defaultdict(set)
     commercial_project_labels_by_scope: dict[str, set[str]] = defaultdict(set)
+    commercial_project_members_by_scope: dict[str, set[str]] = defaultdict(set)
     for scope_context in source_context.values():
         scope_code = str(scope_context.get("page_commercial_scope_code") or "").strip()
         designation = commercial_scope_facility_designation(
@@ -2828,6 +2855,13 @@ def _work_schedule(
         )
         if scope_code and project_label is not None:
             commercial_project_labels_by_scope[scope_code].add(project_label)
+            commercial_project_members_by_scope[scope_code].update(
+                str(item["facility_id"])
+                for item in _project_scope_facility_members(
+                    scope_context.get("page_commercial_scope_header"), facilities
+                )
+                if item.get("facility_id")
+            )
     facility_ids_by_locator: dict[str, set[str]] = defaultdict(set)
     facility_ids_by_page: dict[tuple[str, int], set[str]] = defaultdict(set)
     for item in facilities:
@@ -2992,15 +3026,27 @@ def _work_schedule(
                     "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
                 )
         project_scope_label = None
+        project_scope_member_ids: set[str] = set()
         if facility is None:
             project_scope_label = _project_scope_facility_label(
                 resolution.get("facility"), facilities
             )
+            if project_scope_label is not None:
+                project_scope_member_ids.update(
+                    str(item["facility_id"])
+                    for item in _project_scope_facility_members(
+                        resolution.get("facility"), facilities
+                    )
+                    if item.get("facility_id")
+                )
             if project_scope_label is None:
                 scope_code = str(context.get("page_commercial_scope_code") or "").strip()
                 scope_labels = commercial_project_labels_by_scope.get(scope_code, set())
                 if len(scope_labels) == 1:
                     project_scope_label = next(iter(scope_labels))
+                    project_scope_member_ids.update(
+                        commercial_project_members_by_scope.get(scope_code, set())
+                    )
         if project_scope_label is not None:
             assignment_basis = (
                 "Источник явно относится ко всем установленным сооружениям объекта; "
@@ -3119,6 +3165,7 @@ def _work_schedule(
             else "project"
             if project_scope_label is not None
             else "unresolved",
+            "location_scope_member_ids": sorted(project_scope_member_ids),
             # Keep facility labels authoritative to the established project
             # inventory.  An unmatched facility-shaped token can be an
             # equipment model or a partial designation; showing it as the
@@ -3323,6 +3370,14 @@ def _work_schedule(
                 None,
             ),
             "location_scope_kind": str(observations[0].get("location_scope_kind")),
+            "location_scope_member_ids": sorted(
+                {
+                    str(member_id)
+                    for item in observations
+                    for member_id in item.get("location_scope_member_ids") or ()
+                    if member_id
+                }
+            ),
             "facility": facility_name,
             "family_key": family_key,
             "work_name": operation_name,
@@ -4160,6 +4215,13 @@ def _scope_comparisons(
     unresolved_commercial_facilities = {
         str(row.get("facility_id")) for row in unresolved_commercial if row.get("facility_id")
     }
+    unresolved_commercial_facilities.update(
+        str(member_id)
+        for row in unresolved_commercial
+        if row.get("location_scope_kind") == "project"
+        for member_id in row.get("location_scope_member_ids") or ()
+        if member_id
+    )
     unresolved_design_facilities = {
         str(row.get("facility_id")) for row in unresolved_design if row.get("facility_id")
     }
@@ -4172,6 +4234,12 @@ def _scope_comparisons(
             commercial_by_family[str(row.get("family_key") or "")].append(row)
             if row.get("facility_id"):
                 commercial_facilities.add(str(row["facility_id"]))
+            if row.get("location_scope_kind") == "project":
+                commercial_facilities.update(
+                    str(member_id)
+                    for member_id in row.get("location_scope_member_ids") or ()
+                    if member_id
+                )
         if roles.intersection(design_roles):
             design_by_family[str(row.get("family_key") or "")].append(row)
 
@@ -4183,15 +4251,26 @@ def _scope_comparisons(
         if not design:
             if commercial:
                 possible_design = design_by_family.get(str(row.get("family_key") or ""), [])
-                covered_by_design_scope = any(
-                    _design_scope_covers_commercial_operation(design_row, row)
-                    for design_row in possible_design
+                covering_design_scope = next(
+                    (
+                        design_row
+                        for design_row in possible_design
+                        if _design_scope_covers_commercial_operation(design_row, row)
+                    ),
+                    None,
                 )
-                if covered_by_design_scope:
+                if covering_design_scope is not None:
                     status = "MATCH"
                     professional_status = "Коммерческая операция имеет проектное основание"
                     conclusion = (
-                        "Операция относится к установленному проектному объёму этого сооружения."
+                        "Операция относится к установленному проектному объёму "
+                        "одного из сооружений; "
+                        "коммерческий объём по сооружениям не распределён."
+                        if row.get("location_scope_kind") == "project"
+                        else (
+                            "Операция относится к установленному проектному объёму "
+                            "этого сооружения."
+                        )
                     )
                 elif possible_design:
                     status = "UNRESOLVED_SCOPE_MATCH"
@@ -4239,21 +4318,51 @@ def _scope_comparisons(
             possible_at_facility = [
                 value
                 for value in possible
-                if facility_id and str(value.get("facility_id") or "") == facility_id
+                if facility_id
+                and (
+                    str(value.get("facility_id") or "") == facility_id
+                    or (
+                        value.get("location_scope_kind") == "project"
+                        and facility_id
+                        in {
+                            str(member_id)
+                            for member_id in value.get("location_scope_member_ids") or ()
+                        }
+                    )
+                )
             ]
             possible_without_facility = [
-                value for value in possible if not value.get("facility_id")
+                value
+                for value in possible
+                if not value.get("facility_id") and value.get("location_scope_kind") != "project"
             ]
-            covered_commercial = any(
-                _design_scope_covers_commercial_operation(row, commercial_row)
-                for commercial_row in possible_at_facility
+            covering_commercial_scope = next(
+                (
+                    commercial_row
+                    for commercial_row in possible_at_facility
+                    if _design_scope_covers_commercial_operation(row, commercial_row)
+                ),
+                None,
             )
-            if covered_commercial:
+            if covering_commercial_scope is not None:
                 status = "MATCH"
-                professional_status = "Коммерческий состав найден"
+                project_wide_coverage = (
+                    covering_commercial_scope.get("location_scope_kind") == "project"
+                )
+                professional_status = (
+                    "Коммерческий состав найден в общем объёме"
+                    if project_wide_coverage
+                    else "Коммерческий состав найден"
+                )
                 conclusion = (
-                    "Проектный объём связан с соответствующей коммерческой операцией "
-                    "этого сооружения."
+                    "Работа найдена в общем коммерческом объёме, который явно "
+                    "охватывает это сооружение; "
+                    "распределение количества по сооружениям не установлено."
+                    if project_wide_coverage
+                    else (
+                        "Проектный объём связан с соответствующей коммерческой "
+                        "операцией этого сооружения."
+                    )
                 )
             elif possible_at_facility or possible_without_facility:
                 status = "UNRESOLVED_SCOPE_MATCH"
@@ -4262,6 +4371,13 @@ def _scope_comparisons(
                     "Коммерческие позиции этого вида найдены, но их нельзя однозначно "
                     "распределить по сооружениям."
                 )
+            elif row.get("facility_id") in unresolved_commercial_facilities:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Сопоставление коммерческого состава не завершено"
+                conclusion = (
+                    "Сопоставление пока не завершено: в ВОР/смете остаются описания работ, "
+                    "которые ещё не удалось однозначно классифицировать."
+                )
             elif row.get("facility_id") in commercial_facilities:
                 status = "WORK_MISSING_IN_COMMERCIAL"
                 professional_status = "Возможная неучтённая работа"
@@ -4269,9 +4385,7 @@ def _scope_comparisons(
                     "Работа установлена в проектных документах, но соответствующая позиция "
                     f"не найдена {commercial_denominator}."
                 )
-            elif row.get("facility_id") in unresolved_commercial_facilities or (
-                not row.get("facility_id") and unresolved_commercial
-            ):
+            elif not row.get("facility_id") and unresolved_commercial:
                 status = "UNRESOLVED_SCOPE_MATCH"
                 professional_status = "Сопоставление коммерческого состава не завершено"
                 conclusion = (
@@ -4297,6 +4411,8 @@ def _scope_comparisons(
                 "professional_status": professional_status,
                 "facility": row.get("facility"),
                 "facility_id": row.get("facility_id"),
+                "location_scope_kind": row.get("location_scope_kind"),
+                "location_scope_member_ids": list(row.get("location_scope_member_ids") or ()),
                 "family_key": row.get("family_key"),
                 "work": row.get("work_name"),
                 "design_roles": sorted(design),
@@ -4366,12 +4482,26 @@ def _design_scope_covers_commercial_operation(
 ) -> bool:
     """Match a bounded generic design scope to its priced construction operation."""
 
-    if not design.get("facility_id") or design.get("facility_id") != commercial.get("facility_id"):
+    design_facility_id = str(design.get("facility_id") or "")
+    commercial_facility_id = str(commercial.get("facility_id") or "")
+    commercial_project_members = {
+        str(member_id) for member_id in commercial.get("location_scope_member_ids") or ()
+    }
+    same_location = bool(design_facility_id) and (
+        design_facility_id == commercial_facility_id
+        or (
+            commercial.get("location_scope_kind") == "project"
+            and design_facility_id in commercial_project_members
+        )
+    )
+    if not same_location:
         return False
     if design.get("family_key") != commercial.get("family_key"):
         return False
     design_work = _normalized(design.get("work_name"))
     commercial_work = _normalized(commercial.get("work_name"))
+    if design_work and design_work == commercial_work:
+        return True
     if design.get("family_key") == "sheet_piling":
         return "устройство шпунтового ограждения" in design_work and commercial_work in {
             "погружение шпунта",
