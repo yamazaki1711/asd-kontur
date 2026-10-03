@@ -460,3 +460,24 @@ projection has 10 scope matches, one commercial-only work and 264 unresolved
 scope matches. The regression remains `PRESERVED_BUT_INCOMPLETE` until the
 remaining commercial descriptions are classified sufficiently to establish a
 defensible omitted-work denominator and price-bearing delta analysis.
+
+## First-pass classification fairness — release db05be8
+
+The commercial-scope engine can only establish a reliable omission denominator
+after previously unseen project and commercial descriptions receive a semantic
+construction meaning. Release `db05be8` corrects a scheduler defect that let
+relationship review consume all four bounded refill slots even when hundreds
+of construction descriptions had never received a first-pass decision.
+
+The deployed scheduler now reserves one real batch for never-reviewed work.
+On the blind workspace it autonomously created and completed first-pass job
+`01a10120-8262-7517-81ba-5b0996e51c65`. The live application result moved from
+547 to 548 classified observations and from 411 to 410 unclassified
+observations; one additional facility association and four accepted quantity
+interpretations also became available. No corpus name, expected quantity or
+known omission was added to production logic.
+
+This is a necessary bridge toward the restored VOR/estimate task, not closure
+of the regression. The user still lacks a new defensible omitted-work or
+price-bearing delta finding from the blind project, so the capability remains
+`PRESERVED_BUT_INCOMPLETE`.

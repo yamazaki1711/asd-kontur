@@ -869,6 +869,53 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Guaranteed first-pass semantic progress — release db05be8
+
+The live blind workspace still contained 411 construction descriptions without
+any current-profile semantic decision. The previous scheduler nominally
+reserved one of four refill slots for ordinary classification, but that slot
+was filled from a mixed priority pool and could select a fourth relationship
+batch. Quantity and cross-document work could therefore keep first-pass work
+starved indefinitely.
+
+Commit `db05be8dcb46b96d993f2377207aa3e1229806a1` makes the reserved lane
+structural rather than nominal. Three slots remain available to high-value
+relationship and cross-document review. When never-reviewed construction work
+exists, the fourth slot is selected only from rows whose
+`classification_review_needed` value is true, with the existing source,
+duplicate-wording and quantity-context bounds preserved.
+
+The immutable v61 release autonomously created four blind-workspace batches at
+`2026-10-03T21:37:43.348518+12:00`: three relationship batches and job
+`01a10120-8262-7517-81ba-5b0996e51c65`, containing two never-reviewed rows in
+the reserved lane. Qwen completed that job without a developer queue, retry or
+priority command. The resulting application model changed as follows:
+
+- classified observations: 547 to 548;
+- unclassified observations: 411 to 410;
+- facility-assigned observations: 328 to 329;
+- accepted work quantities: 323 to 327;
+- model fingerprint:
+  `sha256:8758837da3de48f8ad331e125133fe19455b7302c88e314b63def42c039e5891`.
+
+The active immutable release is
+`~/.asd-kontur/public-demo/releases/20261003-db05be8-first-pass-v61`.
+Exact-SHA CI run `37112383798` passed. Migration head remains
+`0118_source_grounded_alternative_profile`; Qwen PID `93554` and NTD worker PID
+`98263` were preserved. The all-history platform-memory fingerprint remains
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+all 26 critical platform/NTD table counts equal the deletion-safety baseline,
+and the NTD ledger remains exactly 319 succeeded jobs. The release-receipt
+SHA-256 is
+`36aebe9329dacd291e2cae6db35425dfad0e388e18f324d239983c0f81282d46`.
+
+The classification denominator is still materially incomplete, and this
+release does not create a new omitted-work claim. The next product step remains
+a defensible VOR/estimate delta or omission derived from compatible scopes.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Project-wide VOR/estimate comparison — release 4db8b11
 
 Commit `4db8b114a8c32dc92eb740f76af7e40d7c84152a` advances the next
