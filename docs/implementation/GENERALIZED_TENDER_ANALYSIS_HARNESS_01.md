@@ -869,6 +869,59 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Explicit revision authority — release 770933d
+
+The autonomous v36 run exposed a generic semantic-authority defect in a real
+cross-document pair. Qwen labelled two otherwise identically worded work
+scopes as `REVISION_DIFFERENCE` solely because their quantities and material
+thicknesses differed. Neither source stated that one row revised, replaced or
+superseded the other. Treating the discrepancy itself as proof of a revision
+would suppress the very quantity or material comparison that Tender mode must
+perform.
+
+Profile v37 therefore admits `REVISION_DIFFERENCE` and quantity
+`REVISION_OF` only when the bounded source context explicitly refers to a
+revision, version, amendment, replacement or supersession. Numeric, grade,
+profile, thickness and quantity differences are not revision evidence. A
+typed bounded repair asks Qwen to decide the actual scope compatibility rather
+than accepting the unsupported revision relation. Changed-name unit cases
+prove both rejection of the unsupported inference and preservation of a real
+explicit revision. No project name, document filename, expected value or
+known finding was added to runtime logic.
+
+Commit `770933d4f95c1287e9d359ade24b2e3aea2199f6` passed exact-SHA CI run
+`37138314619` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261004-770933d-explicit-revision-v80`.
+Migration head is `0124_explicit_revision_scope_profile`. Before migration,
+the public database was backed up to
+`~/.asd-kontur/public-demo/backups/pre-0124-explicit-revision-20261004T0500/public-before-0124.dump`
+(SHA-256
+`300b024d22e7a47f29752502b7d1970fa3fc1603e4437e669707bd9c9dd70c40`).
+A separate restore passed upgrade, explicit disposable downgrade and
+re-upgrade. The full unit suite passed 1,245 tests, the focused reconciliation
+suite passed 43 tests, and the disposable migration round trip passed.
+
+The controlled drain preserved the in-flight v36 result. One launchd restart
+raced the first transition and claimed a further queued job; that job also
+reached `succeeded` before activation, with no abandoned lease or duplicate
+accepted output. Qwen PID `85702` and NTD worker PID `98263` were preserved.
+The all-history platform-memory fingerprint remains
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`,
+and the NTD ledger remains exactly 319 succeeded jobs.
+
+Without a developer queue, retry, successor or priority command, the
+supervised runtime created and completed v37 job
+`01a102b8-54f5-7f0c-9960-19c9115c183e`. It retained a source-grounded
+foundation-preparation interpretation while leaving an incompatible item
+count ambiguous. The exact live replay of the unsupported revision pair is
+still queued through autonomous scheduling at this checkpoint; the release
+receipt records that gate as pending rather than claiming it passed.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Exact scope-pair recovery and source grounding — releases 2fdc79b through c204c92
 
 The comparison scheduler now treats a proposed design/commercial work match as
