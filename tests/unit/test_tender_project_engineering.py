@@ -919,17 +919,17 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "value": "68.4",
                             "unit": "м3",
                             "semantic_scope": "Crushed-stone base volume",
-                        "relation_kind": "DUPLICATE_OF",
-                        "related_quantity_candidate_ids": ["estimate-volume"],
-                        "scope_compatibility": "SAME_SCOPE",
-                        "scope_assertions": [
-                            {
-                                "related_quantity_candidate_id": "estimate-volume",
-                                "scope_compatibility": "SAME_SCOPE",
-                                "reason": "Same crushed-stone base volume.",
-                            }
-                        ],
-                        "relationship_reviewed": True,
+                            "relation_kind": "DUPLICATE_OF",
+                            "related_quantity_candidate_ids": ["estimate-volume"],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "estimate-volume",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same crushed-stone base volume.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         },
                     ],
@@ -939,17 +939,17 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "value": "61.2",
                             "unit": "м3",
                             "semantic_scope": "Crushed-stone base volume",
-                        "relation_kind": "DUPLICATE_OF",
-                        "related_quantity_candidate_ids": ["design-volume"],
-                        "scope_compatibility": "SAME_SCOPE",
-                        "scope_assertions": [
-                            {
-                                "related_quantity_candidate_id": "design-volume",
-                                "scope_compatibility": "SAME_SCOPE",
-                                "reason": "Same crushed-stone base volume.",
-                            }
-                        ],
-                        "relationship_reviewed": True,
+                            "relation_kind": "DUPLICATE_OF",
+                            "related_quantity_candidate_ids": ["design-volume"],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "design-volume",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same crushed-stone base volume.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
@@ -988,16 +988,16 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "quantity_candidate_id": "vor-area",
                             "value": "833.9",
                             "unit": "м2",
-                        "semantic_scope": "Waterproofed surface area",
-                        "scope_compatibility": "SAME_SCOPE",
-                        "scope_assertions": [
-                            {
-                                "related_quantity_candidate_id": "estimate-area",
-                                "scope_compatibility": "SAME_SCOPE",
-                                "reason": "Same waterproofed surface area.",
-                            }
-                        ],
-                        "relationship_reviewed": True,
+                            "semantic_scope": "Waterproofed surface area",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "estimate-area",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same waterproofed surface area.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
@@ -1006,16 +1006,16 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "quantity_candidate_id": "estimate-area",
                             "value": "8.339",
                             "unit": "100 м2",
-                        "semantic_scope": "Waterproofed surface area",
-                        "scope_compatibility": "SAME_SCOPE",
-                        "scope_assertions": [
-                            {
-                                "related_quantity_candidate_id": "vor-area",
-                                "scope_compatibility": "SAME_SCOPE",
-                                "reason": "Same waterproofed surface area.",
-                            }
-                        ],
-                        "relationship_reviewed": True,
+                            "semantic_scope": "Waterproofed surface area",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "vor-area",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same waterproofed surface area.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
