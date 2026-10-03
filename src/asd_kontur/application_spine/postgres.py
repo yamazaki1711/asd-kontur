@@ -666,8 +666,7 @@ def _quantity_may_be_stated_total(quantity: Mapping[str, Any]) -> bool:
     if str(quantity.get("prior_quantity_type") or "") in {"TOTAL", "SUBTOTAL"}:
         return True
     context = " ".join(
-        str(quantity.get(key) or "")
-        for key in ("prior_semantic_scope", "nearby_context")
+        str(quantity.get(key) or "") for key in ("prior_semantic_scope", "nearby_context")
     )
     return bool(_ADDITIVE_QUANTITY_FORMULA.search(context))
 
@@ -744,9 +743,7 @@ def _quantity_relationship_batches(
             for quantity in row.get("quantity_observations") or ()
             if isinstance(quantity, Mapping)
         ]
-        quantity_types = {
-            str(quantity.get("prior_quantity_type") or "") for quantity in quantities
-        }
+        quantity_types = {str(quantity.get("prior_quantity_type") or "") for quantity in quantities}
         if any(_quantity_may_be_stated_total(value) for value in quantities) and (
             quantity_types & {"COMPONENT", "SUBTOTAL"}
         ):
