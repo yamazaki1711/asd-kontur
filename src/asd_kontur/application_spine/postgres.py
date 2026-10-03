@@ -629,7 +629,7 @@ def _relationship_group_component_total_context_size(
     }
     if "TOTAL" not in quantity_types or not quantity_types & {"COMPONENT", "SUBTOTAL"}:
         return 0
-    return sum(
+    hinted_rows = sum(
         int(
             any(
                 str(quantity.get("prior_quantity_type") or "") in {"TOTAL", "COMPONENT", "SUBTOTAL"}
@@ -639,6 +639,10 @@ def _relationship_group_component_total_context_size(
         )
         for row in values
     )
+    # One known component plus one total is precisely the case where a third,
+    # still-standalone row may complete the set.  Reserve that one bounded
+    # context slot without assuming that the row is actually a component.
+    return max(3, hinted_rows)
 
 
 def _ordered_relationship_pair(

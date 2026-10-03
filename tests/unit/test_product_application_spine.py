@@ -758,7 +758,7 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
     component_b["quantity_observations"][0].update(
         value="147.5",
         unit="м2",
-        prior_quantity_type="COMPONENT",
+        prior_quantity_type="STANDALONE",
         prior_semantic_scope="Площадь демонтажа покрытия",
     )
     stated_total = _work_batch_row(
