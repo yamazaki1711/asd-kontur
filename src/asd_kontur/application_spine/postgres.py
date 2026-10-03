@@ -1039,10 +1039,15 @@ def _work_scope_comparison_context_available(
     *,
     existing: Mapping[str, Any] | None,
     candidate_version: int,
-    explicit_facility: str | None,
     pending_quantities: Iterable[Mapping[str, Any]],
 ) -> bool:
-    """Reuse one settled work only as bounded cross-document scope context."""
+    """Reuse one settled work only as bounded cross-document scope context.
+
+    A facility is not required here because the downstream batch selector also
+    supports an exact-wording lane for unresolved locations. Exact wording only
+    assembles the bounded design/commercial context; it does not establish
+    scope equivalence or a professional finding.
+    """
 
     if existing is None or int(existing.get("candidate_version") or 0) != candidate_version:
         return False
@@ -1051,7 +1056,6 @@ def _work_scope_comparison_context_available(
         in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
         and str(existing.get("status") or "") == "MATCHED"
         and str(existing.get("family_key") or "") in work_family_catalog()
-        and (existing.get("facility") or explicit_facility)
         and not tuple(pending_quantities)
     )
 
@@ -6446,7 +6450,6 @@ class SpinePostgresRepository:
                 scope_comparison_context_only = _work_scope_comparison_context_available(
                     existing=existing,
                     candidate_version=version,
-                    explicit_facility=explicit_facility,
                     pending_quantities=linked_quantities,
                 )
                 if (

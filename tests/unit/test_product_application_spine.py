@@ -635,19 +635,21 @@ def test_settled_work_is_reused_only_as_bounded_scope_comparison_context() -> No
     assert _work_scope_comparison_context_available(
         existing=existing,
         candidate_version=3,
-        explicit_facility=None,
+        pending_quantities=[],
+    )
+    assert _work_scope_comparison_context_available(
+        existing={**existing, "facility": None},
+        candidate_version=3,
         pending_quantities=[],
     )
     assert not _work_scope_comparison_context_available(
         existing=existing,
         candidate_version=3,
-        explicit_facility=None,
         pending_quantities=[{"candidate_id": "unreviewed-mass"}],
     )
     assert not _work_scope_comparison_context_available(
         existing={**existing, "status": "AMBIGUOUS"},
         candidate_version=3,
-        explicit_facility=None,
         pending_quantities=[],
     )
 
