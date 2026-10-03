@@ -4607,9 +4607,7 @@ def test_unassigned_exact_material_match_requires_isolated_source_rows() -> None
                 **base_work,
                 "materials_by_document": {
                     "РД": [{"name": "Washed gravel", "source_locator_id": "design-a"}],
-                    "ВОР": [
-                        {"name": "Washed gravel", "source_locator_id": "commercial"}
-                    ],
+                    "ВОР": [{"name": "Washed gravel", "source_locator_id": "commercial"}],
                 },
             }
         ],
@@ -4627,9 +4625,7 @@ def test_unassigned_exact_material_match_requires_isolated_source_rows() -> None
                         {"name": "Washed gravel", "source_locator_id": "design-a"},
                         {"name": "Washed gravel", "source_locator_id": "design-b"},
                     ],
-                    "ВОР": [
-                        {"name": "Washed gravel", "source_locator_id": "commercial"}
-                    ],
+                    "ВОР": [{"name": "Washed gravel", "source_locator_id": "commercial"}],
                 },
             }
         ],
