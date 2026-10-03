@@ -525,3 +525,25 @@ work. The live project retains nine scope matches, one commercial-only work and
 price-bearing VOR/estimate delta has yet been established. The legacy
 VOR/estimate and omitted-work capabilities therefore remain
 `PRESERVED_BUT_INCOMPLETE`.
+
+## Quantity-relationship safety checkpoint — release e6c561a
+
+The user can now see one source-grounded component/total result from the blind
+project: the design components of 37 and 24 removed trees deterministically
+sum to the commercial total of 61. This recovers a useful part of the legacy
+quantity-analysis task without asking the model to perform arithmetic.
+
+Equally important, the current application no longer converts three unsafe
+shortcuts into professional findings. A design component is not compared
+directly with a commercial total without an explicit quantity graph; an object
+acted upon is not treated as a supplied construction material; and unresolved
+utility items are not compared solely because they share a broad material
+family. Consequently, the blind project now presents two grounded Tender
+findings rather than an inflated set containing tree-diameter and unrelated
+pipe/drainage material differences.
+
+This improves the recovered quantity/material comparison capability, but the
+regression remains `PRESERVED_BUT_INCOMPLETE`: a project-wide defensible
+design omission or price-bearing commercial delta is still not established.
+The autonomous first-pass queue continues to process unresolved construction
+descriptions; no developer progression command was used.

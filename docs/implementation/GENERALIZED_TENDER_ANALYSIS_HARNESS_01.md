@@ -869,6 +869,51 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Component/total and material-scope safety — release e6c561a
+
+The blind project now contains a defensible quantity graph for tree removal:
+the design identifies 37 trees in the 14.1–18 cm band and 24 trees over 20 cm,
+while the commercial scope states a total of 61 trees. Qwen established the
+`COMPONENT_OF` / `TOTAL_FOR` relationships; deterministic Decimal arithmetic
+calculated `37 + 24 = 61` and returned `MATCH`. The model did not perform the
+arithmetic.
+
+The same live workload exposed three generic false-positive paths. Release
+`e6c561aa34b8c0b925a0682578276f7d592f002f` now rejects a direct
+component-to-total comparison unless an explicit quantity graph exists,
+prevents natural subjects of work (such as felled trees) from becoming
+construction materials, and requires item identity before comparing unresolved
+utility materials. The latter prevents unrelated pipe or drainage items from
+being compared merely because they share a broad material family. Controlled
+structural-steel synonyms and explicit component/total graphs remain usable.
+
+The active blind projection is `project-engineering-model-v75`, fingerprint
+`sha256:d9b91040d8cacda20492909d01fa7ee8ad2a7f62c89ecc50c954f9c010c2b05d`.
+It reports 550 of 789 construction observations classified (69.7%), 330
+accepted work quantities, ten quantity comparisons, four material comparisons
+and two professional findings. The remaining findings are the 2.2-month versus
+4-month duration difference and the commercial soil-loading scope that is not
+yet linked to design. The false tree-material and unresolved utility-material
+findings are absent.
+
+The immutable public release is
+`~/.asd-kontur/public-demo/releases/20261004-e6c561a-scope-safety-v69`.
+Exact-SHA CI run `37123195390` passed, as did the 1,231-test local unit suite.
+A controlled worker restart was followed by an autonomously claimed
+cross-document job; no developer queue, retry, successor, priority or Qwen
+command was issued. Qwen PID `85702` and NTD worker PID `98263` were preserved.
+The release receipt SHA-256 is
+`be344b7aeb9b06a8f5e959ab7c3ea24a83f6e1d10c1cd1d7277740b24820983b`.
+
+The platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains exactly
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains 319 succeeded jobs.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Commercial work denominator cleanup — release c00a938
 
 Release `c00a938f6acf9ca0e2989776ac7398874051daa7` separates construction
