@@ -124,6 +124,78 @@ def test_cross_document_scope_task_asks_for_semantic_operation_without_arithmeti
     )
 
 
+def test_cross_document_scope_schema_repair_keeps_exact_pair_intact(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        assertions_required = len(prompts) > 1
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "pipeline",
+                        "operation": "Монтаж водовода",
+                        "facility": "Участок 7",
+                        "confidence": "0.91",
+                        "reason": "Строки относятся к одному водоводу.",
+                        **(
+                            {
+                                "work_scope_assertions": [
+                                    {
+                                        "related_candidate_id": (
+                                            "commercial-pipe"
+                                            if candidate_id == "design-pipe"
+                                            else "design-pipe"
+                                        ),
+                                        "scope_compatibility": "SAME_SCOPE",
+                                        "normalized_operation": "Монтаж водовода",
+                                        "reason": "Один объём монтажа водовода.",
+                                    }
+                                ]
+                            }
+                            if assertions_required
+                            else {}
+                        ),
+                    }
+                    for candidate_id in ("design-pipe", "commercial-pipe")
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-pipe",
+                "wording": "Устройство водовода",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-pipe",
+                "wording": "Монтаж трубопровода",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"pipeline": "Трубопроводы"},
+        facilities=["Участок 7"],
+    )
+
+    assert len(prompts) == 2
+    assert "qwen_work_reconciliation_work_scope_assertions_invalid" in prompts[1]
+    assert "design-pipe" in prompts[1]
+    assert "commercial-pipe" in prompts[1]
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_work_scope_assertions_invalid"]
+    assert all(value.get("work_scope_assertions") for value in result["observations"])
+
+
 def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
     monkeypatch: Any,
 ) -> None:

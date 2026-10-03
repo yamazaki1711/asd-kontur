@@ -9905,11 +9905,15 @@ def _quantities_requiring_semantic_review(
             result.append(row)
             continue
         # V33 adds pair-specific authority for the work operation itself. V32
-        # already established pair-specific quantity compatibility, so its
+        # and V33 already established pair-specific quantity compatibility, so their
         # accepted numeric decisions remain current input and must not be sent
         # through the heavy model again merely to obtain the work assertion.
         if (
-            existing_profile == "qwen-project-work-reconciliation-v32"
+            existing_profile
+            in {
+                "qwen-project-work-reconciliation-v32",
+                "qwen-project-work-reconciliation-v33",
+            }
             and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
             and review.get("relationship_reviewed") is True
         ):

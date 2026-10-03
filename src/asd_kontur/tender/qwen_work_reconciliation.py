@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v33"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v34"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -48,6 +48,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v30",
     "qwen-project-work-reconciliation-v31",
     "qwen-project-work-reconciliation-v32",
+    "qwen-project-work-reconciliation-v33",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
@@ -249,6 +250,27 @@ class QwenProjectWorkReconciler:
         except QwenSemanticFailure as exc:
             if exc.code not in _RECOVERABLE_RESPONSE_FAILURES:
                 raise
+            # A work-scope decision is defined by the exact design/commercial
+            # pair. Splitting a rejected pair into single rows can never
+            # produce reciprocal authority, so repair the same two-row context
+            # once before the safe unresolved fallback.
+            if (
+                scope_review
+                and relationship_schema_retry_available
+                and exc.code == "qwen_work_reconciliation_work_scope_assertions_invalid"
+            ):
+                observations, call_count, codes = self._reconcile_rows(
+                    rows,
+                    work_families=work_families,
+                    facilities=facilities,
+                    relationship_review=relationship_review,
+                    single_retry_available=single_retry_available,
+                    relationship_context_complete=relationship_context_complete,
+                    expanded_relationship_budget=expanded_relationship_budget,
+                    relationship_schema_retry_available=False,
+                    relationship_repair_code=exc.code,
+                )
+                return observations, call_count + 1, [exc.code, *codes]
             # A relationship review loses its cross-row authority when recursive
             # recovery splits the batch.  Real project observations showed that a
             # valid three/four-row relationship response can exhaust the compact
@@ -507,6 +529,11 @@ def _prompt(
             "qwen_work_reconciliation_same_scope_operation_mismatch": (
                 "Строки с одинаковым semantic_scope и SAME_SCOPE должны иметь дословно "
                 "одинаковое краткое operation; различие чисел этому не препятствует."
+            ),
+            "qwen_work_reconciliation_work_scope_assertions_invalid": (
+                "Сохраните точную пару из двух строк. Для каждой строки верните ровно одно "
+                "work_scope_assertions на идентификатор второй строки. В обоих направлениях "
+                "дословно повторите scope_compatibility, normalized_operation и reason."
             ),
         }.get(relationship_repair_code, "")
         relationship_repair_instruction = (
