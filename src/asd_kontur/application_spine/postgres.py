@@ -1061,10 +1061,11 @@ def _deterministic_scope_requires_semantic_review(
     deterministic_family: tuple[str, str] | None,
     explicit_facility: str | None,
     linked_quantities: Iterable[Mapping[str, Any]],
+    scope_comparison_context_only: bool = False,
 ) -> bool:
     """Keep known scopes out of Qwen unless their numbers still need meaning."""
 
-    return not (
+    return scope_comparison_context_only or not (
         deterministic_family is not None
         and explicit_facility is not None
         and not tuple(linked_quantities)
@@ -6495,6 +6496,7 @@ class SpinePostgresRepository:
                     deterministic_family=deterministic_family,
                     explicit_facility=explicit_facility,
                     linked_quantities=linked_quantities,
+                    scope_comparison_context_only=scope_comparison_context_only,
                 ):
                     continue
                 row["wording"] = wording

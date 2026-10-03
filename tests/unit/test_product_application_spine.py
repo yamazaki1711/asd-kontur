@@ -415,6 +415,12 @@ def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
         explicit_facility=None,
         linked_quantities=[],
     )
+    assert _deterministic_scope_requires_semantic_review(
+        deterministic_family=family,
+        explicit_facility="Reservoir Delta",
+        linked_quantities=[],
+        scope_comparison_context_only=True,
+    )
 
 
 def test_quantity_review_chunks_schedule_relationship_pass_before_completion() -> None:
