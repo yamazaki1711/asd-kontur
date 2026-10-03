@@ -1833,6 +1833,47 @@ def test_quantity_review_chunks_merge_by_exact_candidate_identity() -> None:
     ]
 
 
+def test_quantity_review_chunks_preserve_multiple_reviewed_relationships() -> None:
+    combined = _merged_quantity_reviews(
+        (
+            {
+                "quantity_candidate_id": "manual",
+                "status": "WORK_QUANTITY",
+                "relation_kind": "COMPONENT_OF",
+                "related_quantity_candidate_ids": ["design-total"],
+                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                "relationship_reviewed": True,
+            },
+        ),
+        (
+            {
+                "quantity_candidate_id": "manual",
+                "status": "WORK_QUANTITY",
+                "relation_kind": "DUPLICATE_OF",
+                "related_quantity_candidate_ids": ["vor-manual"],
+                "scope_compatibility": "SAME_SCOPE",
+                "relationship_reviewed": True,
+            },
+        ),
+    )
+
+    assert combined[0]["relation_kind"] == "DUPLICATE_OF"
+    assert combined[0]["relationship_assertions"] == [
+        {
+            "relation_kind": "COMPONENT_OF",
+            "related_quantity_candidate_ids": ["design-total"],
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "relationship_reviewed": True,
+        },
+        {
+            "relation_kind": "DUPLICATE_OF",
+            "related_quantity_candidate_ids": ["vor-manual"],
+            "scope_compatibility": "SAME_SCOPE",
+            "relationship_reviewed": True,
+        },
+    ]
+
+
 def test_work_resolution_profile_upgrade_preserves_facility_and_quantity_reviews() -> None:
     rows = [
         {

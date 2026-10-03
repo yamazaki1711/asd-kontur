@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v72"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v73"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3099,6 +3099,7 @@ def _work_schedule(
                             "scope_compatibility",
                             "relationship_reviewed",
                             "component_set_complete",
+                            "relationship_assertions",
                         )
                         if review.get(key) is not None
                     }
@@ -3137,6 +3138,9 @@ def _work_schedule(
                     "scope_compatibility": review.get("scope_compatibility"),
                     "relationship_reviewed": review.get("relationship_reviewed"),
                     "component_set_complete": review.get("component_set_complete"),
+                    "relationship_assertions": list(
+                        review.get("relationship_assertions") or ()
+                    ),
                     "reason": review.get("reason"),
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
@@ -3709,21 +3713,41 @@ def _component_total_comparisons(
                             ]
                         ),
                     )
-                    relation = QuantityRelation(str(value.get("relation_kind") or "NONE"))
-                    compatibility = ScopeCompatibility(
-                        str(value.get("scope_compatibility") or "INSUFFICIENT_INFORMATION")
-                    )
                 except (InvalidOperation, TypeError, ValueError):
                     continue
                 records.setdefault(
                     candidate_id,
                     {"statement": statement, "value": value, "work": work, "role": str(role)},
                 )
-                related = tuple(
-                    str(item) for item in value.get("related_quantity_candidate_ids") or ()
+                relationship_values = [value]
+                relationship_values.extend(
+                    dict(item)
+                    for item in value.get("relationship_assertions") or ()
+                    if isinstance(item, Mapping)
                 )
-                if relation is not QuantityRelation.NONE and related:
-                    if value.get("relationship_reviewed") is not True:
+                for relationship_value in relationship_values:
+                    try:
+                        relation = QuantityRelation(
+                            str(relationship_value.get("relation_kind") or "NONE")
+                        )
+                        compatibility = ScopeCompatibility(
+                            str(
+                                relationship_value.get("scope_compatibility")
+                                or "INSUFFICIENT_INFORMATION"
+                            )
+                        )
+                    except ValueError:
+                        continue
+                    related = tuple(
+                        str(item)
+                        for item in relationship_value.get(
+                            "related_quantity_candidate_ids"
+                        )
+                        or ()
+                    )
+                    if relation is QuantityRelation.NONE or not related:
+                        continue
+                    if relationship_value.get("relationship_reviewed") is not True:
                         continue
                     if (
                         relation in {QuantityRelation.COMPONENT_OF, QuantityRelation.SUBTOTAL_OF}
@@ -3733,7 +3757,7 @@ def _component_total_comparisons(
                             reciprocal_components[total_id].add(candidate_id)
                     if (
                         relation is QuantityRelation.TOTAL_FOR
-                        and value.get("component_set_complete") is not True
+                        and relationship_value.get("component_set_complete") is not True
                     ):
                         continue
                     if relation is QuantityRelation.TOTAL_FOR:
@@ -6381,6 +6405,7 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                     "relationship_reviewed",
                     "component_set_complete",
                     "semantic_review_profile",
+                    "relationship_assertions",
                 ):
                     if row.get(review_field) is not None:
                         semantics[review_field] = row.get(review_field)

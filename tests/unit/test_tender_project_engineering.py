@@ -1351,10 +1351,26 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
                             "unit": "м3",
                             "semantic_scope": "Ручная разработка грунта",
                             "quantity_type": "COMPONENT",
-                            "relation_kind": "COMPONENT_OF",
-                            "related_quantity_candidate_ids": ["total"],
-                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relation_kind": "DUPLICATE_OF",
+                            "related_quantity_candidate_ids": ["commercial-manual"],
+                            "scope_compatibility": "SAME_SCOPE",
                             "relationship_reviewed": True,
+                            "relationship_assertions": [
+                                {
+                                    "relation_kind": "COMPONENT_OF",
+                                    "related_quantity_candidate_ids": ["total"],
+                                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                    "relationship_reviewed": True,
+                                },
+                                {
+                                    "relation_kind": "DUPLICATE_OF",
+                                    "related_quantity_candidate_ids": [
+                                        "commercial-manual"
+                                    ],
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "relationship_reviewed": True,
+                                },
+                            ],
                             "source_locator_id": "locator-manual",
                         },
                     ]
@@ -2634,7 +2650,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v72"
+    assert model["model_version"] == "project-engineering-model-v73"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

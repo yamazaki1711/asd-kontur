@@ -9904,7 +9904,48 @@ def _merged_quantity_reviews(
     for value in (*tuple(prior), *tuple(current)):
         candidate_id = str(value.get("quantity_candidate_id") or "")
         if candidate_id:
-            reviews[candidate_id] = dict(value)
+            previous = reviews.get(candidate_id, {})
+            combined = dict(value)
+            assertions: dict[tuple[str, tuple[str, ...], str, bool | None], dict[str, Any]] = {}
+            for source in (
+                *(previous.get("relationship_assertions") or ()),
+                previous,
+                *(value.get("relationship_assertions") or ()),
+                value,
+            ):
+                if not isinstance(source, Mapping):
+                    continue
+                relation_kind = str(source.get("relation_kind") or "NONE")
+                related_ids = tuple(
+                    str(item)
+                    for item in source.get("related_quantity_candidate_ids") or ()
+                    if item
+                )
+                compatibility = str(
+                    source.get("scope_compatibility") or "INSUFFICIENT_INFORMATION"
+                )
+                if (
+                    source.get("relationship_reviewed") is not True
+                    or relation_kind == "NONE"
+                    or not related_ids
+                ):
+                    continue
+                complete = source.get("component_set_complete")
+                key = (relation_kind, related_ids, compatibility, complete)
+                assertions[key] = {
+                    "relation_kind": relation_kind,
+                    "related_quantity_candidate_ids": list(related_ids),
+                    "scope_compatibility": compatibility,
+                    "relationship_reviewed": True,
+                    **(
+                        {"component_set_complete": complete}
+                        if complete is not None
+                        else {}
+                    ),
+                }
+            if assertions:
+                combined["relationship_assertions"] = list(assertions.values())
+            reviews[candidate_id] = combined
     return list(reviews.values())
 
 
