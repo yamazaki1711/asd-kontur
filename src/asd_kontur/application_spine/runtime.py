@@ -415,6 +415,11 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         service_commands.append(("ntd-worker", "run-ntd-worker"))
     for name, command_name in service_commands:
         log_path = log_root / f"{name}.log"
+        # Model-backed workers finish the current bounded request after
+        # SIGTERM before leaving the claim loop.  launchd's short default exit
+        # window otherwise escalates a controlled release to SIGKILL, expires
+        # the durable lease and wastes the still-running local generation.
+        exit_timeout_seconds = 960 if name in {"worker", "assistant-worker"} else 30
         content = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
@@ -428,6 +433,7 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
             f"<key>EnvironmentVariables</key><dict>{environment_xml}</dict>"
             f"<key>StandardOutPath</key><string>{escape(str(log_path))}</string>"
             f"<key>StandardErrorPath</key><string>{escape(str(log_path))}</string>"
+            f"<key>ExitTimeOut</key><integer>{exit_timeout_seconds}</integer>"
             "<key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>5</integer>"
             "<key>ProcessType</key><string>Background</string>"
             "</dict></plist>\n"

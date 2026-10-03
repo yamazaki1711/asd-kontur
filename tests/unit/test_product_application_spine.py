@@ -3155,11 +3155,15 @@ def test_launchd_and_bounded_log_contracts(tmp_path: Path, monkeypatch: pytest.M
     assert parsed["ProgramArguments"][0] == str(Path(sys.executable).absolute())
     assert parsed["EnvironmentVariables"]["ASD_DATABASE_URL"].startswith("postgresql+psycopg://")
     assert parsed["EnvironmentVariables"]["ASD_EXPECTED_MIGRATION_HEAD"] == ("0033_ntd_memory")
+    assert parsed["ExitTimeOut"] == 30
     assistant_plist = plistlib.loads(
         (output / "ru.asd-kontur.spine.assistant-worker.plist").read_bytes()
     )
     assert assistant_plist["Label"] == "ru.asd-kontur.spine.assistant-worker"
     assert assistant_plist["ProgramArguments"][-1] == "run-assistant-worker"
+    assert assistant_plist["ExitTimeOut"] == 960
+    worker_plist = plistlib.loads((output / "ru.asd-kontur.spine.worker.plist").read_bytes())
+    assert worker_plist["ExitTimeOut"] == 960
     orchestrator_plist = plistlib.loads(
         (output / "ru.asd-kontur.spine.project-orchestrator.plist").read_bytes()
     )
