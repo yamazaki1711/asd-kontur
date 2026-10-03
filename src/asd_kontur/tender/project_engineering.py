@@ -2351,11 +2351,7 @@ def _project_scope_facility_members(
         return ()
     return tuple(
         sorted(
-            (
-                item
-                for item in rows
-                if _specific_structure_key(item.get("name")) is not None
-            ),
+            (item for item in rows if _specific_structure_key(item.get("name")) is not None),
             key=lambda item: (
                 str(item.get("facility_id") or ""),
                 str(item.get("name") or ""),

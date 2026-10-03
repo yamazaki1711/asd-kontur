@@ -2048,15 +2048,11 @@ def test_project_wide_commercial_scope_covers_only_its_exact_member_facilities()
     building_a = next(row for row in comparisons if row["facility"] == "Building A")
     building_c = next(row for row in comparisons if row["facility"] == "Building C")
     assert building_a["classification"] == "MATCH"
-    assert building_a["professional_status"] == (
-        "Коммерческий состав найден в общем объёме"
-    )
+    assert building_a["professional_status"] == ("Коммерческий состав найден в общем объёме")
     assert "распределение количества" in building_a["conclusion"]
     assert building_c["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
-    project_row = next(
-        row for row in comparisons if row["location_scope_kind"] == "project"
-    )
+    project_row = next(row for row in comparisons if row["location_scope_kind"] == "project")
     assert project_row["classification"] == "MATCH"
     assert "коммерческий объём по сооружениям не распределён" in project_row["conclusion"]
 
@@ -2097,9 +2093,7 @@ def test_unclassified_project_wide_commercial_scope_blocks_false_omission() -> N
 
     formwork = next(row for row in comparisons if row["family_key"] == "formwork")
     assert formwork["classification"] == "UNRESOLVED_SCOPE_MATCH"
-    assert formwork["professional_status"] == (
-        "Сопоставление коммерческого состава не завершено"
-    )
+    assert formwork["professional_status"] == ("Сопоставление коммерческого состава не завершено")
 
 
 def test_generic_sheet_pile_design_scope_covers_driving_at_same_facility_only() -> None:
