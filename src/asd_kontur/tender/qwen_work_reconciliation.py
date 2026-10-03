@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v38"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v39"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -53,6 +53,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v35",
     "qwen-project-work-reconciliation-v36",
     "qwen-project-work-reconciliation-v37",
+    "qwen-project-work-reconciliation-v38",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
@@ -217,6 +218,7 @@ class QwenProjectWorkReconciler:
         relationship_context_complete: bool = True,
         expanded_relationship_budget: bool = False,
         scope_repair_attempts_remaining: int = 2,
+        quantity_pair_repair_attempts_remaining: int = 2,
         relationship_schema_retry_available: bool = True,
         relationship_repair_code: str | None = None,
     ) -> tuple[list[dict[str, Any]], int, list[str]]:
@@ -321,6 +323,48 @@ class QwenProjectWorkReconciler:
         except QwenSemanticFailure as exc:
             if exc.code not in _RECOVERABLE_RESPONSE_FAILURES:
                 raise
+            # An exact two-row quantity relationship is just as indivisible as
+            # a design/commercial scope pair. Splitting it into independent
+            # single-row calls can never establish reciprocal quantity
+            # authority. Production v38 receipts demonstrated that the old
+            # split fallback could spend five calls and still return unresolved
+            # rows. Keep the pair intact, permit at most two progressive repairs,
+            # and stop when the same rejected shape repeats.
+            if (
+                relationship_review
+                and len(rows) == 2
+                and quantity_pair_repair_attempts_remaining > 0
+                and (
+                    relationship_repair_code is None
+                    or exc.code != relationship_repair_code
+                    or (
+                        exc.code == "qwen_semantic_response_output_exhausted"
+                        and not expanded_relationship_budget
+                    )
+                )
+            ):
+                observations, call_count, codes = self._reconcile_rows(
+                    rows,
+                    work_families=work_families,
+                    facilities=facilities,
+                    relationship_review=True,
+                    single_retry_available=single_retry_available,
+                    relationship_context_complete=True,
+                    expanded_relationship_budget=True,
+                    scope_repair_attempts_remaining=scope_repair_attempts_remaining,
+                    quantity_pair_repair_attempts_remaining=(
+                        quantity_pair_repair_attempts_remaining - 1
+                    ),
+                    relationship_schema_retry_available=False,
+                    relationship_repair_code=exc.code,
+                )
+                return observations, call_count + 1, [exc.code, *codes]
+            if relationship_review and len(rows) == 2:
+                return (
+                    [_unresolved_observation(row, failure_code=exc.code) for row in rows],
+                    1,
+                    [exc.code, "qwen_work_reconciliation_quantity_pair_unresolved"],
+                )
             # A work-scope decision is defined by the exact design/commercial
             # pair. Splitting a rejected pair into single rows can never produce
             # reciprocal authority. Keep that pair intact and permit at most two

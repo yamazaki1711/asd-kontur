@@ -2301,7 +2301,7 @@ def test_quantity_relationship_task_preserves_incomplete_component_set(monkeypat
     assert total_review["component_set_complete"] is False
 
 
-def test_split_quantity_batch_is_not_certified_as_complete_relationship_review(
+def test_two_row_quantity_batch_is_not_split_after_repeated_invalid_json(
     monkeypatch: Any,
 ) -> None:
     rows = [
@@ -2369,7 +2369,12 @@ def test_split_quantity_batch_is_not_certified_as_complete_relationship_review(
         facilities=[],
     )
 
-    assert result["inference_call_count"] == 3
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_invalid_json",
+        "qwen_work_reconciliation_invalid_json",
+        "qwen_work_reconciliation_quantity_pair_unresolved",
+    ]
     assert all(
         "relationship_reviewed" not in review
         for observation in result["observations"]
@@ -2655,6 +2660,180 @@ def test_relationship_schema_failure_retries_same_complete_context_once(
         for observation in result["observations"]
         for review in observation["quantity_reviews"]
     )
+
+
+def test_two_row_quantity_relationship_repairs_two_distinct_failures_without_split(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "pipeline",
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_id, "value": value, "unit": "m"}
+            ],
+        }
+        for candidate_id, quantity_id, wording, value in (
+            ("candidate-total", "quantity-total", "Общая длина теплотрассы", "240"),
+            ("candidate-section", "quantity-section", "Длина участка теплотрассы", "140"),
+        )
+    ]
+    calls: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        calls.append(prompt)
+        call_number = len(calls)
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "pipeline",
+                        "operation": "Прокладка теплотрассы",
+                        "facility": None,
+                        "confidence": "0.92",
+                        "reason": "Переданы общий объём и один участок.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина теплотрассы",
+                                "quantity_type": (
+                                    "TOTAL"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT"
+                                ),
+                                "relation_kind": (
+                                    "TOTAL_FOR"
+                                    if row["candidate_id"] == "candidate-total"
+                                    else "COMPONENT_OF"
+                                ),
+                                "related_quantity_candidate_ids": (
+                                    ["invented-id"]
+                                    if call_number == 1
+                                    else [
+                                        "quantity-section"
+                                        if row["candidate_id"] == "candidate-total"
+                                        else "quantity-total"
+                                    ]
+                                ),
+                                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                                "component_set_complete": (
+                                    False
+                                    if row["candidate_id"] == "candidate-total" and call_number != 2
+                                    else None
+                                ),
+                                "reason": "Участок является частью общей длины.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"pipeline": "Трубопроводы"},
+        facilities=[],
+    )
+
+    assert len(calls) == 3
+    assert all(all(row["candidate_id"] in prompt for row in rows) for prompt in calls)
+    assert result["inference_call_count"] == 3
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_quantity_relation_ids_invalid",
+        "qwen_work_reconciliation_component_completeness_invalid",
+    ]
+    assert all(
+        review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
+def test_two_row_quantity_relationship_stops_after_repeated_failure_without_split(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "structural_steel",
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_id, "value": value, "unit": "t"}
+            ],
+        }
+        for candidate_id, quantity_id, wording, value in (
+            ("candidate-a", "quantity-a", "Масса ферм блока A", "8.1"),
+            ("candidate-b", "quantity-b", "Масса ферм блока B", "7.4"),
+        )
+    ]
+    calls: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        calls.append(prompt)
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Монтаж ферм",
+                        "facility": None,
+                        "confidence": "0.88",
+                        "reason": "Строки относятся к разным блокам.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Масса ферм",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": ["invented-id"],
+                                "scope_compatibility": "DIFFERENT_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Разные конструктивные блоки.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"structural_steel": "Металлоконструкции"},
+        facilities=[],
+    )
+
+    assert len(calls) == 2
+    assert all(all(row["candidate_id"] in prompt for row in rows) for prompt in calls)
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_quantity_relation_ids_invalid",
+        "qwen_work_reconciliation_quantity_relation_ids_invalid",
+        "qwen_work_reconciliation_quantity_pair_unresolved",
+    ]
+    assert all(value["status"] == "UNCLASSIFIED" for value in result["observations"])
 
 
 def test_qwen_work_reconciliation_rejects_invented_cross_row_quantity_identity(
