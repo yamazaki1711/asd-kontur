@@ -356,6 +356,147 @@ def test_cross_document_scope_output_exhaustion_never_splits_exact_pair(
     assert all(value.get("work_scope_assertions") for value in result["observations"])
 
 
+def test_cross_document_scope_repairs_revision_inferred_only_from_different_values(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": "design-waterproofing",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            "wording": "Устройство мембранной гидроизоляции",
+            "document_role": "РД",
+            "nearby_context": "Общая площадь мембранной гидроизоляции 740 м².",
+        },
+        {
+            "candidate_id": "commercial-waterproofing",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            "wording": "Устройство мембранной гидроизоляции",
+            "document_role": "ВОР",
+            "nearby_context": "Устройство мембранной гидроизоляции 700 м².",
+        },
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        repaired = "qwen_work_reconciliation_revision_evidence_missing" in prompt
+        compatibility = "SAME_SCOPE" if repaired else "REVISION_DIFFERENCE"
+        normalized_operation = "Устройство мембранной гидроизоляции" if repaired else None
+        reason = (
+            "Обе строки описывают общую площадь мембранной гидроизоляции."
+            if repaired
+            else "Разные значения указывают на разные редакции."
+        )
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Устройство мембранной гидроизоляции",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": reason,
+                        "work_scope_assertions": [
+                            {
+                                "related_candidate_id": (
+                                    "commercial-waterproofing"
+                                    if row["candidate_id"] == "design-waterproofing"
+                                    else "design-waterproofing"
+                                ),
+                                "scope_compatibility": compatibility,
+                                "normalized_operation": normalized_operation,
+                                "reason": reason,
+                            }
+                        ],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert "Различие значений, марок, толщин или объёмов" in prompts[1]
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_revision_evidence_missing"]
+    assert {
+        value["work_scope_assertions"][0]["scope_compatibility"] for value in result["observations"]
+    } == {"SAME_SCOPE"}
+
+
+def test_cross_document_scope_accepts_explicit_revision_relationship(monkeypatch: Any) -> None:
+    rows = [
+        {
+            "candidate_id": "revision-one",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            "wording": "Устройство мембранной гидроизоляции",
+            "document_role": "РД",
+            "nearby_context": "Редакция 1: площадь гидроизоляции 740 м².",
+        },
+        {
+            "candidate_id": "revision-two",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            "wording": "Устройство мембранной гидроизоляции",
+            "document_role": "РД",
+            "nearby_context": "Изм. 2 заменяет редакцию 1: площадь 700 м².",
+        },
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": "Устройство мембранной гидроизоляции",
+                        "facility": None,
+                        "confidence": "0.97",
+                        "reason": "Источник прямо связывает редакцию 1 и изменение 2.",
+                        "work_scope_assertions": [
+                            {
+                                "related_candidate_id": (
+                                    "revision-two"
+                                    if row["candidate_id"] == "revision-one"
+                                    else "revision-one"
+                                ),
+                                "scope_compatibility": "REVISION_DIFFERENCE",
+                                "normalized_operation": None,
+                                "reason": "Источник прямо связывает редакцию 1 и изменение 2.",
+                            }
+                        ],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 1
+    assert result["recovery_codes"] == []
+    assert {
+        value["work_scope_assertions"][0]["scope_compatibility"] for value in result["observations"]
+    } == {"REVISION_DIFFERENCE"}
+
+
 def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
     monkeypatch: Any,
 ) -> None:
@@ -1183,6 +1324,111 @@ def test_quantity_relationship_accepts_explicit_alternative_design(
         for observation in result["observations"]
         for review in observation["quantity_reviews"]
     )
+
+
+def test_quantity_relationship_repairs_revision_inferred_only_from_quantity_difference(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": "design",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Устройство защитного покрытия",
+            "document_role": "РД",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "design-q",
+                    "value": "740",
+                    "unit": "м2",
+                    "nearby_context": "Общая площадь защитного покрытия 740 м².",
+                }
+            ],
+        },
+        {
+            "candidate_id": "commercial",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Устройство защитного покрытия",
+            "document_role": "ВОР",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "commercial-q",
+                    "value": "700",
+                    "unit": "м2",
+                    "nearby_context": "Устройство защитного покрытия 700 м².",
+                }
+            ],
+        },
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        repaired = "qwen_work_reconciliation_revision_evidence_missing" in prompt
+        observations = []
+        for row in rows:
+            quantity_id = row["quantity_observations"][0]["quantity_candidate_id"]
+            peer = "commercial-q" if quantity_id == "design-q" else "design-q"
+            observations.append(
+                {
+                    "candidate_id": row["candidate_id"],
+                    "status": "MATCHED",
+                    "family_key": "protective_coating",
+                    "operation": "Устройство защитного покрытия",
+                    "facility": None,
+                    "confidence": "0.94",
+                    "reason": "Обе строки описывают защитное покрытие.",
+                    "quantity_reviews": [
+                        {
+                            "quantity_candidate_id": quantity_id,
+                            "status": "WORK_QUANTITY",
+                            "semantic_scope": "Площадь защитного покрытия",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "NONE" if repaired else "REVISION_OF",
+                            "related_quantity_candidate_ids": [] if repaired else [peer],
+                            "scope_compatibility": (
+                                "SAME_SCOPE" if repaired else "REVISION_DIFFERENCE"
+                            ),
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": peer,
+                                    "scope_compatibility": (
+                                        "SAME_SCOPE" if repaired else "REVISION_DIFFERENCE"
+                                    ),
+                                    "reason": (
+                                        "Один инженерный объём."
+                                        if repaired
+                                        else "Разные значения означают разные редакции."
+                                    ),
+                                }
+                            ],
+                            "component_set_complete": None,
+                            "reason": (
+                                "Один инженерный объём."
+                                if repaired
+                                else "Разные значения означают разные редакции."
+                            ),
+                        }
+                    ],
+                    "material_reviews": [],
+                }
+            )
+        return json.dumps({"observations": observations}, ensure_ascii=False)
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"protective_coating": "Защитные покрытия"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_revision_evidence_missing"]
+    assert {
+        review["scope_compatibility"]
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    } == {"SAME_SCOPE"}
 
 
 def test_quantity_relationship_repairs_same_scope_operation_mismatch(

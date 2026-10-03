@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v36"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v37"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -51,6 +51,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v33",
     "qwen-project-work-reconciliation-v34",
     "qwen-project-work-reconciliation-v35",
+    "qwen-project-work-reconciliation-v36",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
@@ -81,6 +82,13 @@ _WEAK_FACILITY_REASON = re.compile(
 _EXPLICIT_ALTERNATIVE_EVIDENCE = re.compile(
     r"(?:\bальтернатив\w*|\bвариант\w*|\bвзамен\b|\bзамен\w*|"
     r"\balternative\w*|\boption\w*|\binstead\s+of\b|\breplac\w*)",
+    re.IGNORECASE,
+)
+_EXPLICIT_REVISION_EVIDENCE = re.compile(
+    r"(?:\bредакц\w*|\bревиз\w*|\bизмен(?:ен|ение|ения|ён|ённ)\w*|"
+    r"\bизм\.?\s*[-№nº]*\s*\d+|\bверси\w*|\bзамен(?:ен|яет|ена)\w*|"
+    r"\brevision\w*|\brev\.?\s*[-#]?\s*[a-z0-9]+|\bversion\w*|"
+    r"\bsupersed\w*|\breplac(?:es|ed|ement)\b)",
     re.IGNORECASE,
 )
 _SCOPE_OPERATION_GENERIC_WORDS = frozenset(
@@ -140,6 +148,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_scope_assertions_invalid",
         "qwen_work_reconciliation_work_scope_assertions_invalid",
         "qwen_work_reconciliation_work_scope_operation_ungrounded",
+        "qwen_work_reconciliation_revision_evidence_missing",
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_alternative_evidence_missing",
         "qwen_work_reconciliation_same_scope_operation_mismatch",
@@ -233,6 +242,19 @@ class QwenProjectWorkReconciler:
             for value in row.get("quantity_observations") or ()
             if isinstance(value, Mapping) and value.get("quantity_candidate_id")
         }
+        work_context_by_id = {
+            str(row["candidate_id"]): " ".join(
+                str(value or "")
+                for value in (
+                    row.get("wording"),
+                    row.get("scope"),
+                    row.get("document"),
+                    row.get("document_role"),
+                    row.get("nearby_context"),
+                )
+            )
+            for row in rows
+        }
         try:
             scope_review = bool(rows) and all(
                 str(row.get("analysis_task") or "")
@@ -272,6 +294,7 @@ class QwenProjectWorkReconciler:
                         str(row["candidate_id"]): str(row.get("wording") or "").casefold()
                         for row in rows
                     },
+                    work_context_by_id=work_context_by_id,
                     quantity_ids_by_work=quantity_ids_by_work,
                     quantity_context_by_id=quantity_context_by_id,
                     work_families=work_families,
@@ -373,6 +396,7 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_quantity_relation_ids_invalid",
                     "qwen_work_reconciliation_scope_assertions_invalid",
                     "qwen_work_reconciliation_alternative_evidence_missing",
+                    "qwen_work_reconciliation_revision_evidence_missing",
                     "qwen_work_reconciliation_same_scope_operation_mismatch",
                     "qwen_work_reconciliation_component_total_relation_missing",
                 }
@@ -590,6 +614,12 @@ def _prompt(
                 "называет вариант, альтернативу или замену. Различие значений само по себе не "
                 "является альтернативой. Для одного инженерного объёма верните SAME_SCOPE."
             ),
+            "qwen_work_reconciliation_revision_evidence_missing": (
+                "REVISION_OF/REVISION_DIFFERENCE допустимы только когда исходный текст прямо "
+                "называет редакцию, изменение, версию, замену или отменённую редакцию. Различие "
+                "значений, марок, толщин или объёмов само по себе не доказывает связь редакций. "
+                "Верните фактическую сопоставимость инженерных областей."
+            ),
             "qwen_work_reconciliation_same_scope_operation_mismatch": (
                 "Строки с одинаковым semantic_scope и SAME_SCOPE должны иметь дословно "
                 "одинаковое краткое operation; различие чисел этому не препятствует."
@@ -700,6 +730,9 @@ quantity_candidate_id перечисляют ВСЕ составляющие и�
 вид работ или одно сооружение сами по себе не доказывают SAME_SCOPE. normalized_operation должно
 содержать хотя бы один различительный термин из точного wording КАЖДОЙ строки пары. nearby_context
 может объяснять строку, но не может подменять её другой операцией из соседнего текста.
+REVISION_DIFFERENCE допустимо только при прямом указании редакции, изменения, версии, замены или
+отменённой редакции в переданном источнике. Различие чисел, марок, толщин или объёмов само по себе
+не доказывает связь редакций.
 Для каждой пары переданных чисел по одной инженерной операции примите явное решение о
 сопоставимости. Если значения измеряют один и тот же инженерный объём, даже когда сами числа
 различаются, укажите SAME_SCOPE для обеих строк и используйте для них дословно одинаковый краткий
@@ -748,6 +781,7 @@ def _parse(
     *,
     input_ids: tuple[str, ...],
     wording_by_id: Mapping[str, str],
+    work_context_by_id: Mapping[str, str],
     quantity_ids_by_work: Mapping[str, tuple[str, ...]],
     quantity_context_by_id: Mapping[str, str],
     work_families: Mapping[str, str],
@@ -863,7 +897,11 @@ def _parse(
             quantity_context_by_id=quantity_context_by_id,
         )
     if scope_review:
-        _validate_work_scope_assertions(ordered, wording_by_id=wording_by_id)
+        _validate_work_scope_assertions(
+            ordered,
+            wording_by_id=wording_by_id,
+            work_context_by_id=work_context_by_id,
+        )
     return ordered
 
 
@@ -922,6 +960,7 @@ def _validate_work_scope_assertions(
     observations: Iterable[Mapping[str, Any]],
     *,
     wording_by_id: Mapping[str, str],
+    work_context_by_id: Mapping[str, str],
 ) -> None:
     by_id = {str(value.get("candidate_id") or ""): value for value in observations}
     for candidate_id, observation in by_id.items():
@@ -949,6 +988,12 @@ def _validate_work_scope_assertions(
                     raise QwenSemanticFailure(
                         "qwen_work_reconciliation_work_scope_operation_ungrounded"
                     )
+            if assertion.get("scope_compatibility") == ScopeCompatibility.REVISION_DIFFERENCE.value:
+                revision_context = " ".join(
+                    work_context_by_id.get(value, "") for value in (candidate_id, peer_id)
+                )
+                if _EXPLICIT_REVISION_EVIDENCE.search(revision_context) is None:
+                    raise QwenSemanticFailure("qwen_work_reconciliation_revision_evidence_missing")
 
 
 def _scope_operation_anchor_stems(value: str) -> set[str]:
@@ -1023,6 +1068,32 @@ def _validate_relationship_consistency(
                     raise QwenSemanticFailure(
                         "qwen_work_reconciliation_alternative_evidence_missing"
                     )
+            if (
+                relation_kind == QuantityRelation.REVISION_OF.value
+                or compatibility == ScopeCompatibility.REVISION_DIFFERENCE.value
+            ):
+                revision_ids = tuple(
+                    dict.fromkeys(
+                        [
+                            *(
+                                str(value)
+                                for value in review.get("related_quantity_candidate_ids") or ()
+                            ),
+                            *(
+                                str(assertion.get("related_quantity_candidate_id") or "")
+                                for assertion in review.get("scope_assertions") or ()
+                                if isinstance(assertion, Mapping)
+                            ),
+                        ]
+                    )
+                )
+                evidence = " ".join(
+                    quantity_context_by_id.get(value, "")
+                    for value in (quantity_id, *revision_ids)
+                    if value
+                )
+                if _EXPLICIT_REVISION_EVIDENCE.search(evidence) is None:
+                    raise QwenSemanticFailure("qwen_work_reconciliation_revision_evidence_missing")
             if compatibility == ScopeCompatibility.SAME_SCOPE.value:
                 semantic_scope = " ".join(
                     str(review.get("semantic_scope") or "").casefold().split()
