@@ -6836,6 +6836,12 @@ class SpinePostgresRepository:
                             "prior_status": prior_quantity_reviews.get(
                                 str(quantity.get("candidate_id") or ""), {}
                             ).get("status"),
+                            "prior_scope_assertions": list(
+                                prior_quantity_reviews.get(
+                                    str(quantity.get("candidate_id") or ""), {}
+                                ).get("scope_assertions")
+                                or ()
+                            ),
                         }
                     )
                 contextual_scope = (
@@ -9891,6 +9897,20 @@ def _quantities_requiring_semantic_review(
             and str(review.get("scope_compatibility") or "") != "ALTERNATIVE_DESIGN"
         ):
             continue
+        # V32 makes cross-document compatibility pair-specific. A v31 row may
+        # have been reviewed against several peers over time; its single
+        # top-level compatibility field can therefore describe only the last
+        # batch and can erase an earlier valid pair. Re-review only numeric
+        # rows that participated in a relationship pass and do not yet carry
+        # the pair assertions required by the current contract.
+        if (
+            existing_profile == "qwen-project-work-reconciliation-v31"
+            and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
+            and review.get("relationship_reviewed") is True
+            and not list(review.get("scope_assertions") or ())
+        ):
+            result.append(row)
+            continue
         if not current_profile_reviewed:
             result.append(row)
             continue
@@ -9978,6 +9998,24 @@ def _merged_quantity_reviews(
                 }
             if assertions:
                 combined["relationship_assertions"] = list(assertions.values())
+            scope_assertions: dict[tuple[str, str], dict[str, Any]] = {}
+            for source in (
+                *(previous.get("scope_assertions") or ()),
+                *(value.get("scope_assertions") or ()),
+            ):
+                if not isinstance(source, Mapping):
+                    continue
+                peer_id = str(source.get("related_quantity_candidate_id") or "")
+                compatibility = str(source.get("scope_compatibility") or "")
+                reason = " ".join(str(source.get("reason") or "").split())
+                if peer_id and compatibility and reason:
+                    scope_assertions[(peer_id, compatibility)] = {
+                        "related_quantity_candidate_id": peer_id,
+                        "scope_compatibility": compatibility,
+                        "reason": reason,
+                    }
+            if scope_assertions:
+                combined["scope_assertions"] = list(scope_assertions.values())
             reviews[candidate_id] = combined
     return list(reviews.values())
 

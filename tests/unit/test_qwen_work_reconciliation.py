@@ -684,6 +684,13 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
                                 "relation_kind": "NONE",
                                 "related_quantity_candidate_ids": [],
                                 "scope_compatibility": "SAME_SCOPE",
+                                "scope_assertions": [
+                                    {
+                                        "related_quantity_candidate_id": "commercial-q",
+                                        "scope_compatibility": "SAME_SCOPE",
+                                        "reason": "Обе строки измеряют одну площадь.",
+                                    }
+                                ],
                                 "component_set_complete": None,
                                 "reason": "Тот же инженерный объём.",
                             }
@@ -706,6 +713,13 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
                                 "relation_kind": "NONE",
                                 "related_quantity_candidate_ids": [],
                                 "scope_compatibility": "SAME_SCOPE",
+                                "scope_assertions": [
+                                    {
+                                        "related_quantity_candidate_id": "design-q",
+                                        "scope_compatibility": "SAME_SCOPE",
+                                        "reason": "Обе строки измеряют одну площадь.",
+                                    }
+                                ],
                                 "component_set_complete": None,
                                 "reason": "Тот же инженерный объём.",
                             }
@@ -747,6 +761,8 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
     reviews = [observation["quantity_reviews"][0] for observation in result["observations"]]
     assert {review["semantic_scope"] for review in reviews} == {"Площадь обмазочной гидроизоляции"}
     assert {review["scope_compatibility"] for review in reviews} == {"SAME_SCOPE"}
+    assert reviews[0]["scope_assertions"][0]["related_quantity_candidate_id"] == "commercial-q"
+    assert reviews[1]["scope_assertions"][0]["related_quantity_candidate_id"] == "design-q"
 
 
 def test_quantity_relationship_repairs_unsupported_numeric_alternative(

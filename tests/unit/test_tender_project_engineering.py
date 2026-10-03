@@ -1002,6 +1002,118 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
     assert comparisons[0]["right"]["value"] == "833.9"
 
 
+def test_pair_specific_same_scope_survives_later_unrelated_scope_decision() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "manual-excavation",
+                "facility_id": None,
+                "facility": "Location unresolved",
+                "work_name": "Manual excavation",
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "vor-manual",
+                            "value": "42.5",
+                            "unit": "м3",
+                            "semantic_scope": "Manual excavation volume",
+                            "scope_compatibility": "DIFFERENT_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "estimate-manual",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same manual excavation scope.",
+                                },
+                                {
+                                    "related_quantity_candidate_id": "mechanized",
+                                    "scope_compatibility": "DIFFERENT_SCOPE",
+                                    "reason": "Different excavation method.",
+                                },
+                            ],
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                    "Смета": [
+                        {
+                            "quantity_candidate_id": "estimate-manual",
+                            "value": "42.5",
+                            "unit": "м3",
+                            "semantic_scope": "Manual excavation volume",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "vor-manual",
+                                    "scope_compatibility": "SAME_SCOPE",
+                                    "reason": "Same manual excavation scope.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+
+
+def test_pair_specific_different_scope_rejects_equal_value_false_positive() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "mixed-excavation",
+                "facility_id": "facility-a",
+                "facility": "Facility A",
+                "work_name": "Excavation",
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "design-manual",
+                            "value": "51",
+                            "unit": "м3",
+                            "semantic_scope": "Excavation volume",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "estimate-mechanized",
+                                    "scope_compatibility": "DIFFERENT_SCOPE",
+                                    "reason": "Different excavation method and boundary.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                    "Смета": [
+                        {
+                            "quantity_candidate_id": "estimate-mechanized",
+                            "value": "51",
+                            "unit": "м3",
+                            "semantic_scope": "Excavation volume",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "scope_assertions": [
+                                {
+                                    "related_quantity_candidate_id": "design-manual",
+                                    "scope_compatibility": "DIFFERENT_SCOPE",
+                                    "reason": "Different excavation method and boundary.",
+                                }
+                            ],
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
+
+
 def test_explicit_project_scope_allows_same_scope_vor_estimate_comparison() -> None:
     comparisons = _validated_scope_quantity_comparisons(
         [
@@ -2695,7 +2807,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v75"
+    assert model["model_version"] == "project-engineering-model-v76"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

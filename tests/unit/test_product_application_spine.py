@@ -703,6 +703,30 @@ def test_legacy_component_relationship_is_requeued_for_completeness_review() -> 
     ]
 
 
+def test_v31_scope_decision_is_requeued_for_pair_specific_assertions() -> None:
+    quantities = [{"candidate_id": "quantity-design"}, {"candidate_id": "quantity-vor"}]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v31",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": value["candidate_id"],
+                "status": "WORK_QUANTITY",
+                "relation_kind": "NONE",
+                "relationship_reviewed": True,
+                "scope_compatibility": "SAME_SCOPE",
+            }
+            for value in quantities
+        ],
+    }
+
+    remaining = _quantities_requiring_semantic_review(quantities, prior)
+
+    assert [value["candidate_id"] for value in remaining] == [
+        "quantity-design",
+        "quantity-vor",
+    ]
+
+
 def test_prior_profile_quantity_reviews_are_requeued_for_current_scope_policy() -> None:
     quantities = [{"candidate_id": "quantity-design"}, {"candidate_id": "quantity-vor"}]
     prior = {
@@ -1873,6 +1897,53 @@ def test_quantity_review_chunks_preserve_multiple_reviewed_relationships() -> No
             "related_quantity_candidate_ids": ["vor-manual"],
             "scope_compatibility": "SAME_SCOPE",
             "relationship_reviewed": True,
+        },
+    ]
+
+
+def test_quantity_review_chunks_preserve_pair_specific_scope_decisions() -> None:
+    combined = _merged_quantity_reviews(
+        (
+            {
+                "quantity_candidate_id": "manual",
+                "status": "WORK_QUANTITY",
+                "scope_compatibility": "SAME_SCOPE",
+                "scope_assertions": [
+                    {
+                        "related_quantity_candidate_id": "vor-manual",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "reason": "One manual excavation scope.",
+                    }
+                ],
+            },
+        ),
+        (
+            {
+                "quantity_candidate_id": "manual",
+                "status": "WORK_QUANTITY",
+                "scope_compatibility": "DIFFERENT_SCOPE",
+                "scope_assertions": [
+                    {
+                        "related_quantity_candidate_id": "mechanized",
+                        "scope_compatibility": "DIFFERENT_SCOPE",
+                        "reason": "Manual and mechanized excavation are distinct.",
+                    }
+                ],
+            },
+        ),
+    )
+
+    assert combined[0]["scope_compatibility"] == "DIFFERENT_SCOPE"
+    assert combined[0]["scope_assertions"] == [
+        {
+            "related_quantity_candidate_id": "vor-manual",
+            "scope_compatibility": "SAME_SCOPE",
+            "reason": "One manual excavation scope.",
+        },
+        {
+            "related_quantity_candidate_id": "mechanized",
+            "scope_compatibility": "DIFFERENT_SCOPE",
+            "reason": "Manual and mechanized excavation are distinct.",
         },
     ]
 

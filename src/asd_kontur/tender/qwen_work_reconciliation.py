@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v31"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v32"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -46,9 +46,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v28",
     "qwen-project-work-reconciliation-v29",
     "qwen-project-work-reconciliation-v30",
+    "qwen-project-work-reconciliation-v31",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@18.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@19.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -97,6 +98,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_source_unit_invalid",
         "qwen_work_reconciliation_quantity_source_value_invalid",
         "qwen_work_reconciliation_quantity_relation_ids_invalid",
+        "qwen_work_reconciliation_scope_assertions_invalid",
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_alternative_evidence_missing",
         "qwen_work_reconciliation_same_scope_operation_mismatch",
@@ -275,6 +277,7 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_quantity_source_unit_invalid",
                     "qwen_work_reconciliation_quantity_source_value_invalid",
                     "qwen_work_reconciliation_quantity_relation_ids_invalid",
+                    "qwen_work_reconciliation_scope_assertions_invalid",
                     "qwen_work_reconciliation_alternative_evidence_missing",
                     "qwen_work_reconciliation_same_scope_operation_mismatch",
                     "qwen_work_reconciliation_component_total_relation_missing",
@@ -413,6 +416,7 @@ def _prompt(
                     "prior_semantic_scope": value.get("prior_semantic_scope"),
                     "prior_quantity_type": value.get("prior_quantity_type"),
                     "prior_status": value.get("prior_status"),
+                    "prior_scope_assertions": list(value.get("prior_scope_assertions") or ()),
                     "available_source_measures": _source_measure_options(
                         value.get("value"), value.get("unit")
                     ),
@@ -528,6 +532,9 @@ def _prompt(
 "semantic_scope":"что именно измеряет значение","quantity_type":"TOTAL|SUBTOTAL|COMPONENT|STANDALONE|DIMENSION|DURATION|RESOURCE_OR_RATE|UNKNOWN",
 "relation_kind":"COMPONENT_OF|SUBTOTAL_OF|TOTAL_FOR|ALTERNATIVE_TO|DUPLICATE_OF|REVISION_OF|INCOMPARABLE_TO|NONE",
 "related_quantity_candidate_ids":["..."],"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
+"scope_assertions":[{{"related_quantity_candidate_id":"...",
+"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|COMPONENT_VS_TOTAL|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
+"reason":"почему именно эта пара сопоставима или различается"}}],
 "component_set_complete":true|false|null,
 "reason":"что именно означает значение в данном фрагменте"}}],
 "material_reviews":[{{"material_name":"точное наименование без размера/марки",
@@ -584,6 +591,9 @@ semantic_scope. relation_kind при этом может оставаться NO
 что строки находятся в двух похожих документах. Если область различается, укажите DIFFERENT_SCOPE,
 OVERLAPPING_SCOPE либо другую точную причину. INSUFFICIENT_INFORMATION используйте лишь когда
 переданного контекста действительно недостаточно для такого решения.
+В scope_assertions сохраните решение отдельно для каждого quantity_candidate_id, с которым данное
+значение действительно сопоставлялось. Решение должно быть взаимным: если A указывает B, то B
+указывает A с той же scope_compatibility. Не переносите решение одной пары на остальные числа пакета.
 Для NONE верните пустой related_quantity_candidate_ids. Для сравнения укажите одну точную
 scope_compatibility; DIFFERENT_SCOPE и INSUFFICIENT_INFORMATION не создают расхождение объёмов.
 deterministic_family_hint получен воспроизводимым словарём и может быть принят как family_key, если
@@ -743,6 +753,23 @@ def _validate_relationship_consistency(
     same_scope_operations: dict[str, set[str]] = {}
     same_scope_quantity_types: dict[str, set[str]] = {}
     same_scope_relation_kinds: dict[str, set[str]] = {}
+    reviews_by_id: dict[str, Mapping[str, Any]] = {}
+    for observation in observations:
+        for review in observation.get("quantity_reviews") or ():
+            if isinstance(review, Mapping) and review.get("quantity_candidate_id"):
+                reviews_by_id[str(review["quantity_candidate_id"])] = review
+    for quantity_id, review in reviews_by_id.items():
+        for assertion in review.get("scope_assertions") or ():
+            peer_id = str(assertion.get("related_quantity_candidate_id") or "")
+            reciprocal = [
+                value
+                for value in reviews_by_id.get(peer_id, {}).get("scope_assertions") or ()
+                if str(value.get("related_quantity_candidate_id") or "") == quantity_id
+            ]
+            if len(reciprocal) != 1 or str(reciprocal[0].get("scope_compatibility") or "") != str(
+                assertion.get("scope_compatibility") or ""
+            ):
+                raise QwenSemanticFailure("qwen_work_reconciliation_scope_assertions_invalid")
     for observation in observations:
         operation = " ".join(str(observation.get("operation") or "").split())
         for review in observation.get("quantity_reviews") or ():
@@ -886,6 +913,7 @@ def _parse_quantity_reviews(
         scope_compatibility = str(value.get("scope_compatibility") or "")
         related = value.get("related_quantity_candidate_ids")
         component_set_complete = value.get("component_set_complete")
+        scope_assertions = value.get("scope_assertions", [])
         reason = " ".join(str(value.get("reason") or "").split())
         if (
             candidate_id not in allowed_ids
@@ -896,6 +924,7 @@ def _parse_quantity_reviews(
             or scope_compatibility not in ScopeCompatibility
             or not semantic_scope
             or not isinstance(related, list)
+            or not isinstance(scope_assertions, list)
             or not reason
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_core_invalid")
@@ -936,6 +965,30 @@ def _parse_quantity_reviews(
             or (relation_kind != QuantityRelation.NONE and not related_ids)
         ):
             raise QwenSemanticFailure("qwen_work_reconciliation_quantity_relation_ids_invalid")
+        parsed_scope_assertions: list[dict[str, str]] = []
+        seen_scope_peers: set[str] = set()
+        for assertion in scope_assertions:
+            if not isinstance(assertion, Mapping):
+                raise QwenSemanticFailure("qwen_work_reconciliation_scope_assertions_invalid")
+            peer_id = str(assertion.get("related_quantity_candidate_id") or "")
+            pair_compatibility = str(assertion.get("scope_compatibility") or "")
+            pair_reason = " ".join(str(assertion.get("reason") or "").split())
+            if (
+                peer_id not in relation_ids
+                or peer_id == candidate_id
+                or peer_id in seen_scope_peers
+                or pair_compatibility not in ScopeCompatibility
+                or not pair_reason
+            ):
+                raise QwenSemanticFailure("qwen_work_reconciliation_scope_assertions_invalid")
+            seen_scope_peers.add(peer_id)
+            parsed_scope_assertions.append(
+                {
+                    "related_quantity_candidate_id": peer_id,
+                    "scope_compatibility": pair_compatibility,
+                    "reason": pair_reason[:500],
+                }
+            )
         reviews[candidate_id] = {
             "quantity_candidate_id": candidate_id,
             "status": status,
@@ -946,6 +999,8 @@ def _parse_quantity_reviews(
             "scope_compatibility": scope_compatibility,
             "reason": reason[:500],
         }
+        if parsed_scope_assertions:
+            reviews[candidate_id]["scope_assertions"] = parsed_scope_assertions
         if source_unit is not None:
             reviews[candidate_id]["source_unit"] = source_unit
         if source_value is not None:

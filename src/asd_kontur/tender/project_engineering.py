@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v75"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v76"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -62,12 +62,14 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v28",
         "qwen-project-work-reconciliation-v29",
         "qwen-project-work-reconciliation-v30",
+        "qwen-project-work-reconciliation-v31",
         PROJECT_WORK_RECONCILIATION_PROFILE,
     }
 )
 _SCOPE_REVIEW_PROFILES = frozenset(
     {
         "qwen-project-work-reconciliation-v30",
+        "qwen-project-work-reconciliation-v31",
         PROJECT_WORK_RECONCILIATION_PROFILE,
     }
 )
@@ -3173,6 +3175,7 @@ def _work_schedule(
                             "relationship_reviewed",
                             "component_set_complete",
                             "relationship_assertions",
+                            "scope_assertions",
                         )
                         if review.get(key) is not None
                     }
@@ -3212,6 +3215,7 @@ def _work_schedule(
                     "relationship_reviewed": review.get("relationship_reviewed"),
                     "component_set_complete": review.get("component_set_complete"),
                     "relationship_assertions": list(review.get("relationship_assertions") or ()),
+                    "scope_assertions": list(review.get("scope_assertions") or ()),
                     "reason": review.get("reason"),
                     "source_locator_id": quantity.get("source_locator_id"),
                 }
@@ -4154,7 +4158,6 @@ def _comparison_has_reviewed_quantity_identity(
             if isinstance(value, Mapping)
             and _normalized(value.get("semantic_scope")) == semantic_scope
             and value.get("relationship_reviewed") is True
-            and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE
             and value.get("quantity_candidate_id")
             and value.get("semantic_review_profile") in _SCOPE_REVIEW_PROFILES
         ]
@@ -4163,6 +4166,11 @@ def _comparison_has_reviewed_quantity_identity(
     right_values = matching(right_role)
     if len(left_values) != 1 or len(right_values) != 1:
         return False
+    if left_values[0].get("scope_assertions") or right_values[0].get("scope_assertions"):
+        return (
+            _pair_scope_compatibility(left_values[0], right_values[0])
+            is ScopeCompatibility.SAME_SCOPE
+        )
     # SAME_SCOPE is the explicit cross-document comparison decision produced
     # by the complete bounded relationship review. A relation id is required
     # for COMPONENT_OF/DUPLICATE_OF semantics, but not for two independent
@@ -6524,6 +6532,7 @@ def _unique_values(values: Iterable[Mapping[str, Any]], kind: str) -> list[dict[
                     "component_set_complete",
                     "semantic_review_profile",
                     "relationship_assertions",
+                    "scope_assertions",
                 ):
                     if row.get(review_field) is not None:
                         semantics[review_field] = row.get(review_field)
@@ -6607,10 +6616,20 @@ def _comparable_quantities_by_semantic_scope(
         value = dict(raw)
         scope = _normalized(value.get("semantic_scope"))
         if scope:
-            if str(value.get("scope_compatibility") or "") not in {
-                ScopeCompatibility.SAME_SCOPE.value,
-                ScopeCompatibility.COMPONENT_VS_TOTAL.value,
-            }:
+            pair_compatibilities = {
+                str(assertion.get("scope_compatibility") or "")
+                for assertion in value.get("scope_assertions") or ()
+                if isinstance(assertion, Mapping)
+            }
+            if (
+                str(value.get("scope_compatibility") or "")
+                not in {
+                    ScopeCompatibility.SAME_SCOPE.value,
+                    ScopeCompatibility.COMPONENT_VS_TOTAL.value,
+                }
+                and ScopeCompatibility.SAME_SCOPE.value not in pair_compatibilities
+                and ScopeCompatibility.COMPONENT_VS_TOTAL.value not in pair_compatibilities
+            ):
                 continue
         else:
             # Compatibility path for deterministic/older accepted rows. The
@@ -6643,15 +6662,26 @@ def _semantic_scope_pair_is_directly_comparable(
     dedicated component-total consistency engine.
     """
 
-    selected: list[dict[str, Any]] = []
-    for raw in (*tuple(left_values), *tuple(right_values)):
-        value = dict(raw)
-        if _normalized(value.get("semantic_scope")) != scope:
-            continue
-        quantity = _one_comparable_quantity([value])
-        if quantity is None or quantity[1] != unit:
-            continue
-        selected.append(value)
+    selected_left: list[dict[str, Any]] = []
+    selected_right: list[dict[str, Any]] = []
+    for target, raw_values in ((selected_left, left_values), (selected_right, right_values)):
+        for raw in raw_values:
+            value = dict(raw)
+            if _normalized(value.get("semantic_scope")) != scope:
+                continue
+            quantity = _one_comparable_quantity([value])
+            if quantity is None or quantity[1] != unit:
+                continue
+            target.append(value)
+    selected = [*selected_left, *selected_right]
+    if any(value.get("scope_assertions") for value in selected):
+        if len(selected_left) != 1 or len(selected_right) != 1:
+            return False
+        if (
+            _pair_scope_compatibility(selected_left[0], selected_right[0])
+            is not ScopeCompatibility.SAME_SCOPE
+        ):
+            return False
     quantity_types = {str(value.get("quantity_type") or "") for value in selected}
     if not (quantity_types & {"COMPONENT", "SUBTOTAL"} and "TOTAL" in quantity_types):
         return True
@@ -6671,6 +6701,34 @@ def _semantic_scope_pair_is_directly_comparable(
         if related & candidate_ids:
             return False
     return False
+
+
+def _pair_scope_compatibility(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> ScopeCompatibility | None:
+    """Return one reciprocal pair-specific compatibility decision, if any."""
+
+    left_id = str(left.get("quantity_candidate_id") or "")
+    right_id = str(right.get("quantity_candidate_id") or "")
+    if not left_id or not right_id:
+        return None
+
+    def decisions(value: Mapping[str, Any], peer_id: str) -> set[str]:
+        return {
+            str(assertion.get("scope_compatibility") or "")
+            for assertion in value.get("scope_assertions") or ()
+            if isinstance(assertion, Mapping)
+            and str(assertion.get("related_quantity_candidate_id") or "") == peer_id
+        }
+
+    left_decisions = decisions(left, right_id)
+    right_decisions = decisions(right, left_id)
+    if len(left_decisions) != 1 or left_decisions != right_decisions:
+        return None
+    try:
+        return ScopeCompatibility(next(iter(left_decisions)))
+    except ValueError:
+        return None
 
 
 def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:
