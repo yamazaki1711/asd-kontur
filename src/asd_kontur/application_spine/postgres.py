@@ -6921,21 +6921,46 @@ class SpinePostgresRepository:
                 max_batches=max_batches,
                 ordinary_classification_pending=ordinary_classification_pending,
             )
-            relationship_batches, relationship_candidate_ids = _quantity_relationship_batches(
-                prepared,
-                batch_size=batch_size,
-                max_batches=priority_batch_limit,
-                attempted_pairs=attempted_relationship_pairs,
-            )
-            batches = list(relationship_batches)
-            remaining_batch_capacity = priority_batch_limit - len(batches)
+            # Preserve one bounded semantic-scope lane when a design/commercial
+            # pair is eligible. Otherwise a large quantity-relationship backlog
+            # can indefinitely postpone the very scope decision required for
+            # professional omitted-work and commercial-completeness analysis.
+            # The lane assembles candidates only; Qwen still has to establish
+            # meaning and deterministic comparison guards remain unchanged.
             cross_document_batches, cross_document_candidate_ids = _cross_document_work_batches(
                 prepared,
                 batch_size=batch_size,
-                max_batches=remaining_batch_capacity,
+                max_batches=min(priority_batch_limit, 1),
                 attempted_pairs=attempted_scope_pairs,
             )
-            batches.extend(cross_document_batches)
+            relationship_input = [
+                row
+                for row in prepared
+                if str(row.get("candidate_id") or "") not in cross_document_candidate_ids
+            ]
+            relationship_batches, relationship_candidate_ids = _quantity_relationship_batches(
+                relationship_input,
+                batch_size=batch_size,
+                max_batches=max(priority_batch_limit - len(cross_document_batches), 0),
+                attempted_pairs=attempted_relationship_pairs,
+            )
+            batches = [*cross_document_batches, *relationship_batches]
+            remaining_batch_capacity = priority_batch_limit - len(batches)
+            if remaining_batch_capacity > 0:
+                additional_scope_input = [
+                    row
+                    for row in prepared
+                    if str(row.get("candidate_id") or "")
+                    not in (cross_document_candidate_ids | relationship_candidate_ids)
+                ]
+                additional_batches, additional_candidate_ids = _cross_document_work_batches(
+                    additional_scope_input,
+                    batch_size=batch_size,
+                    max_batches=remaining_batch_capacity,
+                    attempted_pairs=attempted_scope_pairs,
+                )
+                batches.extend(additional_batches)
+                cross_document_candidate_ids.update(additional_candidate_ids)
             selected_candidate_ids = relationship_candidate_ids | cross_document_candidate_ids
             by_source: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for row in prepared:
