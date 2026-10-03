@@ -59,7 +59,7 @@ from .postgres import (
 from .qualification import execute_four_mode_fixture
 from .qwen import run_bf16_smoke
 
-EXPECTED_HEAD = "0030_professional_assistant"
+EXPECTED_HEAD = "0033_ntd_memory"
 EXPECTED_MODEL_DIGEST = "sha256:8ab2241982b33afd5ab176cc4e5069afee866323a8fcc52df6345149b3f0d766"
 HEAD_TABLES = (
     "project_definition_versions",

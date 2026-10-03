@@ -1,0 +1,98 @@
+{
+  "profile": "ntd-retrieval-qualification-corpus@2.0.0",
+  "source_audit": {
+    "sha256": "sha256:6a0e38c9d4b69ad07b5b407e3bb4911f599041873dab133f2d1bce925cd8c09a",
+    "semantic_fingerprint": "sha256:a8c56c87401e8c7cf45c5e8415b201a30824bd0f33ea4f67cc50f31f3a20a1ac"
+  },
+  "selection_policy": {
+    "unique_byte_objects": 9,
+    "ntd_objects": 9,
+    "notes": [
+      "Authority and edition currency are preserved from the accepted audit and are not promoted by this corpus.",
+      "The I 1.13-07 byte object is intentionally selected because the audit representation called it VSN 123-90 while the title pages identify I 1.13-07."
+    ]
+  },
+  "documents": [
+    {
+      "designation": "СП 70.13330.2012",
+      "title": "Несущие и ограждающие конструкции",
+      "sha256": "sha256:47ed8e3302560ab2e85cc1fb07e8dbfa73ac4e7197e7e2c2d6877309fb4233a5",
+      "audit_ordinal": 113,
+      "authority_class": "official_binding_recovered",
+      "expected_pages": 203,
+      "features": ["canary", "native_text", "long_document", "tables", "appendices", "concrete_work"]
+    },
+    {
+      "designation": "СП 543.1325800.2024",
+      "title": "Строительный контроль при строительстве, реконструкции, капитальном ремонте объектов капитального строительства",
+      "sha256": "sha256:1143c97a803c597556fd02f1924496b342d4c3d1b77aaa24a65fe4936767c267",
+      "audit_ordinal": 137,
+      "authority_class": "official",
+      "expected_pages": 273,
+      "features": ["native_text", "long_document", "control_operations", "overlapping_concrete_terms"]
+    },
+    {
+      "designation": "СП 45.13330.2017",
+      "title": "Земляные сооружения, основания и фундаменты",
+      "sha256": "sha256:2d1803ad939d4168993fe3e147fea9fe9c9227dac21c7034dfb1bf75409768a0",
+      "audit_ordinal": 135,
+      "authority_class": "official",
+      "expected_pages": 179,
+      "features": ["raster", "long_document", "tables", "earthworks"]
+    },
+    {
+      "designation": "СП 392.1325800.2018",
+      "title": "Трубопроводы магистральные и промысловые для нефти и газа. Исполнительная документация при строительстве",
+      "sha256": "sha256:18808b6b4f8f4c5c53c76fcc8f105e23bdf1b89f83773faef555b1995db29a6e",
+      "audit_ordinal": 134,
+      "authority_class": "official",
+      "expected_pages": 164,
+      "features": ["mixed", "table_heavy", "forms", "appendices", "executive_documentation"]
+    },
+    {
+      "designation": "СП 48.13330.2019",
+      "title": "Организация строительства",
+      "sha256": "sha256:0cbfe59b5395ac0ed3f90d60e459cb2478cc12e08c0ece5677cbca4d66f1d4ac",
+      "audit_ordinal": 136,
+      "authority_class": "official",
+      "expected_pages": 100,
+      "features": ["raster", "organization", "cross_document"]
+    },
+    {
+      "designation": "ГОСТ 10180-2012",
+      "title": "Бетоны. Методы определения прочности по контрольным образцам",
+      "sha256": "sha256:265c997e90f859dd3f031bcce3f1e5b17d0049bb3c5d2c524f7540ef09589a45",
+      "audit_ordinal": 11,
+      "authority_class": "legacy_reference",
+      "expected_pages": 36,
+      "features": ["native_text", "tables", "concrete_testing", "similar_terms"]
+    },
+    {
+      "designation": "ГОСТ 18105-2018",
+      "title": "Бетоны. Правила контроля и оценки прочности",
+      "sha256": "sha256:64bd1509394dc752dc7f98818423a5201294163b8cb76b66da7e0eb62065e25f",
+      "audit_ordinal": 13,
+      "authority_class": "legacy_reference",
+      "expected_pages": 19,
+      "features": ["native_text", "tables", "concrete_control", "similar_designation"]
+    },
+    {
+      "designation": "ГОСТ Р 51872-2024",
+      "title": "Документация исполнительная геодезическая. Правила выполнения",
+      "sha256": "sha256:639b851f7ecdbe3fe568e0435b5892a8e138e1ddbb53acca35cd71b61957e8bd",
+      "audit_ordinal": 98,
+      "authority_class": "legacy_reference",
+      "expected_pages": 38,
+      "features": ["native_text", "tables", "geodesy", "edition_collision"]
+    },
+    {
+      "designation": "И 1.13-07",
+      "title": "Инструкция по оформлению приемо-сдаточной документации по электромонтажным работам",
+      "sha256": "sha256:400115a99fa3ec311395162f9bc5a7839062aad544ac1da484f0432a76057d16",
+      "audit_ordinal": 96,
+      "authority_class": "legacy_reference",
+      "expected_pages": 57,
+      "features": ["native_text", "instruction", "misclassified_audit_identity", "forms"]
+    }
+  ]
+}

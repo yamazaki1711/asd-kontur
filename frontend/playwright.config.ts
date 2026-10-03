@@ -10,6 +10,11 @@ const webServerEnvironment = Object.fromEntries(
     (entry): entry is [string, string] => entry[1] !== undefined,
   ),
 );
+// The disposable CI suite exercises real API/Gateway/PostgreSQL with an explicit
+// model transport fixture. Local model acceptance remains opt-in and separate.
+webServerEnvironment.ASD_E2E_SYNTHETIC_QWEN =
+  process.env.ASD_E2E_SYNTHETIC_QWEN ??
+  (process.env.ASD_E2E_EXPECT_CONSULTANT_CITATIONS === "1" ? "0" : "1");
 
 export default defineConfig({
   testDir: "./e2e",

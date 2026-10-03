@@ -73,6 +73,12 @@ from .production import (
     registry_manifest,
 )
 from .production_postgres import SupportProductionError, SupportProductionRepository
+from .release_readiness import (
+    SupportReleaseReadiness,
+    SupportReleaseReadinessService,
+    load_support_work_type_profiles,
+    support_writer_status,
+)
 from .template_postgres import OfficialTemplatePublisher, QualifiedTemplatePublication
 from .template_qualification import (
     OfficialPdfFormProfile,
@@ -135,6 +141,8 @@ __all__ = [
     "SupportProcessStateMachine",
     "SupportProductionError",
     "SupportProductionRepository",
+    "SupportReleaseReadiness",
+    "SupportReleaseReadinessService",
     "SupportScope",
     "SupportState",
     "SupportTerminalResult",
@@ -155,9 +163,11 @@ __all__ = [
     "evolve_package_version",
     "form_executive_scheme",
     "load_official_pdf_form_profile",
+    "load_support_work_type_profiles",
     "qualify_official_pdf_form",
     "registry_manifest",
     "require_independent_authorities",
+    "support_writer_status",
     "validate_docx",
     "validate_xlsx",
 ]

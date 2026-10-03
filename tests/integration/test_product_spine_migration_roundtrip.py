@@ -14,6 +14,7 @@ from .conftest import create_database, drop_database, run_migration
 pytestmark = pytest.mark.postgres
 
 SPINE_WORKSPACE_TABLES = (
+    "contract_analysis_results",
     "document_pages",
     "document_processing_states",
     "document_records",
@@ -31,6 +32,7 @@ SPINE_WORKSPACE_TABLES = (
     "pilot_export_versions",
     "pilot_mode_result_versions",
     "pilot_result_item_decisions",
+    "project_work_reconciliation_results",
 )
 
 
@@ -98,6 +100,7 @@ def _schema_fingerprint(engine: sa.Engine) -> str:
 
 def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
     repository_root: Path,
+    migration_head: str,
 ) -> None:
     explicit_url = os.environ.get("ASD_TEST_DATABASE_URL")
     if not explicit_url:
@@ -115,6 +118,138 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
         prior = os.environ.get("ASD_ALLOW_DESTRUCTIVE_DOWNGRADE")
         os.environ["ASD_ALLOW_DESTRUCTIVE_DOWNGRADE"] = "1"
         try:
+            # Reproduce an existing pre-0046 installation with Alembic's original
+            # varchar(32), then verify that upgrading preserves the published ID.
+            run_migration(str(repository_root), database_url, "0045_bounded_dep_recovery")
+            with database_engine.begin() as connection:
+                connection.execute(
+                    sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE varchar(32)")
+                )
+            run_migration(str(repository_root), database_url, "head")
+            with database_engine.connect() as connection:
+                assert (
+                    connection.scalar(sa.text("SELECT version_num FROM alembic_version"))
+                    == migration_head
+                )
+                claim_definition = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_functiondef("
+                            "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                        )
+                    )
+                )
+                contract_priority = claim_definition.index(
+                    "CASE WHEN j.job_kind='CONTRACT_ANALYSIS' THEN 3"
+                )
+                primary_facts_priority = claim_definition.index(
+                    "EXISTS (\n                 SELECT 1\n"
+                    "                   FROM workspace.document_versions active_version"
+                )
+                assert contract_priority < primary_facts_priority
+                assert primary_facts_priority < claim_definition.index(
+                    "SELECT max(served.started_at)"
+                )
+                assert "PROJECT_DEFINITION_EXTRACTION" in claim_definition
+                assert "count(*) FILTER" not in claim_definition
+                assert "completed_version" in claim_definition
+                assert "incremental_source_job_id" not in claim_definition
+                fairness_start = claim_definition.index("SELECT max(served.started_at)")
+                fairness_end = claim_definition.index("),'-infinity'::timestamptz)")
+                fairness_definition = claim_definition[fairness_start:fairness_end]
+                assert "PROJECT_WORK_RECONCILIATION" in fairness_definition
+                assert "CONTRACT_ANALYSIS" in fairness_definition
+                assert "DOCUMENT_HASH" not in fairness_definition
+                contract_profile_constraint = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid='workspace.contract_analysis_results'::regclass "
+                            "AND conname='contract_analysis_results_profile_version_check'"
+                        )
+                    )
+                )
+                assert "qwen-contract-analysis-v1" in contract_profile_constraint
+                assert "qwen-contract-analysis-v2" in contract_profile_constraint
+                assert "qwen-contract-analysis-v3" in contract_profile_constraint
+                assert "qwen-contract-analysis-v4" in contract_profile_constraint
+                assert "qwen-contract-analysis-v5" in contract_profile_constraint
+                assert "qwen-contract-analysis-v6" in contract_profile_constraint
+                assert "qwen-contract-analysis-v7" in contract_profile_constraint
+                assert "qwen-contract-analysis-v8" in contract_profile_constraint
+                assert "qwen-contract-analysis-v9" in contract_profile_constraint
+                assert "qwen-contract-analysis-v10" in contract_profile_constraint
+                work_profile_constraint = str(
+                    connection.scalar(
+                        sa.text(
+                            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                            "WHERE conrelid="
+                            "'workspace.project_work_reconciliation_results'::regclass "
+                            "AND conname="
+                            "'project_work_reconciliation_results_profile_version_check'"
+                        )
+                    )
+                )
+                assert "qwen-project-work-reconciliation-v20" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v21" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v22" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v23" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v24" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v25" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v32" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v33" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v36" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v37" in work_profile_constraint
+                expected_claim_indexes = {
+                    "ix_durable_jobs_successor_lineage",
+                    "ix_durable_jobs_workspace_model_service",
+                    "ix_project_stage_source_terminal",
+                    "ix_assistant_turns_workspace_active",
+                    "ix_durable_jobs_active_project_recency",
+                }
+                actual_claim_indexes = set(
+                    connection.scalars(
+                        sa.text(
+                            "SELECT indexname FROM pg_indexes WHERE schemaname='workspace' "
+                            "AND indexname=ANY(:indexes)"
+                        ),
+                        {"indexes": sorted(expected_claim_indexes)},
+                    )
+                )
+                assert actual_claim_indexes == expected_claim_indexes
+
+            # 0045 must restore the 0044 wrapper AND retain its v1 implementation.
+            run_migration(str(repository_root), database_url, "0044_dep_recovery_idempotency")
+            with database_engine.connect() as connection:
+                assert (
+                    connection.scalar(
+                        sa.text("SELECT workspace.recover_dependency_terminal_failures_v1()")
+                    )
+                    == 0
+                )
+                assert (
+                    connection.scalar(
+                        sa.text("SELECT workspace.recover_dependency_terminal_failures()")
+                    )
+                    == 0
+                )
+            run_migration(str(repository_root), database_url, "0041_engineering_v4_manifest")
+            with database_engine.connect() as connection:
+                definition = connection.scalar(
+                    sa.text(
+                        "SELECT pg_get_functiondef("
+                        "'workspace.claim_next_durable_job(text,integer)'::regprocedure)"
+                    )
+                )
+                assert "dependency_success_satisfied" not in str(definition)
+                assert (
+                    connection.execute(
+                        sa.text(
+                            "SELECT * FROM workspace.claim_next_durable_job('migration-test', 5)"
+                        )
+                    ).all()
+                    == []
+                )
             run_migration(str(repository_root), database_url, "0018_product_spine")
         finally:
             if prior is None:

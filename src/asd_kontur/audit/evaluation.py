@@ -9,6 +9,7 @@ from asd_kontur.domain import uuid7
 
 from .models import (
     ActionRequest,
+    ActionRequestReference,
     AuditReport,
     AuditScope,
     AuditTerminalOutcome,
@@ -123,7 +124,10 @@ def assemble_audit_report(
         causal_delta.fingerprint,
         package_readiness.package_readiness_id,
         package_readiness.fingerprint,
-        tuple(request.action_request_id for request in action_requests),
+        tuple(
+            ActionRequestReference(request.action_request_id, request.version)
+            for request in action_requests
+        ),
         outcome,
         tuple(unresolved),
         datetime.now(UTC),

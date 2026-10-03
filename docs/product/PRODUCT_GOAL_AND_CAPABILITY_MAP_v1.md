@@ -9,12 +9,16 @@
 
 ## Goal
 
-ASD-KONTUR is an object-independent, local-first, evidence-bound construction
-software system for thousands of documents. Its common professional chain is:
+ASD-KONTUR is an object-independent, local-first applied construction-
+engineering system for thousands of documents. It understands what is being
+built, connects facilities and structures to works, quantities and materials,
+compares project and commercial sources, applies available requirements, and
+produces practical professional conclusions and documents. Its common
+professional chain is:
 
 `PD/RD + contract + VOR/estimate + customer regulation + NTD`
-`→ ProjectDefinition → OKS structure → works/quantities → MTR → control points`
-`→ required evidence → ID → presented quantities → KS → payment`.
+`→ project composition → facilities/structures → works/quantities/materials`
+`→ comparisons/requirements → issues/risks/actions → professional outputs`.
 
 The three permanent results are:
 
@@ -26,6 +30,37 @@ The three permanent results are:
 
 Tender, Support, Audit and Restoration are required. They share one domain and
 knowledge kernel; a backend slice or UI screen is not a ready mode.
+
+## Product interpretation and acceptance
+
+The primary unit of progress is a solved professional user task, not a
+processed document, extracted candidate, receipt, test, migration, capability
+counter, or readiness state. Internal provenance, immutable history, workspace
+isolation, authorization, model receipts, and source locators remain mandatory
+supporting infrastructure for correctness and safety.
+
+The primary application hierarchy is:
+
+`PROJECT → AREA/FACILITY → STRUCTURE/PIT → WORK → QUANTITY/MATERIAL`
+`→ REQUIREMENT → ISSUE/RISK → ACTION → DOCUMENT`.
+
+Processing and diagnostic state is secondary. UUIDs, candidate lifecycles,
+reconciliation terminology, and model-operation details are not the normal
+professional workflow.
+
+A capability is materially useful only when a user can obtain its professional
+result through the application on representative project data. Tests, CI,
+traceability, and safety checks remain mandatory acceptance evidence, but they
+cannot substitute for the result. Source links support an engineering
+conclusion; they are not the conclusion itself.
+
+For Tender this means an understandable project, facility and work schedules,
+quantity/material comparisons, engineering and NTD issues, contractor risks,
+questions, and—when contract inputs exist—contract revisions. For Support it
+means knowing what ID is required, ready, missing, and safely generatable. For
+Audit it means a concrete list of missing, incomplete, conflicting, or invalid
+documents and corrections. For Restoration it means safely generated
+recoverable documents plus an exact list of facts that still require people.
 
 ## Complete denominator
 
@@ -135,8 +170,10 @@ Rule Registry has infrastructure but zero operational rules.
 
 ## Delivery order
 
-1. preserve the qualified MEMORY-INTEGRITY-FIX-01 release and fingerprints;
-2. implement `INDUSTRIAL-DOCUMENT-UNDERSTANDING-01` exactly as specified in the
-   [Implementation Plan](../architecture/IMPLEMENTATION_PLAN_v1.md);
-3. deliver capability streams that end in visible professional outputs;
-4. perform Trial Readiness qualification before any real OKS.
+1. preserve stable processing, traceability, isolation, recovery, and accepted
+   document-output foundations;
+2. deliver **OZERO Project Understanding and Tender Engineering Analysis v1**
+   through the shared, object-independent project model;
+3. continue capability streams only when each ends in a visible professional
+   application result across Tender, Support, Audit, or Restoration;
+4. perform Trial Readiness qualification before proposing a new real OKS.

@@ -378,12 +378,24 @@ test("user enters through four Russian modes and keeps the selected object", asy
   await page.getByLabel("Название объекта").fill("Строительство корпуса Б");
   await page.getByRole("button", { name: "Создать объект" }).click();
   await expect(page.getByRole("heading", { name: "Аудит" })).toBeVisible();
-  await page.goto(`/admin/workspaces/${workspaceA}/reset`);
-  await page.getByRole("button", { name: "Подготовить reset" }).click();
-  const exact = `RESET ${workspaceA} synthetic-confirmation`;
-  await page.getByLabel("Подтверждение exact target").fill(exact);
-  await page.getByRole("button", { name: "Выполнить reset" }).click();
   await page.goto("/modes/audit/workspaces");
+  const projectA = page
+    .locator("article.entity-card")
+    .filter({ hasText: "Строительство корпуса А" });
+  await projectA
+    .getByLabel("Действия с проектом Строительство корпуса А")
+    .click();
+  await page.getByRole("button", { name: "Удалить проект" }).first().click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "Удалить проект «Строительство корпуса А»?",
+  });
+  await expect(deleteDialog).toContainText(
+    "документы проекта, результаты анализа, диалоги и сформированные файлы",
+  );
+  await deleteDialog
+    .getByLabel("Для подтверждения введите название проекта")
+    .fill("Строительство корпуса А");
+  await deleteDialog.getByRole("button", { name: "Удалить проект" }).click();
   await expect(page.getByText("Строительство корпуса Б")).toBeVisible();
   await expect(page.getByText("Строительство корпуса А")).toHaveCount(0);
   await page.getByRole("button", { name: "Выйти" }).click();
@@ -509,6 +521,19 @@ function knowledge() {
       "VERIFIED_NTD_UNAVAILABLE",
       "ACTIVE_RULE_VERSION_UNAVAILABLE",
     ],
+    ntd_inventory: {
+      total_documents: 100,
+      official_documents: 50,
+      reference_documents: 50,
+      searchable: 40,
+      partially_searchable: 10,
+      bytes_present: 1024,
+      structured_editions: 20,
+      verified_provisions: 30,
+      documents_without_text: 5,
+      absent_identities: 2,
+      edition_currency_unchecked: 15,
+    },
   };
 }
 

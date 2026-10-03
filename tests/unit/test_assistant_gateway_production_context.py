@@ -1,0 +1,971 @@
+# ruff: noqa: RUF001 -- Russian test display name is intentional.
+
+from __future__ import annotations
+
+from typing import Any, cast
+from uuid import uuid4
+
+from sqlalchemy import Engine
+
+from asd_kontur.assistant.gateway import (
+    ASSISTANT_TOOL,
+    ProfessionalAssistantKnowledgeQuery,
+    _assistant_contract_analysis,
+    _assistant_engineering_for_query,
+    _project_pit_unresolved_inventory,
+    _public_inventory_candidate,
+    _select_facility_work_candidates,
+    _semantic_coverage_complete,
+)
+from asd_kontur.knowledge.gateway import GatewayContext
+
+
+def _source(title: str) -> dict[str, Any]:
+    return {
+        "source_id": f"{title}-source",
+        "source_version_id": f"{title}-version",
+        "edition_id": None,
+        "authority_layer": "normative_authority",
+        "title": title,
+        "edition": "2026",
+        "page": 3,
+        "locator_label": "пункт 5.1",
+        "fragment": "Контрольный фрагмент.",
+        "content_digest": "sha256:" + "1" * 64,
+        "href": "/api/v1/platform/sources/source/content#page=3",
+        "edition_currency_notice": "Актуальность редакции не проверена",
+    }
+
+
+def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> None:
+    assert _semantic_coverage_complete([]) is False
+    assert _semantic_coverage_complete([{"state": "complete"}]) is True
+    assert (
+        _semantic_coverage_complete(
+            [{"state": "complete"}, {"state": "partial", "status": "complete"}]
+        )
+        is False
+    )
+    assert _semantic_coverage_complete([{"status": "complete"}]) is False
+
+
+def test_assistant_contract_projection_keeps_professional_facts_not_process_ids() -> None:
+    locator_id = uuid4()
+    clause_id = uuid4()
+    issue_id = uuid4()
+    projected = _assistant_contract_analysis(
+        {
+            "status": "analyzing",
+            "process": {"tender_process_id": str(uuid4())},
+            "assessment": {"source_names": ["Draft agreement RA-62.docx"]},
+            "clauses": [
+                {
+                    "clause_id": str(clause_id),
+                    "clause_key": "8.4",
+                    "locator_label": "Payment",
+                    "source_name": "Draft agreement RA-62.docx",
+                    "source_page": 17,
+                    "source_text": "Payment depends on an approval controlled by the Customer.",
+                    "category": "payment",
+                    "source_locator_ids": [str(locator_id)],
+                }
+            ],
+            "issues": [
+                {
+                    "issue_id": str(issue_id),
+                    "clause_id": str(clause_id),
+                    "subject": "customer_controlled_payment",
+                    "severity": "high",
+                    "description": "The Customer controls a condition precedent to payment.",
+                    "consequence_code": "Payment may be delayed after accepted performance.",
+                    "recommendation_text": "Add an objective payment deadline.",
+                }
+            ],
+            "disagreement_items": [
+                {
+                    "issue_id": str(issue_id),
+                    "clause_id": str(clause_id),
+                    "replacement_source_text": "Payment depends on Customer approval.",
+                    "proposed_clause_text": "Pay accepted work within 15 calendar days.",
+                }
+            ],
+            "deliverables": [
+                {"deliverable_kind": "disagreement_protocol", "state": "partial_draft"}
+            ],
+            "gaps": ["CONTRACT_ANALYSIS_IN_PROGRESS"],
+            "authority_boundary": "human legal review required",
+        }
+    )
+
+    assert projected["summary"] == {
+        "clause_count": 1,
+        "contractor_risk_count": 1,
+        "proposed_revision_count": 1,
+    }
+    assert projected["contractor_risks"][0]["clause"] == "8.4"
+    assert projected["contractor_risks"][0]["source_locator_ids"] == [str(locator_id)]
+    assert projected["proposed_revisions"][0]["contractor_wording"].startswith("Pay accepted")
+    assert "process" not in projected
+    assert str(clause_id) not in str(projected)
+    assert str(issue_id) not in str(projected)
+
+
+def test_public_inventory_candidate_preserves_evidence_sources_not_internal_ids() -> None:
+    source_id = uuid4()
+    candidate = _public_inventory_candidate(
+        {
+            "identity_candidate_id": uuid4(),
+            "member_structure_node_ids": [uuid4()],
+            "source_locator_ids": [source_id],
+            "canonical_label": "Котлован К-1",
+            "status": "candidate",
+        }
+    )
+
+    assert candidate == {
+        "canonical_label": "Котлован К-1",
+        "status": "требует подтверждения",
+        "source_ids": [str(source_id)],
+    }
+
+
+def test_pit_inventory_preserves_dispositions_and_full_unresolved_denominator() -> None:
+    rows, total, coverage, complete = _project_pit_unresolved_inventory(
+        {
+            "unresolved_observations": [
+                {
+                    "node_kind": "excavation_pit",
+                    "raw_name": "Котлован",
+                    "pit_observation_disposition": "generic_mention",
+                    "pit_observation_reason_code": "GENERIC_CONTEXT",
+                },
+                {
+                    "node_kind": "excavation_pit",
+                    "raw_name": "Скважина 7",
+                    "pit_observation_disposition": "non_pit",
+                    "pit_observation_reason_code": "EXPLORATION_BOREHOLE",
+                },
+            ],
+            "coverage": {
+                "unresolved_observation_count": 7,
+                "returned_unresolved_observation_count": 2,
+                "disposition_counts": {"generic_mention": 3, "non_pit": 4},
+                "exact_total_supported": False,
+            },
+        },
+        query="",
+    )
+
+    assert total == 7
+    assert complete is False
+    assert coverage["disposition_counts"] == {"generic_mention": 3, "non_pit": 4}
+    assert [row["pit_observation_disposition"] for row in rows] == [
+        "generic_mention",
+        "non_pit",
+    ]
+
+
+def test_workspace_context_uses_production_ntd_path_when_endpoint_configured(
+    monkeypatch: Any,
+) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(
+        cast(Engine, object()),
+        production_embedding_endpoint="http://127.0.0.1:8791/v1/embeddings",
+    )
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    calls: list[tuple[str, int]] = []
+
+    monkeypatch.setattr(
+        query,
+        "_workspace_context",
+        lambda organization, workspace, mode, question, *, owner_identity_id=None: {
+            "workspace_id": str(workspace),
+            "name": "Изолированный ОКС",
+            "project_definition": {"purpose": "test"},
+            "work_packages": [],
+            "requirement_matrix": [],
+            "discrepancies": [],
+            "mode_result": None,
+            "documents": [],
+            "source_items": [],
+        },
+    )
+    monkeypatch.setattr(query, "_practice_context", lambda _question, _limit: [])
+
+    def production_content(
+        question: str, limit: int, document_id: object = None
+    ) -> list[dict[str, Any]]:
+        assert document_id is None
+        calls.append((question, limit))
+        return [
+            {
+                "content": {"document": "СП 70", "text": "Контрольный фрагмент."},
+                "source": _source("СП 70"),
+            }
+        ]
+
+    monkeypatch.setattr(query, "_search_ntd_content", production_content)
+    monkeypatch.setattr(
+        query,
+        "_normative_context",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("legacy NTD path used")),
+    )
+
+    response = query.execute(
+        ASSISTANT_TOOL,
+        {"query": "Как контролировать бетонные работы?", "mode": "Support"},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert calls == [("Как контролировать бетонные работы?", 4)]
+    assert response.result["workspace"]["workspace_id"] == str(workspace_id)
+    assert response.result["normative_authority"][0]["document"] == "СП 70"
+    assert response.evidence_pack.evidence[0].source_version_id == "СП 70-version"
+
+
+def test_workspace_work_packages_keep_their_own_source_evidence(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    package_source = _source("Лист работ")
+    package_source["authority_layer"] = "workspace_fact"
+
+    def workspace_context(
+        organization: object,
+        workspace: object,
+        mode: object,
+        question: object,
+        *,
+        work_package_limit: int = 20,
+        owner_identity_id: str | None = None,
+    ) -> dict[str, Any]:
+        assert organization == organization_id
+        assert mode == "Tender"
+        assert question == "разработка грунта"
+        assert work_package_limit == 20
+        assert owner_identity_id == "owner-a"
+        return {
+            "workspace_id": str(workspace),
+            "name": "Изолированный ОКС",
+            "project_definition": {"purpose": "test"},
+            "work_packages": [{"package": {"work_type": {"raw": "Разработка грунта"}}}],
+            "work_package_selection": {
+                "query": "разработка грунта",
+                "selection": "lexical_relevance",
+                "total_observation_count": 31,
+                "matched_observation_count": 1,
+                "returned_observation_count": 1,
+                "exhaustive_for_query": True,
+                "authority": "candidate_observations_not_confirmed_work_packages",
+            },
+            "facility_work_candidate_groups": [
+                {
+                    "facility_work_candidate_id": "sha256:" + "2" * 64,
+                    "identity_label": "КНС-1",
+                    "work_type": {"raw": "Разработка грунта"},
+                    "candidate_state": "facility_work_candidate_not_confirmed",
+                }
+            ],
+            "facility_work_selection": {
+                "query": "разработка грунта",
+                "matched_candidate_group_count": 1,
+                "returned_candidate_group_count": 1,
+                "authority": "candidate_association_not_confirmed_scope",
+            },
+            "requirement_matrix": {},
+            "discrepancies": [],
+            "mode_result": None,
+            "documents": [],
+            "structure_dossiers": [],
+            "materialization": {"state": "partial"},
+            "source_items": [],
+            "overview_source_items": [],
+            "work_package_source_items": [{"source": package_source}],
+            "discrepancy_source_items": [],
+            "gap_source_items": [],
+        }
+
+    monkeypatch.setattr(query, "_workspace_context", workspace_context)
+
+    response = query.execute(
+        "consultant.get_work_packages",
+        {"mode": "Tender", "query": "разработка грунта", "limit": 20},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert response.result["value"]["work_packages"][0]["package"]["work_type"]["raw"] == (
+        "Разработка грунта"
+    )
+    assert response.result["value"]["selection_coverage"]["total_observation_count"] == 31
+    assert response.result["value"]["selection_coverage"]["exhaustive_for_query"] is True
+    assert (
+        response.result["value"]["facility_work_candidate_groups"][0]["identity_label"] == "КНС-1"
+    )
+    assert (
+        response.result["value"]["facility_work_selection_coverage"][
+            "matched_candidate_group_count"
+        ]
+        == 1
+    )
+    assert response.evidence_pack.evidence[0].evidence_link_id == "Лист работ-source"
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
+def test_workspace_overview_exposes_shared_engineering_model(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    engineering_source = _source("Лист КР")
+    engineering_source["authority_layer"] = "workspace_fact"
+    model = {
+        "model_version": "project-engineering-model-v2",
+        "pits": {"professional_answer": "Подтверждены 4 отдельных котлована."},
+        "sheet_pile_schedule": [
+            {
+                "facility": "КНС 4",
+                "operation": "Устройство шпунтового ограждения",
+                "waling_beams": ["30Ш2", "35Ш2"],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "9.841",
+                            "unit": "т",
+                            "occurrence_count": 2,
+                            "source_locator_ids": ["locator-a"],
+                        }
+                    ]
+                },
+                "materials_by_document": {
+                    "ВОР": [{"name": "Двутавр", "quantity": "9.841", "unit": "т"}]
+                },
+                "source_locator_ids": ["locator-a"],
+            }
+        ],
+        "issues": [{"kind": "Требуется распределить коммерческий объём"}],
+    }
+
+    monkeypatch.setattr(
+        query,
+        "_workspace_context",
+        lambda *_args, **_kwargs: {
+            "name": "Испытательный объект",
+            "project_definition": {},
+            "project_engineering": model,
+            "work_packages": [],
+            "work_package_selection": {},
+            "facility_work_candidate_groups": [],
+            "facility_work_selection": {},
+            "requirement_matrix": {},
+            "discrepancies": [],
+            "mode_result": None,
+            "documents": [],
+            "structure_dossiers": [],
+            "structure_identity_candidates": [],
+            "structure_identity_dossiers": [],
+            "materialization": {"state": "partial"},
+            "semantic_coverage": [],
+            "candidate_summary": {},
+            "facility_work_coverage": {},
+            "overview_source_items": [{"source": engineering_source}],
+        },
+    )
+
+    response = query.execute(
+        "consultant.get_workspace_overview",
+        {"mode": "Tender"},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    overview_engineering = response.result["value"]["project_engineering"]
+    assert overview_engineering["model_version"] == "project-engineering-model-v2"
+    assert overview_engineering["sheet_pile_schedule"][0]["waling_beams"] == ["30Ш2", "35Ш2"]
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+    work_response = query.execute(
+        "consultant.get_work_packages",
+        {"mode": "Tender", "query": "шпунт", "limit": 20},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    work_engineering = work_response.result["value"]["project_engineering"]
+    sheet_pile = work_engineering["sheet_pile_schedule"][0]
+    assert sheet_pile["waling_beams"] == ["30Ш2", "35Ш2"]
+    assert sheet_pile["quantities_by_document"]["Смета"][0]["value"] == "9.841"
+    assert work_response.evidence_pack.evidence[0].authority_layer == "workspace_fact"
+
+
+def test_query_focused_engineering_projection_preserves_waling_facts_before_verbose_works() -> None:
+    model = {
+        "model_version": "project-engineering-model-v2",
+        "works": [
+            {
+                "work_name": "Прочая работа",
+                "project_wording": ["x" * 2_000],
+                "source_locator_ids": [f"unrelated-{index}"],
+            }
+            for index in range(20)
+        ],
+        "sheet_pile_schedule": [
+            {
+                "facility": "КНС 4",
+                "operation": "Устройство распределительного пояса",
+                "waling_beams": ["30Ш2", "35Ш2"],
+                "quantities_by_document": {
+                    "Смета": [
+                        {
+                            "value": "9.841",
+                            "unit": "т",
+                            "occurrence_count": 2,
+                            "source_locator_ids": ["waling-a", "waling-b"],
+                        }
+                    ]
+                },
+                "materials_by_document": {
+                    "ВОР": [{"name": "Двутавр", "quantity": "9.841", "unit": "т"}]
+                },
+                "source_locator_ids": ["waling-a", "waling-b"],
+            }
+        ],
+        "issues": [],
+        "summary": {"work_scope_count": 96},
+    }
+
+    projected = _assistant_engineering_for_query(
+        model,
+        query="Что предусмотрено по распределительным поясам?",
+        limit=20,
+    )
+
+    assert "works" not in projected
+    row = projected["sheet_pile_schedule"][0]
+    assert row["waling_beams"] == ["30Ш2", "35Ш2"]
+    assert row["quantities_by_document"]["Смета"] == [
+        {"value": "9.841", "unit": "т", "occurrence_count": 2}
+    ]
+    assert row["materials_by_document"]["ВОР"] == [
+        {"name": "Двутавр", "quantity": "9.841", "unit": "т"}
+    ]
+    assert row["source_locator_ids"] == ["waling-a", "waling-b"]
+
+
+def test_query_focused_projection_keeps_professional_quantity_comparison() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "model_version": "project-engineering-model-v18",
+            "quantity_comparisons": [
+                {
+                    "facility": "Место выполнения не установлено",
+                    "work": "Демонтаж светильников",
+                    "classification": "MATCH",
+                    "professional_status": "Значения совпадают",
+                    "conclusion": "Значения совпадают",
+                    "left": {"document_role": "ПД", "value": "3", "unit": "шт"},
+                    "right": {"document_role": "Смета", "value": "3", "unit": "шт"},
+                    "scope_match_basis": "Операция сопоставлена по смыслу.",
+                    "source_locator_ids": ["design-light", "estimate-light"],
+                }
+            ],
+        },
+        query="Какие объёмы демонтажа светильников расходятся с ПД?",
+        limit=20,
+    )
+
+    comparison = projected["quantity_comparisons"][0]
+    assert comparison["left"] == {"document_role": "ПД", "value": "3", "unit": "шт"}
+    assert comparison["right"] == {
+        "document_role": "Смета",
+        "value": "3",
+        "unit": "шт",
+    }
+    assert comparison["professional_status"] == "Значения совпадают"
+    assert comparison["source_locator_ids"] == ["design-light", "estimate-light"]
+
+
+def test_query_focused_projection_keeps_professional_questions_and_risks() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "customer_questions": [
+                {
+                    "question": "Просим подтвердить включение армирования в ВОР.",
+                    "location": "КНС 8.1",
+                    "source_locator_ids": ["question-source"],
+                }
+            ],
+            "risks": [
+                {
+                    "risk": "Армирование может остаться нерасценённым.",
+                    "mitigation": "Получить отдельную позицию ВОР.",
+                    "location": "КНС 8.1",
+                }
+            ],
+        },
+        query="Какие вопросы Заказчику и риски есть по КНС 8.1?",
+        limit=20,
+    )
+
+    assert projected["customer_questions"] == [
+        {
+            "question": "Просим подтвердить включение армирования в ВОР.",
+            "location": "КНС 8.1",
+            "source_locator_ids": ["question-source"],
+            "source_refs": ["question-source"],
+        }
+    ]
+    assert projected["risks"] == [
+        {
+            "risk": "Армирование может остаться нерасценённым.",
+            "mitigation": "Получить отдельную позицию ВОР.",
+            "location": "КНС 8.1",
+        }
+    ]
+
+
+def test_facility_projection_keeps_requested_quantities_and_materials() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "facility_cards": [
+                {
+                    "facility": {"name": "КНС 4"},
+                    "works": [
+                        {
+                            "work_name": "Погружение шпунта",
+                            "quantities_by_document": {"ВОР": [{"value": "95.028", "unit": "т"}]},
+                        }
+                    ],
+                    "materials": [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}],
+                    "comparisons": [
+                        {
+                            "work": "Погружение шпунта",
+                            "left": {"document_role": "ВОР", "value": "95", "unit": "т"},
+                            "right": {
+                                "document_role": "Смета",
+                                "value": "95",
+                                "unit": "т",
+                            },
+                            "conclusion": "Значения совпадают",
+                        }
+                    ],
+                }
+            ]
+        },
+        query="Какие объёмы и материалы предусмотрены на КНС-4?",
+        limit=20,
+    )
+
+    dossier = projected["facility_dossiers"][0]
+    assert dossier["work_schedule"] == [
+        {
+            "work_name": "Погружение шпунта",
+            "quantities_by_document": {"ВОР": [{"value": "95.028", "unit": "т"}]},
+        }
+    ]
+    assert dossier["materials"] == [{"name": "Шпунт Л5", "quantity": "9.5", "unit": "т"}]
+    assert dossier["comparisons"][0]["conclusion"] == "Значения совпадают"
+
+
+def test_project_wide_action_queries_return_prepared_results_without_keyword_overlap() -> None:
+    engineering = {
+        "customer_questions": [
+            {
+                "question": "Просим подтвердить включение ограждения в ВОР.",
+                "location": "Участок 17",
+                "source_locator_ids": ["question-source"],
+            }
+        ],
+        "risks": [
+            {
+                "risk": "Ограждение может остаться нерасценённым.",
+                "mitigation": "Получить отдельную позицию ВОР.",
+                "location": "Участок 17",
+            }
+        ],
+    }
+
+    questions = _assistant_engineering_for_query(
+        engineering,
+        query="Какие вопросы надо направить Заказчику?",
+        limit=20,
+    )
+    risks = _assistant_engineering_for_query(
+        engineering,
+        query="Какие риски есть для Подрядчика?",
+        limit=20,
+    )
+
+    assert questions["customer_questions"][0]["location"] == "Участок 17"
+    assert risks["risks"][0]["risk"] == "Ограждение может остаться нерасценённым."
+
+
+def test_project_wide_material_difference_query_returns_prepared_comparisons() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "material_comparisons": [
+                {
+                    "facility": "Участок 17",
+                    "work": "Железобетонные конструкции",
+                    "material": "Бетон В25",
+                    "description": "Морозостойкость: проект F200, ВОР F150.",
+                    "classification": "MATERIAL_DIFFERENCE",
+                    "source_locator_ids": ["design", "commercial"],
+                }
+            ]
+        },
+        query="Какие материалы расходятся между документами?",
+        limit=20,
+    )
+
+    assert projected["material_comparisons"] == [
+        {
+            "facility": "Участок 17",
+            "work": "Железобетонные конструкции",
+            "material": "Бетон В25",
+            "description": "Морозостойкость: проект F200, ВОР F150.",
+            "classification": "MATERIAL_DIFFERENCE",
+            "source_locator_ids": ["design", "commercial"],
+            "source_refs": ["design", "commercial"],
+        }
+    ]
+
+
+def test_unresolved_question_returns_professional_bounded_project_gaps() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "pits": {
+                "professional_answer": "Подтверждено 9 котлованов; итог требует уточнения.",
+                "established_count": 9,
+                "is_final": False,
+                "requires_clarification": [
+                    {
+                        "description": "Рабочий и приёмный котлованы перехода",
+                        "reason": "Число переходов не установлено.",
+                        "minimum_count": 2,
+                        "source_locator_ids": ["pit-source"],
+                    }
+                ],
+            },
+            "work_classification": {
+                "unclassified_observation_count": 17,
+                "construction_scope_observation_count": 120,
+                "construction_scope_classified_percent": 85.8,
+                "facility_unassigned_observation_count": 9,
+                "pending_quantity_observation_count": 4,
+            },
+            "unresolved": {"facility_designations": ["Участок без номера"]},
+            "requirements": {
+                "professional_summary": "Применимость нормы требует уточнения.",
+                "unresolved": ["Не установлена редакция СП."],
+            },
+        },
+        query="Что ещё не удалось определить?",
+        limit=20,
+    )
+
+    assert projected["pits"]["established_count"] == 9
+    assert projected["pits"]["requires_clarification"][0]["minimum_count"] == 2
+    assert projected["unresolved_work_scope"]["unclassified_observation_count"] == 17
+    assert projected["unresolved_project_information"]["facility_designations"] == [
+        "Участок без номера"
+    ]
+    assert projected["requirements"]["unresolved"] == ["Не установлена редакция СП."]
+
+
+def test_project_composition_query_returns_complete_facility_inventory() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "project": {
+                "name": "Контролируемый объект",
+                "purpose": {"value": "Строительство очистных сооружений"},
+                "composition": {"value": "КНС 2, ЛОС 7"},
+            },
+            "facilities": [
+                {"name": "КНС 2", "designation": "КНС 2", "is_alias_group": False},
+                {"name": "ЛОС 7", "designation": "ЛОС 7", "is_alias_group": False},
+                {"name": "КНС-2", "designation": "КНС 2", "is_alias_group": True},
+            ],
+        },
+        query="Что это за проект и какие сооружения входят в состав объекта?",
+        limit=20,
+    )
+
+    assert projected["project"]["composition"]["value"] == "КНС 2, ЛОС 7"
+    assert [row["designation"] for row in projected["facility_inventory"]] == [
+        "КНС 2",
+        "ЛОС 7",
+    ]
+
+
+def test_missing_commercial_work_query_returns_established_omission_not_arbitrary_rows() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "scope_comparisons": [
+                {
+                    "classification": "UNRESOLVED_SCOPE_MATCH",
+                    "facility": "Участок 4",
+                    "work": "Разработка грунта",
+                },
+                {
+                    "classification": "WORK_MISSING_IN_COMMERCIAL",
+                    "facility": "Участок 17",
+                    "work": "Устройство шпунтового ограждения",
+                    "professional_status": "Возможная неучтённая работа",
+                    "conclusion": "Работа не найдена в ВОР и смете.",
+                },
+            ],
+            "issues": [
+                {
+                    "kind": "Возможная неучтённая работа",
+                    "location": "Участок 17",
+                    "subject": "Устройство шпунтового ограждения",
+                    "description": "Работа не найдена в ВОР и смете.",
+                },
+                {
+                    "kind": "Различие характеристик материала",
+                    "location": "Участок 8",
+                },
+            ],
+        },
+        query="Какие работы установлены в проекте, но не найдены в ВОР или смете?",
+        limit=20,
+    )
+
+    assert [row["work"] for row in projected["scope_comparisons"]] == [
+        "Устройство шпунтового ограждения"
+    ]
+    assert [row["location"] for row in projected["issues"]] == ["Участок 17"]
+
+
+def test_technical_contradiction_query_returns_prepared_engineering_issues() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "issues": [
+                {
+                    "kind": "Различие характеристик материала",
+                    "location": "КНС 8.1",
+                    "subject": "Шпунтовое ограждение",
+                    "description": "В проекте и ВОР указаны разные профили шпунта.",
+                    "source_locator_ids": ["design", "commercial"],
+                }
+            ],
+            "scope_comparisons": [
+                {
+                    "classification": "UNRESOLVED_SCOPE_MATCH",
+                    "facility": "Участок 4",
+                    "work": "Разработка грунта",
+                }
+            ],
+        },
+        query="Какие технические противоречия найдены?",
+        limit=20,
+    )
+
+    assert projected["issues"] == [
+        {
+            "kind": "Различие характеристик материала",
+            "location": "КНС 8.1",
+            "subject": "Шпунтовое ограждение",
+            "description": "В проекте и ВОР указаны разные профили шпунта.",
+            "source_locator_ids": ["design", "commercial"],
+            "source_refs": ["design", "commercial"],
+        }
+    ]
+
+
+def test_facility_query_keeps_structures_connections_and_work_names() -> None:
+    projected = _assistant_engineering_for_query(
+        {
+            "document_composition": {
+                "professional_summary": "В комплекте есть ПД и смета; ВОР не найдена.",
+                "available_roles": ["ПД", "Смета"],
+                "missing_roles": ["РД", "Спецификация", "ВОР", "Договор"],
+            },
+            "facility_cards": [
+                {
+                    "facility": {
+                        "name": "КНС 4",
+                        "designation": "КНС 4",
+                        "kind": "Сооружение",
+                        "status": "Установлено",
+                    },
+                    "pits": [{"name": "котлован для КНС 4", "source_locator_ids": ["pit"]}],
+                    "structures": [
+                        {
+                            "name": "шпунтовое ограждение котлована",
+                            "relationship": "Обслуживает сооружение",
+                            "source_locator_ids": ["enclosure"],
+                        }
+                    ],
+                    "connections": [
+                        {
+                            "name": "ЛОС 4",
+                            "relationship": "Связано с сооружением",
+                            "source_locator_ids": ["connection"],
+                        }
+                    ],
+                    "characteristics": [
+                        {
+                            "label": "Производительность КНС-4",
+                            "value": "155 л/с",
+                            "source_locator_ids": ["capacity"],
+                        }
+                    ],
+                    "works": [
+                        {"work_name": "Погружение шпунта"},
+                        {"work_name": "Устройство распределительного пояса"},
+                        {"work_name": "Погружение шпунта"},
+                    ],
+                    "missing_information": ["Коммерческий объём не распределён"],
+                },
+                {
+                    "facility": {
+                        "name": "КНС 8.1",
+                        "designation": "КНС 8.1",
+                        "kind": "Сооружение",
+                        "status": "Установлено",
+                    },
+                    "pits": [],
+                    "structures": [],
+                    "connections": [],
+                    "characteristics": [],
+                    "works": [{"work_name": "Разработка котлована"}],
+                    "missing_information": [],
+                },
+            ],
+        },
+        query="Какие конструкции и работы относятся к КНС-4?",
+        limit=20,
+    )
+
+    dossier = projected["facility_dossiers"][0]
+    assert len(projected["facility_dossiers"]) == 1
+    assert projected["document_composition"]["missing_roles"] == [
+        "РД",
+        "Спецификация",
+        "ВОР",
+        "Договор",
+    ]
+    assert dossier["facility"]["name"] == "КНС 4"
+    assert dossier["structures"] == [
+        {
+            "name": "шпунтовое ограждение котлована",
+            "relationship": "Обслуживает сооружение",
+            "source_locator_ids": ["enclosure"],
+            "source_refs": ["enclosure"],
+        }
+    ]
+    assert dossier["connections"][0]["name"] == "ЛОС 4"
+    assert dossier["characteristics"] == [
+        {
+            "label": "Производительность КНС-4",
+            "value": "155 л/с",
+            "source_locator_ids": ["capacity"],
+            "source_refs": ["capacity"],
+        }
+    ]
+    assert dossier["work_names"] == [
+        "Погружение шпунта",
+        "Устройство распределительного пояса",
+    ]
+    assert dossier["work_count"] == 2
+
+
+def test_facility_work_candidate_selection_matches_facility_without_name_merging() -> None:
+    groups = [
+        {
+            "facility_work_candidate_id": "candidate-kns",
+            "identity_label": "КНС-1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Разработка грунта", "normalized": "разработка грунта"},
+        },
+        {
+            "facility_work_candidate_id": "candidate-los",
+            "identity_label": "ЛОС-1",
+            "identity_kind": "facility",
+            "work_type": {"raw": "Разработка грунта", "normalized": "разработка грунта"},
+        },
+    ]
+
+    selected, coverage = _select_facility_work_candidates(
+        groups,
+        query="Какие работы предусмотрены для КНС-1?",
+        limit=20,
+        projection_coverage={"exact_identity_package_count": 2},
+    )
+
+    assert [item["facility_work_candidate_id"] for item in selected] == ["candidate-kns"]
+    assert coverage == {
+        "query": "Какие работы предусмотрены для КНС-1?",
+        "selection": "facility_designation_and_lexical_relevance",
+        "total_candidate_group_count": 2,
+        "matched_candidate_group_count": 1,
+        "returned_candidate_group_count": 1,
+        "exhaustive_for_query": True,
+        "projection_coverage": {"exact_identity_package_count": 2},
+        "authority": "candidate_association_not_confirmed_scope",
+    }
+
+
+def test_project_entity_inventory_returns_coverage_and_workspace_sources(monkeypatch: Any) -> None:
+    query = ProfessionalAssistantKnowledgeQuery(cast(Engine, object()))
+    organization_id = uuid4()
+    workspace_id = uuid4()
+    source = _source("Лист котлована")
+    source["authority_layer"] = "workspace_fact"
+    monkeypatch.setattr(
+        query,
+        "_project_entity_inventory",
+        lambda **_kwargs: (
+            {
+                "authority": "cross_document_identity_candidates_not_confirmed_facts",
+                "candidate_entity_count": 2,
+                "unresolved_observation_count": 1,
+                "coverage": {"exact_total_supported": False},
+            },
+            [source],
+        ),
+    )
+
+    response = query.execute(
+        "consultant.get_project_entity_inventory",
+        {"mode": "Tender", "kind": "excavation_pit", "limit": 30},
+        GatewayContext(
+            "owner-a",
+            "assistant.chat.invoke",
+            "assistant-test",
+            uuid4(),
+            organization_id,
+            workspace_id,
+        ),
+    )
+
+    assert response.result["value"]["candidate_entity_count"] == 2
+    assert response.result["value"]["coverage"]["exact_total_supported"] is False
+    assert response.evidence_pack.evidence[0].authority_layer == "workspace_fact"

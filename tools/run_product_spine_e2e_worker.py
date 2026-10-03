@@ -52,6 +52,7 @@ def main() -> None:
             store,
             worker_identity="browser-e2e-restarted-worker",
             lease_seconds=int(state["lease_seconds"]),
+            qwen_semantic_url=None,  # This CI scenario uses native synthetic PDF/CSV evidence.
         )
         processed = 0
         while worker.run_once() is not None:

@@ -5,8 +5,18 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 from typing import BinaryIO
+from uuid import UUID
 
-from asd_kontur.application_spine.models import ClaimedJob, JobKind
+from asd_kontur.application_spine.models import (
+    ENGINEERING_SEMANTIC_RECOVERY_CONTRACT,
+    STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION,
+    ClaimedJob,
+    JobKind,
+)
+from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
+from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_PROFILE,
+)
 
 from .models import (
     CLASSIFICATION_PROFILE_VERSION,
@@ -14,24 +24,41 @@ from .models import (
     OCR_ROUTING_PROFILE_VERSION,
     PAGE_HEALTH_PROFILE_VERSION,
     PROJECT_EXTRACTION_PROFILE_VERSION,
+    PROJECT_RECONCILIATION_PROFILE_VERSION,
     UNDERSTANDING_PROFILE_VERSION,
     WORK_EXTRACTION_PROFILE_VERSION,
     OcrRoute,
 )
 from .native import NativeExtractionFailure, inspect_and_extract
 from .ocr import (
-    AppleVisionOcrAdapter,
     OcrAdapter,
     OcrAdapterResult,
     OcrFailure,
-    TesseractOcrAdapter,
+    QwenVisionOcrAdapter,
     render_pdf_page,
     select_adapters,
 )
 from .postgres import IndustrialUnderstandingRepository
-from .semantic import StructuredCandidates, classify_pages, extract_structured_candidates
+from .qwen_semantic import (
+    _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES,
+    _COMPATIBLE_STRUCTURE_IDENTITY_PROFILES,
+    _DENSE_ENGINEERING_BATCHING_POLICY,
+    QWEN_ENGINEERING_EXTRACTION_PROFILE,
+    QWEN_PIT_OBSERVATION_PROFILE,
+    QWEN_STRUCTURE_IDENTITY_PROFILE,
+    QwenDocumentSemanticAdapter,
+    QwenEngineeringBatch,
+    QwenSemanticFailure,
+)
+from .semantic import (
+    ClassificationBundle,
+    StructuredCandidates,
+    classify_pages,
+    extract_structured_candidates,
+)
 
 MAX_BOUNDED_PROCESSING_BYTES = 256 * 1024 * 1024
+_MAX_NEW_ENGINEERING_BATCHES_PER_DURABLE_JOB = 1
 
 
 class UnderstandingStageFailure(RuntimeError):
@@ -47,12 +74,12 @@ class IndustrialDocumentUnderstandingPipeline:
         self,
         repository: IndustrialUnderstandingRepository,
         *,
-        apple_vision: AppleVisionOcrAdapter,
-        tesseract: TesseractOcrAdapter,
+        qwen_vision: QwenVisionOcrAdapter,
+        qwen_semantic: QwenDocumentSemanticAdapter | None = None,
     ) -> None:
         self._repository = repository
-        self._apple = apple_vision
-        self._tesseract = tesseract
+        self._qwen_vision = qwen_vision
+        self._qwen_semantic = qwen_semantic
 
     def execute(self, claimed: ClaimedJob, source: BinaryIO) -> dict[str, object]:
         handlers = {
@@ -68,16 +95,40 @@ class IndustrialDocumentUnderstandingPipeline:
             JobKind.WORK_PACKAGE_ASSEMBLY: self._assembly,
             JobKind.REQUIREMENT_MATRIX_ASSEMBLY: self._assembly,
             JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: self._reconciliation,
+            JobKind.PROJECT_STRUCTURE_RECONCILIATION: self._reconciliation,
+            JobKind.PROJECT_WORK_RECONCILIATION: self._work_reconciliation,
+            JobKind.CONTRACT_ANALYSIS: self._contract_analysis,
         }
         handler = handlers.get(claimed.job_kind)
         if handler is None:
             raise UnderstandingStageFailure("understanding_stage_not_supported")
         result = handler(claimed, source)
+        terminal_status = "complete"
+        typed_failure_code: str | None = None
+        semantic_coverage = result.get("semantic_coverage")
+        if (
+            claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION
+            and isinstance(semantic_coverage, dict)
+            and semantic_coverage.get("complete") is False
+        ):
+            terminal_status = "partial"
+            typed_failure_code = "qwen_engineering_coverage_incomplete"
+        effective_profile = _profile_for(claimed.job_kind)
+        if claimed.job_kind is JobKind.PROJECT_DEFINITION_EXTRACTION and isinstance(
+            semantic_coverage, dict
+        ):
+            # The stage receipt is the authoritative declaration of which
+            # candidate profile became effective.  Initial intake jobs predate
+            # semantic-recovery provenance and must not publish a deterministic
+            # profile after they actually persisted Qwen candidates.
+            effective_profile = QWEN_ENGINEERING_EXTRACTION_PROFILE
         self._repository.record_stage_result(
             claimed,
             stage_kind=claimed.job_kind.value,
-            profile_version=_profile_for(claimed.job_kind),
+            profile_version=effective_profile,
             output_manifest=result,
+            terminal_status=terminal_status,
+            typed_failure_code=typed_failure_code,
         )
         return result
 
@@ -130,10 +181,10 @@ class IndustrialDocumentUnderstandingPipeline:
             raise UnderstandingStageFailure("ocr_routing_input_unavailable")
         return {
             "routes": [{"page": page, "route": route} for page, route in routes],
-            "primary_adapter": self._apple.adapter_key if self._apple.available() else None,
-            "fallback_adapter": self._tesseract.adapter_key
-            if self._tesseract.available()
+            "primary_adapter": self._qwen_vision.adapter_key
+            if self._qwen_vision.available()
             else None,
+            "fallback_adapter": None,
         }
 
     def _ocr(self, claimed: ClaimedJob, source: BinaryIO) -> dict[str, object]:
@@ -143,10 +194,15 @@ class IndustrialDocumentUnderstandingPipeline:
         ]
         if not routed:
             return {"routed_page_count": 0, "extracted_page_count": 0, "status": "not_required"}
-        blocked = [
-            page for page, route in routed if route in {OcrRoute.BLOCKED, OcrRoute.VLM_REQUIRED}
+        blocked = [page for page, route in routed if route is OcrRoute.BLOCKED]
+        completed_pages = self._repository.load_completed_ocr_pages(
+            claimed, adapter_key=self._qwen_vision.adapter_key
+        )
+        actionable = [
+            (page, route)
+            for page, route in routed
+            if page not in blocked and page not in completed_pages
         ]
-        actionable = [(page, route) for page, route in routed if page not in blocked]
         if blocked and not actionable:
             raise UnderstandingStageFailure(
                 "drawing_or_encrypted_content_requires_unavailable_capability"
@@ -165,7 +221,7 @@ class IndustrialDocumentUnderstandingPipeline:
                 else:
                     raise UnderstandingStageFailure("ocr_source_format_unsupported")
                 result = self._run_ocr_adapters(
-                    select_adapters(route, apple=self._apple, tesseract=self._tesseract),
+                    select_adapters(route, qwen=self._qwen_vision),
                     image,
                     claimed,
                     page_number,
@@ -182,6 +238,7 @@ class IndustrialDocumentUnderstandingPipeline:
         return {
             "routed_page_count": len(routed),
             "extracted_page_count": len(extracted),
+            "already_complete_page_count": len(completed_pages),
             "blocked_pages": blocked,
             "results": extracted,
         }
@@ -217,10 +274,22 @@ class IndustrialDocumentUnderstandingPipeline:
         if not elements:
             raise UnderstandingStageFailure("classification_evidence_unavailable")
         bundle = classify_pages(elements)
+        qwen_candidate_count = 0
+        if self._qwen_semantic is not None:
+            try:
+                semantic = self._qwen_semantic.classify(elements)
+            except QwenSemanticFailure as exc:
+                raise UnderstandingStageFailure(exc.code) from exc
+            bundle = ClassificationBundle(
+                candidates=(*bundle.candidates, *semantic.candidates),
+                decisions=(*bundle.decisions, *semantic.decisions),
+            )
+            qwen_candidate_count = len(semantic.candidates)
         self._repository.persist_classification(claimed, bundle.candidates, bundle.decisions)
         return {
             "candidate_count": len(bundle.candidates),
             "decision_count": len(bundle.decisions),
+            "qwen_semantic_candidate_count": qwen_candidate_count,
             "selected_roles": sorted(
                 {role.value for decision in bundle.decisions for role in decision.selected_roles}
             ),
@@ -242,13 +311,125 @@ class IndustrialDocumentUnderstandingPipeline:
         }
 
     def _project_fields(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        bundle = self._structured(claimed)
-        fields_only = StructuredCandidates(bundle.project_fields, (), (), (), (), ())
-        self._repository.persist_structured(claimed, fields_only)
-        return {"project_field_candidate_count": len(bundle.project_fields)}
+        semantic = self._engineering_semantic(claimed)
+        bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
+        if semantic is not None:
+            bundle = StructuredCandidates(
+                (*bundle.project_fields, *semantic.project_fields),
+                (*bundle.works, *semantic.works),
+                (*bundle.quantities, *semantic.quantities),
+                (*bundle.materials, *semantic.materials),
+                bundle.estimates,
+                (*bundle.defects, *semantic.defects),
+                structures=(*bundle.structures, *semantic.structures),
+                structure_relationships=(
+                    *bundle.structure_relationships,
+                    *semantic.structure_relationships,
+                ),
+            )
+        self._repository.persist_structured(claimed, bundle)
+        result: dict[str, object] = {
+            "project_field_candidate_count": len(bundle.project_fields),
+            "structure_candidate_count": len(bundle.structures),
+            "work_candidate_count": len(bundle.works),
+            "quantity_candidate_count": len(bundle.quantities),
+            "material_candidate_count": len(bundle.materials),
+        }
+        coverage = getattr(self._repository, "engineering_semantic_coverage", None)
+        if semantic is not None and callable(coverage):
+            result["semantic_coverage"] = coverage(
+                claimed,
+                profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            )
+        return result
+
+    def _record_engineering_batch(
+        self,
+        claimed: ClaimedJob,
+        batch: QwenEngineeringBatch,
+        manifest: dict[str, object],
+    ) -> None:
+        self._repository.record_accepted_engineering_batch(
+            claimed,
+            profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            batch_ordinal=batch.ordinal,
+            batch_digest=batch.digest,
+            source_locator_ids=batch.locator_ids,
+            input_manifest=batch.input_manifest,
+            output_manifest=manifest,
+        )
+        if self._qwen_semantic is not None:
+            self._repository.persist_structured(
+                claimed, self._qwen_semantic.accepted_batch_candidates(batch, manifest)
+            )
+
+    def _record_failed_engineering_batch(
+        self,
+        claimed: ClaimedJob,
+        batch: QwenEngineeringBatch,
+        failure_code: str,
+        failure_diagnostics: dict[str, object],
+    ) -> None:
+        self._repository.record_failed_engineering_batch(
+            claimed,
+            profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+            batch_ordinal=batch.ordinal,
+            batch_digest=batch.digest,
+            source_locator_ids=batch.locator_ids,
+            input_manifest=batch.input_manifest,
+            failure_code=failure_code,
+            failure_diagnostics=failure_diagnostics,
+        )
+
+    def _record_engineering_batch_progress(
+        self, claimed: ClaimedJob, *, completed_batches: int, total_batches: int
+    ) -> None:
+        """Publish durable, content-free semantic progress when the repository supports it."""
+        recorder = getattr(self._repository, "record_engineering_batch_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_batches=completed_batches,
+                total_batches=total_batches,
+            )
+
+    def _record_structure_identity_progress(
+        self, claimed: ClaimedJob, *, completed_groups: int, total_groups: int
+    ) -> None:
+        """Publish content-free cross-document reconciliation progress."""
+        recorder = getattr(self._repository, "record_structure_identity_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=total_groups,
+            )
+
+    def _record_pit_observation_progress(
+        self, claimed: ClaimedJob, *, completed_groups: int, total_groups: int
+    ) -> None:
+        """Publish content-free pit-observation disposition progress."""
+        recorder = getattr(self._repository, "record_pit_observation_progress", None)
+        if callable(recorder):
+            recorder(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=total_groups,
+            )
 
     def _work_values(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
-        bundle = self._structured(claimed)
+        semantic = self._engineering_semantic(claimed)
+        bundle = self._structured(claimed, allow_missing_role_decisions=semantic is not None)
+        if semantic is not None:
+            bundle = StructuredCandidates(
+                bundle.project_fields,
+                (*bundle.works, *semantic.works),
+                (*bundle.quantities, *semantic.quantities),
+                (*bundle.materials, *semantic.materials),
+                bundle.estimates,
+                (*bundle.defects, *semantic.defects),
+                structures=bundle.structures,
+            )
         values_only = StructuredCandidates(
             (), bundle.works, bundle.quantities, bundle.materials, bundle.estimates, bundle.defects
         )
@@ -261,10 +442,92 @@ class IndustrialDocumentUnderstandingPipeline:
             "reconciliation_defect_count": len(bundle.defects),
         }
 
-    def _structured(self, claimed: ClaimedJob) -> StructuredCandidates:
+    def _engineering_semantic(self, claimed: ClaimedJob) -> StructuredCandidates | None:
+        if self._qwen_semantic is None:
+            return None
+        recovery_contract = claimed.input_manifest.get("semantic_coverage_recovery_contract")
+        if (
+            recovery_contract is not None
+            and recovery_contract != ENGINEERING_SEMANTIC_RECOVERY_CONTRACT
+        ):
+            raise UnderstandingStageFailure("engineering_semantic_recovery_contract_unsupported")
+        try:
+            elements = self._repository.load_elements(claimed)
+            accepted_batches = self._repository.load_accepted_engineering_batches(
+                claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+            )
+            accepted_fragment_loader = getattr(
+                self._repository, "load_accepted_engineering_batch_fragment_ids", None
+            )
+            accepted_batch_fragment_ids = (
+                accepted_fragment_loader(
+                    claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+                )
+                if callable(accepted_fragment_loader)
+                else {}
+            )
+            failed_batch_loader = getattr(
+                self._repository, "load_failed_engineering_batch_digests", None
+            )
+            failed_batch_digests = (
+                failed_batch_loader(claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE)
+                if callable(failed_batch_loader)
+                else frozenset()
+            )
+            compatible_accepted_batches: dict[str, dict[str, object]] = {}
+            compatible_accepted_batch_fragment_ids: dict[str, tuple[str, ...]] = {}
+            for profile_version in _COMPATIBLE_ENGINEERING_EXTRACTION_PROFILES:
+                compatible_accepted_batches.update(
+                    self._repository.load_accepted_engineering_batches(
+                        claimed, profile_version=profile_version
+                    )
+                )
+                if callable(accepted_fragment_loader):
+                    compatible_accepted_batch_fragment_ids.update(
+                        accepted_fragment_loader(claimed, profile_version=profile_version)
+                    )
+            for partial_bundle in self._qwen_semantic.accepted_source_batch_candidates(
+                elements,
+                accepted_batches=accepted_batches,
+                batching_policy_version=_DENSE_ENGINEERING_BATCHING_POLICY,
+            ):
+                self._repository.persist_structured(claimed, partial_bundle)
+            return self._qwen_semantic.extract_engineering(
+                elements,
+                accepted_batches=accepted_batches,
+                accepted_batch_fragment_ids=accepted_batch_fragment_ids,
+                failed_batch_digests=failed_batch_digests,
+                compatible_accepted_batches=compatible_accepted_batches,
+                compatible_accepted_batch_fragment_ids=(compatible_accepted_batch_fragment_ids),
+                batching_policy_version=_DENSE_ENGINEERING_BATCHING_POLICY,
+                on_accepted_batch=lambda batch, manifest: self._record_engineering_batch(
+                    claimed, batch, manifest
+                ),
+                on_batch_progress=lambda completed, total: self._record_engineering_batch_progress(
+                    claimed,
+                    completed_batches=completed,
+                    total_batches=total,
+                ),
+                on_failed_batch=lambda batch, failure_code, failure_diagnostics: (
+                    self._record_failed_engineering_batch(
+                        claimed, batch, failure_code, failure_diagnostics
+                    )
+                ),
+                max_new_batches=_MAX_NEW_ENGINEERING_BATCHES_PER_DURABLE_JOB,
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+
+    def _structured(
+        self, claimed: ClaimedJob, *, allow_missing_role_decisions: bool = False
+    ) -> StructuredCandidates:
         elements = self._repository.load_elements(claimed)
         decisions = self._repository.load_role_decisions(claimed)
-        if not elements or not decisions:
+        if not elements:
+            raise UnderstandingStageFailure("structured_extraction_evidence_unavailable")
+        if not decisions:
+            if allow_missing_role_decisions:
+                return StructuredCandidates((), (), (), (), (), ())
             raise UnderstandingStageFailure("structured_extraction_evidence_unavailable")
         return extract_structured_candidates(elements, decisions)
 
@@ -272,9 +535,344 @@ class IndustrialDocumentUnderstandingPipeline:
         return self._repository.assemble_workspace(claimed)
 
     def _reconciliation(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        coverage = self._repository.workspace_engineering_semantic_coverage(
+            claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+        )
+        groups = self._repository.load_structure_identity_observation_groups(
+            claimed, profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE
+        )
+        pit_group_loader = getattr(self._repository, "load_pit_observation_groups", None)
+        pit_groups = (
+            pit_group_loader(
+                claimed,
+                profile_version=QWEN_ENGINEERING_EXTRACTION_PROFILE,
+                disposition_profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+            )
+            if callable(pit_group_loader)
+            else ()
+        )
+        if claimed.job_kind is JobKind.PROJECT_UNDERSTANDING_RECONCILIATION:
+            # Publishing the current project view is deterministic and must
+            # not wait for every optional cross-document identity proposal.
+            # A large corpus can contain hundreds of bounded identity groups;
+            # one malformed model response previously prevented all already
+            # persisted fields, structures, works and quantities from becoming
+            # current. The dedicated structure-reconciliation job owns that
+            # semantic work, while this job exposes its remaining denominator.
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_candidate_count"] = 0
+            result["structure_identity_group_count"] = len(groups)
+            result["structure_identity_reconciliation"] = (
+                "deferred_to_structure_reconciliation" if groups else "not_required"
+            )
+            result["workspace_semantic_coverage"] = coverage
+            return result
+        if self._qwen_semantic is None:
+            result = self._repository.assemble_workspace(claimed)
+            result["structure_identity_reconciliation"] = "qwen_runtime_unavailable"
+            result["structure_identity_group_count"] = len(groups)
+            result["workspace_semantic_coverage"] = coverage
+            return result
+        identity_count = 0
+        current_identity_candidate_ids: set[str] = set()
+        current_group_fingerprints: set[str] = set()
+        failures: list[dict[str, object]] = []
+        receipts = self._repository.load_structure_identity_group_receipts(
+            claimed,
+            profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+            compatible_profile_versions=_COMPATIBLE_STRUCTURE_IDENTITY_PROFILES,
+        )
+        if groups:
+            self._record_structure_identity_progress(
+                claimed, completed_groups=0, total_groups=len(groups)
+            )
+        for completed_groups, group in enumerate(groups, start=1):
+            group_fingerprint = _digest(
+                {
+                    "profile_version": QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    "observations": group,
+                }
+            )
+            current_group_fingerprints.add(group_fingerprint)
+            receipt = receipts.get(group_fingerprint)
+            if receipt is not None:
+                candidate_ids = receipt.get("identity_candidate_ids", ())
+                if isinstance(candidate_ids, (list, tuple)):
+                    identity_count += len(candidate_ids)
+                    current_identity_candidate_ids.update(str(value) for value in candidate_ids)
+                if receipt.get("outcome") == "failed":
+                    failures.append(
+                        {
+                            "group_fingerprint": group_fingerprint,
+                            "failure_code": str(
+                                receipt.get("failure_code")
+                                or "qwen_structure_identity_group_failed"
+                            ),
+                        }
+                    )
+                self._record_structure_identity_progress(
+                    claimed,
+                    completed_groups=completed_groups,
+                    total_groups=len(groups),
+                )
+                continue
+            try:
+                candidates = self._qwen_semantic.reconcile_structure_identities(group)
+            except QwenSemanticFailure as exc:
+                # Infrastructure loss is retryable at the durable-job boundary;
+                # recording it as a terminal content receipt would suppress a
+                # valid future attempt under the unchanged semantic contract.
+                if exc.code == "qwen_semantic_runtime_unavailable":
+                    raise
+                self._repository.persist_structure_identity_group_outcome(
+                    claimed,
+                    group_fingerprint=group_fingerprint,
+                    profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    input_structure_node_ids=tuple(
+                        UUID(str(item["structure_node_id"])) for item in group
+                    ),
+                    input_manifest=group,
+                    failure_code=exc.code,
+                )
+                failures.append(
+                    {
+                        "group_fingerprint": group_fingerprint,
+                        "failure_code": exc.code,
+                    }
+                )
+            else:
+                self._repository.persist_structure_identity_group_outcome(
+                    claimed,
+                    group_fingerprint=group_fingerprint,
+                    profile_version=QWEN_STRUCTURE_IDENTITY_PROFILE,
+                    input_structure_node_ids=tuple(
+                        UUID(str(item["structure_node_id"])) for item in group
+                    ),
+                    input_manifest=group,
+                    candidates=candidates,
+                )
+                identity_count += len(candidates)
+                current_identity_candidate_ids.update(
+                    str(candidate.identity_candidate_id) for candidate in candidates
+                )
+            self._record_structure_identity_progress(
+                claimed,
+                completed_groups=completed_groups,
+                total_groups=len(groups),
+            )
         result = self._repository.assemble_workspace(claimed)
-        if result["terminal_status"] == "complete":
-            raise UnderstandingStageFailure("project_understanding_must_expose_authority_gaps")
+        result["structure_identity_candidate_count"] = identity_count
+        result["structure_identity_candidate_ids"] = sorted(current_identity_candidate_ids)
+        result["structure_identity_reconciliation_profile"] = QWEN_STRUCTURE_IDENTITY_PROFILE
+        result["structure_identity_result_manifest_version"] = (
+            STRUCTURE_IDENTITY_RESULT_MANIFEST_VERSION
+        )
+        result["structure_identity_group_count"] = len(groups)
+        result["structure_identity_group_fingerprints"] = sorted(current_group_fingerprints)
+        result["structure_identity_failed_group_count"] = len(failures)
+        result["structure_identity_failures"] = failures
+        if failures:
+            result["structure_identity_reconciliation"] = "partial_group_failures"
+        else:
+            result["structure_identity_reconciliation"] = (
+                "completed" if coverage["complete"] else "partial_completed_source_groups"
+            )
+        result["workspace_semantic_coverage"] = coverage
+        pit_receipt_loader = getattr(
+            self._repository, "load_pit_observation_disposition_receipts", None
+        )
+        pit_persist = getattr(self._repository, "persist_pit_observation_disposition_outcome", None)
+        pit_failure_count = 0
+        pit_decision_count = 0
+        pit_group_fingerprints: set[str] = set()
+        pit_failures: list[dict[str, object]] = []
+        if callable(pit_receipt_loader) and callable(pit_persist) and pit_groups:
+            pit_receipts = pit_receipt_loader(claimed, profile_version=QWEN_PIT_OBSERVATION_PROFILE)
+            self._record_pit_observation_progress(
+                claimed, completed_groups=0, total_groups=len(pit_groups)
+            )
+            for completed_groups, group in enumerate(pit_groups, start=1):
+                group_fingerprint = _digest(
+                    {
+                        "profile_version": QWEN_PIT_OBSERVATION_PROFILE,
+                        "observations": group,
+                    }
+                )
+                pit_group_fingerprints.add(group_fingerprint)
+                receipt = pit_receipts.get(group_fingerprint)
+                if receipt is not None:
+                    pit_decision_count += len(receipt.get("decisions", ()))
+                    if receipt.get("outcome") == "failed":
+                        pit_failure_count += 1
+                        pit_failures.append(
+                            {
+                                "group_fingerprint": group_fingerprint,
+                                "failure_code": str(
+                                    receipt.get("failure_code")
+                                    or "qwen_pit_observation_group_failed"
+                                ),
+                            }
+                        )
+                    self._record_pit_observation_progress(
+                        claimed,
+                        completed_groups=completed_groups,
+                        total_groups=len(pit_groups),
+                    )
+                    continue
+                try:
+                    decisions = self._qwen_semantic.classify_excavation_pit_observations(group)
+                except QwenSemanticFailure as exc:
+                    if exc.code == "qwen_semantic_runtime_unavailable":
+                        raise
+                    pit_persist(
+                        claimed,
+                        group_fingerprint=group_fingerprint,
+                        profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+                        input_structure_node_ids=tuple(
+                            UUID(str(item["structure_node_id"])) for item in group
+                        ),
+                        input_manifest=group,
+                        failure_code=exc.code,
+                    )
+                    pit_failure_count += 1
+                    pit_failures.append(
+                        {"group_fingerprint": group_fingerprint, "failure_code": exc.code}
+                    )
+                else:
+                    pit_persist(
+                        claimed,
+                        group_fingerprint=group_fingerprint,
+                        profile_version=QWEN_PIT_OBSERVATION_PROFILE,
+                        input_structure_node_ids=tuple(
+                            UUID(str(item["structure_node_id"])) for item in group
+                        ),
+                        input_manifest=group,
+                        decisions=decisions,
+                    )
+                    pit_decision_count += len(decisions)
+                self._record_pit_observation_progress(
+                    claimed,
+                    completed_groups=completed_groups,
+                    total_groups=len(pit_groups),
+                )
+        result["pit_observation_reconciliation_profile"] = QWEN_PIT_OBSERVATION_PROFILE
+        result["pit_observation_group_count"] = len(pit_groups)
+        result["pit_observation_group_fingerprints"] = sorted(pit_group_fingerprints)
+        result["pit_observation_decision_count"] = pit_decision_count
+        result["pit_observation_failed_group_count"] = pit_failure_count
+        result["pit_observation_failures"] = pit_failures
+        return result
+
+    def _work_reconciliation(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_work_reconciliation_runtime_unavailable")
+        manifest = claimed.input_manifest
+        rows = manifest.get("work_observations")
+        families = manifest.get("work_families")
+        facilities = manifest.get("facilities")
+        if (
+            not isinstance(rows, list)
+            or not isinstance(families, dict)
+            or not isinstance(facilities, list)
+        ):
+            raise UnderstandingStageFailure("work_reconciliation_manifest_invalid")
+        profile_version = str(manifest.get("work_reconciliation_profile") or "")
+        # A queued semantic job is immutable, so a release may encounter work
+        # created by an older prompt/schema profile.  Running that manifest
+        # through the current adapter wastes the single local-model slot and
+        # can only fail at persistence because the current output contract no
+        # longer matches the queued profile.  Terminate it before inference;
+        # the supervised planner will schedule the current idempotent profile.
+        if profile_version != PROJECT_WORK_RECONCILIATION_PROFILE:
+            raise UnderstandingStageFailure("work_reconciliation_profile_superseded")
+        reusable = self._repository.load_project_work_reconciliation_result(
+            claimed,
+            profile_version=profile_version,
+        )
+        if reusable is not None:
+            return reusable
+        try:
+            result = self._qwen_semantic.reconcile_project_works(
+                [dict(row) for row in rows if isinstance(row, dict)],
+                work_families={str(key): str(value) for key, value in families.items()},
+                facilities=[str(value) for value in facilities],
+            )
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+        self._repository.record_project_work_reconciliation_result(
+            claimed,
+            profile_version=profile_version,
+            output_manifest=result,
+            model_identity=str(manifest.get("model_identity") or "local-qwen3.8-27b"),
+        )
+        return result
+
+    def _contract_analysis(self, claimed: ClaimedJob, _source: BinaryIO) -> dict[str, object]:
+        if self._qwen_semantic is None:
+            raise UnderstandingStageFailure("qwen_contract_analysis_runtime_unavailable")
+        manifest = claimed.input_manifest
+        if str(manifest.get("contract_analysis_profile") or "") != CONTRACT_ANALYSIS_PROFILE:
+            raise UnderstandingStageFailure("contract_analysis_profile_superseded")
+        reusable = self._repository.load_contract_analysis_result(claimed)
+        if reusable is not None:
+            return reusable
+        raw_locator_ids = manifest.get("source_locator_ids")
+        if not isinstance(raw_locator_ids, list) or not raw_locator_ids:
+            raise UnderstandingStageFailure("contract_analysis_manifest_invalid")
+        expected = {str(value) for value in raw_locator_ids}
+        elements = {
+            str(element.locator.source_locator_id): element
+            for element in self._repository.load_elements(claimed)
+            if str(element.locator.source_locator_id) in expected
+        }
+        raw_segments = manifest.get("source_segments")
+        fragments: list[dict[str, object]] = []
+        if isinstance(raw_segments, list) and raw_segments:
+            for raw_segment in raw_segments:
+                if not isinstance(raw_segment, dict):
+                    raise UnderstandingStageFailure("contract_analysis_manifest_invalid")
+                locator_id = str(raw_segment.get("source_locator_id") or "")
+                element = elements.get(locator_id)
+                start = raw_segment.get("start")
+                end = raw_segment.get("end")
+                source_text = ""
+                if element is not None:
+                    source_text = element.raw_text or element.normalized_text
+                if (
+                    element is None
+                    or not isinstance(start, int)
+                    or isinstance(start, bool)
+                    or not isinstance(end, int)
+                    or isinstance(end, bool)
+                    or start < 0
+                    or end <= start
+                    or end > len(source_text)
+                ):
+                    raise UnderstandingStageFailure("contract_analysis_source_context_incomplete")
+                fragments.append(
+                    {
+                        "source_locator_id": locator_id,
+                        "page": element.locator.page_number,
+                        "text": source_text[start:end],
+                    }
+                )
+        else:
+            fragments = [
+                {
+                    "source_locator_id": locator_id,
+                    "page": element.locator.page_number,
+                    "text": element.raw_text or element.normalized_text,
+                }
+                for locator_id, element in elements.items()
+                if (element.raw_text or element.normalized_text).strip()
+            ]
+        if {str(value["source_locator_id"]) for value in fragments} != expected:
+            raise UnderstandingStageFailure("contract_analysis_source_context_incomplete")
+        try:
+            result = self._qwen_semantic.analyze_contract(fragments)
+        except QwenSemanticFailure as exc:
+            raise UnderstandingStageFailure(exc.code) from exc
+        self._repository.record_contract_analysis_result(claimed, output_manifest=result)
         return result
 
 
@@ -304,7 +902,10 @@ def _profile_for(kind: JobKind) -> str:
         JobKind.WORK_QUANTITY_MATERIAL_EXTRACTION: WORK_EXTRACTION_PROFILE_VERSION,
         JobKind.WORK_PACKAGE_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
         JobKind.REQUIREMENT_MATRIX_ASSEMBLY: UNDERSTANDING_PROFILE_VERSION,
-        JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
+        JobKind.PROJECT_UNDERSTANDING_RECONCILIATION: PROJECT_RECONCILIATION_PROFILE_VERSION,
+        JobKind.PROJECT_STRUCTURE_RECONCILIATION: UNDERSTANDING_PROFILE_VERSION,
+        JobKind.PROJECT_WORK_RECONCILIATION: PROJECT_WORK_RECONCILIATION_PROFILE,
+        JobKind.CONTRACT_ANALYSIS: CONTRACT_ANALYSIS_PROFILE,
     }[kind]
 
 
