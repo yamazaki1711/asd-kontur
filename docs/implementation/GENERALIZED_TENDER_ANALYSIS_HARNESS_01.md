@@ -963,6 +963,51 @@ retry, successor, priority or Qwen command was issued.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Explicit project-wide commercial membership — release b2329f4
+
+Commit `b2329f4d9534cdec488661d2015db3932843e0b3` closes a generic scope-linking
+gap in the design-to-commercial comparison path. A commercial heading that
+explicitly names every established addressed facility is now retained as one
+project-wide scope with the exact member facility identities. This membership
+can establish that a design operation is present commercially for a named
+facility, while the quantity remains project-wide and is not allocated between
+facilities without source support.
+
+The live blind-project v71 projection contains 275 consolidated work scopes.
+Of these, 142 commercial scopes carry the exact two-facility membership from
+their source heading. The scope comparison now contains 10 `MATCH` results,
+264 unresolved scope matches and one commercial-only work. In particular, the
+design excavation and pipeline-installation scopes for retaining wall 63/1
+are now shown as present in the explicit two-facility commercial scope. The
+Russian application conclusion states that the commercial quantity has not
+been allocated between structures. No omitted-work finding is generated from
+the still-incomplete commercial denominator.
+
+This is a direct professional improvement: the user can distinguish “work is
+present in the common commercial scope” from both “work is omitted” and “the
+commercial quantity is allocated to this facility.” It does not close the
+broader VOR/estimate delta regression because 411 work descriptions remain
+unclassified and a defensible omitted-work denominator is not yet complete.
+
+Exact-SHA CI run `37110891575` passed. The active immutable release is
+`~/.asd-kontur/public-demo/releases/20261003-b2329f4-commercial-members-v60`.
+All four application services run the exact commit; Qwen PID `93554` and NTD
+worker PID `98263` were preserved. After activation, the supervised worker
+autonomously claimed job `01a100f2-f475-7422-87b3-bd65f589e62f`; no developer
+queue, retry, successor, priority or Qwen command was issued.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`.
+All critical NTD/platform counts are exactly equal to the preserved deletion
+baseline, including 319 succeeded NTD jobs. The canonical NTD root remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`.
+The release receipt SHA-256 is
+`4aed664951bdee6e221c76a3f0df6de64b95381f7b4bb34def6f76d678560af9`.
+
+Current status remains: `ContractAnalysisOperational=true`,
+`ProtocolOfDisagreementsOperational=true`, `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Cross-document scheduling and serialized refill — releases v30–v36
 
 The blind-project queue exposed two generic barriers between accepted quantity

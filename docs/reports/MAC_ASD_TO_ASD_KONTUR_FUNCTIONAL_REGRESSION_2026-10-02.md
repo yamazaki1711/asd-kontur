@@ -444,3 +444,19 @@ authority, and a project-wide commercial amount is not misreported as a
 facility-specific omission. The next recovery step is a defensible omitted-work
 or quantity-difference finding from compatible design and commercial scopes,
 not a larger list of unresolved rows.
+
+## Explicit multi-facility commercial coverage — release b2329f4
+
+ASD-KONTUR now preserves the exact facility membership of a commercial heading
+that explicitly covers several named structures. On the blind project, this
+allows the user to see that excavation and pipeline-installation work designed
+for retaining wall 63/1 is present in the common commercial scope for walls
+63/1 and 65/1. The result also states the remaining limitation: the source does
+not distribute the common commercial quantity between those structures.
+
+This removes four previously unresolved reciprocal scope links without
+inventing a facility quantity or an omitted-work conclusion. The live v71
+projection has 10 scope matches, one commercial-only work and 264 unresolved
+scope matches. The regression remains `PRESERVED_BUT_INCOMPLETE` until the
+remaining commercial descriptions are classified sufficiently to establish a
+defensible omitted-work denominator and price-bearing delta analysis.
