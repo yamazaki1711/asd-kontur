@@ -505,3 +505,23 @@ The VOR/estimate and omitted-work regression therefore remains
 commercial-only scope exist, but no design-work omission or price-bearing
 delta is yet established. The next result must come from further generic scope
 resolution, not from relaxing the comparison guard.
+
+## Commercial resource/work separation checkpoint — release c00a938
+
+The blind package showed that most rows presented as “unclassified commercial
+work” were estimate resources or table/accounting headings rather than
+construction operations. Release `c00a938f6acf9ca0e2989776ac7398874051daa7`
+removes those rows from the work-comparison denominator without deleting the
+source observations or their material meaning. Construction-scope
+classification is now 545 of 794 observations (68.6%), and unclassified work
+is 249 rather than being inflated by material, labour, reserve and heading
+rows. The only remaining unclassified VOR operation is the real construction
+description `Установка лотков водоотводных`, which remains in the autonomous
+semantic queue.
+
+This improves the professional denominator but does not manufacture a missing
+work. The live project retains nine scope matches, one commercial-only work and
+267 unresolved scope matches; no defensible design-work omission or
+price-bearing VOR/estimate delta has yet been established. The legacy
+VOR/estimate and omitted-work capabilities therefore remain
+`PRESERVED_BUT_INCOMPLETE`.

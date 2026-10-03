@@ -869,6 +869,57 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Commercial work denominator cleanup — release c00a938
+
+Release `c00a938f6acf9ca0e2989776ac7398874051daa7` separates construction
+operations from estimate accounting/resource rows before work-scope comparison.
+The generic filter recognizes coded estimate resources, labour/FOT/reserve
+rows, material-only rows, LSR/LRS/table headings and project/structure headings.
+It preserves every raw observation and keeps source-grounded materials in the
+material schedule. A validated Qwen `MATCHED` construction decision takes
+precedence, so a row is not removed merely because it also names a material.
+No project name, document filename, facility, quantity or expected omission is
+encoded in the rule.
+
+The live blind projection now contains 794 construction-scope observations:
+545 are classified and 249 remain unclassified, for 68.6% construction-scope
+classification. It excludes 1,301 accounting/resource/non-work observations
+from the work denominator while retaining 575 material scopes. Only one VOR
+operation remains unclassified: `Установка лотков водоотводных`; it remains
+eligible for autonomous Qwen classification rather than being suppressed.
+The projection retains nine compatible scope matches, one grounded
+commercial-only work, nine quantity comparisons, eight material comparisons,
+seven professional issues, seven customer questions and seven contractor
+risks. No design-work omission is claimed yet because the remaining
+design/commercial scope is not sufficiently resolved.
+
+Exact-SHA CI run `37119074830` passed. The active immutable release is
+`~/.asd-kontur/public-demo/releases/20261003-c00a938-commercial-scope-v66` at
+migration `0118_source_grounded_alternative_profile`. The first activation
+check detected that a copied editable virtual environment still pointed at the
+v65 source tree. No acceptance claim was made from that process state; the
+release-local editable source pointer was corrected, the four application
+services were restarted, and the imported module path plus
+`project-engineering-model-v74` were then verified. Qwen PID `85702` and NTD
+worker PID `98263` were preserved throughout.
+
+After activation the autonomous worker resumed
+`PROJECT_WORK_RECONCILIATION`; the observed ledger had 3,083 succeeded jobs,
+18 queued jobs and one running job, while Qwen reported 50 completed requests
+and `QWEN_GENERATING`. No manual queue, retry, successor or priority command
+was issued. Platform memory remained exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+canonical NTD memory remained exactly
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`,
+and the NTD ledger remained 319 succeeded jobs. The release receipt is
+`~/.asd-kontur/public-demo/releases/20261003-c00a938-commercial-scope-v66/release-receipt.json`
+with SHA-256
+`41d89abc609defb0936cfcb029ccdb77b482593956094502817673bd7fcfb1e6`.
+
+Current status remains: `ContractAnalysisOperational=true`,
+`ProtocolOfDisagreementsOperational=true`, `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Commercial first-pass throughput and multi-relationship quantity safety — release ec4d232
 
 Releases `d8dcd3c` and `679fc38` separated the independent first-pass lane from
