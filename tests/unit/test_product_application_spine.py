@@ -742,7 +742,10 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
     )
     component_a.update(page=21, relationship_review_needed=True, semantic_priority=(80, 1, 1))
     component_a["quantity_observations"][0].update(
-        value="127.2", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+        value="127.2",
+        unit="м2",
+        prior_quantity_type="COMPONENT",
+        prior_semantic_scope="Площадь демонтажа покрытия",
     )
     component_b = _work_batch_row(
         "component-b",
@@ -753,7 +756,10 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
     )
     component_b.update(page=21, relationship_review_needed=True, semantic_priority=(70, 1, 1))
     component_b["quantity_observations"][0].update(
-        value="147.5", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+        value="147.5",
+        unit="м2",
+        prior_quantity_type="COMPONENT",
+        prior_semantic_scope="Площадь демонтажа покрытия",
     )
     stated_total = _work_batch_row(
         "total",
@@ -764,7 +770,10 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
     )
     stated_total.update(page=30, relationship_review_needed=True, semantic_priority=(100, 1, 1))
     stated_total["quantity_observations"][0].update(
-        value="274.7", unit="м2", prior_semantic_scope="Площадь демонтажа покрытия"
+        value="274.7",
+        unit="м2",
+        prior_quantity_type="TOTAL",
+        prior_semantic_scope="Площадь демонтажа покрытия",
     )
     unrelated = _work_batch_row(
         "unrelated",
@@ -783,7 +792,7 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
 
     batches, selected = _quantity_relationship_batches(
         [unrelated, component_b, stated_total, component_a],
-        batch_size=3,
+        batch_size=2,
         max_batches=1,
     )
 

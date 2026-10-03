@@ -617,6 +617,30 @@ def _relationship_group_lane_priority(rows: Iterable[Mapping[str, Any]]) -> int:
     )
 
 
+def _relationship_group_component_total_context_size(
+    rows: Iterable[Mapping[str, Any]],
+) -> int:
+    values = list(rows)
+    quantity_types = {
+        str(quantity.get("prior_quantity_type") or "")
+        for row in values
+        for quantity in row.get("quantity_observations") or ()
+        if isinstance(quantity, Mapping)
+    }
+    if "TOTAL" not in quantity_types or not quantity_types & {"COMPONENT", "SUBTOTAL"}:
+        return 0
+    return sum(
+        int(
+            any(
+                str(quantity.get("prior_quantity_type") or "") in {"TOTAL", "COMPONENT", "SUBTOTAL"}
+                for quantity in row.get("quantity_observations") or ()
+                if isinstance(quantity, Mapping)
+            )
+        )
+        for row in values
+    )
+
+
 def _ordered_relationship_pair(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -727,6 +751,12 @@ def _quantity_relationship_batches(
             )
         )
         seeds = [left_seed, right_seed]
+        component_context_size = _relationship_group_component_total_context_size(values)
+        relationship_batch_size = (
+            min(4, max(batch_size, component_context_size))
+            if component_context_size
+            else batch_size
+        )
         # Once the strongest missing relation has selected the batch, keep the
         # remaining context cohesive with that relation.  A total often needs
         # two or more component rows; global semantic priority alone could
@@ -767,7 +797,7 @@ def _quantity_relationship_batches(
                 or any(
                     candidate_id == str(existing.get("candidate_id") or "") for existing in batch
                 )
-                or len(batch) >= batch_size
+                or len(batch) >= relationship_batch_size
             ):
                 continue
             row_quantity_count = len(row.get("quantity_observations") or ())
