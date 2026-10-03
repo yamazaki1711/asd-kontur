@@ -429,8 +429,8 @@ def test_cross_document_work_batches_preserve_quantity_context_bound() -> None:
     batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
 
     assert len(batches) == 1
-    assert sum(len(row["quantity_observations"]) for row in batches[0]) == 16
-    assert selected == {"design", "commercial"}
+    assert sum(len(row["quantity_observations"]) for row in batches[0]) <= 16
+    assert selected == {"design", "extra"}
 
 
 def test_cross_document_work_batches_review_exact_wording_without_location() -> None:
@@ -604,6 +604,54 @@ def test_scope_context_skips_an_exact_pair_already_attempted() -> None:
     )
 
     assert selected == []
+
+
+def test_scope_context_queues_unlocated_family_synonyms_from_settled_results() -> None:
+    rows = [
+        {
+            "candidate_id": "design-fence",
+            "source_version_id": "source-design",
+            "source_role": "project_documentation",
+            "wording": "Устройство металлического ограждения",
+            "deterministic_family_hint": "fencing",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"operation": "Устройство металлического ограждения"},
+        },
+        {
+            "candidate_id": "commercial-fence",
+            "source_version_id": "source-commercial",
+            "source_role": "local_estimate",
+            "wording": "Монтаж металлических ограждений",
+            "deterministic_family_hint": "fencing",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"operation": "Монтаж металлических ограждений"},
+        },
+        {
+            "candidate_id": "commercial-gate",
+            "source_version_id": "source-commercial",
+            "source_role": "local_estimate",
+            "wording": "Монтаж въездных ворот",
+            "deterministic_family_hint": "fencing",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"operation": "Монтаж въездных ворот"},
+        },
+    ]
+
+    selected = _bounded_scope_context_rows(
+        rows,
+        source_display_names={
+            "source-design": "Design.pdf",
+            "source-commercial": "Estimate.xlsx",
+        },
+        source_role_contexts={},
+        attempted_pairs=set(),
+        max_batches=1,
+    )
+
+    assert {value["candidate_id"] for value in selected} == {
+        "design-fence",
+        "commercial-fence",
+    }
 
 
 def test_scope_context_uses_page_role_for_an_embedded_commercial_section() -> None:

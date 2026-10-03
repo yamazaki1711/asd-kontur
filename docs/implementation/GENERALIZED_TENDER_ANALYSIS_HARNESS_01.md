@@ -1087,6 +1087,43 @@ retry, successor, priority or Qwen command was issued.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Unlocated wording variants reaching semantic scope review — pending release
+
+The current blind-project projection contains 276 unresolved scope matches.
+Seven of those groups contain both design and commercial observations, while
+191 are commercial-only and 78 are design-only at the current model boundary.
+Inspection of the seven two-sided groups exposed a generic scheduling defect:
+settled observations without an established facility could reach the semantic
+scope task only when their normalized source wording was identical. Ordinary
+design/commercial variants in the same construction family therefore remained
+permanently unresolved even though Qwen is the component responsible for
+deciding whether their engineering scopes are equivalent.
+
+The corrected scheduler uses the construction family only to assemble a
+bounded candidate context. It does not treat family membership as comparison
+authority. Within that context it deterministically chooses the strongest
+design/commercial source pair using source-wording affinity and stable
+candidate identifiers; Qwen must still return the semantic scope decision, and
+the existing source-grounding and false-positive guards remain authoritative.
+The same affinity selection is applied to located cross-document batches so a
+weak first row cannot displace a materially stronger counterpart.
+
+The change contains no project name, document name, facility, quantity or
+expected finding. A generic fencing example verifies that distinct source
+wordings can be queued for semantic review while a gate in the same broad
+family is not selected over the closer fence counterpart. The unit module
+passes 103 tests and the complete unit suite passes 1,246 tests. The PostgreSQL
+integration scenario remains environment-gated unless an explicitly
+disposable `ASD_TEST_DATABASE_URL` is supplied; it was not pointed at the
+public database.
+
+No developer queue, retry, successor, priority or Qwen command has been
+issued. At the observation boundary the supervised runtime had 67 queued jobs,
+one active v37 work-reconciliation job with a fresh heartbeat, and 16,331
+succeeded jobs. The release and autonomous live-result evidence remain pending,
+so the truthful status remains `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Current-profile comparison authority — engineering model v77
 
 Engineering model v77 closes the remaining deterministic fallback behind the

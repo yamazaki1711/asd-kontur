@@ -548,7 +548,15 @@ def _cross_document_work_batches(
         # peer and a later review cannot overwrite the meaning of an earlier
         # pair. Quantity/component context has its own bounded multi-row lane.
         batch: list[dict[str, Any]] = []
-        for value in eligible_seed_pairs[0]:
+        selected_pair = max(
+            eligible_seed_pairs,
+            key=lambda pair: (
+                _relationship_pair_affinity(*pair),
+                str(pair[0].get("candidate_id") or ""),
+                str(pair[1].get("candidate_id") or ""),
+            ),
+        )
+        for value in selected_pair:
             cleaned = dict(value)
             cleaned.pop("semantic_priority", None)
             cleaned.pop("comparison_side", None)
@@ -578,9 +586,10 @@ def _bounded_scope_context_rows(
 
     Scope-only rows are useful only when a design and commercial counterpart
     can form a new exact candidate pair. Select one deterministic pair per
-    eligible facility/family or exact-wording/family group. Qwen still owns
-    the semantic operation decision; this helper only prevents hundreds of
-    irrelevant locators from entering the source-context SQL.
+    eligible facility/family or unresolved-family group, preferring source
+    wording affinity without declaring semantic equivalence. Qwen still owns
+    the operation decision; this helper only prevents hundreds of irrelevant
+    locators from entering the source-context SQL.
     """
 
     ordinary: list[dict[str, Any]] = []
@@ -609,7 +618,14 @@ def _bounded_scope_context_rows(
         if facility:
             key = ("facility", facility, family)
         elif wording:
-            key = ("wording", wording, family)
+            # Settled observations may already have a valid construction
+            # family while their source wording differs across design and
+            # commercial documents. Exact wording is therefore too strong a
+            # precondition for the semantic scope task: it prevents Qwen from
+            # ever deciding ordinary variants such as "pile installation"
+            # versus "bored-pile construction". Family membership only
+            # assembles bounded context; it is not comparison authority.
+            key = ("unresolved-family", "", family)
         else:
             continue
         row["_comparison_side"] = side
@@ -630,7 +646,15 @@ def _bounded_scope_context_rows(
         ]
         if not pairs:
             continue
-        selected_ids.update(str(value.get("candidate_id") or "") for value in pairs[0])
+        selected_pair = max(
+            pairs,
+            key=lambda pair: (
+                _relationship_pair_affinity(*pair),
+                str(pair[0].get("candidate_id") or ""),
+                str(pair[1].get("candidate_id") or ""),
+            ),
+        )
+        selected_ids.update(str(value.get("candidate_id") or "") for value in selected_pair)
         selected_group_count += 1
         if selected_group_count >= max_batches:
             break
