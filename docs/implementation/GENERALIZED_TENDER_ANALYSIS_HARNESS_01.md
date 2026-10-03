@@ -1006,10 +1006,31 @@ of unsafe decision. Generic tests use changed structures, work descriptions,
 values, and units; they also prove that a source which explicitly names an
 alternative remains an accepted non-comparable scope.
 
-No production queue, retry, priority, successor, or Qwen command was issued to
-create this checkpoint. The live v31 result and release state must be recorded
-after controlled activation; until then no new real-project comparison is
-claimed.
+Commits `3f0218f305d7a69e3fa95d26c9ae3b1f702db4ec` and
+`c899b317e57ed4bd074792078d1c9a1a84748805` passed exact-SHA CI run
+`37103729010` and are active as immutable release
+`~/.asd-kontur/public-demo/releases/20261003-c899b31-alt-evidence-v55`.
+Migration `0118_source_grounded_alternative_profile` was exercised as
+upgrade/downgrade/upgrade on separate restored database
+`asd_kontur_restore_0118_20261003` before public activation. The production
+backup SHA-256 is
+`a4980634ff8ccff26390ef08d1772fb941bd53d01ea9246e0550db000d26216b`.
+
+The application worker's in-flight v30 lease was recovered automatically
+during activation and terminated with the typed supersession outcome. The
+supervised orchestrator created the targeted v31 queue without a developer
+queue, retry, priority, successor, or Qwen command. At the release receipt,
+two v31 jobs had succeeded, one was running and 47 were queued. Qwen PID
+`93554` and NTD worker PID `98263` were preserved. The release receipt SHA-256
+is `2d42a192e7923fa007d1ed7974e5874cc1bea68912370c1f67045336972f7d70`.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains exactly
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The OP-73 and real blind
+target v31 results remain in the fair autonomous queue, so no repaired
+cross-document comparison is claimed at this checkpoint.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
