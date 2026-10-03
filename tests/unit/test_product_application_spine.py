@@ -576,6 +576,102 @@ def test_quantity_relationship_batches_prefer_opposite_document_sides() -> None:
     assert selected == {"design-high", "commercial"}
 
 
+def test_quantity_relationship_batches_rank_semantic_scope_before_unrelated_family_rows() -> None:
+    design_fence = _work_batch_row(
+        "design-fence",
+        facility="",
+        family="fencing",
+        document_role="ПД",
+        wording="Устройство металлического ограждения",
+    )
+    design_fence["quantity_observations"][0].update(
+        unit="м", prior_semantic_scope="Длина металлического ограждения"
+    )
+    design_drainage = _work_batch_row(
+        "design-drainage",
+        facility="",
+        family="fencing",
+        document_role="РД",
+        wording="Ограждение дренажного канала",
+    )
+    design_drainage["quantity_observations"][0].update(
+        unit="м", prior_semantic_scope="Длина ограждения дренажного канала"
+    )
+    commercial_fence = _work_batch_row(
+        "commercial-fence",
+        facility="",
+        family="fencing",
+        document_role="Смета",
+        wording="Монтаж металлических ограждений",
+    )
+    commercial_fence["quantity_observations"][0].update(
+        unit="м", prior_semantic_scope="Длина металлического ограждения"
+    )
+    commercial_unrelated = _work_batch_row(
+        "commercial-unrelated",
+        facility="",
+        family="fencing",
+        document_role="ВОР",
+        wording="Разборка временного защитного забора",
+    )
+    commercial_unrelated["quantity_observations"][0].update(
+        unit="м2", prior_semantic_scope="Площадь временного защитного забора"
+    )
+    rows = [design_drainage, commercial_unrelated, design_fence, commercial_fence]
+    for row in rows:
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [
+        ["design-fence", "commercial-fence"]
+    ]
+    assert selected == {"design-fence", "commercial-fence"}
+
+
+def test_quantity_relationship_pair_ranking_never_uses_numeric_similarity() -> None:
+    design = _work_batch_row(
+        "design",
+        facility="",
+        family="earthworks",
+        document_role="ПД",
+        wording="Разработка грунта котлована",
+    )
+    design["quantity_observations"][0].update(
+        value="438", unit="м3", prior_semantic_scope="Объем грунта котлована"
+    )
+    commercial_related = _work_batch_row(
+        "commercial-related",
+        facility="",
+        family="earthworks",
+        document_role="Смета",
+        wording="Разработка грунта в котловане",
+    )
+    commercial_related["quantity_observations"][0].update(
+        value="361", unit="м3", prior_semantic_scope="Объем грунта котлована"
+    )
+    commercial_same_number = _work_batch_row(
+        "commercial-same-number",
+        facility="",
+        family="earthworks",
+        document_role="ВОР",
+        wording="Обратная засыпка траншеи",
+    )
+    commercial_same_number["quantity_observations"][0].update(
+        value="438", unit="м3", prior_semantic_scope="Объем обратной засыпки траншеи"
+    )
+    rows = [design, commercial_same_number, commercial_related]
+    for row in rows:
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+
+    batches, _selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert [item["candidate_id"] for item in batches[0]] == [
+        "design",
+        "commercial-related",
+    ]
+
+
 def test_quantity_relationship_batches_reuse_settled_context_only_for_mixed_review() -> None:
     design = _work_batch_row(
         "settled-design",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from asd_kontur.document_understanding.models import (
 from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
 )
+from asd_kontur.document_understanding.semantic import normalize_unit
 from asd_kontur.domain import uuid7
 from asd_kontur.tender.excavation_pit_inventory import build_excavation_pit_inventory
 from asd_kontur.tender.facility_work_projection import (
@@ -372,6 +374,77 @@ def _semantic_extraction_priority(document_roles: tuple[str, ...]) -> int:
     )
 
 
+def _relationship_terms(value: object) -> set[str]:
+    """Return coarse lexical stems used only to assemble bounded model context."""
+
+    tokens = re.findall(r"[^\W_]+", str(value or "").casefold())
+    return {token[:6] for token in tokens if len(token) >= 4 and not token.isdecimal()}
+
+
+def _relationship_unit_dimensions(row: Mapping[str, Any]) -> set[str]:
+    dimensions: set[str] = set()
+    for quantity in row.get("quantity_observations") or ():
+        if not isinstance(quantity, Mapping):
+            continue
+        raw = str(quantity.get("unit") or "").strip().casefold()
+        unit = normalize_unit(raw)
+        if unit is None:
+            compact = raw.replace(" ", "")
+            unit = normalize_unit(re.sub(r"^(?:1000|100)", "", compact))
+        if unit is not None:
+            dimensions.add(unit)
+    return dimensions
+
+
+def _relationship_pair_affinity(
+    design: Mapping[str, Any], commercial: Mapping[str, Any]
+) -> tuple[int, int, int, int, tuple[int, ...]]:
+    """Rank useful design/commercial context without deciding compatibility.
+
+    Text and physical-unit overlap may reduce obviously unrelated Qwen calls.
+    Numeric values are deliberately absent; Qwen must still establish semantic
+    scope, and deterministic code alone performs any later arithmetic.
+    """
+
+    design_wording = " ".join(str(design.get("wording") or "").casefold().split())
+    commercial_wording = " ".join(str(commercial.get("wording") or "").casefold().split())
+    design_scope = " ".join(
+        str(value.get("prior_semantic_scope") or "")
+        for value in design.get("quantity_observations") or ()
+        if isinstance(value, Mapping)
+    )
+    commercial_scope = " ".join(
+        str(value.get("prior_semantic_scope") or "")
+        for value in commercial.get("quantity_observations") or ()
+        if isinstance(value, Mapping)
+    )
+    wording_overlap = len(
+        _relationship_terms(design_wording) & _relationship_terms(commercial_wording)
+    )
+    scope_overlap = len(
+        _relationship_terms(f"{design_wording} {design_scope}")
+        & _relationship_terms(f"{commercial_wording} {commercial_scope}")
+    )
+    unit_overlap = len(
+        _relationship_unit_dimensions(design) & _relationship_unit_dimensions(commercial)
+    )
+    priorities = tuple(
+        left + right
+        for left, right in zip(
+            tuple(design.get("semantic_priority") or (0, 0, 0)),
+            tuple(commercial.get("semantic_priority") or (0, 0, 0)),
+            strict=False,
+        )
+    )
+    return (
+        int(bool(design_wording) and design_wording == commercial_wording),
+        scope_overlap,
+        wording_overlap,
+        unit_overlap,
+        priorities,
+    )
+
+
 def _cross_document_work_batches(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -533,19 +606,30 @@ def _quantity_relationship_batches(
         # engineering family remained available.  This is only context
         # assembly: Qwen must still return DIFFERENT_SCOPE/INCOMPARABLE when
         # the source context does not establish semantic compatibility.
+        design_rows = [
+            row
+            for row in ordered
+            if document_comparison_side(row.get("document_role"), row.get("document")) == "design"
+        ]
+        commercial_rows = [
+            row
+            for row in ordered
+            if document_comparison_side(row.get("document_role"), row.get("document"))
+            == "commercial"
+        ]
         seeds: list[dict[str, Any]] = []
-        for side in ("design", "commercial"):
-            match = next(
-                (
-                    row
-                    for row in ordered
-                    if document_comparison_side(row.get("document_role"), row.get("document"))
-                    == side
+        if design_rows and commercial_rows:
+            design_seed, commercial_seed = max(
+                ((design, commercial) for design in design_rows for commercial in commercial_rows),
+                key=lambda pair: (
+                    _relationship_pair_affinity(*pair),
+                    str(pair[0].get("candidate_id") or ""),
+                    str(pair[1].get("candidate_id") or ""),
                 ),
-                None,
             )
-            if match is not None:
-                seeds.append(match)
+            seeds.extend((design_seed, commercial_seed))
+        elif ordered:
+            seeds.append(ordered[0])
         batch: list[dict[str, Any]] = []
         quantity_count = 0
         for row in [*seeds, *ordered]:
