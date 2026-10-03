@@ -605,6 +605,18 @@ def _relationship_pair_lane_priority(left: Mapping[str, Any], right: Mapping[str
     return 0
 
 
+def _relationship_group_lane_priority(rows: Iterable[Mapping[str, Any]]) -> int:
+    values = list(rows)
+    return max(
+        (
+            _relationship_pair_lane_priority(left, right)
+            for left, right in combinations(values, 2)
+            if _relationship_pair_is_professionally_relevant(left, right)
+        ),
+        default=-1,
+    )
+
+
 def _ordered_relationship_pair(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -653,6 +665,7 @@ def _quantity_relationship_batches(
     ordered_groups = sorted(
         groups.items(),
         key=lambda item: (
+            _relationship_group_lane_priority(item[1]),
             len(
                 {
                     document_comparison_side(row.get("document_role"), row.get("document"))

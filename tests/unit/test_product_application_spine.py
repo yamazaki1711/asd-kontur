@@ -635,6 +635,50 @@ def test_quantity_relationship_batches_include_design_design_scope_review() -> N
     assert selected == {"pd", "rd"}
 
 
+def test_quantity_relationship_batches_prioritize_cross_document_lane() -> None:
+    vor = _work_batch_row(
+        "vor",
+        facility="Тепловая сеть",
+        family="pipeline",
+        document_role="bill of quantities",
+        wording="Монтаж трубопровода",
+    )
+    estimate = _work_batch_row(
+        "estimate",
+        facility="Тепловая сеть",
+        family="pipeline",
+        document_role="local estimate",
+        wording="Монтаж трубопровода",
+    )
+    component_a = _work_batch_row(
+        "component-a",
+        facility="Кровля",
+        family="waterproofing",
+        document_role="ВОР",
+        wording="Теплоизоляция южного ската",
+        quantity_count=4,
+    )
+    component_b = _work_batch_row(
+        "component-b",
+        facility="Кровля",
+        family="waterproofing",
+        document_role="ВОР",
+        wording="Теплоизоляция северного ската",
+        quantity_count=4,
+    )
+    component_b["source_version_id"] = component_a["source_version_id"]
+    rows = [component_a, component_b, vor, estimate]
+    for row in rows:
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        for quantity in row["quantity_observations"]:
+            quantity["unit"] = "м"
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [["vor", "estimate"]]
+    assert selected == {"vor", "estimate"}
+
+
 def test_quantity_relationship_batches_rank_semantic_scope_before_unrelated_family_rows() -> None:
     design_fence = _work_batch_row(
         "design-fence",
