@@ -1087,7 +1087,7 @@ retry, successor, priority or Qwen command was issued.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
-## Unlocated wording variants reaching semantic scope review — pending release
+## Unlocated wording variants reaching semantic scope review — release ae3d1a2
 
 The current blind-project projection contains 276 unresolved scope matches.
 Seven of those groups contain both design and commercial observations, while
@@ -1117,11 +1117,33 @@ integration scenario remains environment-gated unless an explicitly
 disposable `ASD_TEST_DATABASE_URL` is supplied; it was not pointed at the
 public database.
 
-No developer queue, retry, successor, priority or Qwen command has been
-issued. At the observation boundary the supervised runtime had 67 queued jobs,
-one active v37 work-reconciliation job with a fresh heartbeat, and 16,331
-succeeded jobs. The release and autonomous live-result evidence remain pending,
-so the truthful status remains `GeneralizedTenderHarness=false`,
+Commit `ae3d1a23f1ab82a78a71788bc5363f8ce753dbba` passed exact-SHA CI run
+`37141866559` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261004-ae3d1a2-scope-variants-v81`.
+API readiness passes at unchanged migration head
+`0124_explicit_revision_scope_profile`; all four application services import
+the v81 release path. Qwen PID `85702` and NTD worker PID `98263` were
+preserved. The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`
+and the NTD ledger remains exactly 319 succeeded jobs. The release-receipt
+SHA-256 is
+`c884d934f96e0d2ec1f910c4fc4199e5cba65012cbb3a0df6b906b74310e4977`.
+
+The supervised orchestrator autonomously created two new v37 semantic scope
+jobs without a developer progression command. Job
+`01a102eb-7f19-73ef-87ab-1fcb13c40a1e` reviewed a design requirement for
+pipeline thermal insulation against a commercial pipeline-installation row.
+Qwen established `DIFFERENT_SCOPE`; the projection retained the distinct
+operations and did not manufacture an omission or quantity discrepancy. Its
+result digest is
+`sha256:7848086aa9295946801713f6c6d9d3d9834322f6d24432d6051c249c119df42d`.
+The paired hydraulic-test job remains in the autonomous queue at this
+checkpoint.
+
+The controlled worker restart also left one expired in-flight lease. The new
+worker autonomously changed it from stale `running` to queued with typed code
+`stale_lease_recovered`; no SQL repair, retry command or queue refill was
+issued. Current status remains `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
 ## Current-profile comparison authority — engineering model v77
