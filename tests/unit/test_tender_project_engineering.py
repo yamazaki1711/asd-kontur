@@ -2408,7 +2408,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v68"
+    assert model["model_version"] == "project-engineering-model-v69"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -3781,6 +3781,43 @@ def test_obvious_estimate_resources_do_not_consume_qwen_reconciliation() -> None
     )
 
 
+@pytest.mark.parametrize(
+    ("wording", "reason_fragment"),
+    [
+        ("Итого по расценке 412,60", "итог"),
+        ("Всего по позиции 7 980,00", "итог"),
+        ("Материальные ресурсы", "стоимости"),
+        ("Средства на оплату труда", "стоимости"),
+        ("2 ЭМ 315,40 0,8 252,32", "эксплуатации машин"),
+        ("3 в т.ч. ОТМ 184,25", "эксплуатации машин"),
+        ("К.С. 812/пр-025.0 НР - Монтаж оборудования", "норматив"),
+        ("774/пр-031.02 СП - Автомобильные дороги", "норматив"),
+    ],
+)
+def test_generic_estimate_accounting_rows_are_not_construction_works(
+    wording: str, reason_fragment: str
+) -> None:
+    reason = non_work_reason(wording)
+
+    assert reason is not None
+    assert reason_fragment in reason.casefold()
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "Устройство монолитной плиты",
+        "Монтаж технологического трубопровода",
+        "Итоговое бетонирование захватки",
+        "Сталь листовая С345 толщиной 12 мм",
+    ],
+)
+def test_estimate_accounting_grammar_does_not_exclude_work_or_material_rows(
+    wording: str,
+) -> None:
+    assert non_work_reason(wording) is None
+
+
 def test_reconciliation_prioritizes_descriptive_construction_operations() -> None:
     operation = work_reconciliation_priority(
         "Укладка труб на песчаную подушку",
@@ -4109,6 +4146,7 @@ def test_project_scope_requires_explicit_reference_to_every_addressed_facility()
     facilities = [
         {"name": "Подпорная стена по ул. Северная, 10/1"},
         {"name": "Подпорная стена по ул. Северная, 12/1"},
+        {"name": "Участок производства работ"},
     ]
 
     assert _project_scope_facility_label(
@@ -4122,6 +4160,65 @@ def test_project_scope_requires_explicit_reference_to_every_addressed_facility()
         _project_scope_facility_label("Подпорная стена по ул. Северная, 10/1", facilities) is None
     )
     assert _project_scope_facility_label("Подпорные стены", facilities) is None
+
+
+def test_commercial_heading_assigns_work_to_explicit_multi_facility_project_scope() -> None:
+    source_context = dict([_source("estimate-earthwork", "Estimate Q-42.pdf", 2)])
+    source_context["estimate-earthwork"].update(
+        page_commercial_scope_code="04-02-03",
+        page_commercial_scope_header=(
+            "Local estimate 04-02-03. Repair of retaining walls at "
+            "ул. Северная, 10/1 and ул. Северная, 12/1"
+        ),
+    )
+    model = build_project_engineering_model(
+        workspace_id="workspace-project-commercial-scope",
+        project_definition={"definition": {"fields": {}}},
+        candidates={
+            "project_fields": [],
+            "work_types": [
+                {
+                    "candidate_id": "estimate-earthwork",
+                    "version": 1,
+                    "value": "Разработка грунта экскаватором",
+                    "source_version_id": "estimate-version",
+                    "source_locator_id": "estimate-earthwork",
+                    "source_role": "local_estimate",
+                }
+            ],
+            "quantities": [],
+            "materials": [],
+        },
+        structure_nodes=[],
+        identity_components=[
+            {
+                "identity_kind": "facility",
+                "canonical_label": "Подпорная стена по ул. Северная, 10/1",
+                "candidate_labels": ["Подпорная стена по ул. Северная, 10/1"],
+                "member_structure_node_ids": ["wall-10-pz", "wall-10-kr"],
+                "source_locator_ids": ["wall-10-pz-source", "wall-10-kr-source"],
+            },
+            {
+                "identity_kind": "facility",
+                "canonical_label": "Подпорная стена по ул. Северная, 12/1",
+                "candidate_labels": ["Подпорная стена по ул. Северная, 12/1"],
+                "member_structure_node_ids": ["wall-12-pz", "wall-12-kr"],
+                "source_locator_ids": ["wall-12-pz-source", "wall-12-kr-source"],
+            },
+        ],
+        pit_inventory={"candidate_pits": [], "coverage": {}},
+        defects=[],
+        matrix={"matrix": {"rows": []}},
+        normative_profile=None,
+        source_context=source_context,
+    )
+
+    assert model["works"][0]["facility"] == (
+        "Объект в целом (Подпорная стена по ул. Северная, 10/1; "
+        "Подпорная стена по ул. Северная, 12/1)"
+    )
+    assert model["works"][0]["location_scope_kind"] == "project"
+    assert "всем установленным сооружениям" in model["works"][0]["status"]
 
 
 def test_repeated_equipment_model_does_not_enter_generic_facility_hierarchy() -> None:

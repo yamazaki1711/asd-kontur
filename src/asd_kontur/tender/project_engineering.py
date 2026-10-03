@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v68"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v69"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -1472,8 +1472,30 @@ def non_work_reason(value: object) -> str | None:
         return "Сметный шифр без описания строительной операции"
     if re.match(r"^\d+(?:[.-]\d+){2,}\s+", normalized):
         return "Сметный ресурс с кодом, а не отдельная строительная операция"
+    if re.match(r"^(?:итого|всего)(?:\s|$)", normalized):
+        return "Сметный итог или промежуточный итог, а не отдельная строительная операция"
+    if (
+        normalized.startswith(
+            (
+                "прямые затраты",
+                "сметная стоимость",
+                "материальные ресурсы",
+                "средства на оплату труда",
+                "накладные расходы",
+                "сметная прибыль",
+            )
+        )
+        or normalized == "фот"
+    ):
+        return "Сметный показатель стоимости, а не отдельная строительная операция"
     if normalized.startswith(("отм зтм", "от зт", "зтм ", "зт ")):
         return "Сметный показатель трудозатрат, а не отдельная строительная операция"
+    if re.match(r"^(?:\d+\s+)?(?:от|отм|эм|зтм|зм)(?:\s|\(|$)", normalized) or re.match(
+        r"^(?:\d+\s+)?в\s+т\.ч\.\s+(?:от|отм|эм|зтм|зм)(?:\s|$)", normalized
+    ):
+        return "Сметный показатель трудозатрат или эксплуатации машин, а не работа"
+    if re.match(r"^(?:к\.с\.\s+)?\d+\s+пр\s+\d", normalized):
+        return "Сметный норматив начисления, а не отдельная строительная операция"
     if normalized in {"зт", "зм"}:
         return "Сметный показатель, а не отдельная строительная операция"
     if normalized.startswith(("площадь ", "объем ", "объём ")):
@@ -2298,14 +2320,21 @@ def _project_scope_facility_label(
         for item in rows
         if (address := _specific_structure_key(item.get("name"))) is not None
     }
-    if len(rows) < 2 or len(facility_addresses) != len(rows):
+    # A project may also contain a site-wide/container card without an address.
+    # That generic card must not prevent an explicit heading which names every
+    # addressed facility from establishing an all-site commercial scope.
+    if len(facility_addresses) < 2:
         return None
     scope_addresses = {
         " ".join(item.replace(",", " ").split()) for item in _street_addresses(value)
     }
     if not facility_addresses <= scope_addresses:
         return None
-    names = sorted(str(item.get("name") or "") for item in rows if item.get("name"))
+    names = sorted(
+        str(item.get("name") or "")
+        for item in rows
+        if item.get("name") and _specific_structure_key(item.get("name")) is not None
+    )
     return f"Объект в целом ({'; '.join(names)})"
 
 
@@ -2785,6 +2814,7 @@ def _work_schedule(
         {"project_facility_ids": sorted(str(item.get("facility_id")) for item in facilities)}
     )
     commercial_facilities_by_scope: dict[str, set[str]] = defaultdict(set)
+    commercial_project_labels_by_scope: dict[str, set[str]] = defaultdict(set)
     for scope_context in source_context.values():
         scope_code = str(scope_context.get("page_commercial_scope_code") or "").strip()
         designation = commercial_scope_facility_designation(
@@ -2793,6 +2823,11 @@ def _work_schedule(
         facility = facility_by_designation.get(designation or "")
         if scope_code and facility is not None:
             commercial_facilities_by_scope[scope_code].add(str(facility["facility_id"]))
+        project_label = _project_scope_facility_label(
+            scope_context.get("page_commercial_scope_header"), facilities
+        )
+        if scope_code and project_label is not None:
+            commercial_project_labels_by_scope[scope_code].add(project_label)
     facility_ids_by_locator: dict[str, set[str]] = defaultdict(set)
     facility_ids_by_page: dict[tuple[str, int], set[str]] = defaultdict(set)
     for item in facilities:
@@ -2956,11 +2991,16 @@ def _work_schedule(
                 assignment_basis = (
                     "Сооружение установлено локальной моделью по тексту и контексту исходного листа"
                 )
-        project_scope_label = (
-            _project_scope_facility_label(resolution.get("facility"), facilities)
-            if facility is None
-            else None
-        )
+        project_scope_label = None
+        if facility is None:
+            project_scope_label = _project_scope_facility_label(
+                resolution.get("facility"), facilities
+            )
+            if project_scope_label is None:
+                scope_code = str(context.get("page_commercial_scope_code") or "").strip()
+                scope_labels = commercial_project_labels_by_scope.get(scope_code, set())
+                if len(scope_labels) == 1:
+                    project_scope_label = next(iter(scope_labels))
         if project_scope_label is not None:
             assignment_basis = (
                 "Источник явно относится ко всем установленным сооружениям объекта; "
