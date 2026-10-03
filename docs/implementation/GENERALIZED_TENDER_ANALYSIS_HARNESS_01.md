@@ -1158,6 +1158,48 @@ schema, deterministic validation, maximum 5,000-token repair ceiling and all
 semantic authority rules remain unchanged. Effectiveness will be measured from
 new terminal receipts rather than inferred from the configuration change.
 
+Release v82 supplied that first terminal receipt. Job
+`01a102b8-5546-7bb3-90b9-b9924a71e30b` completed without output exhaustion in
+171.5 seconds and used two inference calls, but encountered two distinct typed
+validation failures and therefore remained safely unresolved under the former
+one-repair policy. Its result digest is
+`sha256:2b52f548eac124c7aaf31b044853df944bce87af57be5703799b0ecd09cd96e0`.
+The v82 release-receipt SHA-256 is
+`4e26e1cb5adac02656fffad9603978359b59ccf0182f521c77a70682971b25e4`.
+
+Semantic profile `qwen-project-work-reconciliation-v38` now permits a second
+bounded repair only when deterministic validation advances to a different
+typed error. An identical repeated invalid shape stops after the first retry;
+the exact two-row pair remains intact, the maximum repair output stays at
+5,000 tokens, and neither semantic authority nor deterministic acceptance was
+relaxed. Generic tests cover both a successful third-call recovery after two
+different failures and safe unresolved termination after a repeated failure.
+
+Commit `91808c35c8c430ede1cc66cef17b7d7917a0c3b0` passed exact-SHA CI run
+`37145510041` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261004-91808c3-progressive-scope-v84`.
+Migration `0125_progressive_scope_repair_profile` was backed up, restored to a
+separate database, upgraded, downgraded and re-upgraded before controlled
+public activation. The supervised orchestrator then replaced superseded work
+with v38 jobs without a queue command.
+
+The first live v38 receipt was produced autonomously by job
+`01a10320-8532-7ad5-a3a8-4d104f077850`. It used three inference calls over
+263.2 seconds. Validation advanced from an invalid quantity relationship to an
+ungrounded operation, then saw the same operation error again and stopped. Both
+observations were persisted as unresolved and no unsupported comparison was
+published. The result digest is
+`sha256:32c1d2845916e9437d5926cb9426a54ca479974b0b13bd312b95851e0b53fdae`.
+The worker immediately claimed the next autonomous job.
+
+Qwen PID `85702` and NTD worker PID `98263` were preserved. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD processing ledger remains exactly 319 succeeded jobs. The v84
+release receipt is stored outside Git beside the immutable release. Current
+status remains `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Current-profile comparison authority — engineering model v77
 
 Engineering model v77 closes the remaining deterministic fallback behind the
