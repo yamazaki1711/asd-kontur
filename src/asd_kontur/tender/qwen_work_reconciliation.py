@@ -169,6 +169,7 @@ class QwenProjectWorkReconciler:
             str(value.get("quantity_candidate_id") or ""): " ".join(
                 str(item or "")
                 for item in (
+                    value.get("value"),
                     value.get("unit"),
                     value.get("nearby_context"),
                 )

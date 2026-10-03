@@ -509,6 +509,73 @@ def test_quantity_source_value_repair_offers_exact_compound_measure_choices(
     assert result["observations"][0]["quantity_reviews"][0]["source_value"] == "83,4"
 
 
+def test_compound_measure_choice_is_validated_against_the_source_value_cell(
+    monkeypatch: Any,
+) -> None:
+    """The extracted value cell is source evidence even when nearby text omits it."""
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del prompt, max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "compound-row",
+                        "status": "MATCHED",
+                        "family_key": "demolition",
+                        "operation": "Разборка покрытия",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": "Источник содержит площадь и объём.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "compound-measure",
+                                "status": "WORK_QUANTITY",
+                                "source_value": "274,7",
+                                "source_unit": "м2",
+                                "semantic_scope": "Площадь разбираемого покрытия",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": False,
+                                "reason": "Выбрана исходная площадь.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "compound-row",
+                "wording": "Разборка покрытия",
+                "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                "nearby_context": "Демонтаж асфальтобетонного покрытия",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "compound-measure",
+                        "value": "274,7/13,76",
+                        "unit": "м2 / м 3",
+                        "nearby_context": "Демонтаж асфальтобетонного покрытия",
+                    }
+                ],
+            }
+        ],
+        work_families={"demolition": "Демонтажные работы"},
+        facilities=[],
+    )
+
+    review = result["observations"][0]["quantity_reviews"][0]
+    assert review["source_value"] == "274,7"
+    assert review["source_unit"] == "м2"
+
+
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(
     monkeypatch: Any,
 ) -> None:
