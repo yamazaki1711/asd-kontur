@@ -554,9 +554,13 @@ def _cross_document_work_batches(
 def _relationship_role_lane(row: Mapping[str, Any]) -> str:
     role = " ".join(str(row.get("document_role") or "").casefold().split())
     side = document_comparison_side(row.get("document_role"), row.get("document"))
-    if role == "вор" or ("ведомост" in role and "объем" in role):
+    if (
+        role in {"bill of quantities", "work quantity sheet", "вор"}
+        or "bill of quantities" in role
+        or ("ведомост" in role and ("объем" in role or "объём" in role))
+    ):
         return "vor"
-    if "смет" in role:
+    if "estimate" in role or "смет" in role:
         return "estimate"
     return str(side or "other")
 

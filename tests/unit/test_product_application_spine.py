@@ -576,19 +576,28 @@ def test_quantity_relationship_batches_prefer_opposite_document_sides() -> None:
     assert selected == {"design-high", "commercial"}
 
 
-def test_quantity_relationship_batches_include_vor_estimate_scope_review() -> None:
+@pytest.mark.parametrize(
+    ("vor_role", "estimate_role"),
+    (
+        ("Ведомость объемов работ", "Локальная смета"),
+        ("bill of quantities", "local estimate"),
+    ),
+)
+def test_quantity_relationship_batches_include_vor_estimate_scope_review(
+    vor_role: str, estimate_role: str
+) -> None:
     vor = _work_batch_row(
         "vor",
         facility="Мост через реку Северную",
         family="pile_foundation",
-        document_role="Ведомость объемов работ",
+        document_role=vor_role,
         wording="Устройство буронабивных свай",
     )
     estimate = _work_batch_row(
         "estimate",
         facility="Мост через реку Северную",
         family="pile_foundation",
-        document_role="Локальная смета",
+        document_role=estimate_role,
         wording="Устройство буронабивных свай",
     )
     for row in (vor, estimate):
