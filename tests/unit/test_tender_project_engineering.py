@@ -4050,6 +4050,21 @@ def test_reconciliation_prioritizes_scoped_design_commercial_pair() -> None:
     assert document_comparison_side("bill_of_quantities", "ВОР.xlsx") == "commercial"
 
 
+def test_reconciliation_prioritizes_vor_denominator_before_estimate_tail() -> None:
+    vor = work_reconciliation_priority(
+        "Устройство основания",
+        document_role="ВОР",
+        nearby_context="Общие объёмы",
+    )
+    estimate = work_reconciliation_priority(
+        "Устройство основания",
+        document_role="Смета",
+        nearby_context="Общие объёмы",
+    )
+
+    assert vor > estimate
+
+
 @pytest.mark.parametrize("role", ("ПД", "РД", "КР", "АР", "Спецификация", "Расчёт"))
 def test_professional_design_roles_are_comparison_inputs(role: str) -> None:
     assert document_comparison_side(role, "generic-source.bin") == "design"

@@ -1604,7 +1604,24 @@ def work_reconciliation_priority(
     operation_score = sum(marker in wording for marker in _CONSTRUCTION_OPERATION_MARKERS)
     facility_score = 48 if has_facility_hint else 0
     contextual_score = int(any(marker in context for marker in _CONSTRUCTION_OPERATION_MARKERS))
-    commercial_score = int(role in {"bill of quantities", "local estimate", "object estimate"})
+    # Professional source roles reach this function after UI-facing role
+    # normalization, so production values are commonly localized even though
+    # older callers use internal English labels.  A VOR
+    # establishes the direct commercial work-set denominator needed for
+    # omitted-work analysis; estimate rows remain valuable but include a much
+    # larger resource/accounting tail.  This is scheduling priority only and
+    # never asserts that either row is a construction work or comparable.
+    commercial_score = {
+        "bill of quantities": 12,
+        "work quantity sheet": 12,
+        "вор": 12,
+        "local estimate": 4,
+        "object estimate": 4,
+        "consolidated estimate": 4,
+        "estimate": 4,
+        "смета": 4,
+        "смета контракта": 4,
+    }.get(role, 0)
     priority_family_score = {
         "sheet_piling": 4,
         "waling_beam": 4,
