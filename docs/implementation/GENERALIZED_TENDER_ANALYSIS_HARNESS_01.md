@@ -869,6 +869,69 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Commercial first-pass throughput and multi-relationship quantity safety — release ec4d232
+
+Releases `d8dcd3c` and `679fc38` separated the independent first-pass lane from
+the two-row relationship lane. A first-pass batch may now contain four
+independent descriptions, and localized VOR roles receive product-value
+priority over estimate accounting tails. The first autonomous four-row batch
+contained two VOR and two PD descriptions. It classified valve installation,
+relocation of a 300 mm steel water pipeline, retaining-wall reinforcement and
+construction of a new bored-pile retaining wall in 74.432 seconds with one
+inference call and no repair. A second four-row batch retained four
+construction operations in 81.581 seconds after bounded validation repair.
+No developer queue, retry or priority command was issued.
+
+The same live run exposed a false-positive boundary in the generic quantity
+graph. Persisted semantic reviews contained `772.5 m3` as a stated excavation
+total, `656.6 m3` as one component and `115.9 m3` as another related measure.
+One review listed only the 656.6 component on the total row, while a separate
+review related the 115.9 value to the total. A later cross-document pass then
+replaced that component relation with a valid `DUPLICATE_OF` relation. The
+projection consequently emitted an unsupported `115.9 m3` mismatch.
+
+Commits `7e3fa70` through `ec4d232` correct the generic failure without
+encoding any project quantity. Reviewed quantity relationships are now
+retained as a set: one statement may be both a component of a design total and
+a duplicate of a VOR/estimate statement. Deterministic component/total
+arithmetic closes only explicit reviewed reciprocal links. Facility, unit,
+revision and engineering-scope compatibility still have to pass. On the live
+blind project the current graph does not establish a compatible complete
+component set, so model `project-engineering-model-v73` suppresses the false
+comparison instead of presenting either a mismatch or a manufactured match.
+
+The blind application now exposes six grounded quantity matches: crushed-stone
+base VOR/estimate `65.4 m3`, metal fencing PD/VOR `219 m`, reinforced-concrete
+demolition VOR/contract estimate `119.83 m3`, manual excavation VOR/estimate
+`115.9 m3`, vegetation-layer removal PD/VOR `370 m2`, and drainage collector
+VOR/estimate `219 m`. It also retains the independently established `2.2`
+versus `4` month duration mismatch. The projection contains 559 classified
+construction observations, 392 unclassified observations, 338
+facility-associated observations and 332 accepted work quantities. It does
+not yet contain a defensible design-work omission or a price-bearing estimate
+delta; those results remain open product work.
+
+Exact-SHA CI run `37117638337` passed for
+`ec4d23220872f7ad8417a08185f6da3b211f2ef6`. The immutable active release is
+`~/.asd-kontur/public-demo/releases/20261003-ec4d232-quantity-relations-v65`
+on unchanged migration `0118_source_grounded_alternative_profile`. API,
+document worker, assistant worker and project orchestrator run from that
+release. Qwen PID `85702` and NTD worker PID `98263` were preserved. Two jobs
+crossing controlled worker activation were reclaimed from expired leases and
+completed autonomously with one accepted result row each; no manual recovery
+command was used.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt
+SHA-256 is
+`f7d5fb145e0fa72bd5b1b5a7893131579026ddd4e060dd3ba60b2ae524843e5b`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Guaranteed first-pass semantic progress — release db05be8
 
 The live blind workspace still contained 411 construction descriptions without

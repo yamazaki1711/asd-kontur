@@ -481,3 +481,27 @@ This is a necessary bridge toward the restored VOR/estimate task, not closure
 of the regression. The user still lacks a new defensible omitted-work or
 price-bearing delta finding from the blind project, so the capability remains
 `PRESERVED_BUT_INCOMPLETE`.
+
+## Quantity-graph safety and commercial comparison checkpoint — release ec4d232
+
+The blind project now produces six professional quantity matches across
+PD/VOR/estimate roles, including `115.9 m3` of manual excavation,
+`119.83 m3` of reinforced-concrete demolition and `370 m2` of vegetation-layer
+removal, in addition to the previously recorded scopes. The supervised runtime
+also reduced the unclassified construction set to 392 without developer queue
+commands.
+
+This checkpoint deliberately rejects an apparent component/total discrepancy.
+The stored observations contain a `772.5 m3` excavation total and related
+`656.6 m3` and `115.9 m3` measures, but the currently active semantic graph does
+not establish a compatible complete component set under one engineering
+scope. A transient projection used only the 656.6 component and produced a
+false 115.9 mismatch. Release `ec4d232` preserves multiple reviewed quantity
+relationships and suppresses that unsupported finding. This is a stronger
+professional result than reporting a convenient but false delta.
+
+The VOR/estimate and omitted-work regression therefore remains
+`PRESERVED_BUT_INCOMPLETE`: compatible quantity matches and one grounded
+commercial-only scope exist, but no design-work omission or price-bearing
+delta is yet established. The next result must come from further generic scope
+resolution, not from relaxing the comparison guard.
