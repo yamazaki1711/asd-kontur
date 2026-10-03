@@ -576,6 +576,7 @@ def _bounded_scope_context_rows(
     rows: Iterable[Mapping[str, Any]],
     *,
     source_display_names: Mapping[str, str],
+    source_role_contexts: Mapping[str, Mapping[str, Any]],
     attempted_pairs: set[tuple[str, str]],
     max_batches: int,
 ) -> list[dict[str, Any]]:
@@ -602,9 +603,13 @@ def _bounded_scope_context_rows(
             f"{row.get('wording') or ''} {row.get('scope_key') or ''}"
         )
         source_version_id = str(row.get("source_version_id") or "")
-        side = document_comparison_side(
-            row.get("source_role"), source_display_names.get(source_version_id, "")
+        locator_id = str(row.get("source_locator_id") or "")
+        role_context = dict(source_role_contexts.get(locator_id) or {})
+        role_context.setdefault(
+            "safe_display_name", source_display_names.get(source_version_id, "")
         )
+        professional_role = professional_source_role(row.get("source_role"), role_context)
+        side = document_comparison_side(professional_role, role_context.get("safe_display_name"))
         if not family or side not in {"design", "commercial"}:
             continue
         if facility:
@@ -6614,6 +6619,16 @@ class SpinePostgresRepository:
                     source_id: str(value.get("safe_display_name") or "")
                     for source_id, value in source_rows.items()
                 },
+                source_role_contexts=self._project_source_role_context(
+                    session,
+                    organization_id=organization_id,
+                    workspace_id=workspace_id,
+                    locator_ids=[
+                        str(row.get("source_locator_id"))
+                        for row in unresolved
+                        if row.get("scope_comparison_context_only") and row.get("source_locator_id")
+                    ],
+                ),
                 attempted_pairs=attempted_scope_pairs,
                 max_batches=max_batches,
             )
@@ -8725,6 +8740,49 @@ class SpinePostgresRepository:
                 "latest.document_version=decision.document_version AND "
                 "latest.scope=decision.scope)) decided_role ON true ORDER BY "
                 "sl.source_locator_id,v.version DESC"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "locator_ids": locator_ids,
+            },
+        ).mappings()
+        return {str(row["source_locator_id"]): _jsonable_row(row) for row in rows}
+
+    @staticmethod
+    def _project_source_role_context(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        locator_ids: list[str],
+    ) -> dict[str, dict[str, Any]]:
+        """Load persisted page-role decisions without page-text aggregation."""
+
+        if not locator_ids:
+            return {}
+        rows = session.execute(
+            sa.text(
+                "SELECT sl.source_locator_id,v.safe_display_name,"
+                "COALESCE(decided_role.selected_roles,ARRAY[]::text[]) AS selected_roles "
+                "FROM workspace.source_locators sl JOIN workspace.document_versions v ON "
+                "v.organization_id=sl.organization_id AND v.workspace_id=sl.workspace_id AND "
+                "v.source_version_id=sl.source_version_id LEFT JOIN LATERAL (SELECT "
+                "array_agg(DISTINCT selected_role.value ORDER BY selected_role.value) AS "
+                "selected_roles FROM workspace.document_role_decisions decision CROSS JOIN "
+                "LATERAL unnest(decision.selected_roles) AS selected_role(value) WHERE "
+                "decision.organization_id=sl.organization_id AND "
+                "decision.workspace_id=sl.workspace_id AND decision.document_id=v.document_id AND "
+                "decision.document_version=v.version AND decision.scope='page:' || "
+                "(sl.locator_value->>'page') AND decision.recorded_at=(SELECT MAX(latest.recorded_at) "
+                "FROM workspace.document_role_decisions latest WHERE "
+                "latest.organization_id=decision.organization_id AND "
+                "latest.workspace_id=decision.workspace_id AND "
+                "latest.document_id=decision.document_id AND "
+                "latest.document_version=decision.document_version AND "
+                "latest.scope=decision.scope)) decided_role ON true WHERE "
+                "sl.organization_id=:organization AND sl.workspace_id=:workspace AND "
+                "sl.source_locator_id=ANY(CAST(:locator_ids AS uuid[]))"
             ),
             {
                 "organization": organization_id,

@@ -403,7 +403,7 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
         {
             "candidate_id": "design-alpha",
             "source_version_id": "source-design",
-            "source_role": "project documentation",
+            "source_role": "project_documentation",
             "wording": "Install access platform",
             "deterministic_family_hint": "structural_steel",
             "scope_comparison_context_only": True,
@@ -412,7 +412,7 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
         {
             "candidate_id": "commercial-alpha",
             "source_version_id": "source-commercial",
-            "source_role": "local estimate",
+            "source_role": "local_estimate",
             "wording": "Access platform installation",
             "deterministic_family_hint": "structural_steel",
             "scope_comparison_context_only": True,
@@ -421,7 +421,7 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
         {
             "candidate_id": "design-without-counterpart",
             "source_version_id": "source-design",
-            "source_role": "project documentation",
+            "source_role": "project_documentation",
             "wording": "Apply protective coating",
             "deterministic_family_hint": "finishing",
             "scope_comparison_context_only": True,
@@ -430,7 +430,7 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
         {
             "candidate_id": "ordinary-unresolved",
             "source_version_id": "source-design",
-            "source_role": "project documentation",
+            "source_role": "project_documentation",
             "wording": "Unresolved operation",
             "scope_comparison_context_only": False,
         },
@@ -442,6 +442,7 @@ def test_scope_context_is_bounded_before_source_context_loading() -> None:
             "source-design": "Design package Z.pdf",
             "source-commercial": "Commercial schedule Q.pdf",
         },
+        source_role_contexts={},
         attempted_pairs=set(),
         max_batches=1,
     )
@@ -465,19 +466,61 @@ def test_scope_context_skips_an_exact_pair_already_attempted() -> None:
             "prior_resolution": {},
         }
         for candidate_id, source_id, role in (
-            ("design-drainage", "source-design", "project documentation"),
-            ("commercial-drainage", "source-commercial", "local estimate"),
+            ("design-drainage", "source-design", "project_documentation"),
+            ("commercial-drainage", "source-commercial", "local_estimate"),
         )
     ]
 
     selected = _bounded_scope_context_rows(
         rows,
         source_display_names={},
+        source_role_contexts={},
         attempted_pairs={("commercial-drainage", "design-drainage")},
         max_batches=1,
     )
 
     assert selected == []
+
+
+def test_scope_context_uses_page_role_for_an_embedded_commercial_section() -> None:
+    rows = [
+        {
+            "candidate_id": "design-concrete",
+            "source_version_id": "mixed-source",
+            "source_locator_id": "design-page-locator",
+            "source_role": "project_documentation",
+            "wording": "Concrete foundation installation",
+            "deterministic_family_hint": "reinforced_concrete",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Service Hall Gamma"},
+        },
+        {
+            "candidate_id": "commercial-concrete",
+            "source_version_id": "mixed-source",
+            "source_locator_id": "vor-page-locator",
+            "source_role": "project_documentation",
+            "wording": "Foundation concreting",
+            "deterministic_family_hint": "reinforced_concrete",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Service Hall Gamma"},
+        },
+    ]
+
+    selected = _bounded_scope_context_rows(
+        rows,
+        source_display_names={"mixed-source": "Combined project package.pdf"},
+        source_role_contexts={
+            "design-page-locator": {"selected_roles": ["project_documentation"]},
+            "vor-page-locator": {"selected_roles": ["bill_of_quantities"]},
+        },
+        attempted_pairs=set(),
+        max_batches=1,
+    )
+
+    assert {value["candidate_id"] for value in selected} == {
+        "design-concrete",
+        "commercial-concrete",
+    }
 
 
 def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:
