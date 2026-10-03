@@ -1437,3 +1437,47 @@ SHA-256 is
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Commercial relationship lanes and exact-pair accounting — release b398c41
+
+The autonomous quantity-relation scheduler no longer assumes that every useful
+review crosses only a design/commercial boundary. It now assembles bounded
+semantic tasks for design-to-design, design-to-commercial, VOR-to-estimate and
+same-source component/total contexts. Role recognition accepts both the
+Russian professional labels used by the UI and canonical English document-role
+labels used by independent corpora. Numeric similarity remains excluded from
+pair selection; Qwen must still establish semantic scope compatibility.
+
+Relationship attempts are recorded by every exact candidate pair supplied to
+an explicit relationship task. A rejected pair therefore cannot suppress a
+different counterpart, while a completed VOR/estimate or design/design review
+cannot be replayed indefinitely. Same-role settled context remains excluded
+unless it belongs to one of the explicit professional lanes.
+
+The first autonomously created v42 task reviewed two quantities from one VOR.
+Qwen retained both as component areas for different roof slopes and declined to
+invent a total or same-scope relationship. Job
+`01a0ff40-f6d4-782d-b435-17dd744a8318` completed with result digest
+`sha256:f3dacba235ff141bbb91fbe1395a57966bf767d6dcd839408ac6b92c3c0b24bc`.
+The blind workspace independently completed post-switch PD/VOR job
+`01a0ff3f-de9a-70d2-9386-c9dc5efa4120` and continued through the supervised
+queue without a developer progression command.
+
+Commit `b398c41f4c992b39b8864f119dc4a5f91ffcd841` passed exact-SHA CI run
+`37083308969` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261003-b398c41-commercial-lanes-v42`.
+The migration head remains `0111_reviewed_quantity_source_value`. Qwen PID
+`93554` and NTD worker PID `98263` were preserved. API readiness passes, all
+four application services import from the v42 release path, the all-history
+platform-memory fingerprint remains
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+the lifecycle fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`,
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release-receipt
+SHA-256 is
+`bea063aaf975c59051832f01394a0ae27456740c2dc313510ba9ccfd61e39ac0`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
