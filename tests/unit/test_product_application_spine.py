@@ -982,7 +982,22 @@ def test_quantity_relationship_batch_uses_source_formula_when_prior_total_label_
         prior_semantic_scope="Площадь и объем разобранного покрытия",
         nearby_context="(83,6 + 41,4) x 0,08 = 10,0 м3",
     )
-    rows = [east, west, stated]
+    repeated_total = _work_batch_row(
+        "repeated-stated-area-and-volume",
+        facility="",
+        family="roadworks",
+        document_role="Проектная документация",
+        wording="Разборка покрытия, сводная таблица",
+    )
+    repeated_total["quantity_observations"][0].update(
+        quantity_candidate_id="repeated-compound-area-volume",
+        value="125,0/10,0",
+        unit="м2/м3",
+        prior_quantity_type="STANDALONE",
+        prior_semantic_scope="Площадь и объем разобранного покрытия",
+        nearby_context="Всего: 125,0 м2 / 10,0 м3",
+    )
+    rows = [east, west, stated, repeated_total]
     for row in rows:
         row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
 

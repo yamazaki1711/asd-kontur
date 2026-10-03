@@ -671,6 +671,30 @@ def _quantity_may_be_stated_total(quantity: Mapping[str, Any]) -> bool:
     return bool(_ADDITIVE_QUANTITY_FORMULA.search(context))
 
 
+def _relationship_pair_component_total_priority(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> int:
+    """Prefer a known component plus a possible total as relationship seeds."""
+
+    left_quantities = [
+        value for value in left.get("quantity_observations") or () if isinstance(value, Mapping)
+    ]
+    right_quantities = [
+        value for value in right.get("quantity_observations") or () if isinstance(value, Mapping)
+    ]
+    left_component = any(
+        str(value.get("prior_quantity_type") or "") in {"COMPONENT", "SUBTOTAL"}
+        for value in left_quantities
+    )
+    right_component = any(
+        str(value.get("prior_quantity_type") or "") in {"COMPONENT", "SUBTOTAL"}
+        for value in right_quantities
+    )
+    left_total = any(_quantity_may_be_stated_total(value) for value in left_quantities)
+    right_total = any(_quantity_may_be_stated_total(value) for value in right_quantities)
+    return int((left_component and right_total) or (right_component and left_total))
+
+
 def _relationship_quantity_ids(row: Mapping[str, Any]) -> set[str]:
     return {
         str(value.get("quantity_candidate_id") or value.get("candidate_id") or "")
@@ -808,6 +832,7 @@ def _quantity_relationship_batches(
             *max(
                 eligible_pairs,
                 key=lambda pair: (
+                    _relationship_pair_component_total_priority(*pair),
                     _relationship_pair_lane_priority(*pair),
                     _relationship_pair_affinity(*pair),
                     str(pair[0].get("candidate_id") or ""),
@@ -832,6 +857,14 @@ def _quantity_relationship_batches(
         context_rows = sorted(
             ordered,
             key=lambda row: (
+                int(
+                    component_context_size > 0
+                    and not any(
+                        _quantity_may_be_stated_total(value)
+                        for value in row.get("quantity_observations") or ()
+                        if isinstance(value, Mapping)
+                    )
+                ),
                 max(
                     (_relationship_pair_affinity(seed, row) for seed in seeds),
                     default=(0, 0, 0, 0, ()),
