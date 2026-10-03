@@ -198,7 +198,7 @@ def test_product_spine_disposable_downgrade_upgrade_is_reproducible(
                 assert "qwen-project-work-reconciliation-v25" in work_profile_constraint
                 assert "qwen-project-work-reconciliation-v32" in work_profile_constraint
                 assert "qwen-project-work-reconciliation-v33" in work_profile_constraint
-                assert "qwen-project-work-reconciliation-v34" in work_profile_constraint
+                assert "qwen-project-work-reconciliation-v35" in work_profile_constraint
                 expected_claim_indexes = {
                     "ix_durable_jobs_successor_lineage",
                     "ix_durable_jobs_workspace_model_service",

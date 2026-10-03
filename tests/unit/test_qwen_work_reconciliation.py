@@ -196,6 +196,88 @@ def test_cross_document_scope_schema_repair_keeps_exact_pair_intact(
     assert all(value.get("work_scope_assertions") for value in result["observations"])
 
 
+def test_cross_document_scope_output_exhaustion_never_splits_exact_pair(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+    budgets: list[int] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        prompts.append(prompt)
+        budgets.append(max_tokens)
+        assert "design-road" in prompt
+        assert "commercial-road" in prompt
+        if len(prompts) == 1:
+            raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
+        assertions_required = len(prompts) == 3
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "roadworks",
+                        "operation": "Устройство асфальтобетонного покрытия",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": "Обе строки описывают устройство нового покрытия.",
+                        **(
+                            {
+                                "work_scope_assertions": [
+                                    {
+                                        "related_candidate_id": (
+                                            "commercial-road"
+                                            if candidate_id == "design-road"
+                                            else "design-road"
+                                        ),
+                                        "scope_compatibility": "SAME_SCOPE",
+                                        "normalized_operation": (
+                                            "Устройство асфальтобетонного покрытия"
+                                        ),
+                                        "reason": "Один вид работ на сопоставимом объекте.",
+                                    }
+                                ]
+                            }
+                            if assertions_required
+                            else {}
+                        ),
+                    }
+                    for candidate_id in ("design-road", "commercial-road")
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-road",
+                "wording": "Устройство нового асфальтобетонного покрытия",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-road",
+                "wording": "Устройство асфальтобетонного покрытия",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"roadworks": "Дорожные работы"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 3
+    assert budgets[0] < budgets[1] == budgets[2] == 5_000
+    assert "qwen_semantic_response_output_exhausted" in prompts[1]
+    assert "qwen_work_reconciliation_work_scope_assertions_invalid" in prompts[2]
+    assert result["inference_call_count"] == 3
+    assert result["recovery_codes"] == [
+        "qwen_semantic_response_output_exhausted",
+        "qwen_work_reconciliation_work_scope_assertions_invalid",
+    ]
+    assert all(value.get("work_scope_assertions") for value in result["observations"])
+
+
 def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
     monkeypatch: Any,
 ) -> None:
