@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v29"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v30"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -44,6 +44,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v26",
     "qwen-project-work-reconciliation-v27",
     "qwen-project-work-reconciliation-v28",
+    "qwen-project-work-reconciliation-v29",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
@@ -358,6 +359,11 @@ def _prompt(
     relationship_review: bool,
     relationship_repair_code: str | None = None,
 ) -> str:
+    scope_review = bool(rows) and all(
+        str(row.get("analysis_task") or "")
+        == TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value
+        for row in rows
+    )
     all_quantity_candidate_ids = [
         str(value.get("quantity_candidate_id") or "")
         for row in rows
@@ -411,6 +417,8 @@ def _prompt(
             task=(
                 TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS
                 if relationship_review
+                else TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING
+                if scope_review
                 else TenderAnalysisTask.WORK_CLASSIFICATION
             ),
             input_identity=semantic_digest(safe_rows),
@@ -429,6 +437,16 @@ def _prompt(
         "инженерный объём, общий итог, составляющую, дубль, альтернативу или другую редакцию. "
         "Для каждого числа обязательно повторно установите semantic_scope по исходному контексту."
         if relationship_review
+        else ""
+    )
+    scope_instruction = (
+        "Это отдельный проход сопоставления проектного и коммерческого состава работ. "
+        "Для каждой строки сохраните только установленную по источнику работу и сооружение. "
+        "Если строки описывают одну инженерную операцию одного сооружения, верните для них "
+        "дословно одинаковое краткое operation. Если одна работа является отдельной, включённой, "
+        "подготовительной, последующей или имеет другие границы, сохраните разные operation и "
+        "кратко объясните различие. Не объявляйте отсутствие работы и не выполняйте арифметику."
+        if scope_review
         else ""
     )
     relationship_repair_instruction = ""
@@ -469,6 +487,7 @@ def _prompt(
 испытание и временная операция могут быть отдельной коммерческой работой; материал, заголовок,
 техническая характеристика и функция оборудования не являются работой.
 {relationship_instruction}
+{scope_instruction}
 {relationship_repair_instruction}
 
 Структурированная задача: {task_payload}

@@ -59,6 +59,55 @@ def test_qwen_work_reconciliation_preserves_exact_rows_and_allowed_scope(
     ]
 
 
+def test_cross_document_scope_task_asks_for_semantic_operation_without_arithmetic(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert '"task":"CROSS_DOCUMENT_SCOPE_MATCHING"' in prompt
+        assert "Не объявляйте отсутствие работы и не выполняйте арифметику" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Монтаж стальных ферм",
+                        "facility": "Gallery B",
+                        "confidence": "0.92",
+                        "reason": "Обе строки описывают монтаж ферм одного сооружения.",
+                    }
+                    for candidate_id in ("design-row", "commercial-row")
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-row",
+                "wording": "Install roof trusses",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-row",
+                "wording": "Erect steel roof trusses",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"structural_steel": "Structural steel"},
+        facilities=["Gallery B"],
+    )
+
+    assert [value["operation"] for value in result["observations"]] == [
+        "Монтаж стальных ферм",
+        "Монтаж стальных ферм",
+    ]
+
+
 def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
     monkeypatch: Any,
 ) -> None:

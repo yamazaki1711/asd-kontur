@@ -34,6 +34,7 @@ from asd_kontur.application_spine.postgres import (
     _semantic_extraction_priority,
     _semantic_recovery_stalled,
     _work_reconciliation_attempt_sets,
+    _work_scope_comparison_context_available,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
@@ -229,6 +230,45 @@ def test_cross_document_work_batches_are_project_independent(
     ]
     assert selected == {"design", "commercial"}
     assert all("comparison_side" not in value for value in batches[0])
+    assert {value["analysis_task"] for value in batches[0]} == {"CROSS_DOCUMENT_SCOPE_MATCHING"}
+
+
+def test_cross_document_work_batches_skip_only_the_attempted_scope_pair() -> None:
+    rows = [
+        _work_batch_row(
+            "design",
+            facility="Gallery B",
+            family="structural_steel",
+            document_role="Рабочая документация",
+            wording="Install roof trusses",
+        ),
+        _work_batch_row(
+            "commercial-a",
+            facility="Gallery B",
+            family="structural_steel",
+            document_role="Смета",
+            wording="Erect roof trusses",
+        ),
+        _work_batch_row(
+            "commercial-b",
+            facility="Gallery B",
+            family="structural_steel",
+            document_role="Смета",
+            wording="Install roof bracing",
+        ),
+    ]
+
+    batches, selected = _cross_document_work_batches(
+        rows,
+        batch_size=2,
+        max_batches=1,
+        attempted_pairs={("commercial-a", "design")},
+    )
+
+    assert [[value["candidate_id"] for value in batch] for batch in batches] == [
+        ["design", "commercial-b"]
+    ]
+    assert selected == {"design", "commercial-b"}
 
 
 def test_cross_document_work_batches_do_not_mix_scope_or_one_sided_rows() -> None:
@@ -557,6 +597,53 @@ def test_v28_source_value_failure_requeues_only_unresolved_compound_measure() ->
     }
 
     assert _quantities_requiring_semantic_review(quantities, prior) == [quantities[0]]
+
+
+def test_v29_settled_quantity_is_preserved_for_cross_document_work_scope_profile() -> None:
+    quantities = [{"candidate_id": "accepted-volume", "normalized_value": "84.2"}]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v29",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "accepted-volume",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "NONE",
+                "scope_compatibility": "SAME_SCOPE",
+            }
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == []
+
+
+def test_settled_work_is_reused_only_as_bounded_scope_comparison_context() -> None:
+    existing = {
+        "candidate_version": 3,
+        "profile_version": "qwen-project-work-reconciliation-v29",
+        "status": "MATCHED",
+        "family_key": "structural_steel",
+        "facility": "Gallery B",
+    }
+
+    assert _work_scope_comparison_context_available(
+        existing=existing,
+        candidate_version=3,
+        explicit_facility=None,
+        pending_quantities=[],
+    )
+    assert not _work_scope_comparison_context_available(
+        existing=existing,
+        candidate_version=3,
+        explicit_facility=None,
+        pending_quantities=[{"candidate_id": "unreviewed-mass"}],
+    )
+    assert not _work_scope_comparison_context_available(
+        existing={**existing, "status": "AMBIGUOUS"},
+        candidate_version=3,
+        explicit_facility=None,
+        pending_quantities=[],
+    )
 
 
 def test_v28_compound_uncertainty_without_typed_failure_is_not_replayed() -> None:
@@ -1245,7 +1332,7 @@ def test_quantity_relationship_batches_do_not_replay_same_role_settled_context()
 
 
 def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() -> None:
-    attempted, mixed = _work_reconciliation_attempt_sets(
+    attempted, mixed, scope_pairs = _work_reconciliation_attempt_sets(
         [
             {
                 "work_observations": [
@@ -1277,10 +1364,11 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
 
     assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
     assert mixed == {("commercial-mixed", "design-mixed")}
+    assert scope_pairs == set()
 
 
 def test_work_reconciliation_attempt_sets_track_vor_estimate_pair() -> None:
-    attempted, pairs = _work_reconciliation_attempt_sets(
+    attempted, pairs, scope_pairs = _work_reconciliation_attempt_sets(
         [
             {
                 "work_observations": [
@@ -1303,10 +1391,11 @@ def test_work_reconciliation_attempt_sets_track_vor_estimate_pair() -> None:
 
     assert attempted == {"vor-row", "estimate-row"}
     assert pairs == {("estimate-row", "vor-row")}
+    assert scope_pairs == set()
 
 
 def test_mixed_source_classification_batch_is_not_relationship_authority() -> None:
-    attempted, mixed = _work_reconciliation_attempt_sets(
+    attempted, mixed, scope_pairs = _work_reconciliation_attempt_sets(
         [
             {
                 "work_observations": [
@@ -1327,6 +1416,30 @@ def test_mixed_source_classification_batch_is_not_relationship_authority() -> No
 
     assert attempted == {"design-row", "commercial-row"}
     assert mixed == set()
+    assert scope_pairs == set()
+
+
+def test_work_reconciliation_attempt_sets_track_explicit_scope_pair() -> None:
+    attempted, quantity_pairs, scope_pairs = _work_reconciliation_attempt_sets(
+        [
+            {
+                "work_observations": [
+                    {
+                        "candidate_id": "design-scope",
+                        "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+                    },
+                    {
+                        "candidate_id": "commercial-scope",
+                        "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+                    },
+                ]
+            }
+        ]
+    )
+
+    assert attempted == {"design-scope", "commercial-scope"}
+    assert quantity_pairs == set()
+    assert scope_pairs == {("commercial-scope", "design-scope")}
 
 
 def test_settled_quantity_remains_available_for_distinct_cross_document_pairs() -> None:
