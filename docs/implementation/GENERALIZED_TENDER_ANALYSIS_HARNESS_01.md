@@ -926,6 +926,53 @@ independent unseen-project gate. Current status remains:
 `GeneralizedTenderHarness=false`, `AutonomousProjectProcessing=true`,
 `ProductReady=false`.
 
+### Deployment verification correction for v36
+
+Post-activation source-path verification found that the v36 virtual
+environment had been copied from v29 and its editable package pointer still
+resolved `asd_kontur` from the v29 release directory. The launchd executable
+and frontend paths named v36, but the Python application source did not.
+Consequently, the preceding v36 runtime observations prove autonomous queue
+behavior under the older source tree; they do **not** prove that commit
+`3a4c205067c67ab83293d7a1bf188e99104e85d8` was active. The original immutable
+receipt was preserved, and a separate
+`deployment-verification-addendum.json` records
+`FAILED_SOURCE_TREE_PIN`. No history or runtime data was rewritten.
+
+The corrective v37 release was built from Git archive commit
+`27372c90c841f5f476138a636c5af22290f1c30a` with a fresh locked environment.
+After moving the staged release into its final immutable path, the editable
+package was explicitly reinstalled there and verified to import from
+`~/.asd-kontur/public-demo/releases/20261003-27372c9-relationship-transition-v37/src`.
+All four supervised application roles now use that exact release and report
+the exact commit. Exact-SHA CI run `37079521270` passed. Qwen PID `93554` and
+NTD worker PID `98263` were preserved.
+
+The v37 scheduler then autonomously created four dedicated two-row quantity
+relationship batches for the blind project. Every batch carried
+`relationship_review_needed=true`; the selected role pairs were two
+`ПД`/`ВОР` pairs and two `ПД`/`Смета` pairs. No developer queue, retry,
+successor or priority command created those jobs. This is the first valid
+runtime evidence for the current-profile transition that makes accepted
+single-source quantity meaning eligible for a later cross-document
+relationship review. Qwen remains responsible for refusing unrelated scopes;
+the scheduler does not infer compatibility from equal units or numeric values.
+
+API readiness passes at migration head
+`0111_reviewed_quantity_source_value`. The all-history platform-memory
+fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the lifecycle platform fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The corrective v37
+release receipt SHA-256 is
+`f68725a37440135560467bc6184b402b76254bd9cfdffb42502f3f81ea606853`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Procurement and participant-context checkpoint — release 2d64726
 
 The next P1 slice addresses professional-report contamination that was visible
