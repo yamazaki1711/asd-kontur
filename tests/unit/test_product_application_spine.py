@@ -21,6 +21,7 @@ from asd_kontur.application_spine.object_store import (
     sanitize_relative_path,
 )
 from asd_kontur.application_spine.postgres import (
+    _PROJECT_WORK_FIRST_PASS_BATCH_SIZE,
     _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
     SpinePersistenceError,
     SpinePostgresRepository,
@@ -115,8 +116,35 @@ def test_reserved_first_pass_lane_cannot_be_consumed_by_relationship_work() -> N
     assert "semantic_priority" not in batch[0]
 
 
+def test_reserved_first_pass_lane_can_use_wider_independent_batch() -> None:
+    source_id, batch = _reserved_first_pass_classification_batch(
+        {
+            "source-a": [
+                {
+                    "candidate_id": f"first-pass-{index}",
+                    "wording": f"Previously unseen construction operation {index}",
+                    "classification_review_needed": True,
+                    "semantic_priority": (100 - index, 1, 1),
+                    "quantity_observations": [],
+                }
+                for index in range(6)
+            ]
+        },
+        batch_size=4,
+    )
+
+    assert source_id == "source-a"
+    assert [row["candidate_id"] for row in batch] == [
+        "first-pass-0",
+        "first-pass-1",
+        "first-pass-2",
+        "first-pass-3",
+    ]
+
+
 def test_default_work_reconciliation_batch_matches_measured_production_policy() -> None:
     assert _PROJECT_WORK_RECONCILIATION_BATCH_SIZE == 2
+    assert _PROJECT_WORK_FIRST_PASS_BATCH_SIZE == 4
 
 
 def test_semantic_recovery_continues_while_accepted_coverage_advances() -> None:

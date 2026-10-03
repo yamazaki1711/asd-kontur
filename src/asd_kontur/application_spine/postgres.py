@@ -199,6 +199,12 @@ _CONTRACT_ANALYSIS_PRIORITY = 188
 # repair.  The profile version makes the scheduling-policy change explicit and
 # lets the autonomous reconciler supersede queued larger batches safely.
 _PROJECT_WORK_RECONCILIATION_BATCH_SIZE = 2
+# First-pass rows are independent semantic classifications: one rejected row
+# can be isolated by the analyzer without destroying a cross-row engineering
+# relationship.  Keep relationship batches at the measured two-row boundary,
+# but use a wider source-coherent lane so the long tail of previously unseen
+# work descriptions cannot take days to reach the project model.
+_PROJECT_WORK_FIRST_PASS_BATCH_SIZE = 4
 _CONTRACT_CONTEXT_SEGMENT_CHARS = 10_000
 # Real contract-analysis receipts showed that every v7 validation failure used
 # the twelve-locator ceiling.  Those failures averaged 528.6 seconds, compared
@@ -6927,7 +6933,7 @@ class SpinePostgresRepository:
             if ordinary_classification_pending and priority_batch_limit < max_batches:
                 reserved_source_id, reserved_batch = _reserved_first_pass_classification_batch(
                     by_source,
-                    batch_size=batch_size,
+                    batch_size=max(batch_size, _PROJECT_WORK_FIRST_PASS_BATCH_SIZE),
                 )
                 if reserved_source_id is not None and reserved_batch:
                     batches.append(reserved_batch)
