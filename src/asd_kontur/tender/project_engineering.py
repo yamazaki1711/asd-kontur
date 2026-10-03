@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v74"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v75"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -100,6 +100,13 @@ _UNSCOPED_GENERIC_OPERATIONS = frozenset(
         "Подготовка строительной площадки",
         "Монтаж технологического оборудования",
     }
+)
+_NATURAL_WORK_SUBJECT_FAMILIES = frozenset(
+    {"site_preparation", "landscaping", "demolition", "waste_management"}
+)
+_NATURAL_WORK_SUBJECT = re.compile(
+    r"(?:\bдерев\w*|\bкустар\w*|\bрастительн\w*|\btree\w*|\bshrub\w*|\bvegetation\w*)",
+    re.IGNORECASE,
 )
 
 _FACILITY_CODE = re.compile(
@@ -7060,6 +7067,11 @@ def _semantic_material_values(
         name = str(review.get("material_name") or "").strip()
         material_kind = str(review.get("material_kind") or "").strip()
         if not name or not material_kind:
+            continue
+        family_key = str(review.get("associated_work_family_key") or "")
+        if family_key in _NATURAL_WORK_SUBJECT_FAMILIES and _NATURAL_WORK_SUBJECT.search(
+            f"{material_kind} {name}"
+        ):
             continue
         quantity_ids = [
             str(value)

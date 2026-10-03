@@ -33,6 +33,7 @@ from asd_kontur.tender.project_engineering import (
     _reviewed_scaled_quantity_unit,
     _reviewed_source_quantity_value,
     _scope_comparisons,
+    _semantic_material_values,
     _semantic_work_consensus,
     _sheet_pile_profiles,
     _tender_context,
@@ -2694,7 +2695,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v74"
+    assert model["model_version"] == "project-engineering-model-v75"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -5543,6 +5544,27 @@ def test_non_work_material_resource_is_projected_into_material_schedule() -> Non
     assert result["materials"][0]["material_kind"] == "polymer membrane"
     assert result["materials"][0]["quantity"] == "760"
     assert result["materials"][0]["document_role"] == "Спецификация"
+
+
+def test_natural_object_acted_on_is_not_projected_as_construction_material() -> None:
+    materials = _semantic_material_values(
+        [
+            {
+                "material_name": "деревья",
+                "material_kind": "деревья",
+                "associated_work_family_key": "site_preparation",
+                "properties": [{"kind": "DIAMETER", "value": "14-18", "unit": "см"}],
+                "quantity_candidate_ids": [],
+                "confidence": "0.94",
+                "reason": "Диаметр указан для вырубаемых деревьев.",
+            }
+        ],
+        linked_quantities=[],
+        source_locator_id="tree-felling-source",
+        source_context={},
+    )
+
+    assert materials == []
 
 
 def test_deterministic_material_row_is_preserved_without_becoming_work() -> None:
