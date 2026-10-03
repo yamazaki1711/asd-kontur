@@ -7,6 +7,7 @@ from typing import Any
 
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import (
+    PROJECT_WORK_RECONCILIATION_PROFILE,
     QwenProjectWorkReconciler,
     _source_numeric_token_present,
     potential_work_description,
@@ -99,7 +100,7 @@ def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(
         facilities=["КНС 4"],
     )
 
-    assert result["profile_version"] == "qwen-project-work-reconciliation-v24"
+    assert result["profile_version"] == PROJECT_WORK_RECONCILIATION_PROFILE
 
 
 def test_quantity_review_preserves_scaled_source_unit_without_model_arithmetic(
@@ -303,6 +304,74 @@ def test_source_value_evidence_rejects_model_arithmetic() -> None:
 
     assert _source_numeric_token_present("2,113", context)
     assert not _source_numeric_token_present("211,3", context)
+
+
+def test_quantity_review_can_select_one_exact_measure_from_compound_source_cell(
+    monkeypatch: Any,
+) -> None:
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        assert "площадь/объём" in prompt
+        assert "420,6/21,03" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "surface-total-row",
+                        "status": "MATCHED",
+                        "family_key": "demolition",
+                        "operation": "Разборка покрытия",
+                        "facility": None,
+                        "confidence": "0.96",
+                        "reason": "Строка содержит площадь и производный объём покрытия.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": "surface-total",
+                                "status": "WORK_QUANTITY",
+                                "source_value": "420,6",
+                                "source_unit": "м2",
+                                "semantic_scope": "Общая площадь разбираемого покрытия",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": None,
+                                "reason": "Источник явно связывает 420,6 с площадью м2.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "surface-total-row",
+                "wording": "Разборка покрытия, площадь/объём",
+                "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                "nearby_context": "Итого площадь/объём 420,6/21,03 м2/м3",
+                "quantity_observations": [
+                    {
+                        "quantity_candidate_id": "surface-total",
+                        "value": "420,6/21,03",
+                        "unit": "м2/м3",
+                        "nearby_context": "Итого площадь/объём 420,6/21,03 м2/м3",
+                        "peer_quantity_candidate_ids": [],
+                    }
+                ],
+            }
+        ],
+        work_families={"demolition": "Демонтажные работы"},
+        facilities=[],
+    )
+
+    review = result["observations"][0]["quantity_reviews"][0]
+    assert review["source_value"] == "420,6"
+    assert review["source_unit"] == "м2"
 
 
 def test_qwen_work_reconciliation_preserves_material_resource_semantics(

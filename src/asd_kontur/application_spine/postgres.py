@@ -9340,6 +9340,18 @@ def _quantities_requiring_semantic_review(
             and str(review.get("status") or "") in stable_non_quantity_statuses
         ):
             continue
+        # V25 adds one bounded capability: selecting one exact source measure
+        # from a compound cell (for example area/volume) before deterministic
+        # relationship arithmetic. Preserve every settled v24 decision that
+        # does not need that capability; changing a prompt must not replay the
+        # complete accepted project corpus.
+        if (
+            existing_profile == "qwen-project-work-reconciliation-v24"
+            and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
+            and review.get("relationship_reviewed") is True
+            and not _compound_quantity_measure_needs_review(row, review)
+        ):
+            continue
         if not current_profile_reviewed:
             result.append(row)
             continue
@@ -9352,6 +9364,36 @@ def _quantities_requiring_semantic_review(
         ):
             result.append(row)
     return result
+
+
+def _compound_quantity_measure_needs_review(
+    quantity: Mapping[str, Any], review: Mapping[str, Any]
+) -> bool:
+    """Identify accepted rows whose one candidate contains multiple source measures.
+
+    This is scheduling only: separators and multiple numeric tokens establish
+    that one extracted cell needs semantic disambiguation, never which token is
+    authoritative. Qwen must select an exact source token/unit pair and the
+    existing boundary validates that both occur in bounded source context.
+    """
+
+    if review.get("source_value"):
+        return False
+    value = str(
+        quantity.get("normalized_value")
+        if quantity.get("normalized_value") is not None
+        else quantity.get("value") or quantity.get("raw_value") or ""
+    ).strip()
+    unit = str(
+        quantity.get("normalized_unit") or quantity.get("unit") or quantity.get("raw_unit") or ""
+    ).strip()
+    if "/" not in value and "/" not in unit:
+        return False
+    numeric_tokens = re.findall(
+        r"[-+]?(?:\d{1,3}(?:[ \u00a0]\d{3})+|\d+)(?:[.,]\d+)?",
+        value,
+    )
+    return len(numeric_tokens) >= 2
 
 
 def _merged_quantity_reviews(

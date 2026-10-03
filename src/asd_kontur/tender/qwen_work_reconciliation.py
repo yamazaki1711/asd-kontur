@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v24"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v25"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -39,6 +39,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v21",
     "qwen-project-work-reconciliation-v22",
     "qwen-project-work-reconciliation-v23",
+    "qwen-project-work-reconciliation-v24",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
@@ -466,7 +467,11 @@ source_unit копируйте из ближайшего исходного ко
 показывает более точную единицу, повторите переданную unit; не вычисляйте физический объём.
 source_value указывайте только когда переданное value ошибочно захватило число из единицы или
 соседнего столбца, а правильное значение этой же строки дословно присутствует в ближайшем
-контексте. Копируйте один исходный числовой токен без арифметики; иначе укажите null.
+контексте, либо когда переданное value содержит несколько исходных мер одной строки (например,
+площадь/объём), а semantic_scope и source_unit однозначно выбирают одну из них. Во втором случае
+выберите только тот числовой токен, который источник прямо связывает с выбранной единицей и
+инженерным смыслом. Копируйте один исходный числовой токен без арифметики; не вычисляйте и не
+выводите значение из формулы. Если точную пару число/единица выбрать нельзя, укажите null.
 Отношение TOTAL_FOR/COMPONENT_OF/SUBTOTAL_OF допустимо только между переданными идентификаторами,
 когда текст явно устанавливает общий объём и его части в одной роли документа и редакции.
 Связанные значения могут находиться в разных строках переданного пакета. Не выводите отношение

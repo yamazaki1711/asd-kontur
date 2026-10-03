@@ -483,6 +483,47 @@ def test_compatible_terminal_non_quantity_reviews_are_not_reprocessed() -> None:
     ]
 
 
+def test_v24_settled_quantity_is_not_replayed_for_compound_measure_profile() -> None:
+    quantities = [{"candidate_id": "single-volume", "normalized_value": "36.4", "raw_unit": "м3"}]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v24",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "single-volume",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "NONE",
+            }
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == []
+
+
+def test_v24_compound_quantity_is_requeued_for_exact_measure_selection() -> None:
+    quantities = [
+        {
+            "candidate_id": "compound-area-volume",
+            "normalized_value": "420,6/21,03",
+            "raw_unit": "м2/м3",
+        }
+    ]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v24",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "compound-area-volume",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "TOTAL_FOR",
+                "component_set_complete": False,
+            }
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == quantities
+
+
 def test_incompatible_terminal_non_quantity_reviews_are_reprocessed() -> None:
     quantities = [{"candidate_id": "rate"}]
     prior = {

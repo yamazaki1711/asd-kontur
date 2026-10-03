@@ -80,6 +80,7 @@ from asd_kontur.document_understanding.work_packages import (
 )
 from asd_kontur.document_understanding.work_type_catalog import resolve_work_type_candidates
 from asd_kontur.domain import deterministic_uuid
+from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
 DOCUMENT_ID = UUID("10000000-0000-4000-8000-000000000001")
 SOURCE_VERSION_ID = UUID("20000000-0000-4000-8000-000000000001")
@@ -109,9 +110,7 @@ def test_project_materialization_profile_is_independent_from_structure_reconcili
         _profile_for(JobKind.PROJECT_STRUCTURE_RECONCILIATION)
         == "industrial-document-understanding-v0.2"
     )
-    assert (
-        _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == "qwen-project-work-reconciliation-v24"
-    )
+    assert _profile_for(JobKind.PROJECT_WORK_RECONCILIATION) == PROJECT_WORK_RECONCILIATION_PROFILE
 
 
 def test_engineering_prompt_requires_every_explicit_quantity_row_without_arithmetic() -> None:
@@ -131,7 +130,7 @@ def test_engineering_prompt_requires_every_explicit_quantity_row_without_arithme
 def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> None:
     result = {
         "contract": "project-work-reconciliation-result@12.0.0",
-        "profile_version": "qwen-project-work-reconciliation-v24",
+        "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
         "observations": [
             {
                 "candidate_id": "candidate-a",
@@ -150,7 +149,7 @@ def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> 
         def load_project_work_reconciliation_result(
             self, _claimed: ClaimedJob, *, profile_version: str
         ) -> dict[str, object]:
-            assert profile_version == "qwen-project-work-reconciliation-v24"
+            assert profile_version == PROJECT_WORK_RECONCILIATION_PROFILE
             return result
 
     class Qwen:
@@ -170,7 +169,7 @@ def test_project_work_reconciliation_reuses_persisted_result_after_restart() -> 
         deterministic_uuid("work-reconciliation-job"),
         JobKind.PROJECT_WORK_RECONCILIATION,
         {
-            "work_reconciliation_profile": "qwen-project-work-reconciliation-v24",
+            "work_reconciliation_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
             "work_observations": [{"candidate_id": "candidate-a"}],
             "work_families": {"backfill": "Обратная засыпка"},
             "facilities": [],
