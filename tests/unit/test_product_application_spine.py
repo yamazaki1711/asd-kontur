@@ -24,6 +24,7 @@ from asd_kontur.application_spine.postgres import (
     _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
     SpinePersistenceError,
     SpinePostgresRepository,
+    _bounded_scope_context_rows,
     _contract_context_batches,
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
@@ -395,6 +396,88 @@ def test_cross_document_work_batches_keep_unlocated_different_wording_separate()
 
     assert batches == []
     assert selected == set()
+
+
+def test_scope_context_is_bounded_before_source_context_loading() -> None:
+    rows = [
+        {
+            "candidate_id": "design-alpha",
+            "source_version_id": "source-design",
+            "source_role": "project documentation",
+            "wording": "Install access platform",
+            "deterministic_family_hint": "structural_steel",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Utility Building Alpha"},
+        },
+        {
+            "candidate_id": "commercial-alpha",
+            "source_version_id": "source-commercial",
+            "source_role": "local estimate",
+            "wording": "Access platform installation",
+            "deterministic_family_hint": "structural_steel",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Utility Building Alpha"},
+        },
+        {
+            "candidate_id": "design-without-counterpart",
+            "source_version_id": "source-design",
+            "source_role": "project documentation",
+            "wording": "Apply protective coating",
+            "deterministic_family_hint": "finishing",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {"facility": "Utility Building Beta"},
+        },
+        {
+            "candidate_id": "ordinary-unresolved",
+            "source_version_id": "source-design",
+            "source_role": "project documentation",
+            "wording": "Unresolved operation",
+            "scope_comparison_context_only": False,
+        },
+    ]
+
+    selected = _bounded_scope_context_rows(
+        rows,
+        source_display_names={
+            "source-design": "Design package Z.pdf",
+            "source-commercial": "Commercial schedule Q.pdf",
+        },
+        attempted_pairs=set(),
+        max_batches=1,
+    )
+
+    assert {value["candidate_id"] for value in selected} == {
+        "design-alpha",
+        "commercial-alpha",
+        "ordinary-unresolved",
+    }
+
+
+def test_scope_context_skips_an_exact_pair_already_attempted() -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "source_version_id": source_id,
+            "source_role": role,
+            "wording": "Install drainage channel",
+            "deterministic_family_hint": "drainage",
+            "scope_comparison_context_only": True,
+            "prior_resolution": {},
+        }
+        for candidate_id, source_id, role in (
+            ("design-drainage", "source-design", "project documentation"),
+            ("commercial-drainage", "source-commercial", "local estimate"),
+        )
+    ]
+
+    selected = _bounded_scope_context_rows(
+        rows,
+        source_display_names={},
+        attempted_pairs={("commercial-drainage", "design-drainage")},
+        max_batches=1,
+    )
+
+    assert selected == []
 
 
 def test_known_facility_scope_still_queues_unreviewed_quantities() -> None:

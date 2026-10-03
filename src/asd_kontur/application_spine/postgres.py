@@ -572,6 +572,80 @@ def _cross_document_work_batches(
     return batches, selected_ids
 
 
+def _bounded_scope_context_rows(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    source_display_names: Mapping[str, str],
+    attempted_pairs: set[tuple[str, str]],
+    max_batches: int,
+) -> list[dict[str, Any]]:
+    """Bound settled scope rows before expensive page-context assembly.
+
+    Scope-only rows are useful only when a design and commercial counterpart
+    can form a new exact candidate pair. Select one deterministic pair per
+    eligible facility/family or exact-wording/family group. Qwen still owns
+    the semantic operation decision; this helper only prevents hundreds of
+    irrelevant locators from entering the source-context SQL.
+    """
+
+    ordinary: list[dict[str, Any]] = []
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        row = dict(raw)
+        if not row.get("scope_comparison_context_only"):
+            ordinary.append(row)
+            continue
+        family = str(row.get("deterministic_family_hint") or "")
+        wording = " ".join(str(row.get("wording") or "").casefold().split())
+        prior = dict(row.get("prior_resolution") or {})
+        facility = str(prior.get("facility") or "").strip() or facility_designation(
+            f"{row.get('wording') or ''} {row.get('scope_key') or ''}"
+        )
+        source_version_id = str(row.get("source_version_id") or "")
+        side = document_comparison_side(
+            row.get("source_role"), source_display_names.get(source_version_id, "")
+        )
+        if not family or side not in {"design", "commercial"}:
+            continue
+        if facility:
+            key = ("facility", facility, family)
+        elif wording:
+            key = ("wording", wording, family)
+        else:
+            continue
+        row["_comparison_side"] = side
+        groups[key].append(row)
+
+    selected_ids: set[str] = set()
+    selected_group_count = 0
+    for key in sorted(groups):
+        values = sorted(groups[key], key=lambda value: str(value.get("candidate_id") or ""))
+        pairs = [
+            (design, commercial)
+            for design in values
+            for commercial in values
+            if design.get("_comparison_side") == "design"
+            and commercial.get("_comparison_side") == "commercial"
+            and _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
+            not in attempted_pairs
+        ]
+        if not pairs:
+            continue
+        selected_ids.update(str(value.get("candidate_id") or "") for value in pairs[0])
+        selected_group_count += 1
+        if selected_group_count >= max_batches:
+            break
+
+    selected_scope = []
+    for values in groups.values():
+        for value in values:
+            if str(value.get("candidate_id") or "") not in selected_ids:
+                continue
+            value.pop("_comparison_side", None)
+            selected_scope.append(value)
+    return [*ordinary, *selected_scope]
+
+
 def _relationship_role_lane(row: Mapping[str, Any]) -> str:
     role = " ".join(str(row.get("document_role") or "").casefold().split())
     side = document_comparison_side(row.get("document_role"), row.get("document"))
@@ -6514,6 +6588,37 @@ class SpinePostgresRepository:
             if not unresolved:
                 return ()
 
+            source_rows = {
+                str(row["source_version_id"]): dict(row)
+                for row in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (v.source_version_id) v.source_version_id,v.document_id,"
+                        "v.version,v.object_key,v.media_type,v.content_digest,v.safe_display_name "
+                        "FROM workspace.document_versions v JOIN "
+                        "workspace.document_version_activation_decisions a ON "
+                        "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
+                        "a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
+                        "v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
+                        "workspace.document_version_activation_decisions newer WHERE "
+                        "newer.organization_id=a.organization_id AND "
+                        "newer.workspace_id=a.workspace_id AND newer.document_id=a.document_id AND "
+                        "newer.decision_version>a.decision_version) ORDER BY "
+                        "v.source_version_id,a.decision_version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            }
+            unresolved = _bounded_scope_context_rows(
+                unresolved,
+                source_display_names={
+                    source_id: str(value.get("safe_display_name") or "")
+                    for source_id, value in source_rows.items()
+                },
+                attempted_pairs=attempted_scope_pairs,
+                max_batches=max_batches,
+            )
+            if not unresolved:
+                return ()
             locator_ids = sorted(
                 {
                     str(locator_id)
@@ -6540,26 +6645,6 @@ class SpinePostgresRepository:
                 workspace_id=workspace_id,
                 locator_ids=locator_ids,
             )
-            source_rows = {
-                str(row["source_version_id"]): dict(row)
-                for row in session.execute(
-                    sa.text(
-                        "SELECT DISTINCT ON (v.source_version_id) v.source_version_id,v.document_id,"
-                        "v.version,v.object_key,v.media_type,v.content_digest,v.safe_display_name "
-                        "FROM workspace.document_versions v JOIN "
-                        "workspace.document_version_activation_decisions a ON "
-                        "a.organization_id=v.organization_id AND a.workspace_id=v.workspace_id AND "
-                        "a.document_id=v.document_id AND a.selected_document_version=v.version WHERE "
-                        "v.organization_id=:o AND v.workspace_id=:w AND NOT EXISTS (SELECT 1 FROM "
-                        "workspace.document_version_activation_decisions newer WHERE "
-                        "newer.organization_id=a.organization_id AND "
-                        "newer.workspace_id=a.workspace_id AND newer.document_id=a.document_id AND "
-                        "newer.decision_version>a.decision_version) ORDER BY "
-                        "v.source_version_id,a.decision_version DESC"
-                    ),
-                    {"o": organization_id, "w": workspace_id},
-                ).mappings()
-            }
             identity_candidates = self._structure_identity_candidate_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
