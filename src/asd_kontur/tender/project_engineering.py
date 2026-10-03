@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v69"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v70"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3556,6 +3556,9 @@ def _validated_scope_quantity_comparisons(
     result: list[dict[str, Any]] = []
     for raw in works:
         work = dict(raw)
+        established_location_scope = bool(work.get("facility_id")) or (
+            work.get("location_scope_kind") == "project"
+        )
         exact_cross_role_wording = _exact_cross_role_work_wording(work)
         semantic_cross_role_operation = _semantic_cross_role_work_operation(work)
         for comparison in _comparisons([work]):
@@ -3565,13 +3568,13 @@ def _validated_scope_quantity_comparisons(
                 work, comparison, left_role, right_role
             )
             if (
-                not work.get("facility_id")
+                not established_location_scope
                 and exact_cross_role_wording is None
                 and semantic_cross_role_operation is None
                 and not reviewed_identity
             ):
                 continue
-            if not work.get("facility_id") and not _isolated_unassigned_comparison(
+            if not established_location_scope and not _isolated_unassigned_comparison(
                 work, comparison
             ):
                 continue
@@ -3579,6 +3582,11 @@ def _validated_scope_quantity_comparisons(
                 "Совпадают сооружение, вид работы и строительная операция; "
                 "связанные числовые значения проверены по смыслу."
                 if work.get("facility_id")
+                else (
+                    "Оба значения относятся к явно указанному объёму объекта в целом; "
+                    "смысл количества и единицы измерения совпадают."
+                )
+                if work.get("location_scope_kind") == "project"
                 else (
                     "Локальная модель независимо подтвердила, что по одному числовому "
                     "значению в каждом документе относятся к одному инженерному объёму."
@@ -6366,7 +6374,11 @@ def _normalized_unit(value: object) -> str:
         .split()
     )
     normalized = normalized.rstrip(".")
-    canonical = _normalize_source_unit(normalized)
+    # Native/Qwen outputs can already use the canonical Latin spellings.  The
+    # source normalizer returns ``None`` for those because no spelling change
+    # is required; retain the input as the canonical candidate so ``m`` and
+    # ``м`` (and likewise ``piece``/``шт``) compare as one physical unit.
+    canonical = _normalize_source_unit(normalized) or normalized
     return {
         "m": "м",
         "mm": "мм",

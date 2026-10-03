@@ -1001,6 +1001,82 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
     assert comparisons[0]["right"]["value"] == "833.9"
 
 
+def test_explicit_project_scope_allows_same_scope_vor_estimate_comparison() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "project-drainage-scope",
+                "facility_id": None,
+                "location_scope_kind": "project",
+                "facility": "Project as a whole (North section; South section)",
+                "work_name": "Install drainage collector",
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "vor-length",
+                            "value": "184",
+                            "unit": "m",
+                            "semantic_scope": "Drainage collector length",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v20",
+                        }
+                    ],
+                    "Смета": [
+                        {
+                            "quantity_candidate_id": "estimate-length",
+                            "value": "184",
+                            "unit": "м",
+                            "semantic_scope": "Drainage collector length",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": "qwen-project-work-reconciliation-v24",
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+    assert "объекта в целом" in comparisons[0]["scope_match_basis"]
+
+
+def test_explicit_project_scope_rejects_different_quantity_meanings() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "project-pipeline-scope",
+                "facility_id": None,
+                "location_scope_kind": "project",
+                "facility": "Project as a whole (Block A; Block B)",
+                "work_name": "Install pipeline",
+                "quantities_by_document": {
+                    "ВОР": [
+                        {
+                            "value": "96",
+                            "unit": "m",
+                            "semantic_scope": "Carrier pipe length",
+                            "scope_compatibility": "SAME_SCOPE",
+                        }
+                    ],
+                    "Смета": [
+                        {
+                            "value": "96",
+                            "unit": "м",
+                            "semantic_scope": "Protective casing length",
+                            "scope_compatibility": "SAME_SCOPE",
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
+
+
 def test_legacy_quantity_review_cannot_authorize_new_unlocated_comparison() -> None:
     quantity = {
         "quantity_candidate_id": "legacy-area",
@@ -2408,7 +2484,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v69"
+    assert model["model_version"] == "project-engineering-model-v70"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4160,6 +4236,17 @@ def test_project_scope_requires_explicit_reference_to_every_addressed_facility()
         _project_scope_facility_label("Подпорная стена по ул. Северная, 10/1", facilities) is None
     )
     assert _project_scope_facility_label("Подпорные стены", facilities) is None
+    assert _project_scope_facility_label(
+        (
+            "Ведомость объемов конструктивных решений (элементов) и комплексов "
+            "(видов) работ. Капитальный ремонт подпорных стен по ул. Северная, "
+            "10/1 и ул. Северная, 12/1"
+        ),
+        facilities,
+    ) == (
+        "Объект в целом (Подпорная стена по ул. Северная, 10/1; "
+        "Подпорная стена по ул. Северная, 12/1)"
+    )
 
 
 def test_commercial_heading_assigns_work_to_explicit_multi_facility_project_scope() -> None:
