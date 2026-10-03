@@ -29,6 +29,7 @@ from asd_kontur.application_spine.postgres import (
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
+    _priority_semantic_batch_limit,
     _quantities_requiring_semantic_review,
     _quantity_comparison_context_policy,
     _quantity_relationship_batches,
@@ -47,6 +48,30 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_semantic_refill_reserves_first_pass_classification_capacity() -> None:
+    assert (
+        _priority_semantic_batch_limit(
+            max_batches=4,
+            ordinary_classification_pending=True,
+        )
+        == 3
+    )
+    assert (
+        _priority_semantic_batch_limit(
+            max_batches=4,
+            ordinary_classification_pending=False,
+        )
+        == 4
+    )
+    assert (
+        _priority_semantic_batch_limit(
+            max_batches=1,
+            ordinary_classification_pending=True,
+        )
+        == 1
+    )
 
 
 def test_default_work_reconciliation_batch_matches_measured_production_policy() -> None:

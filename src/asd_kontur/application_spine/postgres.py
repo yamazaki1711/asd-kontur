@@ -651,6 +651,25 @@ def _bounded_scope_context_rows(
     return [*ordinary, *selected_scope]
 
 
+def _priority_semantic_batch_limit(
+    *,
+    max_batches: int,
+    ordinary_classification_pending: bool,
+) -> int:
+    """Keep relationship analysis from starving first-pass work meaning.
+
+    Quantity and cross-document relationships produce the fastest professional
+    comparisons, so they retain priority.  They must not consume every refill
+    forever while never-reviewed construction descriptions remain.  A
+    multi-batch refill therefore reserves one lane for ordinary classification;
+    a deliberately single-batch call keeps its explicit priority semantics.
+    """
+
+    if ordinary_classification_pending and max_batches > 1:
+        return max_batches - 1
+    return max_batches
+
+
 def _relationship_role_lane(row: Mapping[str, Any]) -> str:
     role = " ".join(str(row.get("document_role") or "").casefold().split())
     side = document_comparison_side(row.get("document_role"), row.get("document"))
@@ -6702,6 +6721,7 @@ class SpinePostgresRepository:
                     or ()
                     if isinstance(value, Mapping) and value.get("quantity_candidate_id")
                 }
+                prior_resolution = dict(row.get("prior_resolution") or {})
                 selected_quantities = [
                     value for value in linked_quantities if value.get("candidate_id")
                 ][:8]
@@ -6779,6 +6799,7 @@ class SpinePostgresRepository:
                         "scope_comparison_context_only": bool(
                             row.get("scope_comparison_context_only")
                         ),
+                        "classification_review_needed": not prior_resolution,
                     }
                 )
             frequency: dict[str, int] = defaultdict(int)
@@ -6814,14 +6835,20 @@ class SpinePostgresRepository:
                     priority[2],
                 )
 
+            priority_batch_limit = _priority_semantic_batch_limit(
+                max_batches=max_batches,
+                ordinary_classification_pending=any(
+                    row.get("classification_review_needed") is True for row in prepared
+                ),
+            )
             relationship_batches, relationship_candidate_ids = _quantity_relationship_batches(
                 prepared,
                 batch_size=batch_size,
-                max_batches=max_batches,
+                max_batches=priority_batch_limit,
                 attempted_pairs=attempted_relationship_pairs,
             )
             batches = list(relationship_batches)
-            remaining_batch_capacity = max_batches - len(batches)
+            remaining_batch_capacity = priority_batch_limit - len(batches)
             cross_document_batches, cross_document_candidate_ids = _cross_document_work_batches(
                 prepared,
                 batch_size=batch_size,
