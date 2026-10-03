@@ -3682,7 +3682,8 @@ def _component_total_comparisons(
     """Verify explicit total/component graphs, including separate schedule rows."""
 
     records: dict[str, dict[str, Any]] = {}
-    relationships: dict[tuple[str, str, tuple[str, ...]], QuantityRelationship] = {}
+    total_relationships: dict[str, tuple[tuple[str, ...], ScopeCompatibility]] = {}
+    reciprocal_components: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
         work = dict(raw_work)
         for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
@@ -3725,20 +3726,38 @@ def _component_total_comparisons(
                     if value.get("relationship_reviewed") is not True:
                         continue
                     if (
+                        relation in {QuantityRelation.COMPONENT_OF, QuantityRelation.SUBTOTAL_OF}
+                        and compatibility is ScopeCompatibility.COMPONENT_VS_TOTAL
+                    ):
+                        for total_id in related:
+                            reciprocal_components[total_id].add(candidate_id)
+                    if (
                         relation is QuantityRelation.TOTAL_FOR
                         and value.get("component_set_complete") is not True
                     ):
                         continue
-                    relationship = QuantityRelationship(
-                        subject_id=candidate_id,
-                        relation=relation,
-                        object_ids=related,
-                        compatibility=compatibility,
-                    )
-                    relationships[(candidate_id, relation.value, related)] = relationship
+                    if relation is QuantityRelation.TOTAL_FOR:
+                        total_relationships[candidate_id] = (related, compatibility)
+    relationships: list[QuantityRelationship] = []
+    for total_id, (declared_components, compatibility) in total_relationships.items():
+        # Qwen reviews each quantity row independently. A component can therefore
+        # point to a reviewed total even when the total row omits that reciprocal
+        # edge. Close only explicit, reviewed COMPONENT_OF/SUBTOTAL_OF links; do
+        # not infer membership from wording or arithmetic similarity.
+        component_ids = tuple(
+            dict.fromkeys((*declared_components, *sorted(reciprocal_components[total_id])))
+        )
+        relationships.append(
+            QuantityRelationship(
+                subject_id=total_id,
+                relation=QuantityRelation.TOTAL_FOR,
+                object_ids=component_ids,
+                compatibility=compatibility,
+            )
+        )
     statements = [dict(record)["statement"] for record in records.values()]
     result: list[dict[str, Any]] = []
-    for relationship in relationships.values():
+    for relationship in relationships:
         checked = evaluate_component_total(statements, relationship)
         total_record = records.get(relationship.subject_id)
         if checked is None or total_record is None:

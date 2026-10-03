@@ -1310,6 +1310,70 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
     ]
 
 
+def test_component_total_comparison_closes_reviewed_reciprocal_component_edges() -> None:
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "scope-earthworks",
+                "facility_id": None,
+                "facility": "Объект в целом",
+                "work_name": "Разработка грунта",
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "total",
+                            "value": "772.5",
+                            "unit": "м3",
+                            "semantic_scope": "Общий объём разработки грунта",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "TOTAL_FOR",
+                            "related_quantity_candidate_ids": ["mechanized"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "component_set_complete": True,
+                            "source_locator_id": "locator-total",
+                        },
+                        {
+                            "quantity_candidate_id": "mechanized",
+                            "value": "656.6",
+                            "unit": "м3",
+                            "semantic_scope": "Механизированная разработка грунта",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "source_locator_id": "locator-mechanized",
+                        },
+                        {
+                            "quantity_candidate_id": "manual",
+                            "value": "115.9",
+                            "unit": "м3",
+                            "semantic_scope": "Ручная разработка грунта",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["total"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                            "source_locator_id": "locator-manual",
+                        },
+                    ]
+                },
+            }
+        ]
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATCH"
+    assert comparisons[0]["right"]["value"] == "772.5"
+    assert comparisons[0]["difference"] == "0"
+    assert comparisons[0]["source_locator_ids"] == [
+        "locator-manual",
+        "locator-mechanized",
+        "locator-total",
+    ]
+
+
 def test_quantity_schedule_preserves_review_authority_for_component_arithmetic() -> None:
     raw_values = [
         {
