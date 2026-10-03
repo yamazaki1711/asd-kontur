@@ -1521,3 +1521,71 @@ quantity rule has been introduced.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Typed compound-source failure — release b21a492
+
+The first generic attempt to recover the real blind-project compound
+measurement did not establish a safe scalar source pair. The reviewed source
+cell contained more than one measurement, and the semantic result returned the
+compound cell rather than one exact value/unit pair. Deterministic validation
+rejected that output with the typed recovery code
+`qwen_work_reconciliation_quantity_source_value_invalid`; it did not project a
+quantity, relation, comparison or professional finding from malformed model
+output. This is a negative product result, but it preserves the core invariant
+that Qwen establishes meaning while deterministic code controls numeric
+authority.
+
+The v52 release receipt is stored at
+`~/.asd-kontur/public-demo/releases/20261003-b21a492-typed-quantity-repair-v52/release-receipt.json`
+with SHA-256
+`20fdfca4c5df621c30509404f68a2db920b1485fa553f727df8249b2fac52d12`.
+The failed result was not described as a successful comparison, and the blind
+snapshot gate remains closed.
+
+## Exact scalar options for compound source cells — release ebff0c1
+
+Commit `ebff0c1c1d85358f44d5de6c617e95f60d32b428` implements the generic
+recovery exposed by the v52 failure. The deterministic harness now splits a
+compound source cell into its exact scalar value/unit pairs and supplies those
+pairs as a closed `available_source_measures` set. Qwen may select one exact
+pair or return no selection; it cannot authorize a value that is absent from
+the source set. Arithmetic remains deterministic. The semantic profile is v29
+and the engineering model accepts that profile without any project name,
+document name, expected value or corpus-specific branch.
+
+Accepted v28 results are preserved except for rows carrying the exact typed
+compound-source validation failure. Previously queued or otherwise unprocessed
+v28 work is superseded by v29 work through the normal autonomous profile
+transition. This means the accepted-result replay is targeted, while the
+remaining unfinished validation backlog legitimately continues on the current
+profile; it does not mean that only one workspace has unfinished work.
+
+Migration `0116_exact_compound_source_measure_options` records the active
+semantic contract. The public database was backed up to
+`~/.asd-kontur/public-demo/backups/pre-0116-source-measures-20261003T1715/public-before-0116.dump`
+(SHA-256
+`95f526c6d88aa299654440a99d60c1f89ddbf7be9b77b2b430a88e76e220bdc5`),
+restored separately, upgraded, downgraded and upgraded again before controlled
+activation. The application services run from immutable release
+`~/.asd-kontur/public-demo/releases/20261003-ebff0c1-compound-source-v53`.
+The worker drained its in-flight job to a durable successful receipt before
+activation. Qwen PID `93554` and NTD worker PID `98263` were not restarted.
+
+Exact-SHA CI run `37099025674` passed. API readiness reports migration head
+`0116_exact_compound_source_measure_options`. After activation the supervised
+orchestrator autonomously created blind-workspace v29 job
+`01a10034-743e-70e3-8016-349527670153` for the three compound-measure
+candidates; no developer queue, retry, successor, priority or Qwen command was
+issued. At this checkpoint that job remains queued in the fair shared work
+queue, so no component/total success is claimed yet.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the lifecycle platform fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
