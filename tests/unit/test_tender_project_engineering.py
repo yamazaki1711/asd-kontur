@@ -2408,7 +2408,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v66"
+    assert model["model_version"] == "project-engineering-model-v67"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -3259,7 +3259,7 @@ def test_current_reviewed_scope_connects_unassigned_work_wording_one_to_one() ->
         work_resolutions={
             "design-wall": {
                 "candidate_version": 1,
-                "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+                "profile_version": "qwen-project-work-reconciliation-v30",
                 "status": "MATCHED",
                 "family_key": "reinforced_concrete",
                 "operation": "Железобетонные конструкции",
@@ -3327,7 +3327,7 @@ def test_current_reviewed_scope_connects_unassigned_work_wording_one_to_one() ->
         value["semantic_review_profile"]
         for values in compared_work["quantities_by_document"].values()
         for value in values
-    } == {PROJECT_WORK_RECONCILIATION_PROFILE}
+    } == {"qwen-project-work-reconciliation-v30", PROJECT_WORK_RECONCILIATION_PROFILE}
 
 
 def test_broad_unassigned_family_is_not_reported_as_a_commercial_match() -> None:

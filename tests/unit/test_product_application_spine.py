@@ -749,6 +749,58 @@ def test_v29_settled_quantity_is_preserved_for_cross_document_work_scope_profile
     assert _quantities_requiring_semantic_review(quantities, prior) == []
 
 
+def test_v30_requeues_only_unsupported_alternative_decisions() -> None:
+    quantities = [
+        {"candidate_id": "same-scope"},
+        {"candidate_id": "alternative-relation"},
+        {"candidate_id": "alternative-compatibility"},
+    ]
+    prior = {
+        "profile_version": "qwen-project-work-reconciliation-v30",
+        "quantity_reviews": [
+            {
+                "quantity_candidate_id": "same-scope",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "NONE",
+                "scope_compatibility": "SAME_SCOPE",
+            },
+            {
+                "quantity_candidate_id": "alternative-relation",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "ALTERNATIVE_TO",
+                "scope_compatibility": "ALTERNATIVE_DESIGN",
+            },
+            {
+                "quantity_candidate_id": "alternative-compatibility",
+                "status": "WORK_QUANTITY",
+                "relationship_reviewed": True,
+                "relation_kind": "NONE",
+                "scope_compatibility": "ALTERNATIVE_DESIGN",
+            },
+        ],
+    }
+
+    assert _quantities_requiring_semantic_review(quantities, prior) == quantities[1:]
+
+
+def test_v30_settled_work_does_not_replay_entire_scope_pass() -> None:
+    existing = {
+        "candidate_version": 2,
+        "profile_version": "qwen-project-work-reconciliation-v30",
+        "status": "MATCHED",
+        "family_key": "structural_steel",
+        "facility": "Crossing North",
+    }
+
+    assert not _work_scope_comparison_context_available(
+        existing=existing,
+        candidate_version=2,
+        pending_quantities=[],
+    )
+
+
 def test_settled_work_is_reused_only_as_bounded_scope_comparison_context() -> None:
     existing = {
         "candidate_version": 3,

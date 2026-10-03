@@ -1130,6 +1130,13 @@ def _work_scope_comparison_context_available(
 
     if existing is None or int(existing.get("candidate_version") or 0) != candidate_version:
         return False
+    # V31 changes only the acceptance boundary for unsupported alternative
+    # decisions. V30 already performed the generalized cross-document scope
+    # pass, so settled V30 rows must not replay merely because the validator
+    # became stricter. Rows with an alternative decision are selected through
+    # the targeted quantity-review policy below.
+    if str(existing.get("profile_version") or "") == "qwen-project-work-reconciliation-v30":
+        return False
     return bool(
         str(existing.get("profile_version") or "")
         in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
@@ -9721,6 +9728,18 @@ def _quantities_requiring_semantic_review(
             existing_profile == "qwen-project-work-reconciliation-v29"
             and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
             and review.get("relationship_reviewed") is True
+        ):
+            continue
+        # V31 adds a deterministic source-evidence gate for alternative-design
+        # decisions. Preserve all settled V30 numeric work except the exact rows
+        # carrying ALTERNATIVE_TO/ALTERNATIVE_DESIGN, which need one bounded
+        # semantic re-review under the stronger contract.
+        if (
+            existing_profile == "qwen-project-work-reconciliation-v30"
+            and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
+            and review.get("relationship_reviewed") is True
+            and str(review.get("relation_kind") or "") != "ALTERNATIVE_TO"
+            and str(review.get("scope_compatibility") or "") != "ALTERNATIVE_DESIGN"
         ):
             continue
         if not current_profile_reviewed:

@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v30"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v31"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -45,9 +45,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v27",
     "qwen-project-work-reconciliation-v28",
     "qwen-project-work-reconciliation-v29",
+    "qwen-project-work-reconciliation-v30",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@17.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@18.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -72,6 +73,11 @@ _WEAK_FACILITY_REASON = re.compile(
     r"(?:близост|в том же (?:абзац|контекст)|контекст.*упомина|косвен|предполож|вероятн)",
     re.IGNORECASE,
 )
+_EXPLICIT_ALTERNATIVE_EVIDENCE = re.compile(
+    r"(?:\bальтернатив\w*|\bвариант\w*|\bвзамен\b|\bзамен\w*|"
+    r"\balternative\w*|\boption\w*|\binstead\s+of\b|\breplac\w*)",
+    re.IGNORECASE,
+)
 _RECOVERABLE_RESPONSE_FAILURES = frozenset(
     {
         "qwen_work_reconciliation_invalid_json",
@@ -92,6 +98,8 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_source_value_invalid",
         "qwen_work_reconciliation_quantity_relation_ids_invalid",
         "qwen_work_reconciliation_component_completeness_invalid",
+        "qwen_work_reconciliation_alternative_evidence_missing",
+        "qwen_work_reconciliation_same_scope_operation_mismatch",
         "qwen_work_reconciliation_material_output_invalid",
         "qwen_semantic_response_incomplete",
         "qwen_semantic_response_output_exhausted",
@@ -169,6 +177,9 @@ class QwenProjectWorkReconciler:
             str(value.get("quantity_candidate_id") or ""): " ".join(
                 str(item or "")
                 for item in (
+                    row.get("wording"),
+                    row.get("scope"),
+                    row.get("nearby_context"),
                     value.get("value"),
                     value.get("unit"),
                     value.get("nearby_context"),
@@ -263,6 +274,8 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_quantity_source_unit_invalid",
                     "qwen_work_reconciliation_quantity_source_value_invalid",
                     "qwen_work_reconciliation_quantity_relation_ids_invalid",
+                    "qwen_work_reconciliation_alternative_evidence_missing",
+                    "qwen_work_reconciliation_same_scope_operation_mismatch",
                 }
             ):
                 observations, call_count, codes = self._reconcile_rows(
@@ -471,6 +484,15 @@ def _prompt(
                 "В related_quantity_candidate_ids используйте только переданные UUID: для "
                 "TOTAL_FOR перечислите компоненты, для COMPONENT_OF/SUBTOTAL_OF — итог; для "
                 "NONE верните пустой список."
+            ),
+            "qwen_work_reconciliation_alternative_evidence_missing": (
+                "ALTERNATIVE_TO/ALTERNATIVE_DESIGN допустимы только когда исходный текст прямо "
+                "называет вариант, альтернативу или замену. Различие значений само по себе не "
+                "является альтернативой. Для одного инженерного объёма верните SAME_SCOPE."
+            ),
+            "qwen_work_reconciliation_same_scope_operation_mismatch": (
+                "Строки с одинаковым semantic_scope и SAME_SCOPE должны иметь дословно "
+                "одинаковое краткое operation; различие чисел этому не препятствует."
             ),
         }.get(relationship_repair_code, "")
         relationship_repair_instruction = (
@@ -690,7 +712,60 @@ def _parse(
         observations[candidate_id] = observation
     if set(observations) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_incomplete_output")
-    return [observations[candidate_id] for candidate_id in input_ids]
+    ordered = [observations[candidate_id] for candidate_id in input_ids]
+    if mark_relationship_reviewed:
+        _validate_relationship_consistency(
+            ordered,
+            quantity_context_by_id=quantity_context_by_id,
+        )
+    return ordered
+
+
+def _validate_relationship_consistency(
+    observations: Iterable[Mapping[str, Any]],
+    *,
+    quantity_context_by_id: Mapping[str, str],
+) -> None:
+    """Reject unsupported semantic authority before it reaches arithmetic.
+
+    A numeric difference is not evidence of an alternative design.  Conversely,
+    SAME_SCOPE is useful only when the model also normalizes the engineering
+    operation consistently.  This boundary validates the model's decision against
+    bounded source text; it never decides that two values are comparable itself.
+    """
+
+    same_scope_operations: dict[str, set[str]] = {}
+    for observation in observations:
+        operation = " ".join(str(observation.get("operation") or "").split())
+        for review in observation.get("quantity_reviews") or ():
+            if not isinstance(review, Mapping):
+                continue
+            quantity_id = str(review.get("quantity_candidate_id") or "")
+            relation_kind = str(review.get("relation_kind") or "")
+            compatibility = str(review.get("scope_compatibility") or "")
+            if (
+                relation_kind == QuantityRelation.ALTERNATIVE_TO.value
+                or compatibility == ScopeCompatibility.ALTERNATIVE_DESIGN.value
+            ):
+                related_ids = tuple(
+                    str(value) for value in review.get("related_quantity_candidate_ids") or ()
+                )
+                evidence = " ".join(
+                    quantity_context_by_id.get(value, "")
+                    for value in (quantity_id, *related_ids)
+                )
+                if _EXPLICIT_ALTERNATIVE_EVIDENCE.search(evidence) is None:
+                    raise QwenSemanticFailure(
+                        "qwen_work_reconciliation_alternative_evidence_missing"
+                    )
+            if compatibility == ScopeCompatibility.SAME_SCOPE.value:
+                semantic_scope = " ".join(
+                    str(review.get("semantic_scope") or "").casefold().split()
+                )
+                if semantic_scope and operation:
+                    same_scope_operations.setdefault(semantic_scope, set()).add(operation.casefold())
+    if any(len(operations) > 1 for operations in same_scope_operations.values()):
+        raise QwenSemanticFailure("qwen_work_reconciliation_same_scope_operation_mismatch")
 
 
 def _parse_material_reviews(

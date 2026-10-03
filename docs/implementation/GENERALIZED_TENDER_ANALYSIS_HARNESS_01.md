@@ -973,6 +973,47 @@ release receipt SHA-256 is
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Source-grounded alternative decisions — profile v31
+
+Live autonomous acceptance of profile v30 exposed a generic semantic boundary
+defect. In the independent steel-gallery control workspace, Qwen correctly
+established the design component/total relationship and deterministic Decimal
+arithmetic produced a 0.7 t internal mismatch. The same bounded context also
+contained a 13.2 t design total and a 12.0 t commercial total, but Qwen called
+them alternative designs solely because the values differed. The prompt
+already prohibited that inference; the result validator did not enforce it.
+
+Profile v31 adds two deterministic acceptance checks without deciding scope
+compatibility itself:
+
+- `ALTERNATIVE_TO` or `ALTERNATIVE_DESIGN` requires explicit source language
+  identifying a variant, alternative, or replacement in the bounded source
+  context. A numeric difference is never evidence of an alternative.
+- rows assigned the same normalized `semantic_scope` and `SAME_SCOPE` must use
+  the same normalized construction operation.
+
+Either violation rejects the full bounded response with a typed code and gives
+Qwen one full-context repair. The repair may establish `SAME_SCOPE`, preserve
+an explicitly documented alternative, or leave the relationship unresolved;
+deterministic code does not choose among those outcomes and still performs all
+arithmetic only after accepted semantic authority.
+
+The v30-to-v31 scheduling transition is deliberately narrow. Settled v30
+quantity and cross-document scope decisions remain compatible. Only rows that
+carry `ALTERNATIVE_TO` or `ALTERNATIVE_DESIGN` are eligible for autonomous
+re-review, preventing a new full-corpus replay while repairing the exact class
+of unsafe decision. Generic tests use changed structures, work descriptions,
+values, and units; they also prove that a source which explicitly names an
+alternative remains an accepted non-comparable scope.
+
+No production queue, retry, priority, successor, or Qwen command was issued to
+create this checkpoint. The live v31 result and release state must be recorded
+after controlled activation; until then no new real-project comparison is
+claimed.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Quantity relationship closure and first blind discrepancy — release v40
 
 The accepted single-source quantity bridge produced two materially different

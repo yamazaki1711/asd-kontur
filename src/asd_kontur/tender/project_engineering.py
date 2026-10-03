@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v66"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v67"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -61,6 +61,13 @@ _QUANTITY_AWARE_WORK_PROFILES = frozenset(
         "qwen-project-work-reconciliation-v27",
         "qwen-project-work-reconciliation-v28",
         "qwen-project-work-reconciliation-v29",
+        "qwen-project-work-reconciliation-v30",
+        PROJECT_WORK_RECONCILIATION_PROFILE,
+    }
+)
+_SCOPE_REVIEW_PROFILES = frozenset(
+    {
+        "qwen-project-work-reconciliation-v30",
         PROJECT_WORK_RECONCILIATION_PROFILE,
     }
 )
@@ -3044,7 +3051,7 @@ def _work_schedule(
         reviewed_scope_quantities = [
             value
             for value in accepted_quantities
-            if value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
+            if value.get("semantic_review_profile") in _SCOPE_REVIEW_PROFILES
             and value.get("relationship_reviewed") is True
             and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value
             and _normalized(value.get("semantic_scope"))
@@ -3888,7 +3895,7 @@ def _comparison_has_reviewed_quantity_identity(
             and value.get("relationship_reviewed") is True
             and value.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE
             and value.get("quantity_candidate_id")
-            and value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
+            and value.get("semantic_review_profile") in _SCOPE_REVIEW_PROFILES
         ]
 
     left_values = matching(left_role)

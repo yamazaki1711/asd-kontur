@@ -749,6 +749,257 @@ def test_quantity_relationship_prompt_requires_explicit_same_scope_decision(
     assert {review["scope_compatibility"] for review in reviews} == {"SAME_SCOPE"}
 
 
+def test_quantity_relationship_repairs_unsupported_numeric_alternative(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": "design",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Монтаж несущих рам перехода",
+            "document_role": "РД",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "design-q",
+                    "value": "24.6",
+                    "unit": "т",
+                    "nearby_context": "Общая масса несущих рам 24,6 т",
+                }
+            ],
+        },
+        {
+            "candidate_id": "commercial",
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": "Монтаж несущих рам перехода",
+            "document_role": "ВОР",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": "commercial-q",
+                    "value": "21.9",
+                    "unit": "т",
+                    "nearby_context": "Монтаж несущих рам 21,9 т",
+                }
+            ],
+        },
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        repaired = "qwen_work_reconciliation_alternative_evidence_missing" in prompt
+        observations = []
+        for row in rows:
+            peer = "commercial-q" if row["candidate_id"] == "design" else "design-q"
+            observations.append(
+                {
+                    "candidate_id": row["candidate_id"],
+                    "status": "MATCHED",
+                    "family_key": "structural_steel",
+                    "operation": "Монтаж несущих рам",
+                    "facility": None,
+                    "confidence": "0.94",
+                    "reason": "Обе строки относятся к рамам перехода.",
+                    "quantity_reviews": [
+                        {
+                            "quantity_candidate_id": row["quantity_observations"][0][
+                                "quantity_candidate_id"
+                            ],
+                            "status": "WORK_QUANTITY",
+                            "semantic_scope": "Масса несущих рам перехода",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "NONE" if repaired else "ALTERNATIVE_TO",
+                            "related_quantity_candidate_ids": [] if repaired else [peer],
+                            "scope_compatibility": (
+                                "SAME_SCOPE" if repaired else "ALTERNATIVE_DESIGN"
+                            ),
+                            "component_set_complete": None,
+                            "reason": "Один инженерный объём." if repaired else "Разные значения.",
+                        }
+                    ],
+                    "material_reviews": [],
+                }
+            )
+        return json.dumps({"observations": observations}, ensure_ascii=False)
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"structural_steel": "Металлоконструкции"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert "Различие значений само по себе не является альтернативой" in prompts[1]
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_alternative_evidence_missing"
+    ]
+    assert {
+        review["scope_compatibility"]
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    } == {"SAME_SCOPE"}
+
+
+def test_quantity_relationship_accepts_explicit_alternative_design(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "document_role": "РД",
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "value": value,
+                    "unit": "м",
+                    "nearby_context": wording,
+                }
+            ],
+        }
+        for candidate_id, quantity_id, value, wording in (
+            ("base", "base-q", "180", "Основной вариант: трубопровод длиной 180 м"),
+            ("option", "option-q", "165", "Альтернативный вариант трассы длиной 165 м"),
+        )
+    ]
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "pipeline_installation",
+                        "operation": (
+                            "Монтаж основной трассы"
+                            if row["candidate_id"] == "base"
+                            else "Монтаж альтернативной трассы"
+                        ),
+                        "facility": None,
+                        "confidence": "0.95",
+                        "reason": "Источник прямо называет основной и альтернативный варианты.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина соответствующего варианта трассы",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "ALTERNATIVE_TO",
+                                "related_quantity_candidate_ids": [
+                                    "option-q" if row["candidate_id"] == "base" else "base-q"
+                                ],
+                                "scope_compatibility": "ALTERNATIVE_DESIGN",
+                                "component_set_complete": None,
+                                "reason": "Два явно названных варианта не суммируются.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"pipeline_installation": "Монтаж трубопроводов"},
+        facilities=[],
+    )
+
+    assert result["inference_call_count"] == 1
+    assert result["recovery_codes"] == []
+    assert all(
+        review["scope_compatibility"] == "ALTERNATIVE_DESIGN"
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
+def test_quantity_relationship_repairs_same_scope_operation_mismatch(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_id, "value": value, "unit": "м2"}
+            ],
+        }
+        for candidate_id, quantity_id, value, wording in (
+            ("design", "design-q", "510", "Гидроизоляция перекрытия"),
+            ("commercial", "commercial-q", "480", "Устройство гидроизоляции перекрытия"),
+        )
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        repaired = "qwen_work_reconciliation_same_scope_operation_mismatch" in prompt
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "waterproofing",
+                        "operation": (
+                            "Гидроизоляция перекрытия"
+                            if repaired or row["candidate_id"] == "design"
+                            else "Устройство рулонной изоляции"
+                        ),
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": "Строки описывают одну операцию.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Площадь гидроизоляции перекрытия",
+                                "quantity_type": "TOTAL",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "component_set_complete": None,
+                                "reason": "Один инженерный объём.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"waterproofing": "Гидроизоляция"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert result["recovery_codes"] == [
+        "qwen_work_reconciliation_same_scope_operation_mismatch"
+    ]
+    assert {observation["operation"] for observation in result["observations"]} == {
+        "Гидроизоляция перекрытия"
+    }
+
+
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
     monkeypatch: Any,
 ) -> None:
