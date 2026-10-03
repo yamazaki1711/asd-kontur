@@ -470,10 +470,11 @@ def _cross_document_work_batches(
 
     The grouping keys are deterministic context established before Qwen: one
     exact facility hint and one construction family, or (when location remains
-    unresolved) one exact normalized source wording and construction family.
-    Qwen receives both sides and decides normalized meaning; this helper never
-    declares equivalence. Exact wording is only a safe context-assembly key,
-    not comparison authority.
+    unresolved) one construction family. Qwen receives both sides and decides
+    normalized meaning; this helper never declares equivalence. The unresolved
+    family group is deliberately bounded by the normal batch/quantity limits.
+    It is candidate assembly, not comparison authority: only a validated
+    semantic decision can later establish one engineering operation.
     """
 
     attempted_pairs = attempted_pairs or set()
@@ -491,7 +492,7 @@ def _cross_document_work_batches(
         if len(hints) == 1:
             scope_key = ("facility", hints[0], family)
         elif not hints and wording:
-            scope_key = ("wording", wording, family)
+            scope_key = ("unresolved-family", "", family)
         else:
             continue
         row["comparison_side"] = side

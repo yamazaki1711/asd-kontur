@@ -463,12 +463,12 @@ def test_cross_document_work_batches_review_exact_wording_without_location() -> 
     batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
 
     assert [[value["candidate_id"] for value in batch] for batch in batches] == [
-        ["design", "commercial"]
+        ["design", "commercial", "other-commercial"]
     ]
-    assert selected == {"design", "commercial"}
+    assert selected == {"design", "commercial", "other-commercial"}
 
 
-def test_cross_document_work_batches_keep_unlocated_different_wording_separate() -> None:
+def test_cross_document_work_batches_send_unlocated_family_synonyms_for_semantic_review() -> None:
     rows = [
         _work_batch_row(
             "design",
@@ -488,8 +488,11 @@ def test_cross_document_work_batches_keep_unlocated_different_wording_separate()
 
     batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
 
-    assert batches == []
-    assert selected == set()
+    assert [[value["candidate_id"] for value in batch] for batch in batches] == [
+        ["design", "commercial"]
+    ]
+    assert selected == {"design", "commercial"}
+    assert {value["analysis_task"] for value in batches[0]} == {"CROSS_DOCUMENT_SCOPE_MATCHING"}
 
 
 def test_scope_context_is_bounded_before_source_context_loading() -> None:
