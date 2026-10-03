@@ -5272,6 +5272,39 @@ def test_project_level_material_comparison_requires_isolated_sources() -> None:
     assert ambiguous == []
 
 
+def test_unresolved_material_kind_does_not_merge_different_material_items() -> None:
+    source_context = dict(
+        [
+            _source("design-carrier", "Pipeline design.pdf", 5),
+            _source("commercial-sleeve", "Estimate.pdf", 8),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "document_role": "ПД",
+                "name": "Steel carrier pipe",
+                "material_kind": "steel pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "530", "unit": "mm"}],
+                "source_locator_id": "design-carrier",
+            },
+            {
+                "document_role": "Смета",
+                "name": "Steel wall sleeve",
+                "material_kind": "steel pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "100", "unit": "mm"}],
+                "source_locator_id": "commercial-sleeve",
+            },
+        ],
+    )
+
+    assert comparisons == []
+
+
 def test_project_material_comparison_collapses_repeated_same_page_assertion() -> None:
     source_context = {
         "design-east": {

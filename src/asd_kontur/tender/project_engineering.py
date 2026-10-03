@@ -104,6 +104,9 @@ _UNSCOPED_GENERIC_OPERATIONS = frozenset(
 _NATURAL_WORK_SUBJECT_FAMILIES = frozenset(
     {"site_preparation", "landscaping", "demolition", "waste_management"}
 )
+_ITEM_IDENTITY_REQUIRED_MATERIAL_FAMILIES = frozenset(
+    {"pipeline", "drainage", "electrical", "communications"}
+)
 _NATURAL_WORK_SUBJECT = re.compile(
     r"(?:\bдерев\w*|\bкустар\w*|\bрастительн\w*|\btree\w*|\bshrub\w*|\bvegetation\w*)",
     re.IGNORECASE,
@@ -5213,6 +5216,22 @@ def _material_comparisons(
                 if location_key == "unresolved" and (
                     len(design_values) != 1 or len(commercial_values) != 1
                 ):
+                    continue
+                if (
+                    location_key == "unresolved"
+                    and family_key in _ITEM_IDENTITY_REQUIRED_MATERIAL_FAMILIES
+                    and len(
+                        {
+                            _normalized(value.get("name"))
+                            for value in (*design_values, *commercial_values)
+                        }
+                    )
+                    != 1
+                ):
+                    # One unresolved utility family can contain a carrier,
+                    # casing, sleeve, fitting or cable of unrelated systems.
+                    # Without a location or exact item identity, different
+                    # properties are not a material discrepancy.
                     continue
                 design_properties = _material_property_values(design_values)
                 commercial_properties = _material_property_values(commercial_values)
