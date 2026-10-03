@@ -345,7 +345,7 @@ def test_cross_document_scope_output_exhaustion_never_splits_exact_pair(
     )
 
     assert len(prompts) == 3
-    assert budgets[0] < budgets[1] == budgets[2] == 5_000
+    assert budgets == [3_200, 5_000, 5_000]
     assert "qwen_semantic_response_output_exhausted" in prompts[1]
     assert "qwen_work_reconciliation_work_scope_assertions_invalid" in prompts[2]
     assert result["inference_call_count"] == 3

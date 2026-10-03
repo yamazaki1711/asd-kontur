@@ -55,6 +55,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
+_SCOPE_REVIEW_INITIAL_TOKEN_BUDGET = 3_200
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -265,6 +266,13 @@ class QwenProjectWorkReconciler:
             output_budget = (
                 5_000
                 if (relationship_review or scope_review) and expanded_relationship_budget
+                # Production v37 receipts showed that 9 of 16 strict two-row
+                # scope reviews exhausted the former 1,400-token floor and
+                # spent a second full inference call before validation. The
+                # pair is intentionally indivisible, so give its required
+                # reciprocal JSON shape a measured bounded first-pass budget.
+                else _SCOPE_REVIEW_INITIAL_TOKEN_BUDGET
+                if scope_review
                 else max(1_600, min(5_000, len(rows) * 360 + quantity_count * 180))
                 if relationship_review
                 else max(1_400, min(4_000, len(rows) * 320 + quantity_count * 140))

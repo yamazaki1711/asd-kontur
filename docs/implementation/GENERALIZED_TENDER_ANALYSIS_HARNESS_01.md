@@ -1146,6 +1146,18 @@ worker autonomously changed it from stale `running` to queued with typed code
 issued. Current status remains `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+### Measured two-row semantic budget follow-up
+
+Sixteen completed v37 cross-document scope receipts provide the current
+runtime denominator. Nine of sixteen exhausted the former 1,400-token
+first-pass ceiling; mean inference calls were 2.19 and mean terminal duration
+was 181.4 seconds. Because an exact design/commercial pair cannot be split
+without losing reciprocal scope authority, the next code checkpoint raises
+only this two-row task's initial bounded ceiling to 3,200 tokens. The strict
+schema, deterministic validation, maximum 5,000-token repair ceiling and all
+semantic authority rules remain unchanged. Effectiveness will be measured from
+new terminal receipts rather than inferred from the configuration change.
+
 ## Current-profile comparison authority — engineering model v77
 
 Engineering model v77 closes the remaining deterministic fallback behind the
