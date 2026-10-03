@@ -996,6 +996,88 @@ def test_quantity_relationship_repairs_same_scope_operation_mismatch(
     }
 
 
+def test_quantity_relationship_repairs_component_total_without_relation(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "value": value,
+                    "unit": "м2",
+                }
+            ],
+        }
+        for candidate_id, quantity_id, value, wording in (
+            ("component", "component-q", "210", "Ремонт западного фасада"),
+            ("total", "total-q", "520", "Ремонт фасадов"),
+        )
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        repaired = "qwen_work_reconciliation_component_total_relation_missing" in prompt
+        observations = []
+        for row in rows:
+            component = row["candidate_id"] == "component"
+            observations.append(
+                {
+                    "candidate_id": row["candidate_id"],
+                    "status": "MATCHED",
+                    "family_key": "structural_repair",
+                    "operation": "Ремонт кладки фасада",
+                    "facility": None,
+                    "confidence": "0.92",
+                    "reason": "Описана одна группа фасадных работ.",
+                    "quantity_reviews": [
+                        {
+                            "quantity_candidate_id": row["quantity_observations"][0][
+                                "quantity_candidate_id"
+                            ],
+                            "status": "WORK_QUANTITY",
+                            "semantic_scope": (
+                                "Площадь западного фасада"
+                                if repaired and component
+                                else "Площадь ремонта фасадов"
+                            ),
+                            "quantity_type": "COMPONENT" if component else "TOTAL",
+                            "relation_kind": "NONE",
+                            "related_quantity_candidate_ids": [],
+                            "scope_compatibility": (
+                                "DIFFERENT_SCOPE" if repaired else "SAME_SCOPE"
+                            ),
+                            "component_set_complete": None,
+                            "reason": (
+                                "Один фасад является только частью общего объёма."
+                                if repaired
+                                else "Значения относятся к фасадам."
+                            ),
+                        }
+                    ],
+                    "material_reviews": [],
+                }
+            )
+        return json.dumps({"observations": observations}, ensure_ascii=False)
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"structural_repair": "Ремонт конструкций"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_component_total_relation_missing"]
+    reviews = [observation["quantity_reviews"][0] for observation in result["observations"]]
+    assert {review["scope_compatibility"] for review in reviews} == {"DIFFERENT_SCOPE"}
+
+
 def test_qwen_work_reconciliation_budgets_complete_twelve_row_json(
     monkeypatch: Any,
 ) -> None:

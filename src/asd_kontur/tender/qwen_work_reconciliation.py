@@ -100,6 +100,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_alternative_evidence_missing",
         "qwen_work_reconciliation_same_scope_operation_mismatch",
+        "qwen_work_reconciliation_component_total_relation_missing",
         "qwen_work_reconciliation_material_output_invalid",
         "qwen_semantic_response_incomplete",
         "qwen_semantic_response_output_exhausted",
@@ -276,6 +277,7 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_quantity_relation_ids_invalid",
                     "qwen_work_reconciliation_alternative_evidence_missing",
                     "qwen_work_reconciliation_same_scope_operation_mismatch",
+                    "qwen_work_reconciliation_component_total_relation_missing",
                 }
             ):
                 observations, call_count, codes = self._reconcile_rows(
@@ -735,6 +737,8 @@ def _validate_relationship_consistency(
     """
 
     same_scope_operations: dict[str, set[str]] = {}
+    same_scope_quantity_types: dict[str, set[str]] = {}
+    same_scope_relation_kinds: dict[str, set[str]] = {}
     for observation in observations:
         operation = " ".join(str(observation.get("operation") or "").split())
         for review in observation.get("quantity_reviews") or ():
@@ -765,8 +769,20 @@ def _validate_relationship_consistency(
                     same_scope_operations.setdefault(semantic_scope, set()).add(
                         operation.casefold()
                     )
+                    same_scope_quantity_types.setdefault(semantic_scope, set()).add(
+                        str(review.get("quantity_type") or "")
+                    )
+                    same_scope_relation_kinds.setdefault(semantic_scope, set()).add(relation_kind)
     if any(len(operations) > 1 for operations in same_scope_operations.values()):
         raise QwenSemanticFailure("qwen_work_reconciliation_same_scope_operation_mismatch")
+    for semantic_scope, quantity_types in same_scope_quantity_types.items():
+        component_and_total = bool(quantity_types & {"COMPONENT", "SUBTOTAL"}) and (
+            "TOTAL" in quantity_types
+        )
+        if component_and_total and same_scope_relation_kinds.get(semantic_scope) == {
+            QuantityRelation.NONE.value
+        }:
+            raise QwenSemanticFailure("qwen_work_reconciliation_component_total_relation_missing")
 
 
 def _parse_material_reviews(

@@ -3645,6 +3645,13 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
                     left_by_unit = left_by_scope[scope]
                     right_by_unit = right_by_scope[scope]
                     for unit in sorted(set(left_by_unit).intersection(right_by_unit)):
+                        if not _semantic_scope_pair_is_directly_comparable(
+                            quantities.get(design_role) or (),
+                            quantities.get(commercial_role) or (),
+                            scope=scope,
+                            unit=unit,
+                        ):
+                            continue
                         left = (left_by_unit[unit], unit)
                         right = (right_by_unit[unit], unit)
                         difference = left[0] - right[0]
@@ -3671,6 +3678,13 @@ def _comparisons(works: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
             estimate_by_scope = scoped.get(estimate_role) or {}
             for scope in sorted(set(vor_by_scope).intersection(estimate_by_scope)):
                 for unit in sorted(set(vor_by_scope[scope]).intersection(estimate_by_scope[scope])):
+                    if not _semantic_scope_pair_is_directly_comparable(
+                        quantities.get("ВОР") or (),
+                        quantities.get(estimate_role) or (),
+                        scope=scope,
+                        unit=unit,
+                    ):
+                        continue
                     vor = (vor_by_scope[scope][unit], unit)
                     estimate = (estimate_by_scope[scope][unit], unit)
                     difference = vor[0] - estimate[0]
@@ -6585,6 +6599,52 @@ def _comparable_quantities_by_semantic_scope(
         for scope, units in grouped.items()
         if any(len(amounts) == 1 for amounts in units.values())
     }
+
+
+def _semantic_scope_pair_is_directly_comparable(
+    left_values: Iterable[Mapping[str, Any]],
+    right_values: Iterable[Mapping[str, Any]],
+    *,
+    scope: str,
+    unit: str,
+) -> bool:
+    """Reject a component/total shortcut unless the reviewed graph links it.
+
+    A model may correctly normalize a work operation while still describing
+    one source as a component of a broader total.  Equal scope text alone must
+    not authorize arithmetic across that boundary.  Explicit reciprocal
+    COMPONENT_OF/SUBTOTAL_OF/TOTAL_FOR identities remain eligible for the
+    dedicated component-total consistency engine.
+    """
+
+    selected: list[dict[str, Any]] = []
+    for raw in (*tuple(left_values), *tuple(right_values)):
+        value = dict(raw)
+        if _normalized(value.get("semantic_scope")) != scope:
+            continue
+        quantity = _one_comparable_quantity([value])
+        if quantity is None or quantity[1] != unit:
+            continue
+        selected.append(value)
+    quantity_types = {str(value.get("quantity_type") or "") for value in selected}
+    if not (quantity_types & {"COMPONENT", "SUBTOTAL"} and "TOTAL" in quantity_types):
+        return True
+    candidate_ids = {
+        str(value.get("quantity_candidate_id") or "")
+        for value in selected
+        if value.get("quantity_candidate_id")
+    }
+    for value in selected:
+        if str(value.get("relation_kind") or "") not in {
+            "COMPONENT_OF",
+            "SUBTOTAL_OF",
+            "TOTAL_FOR",
+        }:
+            continue
+        related = {str(item) for item in value.get("related_quantity_candidate_ids") or () if item}
+        if related & candidate_ids:
+            return False
+    return False
 
 
 def _display_quantity(value: object, unit_value: object) -> tuple[object, str]:

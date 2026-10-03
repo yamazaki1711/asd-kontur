@@ -1043,6 +1043,52 @@ def test_explicit_project_scope_allows_same_scope_vor_estimate_comparison() -> N
     assert "объекта в целом" in comparisons[0]["scope_match_basis"]
 
 
+def test_component_and_total_are_not_directly_compared_without_relationship() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "facade-repair-scope",
+                "facility_id": None,
+                "location_scope_kind": "project",
+                "facility": "Project as a whole",
+                "work_name": "Repair brick facade",
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "west-facade-area",
+                            "value": "210",
+                            "unit": "м2",
+                            "semantic_scope": "Facade repair area",
+                            "quantity_type": "COMPONENT",
+                            "relation_kind": "NONE",
+                            "related_quantity_candidate_ids": [],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "all-facades-area",
+                            "value": "520",
+                            "unit": "м2",
+                            "semantic_scope": "Facade repair area",
+                            "quantity_type": "TOTAL",
+                            "relation_kind": "NONE",
+                            "related_quantity_candidate_ids": [],
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
+
+
 def test_explicit_project_scope_rejects_different_quantity_meanings() -> None:
     comparisons = _validated_scope_quantity_comparisons(
         [
