@@ -1462,6 +1462,95 @@ def test_quantity_relationship_accepts_explicit_alternative_design(
     )
 
 
+def test_quantity_relationship_ignores_unauthorized_work_scope_assertions(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+            "wording": wording,
+            "deterministic_family_hint": "pipeline",
+            "quantity_observations": [
+                {"quantity_candidate_id": quantity_id, "value": "180", "unit": "m"}
+            ],
+        }
+        for candidate_id, quantity_id, wording in (
+            ("design-network", "design-length", "Проектная длина тепловой сети"),
+            ("commercial-network", "commercial-length", "Прокладка тепловой сети"),
+        )
+    ]
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": row["candidate_id"],
+                        "status": "MATCHED",
+                        "family_key": "pipeline",
+                        "operation": "Прокладка тепловой сети",
+                        "facility": None,
+                        "confidence": "0.94",
+                        "reason": "Оба значения относятся к длине одной сети.",
+                        # This malformed, out-of-task assertion must neither
+                        # authorize scope identity nor reject the quantity result.
+                        "work_scope_assertions": [{"unexpected": "model drift"}],
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": row["quantity_observations"][0][
+                                    "quantity_candidate_id"
+                                ],
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": "Длина тепловой сети",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "SAME_SCOPE",
+                                "scope_assertions": [
+                                    {
+                                        "related_quantity_candidate_id": (
+                                            "commercial-length"
+                                            if row["candidate_id"] == "design-network"
+                                            else "design-length"
+                                        ),
+                                        "scope_compatibility": "SAME_SCOPE",
+                                        "reason": "Один инженерный объём длины сети.",
+                                    }
+                                ],
+                                "component_set_complete": None,
+                                "reason": "Значения измеряют одну длину.",
+                            }
+                        ],
+                        "material_reviews": [],
+                    }
+                    for row in rows
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        rows,
+        work_families={"pipeline": "Трубопроводы"},
+        facilities=[],
+    )
+
+    assert "work_scope_assertions должен быть пустым списком" in prompts[0]
+    assert result["inference_call_count"] == 1
+    assert result["recovery_codes"] == []
+    assert all("work_scope_assertions" not in value for value in result["observations"])
+    assert all(
+        review["relationship_reviewed"] is True
+        for observation in result["observations"]
+        for review in observation["quantity_reviews"]
+    )
+
+
 def test_quantity_relationship_repairs_revision_inferred_only_from_quantity_difference(
     monkeypatch: Any,
 ) -> None:

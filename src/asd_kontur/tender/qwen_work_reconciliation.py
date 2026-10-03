@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v39"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v40"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -54,6 +54,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v36",
     "qwen-project-work-reconciliation-v37",
     "qwen-project-work-reconciliation-v38",
+    "qwen-project-work-reconciliation-v39",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
@@ -619,7 +620,9 @@ def _prompt(
         "Это отдельный проход смысловых связей числовых значений. Классификацию работы "
         "сохраните по переданным подсказкам; определите, какие значения описывают один "
         "инженерный объём, общий итог, составляющую, дубль, альтернативу или другую редакцию. "
-        "Для каждого числа обязательно повторно установите semantic_scope по исходному контексту."
+        "Для каждого числа обязательно повторно установите semantic_scope по исходному контексту. "
+        "В этой задаче не устанавливайте связь состава работ: work_scope_assertions должен быть "
+        "пустым списком в каждой строке."
         if relationship_review
         else ""
     )
@@ -869,7 +872,12 @@ def _parse(
         reason = " ".join(str(value.get("reason") or "").split())
         raw_quantity_reviews = value.get("quantity_reviews")
         raw_material_reviews = value.get("material_reviews", [])
-        raw_work_scope_assertions = value.get("work_scope_assertions", [])
+        # Each semantic task has a deliberately narrow authority surface.
+        # Quantity relationship review cannot establish work-scope identity;
+        # incidental model output in that field is therefore discarded rather
+        # than allowed to invalidate or contaminate an otherwise valid quantity
+        # decision. CROSS_DOCUMENT_SCOPE_MATCHING remains strictly validated.
+        raw_work_scope_assertions = value.get("work_scope_assertions", []) if scope_review else []
         try:
             confidence = Decimal(str(value.get("confidence")))
         except (InvalidOperation, TypeError) as exc:
