@@ -445,6 +445,12 @@ def _relationship_pair_affinity(
     )
 
 
+def _relationship_pair_key(left: object, right: object) -> tuple[str, str]:
+    left_value = str(left or "")
+    right_value = str(right or "")
+    return (left_value, right_value) if left_value <= right_value else (right_value, left_value)
+
+
 def _cross_document_work_batches(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -625,14 +631,7 @@ def _quantity_relationship_batches(
             (design, commercial)
             for design in design_rows
             for commercial in commercial_rows
-            if tuple(
-                sorted(
-                    (
-                        str(design.get("candidate_id") or ""),
-                        str(commercial.get("candidate_id") or ""),
-                    )
-                )
-            )
+            if _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
             not in attempted_pairs
             and (
                 location != "unassigned" or any(_relationship_pair_affinity(design, commercial)[:3])
@@ -738,7 +737,7 @@ def _work_reconciliation_attempt_sets(
                 and value.get("candidate_id")
             }
             attempted_relationship_pairs.update(
-                tuple(sorted((design_id, commercial_id)))
+                _relationship_pair_key(design_id, commercial_id)
                 for design_id in design_ids
                 for commercial_id in commercial_ids
             )
