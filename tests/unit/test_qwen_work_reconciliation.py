@@ -85,7 +85,7 @@ def test_cross_document_scope_task_asks_for_semantic_operation_without_arithmeti
                                     else "design-row"
                                 ),
                                 "scope_compatibility": "SAME_SCOPE",
-                                "normalized_operation": "Монтаж стальных ферм",
+                                "normalized_operation": "Roof trusses",
                                 "reason": "Обе строки описывают один объём монтажа ферм.",
                             }
                         ],
@@ -154,7 +154,7 @@ def test_cross_document_scope_schema_repair_keeps_exact_pair_intact(
                                             else "design-pipe"
                                         ),
                                         "scope_compatibility": "SAME_SCOPE",
-                                        "normalized_operation": "Монтаж водовода",
+                                        "normalized_operation": "Монтаж водовода / трубопровода",
                                         "reason": "Один объём монтажа водовода.",
                                     }
                                 ]
@@ -194,6 +194,84 @@ def test_cross_document_scope_schema_repair_keeps_exact_pair_intact(
     assert result["inference_call_count"] == 2
     assert result["recovery_codes"] == ["qwen_work_reconciliation_work_scope_assertions_invalid"]
     assert all(value.get("work_scope_assertions") for value in result["observations"])
+
+
+def test_cross_document_scope_rejects_operation_taken_only_from_nearby_context(
+    monkeypatch: Any,
+) -> None:
+    prompts: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        del max_tokens
+        prompts.append(prompt)
+        same_scope = len(prompts) == 1
+        compatibility = "SAME_SCOPE" if same_scope else "DIFFERENT_SCOPE"
+        normalized_operation = "Устройство асфальтобетонного покрытия" if same_scope else None
+        reason = (
+            "Обе строки описывают устройство покрытия."
+            if same_scope
+            else "Проектная строка описывает покрытие, коммерческая — дорожную разметку."
+        )
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": candidate_id,
+                        "status": "MATCHED",
+                        "family_key": "roadworks",
+                        "operation": wording,
+                        "facility": None,
+                        "confidence": "0.93",
+                        "reason": reason,
+                        "work_scope_assertions": [
+                            {
+                                "related_candidate_id": (
+                                    "commercial-marking"
+                                    if candidate_id == "design-paving"
+                                    else "design-paving"
+                                ),
+                                "scope_compatibility": compatibility,
+                                "normalized_operation": normalized_operation,
+                                "reason": reason,
+                            }
+                        ],
+                    }
+                    for candidate_id, wording in (
+                        ("design-paving", "Устройство асфальтобетонного покрытия"),
+                        ("commercial-marking", "Нанесение дорожной разметки"),
+                    )
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "design-paving",
+                "wording": "Проектная общая площадь асфальтобетонного покрытия типа Б",
+                "nearby_context": "Покрытие 4600 м²; далее приведена дорожная разметка.",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-marking",
+                "wording": "Нанесение дорожной разметки",
+                "nearby_context": "В соседней строке указано устройство покрытия.",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ],
+        work_families={"roadworks": "Дорожные работы"},
+        facilities=[],
+    )
+
+    assert len(prompts) == 2
+    assert "qwen_work_reconciliation_work_scope_operation_ungrounded" in prompts[1]
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == ["qwen_work_reconciliation_work_scope_operation_ungrounded"]
+    assert {
+        value["work_scope_assertions"][0]["scope_compatibility"] for value in result["observations"]
+    } == {"DIFFERENT_SCOPE"}
 
 
 def test_cross_document_scope_output_exhaustion_never_splits_exact_pair(

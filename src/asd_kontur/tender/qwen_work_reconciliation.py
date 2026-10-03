@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v35"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v36"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -50,6 +50,7 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v32",
     "qwen-project-work-reconciliation-v33",
     "qwen-project-work-reconciliation-v34",
+    "qwen-project-work-reconciliation-v35",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
 WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
@@ -82,6 +83,41 @@ _EXPLICIT_ALTERNATIVE_EVIDENCE = re.compile(
     r"\balternative\w*|\boption\w*|\binstead\s+of\b|\breplac\w*)",
     re.IGNORECASE,
 )
+_SCOPE_OPERATION_GENERIC_WORDS = frozenset(
+    {
+        "work",
+        "works",
+        "install",
+        "installation",
+        "erect",
+        "erection",
+        "construction",
+        "total",
+        "project",
+        "quantity",
+        "area",
+        "работа",
+        "работы",
+        "работ",
+        "устройство",
+        "устройства",
+        "монтаж",
+        "монтажа",
+        "выполнение",
+        "производство",
+        "строительство",
+        "сооружение",
+        "проектная",
+        "проектный",
+        "общая",
+        "общий",
+        "объем",
+        "объём",
+        "площадь",
+        "количество",
+        "итого",
+    }
+)
 _RECOVERABLE_RESPONSE_FAILURES = frozenset(
     {
         "qwen_work_reconciliation_invalid_json",
@@ -103,6 +139,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_relation_ids_invalid",
         "qwen_work_reconciliation_scope_assertions_invalid",
         "qwen_work_reconciliation_work_scope_assertions_invalid",
+        "qwen_work_reconciliation_work_scope_operation_ungrounded",
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_alternative_evidence_missing",
         "qwen_work_reconciliation_same_scope_operation_mismatch",
@@ -562,6 +599,13 @@ def _prompt(
                 "work_scope_assertions на идентификатор второй строки. В обоих направлениях "
                 "дословно повторите scope_compatibility, normalized_operation и reason."
             ),
+            "qwen_work_reconciliation_work_scope_operation_ungrounded": (
+                "Для SAME_SCOPE normalized_operation должно содержать различительный термин "
+                "из точного wording КАЖДОЙ строки пары. nearby_context помогает понять строку, "
+                "но не разрешает подменять её другой операцией из соседнего текста. Если такое "
+                "общее название невозможно, верните DIFFERENT_SCOPE или "
+                "INSUFFICIENT_INFORMATION и normalized_operation=null."
+            ),
         }.get(relationship_repair_code, "")
         relationship_repair_instruction = (
             "Предыдущий ответ для ТОГО ЖЕ полного пакета отклонён валидатором схемы с кодом "
@@ -653,7 +697,9 @@ quantity_candidate_id перечисляют ВСЕ составляющие и�
 и используют одинаковые scope_compatibility и reason. SAME_SCOPE допустим только для одной
 инженерной операции с одинаковыми границами; тогда normalized_operation обязателен и дословно
 одинаков в обеих строках. Для остальных решений normalized_operation должен быть null. Одинаковый
-вид работ или одно сооружение сами по себе не доказывают SAME_SCOPE.
+вид работ или одно сооружение сами по себе не доказывают SAME_SCOPE. normalized_operation должно
+содержать хотя бы один различительный термин из точного wording КАЖДОЙ строки пары. nearby_context
+может объяснять строку, но не может подменять её другой операцией из соседнего текста.
 Для каждой пары переданных чисел по одной инженерной операции примите явное решение о
 сопоставимости. Если значения измеряют один и тот же инженерный объём, даже когда сами числа
 различаются, укажите SAME_SCOPE для обеих строк и используйте для них дословно одинаковый краткий
@@ -817,7 +863,7 @@ def _parse(
             quantity_context_by_id=quantity_context_by_id,
         )
     if scope_review:
-        _validate_work_scope_assertions(ordered)
+        _validate_work_scope_assertions(ordered, wording_by_id=wording_by_id)
     return ordered
 
 
@@ -872,7 +918,11 @@ def _parse_work_scope_assertions(
     return result
 
 
-def _validate_work_scope_assertions(observations: Iterable[Mapping[str, Any]]) -> None:
+def _validate_work_scope_assertions(
+    observations: Iterable[Mapping[str, Any]],
+    *,
+    wording_by_id: Mapping[str, str],
+) -> None:
     by_id = {str(value.get("candidate_id") or ""): value for value in observations}
     for candidate_id, observation in by_id.items():
         for assertion in observation.get("work_scope_assertions") or ():
@@ -887,6 +937,35 @@ def _validate_work_scope_assertions(observations: Iterable[Mapping[str, Any]]) -
                 for key in ("scope_compatibility", "normalized_operation", "reason")
             ):
                 raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
+            if assertion.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value:
+                operation_anchors = _scope_operation_anchor_stems(
+                    str(assertion.get("normalized_operation") or "")
+                )
+                if not operation_anchors or any(
+                    not operation_anchors
+                    & _scope_operation_anchor_stems(wording_by_id.get(value, ""))
+                    for value in (candidate_id, peer_id)
+                ):
+                    raise QwenSemanticFailure(
+                        "qwen_work_reconciliation_work_scope_operation_ungrounded"
+                    )
+
+
+def _scope_operation_anchor_stems(value: str) -> set[str]:
+    """Return bounded lexical anchors used only to validate model grounding.
+
+    The model still decides semantic compatibility.  Deterministic code merely
+    requires a SAME_SCOPE label to name something present in each exact source
+    row, preventing nearby table text from silently replacing the candidate.
+    Six-character stems tolerate ordinary Russian/English inflection without a
+    corpus-specific alias table.
+    """
+
+    return {
+        token[:6]
+        for token in re.findall(r"[0-9a-zа-яё]+", value.casefold())
+        if len(token) >= 4 and token not in _SCOPE_OPERATION_GENERIC_WORDS
+    }
 
 
 def _validate_relationship_consistency(
