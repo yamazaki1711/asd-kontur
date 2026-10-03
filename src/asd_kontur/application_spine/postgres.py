@@ -749,10 +749,7 @@ def _quantity_relationship_batches(
                     )
                 ),
                 -min(
-                    (
-                        abs(int(row.get("page") or 0) - int(seed.get("page") or 0))
-                        for seed in seeds
-                    ),
+                    (abs(int(row.get("page") or 0) - int(seed.get("page") or 0)) for seed in seeds),
                     default=10**9,
                 ),
                 tuple(row.get("semantic_priority") or (0, 0, 0)),
