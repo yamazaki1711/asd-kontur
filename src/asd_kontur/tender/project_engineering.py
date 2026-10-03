@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v73"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v74"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -1457,8 +1457,21 @@ def work_family_catalog() -> dict[str, str]:
     return {key: title for key, title, _terms in _WORK_FAMILIES}
 
 
-def non_work_reason(value: object) -> str | None:
-    """Identify extracted headings/resources that are not construction operations."""
+def non_work_reason(
+    value: object,
+    *,
+    linked_material: bool = False,
+) -> str | None:
+    """Identify extracted headings/resources that are not construction operations.
+
+    Engineering extraction deliberately retains estimate table rows even when
+    the source table mixes work, labour, machinery and material resources.  A
+    row already extracted as a material is not also a work merely because its
+    name contains a construction-family noun.  Explicit operation wording
+    wins, so ``installation of a pipe`` remains work while ``steel pipe DN300``
+    remains material.  No document role alone is used as authority for
+    exclusion.
+    """
 
     normalized = _normalized(value)
     for reason, exact_values in _NON_WORK_OBSERVATIONS:
@@ -1470,7 +1483,7 @@ def non_work_reason(value: object) -> str | None:
             return reason
     if re.fullmatch(r"\d+(?:[.,\s]\d+){2,}", normalized):
         return "Сметный шифр без описания строительной операции"
-    if re.match(r"^\d+(?:[.-]\d+){2,}\s+", normalized):
+    if re.match(r"^(?:\d+\s+)?\d+(?:[.-]\d+){2,}\s+", normalized):
         return "Сметный ресурс с кодом, а не отдельная строительная операция"
     if re.match(r"^(?:итого|всего)(?:\s|$)", normalized):
         return "Сметный итог или промежуточный итог, а не отдельная строительная операция"
@@ -1486,8 +1499,26 @@ def non_work_reason(value: object) -> str | None:
             )
         )
         or normalized == "фот"
+        or normalized.startswith("фот ")
     ):
         return "Сметный показатель стоимости, а не отдельная строительная операция"
+    if normalized.startswith(
+        (
+            "нормативные затраты труда",
+            "затраты труда рабочих",
+            "затраты труда машинистов",
+        )
+    ):
+        return "Сметный показатель трудозатрат, а не отдельная строительная операция"
+    if normalized.startswith(
+        (
+            "резерв на непредвиденные работы",
+            "резерв средств на непредвиденные работы",
+            "непредвиденные работы и затраты",
+            "непредвиденные затраты для объектов",
+        )
+    ):
+        return "Сметный резерв, а не отдельная строительная операция"
     if normalized.startswith(("отм зтм", "от зт", "зтм ", "зт ")):
         return "Сметный показатель трудозатрат, а не отдельная строительная операция"
     if re.match(r"^(?:\d+\s+)?(?:от|отм|эм|зтм|зм)(?:\s|\(|$)", normalized) or re.match(
@@ -1558,6 +1589,10 @@ def non_work_reason(value: object) -> str | None:
         )
     ):
         return "Описание материала или изделия, а не отдельная строительная операция"
+    if linked_material and not any(
+        marker in normalized for marker in _CONSTRUCTION_OPERATION_MARKERS
+    ):
+        return "Материальная позиция, а не отдельная строительная операция"
     return None
 
 
@@ -2968,7 +3003,6 @@ def _work_schedule(
         locator_id = str(row.get("source_locator_id") or "")
         source_version_id = str(row.get("source_version_id") or "")
         context = dict(source_context.get(locator_id) or {})
-        deterministic_non_work_reason = non_work_reason(name)
         scope_exclusion_reason = construction_scope_exclusion_reason(
             context.get("safe_display_name")
         )
@@ -2978,6 +3012,13 @@ def _work_schedule(
             resolution = {}
         if not resolution and family is None:
             resolution = dict(semantic_consensus.get(_normalized(normalized_name)) or {})
+        deterministic_non_work_reason = non_work_reason(
+            name,
+            linked_material=(
+                bool(material_by_work.get(candidate_id))
+                and resolution.get("status") != "MATCHED"
+            ),
+        )
         designation = facility_designation(f"{name} {row.get('scope_key') or ''}")
         facility = facility_by_designation.get(designation or "")
         assignment_basis = "Явное обозначение сооружения в описании работы"
@@ -3216,6 +3257,26 @@ def _work_schedule(
         # family branch, otherwise these rows inflate the professional work
         # schedule while never becoming eligible for semantic correction.
         if deterministic_non_work_reason is not None or scope_exclusion_reason is not None:
+            # A material/resource row can be deterministically excluded from
+            # the work schedule without discarding the useful material fact.
+            # Keep it in the project material schedule with an unresolved work
+            # association until a real operation provides that relationship.
+            preserved_materials = semantic_materials or _professional_material_values(
+                _unique_values(material_by_work.get(candidate_id, ()), "material"),
+                source_context,
+            )
+            for material in preserved_materials:
+                standalone_material_rows.append(
+                    {
+                        "work_scope_id": None,
+                        "location_scope_id": observation.get("location_scope_id"),
+                        "facility": observation.get("facility")
+                        or "Место применения не установлено",
+                        "work": "Связанная работа требует уточнения",
+                        "document_role": role,
+                        **material,
+                    }
+                )
             excluded.append(
                 {
                     **observation,

@@ -2648,7 +2648,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v73"
+    assert model["model_version"] == "project-engineering-model-v74"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -4041,6 +4041,59 @@ def test_generic_estimate_accounting_rows_are_not_construction_works(
 
     assert reason is not None
     assert reason_fragment in reason.casefold()
+
+
+@pytest.mark.parametrize(
+    ("wording", "reason_fragment"),
+    [
+        ("7 91.05.05-015 Mobile crane, lifting capacity 20 t", "resource"),
+        ("Normative labour input of operators", "labour"),
+        ("Labour input of construction workers; grade 4.2", "labour"),
+        ("FOT 42.80 3100", "cost"),
+        ("Reserve for unforeseen work and costs — 1.5%", "reserve"),
+    ],
+)
+def test_generic_numbered_resource_and_accounting_grammar_is_not_work(
+    wording: str, reason_fragment: str
+) -> None:
+    translations = {
+        "Normative labour input of operators": "Нормативные затраты труда машинистов",
+        "Labour input of construction workers; grade 4.2": (
+            "Затраты труда рабочих-строителей; разряд: 4,2"
+        ),
+        "FOT 42.80 3100": "ФОТ 42,80 3100",
+        "Reserve for unforeseen work and costs — 1.5%": (
+            "Резерв на непредвиденные работы и затраты — 1,5%"
+        ),
+    }
+
+    reason = non_work_reason(translations.get(wording, wording))
+
+    assert reason is not None
+    expected = {
+        "resource": "ресурс",
+        "labour": "трудозатрат",
+        "cost": "стоимости",
+        "reserve": "резерв",
+    }[reason_fragment]
+    assert expected in reason.casefold()
+
+
+def test_linked_material_is_not_a_work_without_an_explicit_operation() -> None:
+    assert (
+        non_work_reason(
+            "Polymer membrane 2.0 mm",
+            linked_material=True,
+        )
+        == "Материальная позиция, а не отдельная строительная операция"
+    )
+    assert (
+        non_work_reason(
+            "Устройство полимерной мембраны толщиной 2,0 мм",
+            linked_material=True,
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize(
@@ -5438,6 +5491,105 @@ def test_non_work_material_resource_is_projected_into_material_schedule() -> Non
     assert result["materials"][0]["material_kind"] == "polymer membrane"
     assert result["materials"][0]["quantity"] == "760"
     assert result["materials"][0]["document_role"] == "Спецификация"
+
+
+def test_deterministic_material_row_is_preserved_without_becoming_work() -> None:
+    source_context = dict([_source("material-row", "Estimate Q8.pdf", 6)])
+    result = _work_schedule(
+        [
+            {
+                "candidate_id": "material-as-work-row",
+                "version": 1,
+                "value": "Geotextile 420 g/m2",
+                "label": "geotextile 420 g/m2",
+                "source_version_id": "source-estimate-q8",
+                "source_locator_id": "material-row",
+                "source_role": "local_estimate",
+            }
+        ],
+        [],
+        [
+            {
+                "candidate_id": "material-q8",
+                "work_candidate_id": "material-as-work-row",
+                "value": "Geotextile 420 g/m2",
+                "normalized_name": "geotextile",
+                "normalized_value": "840",
+                "normalized_unit": "m2",
+                "source_locator_id": "material-row",
+            }
+        ],
+        [],
+        {},
+        [],
+        source_context,
+        {},
+    )
+
+    assert result["works"] == []
+    assert result["unclassified"] == []
+    assert result["excluded"][0]["candidate_id"] == "material-as-work-row"
+    assert "Материальная позиция" in result["excluded"][0]["exclusion_reason"]
+    assert result["materials"] == [
+        {
+            "work_scope_id": None,
+            "location_scope_id": None,
+            "facility": "Место применения не установлено",
+            "work": "Связанная работа требует уточнения",
+            "document_role": "Смета",
+            "name": "Geotextile 420 g/m2",
+            "quantity": "840",
+            "unit": "м2",
+            "raw_unit": "m2",
+            "source_locator_id": "material-row",
+        }
+    ]
+
+
+def test_validated_semantic_work_wins_over_material_only_heuristic() -> None:
+    source_context = dict([_source("scope-row", "Design section Q8.pdf", 9)])
+    result = _work_schedule(
+        [
+            {
+                "candidate_id": "validated-scope",
+                "version": 1,
+                "value": "Polymer membrane 2.0 mm",
+                "label": "polymer membrane 2.0 mm",
+                "source_version_id": "source-design-q8",
+                "source_locator_id": "scope-row",
+                "source_role": "working_documentation",
+            }
+        ],
+        [],
+        [
+            {
+                "candidate_id": "material-q8",
+                "work_candidate_id": "validated-scope",
+                "value": "Polymer membrane 2.0 mm",
+                "normalized_name": "polymer membrane",
+                "source_locator_id": "scope-row",
+            }
+        ],
+        [],
+        {},
+        [],
+        source_context,
+        {
+            "validated-scope": {
+                "candidate_version": 1,
+                "profile_version": "qwen-project-work-reconciliation-v18",
+                "status": "MATCHED",
+                "family_key": "waterproofing",
+                "operation": "Apply polymer waterproofing membrane",
+                "facility": None,
+            }
+        },
+    )
+
+    assert len(result["works"]) == 1
+    assert result["works"][0]["family_key"] == "waterproofing"
+    assert result["unclassified"] == []
+    assert result["excluded"] == []
 
 
 def test_pit_groups_keep_explicit_counts_without_inventing_final_total() -> None:

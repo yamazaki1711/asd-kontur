@@ -6594,6 +6594,10 @@ class SpinePostgresRepository:
             for raw_quantity in candidates.get("quantities", []):
                 quantity = dict(raw_quantity)
                 quantities_by_work[str(quantity.get("work_candidate_id") or "")].append(quantity)
+            materials_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for raw_material in candidates.get("materials", []):
+                material = dict(raw_material)
+                materials_by_work[str(material.get("work_candidate_id") or "")].append(material)
             unresolved = []
             for raw in candidates.get("work_types", []):
                 row = dict(raw)
@@ -6604,9 +6608,20 @@ class SpinePostgresRepository:
                 all_linked_quantities = quantities_by_work.get(candidate_id, [])
                 linked_quantities = all_linked_quantities
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
-                if not candidate_id or not wording or non_work_reason(wording) is not None:
-                    continue
                 existing = prior.get(candidate_id)
+                if (
+                    not candidate_id
+                    or not wording
+                    or non_work_reason(
+                        wording,
+                        linked_material=(
+                            bool(materials_by_work.get(candidate_id))
+                            and str((existing or {}).get("status") or "") != "MATCHED"
+                        ),
+                    )
+                    is not None
+                ):
+                    continue
                 linked_quantities, comparison_context_only = _quantity_comparison_context_policy(
                     existing=existing,
                     candidate_version=version,
