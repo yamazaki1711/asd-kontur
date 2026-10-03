@@ -1487,6 +1487,25 @@ def non_work_reason(
         return "Сметный ресурс с кодом, а не отдельная строительная операция"
     if re.match(r"^(?:итого|всего)(?:\s|$)", normalized):
         return "Сметный итог или промежуточный итог, а не отдельная строительная операция"
+    if re.match(r"^(?:лср|лрс)\s*(?:№|n)?\s*[0-9-]+(?:\s|$)", normalized):
+        return "Заголовок локального сметного раздела, а не строительная операция"
+    if normalized in {
+        "сооружение",
+        "сооружения",
+        "стена",
+        "стены",
+        "стена)",
+        "стены)",
+    } or (
+        re.match(r"^сооружени[ея](?:\s|$)", normalized) is not None
+        and not any(marker in normalized for marker in _CONSTRUCTION_OPERATION_MARKERS)
+    ):
+        return "Заголовок конструкции или части сооружения, а не строительная операция"
+    if normalized in {
+        "прочие работы и затраты",
+        "прочих работ и затрат",
+    }:
+        return "Обобщённый сметный раздел без отдельной строительной операции"
     if (
         normalized.startswith(
             (
@@ -1543,8 +1562,12 @@ def non_work_reason(
         )
     ):
         return "Проектная/расчётная работа, а не строительная операция"
-    if normalized.startswith(("капитальный ремонт ", "строительство ", "реконструкция ")) and any(
-        marker in normalized for marker in (" по ул ", " по ул. ", " по адресу ", " расположен ")
+    object_title = normalized.removeprefix("выполнение работ по ")
+    if any(
+        _ordered_stem_phrase(object_title, phrase)
+        for phrase in ("капитальн ремонт", "строительств", "реконструкц")
+    ) and any(
+        marker in object_title for marker in (" по ул ", " по ул. ", " по адресу ", " расположен ")
     ):
         return "Наименование объекта, а не отдельная строительная операция"
     if normalized in {
@@ -3015,8 +3038,7 @@ def _work_schedule(
         deterministic_non_work_reason = non_work_reason(
             name,
             linked_material=(
-                bool(material_by_work.get(candidate_id))
-                and resolution.get("status") != "MATCHED"
+                bool(material_by_work.get(candidate_id)) and resolution.get("status") != "MATCHED"
             ),
         )
         designation = facility_designation(f"{name} {row.get('scope_key') or ''}")
