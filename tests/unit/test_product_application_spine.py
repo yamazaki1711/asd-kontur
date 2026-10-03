@@ -33,6 +33,7 @@ from asd_kontur.application_spine.postgres import (
     _quantities_requiring_semantic_review,
     _quantity_comparison_context_policy,
     _quantity_relationship_batches,
+    _reserved_first_pass_classification_batch,
     _semantic_extraction_priority,
     _semantic_recovery_stalled,
     _work_reconciliation_attempt_sets,
@@ -72,6 +73,46 @@ def test_semantic_refill_reserves_first_pass_classification_capacity() -> None:
         )
         == 1
     )
+
+
+def test_reserved_first_pass_lane_cannot_be_consumed_by_relationship_work() -> None:
+    source_id, batch = _reserved_first_pass_classification_batch(
+        {
+            "source-a": [
+                {
+                    "candidate_id": "relationship-high",
+                    "wording": "High-priority relationship review",
+                    "classification_review_needed": False,
+                    "relationship_review_needed": True,
+                    "semantic_priority": (500, 10, 10),
+                    "quantity_observations": [{"quantity_candidate_id": "quantity-a"}],
+                },
+                {
+                    "candidate_id": "first-pass-lower",
+                    "wording": "Previously unseen construction operation",
+                    "classification_review_needed": True,
+                    "relationship_review_needed": False,
+                    "semantic_priority": (100, 1, 1),
+                    "quantity_observations": [],
+                },
+            ],
+            "source-b": [
+                {
+                    "candidate_id": "relationship-other",
+                    "wording": "Other relationship review",
+                    "classification_review_needed": False,
+                    "relationship_review_needed": True,
+                    "semantic_priority": (600, 10, 10),
+                    "quantity_observations": [],
+                }
+            ],
+        },
+        batch_size=2,
+    )
+
+    assert source_id == "source-a"
+    assert [row["candidate_id"] for row in batch] == ["first-pass-lower"]
+    assert "semantic_priority" not in batch[0]
 
 
 def test_default_work_reconciliation_batch_matches_measured_production_policy() -> None:

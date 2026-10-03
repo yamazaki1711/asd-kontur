@@ -670,6 +670,63 @@ def _priority_semantic_batch_limit(
     return max_batches
 
 
+def _reserved_first_pass_classification_batch(
+    rows_by_source: Mapping[str, Iterable[Mapping[str, Any]]],
+    *,
+    batch_size: int,
+) -> tuple[str | None, list[dict[str, Any]]]:
+    """Select one source-coherent batch containing only never-reviewed work.
+
+    The priority relationship lanes are intentionally assembled first. The
+    reserved lane must not then fall back to the same mixed priority pool, or a
+    fourth relationship batch can starve ordinary classification indefinitely.
+    This helper enforces the reservation without changing semantic priority
+    inside the first-pass population.
+    """
+
+    available: list[tuple[str, list[dict[str, Any]]]] = []
+    for source_id, raw_rows in rows_by_source.items():
+        rows = [dict(row) for row in raw_rows if row.get("classification_review_needed") is True]
+        if not rows:
+            continue
+        rows.sort(
+            key=lambda row: (
+                tuple(-value for value in tuple(row.get("semantic_priority") or (0, 0, 0))),
+                int(row.get("page") or 0),
+                str(row.get("candidate_id") or ""),
+            )
+        )
+        available.append((source_id, rows))
+    if not available:
+        return None, []
+
+    source_id, rows = max(
+        available,
+        key=lambda item: (
+            tuple(item[1][0].get("semantic_priority") or (0, 0, 0)),
+            len(item[1]),
+            item[0],
+        ),
+    )
+    batch: list[dict[str, Any]] = []
+    seen_wordings: set[str] = set()
+    quantity_review_count = 0
+    for row in rows:
+        if len(batch) >= batch_size:
+            break
+        wording_key = " ".join(str(row.get("wording") or "").casefold().split())
+        if wording_key in seen_wordings:
+            continue
+        row_quantity_count = len(row.get("quantity_observations") or ())
+        if batch and quantity_review_count + row_quantity_count > 16:
+            continue
+        seen_wordings.add(wording_key)
+        quantity_review_count += row_quantity_count
+        row.pop("semantic_priority", None)
+        batch.append(row)
+    return source_id, batch
+
+
 def _relationship_role_lane(row: Mapping[str, Any]) -> str:
     role = " ".join(str(row.get("document_role") or "").casefold().split())
     side = document_comparison_side(row.get("document_role"), row.get("document"))
@@ -6835,11 +6892,12 @@ class SpinePostgresRepository:
                     priority[2],
                 )
 
+            ordinary_classification_pending = any(
+                row.get("classification_review_needed") is True for row in prepared
+            )
             priority_batch_limit = _priority_semantic_batch_limit(
                 max_batches=max_batches,
-                ordinary_classification_pending=any(
-                    row.get("classification_review_needed") is True for row in prepared
-                ),
+                ordinary_classification_pending=ordinary_classification_pending,
             )
             relationship_batches, relationship_candidate_ids = _quantity_relationship_batches(
                 prepared,
@@ -6866,6 +6924,21 @@ class SpinePostgresRepository:
                 ):
                     continue
                 by_source[str(row["source_version_id"])].append(row)
+            if ordinary_classification_pending and priority_batch_limit < max_batches:
+                reserved_source_id, reserved_batch = _reserved_first_pass_classification_batch(
+                    by_source,
+                    batch_size=batch_size,
+                )
+                if reserved_source_id is not None and reserved_batch:
+                    batches.append(reserved_batch)
+                    reserved_candidate_ids = {
+                        str(row.get("candidate_id") or "") for row in reserved_batch
+                    }
+                    by_source[reserved_source_id] = [
+                        row
+                        for row in by_source[reserved_source_id]
+                        if str(row.get("candidate_id") or "") not in reserved_candidate_ids
+                    ]
             for rows in by_source.values():
                 rows.sort(
                     key=lambda row: (
