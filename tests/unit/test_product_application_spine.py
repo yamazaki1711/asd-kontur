@@ -576,6 +576,56 @@ def test_quantity_relationship_batches_prefer_opposite_document_sides() -> None:
     assert selected == {"design-high", "commercial"}
 
 
+def test_quantity_relationship_batches_include_vor_estimate_scope_review() -> None:
+    vor = _work_batch_row(
+        "vor",
+        facility="Мост через реку Северную",
+        family="pile_foundation",
+        document_role="Ведомость объемов работ",
+        wording="Устройство буронабивных свай",
+    )
+    estimate = _work_batch_row(
+        "estimate",
+        facility="Мост через реку Северную",
+        family="pile_foundation",
+        document_role="Локальная смета",
+        wording="Устройство буронабивных свай",
+    )
+    for row in (vor, estimate):
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        row["quantity_observations"][0].update(unit="м")
+
+    batches, selected = _quantity_relationship_batches([estimate, vor], batch_size=2, max_batches=1)
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [["vor", "estimate"]]
+    assert selected == {"vor", "estimate"}
+
+
+def test_quantity_relationship_batches_include_design_design_scope_review() -> None:
+    pd = _work_batch_row(
+        "pd",
+        facility="Здание цеха",
+        family="reinforced_concrete",
+        document_role="Проектная документация",
+        wording="Устройство монолитной фундаментной плиты",
+    )
+    rd = _work_batch_row(
+        "rd",
+        facility="Здание цеха",
+        family="reinforced_concrete",
+        document_role="Рабочая документация",
+        wording="Устройство монолитной фундаментной плиты",
+    )
+    for row in (pd, rd):
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        row["quantity_observations"][0].update(unit="м3")
+
+    batches, selected = _quantity_relationship_batches([rd, pd], batch_size=2, max_batches=1)
+
+    assert [[item["candidate_id"] for item in batch] for batch in batches] == [["pd", "rd"]]
+    assert selected == {"pd", "rd"}
+
+
 def test_quantity_relationship_batches_rank_semantic_scope_before_unrelated_family_rows() -> None:
     design_fence = _work_batch_row(
         "design-fence",
@@ -771,7 +821,7 @@ def test_quantity_relationship_batches_reuse_settled_context_only_for_mixed_revi
     assert all("comparison_context_only" not in item for item in batches[0])
 
 
-def test_quantity_relationship_batches_do_not_replay_one_sided_settled_context() -> None:
+def test_quantity_relationship_batches_do_not_replay_same_role_settled_context() -> None:
     rows = [
         _work_batch_row(
             "settled-a",
@@ -785,7 +835,7 @@ def test_quantity_relationship_batches_do_not_replay_one_sided_settled_context()
             "settled-b",
             facility="",
             family="pipeline",
-            document_role="ПД",
+            document_role="РД",
             wording="Прокладка участка Б",
             quantity_count=1,
         ),
@@ -836,6 +886,32 @@ def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() ->
 
     assert attempted == {"design-only", "design-mixed", "commercial-mixed"}
     assert mixed == {("commercial-mixed", "design-mixed")}
+
+
+def test_work_reconciliation_attempt_sets_track_vor_estimate_pair() -> None:
+    attempted, pairs = _work_reconciliation_attempt_sets(
+        [
+            {
+                "work_observations": [
+                    {
+                        "candidate_id": "vor-row",
+                        "document_role": "ВОР",
+                        "document": "Ведомость.pdf",
+                        "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                    },
+                    {
+                        "candidate_id": "estimate-row",
+                        "document_role": "Локальная смета",
+                        "document": "Смета.pdf",
+                        "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS",
+                    },
+                ]
+            }
+        ]
+    )
+
+    assert attempted == {"vor-row", "estimate-row"}
+    assert pairs == {("estimate-row", "vor-row")}
 
 
 def test_mixed_source_classification_batch_is_not_relationship_authority() -> None:

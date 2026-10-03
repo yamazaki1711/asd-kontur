@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from itertools import combinations
 from typing import Any, cast
 from uuid import UUID, uuid5
 
@@ -550,6 +551,71 @@ def _cross_document_work_batches(
     return batches, selected_ids
 
 
+def _relationship_role_lane(row: Mapping[str, Any]) -> str:
+    role = " ".join(str(row.get("document_role") or "").casefold().split())
+    side = document_comparison_side(row.get("document_role"), row.get("document"))
+    if role == "вор" or ("ведомост" in role and "объем" in role):
+        return "vor"
+    if "смет" in role:
+        return "estimate"
+    return str(side or "other")
+
+
+def _relationship_pair_is_professionally_relevant(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> bool:
+    """Return whether two rows belong to a reusable comparison/relation lane."""
+
+    left_id = str(left.get("source_version_id") or "")
+    right_id = str(right.get("source_version_id") or "")
+    if left_id and left_id == right_id:
+        # Same-source pairs may encode an explicit component/total graph.
+        return True
+    left_role = " ".join(str(left.get("document_role") or "").casefold().split())
+    right_role = " ".join(str(right.get("document_role") or "").casefold().split())
+    if not left_role or not right_role or left_role == right_role:
+        return False
+    left_lane = _relationship_role_lane(left)
+    right_lane = _relationship_role_lane(right)
+    if "design" in {left_lane, right_lane} and (
+        {left_lane, right_lane} & {"commercial", "vor", "estimate"}
+    ):
+        return True
+    if {left_lane, right_lane} == {"vor", "estimate"}:
+        return True
+    if left_lane == right_lane == "design":
+        return True
+    if left_lane == right_lane == "estimate":
+        return True
+    return False
+
+
+def _relationship_pair_lane_priority(left: Mapping[str, Any], right: Mapping[str, Any]) -> int:
+    lanes = {_relationship_role_lane(left), _relationship_role_lane(right)}
+    if "design" in lanes and lanes & {"commercial", "vor", "estimate"}:
+        return 3
+    if lanes == {"vor", "estimate"}:
+        return 2
+    if lanes == {"design"} or lanes == {"estimate"}:
+        return 1
+    return 0
+
+
+def _ordered_relationship_pair(
+    left: dict[str, Any], right: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    lane_order = {"design": 0, "vor": 1, "estimate": 2, "commercial": 3, "other": 4}
+    ordered = sorted(
+        (left, right),
+        key=lambda row: (
+            lane_order.get(_relationship_role_lane(row), 5),
+            str(row.get("document_role") or ""),
+            str(row.get("candidate_id") or ""),
+        ),
+    )
+    return ordered[0], ordered[1]
+
+
 def _quantity_relationship_batches(
     rows: Iterable[Mapping[str, Any]],
     *,
@@ -609,49 +675,41 @@ def _quantity_relationship_batches(
                 str(row.get("candidate_id") or ""),
             ),
         )
-        # A two-row relationship batch is most useful when it carries both
-        # sides of a potential design/commercial comparison.  Alphabetical
-        # document-role ordering could otherwise spend the entire bounded
-        # batch on two design rows while a commercial row from the same
-        # engineering family remained available.  This is only context
-        # assembly: Qwen must still return DIFFERENT_SCOPE/INCOMPARABLE when
-        # the source context does not establish semantic compatibility.
-        design_rows = [
-            row
-            for row in ordered
-            if document_comparison_side(row.get("document_role"), row.get("document")) == "design"
-        ]
-        commercial_rows = [
-            row
-            for row in ordered
-            if document_comparison_side(row.get("document_role"), row.get("document"))
-            == "commercial"
-        ]
+        # Prefer the strongest still-unattempted professional pair. This is
+        # context assembly, not scope authority: design/design, design/
+        # commercial and VOR/estimate lanes all remain subject to Qwen's
+        # SAME_SCOPE/DIFFERENT_SCOPE decision. Same-source rows may also carry
+        # an explicit component/total relationship.
         eligible_pairs = [
-            (design, commercial)
-            for design in design_rows
-            for commercial in commercial_rows
-            if _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
+            (left, right)
+            for left, right in combinations(ordered, 2)
+            if _relationship_pair_is_professionally_relevant(left, right)
+            and _relationship_pair_key(left.get("candidate_id"), right.get("candidate_id"))
             not in attempted_pairs
             and (
-                location != "unassigned" or any(_relationship_pair_affinity(design, commercial)[:3])
+                location != "unassigned"
+                or any(_relationship_pair_affinity(left, right)[:3])
+                or (
+                    str(left.get("source_version_id") or "")
+                    == str(right.get("source_version_id") or "")
+                    and _relationship_pair_affinity(left, right)[3] > 0
+                )
             )
         ]
-        seeds: list[dict[str, Any]] = []
-        if eligible_pairs:
-            design_seed, commercial_seed = max(
+        if not eligible_pairs:
+            continue
+        left_seed, right_seed = _ordered_relationship_pair(
+            *max(
                 eligible_pairs,
                 key=lambda pair: (
+                    _relationship_pair_lane_priority(*pair),
                     _relationship_pair_affinity(*pair),
                     str(pair[0].get("candidate_id") or ""),
                     str(pair[1].get("candidate_id") or ""),
                 ),
             )
-            seeds.extend((design_seed, commercial_seed))
-        elif not design_rows or not commercial_rows:
-            seeds.append(ordered[0])
-        else:
-            continue
+        )
+        seeds = [left_seed, right_seed]
         batch: list[dict[str, Any]] = []
         quantity_count = 0
         for row in [*seeds, *ordered]:
@@ -674,13 +732,12 @@ def _quantity_relationship_batches(
             quantity_count += row_quantity_count
         if quantity_count < 2:
             continue
-        # A previously reviewed observation may be supplied again only as
-        # bounded context for a missing design/commercial relationship.  Do
-        # not replay it in another one-sided quantity batch: classification
-        # and single-source quantity meaning are already durable.
-        if any(bool(row.get("comparison_context_only")) for row in ordered) and {
-            document_comparison_side(row.get("document_role"), row.get("document")) for row in batch
-        } != {"design", "commercial"}:
+        # A settled observation may return only in an actual relationship
+        # lane. Do not replay it in a one-sided ordinary classification batch.
+        if any(bool(row.get("comparison_context_only")) for row in ordered) and not any(
+            _relationship_pair_is_professionally_relevant(left, right)
+            for left, right in combinations(batch, 2)
+        ):
             continue
         batches.append(batch)
         selected.update(str(row["candidate_id"]) for row in batch)
@@ -697,7 +754,8 @@ def _work_reconciliation_attempt_sets(
     separate question, however: two individually reviewed rows may never have
     appeared together, and one rejected pair must not prevent either row from
     being compared with another source. The second set therefore records exact
-    design/commercial pairs, not candidate-level completion authority.
+    candidate pairs from an explicit relationship task, not candidate-level
+    completion authority.
     """
 
     attempted: set[str] = set()
@@ -711,35 +769,15 @@ def _work_reconciliation_attempt_sets(
             str(value.get("candidate_id") or "") for value in rows if value.get("candidate_id")
         }
         attempted.update(candidate_ids)
-        sides = {
-            side
-            for value in rows
-            if (side := document_comparison_side(value.get("document_role"), value.get("document")))
-            is not None
-        }
         relationship_task = bool(rows) and all(
             str(value.get("analysis_task") or "") == "QUANTITY_RELATIONSHIP_ANALYSIS"
             for value in rows
         )
-        if relationship_task and sides == {"design", "commercial"}:
-            design_ids = {
-                str(value.get("candidate_id"))
-                for value in rows
-                if document_comparison_side(value.get("document_role"), value.get("document"))
-                == "design"
-                and value.get("candidate_id")
-            }
-            commercial_ids = {
-                str(value.get("candidate_id"))
-                for value in rows
-                if document_comparison_side(value.get("document_role"), value.get("document"))
-                == "commercial"
-                and value.get("candidate_id")
-            }
+        if relationship_task:
             attempted_relationship_pairs.update(
-                _relationship_pair_key(design_id, commercial_id)
-                for design_id in design_ids
-                for commercial_id in commercial_ids
+                _relationship_pair_key(left.get("candidate_id"), right.get("candidate_id"))
+                for left, right in combinations(rows, 2)
+                if left.get("candidate_id") and right.get("candidate_id")
             )
     return attempted, attempted_relationship_pairs
 
