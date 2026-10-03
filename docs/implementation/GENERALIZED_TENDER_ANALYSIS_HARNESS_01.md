@@ -869,6 +869,82 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Exact scope-pair recovery and source grounding — releases 2fdc79b through c204c92
+
+The comparison scheduler now treats a proposed design/commercial work match as
+an exact two-row semantic decision. Profile v33 introduced exact pair
+authority. Profiles v34 and v35 then corrected two recovery defects exposed by
+the autonomous live queue: a recoverable response could previously split an
+exact pair into singleton prompts, and an output-exhausted pair could consume
+nine model calls before ending unresolved. An exact pair is now indivisible,
+receives one expanded-output retry and one schema-directed retry, and otherwise
+falls back safely to two unresolved rows. No singleton response can authorize
+a cross-document match.
+
+The v35 live access-road control exposed a separate semantic false positive.
+Qwen replaced the exact source operation `Нанесение дорожной разметки` with an
+asphalt-paving operation found in nearby context and returned `SAME_SCOPE`.
+Profile v36 therefore requires a `SAME_SCOPE` normalized operation to retain a
+distinctive lexical anchor from the exact wording of each source row. Nearby
+context may explain a row but may not substitute a different construction
+operation. The validation uses general Unicode word stems and excludes only
+high-frequency construction/count vocabulary; it contains no project name,
+document name, facility, expected quantity or corpus-specific branch.
+
+Autonomous v36 job `01a10280-53e3-745f-8f09-ff709c2e8482` reran the access-road
+negative control and returned reciprocal `DIFFERENT_SCOPE` for asphalt paving
+and road marking after two intact calls. Its terminal result digest is
+`sha256:e7caaaad168f6c669467961b9e61d53f8df59d23d8d931df69ffeb087221c345`.
+Two ambiguous steel-installation pairs remained unresolved after the bounded
+three-call ceiling, with terminal digests
+`sha256:6466b91389f8dd46bc76bfa0946d2b3cb2f233ff7a041a595c77bebd42732563`
+and
+`sha256:35c5241f56a45044d6d4f1de5d5fb03d63854eabd15c1a304c03602629d67733`.
+That is the defensible result because their structural labels did not establish
+identity.
+
+The first apparent positive v36 flooring pair was not accepted as a positive
+control. Qwen established that the 680 m2 Zone A quantity and the 1080 m2 total
+area describe different scopes, so job
+`01a10280-cf9b-7eaa-a5b5-e6626d91bf88` correctly returned reciprocal
+`DIFFERENT_SCOPE` in one call. Its terminal result digest is
+`sha256:d512d804e99777c15deba56ed741325869f9086f0f7c8134ffca1b76e5293290`.
+At this checkpoint no live v36 result has yet established reciprocal
+`SAME_SCOPE`; that positive acceptance gate remains open and
+`GeneralizedTenderHarness` remains false.
+
+Commit `c204c92230ebf3e952db94de482cf777e5b52a61` passed exact-SHA CI run
+`37134728667` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261004-c204c92-source-grounded-scope-v79`.
+Migration head is `0123_source_grounded_scope_pair_profile`. Before migration,
+the public database was backed up to
+`~/.asd-kontur/public-demo/backups/pre-0123-source-grounded-scope-20261004T0350/public-before-0123.dump`
+(SHA-256
+`6511d44999aaf2e0e8c9cd9f44672b2a4ed952c1a831e8aa79c5d0793de72eba`),
+restored separately and verified at migration 0122 with 27,372 durable jobs.
+The full unit suite passed 1,242 tests; the focused semantic suite passed 153;
+the disposable migration roundtrip passed.
+
+Qwen PID `85702` and NTD worker PID `98263` were preserved. The all-history
+platform-memory fingerprint remains
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The release-receipt
+SHA-256 is
+`1bfc386b7231142fda4a1036a380705106b0a880c115794c6b2cd6784ff1400c`.
+
+The launchd plist requested a longer drain interval, but live `launchctl print`
+continued to report an effective 60-second worker exit timeout. Controlled
+activation therefore used the proven terminal-transition procedure: disable
+new launchd claims, allow the durable in-flight job to reach a terminal
+receipt, and boot out the old worker immediately at that transition. The
+longer plist value is not claimed as effective. No developer queue, retry,
+successor, priority or Qwen command was issued during live semantic acceptance.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Exact pair authority — read-side release 84b72a5
 
 Engineering model v77 closes a comparison-authority defect without changing
