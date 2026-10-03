@@ -105,6 +105,25 @@ The construction Tender report remains `PRESERVED_BUT_INCOMPLETE` because
 facility/work consolidation and project-wide design/commercial comparison are
 not yet complete.
 
+### Blind quantity-comparison checkpoint — 2026-10-03 12:38 +12
+
+The current generalized path has now produced both an independently confirmed
+match and a real discrepancy on the blind project. Project and estimate agree
+at `772.5 m3` for mechanized excavation. For tray LM-2, Qwen established equal
+engineering scope before deterministic arithmetic compared project `87 m`
+with estimate `100 m` and found a `13 m` commercial excess. ASD-KONTUR formed
+the contractor consequence and Customer clarification action from those
+structured facts. The pre-oracle `BLIND_TENDER_ANALYSIS_SNAPSHOT_v6` manifest
+has SHA-256
+`9cbcba0949a104d07db52f64c17e6e652563109c03f08c39db1f57de8d0e9934`.
+
+Relationship attempts are now accounted by the exact source pair rather than
+by candidate, so an unrelated rejected pair cannot permanently block a later
+valid counterpart. Context ranking uses semantic scope and unit dimension but
+never numeric proximity; Qwen remains the comparability authority. The
+PD/RD/VOR and VOR/estimate rows remain `PRESERVED_BUT_INCOMPLETE` because this
+proves a real vertical slice, not project-wide coverage.
+
 ## Method and evidence boundary
 
 The audit inspected the legacy source, tests and product documents named in the

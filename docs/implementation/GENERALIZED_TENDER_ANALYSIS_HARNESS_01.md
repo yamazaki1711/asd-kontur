@@ -973,6 +973,71 @@ release receipt SHA-256 is
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Quantity relationship closure and first blind discrepancy — release v40
+
+The accepted single-source quantity bridge produced two materially different
+professional outcomes on the blind project without owner-provided expected
+values. Qwen first established that the project and estimate values for
+mechanized excavation describe the same engineering scope. Deterministic
+comparison reported a match: `772.5 m3` in both sources. The system therefore
+showed agreement instead of manufacturing a Tender defect.
+
+A later autonomous `ПД`/`Смета` review established that the two tray LM-2
+lengths describe the same scope. Deterministic arithmetic then found:
+
+- project: `87 m`;
+- estimate: `100 m`;
+- commercial excess over the project quantity: `13 m`.
+
+The project model generated a typed `QUANTITY_MISMATCH`, explained the
+contractor exposure, and proposed asking the Customer either to confirm the
+project basis for `100 m` or align the estimate with the `87 m` project value.
+The finding retains direct source references to page 11 of
+`22.467 - ПЗУ, КР, НВ.pdf` and page 41 of `22.467-СМ.Изм7.pdf`. At the frozen
+checkpoint the blind model contained three quantity comparisons, six
+professional issues, six customer questions and six contractor risks.
+
+`BLIND_TENDER_ANALYSIS_SNAPSHOT_v6` was persisted before any owner comparison.
+The snapshot SHA-256 is
+`8f75da8a49ef2eec463f0c0569c10a87ade0212c504240757d71bbbe9a394e06`;
+its manifest SHA-256 is
+`9cbcba0949a104d07db52f64c17e6e652563109c03f08c39db1f57de8d0e9934`.
+
+The same run exposed a generic scheduling defect: candidate-level relationship
+attempt accounting allowed one unrelated rejected pair to suppress a later
+comparison with a better counterpart. Commit
+`927c4742c2426938b5a5d1118fb897cf3ab4fe0f` changes that ledger to the exact
+design/commercial candidate pair. It also ranks bounded Qwen context by
+facility, normalized construction wording, previously accepted semantic scope
+and physical-unit dimension. Numeric values are deliberately excluded from
+pair selection. Weak unassigned pairs with no semantic overlap are skipped;
+Qwen still decides whether every selected pair is actually comparable.
+
+Exact-SHA CI run `37082260795` passed. Release
+`~/.asd-kontur/public-demo/releases/20261003-927c474-pair-ledger-v40` is active
+for all four application roles at migration head
+`0111_reviewed_quantity_source_value`. The first autonomous post-activation
+Qwen result was RD/VOR structural-steel job
+`01a0ff30-23b4-771a-be96-758ade42cfaa`, result digest
+`sha256:4765574d48ac88efbf9fe05c749fc761ca7119a347403a11c522a1a39078d633`.
+No developer queue, retry, successor or priority command was issued.
+
+Qwen PID `93554` and NTD worker PID `98263` were preserved. API readiness
+passes. The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the lifecycle platform fingerprint remains
+`sha256:02cb45f341ad56595bbe6ec59abe5fbadac7841914280b165ed99861923e8487`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. The v40 release receipt
+SHA-256 is
+`3d0f0d4834e1d4d58b2c9b883b7f94824c1b29a4122af4617b637bb5a72fdd85`.
+
+This closes the zero-real-comparison defect, but it does not yet establish
+project-wide design/commercial coverage. Current status remains:
+`GeneralizedTenderHarness=false`, `AutonomousProjectProcessing=true`,
+`ProductReady=false`.
+
 ## Procurement and participant-context checkpoint — release 2d64726
 
 The next P1 slice addresses professional-report contamination that was visible
