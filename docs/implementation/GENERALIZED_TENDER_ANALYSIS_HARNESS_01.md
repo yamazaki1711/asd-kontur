@@ -869,6 +869,64 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Pair-specific quantity scope and live persistence repair — release 0c6f880
+
+The user-visible result is that one quantity may now participate in several
+independent engineering comparisons without a later review erasing an earlier
+valid decision. For example, a commercial total can remain comparable with the
+matching estimate scope while being explicitly non-comparable with an unrelated
+design component. The model stores scope compatibility on the exact quantity
+pair and requires reciprocal Qwen assertions. Deterministic comparison consumes
+that pair ledger and continues to perform all arithmetic itself.
+
+Commit `19c729081832194cd6b4fe5b81803c21eaa5557d` introduced semantic profile
+`qwen-project-work-reconciliation-v32` and engineering model
+`project-engineering-model-v76`. Its first public activation exposed a release
+defect before acceptance: the database profile constraint still ended at v31,
+so valid v32 manifests reached Qwen but failed persistence with a PostgreSQL
+check violation. Those immutable failures remain recorded as
+`reconciliation_required`; they are not counted as accepted semantic results.
+
+Commit `0c6f880fc310eaf6f484409c9943e45a95079a0c` adds migration
+`0119_pair_specific_quantity_scope_profile`. The public database was backed up
+to
+`~/.asd-kontur/public-demo/backups/asd_kontur_public_demo_pre_0119_20261004T013300.dump`
+(SHA-256
+`bd3b19ed6fe6c379bb4f937fbcaed35c13180d24536d90cb0984f4260ef931b2`),
+restored separately as `asd_kontur_restore_0119_20261004`, and exercised through
+`0118 -> 0119 -> 0118 -> 0119` before controlled public migration. The migration
+changes only the accepted reconciliation-profile allowlist; it does not rewrite
+project or platform knowledge.
+
+The first result executed entirely after the migration boundary, job
+`01a101f3-1776-76b6-bb1b-15d407f8cc01`, succeeded autonomously. Its validated
+manifest contains reciprocal `DIFFERENT_SCOPE` assertions for a pipeline-branch
+component and a commercial total whose pipe profiles differ. This is a live
+false-positive rejection from the independent control corpus, not a hardcoded
+expected answer. The blind workspace is already materialized as
+`project-engineering-model-v76` with fingerprint
+`sha256:45edbda2b402ab9837cf14d8747fed686df0f63fc6c7e5f329ab9e92ecfaf7b4`;
+its four targeted v32 reviews remain in the fair autonomous queue at this
+observation, so no new blind-project pair decision is claimed yet.
+
+The active immutable release is
+`~/.asd-kontur/public-demo/releases/20261004-0c6f880-pair-scope-v71` with
+release profile `tender-pair-scope-v71-model-v76`. Exact-SHA CI run
+`37126829569` passed; 1,235 local unit tests and the isolated migration
+round-trip passed. Qwen PID `85702` and NTD worker PID `98263` were preserved.
+The release-receipt SHA-256 is
+`eb22589d7ad1fab6d274bbaefe9605f148e17c6247ec3264c50c11efa3e49e36`.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains exactly
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. No developer queue,
+retry, successor, priority or Qwen command was issued.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Component/total and material-scope safety — release e6c561a
 
 The blind project now contains a defensible quantity graph for tree removal:
