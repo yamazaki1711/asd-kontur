@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v76"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v77"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -4166,6 +4166,18 @@ def _comparison_has_reviewed_quantity_identity(
     right_values = matching(right_role)
     if len(left_values) != 1 or len(right_values) != 1:
         return False
+    if any(
+        value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
+        for value in (*left_values, *right_values)
+    ):
+        # The current semantic contract makes compatibility pair-specific.
+        # Its legacy top-level field describes only the last bounded context
+        # and therefore cannot authorize this exact design/commercial pair.
+        # A reciprocal assertion is the only current-profile authority.
+        return (
+            _pair_scope_compatibility(left_values[0], right_values[0])
+            is ScopeCompatibility.SAME_SCOPE
+        )
     if left_values[0].get("scope_assertions") or right_values[0].get("scope_assertions"):
         return (
             _pair_scope_compatibility(left_values[0], right_values[0])
@@ -6674,6 +6686,17 @@ def _semantic_scope_pair_is_directly_comparable(
                 continue
             target.append(value)
     selected = [*selected_left, *selected_right]
+    if any(
+        value.get("semantic_review_profile") == PROJECT_WORK_RECONCILIATION_PROFILE
+        for value in selected
+    ):
+        if len(selected_left) != 1 or len(selected_right) != 1:
+            return False
+        if (
+            _pair_scope_compatibility(selected_left[0], selected_right[0])
+            is not ScopeCompatibility.SAME_SCOPE
+        ):
+            return False
     if any(value.get("scope_assertions") for value in selected):
         if len(selected_left) != 1 or len(selected_right) != 1:
             return False

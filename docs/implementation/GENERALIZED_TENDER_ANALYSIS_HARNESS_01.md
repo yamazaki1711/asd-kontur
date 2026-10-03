@@ -927,6 +927,32 @@ retry, successor, priority or Qwen command was issued.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Current-profile comparison authority — engineering model v77
+
+Engineering model v77 closes the remaining deterministic fallback behind the
+pair-specific v32 semantic contract. A quantity interpreted by the current
+profile can authorize design/commercial or VOR/estimate arithmetic only when
+the two exact quantity identities carry one reciprocal `SAME_SCOPE` assertion.
+The legacy top-level compatibility field describes the last bounded model
+context and can no longer stand in for that exact pair. Historical accepted
+profiles retain their existing compatibility behavior; this change neither
+rewrites their output nor schedules inference.
+
+The first blind v32 result was inspected before this correction. It properly
+kept asphalt-cover demolition distinct from block-wall demolition and therefore
+did not need a pair assertion. The defect was the latent fallback for a future
+current-profile row that reused identical scope text without identifying its
+peer. A changed pipeline fixture now proves that such an unasserted pair is
+rejected, while reciprocal current-profile assertions remain comparable and
+unit-normalized arithmetic remains deterministic.
+
+At the 2026-10-04 02:00 +12 observation boundary, the supervised v32 refresh
+had 13 successes, one actively generating job with a fresh heartbeat, 40
+queued jobs, and ten historical pre-migration reconciliation-required attempts.
+The blind workspace had one completed and three queued targeted reviews. The
+runtime was left autonomous: no manual queue, retry, successor, or priority
+command was issued.
+
 ## Component/total and material-scope safety — release e6c561a
 
 The blind project now contains a defensible quantity graph for tree removal:

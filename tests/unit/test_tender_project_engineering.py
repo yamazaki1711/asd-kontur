@@ -919,10 +919,17 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "value": "68.4",
                             "unit": "м3",
                             "semantic_scope": "Crushed-stone base volume",
-                            "relation_kind": "DUPLICATE_OF",
-                            "related_quantity_candidate_ids": ["estimate-volume"],
-                            "scope_compatibility": "SAME_SCOPE",
-                            "relationship_reviewed": True,
+                        "relation_kind": "DUPLICATE_OF",
+                        "related_quantity_candidate_ids": ["estimate-volume"],
+                        "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "estimate-volume",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same crushed-stone base volume.",
+                            }
+                        ],
+                        "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         },
                     ],
@@ -932,10 +939,17 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
                             "value": "61.2",
                             "unit": "м3",
                             "semantic_scope": "Crushed-stone base volume",
-                            "relation_kind": "DUPLICATE_OF",
-                            "related_quantity_candidate_ids": ["design-volume"],
-                            "scope_compatibility": "SAME_SCOPE",
-                            "relationship_reviewed": True,
+                        "relation_kind": "DUPLICATE_OF",
+                        "related_quantity_candidate_ids": ["design-volume"],
+                        "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "design-volume",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same crushed-stone base volume.",
+                            }
+                        ],
+                        "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
@@ -974,9 +988,16 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "quantity_candidate_id": "vor-area",
                             "value": "833.9",
                             "unit": "м2",
-                            "semantic_scope": "Waterproofed surface area",
-                            "scope_compatibility": "SAME_SCOPE",
-                            "relationship_reviewed": True,
+                        "semantic_scope": "Waterproofed surface area",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "estimate-area",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same waterproofed surface area.",
+                            }
+                        ],
+                        "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
@@ -985,9 +1006,16 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
                             "quantity_candidate_id": "estimate-area",
                             "value": "8.339",
                             "unit": "100 м2",
-                            "semantic_scope": "Waterproofed surface area",
-                            "scope_compatibility": "SAME_SCOPE",
-                            "relationship_reviewed": True,
+                        "semantic_scope": "Waterproofed surface area",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "vor-area",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same waterproofed surface area.",
+                            }
+                        ],
+                        "relationship_reviewed": True,
                             "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                         }
                     ],
@@ -1000,6 +1028,50 @@ def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_rel
     assert comparisons[0]["classification"] == "MATCH"
     assert comparisons[0]["left"]["value"] == "833.9"
     assert comparisons[0]["right"]["value"] == "833.9"
+
+
+def test_current_profile_top_level_same_scope_does_not_authorize_exact_pair() -> None:
+    comparisons = _validated_scope_quantity_comparisons(
+        [
+            {
+                "work_scope_id": "unasserted-current-profile",
+                "facility_id": None,
+                "facility": "Location unresolved",
+                "work_name": "Install pipeline",
+                "project_wording_by_document": {
+                    "ПД": ["Install pipeline"],
+                    "ВОР": ["Install pipeline"],
+                },
+                "semantic_resolution_by_document": {"ПД": ["MATCHED"], "ВОР": ["MATCHED"]},
+                "quantities_by_document": {
+                    "ПД": [
+                        {
+                            "quantity_candidate_id": "design-length",
+                            "value": "120",
+                            "unit": "м",
+                            "semantic_scope": "Pipeline length",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                    "ВОР": [
+                        {
+                            "quantity_candidate_id": "vor-length",
+                            "value": "120",
+                            "unit": "м",
+                            "semantic_scope": "Pipeline length",
+                            "scope_compatibility": "SAME_SCOPE",
+                            "relationship_reviewed": True,
+                            "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert comparisons == []
 
 
 def test_pair_specific_same_scope_survives_later_unrelated_scope_decision() -> None:
@@ -2807,7 +2879,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v76"
+    assert model["model_version"] == "project-engineering-model-v77"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -3676,6 +3748,13 @@ def test_current_reviewed_scope_connects_unassigned_work_wording_one_to_one() ->
                         "quantity_type": "TOTAL",
                         "relation_kind": "NONE",
                         "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "commercial-wall-volume",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same wall concrete scope.",
+                            }
+                        ],
                         "relationship_reviewed": True,
                     }
                 ],
@@ -3694,6 +3773,13 @@ def test_current_reviewed_scope_connects_unassigned_work_wording_one_to_one() ->
                         "quantity_type": "TOTAL",
                         "relation_kind": "NONE",
                         "scope_compatibility": "SAME_SCOPE",
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": "design-wall-volume",
+                                "scope_compatibility": "SAME_SCOPE",
+                                "reason": "Same wall concrete scope.",
+                            }
+                        ],
                         "relationship_reviewed": True,
                     }
                 ],
