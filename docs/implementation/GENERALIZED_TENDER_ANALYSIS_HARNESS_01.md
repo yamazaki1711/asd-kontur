@@ -1200,6 +1200,48 @@ release receipt is stored outside Git beside the immutable release. Current
 status remains `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+### Indivisible quantity-pair recovery — semantic profile v39
+
+The first six v38 receipts exposed a separate bounded-recovery inefficiency.
+Job `01a10321-01ee-792f-92b0-8f32b9048e0e` contained exactly two quantity
+statements. After complete-pair repair failed, the generic fallback split the
+pair and spent two additional single-row retries even though separated rows
+cannot establish reciprocal relationship authority. The job used five Qwen
+calls and still remained unresolved. This was real local-model work, not a
+hung process, but the last two calls could not produce a professional result.
+
+Semantic profile `qwen-project-work-reconciliation-v39` keeps an exact two-row
+quantity relationship indivisible. It permits at most two bounded repairs,
+uses a second repair only after validation advances to a different typed
+failure, and stops after a repeated invalid shape. Larger component groups
+retain their existing complete-context and safe split policies. Qwen still
+decides semantic meaning; deterministic code still owns arithmetic and strict
+validation.
+
+Commit `ab7d59eb95c2564b1c5170bee9586c0b0549bff8` passed exact-SHA CI runs
+`37147035684` and `37147030397`. Migration
+`0126_indivisible_quantity_pair_profile` passed an isolated migration test and
+a restored-public-database upgrade, destructive disposable downgrade and
+re-upgrade before controlled activation. The backup SHA-256 is
+`51723fff8f421a4b123a92ddb72d889e0e1ed475b94c95cccd37f9df28da6e14`.
+
+The live v39 acceptance replayed the measured failure shape without a manual
+queue command. Autonomous job `01a10337-144d-70b2-b1a4-6fb9c22028f3`
+received two quantity rows, saw the same typed validation failure twice, and
+terminated safely after two calls rather than five. The exact pair remained
+intact, no unsupported relationship was published, and the worker immediately
+claimed the next job. Its result digest is
+`sha256:bf7ca67d83747b9f8a6658045d6ca9ae5d00e3fa958d0e5574725422007fcf7c`.
+
+The active immutable release is
+`~/.asd-kontur/public-demo/releases/20261004-ab7d59e-quantity-pair-v85`.
+Qwen PID `85702` and NTD worker PID `98263` were preserved. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. Current status remains
+`GeneralizedTenderHarness=false`, `AutonomousProjectProcessing=true`,
+`ProductReady=false`.
+
 ## Current-profile comparison authority — engineering model v77
 
 Engineering model v77 closes the remaining deterministic fallback behind the
