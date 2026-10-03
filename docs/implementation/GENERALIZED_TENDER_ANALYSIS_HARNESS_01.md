@@ -1651,3 +1651,55 @@ and the NTD ledger remains exactly 319 succeeded jobs.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Profile v31 live closure and material source scope — release 1e08687
+
+The independent steel-gallery control workspace
+`01a0f605-1608-7c9a-8b8a-f13e83a11920` exercised the source-grounded
+alternative guard without a developer progression command. Its first Qwen
+response incorrectly treated the 18.4 t design total and 17.0 t VOR quantity as
+alternatives without source support. Deterministic validation rejected that
+decision with `qwen_work_reconciliation_alternative_evidence_missing`. The
+bounded repair then established 10.1 t and 8.3 t as design components of 18.4 t
+and classified the 17.0 t VOR value as the same commercial scope.
+Deterministic Decimal arithmetic produced a 1.4 t design-to-commercial
+difference, a professional finding, a customer clarification question and a
+contractor-facing consequence. The terminal result digest is
+`sha256:ef5db1cbc98c0e063ec59a38c914a0df7eeab8b09731665882a467d2635c9b89`.
+
+Commit `1e08687366d7cb590716768296014b63219417f4` fixes the next generic bridge
+failure exposed by the same control corpus. Repeated model assertions of the
+same material property on the same source version, document version, page,
+location and work scope are now collapsed before comparison. Assertions with a
+different property, page, source or engineering scope remain distinct. The
+projection also emits one comparison for an exact source-page/property pair,
+while preserving independent design-note and specification comparisons against
+the commercial source. The engineering model version is
+`project-engineering-model-v68`.
+
+The live v68 result contains exactly two material comparisons: RD S355 against
+VOR S275 and specification S355 against VOR S275. It contains no duplicate
+comparison produced solely by material-kind aliases. Together with the 18.4 t
+versus 17.0 t quantity finding, the project view now produces three grounded
+professional issues and three corresponding customer questions from structured
+facts.
+
+The full local suite passed 1,197 tests with 113 skips; the separately exercised
+0118 migration roundtrip passed. Exact-SHA CI run `37104844770` passed every
+backend, frontend, browser, security and migration gate. The immutable active
+release is
+`~/.asd-kontur/public-demo/releases/20261003-1e08687-material-scope-v56`.
+No database migration was required beyond 0118. All four application services
+import commit `1e08687`; Qwen PID `93554` and NTD worker PID `98263` were
+preserved. The release-receipt SHA-256 is
+`a26cf95b2c52bbf34b2b75fbb112ac591702bb3391bff1a38d5d3fe52f8de622`.
+
+The all-history platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`;
+the canonical NTD fingerprint remains
+`sha256:ed99e55b55742af1122f3e64e213fc9c70217921c2fba9a1d0f2295c9e5c6510`;
+and the NTD ledger remains exactly 319 succeeded jobs. No developer queue,
+retry, successor, priority or Qwen command was issued.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
