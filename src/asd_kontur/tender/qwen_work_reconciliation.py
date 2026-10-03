@@ -279,11 +279,7 @@ class QwenProjectWorkReconciler:
             # A work-scope decision is defined by the exact design/commercial
             # pair. Splitting a rejected pair into single rows can never produce
             # reciprocal authority, so repair the same two-row context once.
-            if (
-                scope_review
-                and len(rows) == 2
-                and relationship_schema_retry_available
-            ):
+            if scope_review and len(rows) == 2 and relationship_schema_retry_available:
                 observations, call_count, codes = self._reconcile_rows(
                     rows,
                     work_families=work_families,
