@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v77"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v78"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3242,6 +3242,11 @@ def _work_schedule(
         )
         observation = {
             "candidate_id": candidate_id,
+            "work_scope_assertions": [
+                {"source_candidate_id": candidate_id, **dict(value)}
+                for value in resolution.get("work_scope_assertions") or ()
+                if isinstance(value, Mapping)
+            ],
             "project_wording": name,
             "normalized_work_name": normalized_name,
             "facility_id": facility.get("facility_id") if facility else None,
@@ -3450,11 +3455,13 @@ def _work_schedule(
         wording_by_role: dict[str, set[str]] = defaultdict(set)
         semantic_status_by_role: dict[str, set[str]] = defaultdict(set)
         grouped_quantity_interpretations: list[dict[str, Any]] = []
+        grouped_work_scope_assertions: list[dict[str, Any]] = []
         for observation in observations:
             role = str(observation["document_role"])
             quantities_by_role[role].extend(observation["quantities"])
             materials_by_role[role].extend(observation["materials"])
             grouped_quantity_interpretations.extend(observation["quantity_interpretations"])
+            grouped_work_scope_assertions.extend(observation.get("work_scope_assertions") or ())
             wording_by_role[role].add(str(observation["project_wording"]))
             if observation.get("semantic_resolution_status"):
                 semantic_status_by_role[role].add(str(observation["semantic_resolution_status"]))
@@ -3477,6 +3484,10 @@ def _work_schedule(
         )
         schedule = {
             "work_scope_id": schedule_id,
+            "candidate_ids": sorted(
+                str(item["candidate_id"]) for item in observations if item.get("candidate_id")
+            ),
+            "work_scope_assertions": _deduplicate_dicts(grouped_work_scope_assertions),
             "facility_id": next(
                 (str(item["facility_id"]) for item in observations if item.get("facility_id")),
                 None,
@@ -4433,7 +4444,11 @@ def _scope_comparisons(
                     (
                         design_row
                         for design_row in possible_design
-                        if _design_scope_covers_commercial_operation(design_row, row)
+                        if _work_pair_scope_compatibility(design_row, row) is True
+                        or (
+                            _work_pair_scope_compatibility(design_row, row) is None
+                            and _design_scope_covers_commercial_operation(design_row, row)
+                        )
                     ),
                     None,
                 )
@@ -4474,12 +4489,16 @@ def _scope_comparisons(
             else:
                 continue
         elif commercial:
+            pair_compatibility = _work_pair_scope_compatibility_within_schedule(row)
             exact_operation = _exact_cross_role_work_wording(row)
             semantic_operation = _semantic_cross_role_work_operation(row)
             bounded_semantic_match = (
                 semantic_operation is not None and len(row.get("project_wording") or ()) <= 2
             )
-            if row.get("facility_id") or exact_operation or bounded_semantic_match:
+            if pair_compatibility is True or (
+                pair_compatibility is None
+                and (row.get("facility_id") or exact_operation or bounded_semantic_match)
+            ):
                 status = "MATCH"
                 professional_status = "Состав сопоставлен"
                 conclusion = "Проектная и коммерческая позиции найдены в одном инженерном объёме."
@@ -4518,7 +4537,11 @@ def _scope_comparisons(
                 (
                     commercial_row
                     for commercial_row in possible_at_facility
-                    if _design_scope_covers_commercial_operation(row, commercial_row)
+                    if _work_pair_scope_compatibility(row, commercial_row) is True
+                    or (
+                        _work_pair_scope_compatibility(row, commercial_row) is None
+                        and _design_scope_covers_commercial_operation(row, commercial_row)
+                    )
                 ),
                 None,
             )
@@ -4687,6 +4710,82 @@ def _design_scope_covers_commercial_operation(
             "шпунтовые работы",
         }
     return False
+
+
+def _work_pair_scope_compatibility(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> bool | None:
+    """Return reciprocal exact-pair authority, or ``None`` when not reviewed.
+
+    A work row may be reviewed against several peers.  Only reciprocal
+    assertions naming the exact source candidates can authorize a match; a
+    top-level normalized operation is deliberately insufficient.
+    """
+
+    left_ids = {str(value) for value in left.get("candidate_ids") or () if value}
+    right_ids = {str(value) for value in right.get("candidate_ids") or () if value}
+    if not left_ids or not right_ids:
+        return None
+    left_assertions = _work_assertions_by_pair(left)
+    right_assertions = _work_assertions_by_pair(right)
+    decisions: list[bool] = []
+    for left_id in sorted(left_ids):
+        for right_id in sorted(right_ids):
+            direct = left_assertions.get((left_id, right_id))
+            reciprocal = right_assertions.get((right_id, left_id))
+            if direct is None or reciprocal is None:
+                continue
+            if any(
+                direct.get(key) != reciprocal.get(key)
+                for key in ("scope_compatibility", "normalized_operation", "reason")
+            ):
+                continue
+            decisions.append(
+                direct.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value
+                and bool(_normalized(direct.get("normalized_operation")))
+            )
+    if not decisions:
+        return None
+    return all(decisions)
+
+
+def _work_pair_scope_compatibility_within_schedule(work: Mapping[str, Any]) -> bool | None:
+    candidate_ids = {str(value) for value in work.get("candidate_ids") or () if value}
+    assertions = _work_assertions_by_pair(work)
+    decisions: list[bool] = []
+    for candidate_id in sorted(candidate_ids):
+        for peer_id in sorted(candidate_ids - {candidate_id}):
+            direct = assertions.get((candidate_id, peer_id))
+            reciprocal = assertions.get((peer_id, candidate_id))
+            if direct is None or reciprocal is None:
+                continue
+            if any(
+                direct.get(key) != reciprocal.get(key)
+                for key in ("scope_compatibility", "normalized_operation", "reason")
+            ):
+                continue
+            decisions.append(
+                direct.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value
+                and bool(_normalized(direct.get("normalized_operation")))
+            )
+    if not decisions:
+        return None
+    return all(decisions)
+
+
+def _work_assertions_by_pair(
+    work: Mapping[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    return {
+        (
+            str(value.get("source_candidate_id")),
+            str(value.get("related_candidate_id")),
+        ): dict(value)
+        for value in work.get("work_scope_assertions") or ()
+        if isinstance(value, Mapping)
+        and value.get("source_candidate_id")
+        and value.get("related_candidate_id")
+    }
 
 
 def _commercial_document_phrase(available_roles: Iterable[str]) -> str:

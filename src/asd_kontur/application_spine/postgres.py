@@ -543,23 +543,12 @@ def _cross_document_work_batches(
         ]
         if not eligible_seed_pairs:
             continue
-        seed = list(eligible_seed_pairs[0])
+        # Work-scope authority is pair-specific. Keep this lane to exactly one
+        # design/commercial pair so every accepted model assertion names its
+        # peer and a later review cannot overwrite the meaning of an earlier
+        # pair. Quantity/component context has its own bounded multi-row lane.
         batch: list[dict[str, Any]] = []
-        seen_side_wordings: set[tuple[str, str]] = set()
-        quantity_count = 0
-        for value in [*seed, *ordered]:
-            candidate_id = str(value.get("candidate_id") or "")
-            if candidate_id in selected_ids or any(
-                candidate_id == str(existing.get("candidate_id") or "") for existing in batch
-            ):
-                continue
-            wording = " ".join(str(value.get("wording") or "").casefold().split())
-            side_wording = (str(value.get("comparison_side") or ""), wording)
-            row_quantity_count = len(value.get("quantity_observations") or ())
-            if side_wording in seen_side_wordings or len(batch) >= batch_size:
-                continue
-            if batch and quantity_count + row_quantity_count > 16:
-                continue
+        for value in eligible_seed_pairs[0]:
             cleaned = dict(value)
             cleaned.pop("semantic_priority", None)
             cleaned.pop("comparison_side", None)
@@ -567,8 +556,6 @@ def _cross_document_work_batches(
             cleaned.pop("scope_comparison_context_only", None)
             cleaned["analysis_task"] = TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value
             batch.append(cleaned)
-            seen_side_wordings.add(side_wording)
-            quantity_count += row_quantity_count
         if {
             document_comparison_side(value.get("document_role"), value.get("document"))
             for value in batch
@@ -7867,6 +7854,10 @@ class SpinePostgresRepository:
                     compatible_current.get("material_reviews") or (),
                     item.get("material_reviews") or (),
                 )
+                work_scope_assertions = _merged_work_scope_assertions(
+                    compatible_current.get("work_scope_assertions") or (),
+                    item.get("work_scope_assertions") or (),
+                )
                 combined = {
                     **dict(item),
                     "candidate_version": candidate_version,
@@ -7894,6 +7885,8 @@ class SpinePostgresRepository:
                     combined["quantity_reviews"] = quantity_reviews
                 if material_reviews:
                     combined["material_reviews"] = material_reviews
+                if work_scope_assertions:
+                    combined["work_scope_assertions"] = work_scope_assertions
                 resolved[candidate_id] = combined
         return resolved
 
@@ -9911,6 +9904,16 @@ def _quantities_requiring_semantic_review(
         ):
             result.append(row)
             continue
+        # V33 adds pair-specific authority for the work operation itself. V32
+        # already established pair-specific quantity compatibility, so its
+        # accepted numeric decisions remain current input and must not be sent
+        # through the heavy model again merely to obtain the work assertion.
+        if (
+            existing_profile == "qwen-project-work-reconciliation-v32"
+            and str(review.get("status") or "") in {"WORK_QUANTITY", "DURATION"}
+            and review.get("relationship_reviewed") is True
+        ):
+            continue
         if not current_profile_reviewed:
             result.append(row)
             continue
@@ -9953,6 +9956,28 @@ def _compound_quantity_measure_needs_review(
         value,
     )
     return len(numeric_tokens) >= 2
+
+
+def _merged_work_scope_assertions(
+    prior: Iterable[Mapping[str, Any]],
+    current: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Preserve exact work-pair decisions across bounded scope reviews."""
+
+    assertions: dict[str, dict[str, Any]] = {}
+    for value in (*tuple(prior), *tuple(current)):
+        peer_id = str(value.get("related_candidate_id") or "")
+        compatibility = str(value.get("scope_compatibility") or "")
+        reason = " ".join(str(value.get("reason") or "").split())
+        if not peer_id or not compatibility or not reason:
+            continue
+        assertions[peer_id] = {
+            "related_candidate_id": peer_id,
+            "scope_compatibility": compatibility,
+            "normalized_operation": value.get("normalized_operation"),
+            "reason": reason,
+        }
+    return [assertions[key] for key in sorted(assertions)]
 
 
 def _merged_quantity_reviews(

@@ -16,7 +16,7 @@ from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure,
 from .analysis_harness import TenderAnalysisTask, TenderHarnessTaskInput, bounded_task_payload
 from .quantity_semantics import QuantityRelation, QuantityType, ScopeCompatibility
 
-PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v32"
+PROJECT_WORK_RECONCILIATION_PROFILE = "qwen-project-work-reconciliation-v33"
 PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v3",
     "qwen-project-work-reconciliation-v4",
@@ -47,9 +47,10 @@ PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES = (
     "qwen-project-work-reconciliation-v29",
     "qwen-project-work-reconciliation-v30",
     "qwen-project-work-reconciliation-v31",
+    "qwen-project-work-reconciliation-v32",
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
-WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@19.0.0"
+WORK_RECONCILIATION_CONTRACT = "project-work-reconciliation-result@20.0.0"
 _STATUSES = frozenset({"MATCHED", "AMBIGUOUS", "UNCLASSIFIED", "NOT_A_WORK"})
 _QUANTITY_STATUSES = frozenset(
     {
@@ -99,6 +100,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_source_value_invalid",
         "qwen_work_reconciliation_quantity_relation_ids_invalid",
         "qwen_work_reconciliation_scope_assertions_invalid",
+        "qwen_work_reconciliation_work_scope_assertions_invalid",
         "qwen_work_reconciliation_component_completeness_invalid",
         "qwen_work_reconciliation_alternative_evidence_missing",
         "qwen_work_reconciliation_same_scope_operation_mismatch",
@@ -193,6 +195,11 @@ class QwenProjectWorkReconciler:
             if isinstance(value, Mapping) and value.get("quantity_candidate_id")
         }
         try:
+            scope_review = bool(rows) and all(
+                str(row.get("analysis_task") or "")
+                == TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value
+                for row in rows
+            )
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             output_budget = (
                 5_000
@@ -234,6 +241,7 @@ class QwenProjectWorkReconciler:
                     mark_relationship_reviewed=(
                         relationship_review and relationship_context_complete
                     ),
+                    scope_review=scope_review,
                 ),
                 1,
                 [],
@@ -525,7 +533,11 @@ def _prompt(
 {{"observations":[{{"candidate_id":"...","status":"MATCHED|AMBIGUOUS|UNCLASSIFIED|NOT_A_WORK",
 "family_key":"ключ или null","operation":"краткое профессиональное название или null",
 "facility":"одно допустимое сооружение или null","confidence":"0.00..1.00",
-"reason":"краткая инженерная причина","quantity_reviews":[{{
+"reason":"краткая инженерная причина","work_scope_assertions":[{{
+"related_candidate_id":"...",
+"scope_compatibility":"SAME_SCOPE|OVERLAPPING_SCOPE|DIFFERENT_SCOPE|ALTERNATIVE_DESIGN|REVISION_DIFFERENCE|INSUFFICIENT_INFORMATION",
+"normalized_operation":"общее краткое название только для SAME_SCOPE или null",
+"reason":"почему эта пара описывает один или разные объёмы работ"}}],"quantity_reviews":[{{
 "quantity_candidate_id":"...","status":"WORK_QUANTITY|DIMENSION|DURATION|RESOURCE_OR_RATE|UNRELATED|AMBIGUOUS",
 "source_value":"точное числовое значение из источника или null",
 "source_unit":"точная единица из источника, включая масштаб 10/100/1000, или null",
@@ -582,6 +594,12 @@ quantity_candidate_id перечисляют ВСЕ составляющие и�
 Если они описывают один инженерный объём, используйте одинаковое нормализованное operation. Если
 одна строка является частью, включённой работой, альтернативой, другой редакцией или иным объёмом,
 не объединяйте их только из-за одинакового deterministic_family_hint; отразите различие в reason.
+Для задачи CROSS_DOCUMENT_SCOPE_MATCHING верните work_scope_assertions для точной переданной пары
+проектной и коммерческой строк. Решение должно быть взаимным: обе строки ссылаются друг на друга
+и используют одинаковые scope_compatibility и reason. SAME_SCOPE допустим только для одной
+инженерной операции с одинаковыми границами; тогда normalized_operation обязателен и дословно
+одинаков в обеих строках. Для остальных решений normalized_operation должен быть null. Одинаковый
+вид работ или одно сооружение сами по себе не доказывают SAME_SCOPE.
 Для каждой пары переданных чисел по одной инженерной операции примите явное решение о
 сопоставимости. Если значения измеряют один и тот же инженерный объём, даже когда сами числа
 различаются, укажите SAME_SCOPE для обеих строк и используйте для них дословно одинаковый краткий
@@ -636,6 +654,7 @@ def _parse(
     facilities: tuple[str, ...],
     relationship_review: bool,
     mark_relationship_reviewed: bool,
+    scope_review: bool = False,
 ) -> list[dict[str, Any]]:
     text = raw.strip()
     if text.startswith("```"):
@@ -670,6 +689,7 @@ def _parse(
         reason = " ".join(str(value.get("reason") or "").split())
         raw_quantity_reviews = value.get("quantity_reviews")
         raw_material_reviews = value.get("material_reviews", [])
+        raw_work_scope_assertions = value.get("work_scope_assertions", [])
         try:
             confidence = Decimal(str(value.get("confidence")))
         except (InvalidOperation, TypeError) as exc:
@@ -712,6 +732,12 @@ def _parse(
             allowed_quantity_ids=set(quantity_ids),
             work_families=allowed_families,
         )
+        work_scope_assertions = _parse_work_scope_assertions(
+            raw_work_scope_assertions,
+            candidate_id=candidate_id,
+            allowed_ids=allowed_ids,
+            required=scope_review,
+        )
         observation: dict[str, Any] = {
             "candidate_id": candidate_id,
             "status": status,
@@ -725,6 +751,8 @@ def _parse(
             observation["quantity_reviews"] = quantity_reviews
         if material_reviews:
             observation["material_reviews"] = material_reviews
+        if work_scope_assertions:
+            observation["work_scope_assertions"] = work_scope_assertions
         observations[candidate_id] = observation
     if set(observations) != allowed_ids:
         raise QwenSemanticFailure("qwen_work_reconciliation_incomplete_output")
@@ -734,7 +762,77 @@ def _parse(
             ordered,
             quantity_context_by_id=quantity_context_by_id,
         )
+    if scope_review:
+        _validate_work_scope_assertions(ordered)
     return ordered
+
+
+def _parse_work_scope_assertions(
+    raw: object,
+    *,
+    candidate_id: str,
+    allowed_ids: set[str],
+    required: bool,
+) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
+    if required and len(raw) != 1:
+        raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
+    allowed_compatibility = {
+        ScopeCompatibility.SAME_SCOPE.value,
+        ScopeCompatibility.OVERLAPPING_SCOPE.value,
+        ScopeCompatibility.DIFFERENT_SCOPE.value,
+        ScopeCompatibility.ALTERNATIVE_DESIGN.value,
+        ScopeCompatibility.REVISION_DIFFERENCE.value,
+        ScopeCompatibility.INSUFFICIENT_INFORMATION.value,
+    }
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for value in raw:
+        if not isinstance(value, Mapping):
+            raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
+        peer_id = str(value.get("related_candidate_id") or "")
+        compatibility = str(value.get("scope_compatibility") or "")
+        normalized_operation = (
+            " ".join(str(value.get("normalized_operation") or "").split()) or None
+        )
+        reason = " ".join(str(value.get("reason") or "").split())
+        if (
+            peer_id not in allowed_ids
+            or peer_id == candidate_id
+            or peer_id in seen
+            or compatibility not in allowed_compatibility
+            or not reason
+            or (compatibility == ScopeCompatibility.SAME_SCOPE.value) != bool(normalized_operation)
+        ):
+            raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
+        seen.add(peer_id)
+        result.append(
+            {
+                "related_candidate_id": peer_id,
+                "scope_compatibility": compatibility,
+                "normalized_operation": normalized_operation,
+                "reason": reason[:500],
+            }
+        )
+    return result
+
+
+def _validate_work_scope_assertions(observations: Iterable[Mapping[str, Any]]) -> None:
+    by_id = {str(value.get("candidate_id") or ""): value for value in observations}
+    for candidate_id, observation in by_id.items():
+        for assertion in observation.get("work_scope_assertions") or ():
+            peer_id = str(assertion.get("related_candidate_id") or "")
+            reciprocal = [
+                value
+                for value in by_id.get(peer_id, {}).get("work_scope_assertions") or ()
+                if str(value.get("related_candidate_id") or "") == candidate_id
+            ]
+            if len(reciprocal) != 1 or any(
+                reciprocal[0].get(key) != assertion.get(key)
+                for key in ("scope_compatibility", "normalized_operation", "reason")
+            ):
+                raise QwenSemanticFailure("qwen_work_reconciliation_work_scope_assertions_invalid")
 
 
 def _validate_relationship_consistency(

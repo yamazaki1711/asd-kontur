@@ -77,6 +77,18 @@ def test_cross_document_scope_task_asks_for_semantic_operation_without_arithmeti
                         "facility": "Gallery B",
                         "confidence": "0.92",
                         "reason": "Обе строки описывают монтаж ферм одного сооружения.",
+                        "work_scope_assertions": [
+                            {
+                                "related_candidate_id": (
+                                    "commercial-row"
+                                    if candidate_id == "design-row"
+                                    else "design-row"
+                                ),
+                                "scope_compatibility": "SAME_SCOPE",
+                                "normalized_operation": "Монтаж стальных ферм",
+                                "reason": "Обе строки описывают один объём монтажа ферм.",
+                            }
+                        ],
                     }
                     for candidate_id in ("design-row", "commercial-row")
                 ]
@@ -106,6 +118,10 @@ def test_cross_document_scope_task_asks_for_semantic_operation_without_arithmeti
         "Монтаж стальных ферм",
         "Монтаж стальных ферм",
     ]
+    assert all(
+        value["work_scope_assertions"][0]["scope_compatibility"] == "SAME_SCOPE"
+        for value in result["observations"]
+    )
 
 
 def test_qwen_work_reconciliation_preserves_full_wording_and_context_locators(

@@ -30,6 +30,7 @@ from asd_kontur.application_spine.postgres import (
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _merged_quantity_reviews,
+    _merged_work_scope_assertions,
     _priority_semantic_batch_limit,
     _quantities_requiring_semantic_review,
     _quantity_comparison_context_policy,
@@ -463,9 +464,35 @@ def test_cross_document_work_batches_review_exact_wording_without_location() -> 
     batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=4)
 
     assert [[value["candidate_id"] for value in batch] for batch in batches] == [
-        ["design", "commercial", "other-commercial"]
+        ["design", "commercial"]
     ]
-    assert selected == {"design", "commercial", "other-commercial"}
+    assert selected == {"design", "commercial"}
+
+
+def test_work_scope_assertions_are_preserved_across_exact_pair_reviews() -> None:
+    combined = _merged_work_scope_assertions(
+        [
+            {
+                "related_candidate_id": "commercial-a",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Монтаж ферм",
+                "reason": "Один объём работ.",
+            }
+        ],
+        [
+            {
+                "related_candidate_id": "commercial-b",
+                "scope_compatibility": "DIFFERENT_SCOPE",
+                "normalized_operation": None,
+                "reason": "Связи покрытия являются другой операцией.",
+            }
+        ],
+    )
+
+    assert [value["related_candidate_id"] for value in combined] == [
+        "commercial-a",
+        "commercial-b",
+    ]
 
 
 def test_cross_document_work_batches_send_unlocated_family_synonyms_for_semantic_review() -> None:

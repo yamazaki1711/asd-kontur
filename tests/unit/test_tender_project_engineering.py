@@ -2446,6 +2446,103 @@ def test_generic_sheet_pile_design_scope_covers_driving_at_same_facility_only() 
     assert extraction["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
 
+def test_reciprocal_exact_work_pair_authorizes_different_source_wording() -> None:
+    reason = "Обе строки описывают один объём монтажа ферм."
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": "design-trusses",
+                "candidate_ids": ["design-row"],
+                "work_scope_assertions": [
+                    {
+                        "source_candidate_id": "design-row",
+                        "related_candidate_id": "commercial-row",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "normalized_operation": "Монтаж стальных ферм",
+                        "reason": reason,
+                    }
+                ],
+                "facility_id": "gallery-b",
+                "facility": "Gallery B",
+                "family_key": "structural_steel",
+                "work_name": "Устройство несущего покрытия",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                "work_scope_id": "commercial-trusses",
+                "candidate_ids": ["commercial-row"],
+                "work_scope_assertions": [
+                    {
+                        "source_candidate_id": "commercial-row",
+                        "related_candidate_id": "design-row",
+                        "scope_compatibility": "SAME_SCOPE",
+                        "normalized_operation": "Монтаж стальных ферм",
+                        "reason": reason,
+                    }
+                ],
+                "facility_id": "gallery-b",
+                "facility": "Gallery B",
+                "family_key": "structural_steel",
+                "work_name": "Монтаж ферм покрытия",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-locator"],
+            },
+        ]
+    )
+
+    assert {value["classification"] for value in comparisons} == {"MATCH"}
+
+
+def test_reciprocal_different_scope_rejects_false_work_match() -> None:
+    reason = "Проектная строка описывает фермы, коммерческая — связи покрытия."
+    common = {
+        "facility_id": "gallery-b",
+        "facility": "Gallery B",
+        "family_key": "structural_steel",
+    }
+    comparisons = _scope_comparisons(
+        [
+            {
+                **common,
+                "work_scope_id": "design-trusses",
+                "candidate_ids": ["design-row"],
+                "work_scope_assertions": [
+                    {
+                        "source_candidate_id": "design-row",
+                        "related_candidate_id": "commercial-row",
+                        "scope_compatibility": "DIFFERENT_SCOPE",
+                        "normalized_operation": None,
+                        "reason": reason,
+                    }
+                ],
+                "work_name": "Монтаж металлоконструкций",
+                "document_roles": ["РД"],
+                "source_locator_ids": ["design-locator"],
+            },
+            {
+                **common,
+                "work_scope_id": "commercial-bracing",
+                "candidate_ids": ["commercial-row"],
+                "work_scope_assertions": [
+                    {
+                        "source_candidate_id": "commercial-row",
+                        "related_candidate_id": "design-row",
+                        "scope_compatibility": "DIFFERENT_SCOPE",
+                        "normalized_operation": None,
+                        "reason": reason,
+                    }
+                ],
+                "work_name": "Монтаж металлоконструкций",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-locator"],
+            },
+        ]
+    )
+
+    assert {value["classification"] for value in comparisons} == {"UNRESOLVED_SCOPE_MATCH"}
+
+
 def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
     comparisons = _scope_comparisons(
         [
@@ -2879,7 +2976,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v77"
+    assert model["model_version"] == "project-engineering-model-v78"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
