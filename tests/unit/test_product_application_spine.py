@@ -845,6 +845,97 @@ def test_quantity_relationship_batch_keeps_related_components_with_selected_tota
     assert selected == {"component-a", "component-b", "total"}
 
 
+def test_quantity_relationship_batch_can_review_total_across_facility_components() -> None:
+    north = _work_batch_row(
+        "north-component",
+        facility="Опора Север",
+        family="structural_steel",
+        document_role="РД",
+        wording="Монтаж металлоконструкций северного пролёта",
+    )
+    north["quantity_observations"][0].update(
+        quantity_candidate_id="north-mass",
+        value="7.4",
+        unit="т",
+        prior_quantity_type="COMPONENT",
+        prior_semantic_scope="Масса металлоконструкций пролёта",
+    )
+    south = _work_batch_row(
+        "south-component",
+        facility="Опора Юг",
+        family="structural_steel",
+        document_role="РД",
+        wording="Монтаж металлоконструкций южного пролёта",
+    )
+    south["quantity_observations"][0].update(
+        quantity_candidate_id="south-mass",
+        value="5.1",
+        unit="т",
+        prior_quantity_type="STANDALONE",
+        prior_semantic_scope="Масса металлоконструкций пролёта",
+    )
+    total = _work_batch_row(
+        "project-total",
+        facility="",
+        family="structural_steel",
+        document_role="ВОР",
+        wording="Монтаж металлоконструкций пролётов, всего",
+    )
+    total["quantity_observations"][0].update(
+        quantity_candidate_id="project-total-mass",
+        value="12.5",
+        unit="т",
+        prior_quantity_type="TOTAL",
+        prior_semantic_scope="Общая масса металлоконструкций пролётов",
+    )
+    duplicate_total = _work_batch_row(
+        "project-total-alias",
+        facility="",
+        family="structural_steel",
+        document_role="ВОР",
+        wording="Металлоконструкции пролётов",
+    )
+    duplicate_total["quantity_observations"][0].update(
+        quantity_candidate_id="project-total-mass",
+        value="12.5",
+        unit="т",
+        prior_quantity_type="TOTAL",
+        prior_semantic_scope="Общая масса металлоконструкций пролётов",
+    )
+    unrelated = _work_batch_row(
+        "unrelated",
+        facility="Башня 3",
+        family="structural_steel",
+        document_role="РД",
+        wording="Монтаж лестничного ограждения",
+    )
+    unrelated["quantity_observations"][0].update(
+        quantity_candidate_id="railing-mass",
+        value="1.8",
+        unit="т",
+        prior_quantity_type="STANDALONE",
+        prior_semantic_scope="Масса лестничного ограждения",
+    )
+    rows = [north, south, total, duplicate_total, unrelated]
+    for row in rows:
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+
+    batches, selected = _quantity_relationship_batches(rows, batch_size=2, max_batches=1)
+
+    assert {item["candidate_id"] for item in batches[0]} == {
+        "north-component",
+        "south-component",
+        "project-total",
+    }
+    quantity_ids = [
+        str(quantity.get("quantity_candidate_id") or quantity.get("candidate_id"))
+        for item in batches[0]
+        for quantity in item["quantity_observations"]
+    ]
+    assert quantity_ids == list(dict.fromkeys(quantity_ids))
+    assert "unrelated" not in selected
+
+
 def test_quantity_relationship_pair_ranking_never_uses_numeric_similarity() -> None:
     design = _work_batch_row(
         "design",

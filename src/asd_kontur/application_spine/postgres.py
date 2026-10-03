@@ -645,6 +645,15 @@ def _relationship_group_component_total_context_size(
     return max(3, hinted_rows)
 
 
+def _relationship_quantity_ids(row: Mapping[str, Any]) -> set[str]:
+    return {
+        str(value.get("quantity_candidate_id") or value.get("candidate_id") or "")
+        for value in row.get("quantity_observations") or ()
+        if isinstance(value, Mapping)
+        and (value.get("quantity_candidate_id") or value.get("candidate_id"))
+    }
+
+
 def _ordered_relationship_pair(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -677,6 +686,8 @@ def _quantity_relationship_batches(
 
     attempted_pairs = attempted_pairs or set()
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    family_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    family_locations: dict[str, set[str]] = defaultdict(set)
     for raw in rows:
         row = dict(raw)
         if row.get("relationship_review_needed") is not True:
@@ -689,10 +700,30 @@ def _quantity_relationship_batches(
         )
         location = hints[0] if len(hints) == 1 else "unassigned"
         groups[(location, family)].append(row)
+        family_rows[family].append(row)
+        family_locations[family].add(location)
+
+    # A project/VOR total may intentionally cover components assigned to
+    # different facilities. Keep the exact-location groups, but also assemble
+    # one bounded project-wide context when prior semantic reviews already show
+    # a total/component pattern across more than one location. This does not
+    # assert that the rows are additive; Qwen must establish that relationship.
+    for family, values in family_rows.items():
+        if len(family_locations[family]) < 2:
+            continue
+        quantity_types = {
+            str(quantity.get("prior_quantity_type") or "")
+            for row in values
+            for quantity in row.get("quantity_observations") or ()
+            if isinstance(quantity, Mapping)
+        }
+        if "TOTAL" in quantity_types and quantity_types & {"COMPONENT", "SUBTOTAL"}:
+            groups[("project-wide", family)] = values
 
     ordered_groups = sorted(
         groups.items(),
         key=lambda item: (
+            int(_relationship_group_component_total_context_size(item[1]) > 0),
             _relationship_group_lane_priority(item[1]),
             len(
                 {
@@ -729,6 +760,7 @@ def _quantity_relationship_batches(
             (left, right)
             for left, right in combinations(ordered, 2)
             if _relationship_pair_is_professionally_relevant(left, right)
+            and _relationship_quantity_ids(left) != _relationship_quantity_ids(right)
             and _relationship_pair_key(left.get("candidate_id"), right.get("candidate_id"))
             not in attempted_pairs
             and (
@@ -793,6 +825,7 @@ def _quantity_relationship_batches(
         )
         batch: list[dict[str, Any]] = []
         quantity_count = 0
+        included_quantity_ids: set[str] = set()
         for row in [*seeds, *context_rows]:
             candidate_id = str(row.get("candidate_id") or "")
             if (
@@ -804,13 +837,30 @@ def _quantity_relationship_batches(
                 or len(batch) >= relationship_batch_size
             ):
                 continue
-            row_quantity_count = len(row.get("quantity_observations") or ())
+            row_quantities = [
+                dict(value)
+                for value in row.get("quantity_observations") or ()
+                if isinstance(value, Mapping)
+            ]
+            row_quantity_ids = _relationship_quantity_ids(row)
+            if row_quantity_ids and row_quantity_ids.issubset(included_quantity_ids):
+                continue
+            if included_quantity_ids & row_quantity_ids:
+                row_quantities = [
+                    value
+                    for value in row_quantities
+                    if str(value.get("quantity_candidate_id") or value.get("candidate_id") or "")
+                    not in included_quantity_ids
+                ]
+            row_quantity_count = len(row_quantities)
             if row_quantity_count == 0 or (batch and quantity_count + row_quantity_count > 16):
                 continue
             cleaned = {**row, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"}
             cleaned.pop("comparison_context_only", None)
+            cleaned["quantity_observations"] = row_quantities
             batch.append(cleaned)
             quantity_count += row_quantity_count
+            included_quantity_ids.update(_relationship_quantity_ids(cleaned))
         if quantity_count < 2:
             continue
         # A settled observation may return only in an actual relationship
