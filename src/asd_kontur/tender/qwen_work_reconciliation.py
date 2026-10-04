@@ -167,7 +167,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
 class QwenProjectWorkReconciler:
     """Interpret only bounded unresolved rows; deterministic code owns validation."""
 
-    def __init__(self, endpoint: str, *, timeout_seconds: float = 900.0) -> None:
+    def __init__(self, endpoint: str, *, timeout_seconds: float = 360.0) -> None:
         if not endpoint.startswith(("http://127.0.0.1:", "http://localhost:")):
             raise ValueError("qwen_work_reconciliation_endpoint_invalid")
         self._endpoint = endpoint

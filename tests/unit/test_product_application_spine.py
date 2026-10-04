@@ -39,6 +39,7 @@ from asd_kontur.application_spine.postgres import (
     _semantic_extraction_priority,
     _semantic_recovery_stalled,
     _work_reconciliation_attempt_sets,
+    _work_reconciliation_manifest_replays_accepted_pair,
     _work_scope_comparison_context_available,
 )
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
@@ -1822,6 +1823,45 @@ def test_work_reconciliation_attempt_sets_track_explicit_scope_pair() -> None:
     assert attempted == {"design-scope", "commercial-scope"}
     assert quantity_pairs == set()
     assert scope_pairs == {("commercial-scope", "design-scope")}
+
+
+def test_compatible_pair_ledger_rejects_only_exact_replay() -> None:
+    accepted = {("commercial-scope", "design-scope")}
+    replay = {
+        "work_observations": [
+            {
+                "candidate_id": "design-scope",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "commercial-scope",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ]
+    }
+    distinct = {
+        "work_observations": [
+            {
+                "candidate_id": "design-scope",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+            {
+                "candidate_id": "other-commercial-scope",
+                "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+            },
+        ]
+    }
+
+    assert _work_reconciliation_manifest_replays_accepted_pair(
+        replay,
+        accepted_relationship_pairs=set(),
+        accepted_scope_pairs=accepted,
+    )
+    assert not _work_reconciliation_manifest_replays_accepted_pair(
+        distinct,
+        accepted_relationship_pairs=set(),
+        accepted_scope_pairs=accepted,
+    )
 
 
 def test_settled_quantity_remains_available_for_distinct_cross_document_pairs() -> None:

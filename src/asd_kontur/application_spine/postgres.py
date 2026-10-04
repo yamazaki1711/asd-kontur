@@ -1181,6 +1181,20 @@ def _work_reconciliation_attempt_sets(
     return attempted, attempted_relationship_pairs, attempted_scope_pairs
 
 
+def _work_reconciliation_manifest_replays_accepted_pair(
+    manifest: Mapping[str, Any],
+    *,
+    accepted_relationship_pairs: set[tuple[str, str]],
+    accepted_scope_pairs: set[tuple[str, str]],
+) -> bool:
+    """Return whether one queued manifest only repeats an accepted pair decision."""
+
+    _, relationship_pairs, scope_pairs = _work_reconciliation_attempt_sets((manifest,))
+    return (
+        bool(relationship_pairs) and relationship_pairs.issubset(accepted_relationship_pairs)
+    ) or (bool(scope_pairs) and scope_pairs.issubset(accepted_scope_pairs))
+
+
 def _quantity_comparison_context_policy(
     *,
     existing: Mapping[str, Any] | None,
@@ -1463,7 +1477,7 @@ class SpinePostgresRepository:
                         "count(*) FILTER (WHERE job.state='succeeded') AS succeeded_count,"
                         "count(*) FILTER (WHERE job.state IN ('queued','leased','running')) AS active_count,"
                         "count(*) FILTER (WHERE job.state IN ('leased','running')) AS running_count,"
-                        "count(*) FILTER (WHERE job.state='reconciliation_required' AND "
+                        "count(*) FILTER (WHERE job.state IN ('failed','reconciliation_required') AND "
                         "job.typed_failure_code IS DISTINCT FROM 'dependency_terminal_failure' "
                         "AND NOT EXISTS ("
                         "SELECT 1 FROM workspace.durable_jobs accepted WHERE "
@@ -1547,7 +1561,6 @@ class SpinePostgresRepository:
         active_count = int(jobs["active_count"] or 0)
         blocked_count = int(jobs["blocked_count"] or 0)
         succeeded_count = int(jobs["succeeded_count"] or 0)
-        total_count = int(jobs["total_count"] or 0)
         if active_count and active_kinds.intersection(analysis_kinds):
             status = "analyzing_project"
             stage = "project_analysis"
@@ -1563,7 +1576,13 @@ class SpinePostgresRepository:
         else:
             status = "processing_error" if latest_failure else "processing"
             stage = "admission"
-        denominator = max(total_count, 1)
+        # Historical cancellation/supersession is immutable audit history, not
+        # unfinished user work.  Including it in the denominator made document-
+        # complete projects appear stuck near 35% and allowed a profile rollout
+        # to move progress backwards.  Progress is the resolved share of the
+        # current effective work set; active and unreplaced blocked items are the
+        # only remaining denominator.
+        denominator = max(succeeded_count + active_count + blocked_count, 1)
         return ProjectProcessingStatus(
             status=status,
             current_stage=stage,
@@ -6172,25 +6191,91 @@ class SpinePostgresRepository:
     ) -> int:
         """Terminally account for unclaimed work from superseded Qwen profiles."""
 
-        rows = session.execute(
+        rows = [
+            {
+                "job_id": UUID(str(row.job_id)),
+                "lease_generation": int(row.lease_generation),
+                "prior_profile": str(row.prior_profile or ""),
+                "reason_code": "superseded_work_reconciliation_profile",
+            }
+            for row in session.execute(
+                sa.text(
+                    "SELECT job_id,lease_generation,input_manifest->>"
+                    "'work_reconciliation_profile' AS prior_profile FROM workspace.durable_jobs "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace AND "
+                    "job_kind='PROJECT_WORK_RECONCILIATION' AND state='queued' AND "
+                    "COALESCE(input_manifest->>'work_reconciliation_profile','')<>:profile "
+                    "ORDER BY created_at,job_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    "limit": limit,
+                },
+            ).all()
+        ]
+
+        # Current-profile jobs can also be redundant when a compatible accepted
+        # profile already decided the exact relationship/scope pair.  Previously
+        # every prompt bump reset the pair ledger and caused profile-wide Qwen
+        # replay.  Only unclaimed jobs are terminally accounted here; running
+        # inference is never interrupted.
+        accepted_manifests = session.execute(
             sa.text(
-                "SELECT job_id,lease_generation,input_manifest->>"
-                "'work_reconciliation_profile' AS prior_profile FROM workspace.durable_jobs "
-                "WHERE organization_id=:organization AND workspace_id=:workspace AND "
-                "job_kind='PROJECT_WORK_RECONCILIATION' AND state='queued' AND "
-                "COALESCE(input_manifest->>'work_reconciliation_profile','')<>:profile "
-                "ORDER BY created_at,job_id LIMIT :limit FOR UPDATE SKIP LOCKED"
+                "SELECT job.input_manifest FROM workspace.durable_jobs job JOIN "
+                "workspace.project_work_reconciliation_results result ON "
+                "result.organization_id=job.organization_id AND "
+                "result.workspace_id=job.workspace_id AND result.job_id=job.job_id "
+                "WHERE job.organization_id=:organization AND job.workspace_id=:workspace "
+                "AND job.job_kind='PROJECT_WORK_RECONCILIATION' AND job.state='succeeded' "
+                "AND result.profile_version=ANY(:profiles) AND "
+                "result.profile_version<>:profile"
             ),
             {
                 "organization": organization_id,
                 "workspace": workspace_id,
+                "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
                 "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
-                "limit": limit,
             },
-        ).all()
+        ).scalars()
+        _, accepted_relationship_pairs, accepted_scope_pairs = _work_reconciliation_attempt_sets(
+            dict(value) for value in accepted_manifests
+        )
+        if accepted_relationship_pairs or accepted_scope_pairs:
+            current_rows = session.execute(
+                sa.text(
+                    "SELECT job_id,lease_generation,input_manifest FROM "
+                    "workspace.durable_jobs WHERE organization_id=:organization AND "
+                    "workspace_id=:workspace AND job_kind='PROJECT_WORK_RECONCILIATION' "
+                    "AND state='queued' AND input_manifest->>"
+                    "'work_reconciliation_profile'=:profile ORDER BY created_at,job_id "
+                    "LIMIT :limit FOR UPDATE SKIP LOCKED"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    "limit": limit,
+                },
+            ).all()
+            for row in current_rows:
+                if _work_reconciliation_manifest_replays_accepted_pair(
+                    dict(row.input_manifest),
+                    accepted_relationship_pairs=accepted_relationship_pairs,
+                    accepted_scope_pairs=accepted_scope_pairs,
+                ):
+                    rows.append(
+                        {
+                            "job_id": UUID(str(row.job_id)),
+                            "lease_generation": int(row.lease_generation),
+                            "prior_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                            "reason_code": "superseded_compatible_work_decision",
+                        }
+                    )
         for row in rows:
-            job_id = UUID(str(row.job_id))
-            reason_code = "superseded_work_reconciliation_profile"
+            job_id = row["job_id"]
+            reason_code = row["reason_code"]
             cancellation_id = uuid7()
             session.execute(
                 sa.text(
@@ -6218,7 +6303,7 @@ class SpinePostgresRepository:
             result = {
                 "semantic_effect": False,
                 "reason": reason_code,
-                "prior_profile": str(row.prior_profile or ""),
+                "prior_profile": row["prior_profile"],
                 "replacement_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
             }
             receipt_id = uuid7()
@@ -6235,7 +6320,7 @@ class SpinePostgresRepository:
                     "workspace": workspace_id,
                     "receipt": receipt_id,
                     "job": job_id,
-                    "generation": int(row.lease_generation),
+                    "generation": row["lease_generation"],
                     "reason": reason_code,
                     "result": _json(result),
                     "digest": semantic_digest(
@@ -6582,6 +6667,11 @@ class SpinePostgresRepository:
             prior = self._project_work_resolution_rows(
                 session, organization_id=organization_id, workspace_id=workspace_id
             )
+            # A prompt/profile release is not, by itself, authority to replay an
+            # accepted semantic decision.  Treat every explicitly compatible
+            # successful profile as the same decision ledger.  A future release
+            # that genuinely invalidates an accepted decision must remove that
+            # profile from the compatibility contract deliberately.
             (
                 attempted_candidate_ids,
                 attempted_relationship_pairs,
@@ -6590,15 +6680,18 @@ class SpinePostgresRepository:
                 dict(value)
                 for value in session.execute(
                     sa.text(
-                        "SELECT input_manifest FROM workspace.durable_jobs WHERE "
-                        "organization_id=:o AND workspace_id=:w AND "
-                        "job_kind='PROJECT_WORK_RECONCILIATION' AND "
-                        "input_manifest->>'work_reconciliation_profile'=:profile"
+                        "SELECT job.input_manifest FROM workspace.durable_jobs job JOIN "
+                        "workspace.project_work_reconciliation_results result ON "
+                        "result.organization_id=job.organization_id AND "
+                        "result.workspace_id=job.workspace_id AND result.job_id=job.job_id "
+                        "WHERE job.organization_id=:o AND job.workspace_id=:w AND "
+                        "job.job_kind='PROJECT_WORK_RECONCILIATION' AND job.state='succeeded' "
+                        "AND result.profile_version=ANY(:profiles)"
                     ),
                     {
                         "o": organization_id,
                         "w": workspace_id,
-                        "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
                     },
                 ).scalars()
             )

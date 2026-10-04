@@ -239,6 +239,130 @@ def test_work_profile_upgrade_cancels_only_older_queued_model_work(
     )
 
 
+def test_compatible_accepted_scope_pair_cancels_current_profile_replay(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="compatible-pair-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Compatible pair owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "compatible-pair-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Compatible semantic pair"},
+            headers=_csrf(client),
+        ).json()
+    organization_id = UUID(workspace["organization_id"])
+    workspace_id = UUID(workspace["workspace_id"])
+    accepted_job_id = uuid4()
+    replay_job_id = uuid4()
+    observations = [
+        {
+            "candidate_id": "design-work",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+        },
+        {
+            "candidate_id": "commercial-work",
+            "analysis_task": "CROSS_DOCUMENT_SCOPE_MATCHING",
+        },
+    ]
+    accepted_manifest = {
+        "work_reconciliation_profile": "qwen-project-work-reconciliation-v39",
+        "work_observations": observations,
+    }
+    replay_manifest = {
+        "work_reconciliation_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+        "work_observations": observations,
+    }
+    with postgres_environment.owner_engine.begin() as connection:
+        owner = connection.scalar(
+            sa.text(
+                "SELECT created_by_identity_id FROM workspace.workspaces "
+                "WHERE organization_id=:organization AND workspace_id=:workspace"
+            ),
+            {"organization": organization_id, "workspace": workspace_id},
+        )
+        for job_id, manifest, state in (
+            (accepted_job_id, accepted_manifest, "succeeded"),
+            (replay_job_id, replay_manifest, "queued"),
+        ):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                    "job_kind,input_manifest,input_digest,idempotency_key,state,priority,"
+                    "max_attempts,retry_policy_version,provenance,correlation_id,"
+                    "created_by_identity_id,completed_at) VALUES (:organization,:workspace,:job,"
+                    "'PROJECT_WORK_RECONCILIATION',CAST(:manifest AS jsonb),:digest,:key,"
+                    ":state,175,3,'synthetic-retry-v1',CAST(:provenance AS jsonb),"
+                    ":correlation,:owner,CASE WHEN :state='succeeded' THEN CURRENT_TIMESTAMP END)"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "job": job_id,
+                    "manifest": json.dumps(manifest),
+                    "digest": semantic_digest(manifest),
+                    "key": f"compatible-pair:{job_id}",
+                    "state": state,
+                    "provenance": json.dumps({"contract": "synthetic-profile-test@1.0.0"}),
+                    "correlation": uuid4(),
+                    "owner": owner,
+                },
+            )
+        accepted_result = {
+            "profile_version": "qwen-project-work-reconciliation-v39",
+            "observations": [],
+        }
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.project_work_reconciliation_results "
+                "(organization_id,workspace_id,job_id,profile_version,input_digest,"
+                "result_manifest,result_digest,model_identity) VALUES "
+                "(:organization,:workspace,:job,'qwen-project-work-reconciliation-v39',"
+                ":input_digest,CAST(:result AS jsonb),:result_digest,'Qwen3.8-27B-MLX-8bit')"
+            ),
+            {
+                "organization": organization_id,
+                "workspace": workspace_id,
+                "job": accepted_job_id,
+                "input_digest": semantic_digest(accepted_manifest),
+                "result": json.dumps(accepted_result),
+                "result_digest": semantic_digest(accepted_result),
+            },
+        )
+
+    repository = SpinePostgresRepository(postgres_environment.document_worker_engine)
+    with Session(postgres_environment.document_worker_engine) as session, session.begin():
+        session.execute(
+            sa.select(
+                sa.func.set_config("asd.organization_id", str(organization_id), True),
+                sa.func.set_config("asd.workspace_id", str(workspace_id), True),
+            )
+        ).one()
+        assert (
+            repository._supersede_queued_work_reconciliation_profiles(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+            )
+            == 1
+        )
+
+    with postgres_environment.owner_engine.connect() as connection:
+        replay = connection.execute(
+            sa.text(
+                "SELECT state,typed_failure_code FROM workspace.durable_jobs WHERE job_id=:job"
+            ),
+            {"job": replay_job_id},
+        ).one()
+    assert replay == ("cancelled", "superseded_compatible_work_decision")
+
+
 def _database_url(engine: sa.Engine) -> str:
     return engine.url.render_as_string(hide_password=False)
 
