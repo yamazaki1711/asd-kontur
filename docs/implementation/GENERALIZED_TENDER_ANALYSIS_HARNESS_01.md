@@ -869,6 +869,45 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Pipe material dimension false-positive control — release bb3185b
+
+The blind project exposed a generic material-comparison false positive. A
+design pipe designation expressed outside diameter and wall thickness as
+`315 x 7.7`, while the commercial source stated only diameter `315 mm`. The
+prior projection treated the complete design designation as a diameter and
+published a material mismatch even though the shared diameter agreed.
+
+Engineering model `project-engineering-model-v79` now normalizes the first
+component of an explicit pipe `diameter x wall thickness` designation as the
+diameter for comparison. The rule is limited to material context already
+identified as a pipe; rectangular sections, plates and other two-dimensional
+profiles retain their complete dimensions. A changed-value controlled case
+proves that `273 x 8` still conflicts with `325 mm`, while a separate non-pipe
+case proves that `200 x 100 mm` is not collapsed to `200 mm`.
+
+On the real blind project the application model now contains four supported
+material comparisons instead of five and two professional issues instead of
+three. The unsupported pipe-diameter issue, its customer question and its
+contractor risk are gone. The established duration mismatch and commercial
+work without a project basis remain visible; no project identity, filename or
+known expected value was encoded.
+
+Commit `bb3185bc48d5c5e01251c1138c20da09761cbc02` passed exact-SHA CI run
+`37239045267` and is active as immutable release
+`~/.asd-kontur/public-demo/releases/20261005-bb3185b-pipe-dimension-v87`.
+The database remains at migration head `0127_task_scoped_quantity_profile`.
+The interrupted worker lease was autonomously returned to the queue with
+`stale_lease_recovered`; no developer retry or queue command was issued.
+
+Qwen PID `85702` and NTD worker PID `98263` were preserved. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt is
+stored outside Git beside the immutable release.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Task-scoped quantity semantics — release 8ce2dc2
 
 The v39 live receipt exposed a generic authority-boundary defect rather than a
