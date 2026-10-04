@@ -6194,14 +6194,14 @@ class SpinePostgresRepository:
     ) -> int:
         """Terminally account for unclaimed work from superseded Qwen profiles."""
 
-        rows = [
+        rows: list[dict[str, object]] = [
             {
-                "job_id": UUID(str(row.job_id)),
-                "lease_generation": int(row.lease_generation),
-                "prior_profile": str(row.prior_profile or ""),
+                "job_id": UUID(str(queued_row.job_id)),
+                "lease_generation": int(queued_row.lease_generation),
+                "prior_profile": str(queued_row.prior_profile or ""),
                 "reason_code": "superseded_work_reconciliation_profile",
             }
-            for row in session.execute(
+            for queued_row in session.execute(
                 sa.text(
                     "SELECT job_id,lease_generation,input_manifest->>"
                     "'work_reconciliation_profile' AS prior_profile FROM workspace.durable_jobs "
@@ -6262,23 +6262,23 @@ class SpinePostgresRepository:
                     "limit": limit,
                 },
             ).all()
-            for row in current_rows:
+            for current_row in current_rows:
                 if _work_reconciliation_manifest_replays_accepted_pair(
-                    dict(row.input_manifest),
+                    dict(current_row.input_manifest),
                     accepted_relationship_pairs=accepted_relationship_pairs,
                     accepted_scope_pairs=accepted_scope_pairs,
                 ):
                     rows.append(
                         {
-                            "job_id": UUID(str(row.job_id)),
-                            "lease_generation": int(row.lease_generation),
+                            "job_id": UUID(str(current_row.job_id)),
+                            "lease_generation": int(current_row.lease_generation),
                             "prior_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
                             "reason_code": "superseded_compatible_work_decision",
                         }
                     )
-        for row in rows:
-            job_id = row["job_id"]
-            reason_code = row["reason_code"]
+        for decision in rows:
+            job_id = cast(UUID, decision["job_id"])
+            reason_code = str(decision["reason_code"])
             cancellation_id = uuid7()
             session.execute(
                 sa.text(
@@ -6306,7 +6306,7 @@ class SpinePostgresRepository:
             result = {
                 "semantic_effect": False,
                 "reason": reason_code,
-                "prior_profile": row["prior_profile"],
+                "prior_profile": str(decision["prior_profile"]),
                 "replacement_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
             }
             receipt_id = uuid7()
@@ -6323,7 +6323,7 @@ class SpinePostgresRepository:
                     "workspace": workspace_id,
                     "receipt": receipt_id,
                     "job": job_id,
-                    "generation": row["lease_generation"],
+                    "generation": int(cast(int, decision["lease_generation"])),
                     "reason": reason_code,
                     "result": _json(result),
                     "digest": semantic_digest(
