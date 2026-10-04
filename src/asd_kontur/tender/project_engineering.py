@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v79"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v80"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -5357,6 +5357,20 @@ def _material_comparisons(
                 shared_properties = sorted(
                     set(design_properties).intersection(commercial_properties)
                 )
+                missing_commercial_properties: list[dict[str, Any]] = []
+                if (
+                    _has_pipe_composite_dimension(design_values)
+                    and design_properties.get("DIAMETER")
+                    == commercial_properties.get("DIAMETER")
+                    and design_properties.get("THICKNESS")
+                    and not commercial_properties.get("THICKNESS")
+                ):
+                    missing_commercial_properties.append(
+                        {
+                            "property": "THICKNESS",
+                            "design": sorted(design_properties["THICKNESS"]),
+                        }
+                    )
                 differences = [
                     {
                         "property": kind,
@@ -5366,7 +5380,7 @@ def _material_comparisons(
                     for kind in shared_properties
                     if design_properties[kind] != commercial_properties[kind]
                 ]
-                if not differences:
+                if not differences and not missing_commercial_properties:
                     continue
                 locator_ids = sorted(
                     {
@@ -5381,8 +5395,17 @@ def _material_comparisons(
                     f"{commercial_role} — {', '.join(item['commercial'])}"
                     for item in differences
                 ]
+                descriptions.extend(
+                    f"{_material_property_label(item['property'])}: "
+                    f"{design_role} — {', '.join(item['design'])}; "
+                    f"{commercial_role} — не указано"
+                    for item in missing_commercial_properties
+                )
                 design_material = design_values[0]
                 commercial_material = commercial_values[0]
+                classification = (
+                    "MATERIAL_DIFFERENCE" if differences else "MATERIAL_SCOPE_UNRESOLVED"
+                )
                 result.append(
                     {
                         "material_comparison_id": semantic_digest(
@@ -5393,10 +5416,15 @@ def _material_comparisons(
                                 "design_role": design_role,
                                 "commercial_role": commercial_role,
                                 "differences": differences,
+                                "missing_commercial_properties": missing_commercial_properties,
                             }
                         ),
-                        "classification": "MATERIAL_DIFFERENCE",
-                        "professional_status": "Характеристики материала различаются",
+                        "classification": classification,
+                        "professional_status": (
+                            "Характеристики материала различаются"
+                            if differences
+                            else "В коммерческих документах указаны не все характеристики"
+                        ),
                         "facility": design_material.get("facility")
                         or commercial_material.get("facility")
                         or "Место применения не установлено",
@@ -5413,6 +5441,7 @@ def _material_comparisons(
                         "design_roles": [design_role],
                         "commercial_roles": [commercial_role],
                         "property_differences": differences,
+                        "missing_commercial_properties": missing_commercial_properties,
                         "source_locator_ids": locator_ids,
                         "sources": _source_refs(locator_ids, source_context),
                     }
@@ -5494,7 +5523,63 @@ def _material_property_values(
                         material=material,
                     )
                 )
+                pipe_dimensions = _pipe_composite_dimensions(
+                    kind=kind,
+                    value=value,
+                    unit=unit,
+                    material=material,
+                )
+                if pipe_dimensions is not None:
+                    result["THICKNESS"].add(pipe_dimensions[1])
     return result
+
+
+def _pipe_composite_dimensions(
+    *,
+    kind: str,
+    value: str,
+    unit: str,
+    material: Mapping[str, Any],
+) -> tuple[str, str] | None:
+    """Return normalized pipe diameter and wall thickness when both are explicit."""
+
+    material_context = " ".join(
+        str(material.get(key) or "")
+        for key in ("material_kind", "name", "associated_work_family_key")
+    ).casefold()
+    if kind != "DIAMETER" or not any(
+        token in material_context for token in ("pipe", "труб", "pipeline")
+    ):
+        return None
+    normalized_unit = unit.casefold()
+    if normalized_unit not in {"", "mm", "мм", "millimeter", "millimetre"}:
+        return None
+    composite = re.fullmatch(
+        r"\s*(?:dn|du|d|ду|ø|⌀)?\s*(?P<diameter>\d+(?:[.,]\d+)?)"
+        r"\s*[xх×]\s*(?P<thickness>\d+(?:[.,]\d+)?)\s*",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if composite is None:
+        return None
+    diameter = _decimal_text(Decimal(composite.group("diameter").replace(",", ".")))
+    thickness = _decimal_text(Decimal(composite.group("thickness").replace(",", ".")))
+    return f"{diameter} mm", f"{thickness} mm"
+
+
+def _has_pipe_composite_dimension(materials: Iterable[Mapping[str, Any]]) -> bool:
+    return any(
+        _pipe_composite_dimensions(
+            kind=str(raw.get("kind") or ""),
+            value=" ".join(str(raw.get("value") or "").split()),
+            unit=" ".join(str(raw.get("unit") or "").split()),
+            material=material,
+        )
+        is not None
+        for material in materials
+        for raw in material.get("properties") or ()
+        if isinstance(raw, Mapping)
+    )
 
 
 def _normalized_material_property_value(
@@ -5528,15 +5613,14 @@ def _normalized_material_property_value(
     ).casefold()
     is_pipe = any(token in material_context for token in ("pipe", "труб", "pipeline"))
     if kind == "DIAMETER" and is_pipe:
-        composite = re.fullmatch(
-            r"\s*(?:dn|du|d|ду|ø|⌀)?\s*(?P<diameter>\d+(?:[.,]\d+)?)"
-            r"\s*[xх×]\s*\d+(?:[.,]\d+)?\s*",
-            value,
-            flags=re.IGNORECASE,
+        composite = _pipe_composite_dimensions(
+            kind=kind,
+            value=value,
+            unit=unit,
+            material=material,
         )
-        if composite is not None and normalized_unit in {"", "mm"}:
-            diameter = _decimal_text(Decimal(composite.group("diameter").replace(",", ".")))
-            return f"{diameter} mm"
+        if composite is not None:
+            return composite[0]
         scalar = re.fullmatch(
             r"\s*(?:dn|du|d|ду|ø|⌀)?\s*(?P<diameter>\d+(?:[.,]\d+)?)\s*",
             value,
@@ -5590,6 +5674,9 @@ def _issues(
     for comparison in material_comparisons:
         if comparison.get("classification") == "MATERIAL_MATCH":
             continue
+        material_information_missing = (
+            comparison.get("classification") == "MATERIAL_SCOPE_UNRESOLVED"
+        )
         facility_established = bool(comparison.get("facility_id"))
         material = str(comparison.get("material") or "материала")
         facility = str(comparison.get("facility") or "место применения требует уточнения")
@@ -5597,9 +5684,15 @@ def _issues(
         issues.append(
             {
                 "issue_id": str(comparison["material_comparison_id"]),
-                "finding_kind": ProfessionalFindingKind.MATERIAL_MISMATCH,
+                "finding_kind": (
+                    ProfessionalFindingKind.MISSING_PROJECT_INFORMATION
+                    if material_information_missing
+                    else ProfessionalFindingKind.MATERIAL_MISMATCH
+                ),
                 "kind": (
-                    "Различие характеристик материала"
+                    "Не указана характеристика материала"
+                    if material_information_missing
+                    else "Различие характеристик материала"
                     if facility_established
                     else "Возможное различие характеристик материала"
                 ),
@@ -5607,6 +5700,10 @@ def _issues(
                 "subject": f"{comparison.get('work')} — {material}",
                 "description": comparison.get("description"),
                 "practical_consequence": (
+                    "Без полного коммерческого обозначения нельзя подтвердить, что поставка "
+                    "соответствует проектной характеристике материала."
+                    if material_information_missing
+                    else
                     "После подтверждения единого места применения различие характеристик "
                     "может повлиять на состав поставки, цену и приёмку материала."
                     if not facility_established
@@ -5614,6 +5711,11 @@ def _issues(
                     "материала."
                 ),
                 "recommended_action": (
+                    f"Просим указать в коммерческих документах недостающую характеристику "
+                    f"материала «{material}» для {facility} и подтвердить её соответствие "
+                    "проекту."
+                    if material_information_missing
+                    else
                     f"Просим подтвердить, относятся ли указанные характеристики материала "
                     f"«{material}» к одному месту применения ({facility}); при подтверждении "
                     "привести проект и коммерческие документы к одному значению."
@@ -5621,7 +5723,9 @@ def _issues(
                 "source_locator_ids": locators,
                 "sources": _source_refs(locators, source_context),
                 "status": (
-                    "Установленное расхождение маркировки"
+                    "Недостающая информация в коммерческих документах"
+                    if material_information_missing
+                    else "Установленное расхождение маркировки"
                     if facility_established
                     else "Требуется подтвердить сопоставимость и место применения"
                 ),

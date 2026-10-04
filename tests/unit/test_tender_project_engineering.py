@@ -2976,7 +2976,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v79"
+    assert model["model_version"] == "project-engineering-model-v80"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -5537,7 +5537,13 @@ def test_pipe_diameter_comparison_does_not_treat_wall_thickness_as_diameter() ->
         ],
     )
 
-    assert comparisons == []
+    assert len(comparisons) == 1
+    assert comparisons[0]["classification"] == "MATERIAL_SCOPE_UNRESOLVED"
+    assert comparisons[0]["property_differences"] == []
+    assert comparisons[0]["missing_commercial_properties"] == [
+        {"property": "THICKNESS", "design": ["8 mm"]}
+    ]
+    assert "не указано" in comparisons[0]["description"]
 
 
 def test_pipe_composite_designation_still_detects_different_diameter() -> None:
