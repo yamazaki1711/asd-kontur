@@ -869,6 +869,46 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Pipe characteristic completeness — release e23f06e
+
+Commit `e23f06e4bc491280a0a977b5617aa7e924f7885b` closes the generic gap between
+pipe-dimension normalization and a professional commercial-completeness result.
+The deterministic material projection now decomposes an explicit pipe
+`diameter x wall thickness` notation into diameter and thickness properties.
+When the commercial source confirms the same diameter but omits thickness, the
+system reports missing commercial information rather than either inventing a
+diameter conflict or treating the commercial description as complete. The rule
+is limited to explicit pipe composite dimensions; it does not infer missing
+properties for soil, sand, concrete or generic rectangular dimensions.
+
+The real blind workspace `01a0eba7-70ba-7770-9601-1a713dd359cf` now produces
+engineering model `project-engineering-model-v80` with seven quantity
+comparisons, five material comparisons, 322 scope comparisons, three
+professional issues, three customer questions and three contractor risks. Its
+new grounded material result states that the design source specifies an NPVH
+pipe wall thickness of 7.7 mm while the VOR does not state wall thickness. The
+same model preserves the matching 315 mm diameter and therefore does not report
+the earlier false diameter discrepancy.
+
+The full local suite passed 1,254 tests before release. Exact-SHA CI run
+`37239822745` passed for the corrected formatted commit. The active immutable
+release is
+`~/.asd-kontur/public-demo/releases/20261005-e23f06e-pipe-thickness-v88` with
+profile `tender-pipe-thickness-v88-model-v80`; the migration head remains
+`0127_task_scoped_quantity_profile`. The old worker completed its two accepted
+Qwen jobs before the release boundary, so no running result was abandoned.
+Qwen PID `85702` and NTD worker PID `98263` were preserved. API readiness
+passes, all four application services run commit `e23f06e`, the all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. No developer queue,
+retry, successor, priority or Qwen command was issued. The release-receipt
+SHA-256 is
+`146893bf399a71f1d9e7256ab3a40e5d7c55d48268f6433e26732dc522b28eb1`.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Pipe material dimension false-positive control — release bb3185b
 
 The blind project exposed a generic material-comparison false positive. A
