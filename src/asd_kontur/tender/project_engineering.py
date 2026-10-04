@@ -5360,8 +5360,7 @@ def _material_comparisons(
                 missing_commercial_properties: list[dict[str, Any]] = []
                 if (
                     _has_pipe_composite_dimension(design_values)
-                    and design_properties.get("DIAMETER")
-                    == commercial_properties.get("DIAMETER")
+                    and design_properties.get("DIAMETER") == commercial_properties.get("DIAMETER")
                     and design_properties.get("THICKNESS")
                     and not commercial_properties.get("THICKNESS")
                 ):
@@ -5703,8 +5702,7 @@ def _issues(
                     "Без полного коммерческого обозначения нельзя подтвердить, что поставка "
                     "соответствует проектной характеристике материала."
                     if material_information_missing
-                    else
-                    "После подтверждения единого места применения различие характеристик "
+                    else "После подтверждения единого места применения различие характеристик "
                     "может повлиять на состав поставки, цену и приёмку материала."
                     if not facility_established
                     else "Различие характеристик влияет на состав поставки, цену и приёмку "
@@ -5715,8 +5713,7 @@ def _issues(
                     f"материала «{material}» для {facility} и подтвердить её соответствие "
                     "проекту."
                     if material_information_missing
-                    else
-                    f"Просим подтвердить, относятся ли указанные характеристики материала "
+                    else f"Просим подтвердить, относятся ли указанные характеристики материала "
                     f"«{material}» к одному месту применения ({facility}); при подтверждении "
                     "привести проект и коммерческие документы к одному значению."
                 ),
