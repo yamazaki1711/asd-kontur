@@ -233,3 +233,75 @@ The evidence supports four focused corrections:
 
 Autonomy must be reaccepted only when GPU inference changes professional project
 state without a Codex runtime command.
+
+## Corrective release and autonomy acceptance
+
+The forensic baseline was committed unchanged as `0ca5511`. The minimal runtime
+correction was then committed as `e2f0070` and deployed as immutable release
+`20261005-e2f0070-runtime-autonomy-v89`. It made three bounded changes:
+
+1. accepted project-work decisions remain authoritative across the explicitly
+   compatible semantic profiles, so an exact candidate/relationship/scope pair is
+   not re-enqueued merely because the assembly profile changed;
+2. the Qwen request timeout is 360 seconds rather than 900 seconds, preserving
+   bounded repair while preventing one two-row job from occupying the model for
+   multiple 15-minute calls;
+3. professional progress excludes cancelled/superseded immutable history and uses
+   only succeeded, active and unreplaced blocked effective work.
+
+The supervised Qwen service was also corrected from the stale v68 `PYTHONPATH` to
+the pinned v89 source. Its lightweight health endpoint remained responsive during
+generation and reported `QWEN_GENERATING`, generation start time and completed
+request count without loading another model.
+
+On the first autonomous reconciliation sweep, 20 queued exact replays were
+terminalled with immutable outcome
+`superseded_compatible_work_decision`; 21 current jobs remained (20 queued and one
+running). No running inference was cancelled and no queue row was edited manually.
+
+The real workspace then received an automatic fair-scheduler turn. Supervised job
+`01a108f4-5f00-71ea-bd87-c73c4a10d8b0` made three Qwen calls, succeeded at
+`2026-10-05 11:40:43+12`, and persisted independently derived excavation
+relationships: 656.6 m3 design/estimate statements were identified as the same
+scope, and as components of the stated 772.5 m3 total. The deterministic project
+projection changed fingerprint from
+`sha256:c0910601db25207e17819a7aa79e7952d5a67b2a6c8506a7cbf74d5f5ea9ab53`
+to
+`sha256:975b4eb1bed3d04c343629b3d2f2e2f9306085ac27c6706459ad1f25c39209f5`.
+This is the required useful-work link from GPU inference to professional project
+state; it is not merely a succeeded-job increment.
+
+An additional progress correction in `fcdd68d` excludes the two typed historical
+failure classes `contract_analysis_profile_superseded` and
+`work_reconciliation_profile_superseded`. Those 230 immutable rows remain visible
+to diagnostics but no longer present as current blockers. API release
+`20261005-fcdd68d-progress-v90` therefore reports 21/21 processed documents,
+1,187 effective succeeded jobs, eight effective active jobs, 97 genuine unresolved
+items and 91.9% progress. The earlier 30.7% was not a truthful measure of project
+completion.
+
+At the final checkpoint the workspace has 19 physical queued rows, all with
+satisfied explicit dependencies: 12 historical incremental project-understanding
+rows (only the newest is claim-eligible), five requirement-matrix rows and two
+novel project-work rows. It has no dependency deadlock. If left unattended, the
+supervised worker will process the eight effective items and the project will end
+as complete-to-current-capability or partial with explicit contract/document
+blockers. The remaining 97 blockers are not hidden: 79 are current contract
+source/retry outcomes, ten are other contract validation outcomes, four are page
+locator failures, one is an unsupported format, and three are miscellaneous typed
+contract outcomes.
+
+Worker, orchestrator, Qwen and API were restarted from durable state while the
+project was incomplete. The worker resumed without duplicating an accepted output;
+the orchestrator reconstructed the sweep; Qwen loaded once and accepted new work;
+the API restart did not interrupt background processing. No manual enqueue, retry,
+successor creation, priority mutation, project-fact insert or SQL state repair was
+used during this acceptance.
+
+Acceptance result:
+
+- Codex absent from runtime progression: PASS.
+- Project job state progressed: PASS.
+- Professional project state progressed: PASS.
+- Restart recovery: PASS within the supported per-user launchd profile.
+- Mac sleep/wake: not retested in this correction and not newly claimed.
