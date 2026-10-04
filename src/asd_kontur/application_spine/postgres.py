@@ -112,6 +112,9 @@ def _effective_project_processing_job_sql(alias: str) -> str:
     return (
         "NOT (job.state='reconciliation_required' AND "
         "job.typed_failure_code='dependency_terminal_failure') AND "
+        "NOT (job.state IN ('failed','reconciliation_required') AND "
+        "job.typed_failure_code IN ('contract_analysis_profile_superseded',"
+        "'work_reconciliation_profile_superseded')) AND "
         "NOT (job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
         "COALESCE(job.input_manifest->>'work_reconciliation_profile','')<>"
         ":current_work_profile) AND "

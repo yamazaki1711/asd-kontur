@@ -29,6 +29,7 @@ from asd_kontur.application_spine.postgres import (
     _contract_context_batches,
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
+    _effective_project_processing_job_sql,
     _merged_quantity_reviews,
     _merged_work_scope_assertions,
     _priority_semantic_batch_limit,
@@ -52,6 +53,14 @@ from asd_kontur.web_app.app import _parse_range
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000001801")
 WORKSPACE_ID = UUID("018f5c3e-7b00-7000-8000-000000001802")
+
+
+def test_project_progress_excludes_explicit_profile_supersession_history() -> None:
+    predicate = _effective_project_processing_job_sql("job")
+
+    assert "contract_analysis_profile_superseded" in predicate
+    assert "work_reconciliation_profile_superseded" in predicate
+    assert "job.state IN ('failed','reconciliation_required')" in predicate
 
 
 def test_semantic_refill_reserves_first_pass_classification_capacity() -> None:
