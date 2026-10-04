@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v78"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v79"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -5486,8 +5486,66 @@ def _material_property_values(
             value = " ".join(str(raw.get("value") or "").split())
             unit = " ".join(str(raw.get("unit") or "").split())
             if kind and value:
-                result[kind].add(f"{value}{f' {unit}' if unit else ''}")
+                result[kind].add(
+                    _normalized_material_property_value(
+                        kind=kind,
+                        value=value,
+                        unit=unit,
+                        material=material,
+                    )
+                )
     return result
+
+
+def _normalized_material_property_value(
+    *,
+    kind: str,
+    value: str,
+    unit: str,
+    material: Mapping[str, Any],
+) -> str:
+    """Normalize a property without collapsing different engineering meanings.
+
+    Pipe designations commonly express outside diameter and wall thickness as
+    ``diameter x thickness`` while a commercial schedule repeats only the
+    diameter.  When the semantic extractor has already identified the property
+    as a pipe diameter, compare the first component as the diameter and leave
+    the second component unasserted rather than treating the full designation
+    as a conflicting diameter.  This rule deliberately does not apply to
+    plates, rectangular profiles or other materials whose two dimensions are
+    not diameter and wall thickness.
+    """
+
+    normalized_unit = {
+        "mm": "mm",
+        "мм": "mm",
+        "millimeter": "mm",
+        "millimetre": "mm",
+    }.get(unit.casefold(), unit)
+    material_context = " ".join(
+        str(material.get(key) or "")
+        for key in ("material_kind", "name", "associated_work_family_key")
+    ).casefold()
+    is_pipe = any(token in material_context for token in ("pipe", "труб", "pipeline"))
+    if kind == "DIAMETER" and is_pipe:
+        composite = re.fullmatch(
+            r"\s*(?:dn|du|d|ду|ø|⌀)?\s*(?P<diameter>\d+(?:[.,]\d+)?)"
+            r"\s*[xх×]\s*\d+(?:[.,]\d+)?\s*",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if composite is not None and normalized_unit in {"", "mm"}:
+            diameter = _decimal_text(Decimal(composite.group("diameter").replace(",", ".")))
+            return f"{diameter} mm"
+        scalar = re.fullmatch(
+            r"\s*(?:dn|du|d|ду|ø|⌀)?\s*(?P<diameter>\d+(?:[.,]\d+)?)\s*",
+            value,
+            flags=re.IGNORECASE,
+        )
+        if scalar is not None and normalized_unit == "mm":
+            diameter = _decimal_text(Decimal(scalar.group("diameter").replace(",", ".")))
+            return f"{diameter} mm"
+    return f"{value}{f' {normalized_unit}' if normalized_unit else ''}"
 
 
 def _material_property_label(kind: str) -> str:

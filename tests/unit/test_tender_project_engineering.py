@@ -2976,7 +2976,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v78"
+    assert model["model_version"] == "project-engineering-model-v79"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
@@ -5498,6 +5498,129 @@ def test_contract_estimate_material_participates_in_design_comparison() -> None:
     assert comparisons[0]["commercial_roles"] == ["Смета контракта"]
     assert comparisons[0]["property_differences"] == [
         {"property": "DIAMETER", "design": ["160 mm"], "commercial": ["225 mm"]}
+    ]
+
+
+def test_pipe_diameter_comparison_does_not_treat_wall_thickness_as_diameter() -> None:
+    source_context = dict(
+        [
+            _source("design-pipe", "Utility design.pdf", 7),
+            _source("commercial-pipe", "Quantity schedule.pdf", 2),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": "facility:q42",
+                "facility": "Utility crossing Q-42",
+                "work": "Install carrier pipe",
+                "document_role": "РД",
+                "name": "Polyethylene pipe 273x8.0",
+                "material_kind": "pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "273x8,0", "unit": None}],
+                "source_locator_id": "design-pipe",
+            },
+            {
+                "location_scope_id": "facility:q42",
+                "facility": "Utility crossing Q-42",
+                "work": "Install carrier pipe",
+                "document_role": "ВОР",
+                "name": "Polyethylene pipe DN 273",
+                "material_kind": "pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "273", "unit": "мм"}],
+                "source_locator_id": "commercial-pipe",
+            },
+        ],
+    )
+
+    assert comparisons == []
+
+
+def test_pipe_composite_designation_still_detects_different_diameter() -> None:
+    source_context = dict(
+        [
+            _source("design-pipe", "Utility design.pdf", 7),
+            _source("commercial-pipe", "Quantity schedule.pdf", 2),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": "facility:q43",
+                "facility": "Utility crossing Q-43",
+                "work": "Install carrier pipe",
+                "document_role": "РД",
+                "name": "Steel pipe 273x8",
+                "material_kind": "steel pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "273×8", "unit": None}],
+                "source_locator_id": "design-pipe",
+            },
+            {
+                "location_scope_id": "facility:q43",
+                "facility": "Utility crossing Q-43",
+                "work": "Install carrier pipe",
+                "document_role": "Смета",
+                "name": "Steel pipe DN 325",
+                "material_kind": "steel pipe",
+                "associated_work_family_key": "pipeline",
+                "properties": [{"kind": "DIAMETER", "value": "325", "unit": "mm"}],
+                "source_locator_id": "commercial-pipe",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["property_differences"] == [
+        {"property": "DIAMETER", "design": ["273 mm"], "commercial": ["325 mm"]}
+    ]
+
+
+def test_non_pipe_composite_dimension_is_not_reinterpreted_as_pipe_diameter() -> None:
+    source_context = dict(
+        [
+            _source("design-profile", "Steel design.pdf", 9),
+            _source("commercial-profile", "Steel schedule.pdf", 3),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": "facility:s8",
+                "facility": "Steel frame S-8",
+                "work": "Install steel framing",
+                "document_role": "РД",
+                "name": "Rectangular section 200x100",
+                "material_kind": "rectangular steel section",
+                "associated_work_family_key": "structural_steel",
+                "properties": [{"kind": "DIAMETER", "value": "200x100", "unit": "mm"}],
+                "source_locator_id": "design-profile",
+            },
+            {
+                "location_scope_id": "facility:s8",
+                "facility": "Steel frame S-8",
+                "work": "Install steel framing",
+                "document_role": "ВОР",
+                "name": "Steel section 200",
+                "material_kind": "rectangular steel section",
+                "associated_work_family_key": "structural_steel",
+                "properties": [{"kind": "DIAMETER", "value": "200", "unit": "mm"}],
+                "source_locator_id": "commercial-profile",
+            },
+        ],
+    )
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["property_differences"] == [
+        {"property": "DIAMETER", "design": ["200x100 mm"], "commercial": ["200 mm"]}
     ]
 
 
