@@ -869,6 +869,53 @@ association is still sparse.
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
 
+## Task-scoped quantity semantics — release 8ce2dc2
+
+The v39 live receipt exposed a generic authority-boundary defect rather than a
+construction conclusion: `QUANTITY_RELATIONSHIP_ANALYSIS` was rejected because
+Qwen also returned work-scope assertions that this task is not authorised to
+decide. Semantic profile `qwen-project-work-reconciliation-v40` now requires an
+empty `work_scope_assertions` list for quantity-relationship work, and the
+parser deterministically discards that field for tasks outside the work-scope
+contract. Strict reciprocal validation remains unchanged for
+`CROSS_DOCUMENT_SCOPE_MATCHING`.
+
+Commit `8ce2dc233b183d5afdedcef7fea80ab79b95e7a5` passed exact-SHA CI runs
+`37148177431` and `37148177984`. Migration
+`0127_task_scoped_quantity_profile` passed the disposable restored-public
+upgrade, downgrade and re-upgrade sequence before public activation. The
+public backup is
+`~/.asd-kontur/public-demo/backups/pre-0127-task-scoped-quantity-20261004T0730/public-before-0127.dump`
+with SHA-256
+`ad60244cc551ef1048103c78e27205a40ab01475237648a40ae1c36f11439070`.
+
+The immutable active release is
+`~/.asd-kontur/public-demo/releases/20261004-8ce2dc2-task-scoped-v86`.
+During activation the old worker retained no RUNNING durable job but did not
+exit after supervised shutdown; after confirming that state it was terminated
+and replaced by one v86 worker. The interrupted in-flight semantic lease was
+then recovered by the autonomous runtime as `stale_lease_recovered`; no manual
+retry, queue refill, successor, priority or Qwen command was issued.
+
+The first naturally scheduled v40 acceptance job,
+`01a108f2-d336-73e7-870c-5c640e62bf87`, contained exactly two quantity rows.
+In one Qwen call it established reciprocal `TOTAL_FOR` / `COMPONENT_OF`
+semantics between a 540 m2 total restoration area and a 210 m2 western-facade
+component. It correctly marked the component set incomplete, so deterministic
+code did not compare 210 m2 directly with the total or manufacture a mismatch.
+The terminal result digest is
+`sha256:eb8d306706721b239a0cf236c12988b0cb38d93f249dafe0e5794d52343404cf`.
+
+Qwen PID `85702` and NTD worker PID `98263` were preserved. API readiness
+reports migration head `0127_task_scoped_quantity_profile`. The all-history
+platform-memory fingerprint remains exactly
+`sha256:e79b8886a5983b42d9c89427b82425702292869805e44fc40184114dfcee0126`,
+and the NTD ledger remains exactly 319 succeeded jobs. The release receipt is
+stored outside Git beside the immutable release.
+
+Current status remains: `GeneralizedTenderHarness=false`,
+`AutonomousProjectProcessing=true`, `ProductReady=false`.
+
 ## Explicit revision authority — release 770933d
 
 The autonomous v36 run exposed a generic semantic-authority defect in a real
