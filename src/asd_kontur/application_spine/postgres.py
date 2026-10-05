@@ -990,6 +990,7 @@ def _quantity_relationship_batches(
     batch_size: int,
     max_batches: int,
     attempted_pairs: set[tuple[str, str]] | None = None,
+    attempted_groups: set[tuple[str, ...]] | None = None,
 ) -> tuple[list[list[dict[str, Any]]], set[str]]:
     """Select bounded quantity groups for a dedicated semantic relation pass.
 
@@ -1001,6 +1002,7 @@ def _quantity_relationship_batches(
     """
 
     attempted_pairs = attempted_pairs or set()
+    attempted_groups = attempted_groups or set()
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     family_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     family_locations: dict[str, set[str]] = defaultdict(set)
@@ -1010,17 +1012,18 @@ def _quantity_relationship_batches(
         if row.get("relationship_review_needed") is not True:
             continue
         family = str(row.get("deterministic_family_hint") or "")
-        if not family:
-            if row.get("non_work_measure_context") is not True:
-                continue
+        if row.get("non_work_measure_context") is True:
             # A structural length, area or mass may form a total/component
-            # relation even when its source row is correctly NOT_A_WORK.
+            # relation even when its source row is correctly NOT_A_WORK. An
+            # accepted component may also be a real work; keep its exact
+            # source/unit context without changing that classification.
             # Source and unit only assemble bounded context; neither asserts
             # an additive relationship or matching engineering scope.
             source_id = str(row.get("source_version_id") or "")
             dimensions = _relationship_unit_dimensions(row)
             if source_id and len(dimensions) == 1:
                 non_work_measure_groups[(source_id, next(iter(dimensions)))].append(row)
+        if not family:
             continue
         hints = tuple(
             str(value).strip() for value in row.get("facility_hints") or () if str(value).strip()
@@ -1082,6 +1085,46 @@ def _quantity_relationship_batches(
     for (location, family), values in ordered_groups:
         if len(batches) >= max_batches:
             break
+        if family.startswith("source-measure:"):
+            for total in values:
+                if not any(
+                    str(quantity.get("prior_quantity_type") or "") == "TOTAL"
+                    for quantity in total.get("quantity_observations") or ()
+                    if isinstance(quantity, Mapping)
+                ):
+                    continue
+                components = [
+                    row
+                    for row in values
+                    if row is not total
+                    and any(
+                        str(quantity.get("prior_quantity_type") or "") == "COMPONENT"
+                        for quantity in row.get("quantity_observations") or ()
+                        if isinstance(quantity, Mapping)
+                    )
+                    and _reviewed_component_total_pair(total, row)
+                ]
+                complete_context = [total, *components]
+                group_key = tuple(
+                    sorted(str(row.get("candidate_id") or "") for row in complete_context)
+                )
+                if (
+                    2 <= len(components) <= 3
+                    and group_key not in attempted_groups
+                    and not any(candidate_id in selected for candidate_id in group_key)
+                ):
+                    reviewed_context = []
+                    for row in complete_context:
+                        prepared_row = {**row, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"}
+                        prepared_row.pop("comparison_context_only", None)
+                        reviewed_context.append(prepared_row)
+                    batches.append(reviewed_context)
+                    selected.update(group_key)
+                    break
+            if len(batches) >= max_batches or any(
+                str(row.get("candidate_id") or "") in selected for row in values
+            ):
+                continue
         ordered = sorted(
             values,
             key=lambda row: (
@@ -1268,7 +1311,7 @@ def _non_work_measure_relation_ids(
     dimensions; unreviewed values and resources/rates are not reopened here.
     """
 
-    groups: dict[tuple[str, str], list[tuple[str, bool, bool]]] = defaultdict(list)
+    groups: dict[tuple[str, str], list[tuple[str, bool, bool, str, set[str]]]] = defaultdict(list)
     for raw in work_rows:
         row = dict(raw)
         candidate_id = str(row.get("candidate_id") or "")
@@ -1288,7 +1331,8 @@ def _non_work_measure_relation_ids(
                 }
             )
         )
-        if not validated_dimension and not recoverable_fallback:
+        accepted_component = resolution.get("status") == "MATCHED"
+        if not validated_dimension and not recoverable_fallback and not accepted_component:
             continue
         reviews = {
             str(value.get("quantity_candidate_id") or ""): value
@@ -1298,6 +1342,19 @@ def _non_work_measure_relation_ids(
         for raw_quantity in quantities_by_work.get(candidate_id) or ():
             quantity = dict(raw_quantity)
             review = reviews.get(str(quantity.get("candidate_id") or "")) or {}
+            related_totals = {
+                str(assertion.get("related_quantity_candidate_id") or "")
+                for assertion in review.get("scope_assertions") or ()
+                if isinstance(assertion, Mapping)
+                and assertion.get("scope_compatibility") == "COMPONENT_VS_TOTAL"
+                and assertion.get("related_quantity_candidate_id")
+            }
+            reviewed_component = (
+                accepted_component
+                and review.get("status") == "WORK_QUANTITY"
+                and review.get("quantity_type") == "COMPONENT"
+                and bool(related_totals)
+            )
             if not (
                 # A structural heading can correctly be NOT_A_WORK while its
                 # length/area/mass is an accepted work quantity. Keep that
@@ -1310,6 +1367,7 @@ def _non_work_measure_relation_ids(
                     and review.get("status") == "AMBIGUOUS"
                     and review.get("quantity_type") == "UNKNOWN"
                 )
+                or reviewed_component
             ):
                 continue
             dimensions = _relationship_unit_dimensions(
@@ -1329,15 +1387,31 @@ def _non_work_measure_relation_ids(
                 }
             )
             groups[(source_id, next(iter(dimensions)))].append(
-                (candidate_id, total_hint, validated_dimension)
+                (
+                    candidate_id,
+                    total_hint,
+                    validated_dimension,
+                    str(quantity.get("candidate_id") or ""),
+                    related_totals if reviewed_component else set(),
+                )
             )
-    return {
-        candidate_id
-        for values in groups.values()
-        if len({candidate_id for candidate_id, _, _ in values}) >= 2
-        and any(total_hint and validated for _, total_hint, validated in values)
-        for candidate_id, _, _ in values
-    }
+    selected: set[str] = set()
+    for values in groups.values():
+        if len({candidate_id for candidate_id, *_ in values}) < 2:
+            continue
+        total_ids = {
+            quantity_id
+            for _, total_hint, validated, quantity_id, _ in values
+            if total_hint and validated
+        }
+        if not total_ids:
+            continue
+        selected.update(
+            candidate_id
+            for candidate_id, _, _, _, related_totals in values
+            if not related_totals or related_totals & total_ids
+        )
+    return selected
 
 
 def _multi_measure_output_recovery_needed(
@@ -1421,6 +1495,27 @@ def _work_reconciliation_attempt_sets(
                 if left.get("candidate_id") and right.get("candidate_id")
             )
     return attempted, attempted_relationship_pairs, attempted_scope_pairs
+
+
+def _attempted_quantity_group_keys(
+    manifests: Iterable[Mapping[str, Any]],
+) -> set[tuple[str, ...]]:
+    """Record accepted multi-row relation contexts independently of pairs."""
+
+    groups: set[tuple[str, ...]] = set()
+    for manifest in manifests:
+        observations = manifest.get("work_observations") or ()
+        if not isinstance(observations, list) or len(observations) < 3:
+            continue
+        rows = [dict(value) for value in observations if isinstance(value, Mapping)]
+        if len(rows) != len(observations) or any(
+            row.get("analysis_task") != "QUANTITY_RELATIONSHIP_ANALYSIS" for row in rows
+        ):
+            continue
+        candidate_ids = tuple(sorted(str(row.get("candidate_id") or "") for row in rows))
+        if all(candidate_ids) and len(set(candidate_ids)) == len(candidate_ids):
+            groups.add(candidate_ids)
+    return groups
 
 
 def _work_reconciliation_manifest_replays_accepted_pair(
@@ -6970,11 +7065,7 @@ class SpinePostgresRepository:
             # successful profile as the same decision ledger.  A future release
             # that genuinely invalidates an accepted decision must remove that
             # profile from the compatibility contract deliberately.
-            (
-                attempted_candidate_ids,
-                attempted_relationship_pairs,
-                attempted_scope_pairs,
-            ) = _work_reconciliation_attempt_sets(
+            successful_manifests = [
                 dict(value)
                 for value in session.execute(
                     sa.text(
@@ -6992,7 +7083,13 @@ class SpinePostgresRepository:
                         "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
                     },
                 ).scalars()
-            )
+            ]
+            (
+                attempted_candidate_ids,
+                attempted_relationship_pairs,
+                attempted_scope_pairs,
+            ) = _work_reconciliation_attempt_sets(successful_manifests)
+            attempted_relationship_groups = _attempted_quantity_group_keys(successful_manifests)
             exact_context_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
             for raw_candidate in candidates.get("work_types", []):
                 candidate = dict(raw_candidate)
@@ -7406,6 +7503,7 @@ class SpinePostgresRepository:
                 batch_size=batch_size,
                 max_batches=max(priority_batch_limit - len(cross_document_batches), 0),
                 attempted_pairs=attempted_relationship_pairs,
+                attempted_groups=attempted_relationship_groups,
             )
             batches = [*cross_document_batches, *relationship_batches]
             remaining_batch_capacity = priority_batch_limit - len(batches)

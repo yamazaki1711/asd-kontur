@@ -25,6 +25,7 @@ from asd_kontur.application_spine.postgres import (
     _PROJECT_WORK_RECONCILIATION_BATCH_SIZE,
     SpinePersistenceError,
     SpinePostgresRepository,
+    _attempted_quantity_group_keys,
     _bounded_scope_context_rows,
     _contract_context_batches,
     _cross_document_work_batches,
@@ -1992,6 +1993,67 @@ def test_reviewed_non_work_measures_get_one_bounded_total_context() -> None:
     assert all("sector-b" not in {value["candidate_id"] for value in batch} for batch in batches)
 
 
+def test_reviewed_total_components_get_one_complete_set_pass() -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "source_version_id": "design-source",
+            "wording": wording,
+            "document_role": "РД",
+            "relationship_review_needed": True,
+            "non_work_measure_context": True,
+            "deterministic_family_hint": "steel" if candidate_id == "part-b" else None,
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": f"measure-{candidate_id}",
+                    "unit": "t",
+                    "prior_quantity_type": "TOTAL" if candidate_id == "total" else "COMPONENT",
+                    "prior_scope_assertions": [
+                        {
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "related_quantity_candidate_id": f"measure-{related_id}",
+                        }
+                        for related_id in (
+                            ("part-a", "part-b") if candidate_id == "total" else ("total",)
+                        )
+                    ],
+                }
+            ],
+        }
+        for candidate_id, wording in (
+            ("total", "Общая масса узла"),
+            ("part-a", "Масса балки А"),
+            ("part-b", "Масса балки Б"),
+        )
+    ]
+    attempted_pairs = {("part-a", "part-b"), ("part-a", "total"), ("part-b", "total")}
+    batches, selected = _quantity_relationship_batches(
+        rows, batch_size=4, max_batches=1, attempted_pairs=attempted_pairs
+    )
+    assert len(batches) == 1
+    assert {row["candidate_id"] for row in batches[0]} == {"total", "part-a", "part-b"}
+    assert selected == {"total", "part-a", "part-b"}
+    assert {row["analysis_task"] for row in batches[0]} == {"QUANTITY_RELATIONSHIP_ANALYSIS"}
+
+    manifest = {
+        "work_observations": [
+            {"candidate_id": row["candidate_id"], "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"}
+            for row in batches[0]
+        ]
+    }
+    attempted_groups = _attempted_quantity_group_keys([manifest])
+    assert attempted_groups == {("part-a", "part-b", "total")}
+    batches, selected = _quantity_relationship_batches(
+        rows,
+        batch_size=4,
+        max_batches=1,
+        attempted_pairs=attempted_pairs,
+        attempted_groups=attempted_groups,
+    )
+    assert batches == []
+    assert selected == set()
+
+
 def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
     work_rows = [
         {
@@ -2051,6 +2113,22 @@ def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
     assert _non_work_measure_relation_ids(
         work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
     ) == {"total", "part-a", "part-b"}
+    prior["part-b"]["status"] = "MATCHED"
+    prior["part-b"]["quantity_reviews"][0].update(
+        status="WORK_QUANTITY",
+        quantity_type="COMPONENT",
+        scope_assertions=[
+            {
+                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                "related_quantity_candidate_id": "measure-total",
+            }
+        ],
+    )
+    assert _non_work_measure_relation_ids(
+        work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
+    ) == {"total", "part-a", "part-b"}
+    prior["part-b"]["status"] = "UNCLASSIFIED"
+    prior["part-b"]["quantity_reviews"][0].update(status="AMBIGUOUS", quantity_type="UNKNOWN")
     prior["part-b"]["recovery_codes"] = []
     assert _non_work_measure_relation_ids(
         work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
