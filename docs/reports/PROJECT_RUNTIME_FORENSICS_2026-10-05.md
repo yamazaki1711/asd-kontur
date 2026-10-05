@@ -306,6 +306,34 @@ four page-classification invalid-locator outcomes and one unsupported document
 format. The effective-job completion ratio was 98.7%. This is a queue/workflow
 ratio, **not** a measure that the professional Tender product is 98.7% complete.
 
+## Later page-classification supersession and measured model work
+
+Commit `c179279` applies the same effective-history principle to page
+classification. Four invalid-locator failures all belong to source version
+`01a0ebaa-b38f-719a-be3e-ba0f7f5ab990`; the same source later had successful
+whole-document classification under semantic profiles v3 and v4. The old
+failures remain immutable diagnostics but are no longer current blockers.
+An integration case separately retains a failure for a source with no later
+success, so the projection cannot erase unresolved work generally.
+
+The sole remaining effective blocker is a 7 MB XML cryptographic container
+admitted as `text/plain` whose format inventory returned
+`document_format_not_supported`. It was not silently marked interpreted.
+API-only release `20261005-c179279-classification-progress-v92`, with exact-SHA
+CI run `37246875763` successful, reports 21/21 documents at a terminal
+document-processing state, 1,019 effective succeeded jobs, eight active jobs,
+one blocker and 99.1% **effective-job** completion at the deployment checkpoint.
+The worker, orchestrator, Qwen and NTD service PIDs were unchanged.
+
+The last 24 hours of accepted real-work reconciliation receipts show 15
+one-observation jobs (mean 16.7 seconds, 1.13 calls/job), 71 two-observation
+jobs (114.5 seconds, 1.45 calls/job), four three-observation jobs (273.1
+seconds, 2.25 calls/job), and 182 four-observation jobs (325.4 seconds,
+2.43 calls/job). Recovery codes occur in 2/15, 31/71, 4/4 and 137/182
+respectively. These cohorts carry different task mixes—four-observation
+first-pass contexts versus two-observation relationship reviews—so the
+measurements do **not** by themselves justify another batch-size change.
+
 Worker, orchestrator, Qwen and API were restarted from durable state while the
 project was incomplete. The worker resumed without duplicating an accepted output;
 the orchestrator reconstructed the sweep; Qwen loaded once and accepted new work;
