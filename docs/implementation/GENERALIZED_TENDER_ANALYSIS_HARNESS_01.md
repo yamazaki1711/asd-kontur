@@ -2573,3 +2573,39 @@ retry, successor, priority or Qwen command was issued.
 
 Current status remains: `GeneralizedTenderHarness=false`,
 `AutonomousProjectProcessing=true`, `ProductReady=false`.
+
+## Current blind-project scope bridge — release 3174065
+
+Release `3174065fd9b23803a8968dd9777c082b83f32a33` makes exact,
+reciprocal Qwen `SAME_SCOPE` decisions visible on both sides of a
+design/commercial work comparison, including when the commercial position has
+not yet been allocated to a facility. Contradictory explicit locations still
+reject a match, and a design row with multiple reviewed commercial matches
+remains unresolved. The change does not authorize a quantity comparison or an
+omitted-work finding from a work-scope decision alone.
+
+On the real blind workspace `01a0eba7-70ba-7770-9601-1a713dd359cf`, the
+live API projection after deployment contained 20 matched scope rows, 311
+unresolved rows and one commercial-only row. The pre-change read-only
+projection contained 15 matched rows. The autonomous project model changed
+during the deployment window, so the total row count is not held constant.
+Quantity comparisons remained seven, material comparisons five and
+professional issues three. Exact-SHA CI run `37248218342` passed; only the API
+was switched, leaving supervised worker, orchestrator, Qwen and NTD PIDs
+unchanged.
+
+The next unresolved denominator is substantive: 184 commercial rows still
+require design-scope linkage and 66 design rows still require commercial
+allocation. A read-only exact-wording probe found 17 unique cross-row
+design/commercial pair candidates with non-conflicting explicit locations.
+Three already had negative semantic scope decisions despite identical wording;
+14 had no exact reciprocal decision. Thus identical text is demonstrably
+insufficient as automatic comparison authority. The existing autonomous
+cross-document pair lane ranks exact wording highly and asks Qwen to decide
+scope; no developer queue command or direct project-fact insertion was used.
+
+The real-project quantity graph currently contains one complete reviewed
+component/total relation: the VOR total for tree removal is 61 items and the
+deterministically summed components are also 61. This is a valid consistency
+check, not a discrepancy. Unsupported component sets are not summed into
+Tender findings. `GeneralizedTenderHarness=false` and `ProductReady=false`.
