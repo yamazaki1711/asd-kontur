@@ -2651,3 +2651,27 @@ rejects cycles within that set. It never adds extra components to make an
 arithmetic total match. The blind projection under this stricter rule contains
 five quantity comparisons and three existing professional issues; no new
 finding is claimed.
+
+## Source-backed work-scope matches — 2026-10-05
+
+The blind project's Tender UI showed only unresolved project/commercial work
+positions even though the project model already contained 24 `MATCH` scope
+decisions. A read-only live inspection found that some `MATCH` rows represented
+a commercial schedule row paired to a separate project row, but displayed only
+the commercial document role and its source. Showing those rows unchanged as
+confirmed matches would have overstated the visible basis.
+
+The generic comparison projection now requires a unique covering design row
+before confirming a commercial-only schedule row. It includes the paired
+project and commercial work names, both document-role sets, and source links
+from both sides. Multiple possible project bases remain unresolved. The Tender
+screen now shows confirmed work-scope matches separately from unresolved
+positions and explicitly states that a work-scope match does not establish
+quantity agreement or facility allocation.
+
+Against the same durable blind-project state, the guarded read-only projection
+had 22 confirmed matches rather than 24; all 22 had project and commercial
+roles, paired work descriptions, and source links from both sides. It still had
+five safe quantity comparisons and three existing Tender issues. This is a
+more accurate and visible work-composition result, not a new quantity finding.
+No project jobs were manually enqueued and no Qwen or NTD worker was restarted.
