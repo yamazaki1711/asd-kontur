@@ -6271,7 +6271,7 @@ def _issues(
             else f"Сумма установленных частей превышает общий объём на {residual_amount} {unit}"
         )
         location = str(uncertainty.get("facility") or "Место выполнения требует уточнения")
-        work = str(uncertainty.get("work") or "Общий объём")
+        subject_work = str(uncertainty.get("work") or "Общий объём")
         locators = [str(value) for value in uncertainty.get("source_locator_ids") or ()]
         issues.append(
             {
@@ -6285,7 +6285,7 @@ def _issues(
                 "finding_kind": ProfessionalFindingKind.MISSING_PROJECT_INFORMATION,
                 "kind": "Не подтверждён состав общего объёма",
                 "location": location,
-                "subject": work,
+                "subject": subject_work,
                 "description": (
                     f"{uncertainty.get('document_role')}: общий объём {total} {unit}; "
                     f"установленные составляющие — {known_sum} {unit}. "
@@ -6298,7 +6298,7 @@ def _issues(
                 ),
                 "recommended_action": (
                     f"Просим подтвердить полный перечень составляющих объёма {total} {unit} "
-                    f"для «{work}» и пояснить разность {residual_amount} {unit}."
+                    f"для «{subject_work}» и пояснить разность {residual_amount} {unit}."
                 ),
                 "comparison_data": {
                     "status": "INCOMPLETE_COMPONENT_SET",
