@@ -2637,3 +2637,17 @@ regression or forcibly restored. The new guard prevents future impossible
 component cycles, but historical accepted results remain immutable and need a
 separate, scoped recovery policy before they can be replaced. No professional
 finding or additional comparison is claimed from this code change alone.
+
+Further read-only inspection found that the historical quantity ledger also
+contains incompatible complete-component declarations and directed component
+cycles across separate accepted reviews. The earlier 61-item VOR component
+match is now withheld by the stricter v81 engineering projection: its two
+declared components have mutually contradictory historical component links.
+The independent VOR/estimate `61 шт` same-scope comparison remains available.
+This is an unresolved semantic relationship, **not** a newly discovered
+construction discrepancy. The deterministic total checker now requires one
+consistent exact complete set, refuses unlisted reviewed components, and
+rejects cycles within that set. It never adds extra components to make an
+arithmetic total match. The blind projection under this stricter rule contains
+five quantity comparisons and three existing professional issues; no new
+finding is claimed.

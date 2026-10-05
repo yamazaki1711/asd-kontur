@@ -1542,7 +1542,7 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
     ]
 
 
-def test_component_total_comparison_closes_reviewed_reciprocal_component_edges() -> None:
+def test_complete_total_rejects_additional_reviewed_component_not_in_declared_set() -> None:
     comparisons = _component_total_comparisons(
         [
             {
@@ -1554,7 +1554,7 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
                     "ПД": [
                         {
                             "quantity_candidate_id": "total",
-                            "value": "772.5",
+                            "value": "125",
                             "unit": "м3",
                             "semantic_scope": "Общий объём разработки грунта",
                             "quantity_type": "TOTAL",
@@ -1567,7 +1567,7 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
                         },
                         {
                             "quantity_candidate_id": "mechanized",
-                            "value": "656.6",
+                            "value": "100",
                             "unit": "м3",
                             "semantic_scope": "Механизированная разработка грунта",
                             "quantity_type": "COMPONENT",
@@ -1579,7 +1579,7 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
                         },
                         {
                             "quantity_candidate_id": "manual",
-                            "value": "115.9",
+                            "value": "25",
                             "unit": "м3",
                             "semantic_scope": "Ручная разработка грунта",
                             "quantity_type": "COMPONENT",
@@ -1609,15 +1609,71 @@ def test_component_total_comparison_closes_reviewed_reciprocal_component_edges()
         ]
     )
 
-    assert len(comparisons) == 1
-    assert comparisons[0]["classification"] == "MATCH"
-    assert comparisons[0]["right"]["value"] == "772.5"
-    assert comparisons[0]["difference"] == "0"
-    assert comparisons[0]["source_locator_ids"] == [
-        "locator-manual",
-        "locator-mechanized",
-        "locator-total",
-    ]
+    assert comparisons == []
+
+
+@pytest.mark.parametrize("conflict", ["second_complete_set", "component_cycle"])
+def test_component_total_comparison_rejects_conflicting_review_history(
+    conflict: str,
+) -> None:
+    total = {
+        "quantity_candidate_id": "total",
+        "value": "125",
+        "unit": "м3",
+        "semantic_scope": "Total excavation",
+        "quantity_type": "TOTAL",
+        "relation_kind": "TOTAL_FOR",
+        "related_quantity_candidate_ids": ["part-a", "part-b"],
+        "scope_compatibility": "COMPONENT_VS_TOTAL",
+        "relationship_reviewed": True,
+        "component_set_complete": True,
+    }
+    part_a = {
+        "quantity_candidate_id": "part-a",
+        "value": "100",
+        "unit": "м3",
+        "semantic_scope": "Excavation zone A",
+        "quantity_type": "COMPONENT",
+    }
+    part_b = {
+        "quantity_candidate_id": "part-b",
+        "value": "25",
+        "unit": "м3",
+        "semantic_scope": "Excavation zone B",
+        "quantity_type": "COMPONENT",
+    }
+    if conflict == "second_complete_set":
+        total["relationship_assertions"] = [
+            {
+                "relation_kind": "TOTAL_FOR",
+                "related_quantity_candidate_ids": ["part-a"],
+                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                "relationship_reviewed": True,
+                "component_set_complete": True,
+            }
+        ]
+    else:
+        part_a.update(
+            {
+                "relation_kind": "TOTAL_FOR",
+                "related_quantity_candidate_ids": ["total"],
+                "scope_compatibility": "COMPONENT_VS_TOTAL",
+                "relationship_reviewed": True,
+                "component_set_complete": True,
+            }
+        )
+    comparisons = _component_total_comparisons(
+        [
+            {
+                "work_scope_id": "excavation-scope",
+                "facility_id": "facility-one",
+                "work_name": "Excavation",
+                "quantities_by_document": {"RD": [total, part_a, part_b]},
+            }
+        ]
+    )
+
+    assert comparisons == []
 
 
 def test_quantity_schedule_preserves_review_authority_for_component_arithmetic() -> None:
@@ -3045,7 +3101,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v80"
+    assert model["model_version"] == "project-engineering-model-v81"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

@@ -10,7 +10,7 @@ normal result while retaining document/page references for inspection.
 from __future__ import annotations
 
 import re
-from collections import Counter, defaultdict
+from collections import Counter, defaultdict, deque
 from collections.abc import Iterable, Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v80"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v81"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3806,8 +3806,11 @@ def _component_total_comparisons(
     """Verify explicit total/component graphs, including separate schedule rows."""
 
     records: dict[str, dict[str, Any]] = {}
-    total_relationships: dict[str, tuple[tuple[str, ...], ScopeCompatibility]] = {}
-    reciprocal_components: dict[str, set[str]] = defaultdict(set)
+    total_relationships: dict[
+        str, set[tuple[tuple[str, ...], ScopeCompatibility]]
+    ] = defaultdict(set)
+    reviewed_components: dict[str, set[str]] = defaultdict(set)
+    component_to_total: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
         work = dict(raw_work)
         for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
@@ -3866,33 +3869,60 @@ def _component_total_comparisons(
                         continue
                     if relationship_value.get("relationship_reviewed") is not True:
                         continue
-                    if (
-                        relation in {QuantityRelation.COMPONENT_OF, QuantityRelation.SUBTOTAL_OF}
-                        and compatibility is ScopeCompatibility.COMPONENT_VS_TOTAL
-                    ):
+                    if relation in {
+                        QuantityRelation.COMPONENT_OF,
+                        QuantityRelation.SUBTOTAL_OF,
+                    }:
                         for total_id in related:
-                            reciprocal_components[total_id].add(candidate_id)
+                            component_to_total[candidate_id].add(total_id)
+                            if compatibility is ScopeCompatibility.COMPONENT_VS_TOTAL:
+                                reviewed_components[total_id].add(candidate_id)
+                    if relation is QuantityRelation.TOTAL_FOR:
+                        for component_id in related:
+                            component_to_total[component_id].add(candidate_id)
                     if (
                         relation is QuantityRelation.TOTAL_FOR
                         and relationship_value.get("component_set_complete") is not True
                     ):
                         continue
                     if relation is QuantityRelation.TOTAL_FOR:
-                        total_relationships[candidate_id] = (related, compatibility)
+                        total_relationships[candidate_id].add(
+                            (tuple(sorted(set(related))), compatibility)
+                        )
     relationships: list[QuantityRelationship] = []
-    for total_id, (declared_components, compatibility) in total_relationships.items():
-        # Qwen reviews each quantity row independently. A component can therefore
-        # point to a reviewed total even when the total row omits that reciprocal
-        # edge. Close only explicit, reviewed COMPONENT_OF/SUBTOTAL_OF links; do
-        # not infer membership from wording or arithmetic similarity.
-        component_ids = tuple(
-            dict.fromkeys((*declared_components, *sorted(reciprocal_components[total_id])))
-        )
+    for total_id, declarations in total_relationships.items():
+        if len(declarations) != 1:
+            continue
+        declared_components, compatibility = next(iter(declarations))
+        if not declared_components or not reviewed_components[total_id].issubset(
+            declared_components
+        ):
+            continue
+        # Check only this declared total/component set. A component may have
+        # unrelated historical relationships in another scope; those must not
+        # erase an internally consistent local total.
+        members = {total_id, *declared_components}
+        indegree = {member: 0 for member in members}
+        for component_id in members:
+            for parent_id in component_to_total.get(component_id, set()) & members:
+                indegree[parent_id] += 1
+        pending = deque(node for node, degree in indegree.items() if degree == 0)
+        while pending:
+            node = pending.popleft()
+            for parent_id in component_to_total.get(node, set()) & members:
+                indegree[parent_id] -= 1
+                if indegree[parent_id] == 0:
+                    pending.append(parent_id)
+        if any(degree > 0 for degree in indegree.values()):
+            continue
+        # A TOTAL_FOR assertion marked complete is the exact component set.
+        # Appending a later COMPONENT_OF edge without a revised total decision
+        # would silently turn an inconsistent graph into a plausible sum.
         relationships.append(
             QuantityRelationship(
                 subject_id=total_id,
                 relation=QuantityRelation.TOTAL_FOR,
-                object_ids=component_ids,
+                object_ids=declared_components,
                 compatibility=compatibility,
             )
         )
