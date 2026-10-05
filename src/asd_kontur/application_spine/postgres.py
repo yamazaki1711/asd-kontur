@@ -1157,10 +1157,22 @@ def _quantity_relationship_batches(
                 )
                 # A new seed pair must not drag an already reviewed pair back
                 # into a larger context batch. The model otherwise re-decides
-                # that old pair and can contradict its accepted result.
+                # that old pair and can contradict its accepted result. Two
+                # different components are the exception in the structural
+                # total lane: their earlier pair decision does not answer
+                # whether both belong to a newly supplied stated total.
                 or any(
                     _relationship_pair_key(candidate_id, existing.get("candidate_id"))
                     in attempted_pairs
+                    and not (
+                        family.startswith("source-measure:")
+                        and not any(
+                            _quantity_may_be_stated_total(quantity)
+                            for context_row in (row, existing)
+                            for quantity in context_row.get("quantity_observations") or ()
+                            if isinstance(quantity, Mapping)
+                        )
+                    )
                     for existing in batch
                 )
                 or len(batch) >= relationship_batch_size
@@ -1214,16 +1226,31 @@ def _non_work_measure_relation_ids(
 
     This only admits source-bound context to Qwen. It does not reclassify a
     heading/structure description as work or declare any numeric relationship.
-    Previously unreviewed values and resources/rates are not reopened here.
+    Only a previously typed model-failure fallback may join validated
+    dimensions; unreviewed values and resources/rates are not reopened here.
     """
 
-    groups: dict[tuple[str, str], list[tuple[str, bool]]] = defaultdict(list)
+    groups: dict[tuple[str, str], list[tuple[str, bool, bool]]] = defaultdict(list)
     for raw in work_rows:
         row = dict(raw)
         candidate_id = str(row.get("candidate_id") or "")
         source_id = str(row.get("source_version_id") or "")
         resolution = prior_resolutions.get(candidate_id) or {}
-        if not candidate_id or not source_id or resolution.get("status") != "NOT_A_WORK":
+        if not candidate_id or not source_id:
+            continue
+        validated_dimension = resolution.get("status") == "NOT_A_WORK"
+        recoverable_fallback = (
+            resolution.get("status") == "UNCLASSIFIED"
+            and resolution.get("profile_version") == PROJECT_WORK_RECONCILIATION_PROFILE
+            and bool(
+                set(resolution.get("recovery_codes") or ())
+                & {
+                    "qwen_semantic_response_output_exhausted",
+                    "qwen_work_reconciliation_quantity_relation_ids_invalid",
+                }
+            )
+        )
+        if not validated_dimension and not recoverable_fallback:
             continue
         reviews = {
             str(value.get("quantity_candidate_id") or ""): value
@@ -1233,7 +1260,14 @@ def _non_work_measure_relation_ids(
         for raw_quantity in quantities_by_work.get(candidate_id) or ():
             quantity = dict(raw_quantity)
             review = reviews.get(str(quantity.get("candidate_id") or "")) or {}
-            if review.get("status") != "DIMENSION":
+            if not (
+                (validated_dimension and review.get("status") == "DIMENSION")
+                or (
+                    recoverable_fallback
+                    and review.get("status") == "AMBIGUOUS"
+                    and review.get("quantity_type") == "UNKNOWN"
+                )
+            ):
                 continue
             dimensions = _relationship_unit_dimensions(
                 {
@@ -1251,14 +1285,49 @@ def _non_work_measure_relation_ids(
                     "nearby_context": row.get("value") or row.get("label"),
                 }
             )
-            groups[(source_id, next(iter(dimensions)))].append((candidate_id, total_hint))
+            groups[(source_id, next(iter(dimensions)))].append(
+                (candidate_id, total_hint, validated_dimension)
+            )
     return {
         candidate_id
         for values in groups.values()
-        if len({candidate_id for candidate_id, _ in values}) >= 2
-        and any(total_hint for _, total_hint in values)
-        for candidate_id, _ in values
+        if len({candidate_id for candidate_id, _, _ in values}) >= 2
+        and any(total_hint and validated for _, total_hint, validated in values)
+        for candidate_id, _, _ in values
     }
+
+
+def _multi_measure_output_recovery_needed(
+    existing: Mapping[str, Any] | None,
+    *,
+    candidate_version: int,
+    linked_quantities: Iterable[Mapping[str, Any]],
+) -> bool:
+    """Permit one idempotent ordinary re-review after exhausted model output.
+
+    The original successful job may have stored a safe unresolved fallback.
+    Such a receipt is not a semantic decision, but normal attempt accounting
+    suppresses a successor. Reopen only multi-measure rows with no accepted
+    quantity meaning; the recovery generation is fixed in the job manifest.
+    """
+
+    if existing is None or int(existing.get("candidate_version") or 0) != candidate_version:
+        return False
+    if (
+        existing.get("profile_version") != PROJECT_WORK_RECONCILIATION_PROFILE
+        or existing.get("status") != "UNCLASSIFIED"
+        or "qwen_semantic_response_output_exhausted"
+        not in set(existing.get("recovery_codes") or ())
+    ):
+        return False
+    quantities = [dict(value) for value in linked_quantities]
+    if len(quantities) < 2:
+        return False
+    reviews = [dict(value) for value in existing.get("quantity_reviews") or ()]
+    return bool(reviews) and all(
+        value.get("status") == "AMBIGUOUS" and value.get("quantity_type") == "UNKNOWN"
+        for value in reviews
+    )
 
 
 def _work_reconciliation_attempt_sets(
@@ -6935,6 +7004,11 @@ class SpinePostgresRepository:
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
                 existing = prior.get(candidate_id)
                 non_work_measure_context = candidate_id in non_work_measure_ids
+                multi_measure_recovery = _multi_measure_output_recovery_needed(
+                    existing,
+                    candidate_version=version,
+                    linked_quantities=all_linked_quantities,
+                )
                 if (
                     not candidate_id
                     or not wording
@@ -6956,6 +7030,9 @@ class SpinePostgresRepository:
                     candidate_version=version,
                     linked_quantities=all_linked_quantities,
                 )
+                if multi_measure_recovery:
+                    linked_quantities = all_linked_quantities
+                    comparison_context_only = False
                 existing_profile = str((existing or {}).get("profile_version") or "")
                 existing_status = str((existing or {}).get("status") or "")
                 existing_family_key = str((existing or {}).get("family_key") or "")
@@ -6969,6 +7046,7 @@ class SpinePostgresRepository:
                     candidate_id in attempted_candidate_ids
                     and not comparison_context_only
                     and not scope_comparison_context_only
+                    and not multi_measure_recovery
                 ):
                     # Current-profile active/failed work remains the bounded
                     # retry/replacement policy's responsibility. Do not turn
@@ -7024,6 +7102,7 @@ class SpinePostgresRepository:
                 row["linked_quantities"] = linked_quantities
                 row["prior_resolution"] = existing or {}
                 row["non_work_measure_context"] = non_work_measure_context
+                row["semantic_recovery_generation"] = 1 if multi_measure_recovery else None
                 row["comparison_context_only"] = comparison_context_only
                 row["scope_comparison_context_only"] = scope_comparison_context_only
                 unresolved.append(row)
@@ -7198,6 +7277,7 @@ class SpinePostgresRepository:
                         "facility_hints": hints,
                         "deterministic_family_hint": row.get("deterministic_family_hint"),
                         "non_work_measure_context": bool(row.get("non_work_measure_context")),
+                        "semantic_recovery_generation": row.get("semantic_recovery_generation"),
                         "nearby_context": context_text,
                         "nearby_context_locator_ids": list(context_window["source_locator_ids"]),
                         "quantity_observations": quantity_observations,

@@ -150,6 +150,11 @@ def normalize_unit(value: object) -> str | None:
     direct = UNIT_ALIASES.get(raw) or UNIT_ALIASES.get(normalized)
     if direct is not None:
         return direct
+    # Database candidates may already carry the canonical spelling. A unit
+    # normalizer must be idempotent; otherwise semantic relationship context
+    # silently loses simple length, mass and count units after persistence.
+    if normalized in UNIT_ALIASES.values():
+        return normalized
     compact = normalized.replace(" ", "")
     aliases = {
         # OCR and office-text extraction commonly split the exponent from the

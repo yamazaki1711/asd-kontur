@@ -1930,6 +1930,20 @@ def test_reviewed_non_work_measures_get_one_bounded_total_context() -> None:
     }
     assert selected == {"total", "sector-a", "sector-b"}
 
+    batches, selected = _quantity_relationship_batches(
+        rows,
+        batch_size=4,
+        max_batches=1,
+        attempted_pairs={("sector-a", "sector-b")},
+    )
+    assert len(batches) == 1
+    assert {value["candidate_id"] for value in batches[0]} == {
+        "total",
+        "sector-a",
+        "sector-b",
+    }
+    assert selected == {"total", "sector-a", "sector-b"}
+
     rows[2]["source_version_id"] = "different-source"
     batches, _ = _quantity_relationship_batches(rows, batch_size=4, max_batches=1)
     assert all("sector-b" not in {value["candidate_id"] for value in batch} for batch in batches)
@@ -1949,7 +1963,13 @@ def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
         )
     ]
     quantities_by_work = {
-        candidate_id: [{"candidate_id": f"measure-{candidate_id}", "raw_unit": "т"}]
+        candidate_id: [
+            {
+                "candidate_id": f"measure-{candidate_id}",
+                "raw_unit": "т",
+                "normalized_unit": "t",
+            }
+        ]
         for candidate_id in ("total", "part-a", "part-b")
     }
     prior = {
@@ -1974,6 +1994,19 @@ def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
     assert _non_work_measure_relation_ids(
         work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
     ) == {"total", "part-a", "part-b"}
+    prior["part-b"].update(
+        status="UNCLASSIFIED",
+        profile_version=PROJECT_WORK_RECONCILIATION_PROFILE,
+        recovery_codes=["qwen_work_reconciliation_quantity_relation_ids_invalid"],
+    )
+    prior["part-b"]["quantity_reviews"][0].update(status="AMBIGUOUS", quantity_type="UNKNOWN")
+    assert _non_work_measure_relation_ids(
+        work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
+    ) == {"total", "part-a", "part-b"}
+    prior["part-b"]["recovery_codes"] = []
+    assert _non_work_measure_relation_ids(
+        work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
+    ) == {"total", "part-a"}
     prior["total"]["quantity_reviews"][0]["status"] = "AMBIGUOUS"
     assert (
         _non_work_measure_relation_ids(

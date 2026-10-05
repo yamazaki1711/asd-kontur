@@ -2801,12 +2801,23 @@ tests cover length and mass, including a matching total and a mismatch. This
 is not yet a new live control-project finding.
 
 The lane is now implemented as a bounded source/unit context selector. It
-reopens only previously reviewed `DIMENSION` rows that are correctly
-`NOT_A_WORK`, and only when at least one same-source measure has an explicit
-stated-total cue. Candidate rows are grouped by exact source version and
-normalized unit; component-only pairs are not submitted. Qwen must still
+reopens previously reviewed `DIMENSION` rows that are correctly `NOT_A_WORK`;
+a typed Qwen-failure fallback may join them in the same source/unit group.
+At least one validated same-source measure must have an explicit stated-total
+cue. Component-only pairs are not submitted. Qwen must still
 establish a complete, reciprocal total/component relationship. A failed
 relation pass cannot overwrite a prior validated dimension or turn a heading
 into a construction operation. Changed-name/number tests cover both the
 context selection and deterministic arithmetic. No live finding is claimed
 until supervised processing accepts the semantic relationship independently.
+
+Read-only acceptance preparation found that persisted canonical units `m`
+and `t` were not idempotent inputs to `normalize_unit`. The relation selector
+therefore saw no physical unit for otherwise valid length/mass statements.
+The shared normalizer now accepts its own canonical outputs. Without creating
+a runtime job, the corrected selector identified three current, source-bound
+network-length descriptions for one bounded relationship question. An older
+component-to-component attempt does not suppress the total plus both
+components. This is context assembly, not an asserted mismatch: Qwen must
+independently confirm the relation and completeness before deterministic
+arithmetic can publish a finding.

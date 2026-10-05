@@ -98,6 +98,8 @@ def test_source_unit_normalization_handles_russian_inflections() -> None:
     assert normalize_unit("м. п.") == "m"
     assert normalize_unit("пог. м") == "m"
     assert normalize_unit("погонных метров") == "m"
+    for canonical in ("m", "mm", "m2", "m3", "t", "kg", "piece"):
+        assert normalize_unit(canonical) == canonical
     assert normalize_unit("") is None
 
 
