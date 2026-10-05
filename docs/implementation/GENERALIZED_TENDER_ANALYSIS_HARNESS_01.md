@@ -2695,3 +2695,27 @@ one PD-to-estimate comparison of **29.2 m³ versus 29.2 m³** for an exact
 groundwork scope, with two source links. It is a match, not a Tender finding.
 The one-to-many 656.6 m³ pairing and unparseable project value remain
 unresolved; no arithmetic or discrepancy was inferred from their numeric text.
+
+## Ambiguous quantity allocation as a professional uncertainty — 2026-10-05
+
+The exact quantity comparator correctly refused the blind project's 656.6 m³
+case because two separately sourced project observations were paired to one
+estimate observation. Previously the user saw no explanation for that withheld
+comparison. The generic analysis now groups reciprocal, same-scope,
+unit-compatible one-to-many pairs into a separate clarification result with
+the project values, commercial values and source links. It never adds these
+values or promotes them to a quantity mismatch. The Tender screen and editable
+report present the ambiguity as an unresolved engineering/commercial scope
+question. In a read-only rebuild of the real project, one such clarification
+was produced: two project entries of 656.6 m³ versus one estimate entry of
+656.6 m³, with three source locators. The report DOCX rendered successfully;
+the result was absent from the comparison and finding lists.
+
+A separate read-only diagnostic explains why many semantic pair references do
+not yet reach comparison. Of 32 unique referenced quantity candidates outside
+the accepted work-quantity schedule, all 32 exist in the workspace database
+and belong to classified works and documents in the current project. Twenty
+are still `UNREVIEWED`, eleven are classified as resources/rates rather than
+work quantities, and one is a dimension. They must not be force-included in
+numeric comparisons. Autonomous semantic processing may resolve the 20
+unreviewed values; no Codex refill or database patch was issued.
