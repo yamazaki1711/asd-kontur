@@ -2591,6 +2591,51 @@ def test_exact_reviewed_work_pair_is_symmetric_without_overriding_location(
     comparisons = _scope_comparisons([design, commercial], available_document_roles=["ПД", "Смета"])
 
     assert [row["classification"] for row in comparisons] == [expected, expected]
+    if expected == "MATCH":
+        for comparison in comparisons:
+            assert comparison["design_work"] == design["work_name"]
+            assert comparison["commercial_work"] == commercial["work_name"]
+            assert comparison["design_roles"] == ["ПД"]
+            assert comparison["commercial_roles"] == ["Смета"]
+            assert comparison["source_locator_ids"] == [
+                "commercial-frame-source",
+                "design-frame-source",
+            ]
+
+
+def test_commercial_work_with_two_project_bases_remains_unresolved() -> None:
+    comparisons = _scope_comparisons(
+        [
+            {
+                "work_scope_id": f"design-{facility}",
+                "facility_id": facility,
+                "family_key": "waterproofing",
+                "work_name": "Apply waterproofing",
+                "document_roles": ["РД"],
+                "source_locator_ids": [f"design-source-{facility}"],
+            }
+            for facility in ("zone-a", "zone-b")
+        ]
+        + [
+            {
+                "work_scope_id": "commercial-project-wide",
+                "location_scope_kind": "project",
+                "location_scope_member_ids": ["zone-a", "zone-b"],
+                "family_key": "waterproofing",
+                "work_name": "Apply waterproofing",
+                "document_roles": ["Смета"],
+                "source_locator_ids": ["commercial-source"],
+            }
+        ],
+        available_document_roles=["РД", "Смета"],
+    )
+
+    commercial = next(
+        row
+        for row in comparisons
+        if row["commercial_roles"] == ["Смета"] and not row["design_roles"]
+    )
+    assert commercial["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
 
 def test_reviewed_work_pair_cannot_bridge_disjoint_explicit_project_areas() -> None:

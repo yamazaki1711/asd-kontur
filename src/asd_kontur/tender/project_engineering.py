@@ -4672,25 +4672,24 @@ def _scope_comparisons(
         roles = set(str(value) for value in row.get("document_roles") or ())
         design = roles.intersection(design_roles)
         commercial = roles.intersection(commercial_roles)
+        paired_row: Mapping[str, Any] | None = None
         if not design:
             if commercial:
                 possible_design = design_by_family.get(str(row.get("family_key") or ""), [])
-                covering_design_scope = next(
-                    (
-                        design_row
-                        for design_row in possible_design
-                        if (
-                            _work_pair_scope_compatibility(design_row, row) is True
-                            and _explicit_work_locations_compatible(design_row, row)
-                        )
-                        or (
-                            _work_pair_scope_compatibility(design_row, row) is None
-                            and _design_scope_covers_commercial_operation(design_row, row)
-                        )
-                    ),
-                    None,
-                )
-                if covering_design_scope is not None:
+                covering_design_scopes = [
+                    design_row
+                    for design_row in possible_design
+                    if (
+                        _work_pair_scope_compatibility(design_row, row) is True
+                        and _explicit_work_locations_compatible(design_row, row)
+                    )
+                    or (
+                        _work_pair_scope_compatibility(design_row, row) is None
+                        and _design_scope_covers_commercial_operation(design_row, row)
+                    )
+                ]
+                if len(covering_design_scopes) == 1:
+                    paired_row = covering_design_scopes[0]
                     status = "MATCH"
                     professional_status = "Коммерческая операция имеет проектное основание"
                     conclusion = (
@@ -4790,6 +4789,7 @@ def _scope_comparisons(
                 None,
             )
             if len(reviewed_matches) == 1:
+                paired_row = reviewed_matches[0]
                 status = "MATCH"
                 professional_status = "Коммерческая позиция сопоставлена по инженерному объёму"
                 conclusion = (
@@ -4805,6 +4805,7 @@ def _scope_comparisons(
                     "позиций; нельзя выбрать одну без уточнения границ объёма."
                 )
             elif covering_commercial_scope is not None:
+                paired_row = covering_commercial_scope
                 status = "MATCH"
                 project_wide_coverage = (
                     covering_commercial_scope.get("location_scope_kind") == "project"
@@ -4859,6 +4860,16 @@ def _scope_comparisons(
                     "Для сооружения пока не установлен достаточный коммерческий состав, "
                     "чтобы подтвердить наличие или отсутствие этой работы."
                 )
+        paired_roles = {str(value) for value in (paired_row or {}).get("document_roles") or ()}
+        source_locator_ids = sorted(
+            {
+                str(value)
+                for source_row in (row, paired_row)
+                if source_row is not None
+                for value in source_row.get("source_locator_ids") or ()
+                if value
+            }
+        )
         result.append(
             {
                 "scope_comparison_id": semantic_digest(
@@ -4875,10 +4886,26 @@ def _scope_comparisons(
                 "location_scope_member_ids": list(row.get("location_scope_member_ids") or ()),
                 "family_key": row.get("family_key"),
                 "work": row.get("work_name"),
-                "design_roles": sorted(design),
-                "commercial_roles": sorted(commercial),
+                "design_work": (
+                    row.get("work_name")
+                    if design
+                    else paired_row.get("work_name")
+                    if paired_row is not None
+                    else None
+                ),
+                "commercial_work": (
+                    row.get("work_name")
+                    if commercial
+                    else paired_row.get("work_name")
+                    if paired_row is not None
+                    else None
+                ),
+                "design_roles": sorted(design | paired_roles.intersection(design_roles)),
+                "commercial_roles": sorted(
+                    commercial | paired_roles.intersection(commercial_roles)
+                ),
                 "conclusion": conclusion,
-                "source_locator_ids": list(row.get("source_locator_ids") or ()),
+                "source_locator_ids": source_locator_ids,
             }
         )
     return _deduplicate_dicts(result)

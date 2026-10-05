@@ -5324,6 +5324,9 @@ function ProjectEngineeringResult({
   const scopeComparisons = Array.isArray(model.scope_comparisons)
     ? (model.scope_comparisons as Record<string, unknown>[])
     : [];
+  const confirmedScopeComparisons = scopeComparisons.filter(
+    (comparison) => comparison.classification === "MATCH",
+  );
   const unresolvedScopeComparisons = scopeComparisons.filter(
     (comparison) => comparison.classification !== "MATCH",
   );
@@ -6312,6 +6315,55 @@ function ProjectEngineeringResult({
       </section>
       <section className="panel">
         <h2>Сопоставление проектного и коммерческого состава</h2>
+        {confirmedScopeComparisons.length > 0 && (
+          <details>
+            <summary>
+              Работы с установленным проектным и коммерческим составом (
+              {String(confirmedScopeComparisons.length)})
+            </summary>
+            <p>
+              Сопоставление вида работы не означает совпадения её количества или
+              распределения по сооружениям.
+            </p>
+            <div className="card-grid">
+              {confirmedScopeComparisons.map((comparison) => (
+                <article
+                  className="entity-card"
+                  key={displayValue(comparison.scope_comparison_id)}
+                >
+                  <h3>{displayValue(comparison.work)}</h3>
+                  <p>{displayValue(comparison.facility)}</p>
+                  <p>
+                    Проектная работа: {displayValue(comparison.design_work)}{" "}
+                    {"("}
+                    {displayValue(
+                      Array.isArray(comparison.design_roles)
+                        ? comparison.design_roles.join(", ")
+                        : comparison.design_roles,
+                    )}
+                    {")"}
+                  </p>
+                  <p>
+                    Коммерческая позиция:{" "}
+                    {displayValue(comparison.commercial_work)} {"("}
+                    {displayValue(
+                      Array.isArray(comparison.commercial_roles)
+                        ? comparison.commercial_roles.join(", ")
+                        : comparison.commercial_roles,
+                    )}
+                    {")"}
+                  </p>
+                  <p>{displayValue(comparison.conclusion)}</p>
+                  <ProjectSourceLinks
+                    locatorIds={comparison.source_locator_ids}
+                    workspaceId={workspaceId}
+                    modeSlug={modeSlug}
+                  />
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
         <div className="card-grid">
           {unresolvedScopeSummary.map(([label, count]) => (
             <article className="entity-card" key={label}>
