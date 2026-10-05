@@ -47,6 +47,7 @@ from asd_kontur.application_spine.postgres import (
 from asd_kontur.application_spine.runtime import _migrate, _render_launchd, _show_logs
 from asd_kontur.application_spine.worker import DocumentWorker, _LeaseKeepalive, verify_bytes_digest
 from asd_kontur.document_understanding.postgres import _identity_observation_group_key
+from asd_kontur.tender.analysis_harness import TenderAnalysisTask
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
 )
@@ -2244,6 +2245,97 @@ def test_work_resolution_profile_upgrade_preserves_facility_and_quantity_reviews
     assert resolved["material_reviews"] == [
         {"material_name": "Polymer membrane", "material_kind": "polymer membrane"}
     ]
+
+
+@pytest.mark.parametrize(
+    ("analysis_task", "expected_operation"),
+    [
+        (TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value, "Install gallery beams"),
+        (TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value, "Install steel supports"),
+    ],
+)
+def test_quantity_review_cannot_rewrite_accepted_work_identity(
+    analysis_task: str, expected_operation: str
+) -> None:
+    rows = [
+        {
+            "input_manifest": {
+                "work_observations": [{"candidate_id": "work-1", "candidate_version": 2}]
+            },
+            "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+            "result_manifest": {
+                "observations": [
+                    {
+                        "candidate_id": "work-1",
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Install gallery beams",
+                        "facility": "Gallery A",
+                        "confidence": "0.91",
+                        "reason": "The drawing identifies gallery beams.",
+                        "quantity_reviews": [
+                            {"quantity_candidate_id": "q-1", "status": "WORK_QUANTITY"}
+                        ],
+                    }
+                ]
+            },
+            "recorded_at": "2026-10-01T00:00:00Z",
+        },
+        {
+            "input_manifest": {
+                "work_observations": [
+                    {
+                        "candidate_id": "work-1",
+                        "candidate_version": 2,
+                        "analysis_task": analysis_task,
+                    }
+                ]
+            },
+            "profile_version": PROJECT_WORK_RECONCILIATION_PROFILE,
+            "result_manifest": {
+                "observations": [
+                    {
+                        "candidate_id": "work-1",
+                        "status": "MATCHED",
+                        "family_key": "structural_steel",
+                        "operation": "Install steel supports",
+                        "facility": "Gallery B",
+                        "confidence": "0.75",
+                        "reason": "The bounded review uses a different work label.",
+                        "quantity_reviews": [
+                            {"quantity_candidate_id": "q-2", "status": "WORK_QUANTITY"}
+                        ],
+                    }
+                ]
+            },
+            "recorded_at": "2026-10-01T00:01:00Z",
+        },
+    ]
+
+    class Result:
+        def mappings(self) -> list[dict[str, object]]:
+            return rows
+
+    class Session:
+        def execute(self, *_args: object, **_kwargs: object) -> Result:
+            return Result()
+
+    resolved = SpinePostgresRepository._project_work_resolution_rows(
+        Session(),  # type: ignore[arg-type]
+        organization_id=ORGANIZATION_ID,
+        workspace_id=WORKSPACE_ID,
+    )["work-1"]
+
+    assert resolved["operation"] == expected_operation
+    assert resolved["facility"] == (
+        "Gallery A"
+        if analysis_task == TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value
+        else "Gallery B"
+    )
+    assert {row["quantity_candidate_id"] for row in resolved["quantity_reviews"]} == {
+        "q-1",
+        "q-2",
+    }
 
 
 def test_project_understanding_application_projection_keeps_counts_and_selected_section() -> None:

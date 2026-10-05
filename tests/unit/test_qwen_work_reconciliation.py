@@ -5,14 +5,82 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
+
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure
 from asd_kontur.tender.qwen_work_reconciliation import (
     PROJECT_WORK_RECONCILIATION_PROFILE,
     QwenProjectWorkReconciler,
     _source_measure_options,
     _source_numeric_token_present,
+    _validate_relationship_consistency,
     potential_work_description,
 )
+
+
+@pytest.mark.parametrize(
+    "relations",
+    [
+        {"part-a": ("COMPONENT_OF", ["part-b"]), "part-b": ("COMPONENT_OF", ["part-a"])},
+        {
+            "part-a": ("COMPONENT_OF", ["part-b"]),
+            "part-b": ("SUBTOTAL_OF", ["part-c"]),
+            "part-c": ("COMPONENT_OF", ["part-a"]),
+        },
+    ],
+)
+def test_quantity_component_cycles_are_rejected(
+    relations: dict[str, tuple[str, list[str]]],
+) -> None:
+    observations = [
+        {
+            "operation": "Install gallery elements",
+            "quantity_reviews": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "relation_kind": relation_kind,
+                    "related_quantity_candidate_ids": related_ids,
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "semantic_scope": quantity_id,
+                    "quantity_type": "COMPONENT",
+                    "relationship_reviewed": True,
+                }
+            ],
+        }
+        for quantity_id, (relation_kind, related_ids) in relations.items()
+    ]
+
+    with pytest.raises(QwenSemanticFailure) as error:
+        _validate_relationship_consistency(observations, quantity_context_by_id={})
+
+    assert error.value.code == "qwen_work_reconciliation_quantity_relation_cycle"
+
+
+def test_quantity_total_component_directions_do_not_form_cycle() -> None:
+    relations = {
+        "total": ("TOTAL_FOR", ["part-a", "part-b"]),
+        "part-a": ("COMPONENT_OF", ["total"]),
+        "part-b": ("COMPONENT_OF", ["total"]),
+    }
+    observations = [
+        {
+            "operation": "Install gallery elements",
+            "quantity_reviews": [
+                {
+                    "quantity_candidate_id": quantity_id,
+                    "relation_kind": relation_kind,
+                    "related_quantity_candidate_ids": related_ids,
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "semantic_scope": quantity_id,
+                    "quantity_type": "TOTAL" if quantity_id == "total" else "COMPONENT",
+                    "relationship_reviewed": True,
+                }
+            ],
+        }
+        for quantity_id, (relation_kind, related_ids) in relations.items()
+    ]
+
+    _validate_relationship_consistency(observations, quantity_context_by_id={})
 
 
 def test_qwen_work_reconciliation_preserves_exact_rows_and_allowed_scope(

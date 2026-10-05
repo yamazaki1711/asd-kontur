@@ -149,6 +149,7 @@ _RECOVERABLE_RESPONSE_FAILURES = frozenset(
         "qwen_work_reconciliation_quantity_source_unit_invalid",
         "qwen_work_reconciliation_quantity_source_value_invalid",
         "qwen_work_reconciliation_quantity_relation_ids_invalid",
+        "qwen_work_reconciliation_quantity_relation_cycle",
         "qwen_work_reconciliation_scope_assertions_invalid",
         "qwen_work_reconciliation_work_scope_assertions_invalid",
         "qwen_work_reconciliation_work_scope_operation_ungrounded",
@@ -441,6 +442,7 @@ class QwenProjectWorkReconciler:
                     "qwen_work_reconciliation_quantity_source_unit_invalid",
                     "qwen_work_reconciliation_quantity_source_value_invalid",
                     "qwen_work_reconciliation_quantity_relation_ids_invalid",
+                    "qwen_work_reconciliation_quantity_relation_cycle",
                     "qwen_work_reconciliation_scope_assertions_invalid",
                     "qwen_work_reconciliation_alternative_evidence_missing",
                     "qwen_work_reconciliation_revision_evidence_missing",
@@ -657,6 +659,11 @@ def _prompt(
                 "В related_quantity_candidate_ids используйте только переданные UUID: для "
                 "TOTAL_FOR перечислите компоненты, для COMPONENT_OF/SUBTOTAL_OF — итог; для "
                 "NONE верните пустой список."
+            ),
+            "qwen_work_reconciliation_quantity_relation_cycle": (
+                "Связь составляющая → итог не может образовывать цикл: одна величина не может "
+                "быть составляющей другой, если та одновременно является её составляющей. "
+                "Проверьте направление каждой связи; при недостатке данных верните NONE."
             ),
             "qwen_work_reconciliation_alternative_evidence_missing": (
                 "ALTERNATIVE_TO/ALTERNATIVE_DESIGN допустимы только когда исходный текст прямо "
@@ -1088,6 +1095,36 @@ def _validate_relationship_consistency(
         for review in observation.get("quantity_reviews") or ():
             if isinstance(review, Mapping) and review.get("quantity_candidate_id"):
                 reviews_by_id[str(review["quantity_candidate_id"])] = review
+    component_totals: dict[str, set[str]] = {}
+    for quantity_id, review in reviews_by_id.items():
+        relation_kind = str(review.get("relation_kind") or "NONE")
+        related_component_ids = {
+            str(value) for value in review.get("related_quantity_candidate_ids") or ()
+        }
+        if relation_kind in {
+            QuantityRelation.COMPONENT_OF.value,
+            QuantityRelation.SUBTOTAL_OF.value,
+        }:
+            component_totals.setdefault(quantity_id, set()).update(related_component_ids)
+        elif relation_kind == QuantityRelation.TOTAL_FOR.value:
+            for component_id in related_component_ids:
+                component_totals.setdefault(component_id, set()).add(quantity_id)
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(quantity_id: str) -> None:
+        if quantity_id in visiting:
+            raise QwenSemanticFailure("qwen_work_reconciliation_quantity_relation_cycle")
+        if quantity_id in visited:
+            return
+        visiting.add(quantity_id)
+        for total_id in component_totals.get(quantity_id, ()):
+            visit(total_id)
+        visiting.remove(quantity_id)
+        visited.add(quantity_id)
+
+    for quantity_id in component_totals:
+        visit(quantity_id)
     for quantity_id, review in reviews_by_id.items():
         for assertion in review.get("scope_assertions") or ():
             peer_id = str(assertion.get("related_quantity_candidate_id") or "")

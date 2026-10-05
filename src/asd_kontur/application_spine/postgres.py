@@ -8046,6 +8046,11 @@ class SpinePostgresRepository:
                 for item in manifest.get("work_observations") or ()
                 if isinstance(item, Mapping) and item.get("candidate_id")
             }
+            analysis_tasks = {
+                str(item.get("candidate_id") or ""): str(item.get("analysis_task") or "")
+                for item in manifest.get("work_observations") or ()
+                if isinstance(item, Mapping) and item.get("candidate_id")
+            }
             for item in result.get("observations") or ():
                 if not isinstance(item, Mapping):
                     continue
@@ -8090,6 +8095,27 @@ class SpinePostgresRepository:
                         )
                     ),
                 }
+                if (
+                    same_candidate_version
+                    and str(compatible_current.get("status") or "") == "MATCHED"
+                    and analysis_tasks.get(candidate_id)
+                    == TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value
+                ):
+                    # This task determines relationships among numeric
+                    # observations; it is not a new work-identity decision.
+                    # Letting a later bounded quantity pass rename an already
+                    # accepted operation can move its values to another work
+                    # scope and silently remove a professional comparison.
+                    for field in (
+                        "status",
+                        "family_key",
+                        "operation",
+                        "facility",
+                        "confidence",
+                        "reason",
+                    ):
+                        if field in compatible_current:
+                            combined[field] = compatible_current[field]
                 if (
                     same_candidate_version
                     and not combined.get("facility")

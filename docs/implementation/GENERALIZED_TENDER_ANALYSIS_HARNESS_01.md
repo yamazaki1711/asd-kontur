@@ -2609,3 +2609,31 @@ component/total relation: the VOR total for tree removal is 61 items and the
 deterministically summed components are also 61. This is a valid consistency
 check, not a discrepancy. Unsupported component sets are not summed into
 Tender findings. `GeneralizedTenderHarness=false` and `ProductReady=false`.
+
+## Work identity and quantity-graph guard — 2026-10-05
+
+The live blind workspace continued processing without a Codex queue command.
+Its professional model reached 339 consolidated works and 58 unclassified
+descriptions, but still had only seven quantity comparisons and three issues.
+One autonomous four-row quantity-relationship job
+`01a109a2-5b89-72df-bc77-fbdc8b019e7a` then took 11 minutes 12 seconds and
+five Qwen calls. Its accepted payload contained two quantities that each
+claimed to be a component of the other. Read-only validation with the new
+generic graph guard rejects that exact historical payload as
+`qwen_work_reconciliation_quantity_relation_cycle`; no job or project fact was
+edited, retried, or manually requeued.
+
+The same bounded review changed normalized operation labels for already
+accepted work observations. Quantity relationship interpretation has no
+authority to redefine a settled work identity for the same candidate version.
+The resolution merger now preserves that identity for quantity-only tasks while
+still merging new quantity reviews. Explicit cross-document scope tasks and
+new candidate versions remain able to establish their own work interpretation.
+
+The post-job live projection showed six quantity comparisons, down from seven.
+The count change alone does not establish whether the removed comparison was
+invalidated correctly; it must not be reported as a confirmed engineering
+regression or forcibly restored. The new guard prevents future impossible
+component cycles, but historical accepted results remain immutable and need a
+separate, scoped recovery policy before they can be replaced. No professional
+finding or additional comparison is claimed from this code change alone.
