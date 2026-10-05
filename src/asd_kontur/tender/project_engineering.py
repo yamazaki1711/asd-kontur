@@ -1301,6 +1301,10 @@ def _professional_schedule_date_is_plausible(value: str, document_role: str) -> 
 
 
 def _tender_context_identity_value(key: str, value: str) -> str:
+    if key in {"construction_duration", "work_duration", "contract_duration"}:
+        months = _simple_month_duration(value)
+        if months is not None:
+            return f"months:{months.normalize()}"
     if key == "price_basis":
         # Title-block and estimate prose commonly differ only in spacing and
         # punctuation. Preserve distinct dates/quarters, but do not repeat
@@ -1318,6 +1322,16 @@ def _tender_context_identity_value(key: str, value: str) -> str:
         return f"money:{Decimal(numeric).normalize()}"
     except InvalidOperation:
         return _normalized(value)
+
+
+def _simple_month_duration(value: object) -> Decimal | None:
+    """Read one explicit month duration without interpreting a schedule period."""
+
+    match = re.fullmatch(
+        r"\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:месяц(?:а|ев)?|мес\.?)\s*",
+        str(value or "").casefold(),
+    )
+    return Decimal(match.group(1).replace(",", ".")) if match is not None else None
 
 
 def _professional_context_label(key: str, value: str, default: str) -> str:
@@ -4366,33 +4380,36 @@ def _tender_context_comparisons(
         )
     )
 
-    duration_rows: list[tuple[Decimal, str, list[str]]] = []
+    duration_rows_by_field: dict[str, list[tuple[Decimal, str, list[str]]]] = defaultdict(list)
     for raw in tender_context.get("time_requirements") or ():
         row = dict(raw)
-        if row.get("field") not in {"construction_duration", "work_duration"}:
+        field = str(row.get("field") or "")
+        if field not in {"construction_duration", "work_duration"}:
             continue
-        match = re.fullmatch(
-            r"\s*([0-9]+(?:[.,][0-9]+)?)\s*(?:месяц(?:а|ев)?|мес\.?)\s*",
-            str(row.get("value") or "").casefold(),
-        )
-        if match is None:
+        months = _simple_month_duration(row.get("value"))
+        if months is None:
             continue
         locators = [str(value) for value in row.get("source_locator_ids") or ()]
-        duration_rows.append(
+        duration_rows_by_field[field].append(
             (
-                Decimal(match.group(1).replace(",", ".")),
+                months,
                 _context_comparison_role(locators, source_context),
                 locators,
             )
         )
-    result.extend(
-        _distinct_context_value_comparisons(
-            duration_rows,
-            subject="Продолжительность выполнения работ",
-            unit="мес.",
-            comparison_kind="duration",
+    for field, duration_rows in sorted(duration_rows_by_field.items()):
+        result.extend(
+            _distinct_context_value_comparisons(
+                duration_rows,
+                subject=(
+                    "Продолжительность строительства"
+                    if field == "construction_duration"
+                    else "Срок выполнения работ"
+                ),
+                unit="мес.",
+                comparison_kind="duration",
+            )
         )
-    )
     return result
 
 

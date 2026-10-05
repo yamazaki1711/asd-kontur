@@ -155,6 +155,35 @@ def test_tender_context_collapses_equivalent_price_basis_wording_without_losing_
     assert len(q3["sources"]) == 2
 
 
+def test_tender_context_collapses_equivalent_month_duration_with_sources() -> None:
+    source_context = dict(
+        [
+            _source("design", "Construction plan.pdf", 2),
+            _source("schedule", "Work schedule.pdf", 4),
+            _source("procurement", "Tender notice.pdf", 1),
+        ]
+    )
+    context = _tender_context(
+        [
+            {"label": "work_duration", "value": "5,5 мес", "source_locator_id": "design"},
+            {"label": "work_duration", "value": "5.5 месяца", "source_locator_id": "schedule"},
+            {
+                "label": "construction_duration",
+                "value": "5.5 месяца",
+                "source_locator_id": "procurement",
+            },
+        ],
+        source_context,
+    )
+
+    assert len(context["time_requirements"]) == 2
+    work_duration = next(
+        row for row in context["time_requirements"] if row["field"] == "work_duration"
+    )
+    assert work_duration["source_locator_ids"] == ["design", "schedule"]
+    assert len(work_duration["sources"]) == 2
+
+
 def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> None:
     source_context = dict(
         [
@@ -327,7 +356,7 @@ def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
             ],
             "time_requirements": [
                 {
-                    "field": "construction_duration",
+                    "field": "work_duration",
                     "value": "3,5 месяца",
                     "source_locator_ids": ["pos"],
                 },
@@ -354,6 +383,34 @@ def test_tender_context_compares_typed_vat_and_active_work_duration() -> None:
     assert comparisons[0]["right"]["document_role"] == "Договор"
     assert comparisons[1]["left"]["value"] == "3.5"
     assert comparisons[1]["right"]["value"] == "4"
+
+
+def test_tender_context_does_not_compare_construction_and_work_periods() -> None:
+    source_context = dict(
+        [
+            _source("construction", "Construction method.pdf", 5),
+            _source("work", "Tender schedule.pdf", 2),
+        ]
+    )
+    comparisons = _tender_context_comparisons(
+        {
+            "time_requirements": [
+                {
+                    "field": "construction_duration",
+                    "value": "5.5 месяца",
+                    "source_locator_ids": ["construction"],
+                },
+                {
+                    "field": "work_duration",
+                    "value": "8 месяцев",
+                    "source_locator_ids": ["work"],
+                },
+            ]
+        },
+        source_context,
+    )
+
+    assert comparisons == []
 
 
 def test_facility_material_schedule_consolidates_repeated_mentions_by_scope() -> None:

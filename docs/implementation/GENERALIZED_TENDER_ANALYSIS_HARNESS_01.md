@@ -2745,3 +2745,22 @@ scopes, not claims that quantities or material properties agree. No project
 record or Qwen output was modified. An independent changed-value test verifies
 that a project-wide commercial material cannot be compared with an unlocated
 design material merely because their broad material kind matches.
+
+## Typed schedule periods in the preliminary Tender result — 2026-10-05
+
+The report and comparison layer previously treated a simple numeric
+`construction_duration` and a simple numeric `work_duration` as directly
+comparable months. The two typed fields can describe different periods; equal
+units do not establish equal schedule scope. Comparisons now remain within
+the same typed duration field. No construction-versus-work conflict is emitted
+without a separately established semantic relationship.
+
+Equivalent statements within one field, such as `5,5 мес` and `5.5 месяца`,
+now consolidate deterministically while retaining both source links. Different
+field types and different numeric values remain separate. In a read-only
+rebuild of the blind project, the time section fell to seven distinct rows;
+its 2.2-month work-duration statement retained three source locators and its
+4-month statement retained two. The one existing 2.2-versus-4-month question
+remains because both groups are typed as work duration. A changed-value test
+also proves that construction and work periods are not compared merely because
+both are expressed in months. No project processing job was created manually.
