@@ -2675,3 +2675,23 @@ roles, paired work descriptions, and source links from both sides. It still had
 five safe quantity comparisons and three existing Tender issues. This is a
 more accurate and visible work-composition result, not a new quantity finding.
 No project jobs were manually enqueued and no Qwen or NTD worker was restarted.
+
+## Exact standalone quantity comparison — 2026-10-05
+
+A read-only blocker count for the live blind project found 73 scoped quantity
+statements and 231 persisted pair assertions. Only four distinct cross-work
+design/commercial quantity pairs had reciprocal same-scope decisions on both
+the work and quantity identities with compatible locations. Two pairs shared
+one commercial value with multiple project values and remain withheld; one
+project value was not a parseable Decimal; the fourth was excluded only because
+both sides were classified `STANDALONE` instead of total/component.
+
+`STANDALONE` is a valid single measured scope, not a prohibition on comparison.
+The deterministic exact-pair comparator now accepts it when all existing
+reciprocal work, quantity, role, location, revision, unit and one-to-one guards
+pass. A project-independent changed-value test covers this path and retains a
+mixed-type false-positive guard. The read-only real-project projection gained
+one PD-to-estimate comparison of **29.2 m³ versus 29.2 m³** for an exact
+groundwork scope, with two source links. It is a match, not a Tender finding.
+The one-to-many 656.6 m³ pairing and unparseable project value remain
+unresolved; no arithmetic or discrepancy was inferred from their numeric text.

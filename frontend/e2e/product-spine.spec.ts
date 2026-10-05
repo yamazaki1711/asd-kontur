@@ -407,6 +407,74 @@ test("user enters through four Russian modes and keeps the selected object", asy
   expect(unauthorizedStatus).toBe(401);
 });
 
+test("Tender shows confirmed work pairing with both document sides", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path.endsWith("/project-understanding")) {
+      return json(route, {
+        project_definition: { definition: { fields: {} } },
+        matrix: { matrix: { rows: [] } },
+        materialization: { state: "partial" },
+        evidence_index: {},
+        candidates: {},
+        defects: [],
+        project_engineering: {
+          project: {},
+          summary: {},
+          scope_comparisons: [
+            {
+              scope_comparison_id: digest("a"),
+              classification: "MATCH",
+              facility: "Warehouse B",
+              work: "Install roofing",
+              design_work: "Roof membrane installation",
+              commercial_work: "Install roof covering",
+              design_roles: ["РД"],
+              commercial_roles: ["Смета"],
+              conclusion: "The project and commercial work scopes are paired.",
+              source_locator_ids: [documentId, challengeId],
+            },
+            {
+              scope_comparison_id: digest("b"),
+              classification: "UNRESOLVED_SCOPE_MATCH",
+              professional_status: "Требуется уточнить объём",
+              facility: "Warehouse C",
+              work: "Install drainage",
+              conclusion: "The corresponding commercial position is unclear.",
+            },
+          ],
+        },
+      });
+    }
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+
+  await page.goto(
+    `/modes/tender/workspaces/${workspaceA}/project-understanding?section=gaps`,
+  );
+  await page
+    .getByText("Работы с установленным проектным и коммерческим составом (1)")
+    .click();
+  await expect(
+    page.getByText("Проектная работа: Roof membrane installation"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Коммерческая позиция: Install roof covering"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Сопоставление вида работы не означает/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Открыть исходный фрагмент" }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByText("Требуется уточнить объём").first(),
+  ).toBeVisible();
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },
