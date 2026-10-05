@@ -3806,9 +3806,9 @@ def _component_total_comparisons(
     """Verify explicit total/component graphs, including separate schedule rows."""
 
     records: dict[str, dict[str, Any]] = {}
-    total_relationships: dict[
-        str, set[tuple[tuple[str, ...], ScopeCompatibility]]
-    ] = defaultdict(set)
+    total_relationships: dict[str, set[tuple[tuple[str, ...], ScopeCompatibility]]] = defaultdict(
+        set
+    )
     reviewed_components: dict[str, set[str]] = defaultdict(set)
     component_to_total: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
