@@ -194,6 +194,22 @@ def test_tender_report_omits_sections_without_project_inputs() -> None:
     assert "Риски Подрядчика" not in xml
 
 
+def test_tender_report_omits_zero_pit_inventory_for_unrelated_scope() -> None:
+    payload = render_engineering_tender_report_docx(
+        {
+            "project": {"name": {"value": "Реконструкция здания"}},
+            "pits": {
+                "established_count": 0,
+                "unresolved_group_count": 0,
+                "professional_answer": "В проекте подтверждено 0 отдельных котлованов.",
+            },
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "котлованов" not in xml
+
+
 def test_tender_report_explains_unchecked_total_without_calling_it_a_discrepancy() -> None:
     model = {
         "project": {"name": {"value": "Испытательный мост"}},

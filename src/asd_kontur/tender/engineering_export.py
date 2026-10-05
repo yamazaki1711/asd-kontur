@@ -123,7 +123,11 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     location = dict(project.get("location") or {}).get("value")
     foundation = dict(project.get("foundation") or {}).get("value")
     pits = dict(model.get("pits") or {})
-    pit_answer = pits.get("professional_answer")
+    pit_answer = (
+        pits.get("professional_answer")
+        if pits.get("established_count") != 0 or pits.get("unresolved_group_count") != 0
+        else None
+    )
     body: list[str] = [
         _heading("Первичный анализ проекта", level=1),
         _paragraph(str(name)),
