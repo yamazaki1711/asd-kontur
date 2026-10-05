@@ -118,6 +118,9 @@ def _effective_project_processing_job_sql(alias: str) -> str:
         "NOT (job.job_kind='PROJECT_WORK_RECONCILIATION' AND "
         "COALESCE(job.input_manifest->>'work_reconciliation_profile','')<>"
         ":current_work_profile) AND "
+        "NOT (job.job_kind='CONTRACT_ANALYSIS' AND "
+        "COALESCE(job.input_manifest->>'contract_analysis_profile','')<>"
+        ":current_contract_profile) AND "
         "NOT (job.job_kind='PROJECT_DEFINITION_EXTRACTION' AND EXISTS ("
         "SELECT 1 FROM workspace.durable_jobs newer WHERE "
         "newer.organization_id=job.organization_id AND "
@@ -1506,6 +1509,7 @@ class SpinePostgresRepository:
                         "organization": organization_id,
                         "workspace": workspace_id,
                         "current_work_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        "current_contract_profile": CONTRACT_ANALYSIS_PROFILE,
                         "current_engineering_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                     },
                 )
@@ -1547,6 +1551,7 @@ class SpinePostgresRepository:
                     "organization": organization_id,
                     "workspace": workspace_id,
                     "current_work_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                    "current_contract_profile": CONTRACT_ANALYSIS_PROFILE,
                     "current_engineering_profile": ENGINEERING_SEMANTIC_PROFILE_VERSION,
                 },
             )

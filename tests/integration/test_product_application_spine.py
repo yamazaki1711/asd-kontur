@@ -34,6 +34,85 @@ from .conftest import PostgreSQLEnvironment
 pytestmark = pytest.mark.postgres
 
 
+def test_processing_status_ignores_obsolete_contract_profile_failures(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="contract-progress-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Contract progress owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "contract-progress-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Contract profile progress"},
+            headers=_csrf(client),
+        ).json()
+        organization_id = UUID(workspace["organization_id"])
+        workspace_id = UUID(workspace["workspace_id"])
+        with postgres_environment.owner_engine.connect() as connection:
+            owner_identity_id = str(
+                connection.scalar(
+                    sa.text(
+                        "SELECT created_by_identity_id FROM workspace.workspaces "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {"organization": organization_id, "workspace": workspace_id},
+                )
+            )
+        baseline = app.state.container.service.project_processing_status(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        with postgres_environment.owner_engine.begin() as connection:
+            for index, (profile, state, failure) in enumerate(
+                (
+                    (
+                        "qwen-contract-analysis-v9",
+                        "failed",
+                        "qwen_contract_clause_source_not_exact",
+                    ),
+                    (CONTRACT_ANALYSIS_PROFILE, "succeeded", None),
+                    (CONTRACT_ANALYSIS_PROFILE, "failed", "qwen_contract_clause_source_not_exact"),
+                )
+            ):
+                manifest = {"contract_analysis_profile": profile, "synthetic": index}
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,completed_at,"
+                        "priority,max_attempts,retry_policy_version,typed_failure_code,provenance,"
+                        "correlation_id,created_by_identity_id) VALUES (:organization,:workspace,"
+                        ":job,'CONTRACT_ANALYSIS',CAST(:manifest AS jsonb),:digest,:key,:state,"
+                        "CURRENT_TIMESTAMP,188,3,'synthetic-retry-v1',:failure,"
+                        "CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": uuid4(),
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
+                        "key": f"contract-progress-{index}",
+                        "state": state,
+                        "failure": failure,
+                        "provenance": json.dumps({"contract": "synthetic-progress-test@1.0.0"}),
+                        "correlation": uuid4(),
+                        "owner": owner_identity_id,
+                    },
+                )
+        status = app.state.container.service.project_processing_status(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        assert status.succeeded_job_count == baseline.succeeded_job_count + 1
+        assert status.blocked_job_count == baseline.blocked_job_count + 1
+
+
 def test_contract_profile_upgrade_cancels_only_older_queued_model_work(
     postgres_environment: PostgreSQLEnvironment,
     tmp_path: Path,
