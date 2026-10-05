@@ -5368,7 +5368,14 @@ def test_commercial_heading_assigns_work_to_explicit_multi_facility_project_scop
                 }
             ],
             "quantities": [],
-            "materials": [],
+            "materials": [
+                {
+                    "candidate_id": "estimate-earthwork-material",
+                    "work_candidate_id": "estimate-earthwork",
+                    "value": "Песок",
+                    "source_locator_id": "estimate-earthwork",
+                }
+            ],
         },
         structure_nodes=[],
         identity_components=[
@@ -5399,6 +5406,7 @@ def test_commercial_heading_assigns_work_to_explicit_multi_facility_project_scop
         "Подпорная стена по ул. Северная, 12/1)"
     )
     assert model["works"][0]["location_scope_kind"] == "project"
+    assert model["materials"][0]["location_scope_id"] == model["works"][0]["location_scope_id"]
     assert set(model["works"][0]["location_scope_member_ids"]) == {
         row["facility_id"] for row in model["facilities"]
     }
@@ -6013,6 +6021,41 @@ def test_contract_estimate_material_participates_in_design_comparison() -> None:
     assert comparisons[0]["property_differences"] == [
         {"property": "DIAMETER", "design": ["160 mm"], "commercial": ["225 mm"]}
     ]
+
+
+def test_project_wide_material_does_not_match_unlocated_design_material() -> None:
+    source_context = dict(
+        [
+            _source("design-pipe", "Drainage design.pdf", 7),
+            _source("commercial-pipe", "Building-wide schedule.pdf", 2),
+        ]
+    )
+    comparisons = _material_comparisons(
+        [],
+        source_context,
+        material_rows=[
+            {
+                "location_scope_id": None,
+                "document_role": "ПД",
+                "name": "PVC drainage pipe",
+                "material_kind": "pipe",
+                "associated_work_family_key": "drainage",
+                "properties": [{"kind": "DIAMETER", "value": "240x8.0", "unit": "mm"}],
+                "source_locator_id": "design-pipe",
+            },
+            {
+                "location_scope_id": "project:building-wide",
+                "document_role": "ВОР",
+                "name": "PVC rainwater pipe",
+                "material_kind": "pipe",
+                "associated_work_family_key": "drainage",
+                "properties": [{"kind": "DIAMETER", "value": "240", "unit": "mm"}],
+                "source_locator_id": "commercial-pipe",
+            },
+        ],
+    )
+
+    assert comparisons == []
 
 
 def test_pipe_diameter_comparison_does_not_treat_wall_thickness_as_diameter() -> None:

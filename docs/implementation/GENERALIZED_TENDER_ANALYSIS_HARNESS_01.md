@@ -2719,3 +2719,29 @@ are still `UNREVIEWED`, eleven are classified as resources/rates rather than
 work quantities, and one is a dimension. They must not be force-included in
 numeric comparisons. Autonomous semantic processing may resolve the 20
 unreviewed values; no Codex refill or database patch was issued.
+
+## Preserve material location when building the work schedule — 2026-10-05
+
+The autonomous blind-project run subsequently exposed five material comparison
+rows. A read-only inspection found that the semantic material schedule dropped
+the established work location when projecting a classified work's material.
+The material comparator consequently grouped some located commercial material
+with an unlocated design material under the same `unresolved` key. One visible
+result paired a design perforated drainage pipe with a commercial rainwater-
+system pipe solely through broad material/work-family fields, then treated the
+unspecified commercial wall thickness as a Tender issue. That pairing did not
+establish one engineering scope.
+
+The generic work-schedule projection now carries its location scope to each
+attached material. A project-wide material remains project-wide, a facility
+material retains its facility, and an unlocated material stays unresolved.
+The comparator's existing exact-location guard can therefore refuse the unsafe
+pair. During adjacent read-only checks of the live workspace, the deployed
+projection returned five material comparisons and three issues, while the
+corrected projection returned four material comparisons and two issues; the
+removed item was the unsupported drainage/rainwater pairing. The
+four retained comparisons are material-presence matches for established work
+scopes, not claims that quantities or material properties agree. No project
+record or Qwen output was modified. An independent changed-value test verifies
+that a project-wide commercial material cannot be compared with an unlocated
+design material merely because their broad material kind matches.

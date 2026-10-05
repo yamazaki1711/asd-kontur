@@ -3512,6 +3512,7 @@ def _work_schedule(
                 (str(item["facility_id"]) for item in observations if item.get("facility_id")),
                 None,
             ),
+            "location_scope_id": observations[0].get("location_scope_id"),
             "location_scope_kind": str(observations[0].get("location_scope_kind")),
             "location_scope_member_ids": sorted(
                 {
@@ -3581,6 +3582,9 @@ def _work_schedule(
                         "work": schedule["work_name"],
                         "document_role": role,
                         **material,
+                        "facility_id": material.get("facility_id") or schedule["facility_id"],
+                        "location_scope_id": material.get("location_scope_id")
+                        or schedule["location_scope_id"],
                     }
                 )
     unclassified = _deduplicate_dicts(unclassified)
