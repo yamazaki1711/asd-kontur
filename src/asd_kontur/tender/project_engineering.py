@@ -1036,7 +1036,7 @@ def _tender_context(
     """Project commercial context derived only from explicit typed fields."""
 
     result: dict[str, list[dict[str, Any]]] = {section: [] for section in _TENDER_CONTEXT_FIELDS}
-    seen: set[tuple[str, str, str]] = set()
+    seen: dict[tuple[str, str, str], dict[str, Any]] = {}
     for raw in project_fields:
         row = dict(raw)
         key = _normalized(row.get("label") or row.get("key")).replace(" ", "_")
@@ -1061,18 +1061,23 @@ def _tender_context(
             )
             identity = (section, key, identity_value)
             if identity in seen:
+                existing = seen[identity]
+                if locator_id and locator_id not in existing["source_locator_ids"]:
+                    existing["source_locator_ids"].append(locator_id)
+                    existing["sources"] = _source_refs(
+                        existing["source_locator_ids"], source_context
+                    )
                 break
-            seen.add(identity)
             locator_ids = [locator_id] if locator_id else []
-            result[section].append(
-                {
-                    "field": key,
-                    "label": _professional_context_label(key, value, label),
-                    "value": _professional_context_value(key, value),
-                    "source_locator_ids": locator_ids,
-                    "sources": _source_refs(locator_ids, source_context),
-                }
-            )
+            entry = {
+                "field": key,
+                "label": _professional_context_label(key, value, label),
+                "value": _professional_context_value(key, value),
+                "source_locator_ids": locator_ids,
+                "sources": _source_refs(locator_ids, source_context),
+            }
+            seen[identity] = entry
+            result[section].append(entry)
             break
     result["participants"] = _consolidate_participant_context(result["participants"])
     for values in result.values():
@@ -1296,6 +1301,12 @@ def _professional_schedule_date_is_plausible(value: str, document_role: str) -> 
 
 
 def _tender_context_identity_value(key: str, value: str) -> str:
+    if key == "price_basis":
+        # Title-block and estimate prose commonly differ only in spacing and
+        # punctuation. Preserve distinct dates/quarters, but do not repeat
+        # the same commercial basis in the professional report.
+        normalized = re.sub(r"(?<=\d)[.,](?=\d)", "§", _normalized(value))
+        return re.sub(r"[^0-9a-zа-яё§]+", "", normalized)
     rate = _vat_rate(value) if key == "vat" else None
     if rate is not None:
         return f"vat-rate:{rate.normalize()}"

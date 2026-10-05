@@ -110,6 +110,53 @@ def test_tender_context_is_generic_and_keeps_source_bound_commercial_facts() -> 
     assert all("Не входит" not in str(values) for values in context.values())
 
 
+def test_tender_context_collapses_equivalent_price_basis_wording_without_losing_sources() -> None:
+    source_context = dict(
+        [
+            _source("design", "Project section.pdf", 2),
+            _source("estimate", "Cost schedule.pdf", 4),
+            _source("later", "Price letter.pdf", 1),
+        ]
+    )
+    context = _tender_context(
+        [
+            {
+                "label": "price_basis",
+                "value": "Prices for Q3. 2026",
+                "source_locator_id": "design",
+            },
+            {
+                "label": "price_basis",
+                "value": "Prices for Q3 2026.",
+                "source_locator_id": "estimate",
+            },
+            {
+                "label": "price_basis",
+                "value": "Prices for Q4 2026",
+                "source_locator_id": "later",
+            },
+            {
+                "label": "price_basis",
+                "value": "Index 1.5",
+                "source_locator_id": "design",
+            },
+            {
+                "label": "price_basis",
+                "value": "Index 15",
+                "source_locator_id": "estimate",
+            },
+        ],
+        source_context,
+    )
+
+    assert len(context["commercial_conditions"]) == 4
+    q3 = next(
+        row for row in context["commercial_conditions"] if "Q3" in row["value"]
+    )
+    assert q3["source_locator_ids"] == ["design", "estimate"]
+    assert len(q3["sources"]) == 2
+
+
 def test_tender_context_rejects_false_price_fields_and_deduplicates_money() -> None:
     source_context = dict(
         [
