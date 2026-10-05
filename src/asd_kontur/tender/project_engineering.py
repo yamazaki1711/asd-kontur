@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v81"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v82"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -831,10 +831,13 @@ def build_project_engineering_model(
         work_resolutions or {},
     )
     pits = _attach_pit_work_scopes(pits, work_model["works"])
+    component_comparisons, unresolved_component_totals = _component_total_analysis(
+        work_model["works"]
+    )
     comparisons = _deduplicate_dicts(
         [
             *_validated_scope_quantity_comparisons(work_model["works"]),
-            *_component_total_comparisons(work_model["works"]),
+            *component_comparisons,
             *_tender_context_comparisons(tender_context, source_context),
         ]
     )
@@ -890,7 +893,8 @@ def build_project_engineering_model(
                 value.get("relation_kind") == "TOTAL_FOR"
                 and value.get("component_set_complete") is False
             )
-        ],
+        ]
+        + unresolved_component_totals,
         "requirements": list(requirements["unresolved"]),
         "participants": participant_ambiguities,
     }
@@ -3805,6 +3809,15 @@ def _component_total_comparisons(
 ) -> list[dict[str, Any]]:
     """Verify explicit total/component graphs, including separate schedule rows."""
 
+    comparisons, _ = _component_total_analysis(works)
+    return comparisons
+
+
+def _component_total_analysis(
+    works: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Return safe arithmetic and professionally readable unresolved totals."""
+
     records: dict[str, dict[str, Any]] = {}
     total_relationships: dict[str, set[tuple[tuple[str, ...], ScopeCompatibility]]] = defaultdict(
         set
@@ -3890,13 +3903,45 @@ def _component_total_comparisons(
                             (tuple(sorted(set(related))), compatibility)
                         )
     relationships: list[QuantityRelationship] = []
+    unresolved: list[dict[str, Any]] = []
+
+    def record_unresolved(total_id: str, reason: str) -> None:
+        record = records.get(total_id)
+        if record is None:
+            return
+        work = record["work"]
+        value = record["value"]
+        unresolved.append(
+            {
+                "status": "Требует уточнения",
+                "work_scope_id": work.get("work_scope_id"),
+                "facility": work.get("facility"),
+                "work": work.get("work_name"),
+                "quantity_candidate_id": total_id,
+                "value": value.get("value"),
+                "unit": value.get("unit"),
+                "document_role": record["role"],
+                "source_locator_id": value.get("source_locator_id"),
+                "reason": reason,
+            }
+        )
+
     for total_id, declarations in total_relationships.items():
         if len(declarations) != 1:
+            record_unresolved(
+                total_id,
+                "Для общего объёма указаны разные составы частей; итог не проверен.",
+            )
             continue
         declared_components, compatibility = next(iter(declarations))
         if not declared_components or not reviewed_components[total_id].issubset(
             declared_components
         ):
+            record_unresolved(
+                total_id,
+                "Перечень составляющих общего объёма расходится между источниками; "
+                "арифметическая проверка отложена.",
+            )
             continue
         # Check only this declared total/component set. A component may have
         # unrelated historical relationships in another scope; those must not
@@ -3914,6 +3959,11 @@ def _component_total_comparisons(
                 if indegree[parent_id] == 0:
                     pending.append(parent_id)
         if any(degree > 0 for degree in indegree.values()):
+            record_unresolved(
+                total_id,
+                "Связи между общим объёмом и составляющими противоречат друг другу; "
+                "итог не проверен.",
+            )
             continue
         # A TOTAL_FOR assertion marked complete is the exact component set.
         # Appending a later COMPONENT_OF edge without a revised total decision
@@ -3998,7 +4048,7 @@ def _component_total_comparisons(
                 ),
             }
         )
-    return result
+    return result, unresolved
 
 
 def _tender_context_comparisons(

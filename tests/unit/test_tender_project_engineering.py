@@ -12,6 +12,7 @@ from asd_kontur.tender.project_engineering import (
     _comparison_has_reviewed_quantity_identity,
     _comparison_row,
     _comparisons,
+    _component_total_analysis,
     _component_total_comparisons,
     _display_quantity,
     _document_composition,
@@ -1979,6 +1980,78 @@ def test_component_total_rounding_match_is_not_a_professional_issue() -> None:
     assert issues == []
 
 
+def test_conflicting_component_graph_is_visible_as_unresolved_not_discrepancy() -> None:
+    work = {
+        "work_scope_id": "scope-a",
+        "facility_id": "facility-a",
+        "facility": "Корпус А",
+        "work_name": "Монтаж металлоконструкций",
+        "quantities_by_document": {
+            "РД": [
+                {
+                    "quantity_candidate_id": "total",
+                    "value": "12",
+                    "unit": "т",
+                    "semantic_scope": "Общая масса",
+                    "quantity_type": "TOTAL",
+                    "relation_kind": "TOTAL_FOR",
+                    "related_quantity_candidate_ids": ["part-a", "part-b"],
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "relationship_reviewed": True,
+                    "component_set_complete": True,
+                    "source_locator_id": "locator-total",
+                },
+                {
+                    "quantity_candidate_id": "part-a",
+                    "value": "5",
+                    "unit": "т",
+                    "semantic_scope": "Масса секции А",
+                    "quantity_type": "COMPONENT",
+                    "relation_kind": "COMPONENT_OF",
+                    "related_quantity_candidate_ids": ["total"],
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "relationship_reviewed": True,
+                },
+                {
+                    "quantity_candidate_id": "part-b",
+                    "value": "7",
+                    "unit": "т",
+                    "semantic_scope": "Масса секции Б",
+                    "quantity_type": "COMPONENT",
+                    "relation_kind": "COMPONENT_OF",
+                    "related_quantity_candidate_ids": ["total"],
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "relationship_reviewed": True,
+                    "relationship_assertions": [
+                        {
+                            "relation_kind": "COMPONENT_OF",
+                            "related_quantity_candidate_ids": ["part-a"],
+                            "scope_compatibility": "COMPONENT_VS_TOTAL",
+                            "relationship_reviewed": True,
+                        }
+                    ],
+                },
+            ]
+        },
+    }
+    work["quantities_by_document"]["РД"][1]["relationship_assertions"] = [
+        {
+            "relation_kind": "COMPONENT_OF",
+            "related_quantity_candidate_ids": ["part-b"],
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "relationship_reviewed": True,
+        }
+    ]
+
+    comparisons, unresolved = _component_total_analysis([work])
+
+    assert comparisons == []
+    assert len(unresolved) == 1
+    assert unresolved[0]["quantity_candidate_id"] == "total"
+    assert unresolved[0]["source_locator_id"] == "locator-total"
+    assert "противоречат" in unresolved[0]["reason"]
+
+
 def test_material_schedule_normalizes_unit_but_keeps_source_spelling() -> None:
     values = _unique_values(
         [
@@ -3101,7 +3174,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v81"
+    assert model["model_version"] == "project-engineering-model-v82"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
