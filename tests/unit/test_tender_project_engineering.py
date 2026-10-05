@@ -32,6 +32,7 @@ from asd_kontur.tender.project_engineering import (
     _project_scope_facility_label,
     _qualified_participant_context,
     _resolution_establishes_page_scope,
+    _reviewed_cross_work_quantity_comparisons,
     _reviewed_scaled_quantity_unit,
     _reviewed_source_quantity_value,
     _scope_comparisons,
@@ -969,6 +970,122 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
         "unit": "м3",
     }
     assert comparisons[0]["difference"] == "7.2"
+
+
+@pytest.mark.parametrize(
+    ("work_name", "design_value", "design_unit", "commercial_value", "commercial_unit", "expected"),
+    [
+        ("Install pipe", "125", "м", "0.125", "1000 м", "0"),
+        ("Install steel", "8.2", "т", "7.7", "т", "0.5"),
+        ("Excavate ground", "140", "м3", "110", "м3", "30"),
+    ],
+)
+def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
+    work_name: str,
+    design_value: str,
+    design_unit: str,
+    commercial_value: str,
+    commercial_unit: str,
+    expected: str,
+) -> None:
+    def work(
+        *,
+        work_id: str,
+        candidate_id: str,
+        peer_candidate_id: str,
+        quantity_id: str,
+        peer_quantity_id: str,
+        role: str,
+        value: str,
+        unit: str,
+    ) -> dict[str, object]:
+        return {
+            "work_scope_id": work_id,
+            "candidate_ids": [candidate_id, f"unrelated-{candidate_id}"],
+            "facility_id": "facility-z",
+            "facility": "Facility Z",
+            "work_name": work_name,
+            "work_scope_assertions": [
+                {
+                    "source_candidate_id": candidate_id,
+                    "related_candidate_id": peer_candidate_id,
+                    "scope_compatibility": "SAME_SCOPE",
+                    "normalized_operation": work_name,
+                    "reason": "The exact operations match.",
+                }
+            ],
+            "quantities_by_document": {
+                role: [
+                    {
+                        "quantity_candidate_id": quantity_id,
+                        "value": value,
+                        "unit": unit,
+                        "quantity_type": "COMPONENT",
+                        "semantic_scope": work_name,
+                        "relationship_reviewed": True,
+                        "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": peer_quantity_id,
+                                "scope_compatibility": "SAME_SCOPE",
+                            }
+                        ],
+                        "source_locator_id": f"source-{quantity_id}",
+                    }
+                ]
+            },
+        }
+
+    design = work(
+        work_id="broad-design-row",
+        candidate_id="design-work",
+        peer_candidate_id="commercial-work",
+        quantity_id="design-quantity",
+        peer_quantity_id="commercial-quantity",
+        role="ПД",
+        value=design_value,
+        unit=design_unit,
+    )
+    commercial = work(
+        work_id="broad-commercial-row",
+        candidate_id="commercial-work",
+        peer_candidate_id="design-work",
+        quantity_id="commercial-quantity",
+        peer_quantity_id="design-quantity",
+        role="Смета",
+        value=commercial_value,
+        unit=commercial_unit,
+    )
+    comparisons = _reviewed_cross_work_quantity_comparisons([design, commercial])
+
+    assert len(comparisons) == 1
+    assert comparisons[0]["difference"] == expected
+    assert comparisons[0]["classification"] == (
+        "MATCH" if expected == "0" else "QUANTITY_DIFFERENCE"
+    )
+    assert comparisons[0]["source_locator_ids"] == [
+        "source-commercial-quantity",
+        "source-design-quantity",
+    ]
+
+    # A one-sided semantic decision, a distinct facility, or a component/total
+    # boundary cannot be promoted into a commercial discrepancy.
+    commercial["work_scope_assertions"] = []
+    assert _reviewed_cross_work_quantity_comparisons([design, commercial]) == []
+    commercial["work_scope_assertions"] = [
+        {
+            "source_candidate_id": "commercial-work",
+            "related_candidate_id": "design-work",
+            "scope_compatibility": "SAME_SCOPE",
+            "normalized_operation": work_name,
+            "reason": "The exact operations match.",
+        }
+    ]
+    commercial["facility_id"] = "different-facility"
+    assert _reviewed_cross_work_quantity_comparisons([design, commercial]) == []
+    commercial["facility_id"] = "facility-z"
+    commercial["quantities_by_document"]["Смета"][0]["quantity_type"] = "TOTAL"  # type: ignore[index]
+    assert _reviewed_cross_work_quantity_comparisons([design, commercial]) == []
 
 
 def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_relation_ids() -> None:

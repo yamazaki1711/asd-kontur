@@ -837,6 +837,7 @@ def build_project_engineering_model(
     comparisons = _deduplicate_dicts(
         [
             *_validated_scope_quantity_comparisons(work_model["works"]),
+            *_reviewed_cross_work_quantity_comparisons(work_model["works"]),
             *component_comparisons,
             *_tender_context_comparisons(tender_context, source_context),
         ]
@@ -3802,6 +3803,161 @@ def _validated_scope_quantity_comparisons(
             )
             result.append({**comparison, "scope_match_basis": basis})
     return result
+
+
+def _reviewed_cross_work_quantity_comparisons(
+    works: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare exact reviewed design/commercial pairs across broad work rows.
+
+    A schedule row can contain several different operations.  Its aggregate
+    identity must not suppress a reciprocal model decision about one exact
+    work pair and one exact quantity pair, or authorize its unrelated rows.
+    """
+
+    entries: dict[str, list[tuple[dict[str, Any], str, dict[str, Any]]]] = defaultdict(list)
+    for raw_work in works:
+        work = dict(raw_work)
+        for role, raw_values in dict(work.get("quantities_by_document") or {}).items():
+            for raw_value in raw_values or ():
+                if not isinstance(raw_value, Mapping):
+                    continue
+                value = dict(raw_value)
+                candidate_id = str(value.get("quantity_candidate_id") or "")
+                if candidate_id:
+                    entries[candidate_id].append((work, str(role), value))
+
+    eligible_pairs: dict[tuple[str, str], tuple[str, str]] = {}
+    for candidate_id, records in entries.items():
+        if len(records) != 1:
+            continue
+        _work, _role, value = records[0]
+        if value.get("relationship_reviewed") is not True or value.get(
+            "semantic_review_profile"
+        ) not in _SCOPE_REVIEW_PROFILES:
+            continue
+        for assertion in value.get("scope_assertions") or ():
+            if not isinstance(assertion, Mapping):
+                continue
+            peer_id = str(assertion.get("related_quantity_candidate_id") or "")
+            if peer_id not in entries or len(entries[peer_id]) != 1:
+                continue
+            peer_work, peer_role, peer_value = entries[peer_id][0]
+            work, role, _ = records[0]
+            if work.get("work_scope_id") == peer_work.get("work_scope_id"):
+                continue
+            if role in _DESIGN_QUANTITY_ROLE_SET and peer_role in _COMMERCIAL_QUANTITY_ROLE_SET:
+                design_id, commercial_id = candidate_id, peer_id
+            elif peer_role in _DESIGN_QUANTITY_ROLE_SET and role in _COMMERCIAL_QUANTITY_ROLE_SET:
+                design_id, commercial_id = peer_id, candidate_id
+            else:
+                continue
+            if _pair_scope_compatibility(value, peer_value) is not ScopeCompatibility.SAME_SCOPE:
+                continue
+            if not _reviewed_cross_work_pair(work, peer_work):
+                continue
+            if not _explicit_work_locations_compatible(work, peer_work):
+                continue
+            eligible_pairs[(design_id, commercial_id)] = (design_id, commercial_id)
+
+    # A broad schedule may carry duplicate or alternative commercial rows.
+    # Refuse one-to-many comparisons rather than selecting a convenient value.
+    peer_counts: Counter[str] = Counter(
+        candidate_id for pair in eligible_pairs for candidate_id in pair
+    )
+    result: list[dict[str, Any]] = []
+    for design_id, commercial_id in sorted(eligible_pairs):
+        if peer_counts[design_id] != 1 or peer_counts[commercial_id] != 1:
+            continue
+        design_work, design_role, design_value = entries[design_id][0]
+        commercial_work, commercial_role, commercial_value = entries[commercial_id][0]
+        if (
+            design_value.get("quantity_type") != commercial_value.get("quantity_type")
+            or design_value.get("quantity_type") not in {"TOTAL", "SUBTOTAL", "COMPONENT"}
+        ):
+            continue
+        if (
+            design_value.get("revision")
+            and commercial_value.get("revision")
+            and design_value["revision"] != commercial_value["revision"]
+        ):
+            continue
+        design_quantity = _one_comparable_quantity([design_value])
+        commercial_quantity = _one_comparable_quantity([commercial_value])
+        if (
+            design_quantity is None
+            or commercial_quantity is None
+            or design_quantity[1] != commercial_quantity[1]
+        ):
+            continue
+        difference = design_quantity[0] - commercial_quantity[0]
+        scoped_work = {
+            "work_scope_id": semantic_digest(
+                {"design_quantity": design_id, "commercial_quantity": commercial_id}
+            ),
+            "facility": design_work.get("facility") or commercial_work.get("facility"),
+            "work_name": design_work.get("work_name") or commercial_work.get("work_name"),
+            "source_locator_ids": sorted(
+                {
+                    str(locator)
+                    for locator in (
+                        design_value.get("source_locator_id"),
+                        commercial_value.get("source_locator_id"),
+                    )
+                    if locator
+                }
+            ),
+        }
+        conclusion = (
+            "Значения совпадают"
+            if difference == 0
+            else f"Разница {design_role} ↔ {commercial_role}: "
+            f"{_decimal_text(difference)} {design_quantity[1]}"
+        )
+        comparison = _comparison_row(
+            scoped_work,
+            design_role,
+            commercial_role,
+            design_quantity,
+            commercial_quantity,
+            difference,
+            conclusion,
+        )
+        comparison["semantic_scope"] = str(design_value.get("semantic_scope") or "")
+        comparison["scope_match_basis"] = (
+            "Локальная модель взаимно сопоставила точные проектную и коммерческую "
+            "позиции и относящиеся к ним числовые значения; другие позиции их "
+            "общих групп работ не включены в сравнение."
+        )
+        result.append(comparison)
+    return result
+
+
+def _reviewed_cross_work_pair(
+    left: Mapping[str, Any], right: Mapping[str, Any]
+) -> bool:
+    """Require one reciprocal exact work pair, not a broad family match."""
+
+    left_ids = {str(value) for value in left.get("candidate_ids") or () if value}
+    right_ids = {str(value) for value in right.get("candidate_ids") or () if value}
+    left_assertions = _work_assertions_by_pair(left)
+    right_assertions = _work_assertions_by_pair(right)
+    for left_id in left_ids:
+        for right_id in right_ids:
+            direct = left_assertions.get((left_id, right_id))
+            reciprocal = right_assertions.get((right_id, left_id))
+            if direct is None or reciprocal is None:
+                continue
+            if any(
+                direct.get(key) != reciprocal.get(key)
+                for key in ("scope_compatibility", "normalized_operation", "reason")
+            ):
+                continue
+            if direct.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value and bool(
+                _normalized(direct.get("normalized_operation"))
+            ):
+                return True
+    return False
 
 
 def _component_total_comparisons(
