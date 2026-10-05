@@ -5318,7 +5318,7 @@ function ProjectEngineeringResult({
   ).quantities;
   const unresolvedTotalRelations = Array.isArray(unresolvedQuantities)
     ? (unresolvedQuantities as Record<string, unknown>[]).filter(
-        (item) => typeof item.reason === "string" && item.quantity_candidate_id,
+        (item) => item.unresolved_kind === "component_total_relationship",
       )
     : [];
   const scopeComparisons = Array.isArray(model.scope_comparisons)

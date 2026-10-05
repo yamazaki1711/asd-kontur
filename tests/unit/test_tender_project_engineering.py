@@ -2048,6 +2048,7 @@ def test_conflicting_component_graph_is_visible_as_unresolved_not_discrepancy() 
     assert comparisons == []
     assert len(unresolved) == 1
     assert unresolved[0]["quantity_candidate_id"] == "total"
+    assert unresolved[0]["unresolved_kind"] == "component_total_relationship"
     assert unresolved[0]["source_locator_id"] == "locator-total"
     assert "противоречат" in unresolved[0]["reason"]
 
@@ -3174,7 +3175,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v82"
+    assert model["model_version"] == "project-engineering-model-v83"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

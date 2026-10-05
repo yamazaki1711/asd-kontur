@@ -29,7 +29,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v82"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v83"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3914,6 +3914,7 @@ def _component_total_analysis(
         unresolved.append(
             {
                 "status": "Требует уточнения",
+                "unresolved_kind": "component_total_relationship",
                 "work_scope_id": work.get("work_scope_id"),
                 "facility": work.get("facility"),
                 "work": work.get("work_name"),
