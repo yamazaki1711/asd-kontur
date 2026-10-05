@@ -1261,7 +1261,15 @@ def _non_work_measure_relation_ids(
             quantity = dict(raw_quantity)
             review = reviews.get(str(quantity.get("candidate_id") or "")) or {}
             if not (
-                (validated_dimension and review.get("status") == "DIMENSION")
+                # A structural heading can correctly be NOT_A_WORK while its
+                # length/area/mass is an accepted work quantity. Keep that
+                # reviewed total available as context for a bounded recovery
+                # of another source-bound component; this grants no numeric
+                # comparison authority without Qwen's relationship decision.
+                (
+                    validated_dimension
+                    and review.get("status") in {"DIMENSION", "WORK_QUANTITY"}
+                )
                 or (
                     recoverable_fallback
                     and review.get("status") == "AMBIGUOUS"
