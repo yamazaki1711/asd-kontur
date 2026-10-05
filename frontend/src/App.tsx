@@ -5313,6 +5313,14 @@ function ProjectEngineeringResult({
   const comparisons = Array.isArray(model.quantity_comparisons)
     ? (model.quantity_comparisons as Record<string, unknown>[])
     : [];
+  const unresolvedQuantities = (
+    (model.unresolved ?? {}) as Record<string, unknown>
+  ).quantities;
+  const unresolvedTotalRelations = Array.isArray(unresolvedQuantities)
+    ? (unresolvedQuantities as Record<string, unknown>[]).filter(
+        (item) => typeof item.reason === "string" && item.quantity_candidate_id,
+      )
+    : [];
   const scopeComparisons = Array.isArray(model.scope_comparisons)
     ? (model.scope_comparisons as Record<string, unknown>[])
     : [];
@@ -6241,6 +6249,38 @@ function ProjectEngineeringResult({
           </p>
         )}
       </section>
+      {unresolvedTotalRelations.length > 0 && (
+        <section className="panel">
+          <h2>Общие объёмы, требующие уточнения</h2>
+          <p>
+            Эти значения не включены в арифметические расхождения: связь общего
+            объёма с составляющими пока не подтверждена.
+          </p>
+          <div className="card-grid">
+            {unresolvedTotalRelations.map((item) => (
+              <article
+                className="entity-card"
+                key={displayValue(item.quantity_candidate_id)}
+              >
+                <h3>{displayValue(item.work)}</h3>
+                <p>{displayValue(item.facility)}</p>
+                <p>
+                  {displayValue(item.document_role)}: {displayValue(item.value)}{" "}
+                  {displayValue(item.unit)}
+                </p>
+                <p>{displayValue(item.reason)}</p>
+                <ProjectSourceLinks
+                  locatorIds={
+                    item.source_locator_id ? [item.source_locator_id] : []
+                  }
+                  workspaceId={workspaceId}
+                  modeSlug={modeSlug}
+                />
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
       <section className="panel">
         <h2>Возможные неучтённые работы</h2>
         {missingCommercialWorks.length ? (
