@@ -8,6 +8,7 @@ import pytest
 
 from asd_kontur.application_spine.postgres import _application_engineering_projection
 from asd_kontur.tender.project_engineering import (
+    _actions_and_risks,
     _attach_pit_work_scopes,
     _comparison_has_reviewed_quantity_identity,
     _comparison_row,
@@ -1871,6 +1872,64 @@ def test_component_total_comparison_requires_explicit_semantic_relationship() ->
     ]
 
 
+def test_incomplete_component_set_becomes_question_not_quantity_mismatch() -> None:
+    work = {
+        "work_scope_id": "scope-steel",
+        "facility_id": "facility-north",
+        "facility": "Северный корпус",
+        "work_name": "Металлоконструкции",
+        "quantities_by_document": {
+            "РД": [
+                {
+                    "quantity_candidate_id": "total",
+                    "value": "10",
+                    "unit": "т",
+                    "semantic_scope": "Общая масса металлоконструкций",
+                    "quantity_type": "TOTAL",
+                    "relation_kind": "TOTAL_FOR",
+                    "related_quantity_candidate_ids": ["beam-a", "beam-b"],
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "relationship_reviewed": True,
+                    "component_set_complete": False,
+                    "source_locator_id": "locator-total",
+                },
+                *[
+                    {
+                        "quantity_candidate_id": candidate_id,
+                        "value": value,
+                        "unit": "т",
+                        "semantic_scope": f"Масса балки {candidate_id}",
+                        "quantity_type": "COMPONENT",
+                        "relation_kind": "COMPONENT_OF",
+                        "related_quantity_candidate_ids": ["total"],
+                        "scope_compatibility": "COMPONENT_VS_TOTAL",
+                        "relationship_reviewed": True,
+                        "source_locator_id": f"locator-{candidate_id}",
+                    }
+                    for candidate_id, value in (("beam-a", "4"), ("beam-b", "3"))
+                ],
+            ]
+        },
+    }
+    comparisons, unresolved = _component_total_analysis([work])
+    assert comparisons == []
+    assert len(unresolved) == 1
+    assert unresolved[0]["known_component_sum"] == "7"
+    assert unresolved[0]["residual_to_total"] == "3"
+    issues = _issues([], [], [], [], [work], {}, component_uncertainties=unresolved)
+    assert len(issues) == 1
+    assert issues[0]["finding_kind"] == "MISSING_PROJECT_INFORMATION"
+    assert "расхождение объёмов не установлено" in issues[0]["description"]
+    questions, risks = _actions_and_risks(issues)
+    assert len(questions) == len(risks) == 1
+
+    work["quantities_by_document"]["РД"][2]["unit"] = "м"
+    comparisons, unresolved = _component_total_analysis([work])
+    assert comparisons == []
+    assert unresolved[0]["known_component_sum"] is None
+    assert _issues([], [], [], [], [work], {}, component_uncertainties=unresolved) == []
+
+
 def test_complete_total_rejects_additional_reviewed_component_not_in_declared_set() -> None:
     comparisons = _component_total_comparisons(
         [
@@ -3649,7 +3708,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v83"
+    assert model["model_version"] == "project-engineering-model-v84"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2

@@ -25,11 +25,12 @@ from .quantity_semantics import (
     QuantityStatement,
     QuantityType,
     ScopeCompatibility,
+    assess_component_total,
     evaluate_component_total,
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v83"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v84"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -867,6 +868,7 @@ def build_project_engineering_model(
         work_model["works"],
         source_context,
         material_comparisons=material_comparisons,
+        component_uncertainties=unresolved_component_totals,
     )
     requirements = _requirements(matrix, normative_profile)
     actions, risks = _actions_and_risks(issues)
@@ -4160,6 +4162,9 @@ def _component_total_analysis(
     total_relationships: dict[str, set[tuple[tuple[str, ...], ScopeCompatibility]]] = defaultdict(
         set
     )
+    incomplete_total_relationships: dict[str, set[tuple[tuple[str, ...], ScopeCompatibility]]] = (
+        defaultdict(set)
+    )
     reviewed_components: dict[str, set[str]] = defaultdict(set)
     component_to_total: dict[str, set[str]] = defaultdict(set)
     for raw_work in works:
@@ -4235,6 +4240,9 @@ def _component_total_analysis(
                         relation is QuantityRelation.TOTAL_FOR
                         and relationship_value.get("component_set_complete") is not True
                     ):
+                        incomplete_total_relationships[candidate_id].add(
+                            (tuple(sorted(set(related))), compatibility)
+                        )
                         continue
                     if relation is QuantityRelation.TOTAL_FOR:
                         total_relationships[candidate_id].add(
@@ -4243,7 +4251,14 @@ def _component_total_analysis(
     relationships: list[QuantityRelationship] = []
     unresolved: list[dict[str, Any]] = []
 
-    def record_unresolved(total_id: str, reason: str) -> None:
+    def record_unresolved(
+        total_id: str,
+        reason: str,
+        *,
+        component_ids: tuple[str, ...] = (),
+        known_component_sum: Decimal | None = None,
+        residual_to_total: Decimal | None = None,
+    ) -> None:
         record = records.get(total_id)
         if record is None:
             return
@@ -4261,6 +4276,20 @@ def _component_total_analysis(
                 "unit": value.get("unit"),
                 "document_role": record["role"],
                 "source_locator_id": value.get("source_locator_id"),
+                "source_locator_ids": sorted(
+                    {
+                        str(records[item_id]["value"].get("source_locator_id") or "")
+                        for item_id in (total_id, *component_ids)
+                        if item_id in records and records[item_id]["value"].get("source_locator_id")
+                    }
+                ),
+                "component_ids": list(component_ids),
+                "known_component_sum": (
+                    _decimal_text(known_component_sum) if known_component_sum is not None else None
+                ),
+                "residual_to_total": (
+                    _decimal_text(residual_to_total) if residual_to_total is not None else None
+                ),
                 "reason": reason,
             }
         )
@@ -4316,6 +4345,48 @@ def _component_total_analysis(
             )
         )
     statements = [dict(record)["statement"] for record in records.values()]
+    for total_id, declarations in incomplete_total_relationships.items():
+        if total_id in total_relationships:
+            continue
+        reviewed = reviewed_components[total_id]
+        candidates = [
+            (components, compatibility)
+            for components, compatibility in declarations
+            if len(components) >= 2
+            and set(components) == reviewed
+            and compatibility is ScopeCompatibility.COMPONENT_VS_TOTAL
+        ]
+        if len(candidates) != 1:
+            continue
+        component_ids, compatibility = candidates[0]
+        assessed = assess_component_total(
+            statements,
+            QuantityRelationship(
+                subject_id=total_id,
+                relation=QuantityRelation.TOTAL_FOR,
+                object_ids=component_ids,
+                compatibility=compatibility,
+            ),
+        )
+        if assessed.calculated_total is None or assessed.difference is None:
+            record_unresolved(
+                total_id,
+                "Состав общего объёма не подтверждён как полный; арифметический вывод отложен.",
+                component_ids=component_ids,
+            )
+            continue
+        known_sum = _decimal_text(assessed.calculated_total)
+        residual = _decimal_text(assessed.difference)
+        record_unresolved(
+            total_id,
+            f"Установленные составляющие дают {known_sum} {assessed.unit}, "
+            f"общий объём — {_decimal_text(assessed.stated_total)} {assessed.unit}. "
+            f"Состав частей не подтверждён как полный; разность {residual} {assessed.unit} "
+            "пока не является установленным расхождением.",
+            component_ids=component_ids,
+            known_component_sum=assessed.calculated_total,
+            residual_to_total=assessed.difference,
+        )
     result: list[dict[str, Any]] = []
     for relationship in relationships:
         checked = evaluate_component_total(statements, relationship)
@@ -6177,8 +6248,70 @@ def _issues(
     source_context: Mapping[str, Mapping[str, Any]],
     *,
     material_comparisons: Iterable[Mapping[str, Any]] = (),
+    component_uncertainties: Iterable[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     issues: list[dict[str, Any]] = []
+    for uncertainty in component_uncertainties:
+        if uncertainty.get("known_component_sum") is None or uncertainty.get(
+            "residual_to_total"
+        ) in {None, "0"}:
+            continue
+        total_id = str(uncertainty.get("quantity_candidate_id") or "")
+        if not total_id:
+            continue
+        unit = str(uncertainty.get("unit") or "").strip()
+        total = str(uncertainty.get("value") or "")
+        known_sum = str(uncertainty["known_component_sum"])
+        residual = str(uncertainty["residual_to_total"])
+        residual_value = Decimal(residual)
+        residual_amount = _decimal_text(abs(residual_value))
+        allocation_text = (
+            f"Не распределено {residual_amount} {unit}"
+            if residual_value > 0
+            else f"Сумма установленных частей превышает общий объём на {residual_amount} {unit}"
+        )
+        location = str(uncertainty.get("facility") or "Место выполнения требует уточнения")
+        work = str(uncertainty.get("work") or "Общий объём")
+        locators = [str(value) for value in uncertainty.get("source_locator_ids") or ()]
+        issues.append(
+            {
+                "issue_id": semantic_digest(
+                    {
+                        "kind": "incomplete_component_allocation",
+                        "total_id": total_id,
+                        "component_ids": uncertainty.get("component_ids") or (),
+                    }
+                ),
+                "finding_kind": ProfessionalFindingKind.MISSING_PROJECT_INFORMATION,
+                "kind": "Не подтверждён состав общего объёма",
+                "location": location,
+                "subject": work,
+                "description": (
+                    f"{uncertainty.get('document_role')}: общий объём {total} {unit}; "
+                    f"установленные составляющие — {known_sum} {unit}. "
+                    f"{allocation_text}; состав частей "
+                    "не подтверждён как полный, поэтому расхождение объёмов не установлено."
+                ),
+                "practical_consequence": (
+                    "Без распределения общего объёма по составляющим невозможно подтвердить "
+                    "полный состав работ и его коммерческий учёт."
+                ),
+                "recommended_action": (
+                    f"Просим подтвердить полный перечень составляющих объёма {total} {unit} "
+                    f"для «{work}» и пояснить разность {residual_amount} {unit}."
+                ),
+                "comparison_data": {
+                    "status": "INCOMPLETE_COMPONENT_SET",
+                    "stated_total": total,
+                    "known_component_sum": known_sum,
+                    "unallocated_difference": residual,
+                    "unit": unit,
+                },
+                "source_locator_ids": locators,
+                "sources": _source_refs(locators, source_context),
+                "status": "Требуется уточнить состав общего объёма",
+            }
+        )
     for comparison in material_comparisons:
         if comparison.get("classification") == "MATERIAL_MATCH":
             continue
