@@ -291,6 +291,21 @@ source/retry outcomes, ten are other contract validation outcomes, four are page
 locator failures, one is an unsupported format, and three are miscellaneous typed
 contract outcomes.
 
+## Subsequent status-projection correction
+
+The preceding 97-blocker classification was a projection error, not a change to
+the immutable forensic snapshot. A follow-up read-only profile breakdown showed
+that all 78 contract jobs on the current `qwen-contract-analysis-v10` profile had
+succeeded. The contract failures counted above were from obsolete v2–v9 profiles.
+Commit `11d260e` excludes those superseded profiles from the effective progress
+projection without deleting jobs or changing any contract interpretation.
+
+At the follow-up checkpoint, the corrected effective state was 21/21 processed
+documents, 1,015 succeeded jobs, eight active jobs and five unresolved jobs:
+four page-classification invalid-locator outcomes and one unsupported document
+format. The effective-job completion ratio was 98.7%. This is a queue/workflow
+ratio, **not** a measure that the professional Tender product is 98.7% complete.
+
 Worker, orchestrator, Qwen and API were restarted from durable state while the
 project was incomplete. The worker resumed without duplicating an accepted output;
 the orchestrator reconstructed the sweep; Qwen loaded once and accepted new work;
