@@ -3832,9 +3832,10 @@ def _reviewed_cross_work_quantity_comparisons(
         if len(records) != 1:
             continue
         _work, _role, value = records[0]
-        if value.get("relationship_reviewed") is not True or value.get(
-            "semantic_review_profile"
-        ) not in _SCOPE_REVIEW_PROFILES:
+        if (
+            value.get("relationship_reviewed") is not True
+            or value.get("semantic_review_profile") not in _SCOPE_REVIEW_PROFILES
+        ):
             continue
         for assertion in value.get("scope_assertions") or ():
             if not isinstance(assertion, Mapping):
@@ -3871,10 +3872,9 @@ def _reviewed_cross_work_quantity_comparisons(
             continue
         design_work, design_role, design_value = entries[design_id][0]
         commercial_work, commercial_role, commercial_value = entries[commercial_id][0]
-        if (
-            design_value.get("quantity_type") != commercial_value.get("quantity_type")
-            or design_value.get("quantity_type") not in {"TOTAL", "SUBTOTAL", "COMPONENT"}
-        ):
+        if design_value.get("quantity_type") != commercial_value.get(
+            "quantity_type"
+        ) or design_value.get("quantity_type") not in {"TOTAL", "SUBTOTAL", "COMPONENT"}:
             continue
         if (
             design_value.get("revision")
@@ -3933,9 +3933,7 @@ def _reviewed_cross_work_quantity_comparisons(
     return result
 
 
-def _reviewed_cross_work_pair(
-    left: Mapping[str, Any], right: Mapping[str, Any]
-) -> bool:
+def _reviewed_cross_work_pair(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
     """Require one reciprocal exact work pair, not a broad family match."""
 
     left_ids = {str(value) for value in left.get("candidate_ids") or () if value}
