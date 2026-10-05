@@ -1946,6 +1946,8 @@ def test_reviewed_non_work_measures_get_one_bounded_total_context() -> None:
 
     total_quantity = rows[0]["quantity_observations"][0]
     component_quantity = rows[1]["quantity_observations"][0]
+    rows[1]["quantity_observations"][0]["nearby_context"] = "Общая площадь участка 480 м2"
+    rows[2]["quantity_observations"][0]["nearby_context"] = "Общая площадь участка 480 м2"
     total_quantity["prior_quantity_type"] = "TOTAL"
     component_quantity["prior_quantity_type"] = "COMPONENT"
     total_quantity["prior_scope_assertions"] = [

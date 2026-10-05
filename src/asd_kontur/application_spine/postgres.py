@@ -950,6 +950,25 @@ def _reviewed_component_total_pair(left: Mapping[str, Any], right: Mapping[str, 
     return bool(left_ids and right_ids and links_to(left, right_ids) and links_to(right, left_ids))
 
 
+def _relationship_row_is_stated_total(row: Mapping[str, Any]) -> bool:
+    """Use the row's own designation, not nearby text, for replay control."""
+
+    for quantity in row.get("quantity_observations") or ():
+        if not isinstance(quantity, Mapping):
+            continue
+        prior_type = str(quantity.get("prior_quantity_type") or "")
+        if prior_type in {"TOTAL", "SUBTOTAL"}:
+            return True
+        if prior_type == "COMPONENT":
+            continue
+        own_label = " ".join(
+            str(value or "") for value in (row.get("wording"), quantity.get("prior_semantic_scope"))
+        )
+        if _ADDITIVE_QUANTITY_FORMULA.search(own_label):
+            return True
+    return False
+
+
 def _ordered_relationship_pair(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1187,10 +1206,8 @@ def _quantity_relationship_batches(
                         and (
                             _reviewed_component_total_pair(row, existing)
                             or not any(
-                                _quantity_may_be_stated_total(quantity)
+                                _relationship_row_is_stated_total(context_row)
                                 for context_row in (row, existing)
-                                for quantity in context_row.get("quantity_observations") or ()
-                                if isinstance(quantity, Mapping)
                             )
                         )
                     )
