@@ -4444,7 +4444,10 @@ def _scope_comparisons(
                     (
                         design_row
                         for design_row in possible_design
-                        if _work_pair_scope_compatibility(design_row, row) is True
+                        if (
+                            _work_pair_scope_compatibility(design_row, row) is True
+                            and _explicit_work_locations_compatible(design_row, row)
+                        )
                         or (
                             _work_pair_scope_compatibility(design_row, row) is None
                             and _design_scope_covers_commercial_operation(design_row, row)
@@ -4511,6 +4514,12 @@ def _scope_comparisons(
                 )
         else:
             possible = commercial_by_family.get(str(row.get("family_key") or ""), [])
+            reviewed_matches = [
+                value
+                for value in possible
+                if _work_pair_scope_compatibility(row, value) is True
+                and _explicit_work_locations_compatible(row, value)
+            ]
             facility_id = str(row.get("facility_id") or "")
             possible_at_facility = [
                 value
@@ -4545,7 +4554,22 @@ def _scope_comparisons(
                 ),
                 None,
             )
-            if covering_commercial_scope is not None:
+            if len(reviewed_matches) == 1:
+                status = "MATCH"
+                professional_status = "Коммерческая позиция сопоставлена по инженерному объёму"
+                conclusion = (
+                    "Проектная и коммерческая позиции связаны проверенным сопоставлением "
+                    "одного инженерного объёма. Распределение количества по сооружениям "
+                    "проверяется отдельно."
+                )
+            elif len(reviewed_matches) > 1:
+                status = "UNRESOLVED_SCOPE_MATCH"
+                professional_status = "Требуется выбрать коммерческую позицию"
+                conclusion = (
+                    "Для проектной работы найдено несколько сопоставимых коммерческих "
+                    "позиций; нельзя выбрать одну без уточнения границ объёма."
+                )
+            elif covering_commercial_scope is not None:
                 status = "MATCH"
                 project_wide_coverage = (
                     covering_commercial_scope.get("location_scope_kind") == "project"
@@ -4710,6 +4734,42 @@ def _design_scope_covers_commercial_operation(
             "шпунтовые работы",
         }
     return False
+
+
+def _explicit_work_locations_compatible(
+    design: Mapping[str, Any], commercial: Mapping[str, Any]
+) -> bool:
+    """Do not let semantic pairing override contradictory explicit locations."""
+
+    design_facility = str(design.get("facility_id") or "")
+    commercial_facility = str(commercial.get("facility_id") or "")
+    if design_facility and commercial_facility and design_facility != commercial_facility:
+        return False
+    for facility, project_scope in (
+        (design_facility, commercial),
+        (commercial_facility, design),
+    ):
+        members = {
+            str(value) for value in project_scope.get("location_scope_member_ids") or () if value
+        }
+        if facility and project_scope.get("location_scope_kind") == "project" and members:
+            if facility not in members:
+                return False
+    design_members = {
+        str(value) for value in design.get("location_scope_member_ids") or () if value
+    }
+    commercial_members = {
+        str(value) for value in commercial.get("location_scope_member_ids") or () if value
+    }
+    if (
+        design.get("location_scope_kind") == "project"
+        and commercial.get("location_scope_kind") == "project"
+        and design_members
+        and commercial_members
+        and design_members.isdisjoint(commercial_members)
+    ):
+        return False
+    return True
 
 
 def _work_pair_scope_compatibility(

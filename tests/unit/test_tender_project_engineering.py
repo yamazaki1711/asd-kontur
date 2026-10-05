@@ -16,6 +16,7 @@ from asd_kontur.tender.project_engineering import (
     _display_quantity,
     _document_composition,
     _documents,
+    _explicit_work_locations_compatible,
     _facility_material_schedule,
     _isolated_unassigned_comparison,
     _issues,
@@ -2276,6 +2277,74 @@ def test_same_family_commercial_work_at_other_facilities_does_not_cover_design_s
     )
     assert enclosure["classification"] == "WORK_MISSING_IN_COMMERCIAL"
     assert enclosure["facility"] == "Участок А"
+
+
+@pytest.mark.parametrize(
+    ("reciprocal", "design_facility", "commercial_facility", "expected"),
+    [
+        (True, None, None, "MATCH"),
+        (False, None, None, "UNRESOLVED_SCOPE_MATCH"),
+        (True, "depot-a", "depot-b", "UNRESOLVED_SCOPE_MATCH"),
+    ],
+)
+def test_exact_reviewed_work_pair_is_symmetric_without_overriding_location(
+    reciprocal: bool,
+    design_facility: str | None,
+    commercial_facility: str | None,
+    expected: str,
+) -> None:
+    operation = "Монтаж несущего стального каркаса"
+    reason = "Обе позиции описывают один и тот же монтаж каркаса"
+    design = {
+        "work_scope_id": "design-frame",
+        "candidate_ids": ["design-frame-candidate"],
+        "family_key": "structural_steel",
+        "work_name": "Установка каркаса склада",
+        "facility_id": design_facility,
+        "location_scope_kind": "facility" if design_facility else "unresolved",
+        "document_roles": ["ПД"],
+        "source_locator_ids": ["design-frame-source"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "design-frame-candidate",
+                "related_candidate_id": "commercial-frame-candidate",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": operation,
+                "reason": reason,
+            }
+        ],
+    }
+    commercial = {
+        "work_scope_id": "commercial-frame",
+        "candidate_ids": ["commercial-frame-candidate"],
+        "family_key": "structural_steel",
+        "work_name": "Монтаж металлоконструкций склада",
+        "facility_id": commercial_facility,
+        "location_scope_kind": "facility" if commercial_facility else "unresolved",
+        "document_roles": ["Смета"],
+        "source_locator_ids": ["commercial-frame-source"],
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": "commercial-frame-candidate",
+                "related_candidate_id": "design-frame-candidate",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": operation,
+                "reason": reason,
+            }
+        ]
+        if reciprocal
+        else [],
+    }
+    comparisons = _scope_comparisons([design, commercial], available_document_roles=["ПД", "Смета"])
+
+    assert [row["classification"] for row in comparisons] == [expected, expected]
+
+
+def test_reviewed_work_pair_cannot_bridge_disjoint_explicit_project_areas() -> None:
+    assert not _explicit_work_locations_compatible(
+        {"location_scope_kind": "project", "location_scope_member_ids": ["area-a"]},
+        {"location_scope_kind": "project", "location_scope_member_ids": ["area-b"]},
+    )
 
 
 def test_unallocated_same_family_commercial_work_keeps_design_scope_unresolved() -> None:
