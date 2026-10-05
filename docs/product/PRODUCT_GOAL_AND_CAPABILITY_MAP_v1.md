@@ -172,8 +172,9 @@ Rule Registry has infrastructure but zero operational rules.
 
 1. preserve stable processing, traceability, isolation, recovery, and accepted
    document-output foundations;
-2. deliver **OZERO Project Understanding and Tender Engineering Analysis v1**
-   through the shared, object-independent project model;
+2. deliver the **generalized Tender analysis harness** through the shared,
+   object-independent project model; OZERO is a retired historical validation
+   corpus, not an active project or product-specific implementation target;
 3. continue capability streams only when each ends in a visible professional
    application result across Tender, Support, Audit, or Restoration;
 4. perform Trial Readiness qualification before proposing a new real OKS.

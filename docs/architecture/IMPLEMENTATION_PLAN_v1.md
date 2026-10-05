@@ -9,6 +9,31 @@ document or analysis—not a processing, candidate, test-count or readiness
 claim. Traceability, recovery, isolation and non-fabrication remain mandatory
 supporting qualities.
 
+## Governing active slice — generalized Tender result (2026-10-05)
+
+The OZERO validation workspace has been retired and its active project data
+removed at the owner's direction. Historical OZERO sections below record earlier
+delivery decisions; they do not authorize new OZERO processing or define the
+current project. The current real Tender workspace is a blind validation corpus,
+not a source of hardcoded product answers.
+
+The active delivery slice is the object-independent Tender analysis harness:
+uploaded documents → project/structure/work understanding → scoped quantities
+and materials → compatible design/commercial comparisons → professional issues,
+customer questions and contractor risks → an editable preliminary Tender result.
+Qwen performs bounded semantic interpretation; deterministic code handles
+arithmetic, persistence, matching constraints and report assembly. The supervised
+application—not Codex—must continue processing and create eligible successor
+work. Source traceability, isolation, immutable history and non-fabrication remain
+supporting safeguards.
+
+Current acceptance requires a professional result on the blind real workspace,
+an independent changed construction corpus with no project-specific code change,
+false-positive control for incompatible scopes, and Codex-absent autonomous
+progression. A completed job, passing test or architecture layer is not a
+substitute for those user results. Preserve the existing four-mode and three-
+result product denominator; Tender is the current slice, not a scope reduction.
+
 ## Active product-led delivery policy — 2026-09-19
 
 **Programme objective:** production-quality ASD-KONTUR for Tender, Support,
