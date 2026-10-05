@@ -932,6 +932,24 @@ def _relationship_quantity_ids(row: Mapping[str, Any]) -> set[str]:
     }
 
 
+def _reviewed_component_total_pair(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
+    """Allow settled component/total context without treating it as new authority."""
+
+    def links_to(source: Mapping[str, Any], target_ids: set[str]) -> bool:
+        return any(
+            str(assertion.get("scope_compatibility") or "") == "COMPONENT_VS_TOTAL"
+            and str(assertion.get("related_quantity_candidate_id") or "") in target_ids
+            for quantity in source.get("quantity_observations") or ()
+            if isinstance(quantity, Mapping)
+            for assertion in quantity.get("prior_scope_assertions") or ()
+            if isinstance(assertion, Mapping)
+        )
+
+    left_ids = _relationship_quantity_ids(left)
+    right_ids = _relationship_quantity_ids(right)
+    return bool(left_ids and right_ids and links_to(left, right_ids) and links_to(right, left_ids))
+
+
 def _ordered_relationship_pair(
     left: dict[str, Any], right: dict[str, Any]
 ) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1156,21 +1174,24 @@ def _quantity_relationship_batches(
                     candidate_id == str(existing.get("candidate_id") or "") for existing in batch
                 )
                 # A new seed pair must not drag an already reviewed pair back
-                # into a larger context batch. The model otherwise re-decides
-                # that old pair and can contradict its accepted result. Two
-                # different components are the exception in the structural
-                # total lane: their earlier pair decision does not answer
-                # whether both belong to a newly supplied stated total.
+                # into a larger context batch. In the structural-total lane,
+                # two components or a reciprocally accepted total/component
+                # pair may remain as context for a complete-set review.
+                # Neither exception turns prior context into arithmetic
+                # authority: Qwen must still declare the exact complete set.
                 or any(
                     _relationship_pair_key(candidate_id, existing.get("candidate_id"))
                     in attempted_pairs
                     and not (
                         family.startswith("source-measure:")
-                        and not any(
-                            _quantity_may_be_stated_total(quantity)
-                            for context_row in (row, existing)
-                            for quantity in context_row.get("quantity_observations") or ()
-                            if isinstance(quantity, Mapping)
+                        and (
+                            _reviewed_component_total_pair(row, existing)
+                            or not any(
+                                _quantity_may_be_stated_total(quantity)
+                                for context_row in (row, existing)
+                                for quantity in context_row.get("quantity_observations") or ()
+                                if isinstance(quantity, Mapping)
+                            )
                         )
                     )
                     for existing in batch

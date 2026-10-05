@@ -1944,6 +1944,47 @@ def test_reviewed_non_work_measures_get_one_bounded_total_context() -> None:
     }
     assert selected == {"total", "sector-a", "sector-b"}
 
+    total_quantity = rows[0]["quantity_observations"][0]
+    component_quantity = rows[1]["quantity_observations"][0]
+    total_quantity["prior_quantity_type"] = "TOTAL"
+    component_quantity["prior_quantity_type"] = "COMPONENT"
+    total_quantity["prior_scope_assertions"] = [
+        {
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "related_quantity_candidate_id": "measure-sector-a",
+        }
+    ]
+    component_quantity["prior_scope_assertions"] = [
+        {
+            "scope_compatibility": "COMPONENT_VS_TOTAL",
+            "related_quantity_candidate_id": "measure-total",
+        }
+    ]
+    batches, selected = _quantity_relationship_batches(
+        rows,
+        batch_size=4,
+        max_batches=1,
+        attempted_pairs={("sector-a", "total"), ("sector-a", "sector-b")},
+    )
+    assert len(batches) == 1
+    assert {value["candidate_id"] for value in batches[0]} == {
+        "total",
+        "sector-a",
+        "sector-b",
+    }
+    assert selected == {"total", "sector-a", "sector-b"}
+
+    component_quantity["prior_scope_assertions"] = []
+    batches, selected = _quantity_relationship_batches(
+        rows,
+        batch_size=4,
+        max_batches=1,
+        attempted_pairs={("sector-a", "total"), ("sector-a", "sector-b")},
+    )
+    assert len(batches) == 1
+    assert {value["candidate_id"] for value in batches[0]} == {"total", "sector-b"}
+    assert selected == {"total", "sector-b"}
+
     rows[2]["source_version_id"] = "different-source"
     batches, _ = _quantity_relationship_batches(rows, batch_size=4, max_batches=1)
     assert all("sector-b" not in {value["candidate_id"] for value in batch} for batch in batches)
