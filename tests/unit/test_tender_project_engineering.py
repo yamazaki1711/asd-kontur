@@ -150,9 +150,7 @@ def test_tender_context_collapses_equivalent_price_basis_wording_without_losing_
     )
 
     assert len(context["commercial_conditions"]) == 4
-    q3 = next(
-        row for row in context["commercial_conditions"] if "Q3" in row["value"]
-    )
+    q3 = next(row for row in context["commercial_conditions"] if "Q3" in row["value"])
     assert q3["source_locator_ids"] == ["design", "estimate"]
     assert len(q3["sources"]) == 2
 
