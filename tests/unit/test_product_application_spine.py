@@ -1994,12 +1994,8 @@ def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
     assert _non_work_measure_relation_ids(
         work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
     ) == {"total", "part-a", "part-b"}
-    prior["total"]["quantity_reviews"][0].update(
-        status="WORK_QUANTITY", quantity_type="TOTAL"
-    )
-    prior["part-a"]["quantity_reviews"][0].update(
-        status="WORK_QUANTITY", quantity_type="COMPONENT"
-    )
+    prior["total"]["quantity_reviews"][0].update(status="WORK_QUANTITY", quantity_type="TOTAL")
+    prior["part-a"]["quantity_reviews"][0].update(status="WORK_QUANTITY", quantity_type="COMPONENT")
     assert _non_work_measure_relation_ids(
         work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
     ) == {"total", "part-a", "part-b"}

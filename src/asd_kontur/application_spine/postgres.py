@@ -1266,10 +1266,7 @@ def _non_work_measure_relation_ids(
                 # reviewed total available as context for a bounded recovery
                 # of another source-bound component; this grants no numeric
                 # comparison authority without Qwen's relationship decision.
-                (
-                    validated_dimension
-                    and review.get("status") in {"DIMENSION", "WORK_QUANTITY"}
-                )
+                (validated_dimension and review.get("status") in {"DIMENSION", "WORK_QUANTITY"})
                 or (
                     recoverable_fallback
                     and review.get("status") == "AMBIGUOUS"
