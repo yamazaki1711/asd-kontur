@@ -3832,10 +3832,10 @@ def _reviewed_cross_work_quantity_comparisons(
         if len(records) != 1:
             continue
         _work, _role, value = records[0]
-        if (
-            value.get("relationship_reviewed") is not True
-            or value.get("semantic_review_profile") not in _SCOPE_REVIEW_PROFILES
-        ):
+        # Exact scope assertions are validated independently of component/
+        # total relationship completeness. A later bounded relationship pass
+        # may clear that separate flag while preserving this exact pair.
+        if value.get("semantic_review_profile") not in _SCOPE_REVIEW_PROFILES:
             continue
         for assertion in value.get("scope_assertions") or ():
             if not isinstance(assertion, Mapping):

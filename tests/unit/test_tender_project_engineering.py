@@ -1068,6 +1068,12 @@ def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
         "source-design-quantity",
     ]
 
+    # Pair-specific scope review remains authoritative when a later bounded
+    # component/total pass has not marked that separate relationship complete.
+    design["quantities_by_document"]["ПД"][0].pop("relationship_reviewed")  # type: ignore[index]
+    commercial["quantities_by_document"]["Смета"][0].pop("relationship_reviewed")  # type: ignore[index]
+    assert len(_reviewed_cross_work_quantity_comparisons([design, commercial])) == 1
+
     # A one-sided semantic decision, a distinct facility, or a component/total
     # boundary cannot be promoted into a commercial discrepancy.
     commercial["work_scope_assertions"] = []
