@@ -1242,6 +1242,7 @@ def _work_scope_comparison_context_available(
     existing: Mapping[str, Any] | None,
     candidate_version: int,
     pending_quantities: Iterable[Mapping[str, Any]],
+    exact_unreviewed_cross_role_pair: bool = False,
 ) -> bool:
     """Reuse one settled work only as bounded cross-document scope context.
 
@@ -1265,8 +1266,61 @@ def _work_scope_comparison_context_available(
         in PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES
         and str(existing.get("status") or "") == "MATCHED"
         and str(existing.get("family_key") or "") in work_family_catalog()
-        and not tuple(pending_quantities)
+        and (not tuple(pending_quantities) or exact_unreviewed_cross_role_pair)
     )
+
+
+def _exact_unreviewed_cross_role_candidate_ids(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    prior_resolutions: Mapping[str, Mapping[str, Any]],
+    source_role_contexts: Mapping[str, Mapping[str, Any]],
+    attempted_pairs: set[tuple[str, str]],
+) -> set[str]:
+    """Route one-to-one identical wording to Qwen, never declare a match.
+
+    Older accepted profiles may leave quantity reviews pending. Their candidate
+    attempt then suppresses a missing cross-document scope review. This bounded
+    lane admits only one design and one commercial observation with the same
+    wording and construction family, and only when their exact pair has not
+    already been reviewed. Qwen still decides whether they share a scope.
+    """
+
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for raw in rows:
+        row = dict(raw)
+        candidate_id = str(row.get("candidate_id") or "")
+        existing = prior_resolutions.get(candidate_id) or {}
+        wording = " ".join(str(row.get("value") or "").casefold().split())
+        family = str(existing.get("family_key") or "")
+        if (
+            candidate_id
+            and wording
+            and family in work_family_catalog()
+            and str(existing.get("status") or "") == "MATCHED"
+            and int(existing.get("candidate_version") or 0) == int(row.get("version") or 0)
+        ):
+            grouped[(wording, family)].append(row)
+
+    selected: set[str] = set()
+    for values in grouped.values():
+        if len(values) != 2:
+            continue
+        by_side: dict[str, dict[str, Any]] = {}
+        for row in values:
+            locator_id = str(row.get("source_locator_id") or "")
+            context = source_role_contexts.get(locator_id) or {}
+            role = professional_source_role(row.get("source_role"), context)
+            side = document_comparison_side(role, context.get("safe_display_name"))
+            if side in {"design", "commercial"}:
+                by_side[side] = row
+        if len(by_side) != 2:
+            continue
+        design_id = str(by_side["design"]["candidate_id"])
+        commercial_id = str(by_side["commercial"]["candidate_id"])
+        if _relationship_pair_key(design_id, commercial_id) not in attempted_pairs:
+            selected.update((design_id, commercial_id))
+    return selected
 
 
 def _deterministic_scope_requires_semantic_review(
@@ -6712,6 +6766,35 @@ class SpinePostgresRepository:
                     },
                 ).scalars()
             )
+            exact_context_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+            for raw_candidate in candidates.get("work_types", []):
+                candidate = dict(raw_candidate)
+                prior_resolution = prior.get(str(candidate.get("candidate_id") or "")) or {}
+                wording = " ".join(str(candidate.get("value") or "").casefold().split())
+                family = str(prior_resolution.get("family_key") or "")
+                if wording and family and str(prior_resolution.get("status") or "") == "MATCHED":
+                    exact_context_groups[(wording, family)].append(candidate)
+            exact_context_rows = [
+                row for group in exact_context_groups.values() if len(group) == 2 for row in group
+            ]
+            exact_role_contexts = self._project_source_role_context(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                locator_ids=sorted(
+                    {
+                        str(row["source_locator_id"])
+                        for row in exact_context_rows
+                        if row.get("source_locator_id")
+                    }
+                ),
+            )
+            exact_unreviewed_pair_ids = _exact_unreviewed_cross_role_candidate_ids(
+                exact_context_rows,
+                prior_resolutions=prior,
+                source_role_contexts=exact_role_contexts,
+                attempted_pairs=attempted_scope_pairs,
+            )
             quantities_by_work: dict[str, list[dict[str, Any]]] = defaultdict(list)
             for raw_quantity in candidates.get("quantities", []):
                 quantity = dict(raw_quantity)
@@ -6756,6 +6839,7 @@ class SpinePostgresRepository:
                     existing=existing,
                     candidate_version=version,
                     pending_quantities=linked_quantities,
+                    exact_unreviewed_cross_role_pair=candidate_id in exact_unreviewed_pair_ids,
                 )
                 if (
                     candidate_id in attempted_candidate_ids

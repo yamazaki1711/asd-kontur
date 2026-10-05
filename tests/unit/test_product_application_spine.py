@@ -30,6 +30,7 @@ from asd_kontur.application_spine.postgres import (
     _cross_document_work_batches,
     _deterministic_scope_requires_semantic_review,
     _effective_project_processing_job_sql,
+    _exact_unreviewed_cross_role_candidate_ids,
     _merged_quantity_reviews,
     _merged_work_scope_assertions,
     _priority_semantic_batch_limit,
@@ -1036,10 +1037,103 @@ def test_settled_work_is_reused_only_as_bounded_scope_comparison_context() -> No
         candidate_version=3,
         pending_quantities=[{"candidate_id": "unreviewed-mass"}],
     )
+    assert _work_scope_comparison_context_available(
+        existing=existing,
+        candidate_version=3,
+        pending_quantities=[{"candidate_id": "unreviewed-mass"}],
+        exact_unreviewed_cross_role_pair=True,
+    )
     assert not _work_scope_comparison_context_available(
         existing={**existing, "status": "AMBIGUOUS"},
         candidate_version=3,
         pending_quantities=[],
+    )
+    assert not _work_scope_comparison_context_available(
+        existing={**existing, "status": "AMBIGUOUS"},
+        candidate_version=3,
+        pending_quantities=[{"candidate_id": "unreviewed-mass"}],
+        exact_unreviewed_cross_role_pair=True,
+    )
+    assert not _work_scope_comparison_context_available(
+        existing={**existing, "profile_version": "qwen-project-work-reconciliation-v30"},
+        candidate_version=3,
+        pending_quantities=[{"candidate_id": "unreviewed-mass"}],
+        exact_unreviewed_cross_role_pair=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("wording", "family"),
+    (
+        ("Монтаж водовода", "pipeline"),
+        ("Устройство свай", "pile_foundation"),
+    ),
+)
+def test_exact_unreviewed_cross_role_pair_is_routed_to_qwen(wording: str, family: str) -> None:
+    rows = [
+        {
+            "candidate_id": "design",
+            "version": 1,
+            "value": wording,
+            "source_role": "project_documentation",
+            "source_locator_id": "design-locator",
+        },
+        {
+            "candidate_id": "commercial",
+            "version": 1,
+            "value": wording,
+            "source_role": "project_documentation",
+            "source_locator_id": "commercial-locator",
+        },
+    ]
+    prior = {
+        candidate_id: {
+            "candidate_version": 1,
+            "status": "MATCHED",
+            "family_key": family,
+        }
+        for candidate_id in ("design", "commercial")
+    }
+    contexts = {
+        "design-locator": {
+            "safe_display_name": "Design drawings.pdf",
+            "selected_roles": ["working_documentation"],
+        },
+        "commercial-locator": {
+            "safe_display_name": "Work quantities.pdf",
+            "selected_roles": ["bill_of_quantities"],
+        },
+    }
+
+    assert _exact_unreviewed_cross_role_candidate_ids(
+        rows,
+        prior_resolutions=prior,
+        source_role_contexts=contexts,
+        attempted_pairs=set(),
+    ) == {"design", "commercial"}
+    assert not _exact_unreviewed_cross_role_candidate_ids(
+        rows,
+        prior_resolutions=prior,
+        source_role_contexts=contexts,
+        attempted_pairs={("commercial", "design")},
+    )
+    assert not _exact_unreviewed_cross_role_candidate_ids(
+        [*rows, {**rows[1], "candidate_id": "second-commercial"}],
+        prior_resolutions={
+            **prior,
+            "second-commercial": prior["commercial"],
+        },
+        source_role_contexts=contexts,
+        attempted_pairs=set(),
+    )
+    assert not _exact_unreviewed_cross_role_candidate_ids(
+        rows,
+        prior_resolutions={
+            **prior,
+            "commercial": {**prior["commercial"], "family_key": "backfill"},
+        },
+        source_role_contexts=contexts,
+        attempted_pairs=set(),
     )
 
 
