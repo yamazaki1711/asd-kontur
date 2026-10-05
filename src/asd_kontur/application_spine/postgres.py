@@ -536,9 +536,8 @@ def _cross_document_work_batches(
     )
     batches: list[list[dict[str, Any]]] = []
     selected_ids: set[str] = set()
-    for _key, values in eligible:
-        if len(batches) >= max_batches:
-            break
+    eligible_pairs: list[list[tuple[dict[str, Any], dict[str, Any]]]] = []
+    for _key, values in eligible[:max_batches]:
         ordered = sorted(
             values,
             key=lambda value: (
@@ -547,7 +546,7 @@ def _cross_document_work_batches(
                 str(value.get("candidate_id") or ""),
             ),
         )
-        eligible_seed_pairs = [
+        seed_pairs = [
             (design, commercial)
             for design in ordered
             for commercial in ordered
@@ -556,36 +555,56 @@ def _cross_document_work_batches(
             and _relationship_pair_key(design.get("candidate_id"), commercial.get("candidate_id"))
             not in attempted_pairs
         ]
-        if not eligible_seed_pairs:
-            continue
-        # Work-scope authority is pair-specific. Keep this lane to exactly one
-        # design/commercial pair so every accepted model assertion names its
-        # peer and a later review cannot overwrite the meaning of an earlier
-        # pair. Quantity/component context has its own bounded multi-row lane.
-        batch: list[dict[str, Any]] = []
-        selected_pair = max(
-            eligible_seed_pairs,
-            key=lambda pair: (
-                _relationship_pair_affinity(*pair),
-                str(pair[0].get("candidate_id") or ""),
-                str(pair[1].get("candidate_id") or ""),
-            ),
+        eligible_pairs.append(
+            sorted(
+                seed_pairs,
+                key=lambda pair: (
+                    _relationship_pair_affinity(*pair),
+                    str(pair[0].get("candidate_id") or ""),
+                    str(pair[1].get("candidate_id") or ""),
+                ),
+                reverse=True,
+            )
         )
-        for value in selected_pair:
-            cleaned = dict(value)
-            cleaned.pop("semantic_priority", None)
-            cleaned.pop("comparison_side", None)
-            cleaned.pop("comparison_context_only", None)
-            cleaned.pop("scope_comparison_context_only", None)
-            cleaned["analysis_task"] = TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value
-            batch.append(cleaned)
-        if {
-            document_comparison_side(value.get("document_role"), value.get("document"))
-            for value in batch
-        } != {"design", "commercial"}:
-            continue
-        batches.append(batch)
-        selected_ids.update(str(value["candidate_id"]) for value in batch)
+    # Review one pair per engineering group before a second pass. A large
+    # quantity backlog must not limit design/commercial review to one pair per
+    # refill, but each Qwen decision remains an exact two-row scope question.
+    while len(batches) < max_batches:
+        added = False
+        for pairs in eligible_pairs:
+            if len(batches) >= max_batches:
+                break
+            selected_pair = next(
+                (
+                    pair
+                    for pair in pairs
+                    if all(
+                        str(value.get("candidate_id") or "") not in selected_ids for value in pair
+                    )
+                ),
+                None,
+            )
+            if selected_pair is None:
+                continue
+            batch: list[dict[str, Any]] = []
+            for value in selected_pair:
+                cleaned = dict(value)
+                cleaned.pop("semantic_priority", None)
+                cleaned.pop("comparison_side", None)
+                cleaned.pop("comparison_context_only", None)
+                cleaned.pop("scope_comparison_context_only", None)
+                cleaned["analysis_task"] = TenderAnalysisTask.CROSS_DOCUMENT_SCOPE_MATCHING.value
+                batch.append(cleaned)
+            if {
+                document_comparison_side(value.get("document_role"), value.get("document"))
+                for value in batch
+            } != {"design", "commercial"}:
+                continue
+            batches.append(batch)
+            selected_ids.update(str(value["candidate_id"]) for value in batch)
+            added = True
+        if not added:
+            break
     return batches, selected_ids
 
 
@@ -7132,16 +7151,17 @@ class SpinePostgresRepository:
                 max_batches=max_batches,
                 ordinary_classification_pending=ordinary_classification_pending,
             )
-            # Preserve one bounded semantic-scope lane when a design/commercial
-            # pair is eligible. Otherwise a large quantity-relationship backlog
-            # can indefinitely postpone the very scope decision required for
-            # professional omitted-work and commercial-completeness analysis.
+            # Reserve up to two bounded semantic-scope lanes when design and
+            # commercial pairs are eligible. The live workload spent far more
+            # inference time on quantity relationships while most commercial
+            # work scopes remained unmatched; preserve the remaining lane for
+            # quantity analysis and one for first-pass classification.
             # The lane assembles candidates only; Qwen still has to establish
             # meaning and deterministic comparison guards remain unchanged.
             cross_document_batches, cross_document_candidate_ids = _cross_document_work_batches(
                 prepared,
                 batch_size=batch_size,
-                max_batches=min(priority_batch_limit, 1),
+                max_batches=min(priority_batch_limit, 2),
                 attempted_pairs=attempted_scope_pairs,
             )
             relationship_input = [

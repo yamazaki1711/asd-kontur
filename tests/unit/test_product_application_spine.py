@@ -346,6 +346,38 @@ def test_cross_document_work_batches_are_project_independent(
     assert {value["analysis_task"] for value in batches[0]} == {"CROSS_DOCUMENT_SCOPE_MATCHING"}
 
 
+def test_cross_document_refill_can_review_two_distinct_pairs_in_one_scope() -> None:
+    rows = [
+        _work_batch_row(
+            f"design-{part}",
+            facility="Испытательный переход",
+            family="structural_steel",
+            document_role="Рабочая документация",
+            wording=f"Монтаж балки секции {part}",
+        )
+        for part in ("a", "b")
+    ] + [
+        _work_batch_row(
+            f"commercial-{part}",
+            facility="Испытательный переход",
+            family="structural_steel",
+            document_role="Ведомость объемов работ",
+            wording=f"Монтаж балки секции {part}",
+        )
+        for part in ("a", "b")
+    ]
+
+    batches, selected = _cross_document_work_batches(rows, batch_size=8, max_batches=2)
+
+    assert len(batches) == 2
+    assert {frozenset(value["candidate_id"] for value in batch) for batch in batches} == {
+        frozenset({"design-a", "commercial-a"}),
+        frozenset({"design-b", "commercial-b"}),
+    }
+    assert selected == {"design-a", "design-b", "commercial-a", "commercial-b"}
+    assert all(len(batch) == 2 for batch in batches)
+
+
 def test_cross_document_work_batches_skip_only_the_attempted_scope_pair() -> None:
     rows = [
         _work_batch_row(
