@@ -64,6 +64,8 @@ def test_project_progress_excludes_explicit_profile_supersession_history() -> No
     assert "job.job_kind='CONTRACT_ANALYSIS'" in predicate
     assert "contract_analysis_profile" in predicate
     assert ":current_contract_profile" in predicate
+    assert "job.job_kind='DOCUMENT_PAGE_CLASSIFICATION'" in predicate
+    assert "newer.input_manifest->>'source_version_id'=" in predicate
 
 
 def test_semantic_refill_reserves_first_pass_classification_capacity() -> None:

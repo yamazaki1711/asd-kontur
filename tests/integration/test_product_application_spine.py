@@ -111,6 +111,51 @@ def test_processing_status_ignores_obsolete_contract_profile_failures(
         )
         assert status.succeeded_job_count == baseline.succeeded_job_count + 1
         assert status.blocked_job_count == baseline.blocked_job_count + 1
+        accepted_source = str(uuid4())
+        unresolved_source = str(uuid4())
+        with postgres_environment.owner_engine.begin() as connection:
+            for index, (source_id, state, age_days) in enumerate(
+                (
+                    (accepted_source, "failed", 1),
+                    (accepted_source, "succeeded", 0),
+                    (unresolved_source, "failed", 0),
+                )
+            ):
+                manifest = {"source_version_id": source_id, "synthetic": index}
+                connection.execute(
+                    sa.text(
+                        "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
+                        "job_kind,input_manifest,input_digest,idempotency_key,state,created_at,"
+                        "completed_at,priority,max_attempts,retry_policy_version,typed_failure_code,"
+                        "provenance,correlation_id,created_by_identity_id) VALUES (:organization,"
+                        ":workspace,:job,'DOCUMENT_PAGE_CLASSIFICATION',CAST(:manifest AS jsonb),"
+                        ":digest,:key,:state,CURRENT_TIMESTAMP-(:age_days * INTERVAL '1 day'),"
+                        "CURRENT_TIMESTAMP,188,3,'synthetic-retry-v1',:failure,"
+                        "CAST(:provenance AS jsonb),:correlation,:owner)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "job": uuid4(),
+                        "manifest": json.dumps(manifest),
+                        "digest": semantic_digest(manifest),
+                        "key": f"classification-progress-{index}",
+                        "state": state,
+                        "age_days": age_days,
+                        "failure": (
+                            "qwen_semantic_response_invalid_locator" if state == "failed" else None
+                        ),
+                        "provenance": json.dumps({"contract": "synthetic-progress-test@1.0.0"}),
+                        "correlation": uuid4(),
+                        "owner": owner_identity_id,
+                    },
+                )
+        status = app.state.container.service.project_processing_status(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        assert status.succeeded_job_count == baseline.succeeded_job_count + 2
+        assert status.blocked_job_count == baseline.blocked_job_count + 2
 
 
 def test_contract_profile_upgrade_cancels_only_older_queued_model_work(
