@@ -2292,6 +2292,29 @@ def test_compatible_pair_ledger_rejects_only_exact_replay() -> None:
     )
 
 
+def test_compatible_pair_ledger_preserves_new_complete_set_review() -> None:
+    manifest = {
+        "work_observations": [
+            {"candidate_id": candidate_id, "analysis_task": "QUANTITY_RELATIONSHIP_ANALYSIS"}
+            for candidate_id in ("total", "part-a", "part-b")
+        ]
+    }
+    accepted_pairs = {("part-a", "part-b"), ("part-a", "total"), ("part-b", "total")}
+
+    assert not _work_reconciliation_manifest_replays_accepted_pair(
+        manifest,
+        accepted_relationship_pairs=accepted_pairs,
+        accepted_scope_pairs=set(),
+        accepted_relationship_groups=set(),
+    )
+    assert _work_reconciliation_manifest_replays_accepted_pair(
+        manifest,
+        accepted_relationship_pairs=accepted_pairs,
+        accepted_scope_pairs=set(),
+        accepted_relationship_groups={("part-a", "part-b", "total")},
+    )
+
+
 def test_settled_quantity_remains_available_for_distinct_cross_document_pairs() -> None:
     quantity = {
         "candidate_id": "quantity-design",

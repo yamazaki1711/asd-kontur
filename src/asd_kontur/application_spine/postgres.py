@@ -1523,10 +1523,16 @@ def _work_reconciliation_manifest_replays_accepted_pair(
     *,
     accepted_relationship_pairs: set[tuple[str, str]],
     accepted_scope_pairs: set[tuple[str, str]],
+    accepted_relationship_groups: set[tuple[str, ...]] | None = None,
 ) -> bool:
     """Return whether one queued manifest only repeats an accepted pair decision."""
 
     _, relationship_pairs, scope_pairs = _work_reconciliation_attempt_sets((manifest,))
+    relationship_groups = _attempted_quantity_group_keys((manifest,))
+    if relationship_groups and not relationship_groups.issubset(
+        accepted_relationship_groups or set()
+    ):
+        return False
     return (
         bool(relationship_pairs) and relationship_pairs.issubset(accepted_relationship_pairs)
     ) or (bool(scope_pairs) and scope_pairs.issubset(accepted_scope_pairs))
@@ -6614,27 +6620,31 @@ class SpinePostgresRepository:
         # every prompt bump reset the pair ledger and caused profile-wide Qwen
         # replay.  Only unclaimed jobs are terminally accounted here; running
         # inference is never interrupted.
-        accepted_manifests = session.execute(
-            sa.text(
-                "SELECT job.input_manifest FROM workspace.durable_jobs job JOIN "
-                "workspace.project_work_reconciliation_results result ON "
-                "result.organization_id=job.organization_id AND "
-                "result.workspace_id=job.workspace_id AND result.job_id=job.job_id "
-                "WHERE job.organization_id=:organization AND job.workspace_id=:workspace "
-                "AND job.job_kind='PROJECT_WORK_RECONCILIATION' AND job.state='succeeded' "
-                "AND result.profile_version=ANY(:profiles) AND "
-                "result.profile_version<>:profile"
-            ),
-            {
-                "organization": organization_id,
-                "workspace": workspace_id,
-                "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
-                "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
-            },
-        ).scalars()
+        accepted_manifests = [
+            dict(value)
+            for value in session.execute(
+                sa.text(
+                    "SELECT job.input_manifest FROM workspace.durable_jobs job JOIN "
+                    "workspace.project_work_reconciliation_results result ON "
+                    "result.organization_id=job.organization_id AND "
+                    "result.workspace_id=job.workspace_id AND result.job_id=job.job_id "
+                    "WHERE job.organization_id=:organization AND job.workspace_id=:workspace "
+                    "AND job.job_kind='PROJECT_WORK_RECONCILIATION' AND job.state='succeeded' "
+                    "AND result.profile_version=ANY(:profiles) AND "
+                    "result.profile_version<>:profile"
+                ),
+                {
+                    "organization": organization_id,
+                    "workspace": workspace_id,
+                    "profiles": list(PROJECT_WORK_RECONCILIATION_COMPATIBLE_PROFILES),
+                    "profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                },
+            ).scalars()
+        ]
         _, accepted_relationship_pairs, accepted_scope_pairs = _work_reconciliation_attempt_sets(
-            dict(value) for value in accepted_manifests
+            accepted_manifests
         )
+        accepted_relationship_groups = _attempted_quantity_group_keys(accepted_manifests)
         if accepted_relationship_pairs or accepted_scope_pairs:
             current_rows = session.execute(
                 sa.text(
@@ -6657,6 +6667,7 @@ class SpinePostgresRepository:
                     dict(current_row.input_manifest),
                     accepted_relationship_pairs=accepted_relationship_pairs,
                     accepted_scope_pairs=accepted_scope_pairs,
+                    accepted_relationship_groups=accepted_relationship_groups,
                 ):
                     rows.append(
                         {
