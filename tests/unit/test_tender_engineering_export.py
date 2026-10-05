@@ -194,6 +194,64 @@ def test_tender_report_omits_sections_without_project_inputs() -> None:
     assert "Риски Подрядчика" not in xml
 
 
+def test_tender_report_explains_unchecked_total_without_calling_it_a_discrepancy() -> None:
+    model = {
+        "project": {"name": {"value": "Испытательный мост"}},
+        "unresolved": {
+            "quantities": [
+                {
+                    "unresolved_kind": "component_total_relationship",
+                    "quantity_candidate_id": "total-a",
+                    "facility": "Пролёт 1",
+                    "work": "Монтаж металлоконструкций",
+                    "document_role": "РД",
+                    "value": "12",
+                    "unit": "т",
+                    "reason": "Связи общего объёма и составляющих противоречат друг другу.",
+                },
+                {
+                    "quantity_candidate_id": "unreviewed-b",
+                    "reason": "Непроверенное извлечение не является выводом отчёта.",
+                },
+            ]
+        },
+    }
+
+    payload = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        assert document.testzip() is None
+        xml = document.read("word/document.xml").decode("utf-8")
+
+    assert "Пролёт 1: Монтаж металлоконструкций — РД 12 т." in xml
+    assert "Связи общего объёма и составляющих противоречат друг другу." in xml
+    assert "Непроверенное извлечение не является выводом отчёта." not in xml
+    assert "Расхождения проектных и коммерческих документов" not in xml
+
+
+def test_tender_report_preserves_zero_quantity_in_unresolved_total() -> None:
+    payload = render_engineering_tender_report_docx(
+        {
+            "unresolved": {
+                "quantities": [
+                    {
+                        "unresolved_kind": "component_total_relationship",
+                        "quantity_candidate_id": "total-zero",
+                        "work": "Выемка грунта",
+                        "document_role": "РД",
+                        "value": 0,
+                        "unit": "м3",
+                        "reason": "Состав частей требует уточнения.",
+                    }
+                ]
+            }
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "РД 0 м3" in xml
+    assert "значение не установлено" not in xml
+
+
 def test_tender_report_adapts_to_procurement_and_contract_inputs() -> None:
     value = _model()
     value["participants"] = [{"label": "Заказчик", "value": "АО Заказчик"}]

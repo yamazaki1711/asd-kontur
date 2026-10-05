@@ -452,6 +452,9 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
             str(value.get("reason") or "")
             for value in dict(model.get("unresolved") or {}).get("participants") or ()
         ]
+        + _quantity_relationship_uncertainties(
+            dict(model.get("unresolved") or {}).get("quantities")
+        )
         + _scope_comparison_uncertainties(scope_comparisons)
     )
     if any(uncertainties):
@@ -687,6 +690,35 @@ def _scope_comparison_uncertainties(rows: object) -> list[str]:
         status = str(raw.get("professional_status") or "Сопоставление объёма требует уточнения")
         counts[status] = counts.get(status, 0) + 1
     return [f"{status}: {count} поз." for status, count in sorted(counts.items())]
+
+
+def _quantity_relationship_uncertainties(rows: object) -> list[str]:
+    """Show unchecked totals without promoting them to Tender discrepancies."""
+
+    values: list[str] = []
+    seen: set[str] = set()
+    for raw in rows if isinstance(rows, (list, tuple)) else ():
+        if (
+            not isinstance(raw, Mapping)
+            or raw.get("unresolved_kind") != "component_total_relationship"
+        ):
+            continue
+        candidate_id = str(raw.get("quantity_candidate_id") or "")
+        if not candidate_id or candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        location = str(raw.get("facility") or "Место выполнения требует уточнения")
+        work = str(raw.get("work") or "Работа требует уточнения")
+        role = str(raw.get("document_role") or "Документ")
+        raw_value = raw.get("value")
+        value = str(raw_value) if raw_value not in (None, "") else "значение не установлено"
+        unit = str(raw.get("unit") or "").strip()
+        reason = str(raw.get("reason") or "Связь с составляющими требует уточнения.")
+        values.append(f"{location}: {work} — {role} {value} {unit}. {reason}".replace("  ", " "))
+    limit = 20
+    if len(values) > limit:
+        return [*values[:limit], f"Ещё {len(values) - limit} общих объёмов требуют уточнения."]
+    return values
 
 
 def _heading(value: str, *, level: int = 2) -> str:
