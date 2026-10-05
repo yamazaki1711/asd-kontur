@@ -269,6 +269,39 @@ def test_tender_report_preserves_zero_quantity_in_unresolved_total() -> None:
     assert "значение не установлено" not in xml
 
 
+def test_tender_report_shows_ambiguous_design_commercial_allocation_as_uncertainty() -> None:
+    payload = render_engineering_tender_report_docx(
+        {
+            "project": {"name": {"value": "Испытательный путепровод"}},
+            "unresolved": {
+                "quantities": [
+                    {
+                        "unresolved_kind": "cross_document_quantity_allocation",
+                        "allocation_id": "allocation-a",
+                        "facility": "Опора Z",
+                        "work": "Монтаж облицовки",
+                        "design_quantities": [
+                            {"document_role": "ПД", "value": "45", "unit": "м2"},
+                            {"document_role": "РД", "value": "47", "unit": "м2"},
+                        ],
+                        "commercial_quantities": [
+                            {"document_role": "Смета", "value": "45", "unit": "м2"}
+                        ],
+                        "reason": "Нужно уточнить, повторяют ли проектные позиции один объём.",
+                    }
+                ]
+            },
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(payload)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+
+    assert "Опора Z: Монтаж облицовки — проект: ПД 45 м2; РД 47 м2" in xml
+    assert "коммерческие документы: Смета 45 м2" in xml
+    assert "Нужно уточнить, повторяют ли проектные позиции один объём." in xml
+    assert "Расхождения проектных и коммерческих документов" not in xml
+
+
 def test_tender_report_adapts_to_procurement_and_contract_inputs() -> None:
     value = _model()
     value["participants"] = [{"label": "Заказчик", "value": "АО Заказчик"}]

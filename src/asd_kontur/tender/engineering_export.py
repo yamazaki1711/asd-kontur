@@ -696,11 +696,34 @@ def _scope_comparison_uncertainties(rows: object) -> list[str]:
 
 
 def _quantity_relationship_uncertainties(rows: object) -> list[str]:
-    """Show unchecked totals without promoting them to Tender discrepancies."""
+    """Show unresolved quantity relationships without inventing discrepancies."""
 
     values: list[str] = []
     seen: set[str] = set()
     for raw in rows if isinstance(rows, (list, tuple)) else ():
+        if (
+            isinstance(raw, Mapping)
+            and raw.get("unresolved_kind") == "cross_document_quantity_allocation"
+        ):
+            allocation_id = str(raw.get("allocation_id") or "")
+            if not allocation_id or allocation_id in seen:
+                continue
+            seen.add(allocation_id)
+            design = "; ".join(
+                f"{value.get('document_role')} {value.get('value')} {value.get('unit')}"
+                for value in raw.get("design_quantities") or ()
+                if isinstance(value, Mapping)
+            )
+            commercial = "; ".join(
+                f"{value.get('document_role')} {value.get('value')} {value.get('unit')}"
+                for value in raw.get("commercial_quantities") or ()
+                if isinstance(value, Mapping)
+            )
+            values.append(
+                f"{raw.get('facility')}: {raw.get('work')} — проект: {design}; "
+                f"коммерческие документы: {commercial}. {raw.get('reason')}"
+            )
+            continue
         if (
             not isinstance(raw, Mapping)
             or raw.get("unresolved_kind") != "component_total_relationship"

@@ -424,6 +424,26 @@ test("Tender shows confirmed work pairing with both document sides", async ({
         project_engineering: {
           project: {},
           summary: {},
+          unresolved: {
+            quantities: [
+              {
+                unresolved_kind: "cross_document_quantity_allocation",
+                allocation_id: digest("c"),
+                facility: "Warehouse B",
+                work: "Install facing panels",
+                design_quantities: [
+                  { document_role: "РД", value: "45", unit: "м2" },
+                  { document_role: "ПД", value: "47", unit: "м2" },
+                ],
+                commercial_quantities: [
+                  { document_role: "Смета", value: "45", unit: "м2" },
+                ],
+                reason:
+                  "The duplicate or component relationship needs clarification.",
+                source_locator_ids: [documentId, challengeId, turnId],
+              },
+            ],
+          },
           scope_comparisons: [
             {
               scope_comparison_id: digest("a"),
@@ -468,8 +488,17 @@ test("Tender shows confirmed work pairing with both document sides", async ({
     page.getByText(/Сопоставление вида работы не означает/),
   ).toBeVisible();
   await expect(
-    page.getByRole("link", { name: "Открыть исходный фрагмент" }),
+    page
+      .locator("article.entity-card")
+      .filter({ hasText: "Roof membrane installation" })
+      .getByRole("link", { name: "Открыть исходный фрагмент" }),
   ).toHaveCount(2);
+  await expect(
+    page.getByRole("heading", {
+      name: "Объёмы с неоднозначным сопоставлением",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("РД 45 м2; ПД 47 м2")).toBeVisible();
   await expect(
     page.getByText("Требуется уточнить объём").first(),
   ).toBeVisible();

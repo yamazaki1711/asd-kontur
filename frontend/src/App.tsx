@@ -5321,6 +5321,11 @@ function ProjectEngineeringResult({
         (item) => item.unresolved_kind === "component_total_relationship",
       )
     : [];
+  const unresolvedQuantityAllocations = Array.isArray(unresolvedQuantities)
+    ? (unresolvedQuantities as Record<string, unknown>[]).filter(
+        (item) => item.unresolved_kind === "cross_document_quantity_allocation",
+      )
+    : [];
   const scopeComparisons = Array.isArray(model.scope_comparisons)
     ? (model.scope_comparisons as Record<string, unknown>[])
     : [];
@@ -6276,6 +6281,55 @@ function ProjectEngineeringResult({
                   locatorIds={
                     item.source_locator_id ? [item.source_locator_id] : []
                   }
+                  workspaceId={workspaceId}
+                  modeSlug={modeSlug}
+                />
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+      {unresolvedQuantityAllocations.length > 0 && (
+        <section className="panel">
+          <h2>Объёмы с неоднозначным сопоставлением</h2>
+          <p>
+            Проектные и коммерческие позиции связаны по виду работы, но нельзя
+            определить, повторяют ли документы один объём или описывают разные
+            части. Эти значения не включены в числовые расхождения.
+          </p>
+          <div className="card-grid">
+            {unresolvedQuantityAllocations.map((item) => (
+              <article
+                className="entity-card"
+                key={displayValue(item.allocation_id)}
+              >
+                <h3>{displayValue(item.work)}</h3>
+                <p>{displayValue(item.facility)}</p>
+                <p>
+                  Проект:{" "}
+                  {Array.isArray(item.design_quantities)
+                    ? item.design_quantities
+                        .map((raw) => {
+                          const value = raw as Record<string, unknown>;
+                          return `${displayValue(value.document_role)} ${displayValue(value.value)} ${displayValue(value.unit)}`;
+                        })
+                        .join("; ")
+                    : "требует уточнения"}
+                </p>
+                <p>
+                  Коммерческие документы:{" "}
+                  {Array.isArray(item.commercial_quantities)
+                    ? item.commercial_quantities
+                        .map((raw) => {
+                          const value = raw as Record<string, unknown>;
+                          return `${displayValue(value.document_role)} ${displayValue(value.value)} ${displayValue(value.unit)}`;
+                        })
+                        .join("; ")
+                    : "требует уточнения"}
+                </p>
+                <p>{displayValue(item.reason)}</p>
+                <ProjectSourceLinks
+                  locatorIds={item.source_locator_ids}
                   workspaceId={workspaceId}
                   modeSlug={modeSlug}
                 />

@@ -14,6 +14,7 @@ from asd_kontur.tender.project_engineering import (
     _comparisons,
     _component_total_analysis,
     _component_total_comparisons,
+    _cross_work_quantity_pair_analysis,
     _display_quantity,
     _document_composition,
     _documents,
@@ -1102,6 +1103,97 @@ def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
     commercial["facility_id"] = "facility-z"
     commercial["quantities_by_document"]["Смета"][0]["quantity_type"] = "TOTAL"  # type: ignore[index]
     assert _reviewed_cross_work_quantity_comparisons([design, commercial]) == []
+
+
+def test_one_commercial_quantity_with_two_reviewed_design_scopes_requires_allocation() -> None:
+    def work(
+        *,
+        work_id: str,
+        candidate_id: str,
+        peer_work_ids: list[str],
+        quantity_id: str,
+        peer_quantity_ids: list[str],
+        role: str,
+        value: str,
+    ) -> dict[str, object]:
+        return {
+            "work_scope_id": work_id,
+            "candidate_ids": [candidate_id],
+            "facility_id": "bridge-pier-z",
+            "facility": "Bridge pier Z",
+            "work_name": "Install facing panels",
+            "work_scope_assertions": [
+                {
+                    "source_candidate_id": candidate_id,
+                    "related_candidate_id": peer_id,
+                    "scope_compatibility": "SAME_SCOPE",
+                    "normalized_operation": "Install facing panels",
+                    "reason": "The exact work scopes correspond.",
+                }
+                for peer_id in peer_work_ids
+            ],
+            "quantities_by_document": {
+                role: [
+                    {
+                        "quantity_candidate_id": quantity_id,
+                        "value": value,
+                        "unit": "м2",
+                        "quantity_type": "STANDALONE",
+                        "semantic_scope": "Facing panels at bridge pier Z",
+                        "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
+                        "scope_assertions": [
+                            {
+                                "related_quantity_candidate_id": peer_id,
+                                "scope_compatibility": "SAME_SCOPE",
+                            }
+                            for peer_id in peer_quantity_ids
+                        ],
+                        "source_locator_id": f"source-{quantity_id}",
+                    }
+                ]
+            },
+        }
+
+    design_a = work(
+        work_id="design-a",
+        candidate_id="design-work-a",
+        peer_work_ids=["commercial-work"],
+        quantity_id="design-quantity-a",
+        peer_quantity_ids=["commercial-quantity"],
+        role="РД",
+        value="45",
+    )
+    design_b = work(
+        work_id="design-b",
+        candidate_id="design-work-b",
+        peer_work_ids=["commercial-work"],
+        quantity_id="design-quantity-b",
+        peer_quantity_ids=["commercial-quantity"],
+        role="РД",
+        value="47",
+    )
+    commercial = work(
+        work_id="commercial",
+        candidate_id="commercial-work",
+        peer_work_ids=["design-work-a", "design-work-b"],
+        quantity_id="commercial-quantity",
+        peer_quantity_ids=["design-quantity-a", "design-quantity-b"],
+        role="Смета",
+        value="45",
+    )
+
+    comparisons, unresolved = _cross_work_quantity_pair_analysis([design_a, design_b, commercial])
+
+    assert comparisons == []
+    assert len(unresolved) == 1
+    assert unresolved[0]["unresolved_kind"] == "cross_document_quantity_allocation"
+    assert [row["value"] for row in unresolved[0]["design_quantities"]] == ["45", "47"]
+    assert [row["value"] for row in unresolved[0]["commercial_quantities"]] == ["45"]
+    assert len(unresolved[0]["source_locator_ids"]) == 3
+    assert "числовое сравнение пока не выполняется" in unresolved[0]["reason"]
+
+    commercial["quantities_by_document"]["Смета"][0]["unit"] = "т"  # type: ignore[index]
+    assert _cross_work_quantity_pair_analysis([design_a, design_b, commercial]) == ([], [])
 
 
 def test_reviewed_same_scope_allows_one_to_one_commercial_comparison_without_relation_ids() -> None:

@@ -834,10 +834,13 @@ def build_project_engineering_model(
     component_comparisons, unresolved_component_totals = _component_total_analysis(
         work_model["works"]
     )
+    cross_work_comparisons, unresolved_cross_work_pairs = _cross_work_quantity_pair_analysis(
+        work_model["works"]
+    )
     comparisons = _deduplicate_dicts(
         [
             *_validated_scope_quantity_comparisons(work_model["works"]),
-            *_reviewed_cross_work_quantity_comparisons(work_model["works"]),
+            *cross_work_comparisons,
             *component_comparisons,
             *_tender_context_comparisons(tender_context, source_context),
         ]
@@ -895,7 +898,8 @@ def build_project_engineering_model(
                 and value.get("component_set_complete") is False
             )
         ]
-        + unresolved_component_totals,
+        + unresolved_component_totals
+        + unresolved_cross_work_pairs,
         "requirements": list(requirements["unresolved"]),
         "participants": participant_ambiguities,
     }
@@ -3808,6 +3812,12 @@ def _validated_scope_quantity_comparisons(
 def _reviewed_cross_work_quantity_comparisons(
     works: Iterable[Mapping[str, Any]],
 ) -> list[dict[str, Any]]:
+    return _cross_work_quantity_pair_analysis(works)[0]
+
+
+def _cross_work_quantity_pair_analysis(
+    works: Iterable[Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Compare exact reviewed design/commercial pairs across broad work rows.
 
     A schedule row can contain several different operations.  Its aggregate
@@ -3867,6 +3877,104 @@ def _reviewed_cross_work_quantity_comparisons(
         candidate_id for pair in eligible_pairs for candidate_id in pair
     )
     result: list[dict[str, Any]] = []
+    unresolved: list[dict[str, Any]] = []
+    ambiguous_groups: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
+    for design_id, commercial_id in eligible_pairs:
+        if peer_counts[design_id] > 1:
+            ambiguous_groups[("design", design_id)].add((design_id, commercial_id))
+        if peer_counts[commercial_id] > 1:
+            ambiguous_groups[("commercial", commercial_id)].add((design_id, commercial_id))
+    for (side, anchor_id), pairs in sorted(ambiguous_groups.items()):
+        design_ids = sorted({design_id for design_id, _ in pairs})
+        commercial_ids = sorted({commercial_id for _, commercial_id in pairs})
+        design_rows = [entries[candidate_id][0] for candidate_id in design_ids]
+        commercial_rows = [entries[candidate_id][0] for candidate_id in commercial_ids]
+        quantities = [
+            _one_comparable_quantity([value])
+            for _work, _role, value in [*design_rows, *commercial_rows]
+        ]
+        if any(quantity is None for quantity in quantities):
+            continue
+        units = {quantity[1] for quantity in quantities if quantity is not None}
+        if len(units) != 1:
+            continue
+        display_rows = [*design_rows, *commercial_rows]
+        quantity_types = {str(value.get("quantity_type")) for _work, _role, value in display_rows}
+        revisions = {
+            str(value.get("revision"))
+            for _work, _role, value in display_rows
+            if value.get("revision")
+        }
+        if len(quantity_types) != 1 or len(revisions) > 1:
+            continue
+        unresolved.append(
+            {
+                "unresolved_kind": "cross_document_quantity_allocation",
+                "allocation_id": semantic_digest(
+                    {"side": side, "anchor": anchor_id, "pairs": sorted(pairs)}
+                ),
+                "facility": next(
+                    (
+                        str(work.get("facility"))
+                        for work, _role, _value in display_rows
+                        if work.get("facility")
+                    ),
+                    "Место выполнения требует уточнения",
+                ),
+                "work": next(
+                    (
+                        str(work.get("work_name"))
+                        for work, _role, _value in design_rows
+                        if work.get("work_name")
+                    ),
+                    "Работа требует уточнения",
+                ),
+                "design_quantities": [
+                    {
+                        "work": work.get("work_name"),
+                        "document_role": role,
+                        "value": _decimal_text(quantity[0])
+                        if quantity is not None
+                        else value.get("value"),
+                        "unit": quantity[1] if quantity is not None else value.get("unit"),
+                        "source_locator_id": value.get("source_locator_id"),
+                    }
+                    for (work, role, value), quantity in zip(
+                        design_rows, quantities[: len(design_rows)], strict=True
+                    )
+                ],
+                "commercial_quantities": [
+                    {
+                        "work": work.get("work_name"),
+                        "document_role": role,
+                        "value": _decimal_text(quantity[0])
+                        if quantity is not None
+                        else value.get("value"),
+                        "unit": quantity[1] if quantity is not None else value.get("unit"),
+                        "source_locator_id": value.get("source_locator_id"),
+                    }
+                    for (work, role, value), quantity in zip(
+                        commercial_rows, quantities[len(design_rows) :], strict=True
+                    )
+                ],
+                "reason": (
+                    "Несколько проектных значений связаны с одной коммерческой позицией. "
+                    "Не установлено, повторяют ли проектные документы один объём или описывают "
+                    "разные части; числовое сравнение пока не выполняется."
+                    if side == "commercial"
+                    else "Одно проектное значение связано с несколькими коммерческими позициями. "
+                    "Не установлено, повторяют ли коммерческие документы один объём или "
+                    "распределяют его по частям; числовое сравнение пока не выполняется."
+                ),
+                "source_locator_ids": sorted(
+                    {
+                        str(value.get("source_locator_id"))
+                        for _work, _role, value in display_rows
+                        if value.get("source_locator_id")
+                    }
+                ),
+            }
+        )
     for design_id, commercial_id in sorted(eligible_pairs):
         if peer_counts[design_id] != 1 or peer_counts[commercial_id] != 1:
             continue
@@ -3935,7 +4043,7 @@ def _reviewed_cross_work_quantity_comparisons(
             "общих групп работ не включены в сравнение."
         )
         result.append(comparison)
-    return result
+    return result, unresolved
 
 
 def _reviewed_cross_work_pair(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
