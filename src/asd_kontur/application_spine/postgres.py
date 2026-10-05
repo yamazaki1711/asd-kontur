@@ -1124,6 +1124,14 @@ def _quantity_relationship_batches(
                 or any(
                     candidate_id == str(existing.get("candidate_id") or "") for existing in batch
                 )
+                # A new seed pair must not drag an already reviewed pair back
+                # into a larger context batch. The model otherwise re-decides
+                # that old pair and can contradict its accepted result.
+                or any(
+                    _relationship_pair_key(candidate_id, existing.get("candidate_id"))
+                    in attempted_pairs
+                    for existing in batch
+                )
                 or len(batch) >= relationship_batch_size
             ):
                 continue

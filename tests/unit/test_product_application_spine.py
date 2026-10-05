@@ -1761,6 +1761,45 @@ def test_quantity_relationship_batches_do_not_repeat_attempted_pair() -> None:
     assert selected == {"design", "commercial-b"}
 
 
+def test_quantity_relationship_context_does_not_revisit_attempted_pair() -> None:
+    design = _work_batch_row(
+        "design",
+        facility="Facility 17",
+        family="earthworks",
+        document_role="ПД",
+        wording="Excavate foundation",
+    )
+    old_commercial = _work_batch_row(
+        "old-commercial",
+        facility="Facility 17",
+        family="earthworks",
+        document_role="Смета",
+        wording="Excavate foundation",
+    )
+    new_commercial = _work_batch_row(
+        "new-commercial",
+        facility="Facility 17",
+        family="earthworks",
+        document_role="ВОР",
+        wording="Excavate foundation",
+    )
+    for row in (design, old_commercial, new_commercial):
+        row.update(relationship_review_needed=True, semantic_priority=(100, 1, 1))
+        row["quantity_observations"][0]["unit"] = "м3"
+
+    batches, selected = _quantity_relationship_batches(
+        [design, old_commercial, new_commercial],
+        batch_size=4,
+        max_batches=1,
+        attempted_pairs={("design", "old-commercial")},
+    )
+
+    assert [[row["candidate_id"] for row in batch] for batch in batches] == [
+        ["design", "new-commercial"]
+    ]
+    assert selected == {"design", "new-commercial"}
+
+
 def test_quantity_relationship_batches_skip_weak_unassigned_family_pair() -> None:
     design = _work_batch_row(
         "design",
