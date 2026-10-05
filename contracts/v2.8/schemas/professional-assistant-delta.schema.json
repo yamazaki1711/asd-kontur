@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.8:schema:professional-assistant-delta",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contract_version", "base_delta", "product_denominator", "assistant", "memory", "durability", "external_acceptance", "construction_consultant_quality_ready", "domain_harness_ready", "oks_ready", "product_ready"],
+  "properties": {
+    "contract_version": {"const": "2.8.0"},
+    "base_delta": {"const": "contracts/v2.7/fixtures/valid/professional-assistant-delta.json"},
+    "product_denominator": {"const": 143},
+    "assistant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation_count", "modes", "model", "logical_profile", "model_profile", "gateway_contract", "gateway_tool_count", "max_search_steps", "fixed_source_quota", "direct_sql_for_model", "canonical_actions_require_confirmation", "quality_matrix_questions", "quality_status"],
+      "properties": {
+        "implementation_count": {"const": 1},
+        "modes": {"const": ["Tender", "Support", "Audit", "Restoration"]},
+        "model": {"const": "Qwen3.8-27B-MLX-8bit"},
+        "logical_profile": {"const": "construction-consultant@2.0.0"},
+        "model_profile": {"const": "qwen3.8-27b-construction-consultant@1.0.0"},
+        "gateway_contract": {"const": "construction-consultant-tools@2.8.0"},
+        "gateway_tool_count": {"const": 14},
+        "max_search_steps": {"const": 4},
+        "fixed_source_quota": {"const": false},
+        "direct_sql_for_model": {"const": false},
+        "canonical_actions_require_confirmation": {"const": true},
+        "quality_matrix_questions": {"const": 30},
+        "quality_status": {"enum": ["pending_external_acceptance", "quality_ready", "blocked"]}
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["practice_units", "verified_normative_provisions", "workspace_scoped", "edition_currency_checked", "controlled_history_window", "versioned_dialogue_state"],
+      "properties": {
+        "practice_units": {"const": 21105},
+        "verified_normative_provisions": {"const": 1294},
+        "workspace_scoped": {"const": true},
+        "edition_currency_checked": {"const": false},
+        "controlled_history_window": {"const": true},
+        "versioned_dialogue_state": {"const": true}
+      }
+    },
+    "durability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["postgres_history", "durable_turns", "stream_events", "immutable_tool_receipts", "immutable_quality_receipts", "worker_restart_terminal_outcome", "workspace_reset_scoped"],
+      "properties": {
+        "postgres_history": {"const": true},
+        "durable_turns": {"const": true},
+        "stream_events": {"const": true},
+        "immutable_tool_receipts": {"const": true},
+        "immutable_quality_receipts": {"const": true},
+        "worker_restart_terminal_outcome": {"const": true},
+        "workspace_reset_scoped": {"const": true}
+      }
+    },
+    "external_acceptance": {"enum": ["pending", "pass", "blocked"]},
+    "construction_consultant_quality_ready": {"type": "boolean"},
+    "domain_harness_ready": {"type": "boolean"},
+    "oks_ready": {"const": false},
+    "product_ready": {"const": false}
+  }
+}

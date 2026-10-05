@@ -27,6 +27,7 @@ from asd_kontur.lifecycle import (
     StorageAdapterDefinition,
     VerificationOutcome,
 )
+from asd_kontur.lifecycle.postgres import PostgresWorkspaceStorageAdapter
 
 ORGANIZATION_ID = UUID("018f5c3e-7b00-7000-8000-000000000610")
 WORKSPACE_A = UUID("018f5c3e-7b00-7000-8000-000000000611")
@@ -520,3 +521,18 @@ def test_portable_archive_verifies_hashes_readability_and_exact_inventory(
     with pytest.raises(LifecycleError) as invalid:
         service.verify(package)
     assert invalid.value.code is LifecycleErrorCode.ARCHIVE_INVALID
+
+
+def test_workspace_reset_orders_new_reconciliation_children_before_their_parents() -> None:
+    """Post-extraction child rows must be purged before referenced jobs and sources."""
+
+    tables = PostgresWorkspaceStorageAdapter.TABLES
+    jobs = tables.index("workspace.durable_jobs")
+    source_versions = tables.index("workspace.source_versions")
+    source_locators = tables.index("workspace.source_locators")
+
+    assert tables.index("workspace.project_work_reconciliation_results") < jobs
+    assert tables.index("workspace.engineering_extraction_batches") < source_versions
+    assert tables.index("workspace.project_structure_relationship_candidates") < source_versions
+    assert tables.index("workspace.project_structure_relationship_candidates") < source_locators
+    assert "workspace.project_pit_observation_disposition_receipts" in tables

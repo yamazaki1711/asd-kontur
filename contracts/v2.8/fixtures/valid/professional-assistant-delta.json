@@ -1,0 +1,42 @@
+{
+  "contract_version": "2.8.0",
+  "base_delta": "contracts/v2.7/fixtures/valid/professional-assistant-delta.json",
+  "product_denominator": 143,
+  "assistant": {
+    "implementation_count": 1,
+    "modes": ["Tender", "Support", "Audit", "Restoration"],
+    "model": "Qwen3.8-27B-MLX-8bit",
+    "logical_profile": "construction-consultant@2.0.0",
+    "model_profile": "qwen3.8-27b-construction-consultant@1.0.0",
+    "gateway_contract": "construction-consultant-tools@2.8.0",
+    "gateway_tool_count": 14,
+    "max_search_steps": 4,
+    "fixed_source_quota": false,
+    "direct_sql_for_model": false,
+    "canonical_actions_require_confirmation": true,
+    "quality_matrix_questions": 30,
+    "quality_status": "pending_external_acceptance"
+  },
+  "memory": {
+    "practice_units": 21105,
+    "verified_normative_provisions": 1294,
+    "workspace_scoped": true,
+    "edition_currency_checked": false,
+    "controlled_history_window": true,
+    "versioned_dialogue_state": true
+  },
+  "durability": {
+    "postgres_history": true,
+    "durable_turns": true,
+    "stream_events": true,
+    "immutable_tool_receipts": true,
+    "immutable_quality_receipts": true,
+    "worker_restart_terminal_outcome": true,
+    "workspace_reset_scoped": true
+  },
+  "external_acceptance": "pending",
+  "construction_consultant_quality_ready": false,
+  "domain_harness_ready": false,
+  "oks_ready": false,
+  "product_ready": false
+}

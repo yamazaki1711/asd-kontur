@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:asd-kontur:contracts:v2.9:schema:ntd-consultant-corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "official_denominator", "reference_denominator", "document_count", "page_count", "searchable_page_count", "verified_provision_count", "sp70", "construction_consultant_quality_ready"],
+  "properties": {
+    "profile": {"const": "ntd-consultant-search-index@1.0.0"},
+    "official_denominator": {"const": 15},
+    "reference_denominator": {"const": 104},
+    "document_count": {"const": 119},
+    "page_count": {"type": "integer", "minimum": 1},
+    "searchable_page_count": {"type": "integer", "minimum": 1},
+    "verified_provision_count": {"const": 1294},
+    "sp70": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["designation", "inventory_outcome", "verified_provisions", "edition_currency"],
+      "properties": {
+        "designation": {"const": "СП 70.13330.2012"},
+        "inventory_outcome": {"const": "document_present_searchable"},
+        "verified_provisions": {"const": 0},
+        "edition_currency": {"const": "not_checked"}
+      }
+    },
+    "construction_consultant_quality_ready": {"const": false}
+  }
+}

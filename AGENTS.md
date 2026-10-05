@@ -6,11 +6,36 @@ and the current [Implementation Plan](docs/architecture/IMPLEMENTATION_PLAN_v1.m
 
 - Build the whole object-independent product: four modes and three permanent
   results. The Qwen domain/knowledge harness is necessary, not sufficient.
+- ASD-KONTUR is an applied construction-engineering system, not an evidence-
+  management product. The primary unit of progress is a solved professional
+  user task: understood project composition, engineering/commercial comparison,
+  practical finding/action, or usable document. Processing, provenance,
+  candidates, receipts, coverage and readiness are supporting mechanisms.
+- Keep the primary application project-first: project -> area/facility ->
+  structure/pit -> work -> quantity/material -> requirement -> issue/risk ->
+  action -> document. Put processing and diagnostics on a secondary surface.
+  A capability is not materially useful until its professional result is
+  obtainable through the application on representative project data.
+- Treat any real workspace, including OZERO, as a validation corpus rather
+  than the product boundary. Prioritise reusable capabilities with a visible
+  application output; establish their behaviour first on controlled inputs,
+  then record exactly which subset a real corpus validates. A blocked corpus
+  check never blocks independently testable Tender, Support, Audit, or
+  Restoration work.
+- Engineering analyses, actionable reports and editable ID packages are product outputs. Evidence,
+  provenance, processing receipts, and candidate status support those outputs;
+  they must not require routine manual confirmation of every observation.
 - UI, Application, Industrial Intake, Output, Field and Operations are
   first-class product planes. Foundation/tests are not capability readiness.
 - Do not propose a real OKS before an accepted `TrialReadinessDecision`.
 - Use native/deterministic processing before AI. Qwen3.8 receives bounded
   context through Knowledge Gateway; numeric-critical drawings use BF16.
+- Codex may implement and operate application code, tests, migrations and
+  recovery.  Bulk model-based document OCR/VLM and semantic extraction must
+  run through the approved local Qwen3.8 pipeline with durable provenance;
+  do not substitute Apple Vision, Tesseract, cloud models or Codex inference.
+  Keep deterministic hashing, native extraction, rendering, parsing,
+  validation and indexing outside model inference.
 - Preserve hard workspace isolation, RLS/default deny, evidence, provenance,
   immutable history and Candidate-before-Fact authority.
 - For NTD discovery start with Minstroy, then `docs.cntd.ru`, then

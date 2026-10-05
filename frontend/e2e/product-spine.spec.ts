@@ -378,12 +378,24 @@ test("user enters through four Russian modes and keeps the selected object", asy
   await page.getByLabel("Название объекта").fill("Строительство корпуса Б");
   await page.getByRole("button", { name: "Создать объект" }).click();
   await expect(page.getByRole("heading", { name: "Аудит" })).toBeVisible();
-  await page.goto(`/admin/workspaces/${workspaceA}/reset`);
-  await page.getByRole("button", { name: "Подготовить reset" }).click();
-  const exact = `RESET ${workspaceA} synthetic-confirmation`;
-  await page.getByLabel("Подтверждение exact target").fill(exact);
-  await page.getByRole("button", { name: "Выполнить reset" }).click();
   await page.goto("/modes/audit/workspaces");
+  const projectA = page
+    .locator("article.entity-card")
+    .filter({ hasText: "Строительство корпуса А" });
+  await projectA
+    .getByLabel("Действия с проектом Строительство корпуса А")
+    .click();
+  await page.getByRole("button", { name: "Удалить проект" }).first().click();
+  const deleteDialog = page.getByRole("dialog", {
+    name: "Удалить проект «Строительство корпуса А»?",
+  });
+  await expect(deleteDialog).toContainText(
+    "документы проекта, результаты анализа, диалоги и сформированные файлы",
+  );
+  await deleteDialog
+    .getByLabel("Для подтверждения введите название проекта")
+    .fill("Строительство корпуса А");
+  await deleteDialog.getByRole("button", { name: "Удалить проект" }).click();
   await expect(page.getByText("Строительство корпуса Б")).toBeVisible();
   await expect(page.getByText("Строительство корпуса А")).toHaveCount(0);
   await page.getByRole("button", { name: "Выйти" }).click();
@@ -393,6 +405,103 @@ test("user enters through four Russian modes and keeps the selected object", asy
     return response.status;
   });
   expect(unauthorizedStatus).toBe(401);
+});
+
+test("Tender shows confirmed work pairing with both document sides", async ({
+  page,
+}) => {
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path.endsWith("/project-understanding")) {
+      return json(route, {
+        project_definition: { definition: { fields: {} } },
+        matrix: { matrix: { rows: [] } },
+        materialization: { state: "partial" },
+        evidence_index: {},
+        candidates: {},
+        defects: [],
+        project_engineering: {
+          project: {},
+          summary: {},
+          unresolved: {
+            quantities: [
+              {
+                unresolved_kind: "cross_document_quantity_allocation",
+                allocation_id: digest("c"),
+                facility: "Warehouse B",
+                work: "Install facing panels",
+                design_quantities: [
+                  { document_role: "РД", value: "45", unit: "м2" },
+                  { document_role: "ПД", value: "47", unit: "м2" },
+                ],
+                commercial_quantities: [
+                  { document_role: "Смета", value: "45", unit: "м2" },
+                ],
+                reason:
+                  "The duplicate or component relationship needs clarification.",
+                source_locator_ids: [documentId, challengeId, turnId],
+              },
+            ],
+          },
+          scope_comparisons: [
+            {
+              scope_comparison_id: digest("a"),
+              classification: "MATCH",
+              facility: "Warehouse B",
+              work: "Install roofing",
+              design_work: "Roof membrane installation",
+              commercial_work: "Install roof covering",
+              design_roles: ["РД"],
+              commercial_roles: ["Смета"],
+              conclusion: "The project and commercial work scopes are paired.",
+              source_locator_ids: [documentId, challengeId],
+            },
+            {
+              scope_comparison_id: digest("b"),
+              classification: "UNRESOLVED_SCOPE_MATCH",
+              professional_status: "Требуется уточнить объём",
+              facility: "Warehouse C",
+              work: "Install drainage",
+              conclusion: "The corresponding commercial position is unclear.",
+            },
+          ],
+        },
+      });
+    }
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+
+  await page.goto(
+    `/modes/tender/workspaces/${workspaceA}/project-understanding?section=gaps`,
+  );
+  await page
+    .getByText("Работы с установленным проектным и коммерческим составом (1)")
+    .click();
+  await expect(
+    page.getByText("Проектная работа: Roof membrane installation"),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Коммерческая позиция: Install roof covering"),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Сопоставление вида работы не означает/),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("article.entity-card")
+      .filter({ hasText: "Roof membrane installation" })
+      .getByRole("link", { name: "Открыть исходный фрагмент" }),
+  ).toHaveCount(2);
+  await expect(
+    page.getByRole("heading", {
+      name: "Объёмы с неоднозначным сопоставлением",
+    }),
+  ).toBeVisible();
+  await expect(page.getByText("РД 45 м2; ПД 47 м2")).toBeVisible();
+  await expect(
+    page.getByText("Требуется уточнить объём").first(),
+  ).toBeVisible();
 });
 
 for (const viewport of [
@@ -509,6 +618,19 @@ function knowledge() {
       "VERIFIED_NTD_UNAVAILABLE",
       "ACTIVE_RULE_VERSION_UNAVAILABLE",
     ],
+    ntd_inventory: {
+      total_documents: 100,
+      official_documents: 50,
+      reference_documents: 50,
+      searchable: 40,
+      partially_searchable: 10,
+      bytes_present: 1024,
+      structured_editions: 20,
+      verified_provisions: 30,
+      documents_without_text: 5,
+      absent_identities: 2,
+      edition_currency_unchecked: 15,
+    },
   };
 }
 

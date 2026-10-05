@@ -1,0 +1,28 @@
+{
+  "profile": "ntd-consultant-characterization@1.0.0",
+  "cases": [
+    {
+      "id": "concrete-regulation-follow-up",
+      "messages": [
+        "Какие нормативные документы следует рассмотреть для контроля бетонных работ?",
+        "Почему в ответе не учтён СП 70?"
+      ],
+      "required_first_tool_on_follow_up": "consultant.resolve_ntd_designation",
+      "required_designation": "СП 70.13330.2012",
+      "required_inventory_outcome": "document_present_searchable",
+      "required_conclusions": [
+        "документ уже присутствует",
+        "повторная загрузка не требуется",
+        "СП 70 регулирует несущие и ограждающие конструкции",
+        "СП 543 регулирует строительный контроль",
+        "окончательная применимость зависит от конструкции и вида работ",
+        "актуальность редакции не проверена"
+      ],
+      "forbidden_conclusions": [
+        "СП 70 отсутствует",
+        "загрузите СП 70",
+        "совпадение слова бетон доказывает применимость"
+      ]
+    }
+  ]
+}

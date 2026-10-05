@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import deterministic_uuid, uuid7
 
+from .editable_aosr import EDITABLE_AOSR_PROFILE_VERSION
+from .field_mapping import reconcile_support_field_candidates
 from .production import (
     DocumentMembershipVersion,
     IdPackageVersion,
@@ -39,12 +41,75 @@ class SupportProductionRepository:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def view(self, *, owner_identity_id: str, workspace_id: UUID) -> dict[str, Any]:
+    @staticmethod
+    def _latest_support_process(
+        session: Session, *, organization_id: UUID, workspace_id: UUID
+    ) -> dict[str, Any] | None:
+        """Return the configured professional Support boundary for this workspace."""
+
+        row = (
+            session.execute(
+                sa.text(
+                    "SELECT p.support_process_id,p.mode_execution_id,p.state,p.revision,"
+                    "p.process_definition_version,p.rule_set_version_id,p.authority_profile_version,"
+                    "s.scope_version,s.deliverable_scope,s.source_class_allowlist,s.policy_versions,"
+                    "s.classification,s.purpose,s.scope_digest,s.recorded_at FROM "
+                    "workspace.support_processes p JOIN workspace.support_scope_versions s ON "
+                    "s.organization_id=p.organization_id AND s.workspace_id=p.workspace_id AND "
+                    "s.support_process_id=p.support_process_id WHERE p.organization_id=:o AND "
+                    "p.workspace_id=:w ORDER BY p.updated_at DESC,s.scope_version DESC LIMIT 1"
+                ),
+                {"o": organization_id, "w": workspace_id},
+            )
+            .mappings()
+            .one_or_none()
+        )
+        return None if row is None else dict(row)
+
+    def view(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        work_package_id: UUID | None = None,
+    ) -> dict[str, Any]:
         organization_id = self._resolve_scope(owner_identity_id, workspace_id)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
             matrix = self._latest_matrix(session, organization_id, workspace_id)
             requirements = [] if matrix is None else _matrix_requirements(matrix)
+            if work_package_id is not None:
+                requirements = [
+                    item
+                    for item in requirements
+                    if UUID(str(item["work_package_id"])) == work_package_id
+                ]
+            support_process = self._latest_support_process(
+                session, organization_id=organization_id, workspace_id=workspace_id
+            )
+            source_field_candidates = self._source_field_candidates(
+                session,
+                organization_id=organization_id,
+                workspace_id=workspace_id,
+                requirements=requirements,
+            )
+            available_packages = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (p.id_package_id) p.id_package_id,p.version,"
+                        "p.scope_subject_id work_package_id,p.completeness_status status,p.required_count,"
+                        "p.covered_count,p.missing_count,p.indeterminate_count,p.recorded_at,"
+                        "wp.work_type_key,wp.work_type_version,wp.package->'work_type'->>'raw' work_name "
+                        "FROM workspace.id_package_versions p LEFT JOIN "
+                        "workspace.construction_work_package_versions wp ON "
+                        "wp.organization_id=p.organization_id AND wp.workspace_id=p.workspace_id "
+                        "AND wp.work_package_id=p.scope_subject_id WHERE p.organization_id=:o AND "
+                        "p.workspace_id=:w ORDER BY p.id_package_id,p.version DESC,wp.version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
             package_row = (
                 session.execute(
                     sa.text(
@@ -52,9 +117,11 @@ class SupportProductionRepository:
                         "AND p.workspace_id=:w AND EXISTS (SELECT 1 FROM "
                         "workspace.id_package_volume_book_versions b WHERE b.organization_id=p.organization_id "
                         "AND b.workspace_id=p.workspace_id AND b.id_package_id=p.id_package_id AND "
-                        "b.id_package_version=p.version) ORDER BY p.recorded_at DESC,p.version DESC LIMIT 1"
+                        "b.id_package_version=p.version) AND "
+                        "(CAST(:work AS uuid) IS NULL OR p.scope_subject_id=CAST(:work AS uuid)) "
+                        "ORDER BY p.recorded_at DESC,p.version DESC LIMIT 1"
                     ),
-                    {"o": organization_id, "w": workspace_id},
+                    {"o": organization_id, "w": workspace_id, "work": work_package_id},
                 )
                 .mappings()
                 .one_or_none()
@@ -64,13 +131,17 @@ class SupportProductionRepository:
                     "workspace_id": str(workspace_id),
                     "matrix": _matrix_ref(matrix),
                     "requirements": requirements,
+                    "available_packages": [_jsonable(item) for item in available_packages],
                     "package": None,
                     "package_history": [],
                     "book_history": [],
                     "register_history": [],
                     "readiness_history": [],
+                    "support_process": support_process,
+                    "source_field_candidates": source_field_candidates,
                     "gaps": [
                         *(("WORK_REQUIREMENT_MATRIX_UNAVAILABLE",) if matrix is None else ()),
+                        *(("SUPPORT_PROCESS_NOT_CONFIGURED",) if support_process is None else ()),
                         "ID_PACKAGE_NOT_FORMED",
                     ],
                     "authority_layers": _authority_layers(),
@@ -140,7 +211,8 @@ class SupportProductionRepository:
                 dict(item)
                 for item in session.execute(
                     sa.text(
-                        "SELECT m.*,g.job_id,g.job_state,g.typed_failure_code,g.generated_candidate_id,"
+                        "SELECT m.*,g.job_id,g.job_state,g.typed_failure_code,g.generation_run_id,"
+                        "g.generated_candidate_id,"
                         "g.object_reference,g.bytes_digest,g.format,g.candidate_fingerprint,"
                         "pv.print_validation_id,pv.result print_validation_result,pv.assurance_class "
                         "print_assurance_class,pv.check_codes print_check_codes,pv.blocker_codes "
@@ -153,7 +225,8 @@ class SupportProductionRepository:
                         "fd.qualification_level finalization_qualification_level,fd.document_digest "
                         "finalized_document_digest "
                         "FROM workspace.id_package_document_membership_versions m LEFT JOIN LATERAL ("
-                        "SELECT b.template_id,b.template_version,b.job_id,j.state job_state,"
+                        "SELECT b.template_id,b.template_version,b.job_id,b.generation_run_id,"
+                        "j.state job_state,"
                         "j.typed_failure_code,c.generated_candidate_id,c.object_reference,c.bytes_digest,"
                         "c.format,c.semantic_fingerprint candidate_fingerprint FROM "
                         "workspace.support_generation_job_bindings b JOIN workspace.durable_jobs j ON "
@@ -190,6 +263,28 @@ class SupportProductionRepository:
                     },
                 ).mappings()
             ]
+            representations = [
+                dict(item)
+                for item in session.execute(
+                    sa.text(
+                        "SELECT render_artifact_id,generated_candidate_id,renderer_profile_version,"
+                        "format,object_reference,content_digest,assurance_class,status,created_at FROM "
+                        "workspace.support_render_artifacts WHERE organization_id=:o AND "
+                        "workspace_id=:w AND format='DOCX' ORDER BY created_at,render_artifact_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                ).mappings()
+            ]
+            representations_by_candidate: dict[str, list[dict[str, Any]]] = {}
+            for representation in representations:
+                representations_by_candidate.setdefault(
+                    str(representation["generated_candidate_id"]), []
+                ).append(_jsonable(representation))
+            for membership in memberships:
+                candidate_id = membership.get("generated_candidate_id")
+                membership["editable_representations"] = representations_by_candidate.get(
+                    str(candidate_id), []
+                )
             registers = [
                 dict(item)
                 for item in session.execute(
@@ -247,6 +342,7 @@ class SupportProductionRepository:
             "workspace_id": str(workspace_id),
             "matrix": _matrix_ref(matrix),
             "requirements": requirements,
+            "available_packages": [_jsonable(item) for item in available_packages],
             "package": _jsonable(package_row),
             "package_history": [_jsonable(item) for item in package_history],
             "book_history": [_jsonable(item) for item in book_history],
@@ -257,6 +353,8 @@ class SupportProductionRepository:
             "registers": [_jsonable(item) for item in registers],
             "readiness": _jsonable(readiness) if readiness is not None else None,
             "field_resolutions": [_jsonable(item) for item in fields],
+            "source_field_candidates": source_field_candidates,
+            "support_process": _jsonable(support_process) if support_process is not None else None,
             "gaps": sorted(
                 {
                     str(code)
@@ -269,6 +367,128 @@ class SupportProductionRepository:
             ),
             "authority_layers": _authority_layers(),
         }
+
+    @staticmethod
+    def _source_field_candidates(
+        session: Session,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        requirements: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Project evidence available for an exact work-scoped AOSR draft.
+
+        This is a read projection only.  It neither confirms candidate values
+        nor treats a catalog match as professional authority.
+        """
+
+        work_package_ids = sorted(
+            {
+                UUID(str(item["work_package_id"]))
+                for item in requirements
+                if item.get("document_type") == "support.aosr"
+            },
+            key=str,
+        )
+        if not work_package_ids:
+            return []
+        template_fields = [
+            dict(item)
+            for item in session.execute(
+                sa.text(
+                    "SELECT f.field_key,f.material,f.required,f.value_type,f.display_order "
+                    "FROM platform.required_document_types d JOIN "
+                    "platform.required_document_type_versions dv ON "
+                    "dv.required_document_type_id=d.required_document_type_id JOIN "
+                    "platform.required_document_type_templates map ON "
+                    "map.required_document_type_id=dv.required_document_type_id AND "
+                    "map.required_document_type_version=dv.version JOIN platform.template_versions t "
+                    "ON t.template_id=map.template_id AND t.version=map.template_version JOIN "
+                    "platform.template_field_definitions f ON f.field_schema_id=t.field_schema_id "
+                    "AND f.field_schema_version=t.field_schema_version WHERE "
+                    "d.document_type_key='support.aosr' AND dv.status='active' AND "
+                    "map.applicability_status IN ('qualified','active') AND "
+                    "t.qualification_state IN ('qualified','active') ORDER BY f.display_order"
+                )
+            ).mappings()
+        ]
+        if not template_fields:
+            return []
+        source_ids = session.scalar(
+            sa.text(
+                "SELECT run.source_version_ids FROM workspace.project_understanding_reconciliations r "
+                "JOIN workspace.project_understanding_runs run ON "
+                "run.organization_id=r.organization_id AND run.workspace_id=r.workspace_id AND "
+                "run.run_id=r.run_id WHERE r.organization_id=:o AND r.workspace_id=:w "
+                "ORDER BY r.recorded_at DESC,r.version DESC LIMIT 1"
+            ),
+            {"o": organization_id, "w": workspace_id},
+        )
+        if not source_ids:
+            return []
+        candidates = [
+            dict(item)
+            for item in session.execute(
+                sa.text(
+                    "SELECT p.candidate_id,p.version,p.field_key,p.raw_value,p.normalized_value,"
+                    "p.value_type,p.source_version_id,p.source_locator_id,p.extraction_method,"
+                    "p.extraction_profile_version,p.status,p.uncertainty_codes,p.conflicts,"
+                    "cv.candidate_version kernel_candidate_version,cv.status kernel_candidate_status,"
+                    "COALESCE(cf.typed_value #>> '{}',p.normalized_value,p.raw_value) effective_value,"
+                    "vr.validation_run_id,vr.status validation_status FROM "
+                    "workspace.project_field_candidates p LEFT JOIN LATERAL (SELECT value.* FROM "
+                    "workspace.candidate_versions value WHERE value.organization_id=p.organization_id "
+                    "AND value.workspace_id=p.workspace_id AND value.candidate_id=p.candidate_id "
+                    "ORDER BY value.candidate_version DESC LIMIT 1) cv ON true LEFT JOIN "
+                    "workspace.candidate_fields cf ON cf.organization_id=cv.organization_id AND "
+                    "cf.workspace_id=cv.workspace_id AND cf.candidate_id=cv.candidate_id AND "
+                    "cf.candidate_version=cv.candidate_version AND cf.field_path='/project/'||p.field_key "
+                    "LEFT JOIN LATERAL (SELECT v.validation_run_id,"
+                    "v.status FROM workspace.vlm_validation_runs v WHERE "
+                    "v.organization_id=cv.organization_id AND v.workspace_id=cv.workspace_id AND "
+                    "v.candidate_id=cv.candidate_id AND v.candidate_version=cv.candidate_version "
+                    "ORDER BY v.validated_at DESC LIMIT 1) vr ON true WHERE "
+                    "p.organization_id=:o AND p.workspace_id=:w AND "
+                    "p.source_version_id=ANY(:sources) ORDER BY p.field_key,p.recorded_at,p.candidate_id"
+                ),
+                {"o": organization_id, "w": workspace_id, "sources": list(source_ids)},
+            ).mappings()
+        ]
+        packages = [
+            dict(item)
+            for item in session.execute(
+                sa.text(
+                    "SELECT DISTINCT ON (work_package_id) work_package_id,version,work_type_key,"
+                    "work_type_version,package,fingerprint FROM "
+                    "workspace.construction_work_package_versions WHERE organization_id=:o AND "
+                    "workspace_id=:w AND work_package_id=ANY(:packages) ORDER BY "
+                    "work_package_id,version DESC"
+                ),
+                {"o": organization_id, "w": workspace_id, "packages": work_package_ids},
+            ).mappings()
+        ]
+        result: list[dict[str, Any]] = []
+        for row in packages:
+            package = dict(row["package"])
+            projection = reconcile_support_field_candidates(
+                work_type_key=str(row["work_type_key"]),
+                work_source_locator_ids=package.get("source_locator_ids", ()),
+                template_fields=template_fields,
+                project_candidates=candidates,
+            )
+            result.append(
+                {
+                    "work_package_id": str(row["work_package_id"]),
+                    "work_package_version": int(row["version"]),
+                    "work_type_key": str(row["work_type_key"]),
+                    "work_type_version": str(row["work_type_version"]),
+                    "work_name": str(package.get("work_type", {}).get("raw", "")),
+                    "scope": str(package.get("scope", "")),
+                    "work_package_fingerprint": str(row["fingerprint"]),
+                    **projection,
+                }
+            )
+        return result
 
     def candidate_object(
         self, *, owner_identity_id: str, workspace_id: UUID, candidate_id: UUID
@@ -307,6 +527,13 @@ class SupportProductionRepository:
         now = datetime.now(UTC)
         with Session(self._engine) as session, session.begin():
             _scope(session, organization_id, workspace_id)
+            if (
+                self._latest_support_process(
+                    session, organization_id=organization_id, workspace_id=workspace_id
+                )
+                is None
+            ):
+                raise SupportProductionError("support_process_not_configured")
             matrix = self._latest_matrix(session, organization_id, workspace_id)
             if matrix is None:
                 raise SupportProductionError("work_requirement_matrix_unavailable")
@@ -339,7 +566,11 @@ class SupportProductionRepository:
                 },
             )
             if existing is not None:
-                return self.view(owner_identity_id=owner_identity_id, workspace_id=workspace_id)
+                return self.view(
+                    owner_identity_id=owner_identity_id,
+                    workspace_id=workspace_id,
+                    work_package_id=work_package_id,
+                )
             package_id = deterministic_uuid(f"support-id-package:{workspace_id}:{work_package_id}")
             package_version = int(
                 session.scalar(
@@ -536,7 +767,11 @@ class SupportProductionRepository:
                 },
             )
             self._insert_readiness(session, organization_id, workspace_id, readiness, now)
-        return self.view(owner_identity_id=owner_identity_id, workspace_id=workspace_id)
+        return self.view(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            work_package_id=work_package_id,
+        )
 
     def start_generation(
         self,
@@ -556,7 +791,7 @@ class SupportProductionRepository:
             membership = (
                 session.execute(
                     sa.text(
-                        "SELECT m.*,p.rule_set_version_id FROM "
+                        "SELECT m.*,p.rule_set_version_id,p.scope_subject_id work_package_id FROM "
                         "workspace.id_package_document_membership_versions m JOIN "
                         "workspace.id_package_versions p ON p.organization_id=m.organization_id AND "
                         "p.workspace_id=m.workspace_id AND p.id_package_id=m.id_package_id AND "
@@ -582,12 +817,14 @@ class SupportProductionRepository:
                         "tv.format format_family,v.purpose,m.template_id,m.template_version,tv.field_schema_id,"
                         "tv.field_schema_version,tv.renderer_profile_version,tv.validator_profile_version,"
                         "tv.binding_profile_version,tv.qualification_state,tv.assurance_class,tv.official_status,"
-                        "a.object_key,a.content_digest template_digest,a.byte_length FROM "
+                        "ts.stable_key template_stable_key,a.object_key,a.content_digest template_digest,"
+                        "a.byte_length FROM "
                         "platform.required_document_types t JOIN platform.required_document_type_versions v "
                         "ON v.required_document_type_id=t.required_document_type_id JOIN "
                         "platform.required_document_type_templates m ON m.required_document_type_id=v.required_document_type_id "
                         "AND m.required_document_type_version=v.version JOIN platform.template_versions tv ON "
                         "tv.template_id=m.template_id AND tv.version=m.template_version JOIN "
+                        "platform.template_sources ts ON ts.template_source_id=tv.template_source_id JOIN "
                         "platform.template_artifacts a ON a.template_id=tv.template_id AND "
                         "a.template_version=tv.version WHERE t.document_type_key=:key AND "
                         "v.status='active' AND m.applicability_status IN ('candidate','qualified','active') "
@@ -734,8 +971,26 @@ class SupportProductionRepository:
             )
             if not field_definitions:
                 raise SupportProductionError("template_field_schema_empty")
+            current_work_package_count = int(
+                session.scalar(
+                    sa.text(
+                        "SELECT count(DISTINCT work_package_id) FROM "
+                        "workspace.construction_work_package_versions WHERE organization_id=:o "
+                        "AND workspace_id=:w"
+                    ),
+                    {"o": organization_id, "w": workspace_id},
+                )
+                or 0
+            )
             resolutions = [
-                self._resolve_field(session, organization_id, workspace_id, definition)
+                self._resolve_field(
+                    session,
+                    organization_id,
+                    workspace_id,
+                    UUID(str(membership["work_package_id"])),
+                    definition,
+                    allow_legacy_unscoped=current_work_package_count == 1,
+                )
                 for definition in field_definitions
             ]
             blockers = [
@@ -902,6 +1157,12 @@ class SupportProductionRepository:
                 "bindings": bindings,
                 "semantic_input": semantic_input,
             }
+            if (
+                membership["role"] == "support.aosr"
+                and format_family == "PDF_OVERLAY"
+                and catalog["template_stable_key"] == "support.aosr.344pr-2023.official-form"
+            ):
+                manifest["editable_companion_profile"] = EDITABLE_AOSR_PROFILE_VERSION
             if font_asset is not None:
                 manifest["font_object_key"] = str(font_asset["object_key"])
                 manifest["font_digest"] = str(font_asset["content_digest"])
@@ -1647,7 +1908,13 @@ class SupportProductionRepository:
 
     @staticmethod
     def _resolve_field(
-        session: Session, organization_id: UUID, workspace_id: UUID, definition: Any
+        session: Session,
+        organization_id: UUID,
+        workspace_id: UUID,
+        work_package_id: UUID,
+        definition: Any,
+        *,
+        allow_legacy_unscoped: bool,
     ) -> dict[str, Any]:
         row = (
             session.execute(
@@ -1660,9 +1927,17 @@ class SupportProductionRepository:
                     "v.fact_version=f.current_version LEFT JOIN workspace.workspace_fact_evidence e ON "
                     "e.organization_id=v.organization_id AND e.workspace_id=v.workspace_id AND "
                     "e.fact_id=v.fact_id AND e.fact_version=v.fact_version WHERE f.organization_id=:o "
-                    "AND f.workspace_id=:w AND f.fact_type=:key ORDER BY e.evidence_link_id LIMIT 1"
+                    "AND f.workspace_id=:w AND (f.fact_type=:key OR "
+                    "(:allow_legacy AND f.fact_type=:legacy_key)) ORDER BY "
+                    "(f.fact_type=:key) DESC,e.evidence_link_id LIMIT 1"
                 ),
-                {"o": organization_id, "w": workspace_id, "key": definition["field_key"]},
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "key": f"support.aosr:{work_package_id}:{definition['field_key']}",
+                    "legacy_key": definition["field_key"],
+                    "allow_legacy": allow_legacy_unscoped,
+                },
             )
             .mappings()
             .one_or_none()
@@ -1779,6 +2054,12 @@ def _matrix_requirements(matrix: Any) -> list[dict[str, Any]]:
             result.append(
                 {
                     **document,
+                    # The current matrix contract publishes immutable
+                    # requirement identities; Support package formation binds
+                    # each first materialization to document-requirement v1.
+                    # Expose that exact binding to downstream preflight rather
+                    # than letting it silently assume a version.
+                    "document_requirement_version": 1,
                     "work_package_id": str(row["work_package_id"]),
                     "requirement_state": (
                         "required"

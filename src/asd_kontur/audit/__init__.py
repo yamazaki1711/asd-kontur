@@ -8,6 +8,7 @@ from .evaluation import (
 )
 from .models import (
     ActionRequest,
+    ActionRequestReference,
     ActionRequestState,
     AuditReport,
     AuditScope,
@@ -41,6 +42,7 @@ from .projections import (
 
 __all__ = [
     "ActionRequest",
+    "ActionRequestReference",
     "ActionRequestState",
     "AuditCommand",
     "AuditCommandType",

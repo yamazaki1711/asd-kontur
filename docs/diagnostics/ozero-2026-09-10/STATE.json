@@ -1,0 +1,72 @@
+{
+  "schema_version": "asd-kontur-diagnostic-state@1.0",
+  "captured_at": "2026-09-10T16:09:01+12:00",
+  "scope": {
+    "workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+    "failed_turn_id": "01a088c6-a7a0-7fb4-8a64-732bac76b362",
+    "inspection_mode": "read-only baseline"
+  },
+  "repository": {
+    "path": "/Users/oleg/asd-kontur",
+    "branch": "implementation/ntd-canonical-memory-build-01",
+    "head": "120006d3b4a7211ec8d0e4cc4793bc0adfe4729b",
+    "dirty_paths_preserved": [
+      "frontend/e2e/product-spine-live.spec.ts",
+      "tools/run_product_spine_e2e_server.py",
+      "frontend/pnpm-lock.yaml",
+      "*.orig evidence and incomplete retrieval files"
+    ]
+  },
+  "authoritative_local_services": {
+    "api": {
+      "pid": 29697,
+      "release": "b67bcd6426c873c9625e5cda0bea29de21dfd35f",
+      "database": "asd_kontur_public_demo",
+      "bind": "127.0.0.1:8765",
+      "health_evidence": "No /api/v1/health route; GET returned 404, not a health pass."
+    },
+    "assistant_worker": {
+      "pid": 29715,
+      "release": "b67bcd6426c873c9625e5cda0bea29de21dfd35f",
+      "database": "asd_kontur_public_demo"
+    },
+    "document_worker": {
+      "pid": 37287,
+      "executable_release": "120006d3b4a7211ec8d0e4cc4793bc0adfe4729b",
+      "launchd_declared_release": "b26eb59f00ba6c7986e1462c1d9862865b088034",
+      "database": "asd_kontur_public_demo"
+    },
+    "postgresql": {
+      "endpoint": "127.0.0.1:5433",
+      "database": "asd_kontur_public_demo",
+      "alembic_revision": "0038_consultant_request_id"
+    },
+    "qwen": {
+      "pid": 36891,
+      "endpoint": "127.0.0.1:8790",
+      "health_at": "2026-09-10T16:09:01+12:00",
+      "health_response": {"status": "ready", "model": "Qwen3.8-27B"}
+    },
+    "embedding": {
+      "pid": 19365,
+      "endpoint": "127.0.0.1:8791",
+      "health_result": "HTTP 404; runtime not qualified by this snapshot"
+    }
+  },
+  "workspace_resolution": {
+    "requested_workspace_id": "01a088aa-0491-7bdd-9127-8359fe927a27",
+    "found_in_authoritative_local_api_database": false,
+    "found_in_any_local_postgresql_database_with_workspace_schema": false,
+    "authoritative_local_workspace_count": 0,
+    "consequence": "The current local API/worker database cannot supply a baseline for the user-visible OZERO workspace or original assistant turn."
+  },
+  "historical_unverified_observations": {
+    "source_locators": 97655,
+    "source_versions": 22,
+    "qwen_ocr_pages_persisted": 38,
+    "note": "Present in earlier mission evidence but not corroborated by the current API/worker database; do not mix with current counts."
+  },
+  "incident_status": "NOT_FIXED",
+  "next_required_action": "Locate and bind the live user-facing service to the database containing the requested workspace, then repeat the scoped baseline and trace a real job/turn before any repair."
+}
+

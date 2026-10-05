@@ -10,6 +10,8 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from dataclasses import asdict
+from datetime import UTC, datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -21,10 +23,16 @@ from alembic.config import Config
 from asd_kontur.assistant.gateway import ProfessionalAssistantKnowledgeQuery
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.assistant.worker import AssistantWorker
+from asd_kontur.ntd.exact_lineage import reconcile_exact_native_lineage
+from asd_kontur.ntd.local_semantic import (
+    LocalNtdProvisionRepository,
+    LocalNtdProvisionWorker,
+)
 
 from .auth import OwnerAuthService
 from .config import SpineSettings
 from .object_store import WorkspaceObjectStore
+from .orchestrator import ProjectOrchestrator
 from .postgres import SpinePostgresRepository
 from .worker import DocumentWorker
 
@@ -41,17 +49,29 @@ def main(argv: list[str] | None = None) -> int:
     subcommands.add_parser("serve-api")
     worker = subcommands.add_parser("run-worker")
     worker.add_argument("--identity", default=f"document-worker:{os.getpid()}")
+    subcommands.add_parser("run-project-orchestrator")
     assistant_worker = subcommands.add_parser("run-assistant-worker")
     assistant_worker.add_argument("--identity", default=f"assistant-worker:{os.getpid()}")
+    ntd_worker = subcommands.add_parser("run-ntd-worker")
+    ntd_worker.add_argument("--identity", default=f"ntd-worker:{os.getpid()}")
+    ntd_enqueue = subcommands.add_parser("enqueue-ntd-provisions")
+    ntd_enqueue.add_argument("--limit", type=int, default=2)
+    ntd_enqueue.add_argument("--profile-cap", type=int, default=20)
+    ntd_lineage = subcommands.add_parser("reconcile-ntd-native-lineage")
+    ntd_lineage.add_argument("--document-limit", type=int, default=15)
     subcommands.add_parser("status")
     subcommands.add_parser("health")
     stop = subcommands.add_parser("stop")
     stop.add_argument(
-        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+        "--service",
+        choices=("api", "worker", "project-orchestrator", "assistant-worker", "qwen", "all"),
+        default="all",
     )
     logs = subcommands.add_parser("logs")
     logs.add_argument(
-        "--service", choices=("api", "worker", "assistant-worker", "qwen", "all"), default="all"
+        "--service",
+        choices=("api", "worker", "project-orchestrator", "assistant-worker", "qwen", "all"),
+        default="all",
     )
     logs.add_argument("--lines", type=int, default=100)
     launchd = subcommands.add_parser("render-launchd")
@@ -101,9 +121,20 @@ def main(argv: list[str] | None = None) -> int:
             store,
             worker_identity=args.identity,
             lease_seconds=settings.job_lease_seconds,
+            qwen_vision_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/vision",
+            qwen_semantic_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
+            organization_id=settings.document_worker_organization_id,
+            workspace_id=settings.document_worker_workspace_id,
         )
         try:
             worker_instance.run_forever()
+        finally:
+            engine.dispose()
+        return 0
+    if args.command == "run-project-orchestrator":
+        engine = sa.create_engine(settings.worker_database_url, pool_pre_ping=True)
+        try:
+            ProjectOrchestrator(SpinePostgresRepository(engine)).run_forever()
         finally:
             engine.dispose()
         return 0
@@ -112,7 +143,10 @@ def main(argv: list[str] | None = None) -> int:
         knowledge_engine = sa.create_engine(settings.database_url, pool_pre_ping=True)
         instance = AssistantWorker(
             AssistantRepository(engine),
-            ProfessionalAssistantKnowledgeQuery(knowledge_engine),
+            ProfessionalAssistantKnowledgeQuery(
+                knowledge_engine,
+                production_embedding_endpoint=settings.ntd_embedding_endpoint,
+            ),
             identity=args.identity,
             qwen_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
         )
@@ -121,6 +155,57 @@ def main(argv: list[str] | None = None) -> int:
         finally:
             engine.dispose()
             knowledge_engine.dispose()
+        return 0
+    if args.command in {"run-ntd-worker", "enqueue-ntd-provisions"}:
+        if settings.ntd_processing_database_url is None:
+            raise ValueError("ASD_NTD_PROCESSING_DATABASE_URL is required")
+        engine = sa.create_engine(settings.ntd_processing_database_url, pool_pre_ping=True)
+        try:
+            repository = LocalNtdProvisionRepository(engine)
+            queued = repository.enqueue_bounded(
+                eligible_at=datetime.now(UTC),
+                limit=args.limit if args.command == "enqueue-ntd-provisions" else 2,
+                profile_cap=args.profile_cap if args.command == "enqueue-ntd-provisions" else 20,
+            )
+            if args.command == "enqueue-ntd-provisions":
+                print(
+                    json.dumps(
+                        {
+                            "eligible": queued.eligible,
+                            "inserted": queued.inserted,
+                            "outstanding": queued.outstanding,
+                            "capacity_remaining": queued.capacity_remaining,
+                            "reason": queued.reason,
+                        }
+                    )
+                )
+                return 0
+            LocalNtdProvisionWorker(
+                engine,
+                qwen_url=f"http://{settings.qwen_bind_host}:{settings.qwen_bind_port}/generate",
+                identity=args.identity,
+            ).run_forever()
+        finally:
+            engine.dispose()
+        return 0
+    if args.command == "reconcile-ntd-native-lineage":
+        historical_url = os.environ.get("ASD_NTD_HISTORICAL_DATABASE_URL")
+        if historical_url is None:
+            raise ValueError("ASD_NTD_HISTORICAL_DATABASE_URL is required")
+        if settings.ntd_processing_database_url is None:
+            raise ValueError("ASD_NTD_PROCESSING_DATABASE_URL is required")
+        historical_engine = sa.create_engine(historical_url, pool_pre_ping=True)
+        target_engine = sa.create_engine(settings.ntd_processing_database_url, pool_pre_ping=True)
+        try:
+            result = reconcile_exact_native_lineage(
+                historical_engine,
+                target_engine,
+                document_limit=args.document_limit,
+            )
+        finally:
+            historical_engine.dispose()
+            target_engine.dispose()
+        print(json.dumps(asdict(result), sort_keys=True))
         return 0
     if args.command in {"status", "health"}:
         return _http_status(settings)
@@ -166,8 +251,16 @@ def _database_preflight(settings: SpineSettings) -> int:
 
 def _migrate(settings: SpineSettings) -> int:
     repository = Path(__file__).resolve().parents[3]
+    migration_database_url = os.environ.get("ASD_MIGRATION_DATABASE_URL", settings.database_url)
+    if not migration_database_url.startswith(("postgresql+psycopg://", "postgresql://")):
+        raise ValueError("ASD_MIGRATION_DATABASE_URL must be an explicit PostgreSQL URL")
     configuration = Config(str(repository / "alembic.ini"))
-    configuration.set_main_option("sqlalchemy.url", settings.database_url)
+    configuration.set_main_option("sqlalchemy.url", migration_database_url)
+    # ``migrations/env.py`` deliberately accepts the target connection only as
+    # Alembic's explicit ``-x database_url=...`` argument.  The runtime command
+    # must preserve that fail-closed contract instead of relying on the config
+    # value, which the migration environment intentionally ignores.
+    configuration.cmd_opts = argparse.Namespace(x=[f"database_url={migration_database_url}"])
     command.upgrade(configuration, "head")
     return 0
 
@@ -204,7 +297,17 @@ def _log_root() -> Path:
 
 
 def _stop_launchd(service: str) -> int:
-    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
+    names = (
+        (
+            "api",
+            "worker",
+            "project-orchestrator",
+            "assistant-worker",
+            "qwen",
+        )
+        if service == "all"
+        else (service,)
+    )
     outcomes: dict[str, str] = {}
     for name in names:
         label = f"ru.asd-kontur.spine.{name}"
@@ -223,7 +326,17 @@ def _show_logs(settings: SpineSettings, service: str, lines: int) -> int:
     del settings
     if lines < 1 or lines > 1000:
         raise ValueError("log line count must be between 1 and 1000")
-    names = ("api", "worker", "assistant-worker", "qwen") if service == "all" else (service,)
+    names = (
+        (
+            "api",
+            "worker",
+            "project-orchestrator",
+            "assistant-worker",
+            "qwen",
+        )
+        if service == "all"
+        else (service,)
+    )
     root = _log_root()
     missing = False
     for name in names:
@@ -273,6 +386,17 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         "ASD_QWEN_MODEL_PATH": str(settings.qwen_model_path),
         "ASD_QWEN_BIND_HOST": settings.qwen_bind_host,
         "ASD_QWEN_BIND_PORT": str(settings.qwen_bind_port),
+        "ASD_NTD_PROCESSING_DATABASE_URL": settings.ntd_processing_database_url,
+        "ASD_NTD_PROCESSING_PGPASSFILE": (
+            str(settings.ntd_processing_pgpassfile)
+            if settings.ntd_processing_pgpassfile is not None
+            else None
+        ),
+        "PGPASSFILE": (
+            str(settings.ntd_processing_pgpassfile)
+            if settings.ntd_processing_pgpassfile is not None
+            else None
+        ),
     }
     for variable_name, variable_value in optional_environment.items():
         if variable_value is not None:
@@ -281,12 +405,21 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
         f"<key>{escape(name)}</key><string>{escape(value)}</string>"
         for name, value in sorted(environment.items())
     )
-    for name, command_name in (
+    service_commands = [
         ("api", "serve-api"),
         ("worker", "run-worker"),
+        ("project-orchestrator", "run-project-orchestrator"),
         ("assistant-worker", "run-assistant-worker"),
-    ):
+    ]
+    if settings.ntd_processing_database_url is not None:
+        service_commands.append(("ntd-worker", "run-ntd-worker"))
+    for name, command_name in service_commands:
         log_path = log_root / f"{name}.log"
+        # Model-backed workers finish the current bounded request after
+        # SIGTERM before leaving the claim loop.  launchd's short default exit
+        # window otherwise escalates a controlled release to SIGKILL, expires
+        # the durable lease and wastes the still-running local generation.
+        exit_timeout_seconds = 960 if name in {"worker", "assistant-worker"} else 30
         content = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
@@ -300,6 +433,7 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
             f"<key>EnvironmentVariables</key><dict>{environment_xml}</dict>"
             f"<key>StandardOutPath</key><string>{escape(str(log_path))}</string>"
             f"<key>StandardErrorPath</key><string>{escape(str(log_path))}</string>"
+            f"<key>ExitTimeOut</key><integer>{exit_timeout_seconds}</integer>"
             "<key>KeepAlive</key><true/><key>ThrottleInterval</key><integer>5</integer>"
             "<key>ProcessType</key><string>Background</string>"
             "</dict></plist>\n"
@@ -333,9 +467,12 @@ def _render_launchd(output: Path, settings: SpineSettings) -> None:
     qwen_target = output / "ru.asd-kontur.spine.qwen.plist"
     qwen_target.write_text(qwen_content, encoding="utf-8")
     qwen_target.chmod(0o600)
+    rotation_names = ["api", "worker", "project-orchestrator", "assistant-worker"]
+    if settings.ntd_processing_database_url is not None:
+        rotation_names.append("ntd-worker")
+    rotation_names.append("qwen")
     rotation = "\n".join(
-        f"{log_root / f'{name}.log'}  640  10  10240  *  J"
-        for name in ("api", "worker", "assistant-worker", "qwen")
+        f"{log_root / f'{name}.log'}  640  10  10240  *  J" for name in rotation_names
     )
     (output / "asd-kontur-spine.newsyslog.conf").write_text(rotation + "\n", encoding="utf-8")
 
