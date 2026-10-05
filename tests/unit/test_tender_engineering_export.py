@@ -226,6 +226,7 @@ def test_tender_report_explains_unchecked_total_without_calling_it_a_discrepancy
     assert "Связи общего объёма и составляющих противоречат друг другу." in xml
     assert "Непроверенное извлечение не является выводом отчёта." not in xml
     assert "Расхождения проектных и коммерческих документов" not in xml
+    assert "Инвентаризация котлованов не завершена" not in xml
 
 
 def test_tender_report_preserves_zero_quantity_in_unresolved_total() -> None:
