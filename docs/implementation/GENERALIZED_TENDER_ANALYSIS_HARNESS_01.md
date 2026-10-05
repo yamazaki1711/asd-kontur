@@ -2764,3 +2764,29 @@ its 2.2-month work-duration statement retained three source locators and its
 remains because both groups are typed as work duration. A changed-value test
 also proves that construction and work periods are not compared merely because
 both are expressed in months. No project processing job was created manually.
+
+## Independent control corpus: quantity handoff gap — 2026-10-05
+
+The independently introduced firewater-network control workspace completed
+autonomously (3/3 documents, 135 successful effective jobs, no active or
+blocked jobs), but did **not** pass professional Tender acceptance: it exposed
+seven work scopes, one safe design/commercial quantity match, and no finding.
+Its source-bound segment lengths and stated network length were extracted, but
+they did not reach a validated component/total comparison. They are not
+silently promoted to work quantities: section lengths and an overall network
+length may correctly be `DIMENSION` values attached to rows that are
+`NOT_A_WORK`. The current relationship scheduler requires a recognized work
+family, and the component-total projection reads accepted work quantities
+only. This is a generic missing bridge from engineering dimensions to a
+source-bound quantity graph, not a control-corpus answer to hardcode.
+
+A second generic defect was observed in a source row carrying multiple
+measures: the local model exhausted its ordinary output budget, then the
+single-row recovery repeated exactly the same budget and ended unresolved.
+The bounded retry now raises only that multi-measure singleton's second-call
+ceiling to 5,000 tokens while preserving the complete source context and the
+existing two-call limit. A changed-value regression verifies the exact input
+identities, both budgets, and validated structured reviews. This change does
+not retroactively certify the control corpus or resolve the non-work quantity
+graph; `GeneralizedTenderHarness` remains false. No manual Qwen task or queue
+repair was issued.

@@ -271,7 +271,7 @@ class QwenProjectWorkReconciler:
             quantity_count = sum(len(row.get("quantity_observations") or ()) for row in rows)
             output_budget = (
                 5_000
-                if (relationship_review or scope_review) and expanded_relationship_budget
+                if expanded_relationship_budget
                 # Production v37 receipts showed that 9 of 16 strict two-row
                 # scope reviews exhausted the former 1,400-token floor and
                 # spent a second full inference call before validation. The
@@ -476,6 +476,15 @@ class QwenProjectWorkReconciler:
                     relationship_review=relationship_review,
                     single_retry_available=False,
                     relationship_context_complete=relationship_context_complete,
+                    # A single source row can carry several distinct measures.
+                    # Splitting the row would erase their shared source context;
+                    # repeating an exhausted call at the same output ceiling
+                    # cannot repair it. Keep one bounded retry, with enough
+                    # room for the required structured quantity reviews.
+                    expanded_relationship_budget=(
+                        exc.code == "qwen_semantic_response_output_exhausted"
+                        and len(rows[0].get("quantity_observations") or ()) > 1
+                    ),
                 )
                 return observations, call_count + 1, [exc.code, *codes]
             midpoint = len(rows) // 2

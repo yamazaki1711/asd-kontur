@@ -2634,6 +2634,72 @@ def test_output_exhausted_relationship_batch_retries_complete_context_with_expan
     )
 
 
+def test_output_exhausted_single_row_with_multiple_measures_expands_bounded_retry(
+    monkeypatch: Any,
+) -> None:
+    budgets: list[int] = []
+    quantity_ids = ("measure-alpha", "measure-beta", "measure-gamma")
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        budgets.append(max_tokens)
+        assert all(quantity_id in prompt for quantity_id in quantity_ids)
+        if len(budgets) == 1:
+            raise QwenSemanticFailure("qwen_semantic_response_output_exhausted")
+        return json.dumps(
+            {
+                "observations": [
+                    {
+                        "candidate_id": "network-work",
+                        "status": "MATCHED",
+                        "family_key": "pipelines",
+                        "operation": "Монтаж инженерной сети",
+                        "facility": None,
+                        "confidence": "0.9",
+                        "reason": "Исходная строка описывает монтаж сети.",
+                        "quantity_reviews": [
+                            {
+                                "quantity_candidate_id": quantity_id,
+                                "status": "WORK_QUANTITY",
+                                "semantic_scope": f"Протяжённость участка {ordinal}",
+                                "quantity_type": "STANDALONE",
+                                "relation_kind": "NONE",
+                                "related_quantity_candidate_ids": [],
+                                "scope_compatibility": "INSUFFICIENT_INFORMATION",
+                                "component_set_complete": None,
+                                "reason": "Длина указана для этой операции.",
+                            }
+                            for ordinal, quantity_id in enumerate(quantity_ids, 1)
+                        ],
+                    }
+                ]
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_work_reconciliation._complete", complete)
+    result = QwenProjectWorkReconciler("http://127.0.0.1:8790").reconcile(
+        [
+            {
+                "candidate_id": "network-work",
+                "wording": "Монтаж инженерной сети",
+                "quantity_observations": [
+                    {"quantity_candidate_id": quantity_id, "value": str(ordinal * 15), "unit": "m"}
+                    for ordinal, quantity_id in enumerate(quantity_ids, 1)
+                ],
+            }
+        ],
+        work_families={"pipelines": "Монтаж инженерных сетей"},
+        facilities=[],
+    )
+
+    assert budgets == [1_400, 5_000]
+    assert result["inference_call_count"] == 2
+    assert result["recovery_codes"] == ["qwen_semantic_response_output_exhausted"]
+    assert {
+        value["quantity_candidate_id"] for value in result["observations"][0]["quantity_reviews"]
+    } == set(quantity_ids)
+
+
 def test_relationship_review_normalizes_false_component_completeness_to_null(
     monkeypatch: Any,
 ) -> None:
