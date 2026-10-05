@@ -3874,7 +3874,12 @@ def _reviewed_cross_work_quantity_comparisons(
         commercial_work, commercial_role, commercial_value = entries[commercial_id][0]
         if design_value.get("quantity_type") != commercial_value.get(
             "quantity_type"
-        ) or design_value.get("quantity_type") not in {"TOTAL", "SUBTOTAL", "COMPONENT"}:
+        ) or design_value.get("quantity_type") not in {
+            "TOTAL",
+            "SUBTOTAL",
+            "COMPONENT",
+            "STANDALONE",
+        }:
             continue
         if (
             design_value.get("revision")

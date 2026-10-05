@@ -973,11 +973,20 @@ def test_reviewed_quantity_identity_allows_unlocated_multirow_scope_comparison()
 
 
 @pytest.mark.parametrize(
-    ("work_name", "design_value", "design_unit", "commercial_value", "commercial_unit", "expected"),
+    (
+        "work_name",
+        "design_value",
+        "design_unit",
+        "commercial_value",
+        "commercial_unit",
+        "quantity_type",
+        "expected",
+    ),
     [
-        ("Install pipe", "125", "м", "0.125", "1000 м", "0"),
-        ("Install steel", "8.2", "т", "7.7", "т", "0.5"),
-        ("Excavate ground", "140", "м3", "110", "м3", "30"),
+        ("Install pipe", "125", "м", "0.125", "1000 м", "COMPONENT", "0"),
+        ("Install steel", "8.2", "т", "7.7", "т", "COMPONENT", "0.5"),
+        ("Excavate ground", "140", "м3", "110", "м3", "COMPONENT", "30"),
+        ("Install earth anchors", "36", "шт", "34", "шт", "STANDALONE", "2"),
     ],
 )
 def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
@@ -986,6 +995,7 @@ def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
     design_unit: str,
     commercial_value: str,
     commercial_unit: str,
+    quantity_type: str,
     expected: str,
 ) -> None:
     def work(
@@ -1020,7 +1030,7 @@ def test_exact_reviewed_quantity_pair_compares_across_broad_work_rows(
                         "quantity_candidate_id": quantity_id,
                         "value": value,
                         "unit": unit,
-                        "quantity_type": "COMPONENT",
+                        "quantity_type": quantity_type,
                         "semantic_scope": work_name,
                         "relationship_reviewed": True,
                         "semantic_review_profile": PROJECT_WORK_RECONCILIATION_PROFILE,
