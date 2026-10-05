@@ -877,7 +877,7 @@ def _relationship_group_component_total_context_size(
 
 
 _ADDITIVE_QUANTITY_FORMULA = re.compile(
-    r"(?:\d[\d\s.,]*\s*\+\s*\d[\d\s.,]*|(?:итого|всего|суммарн\w*|total)\s*[:=])",
+    r"(?:\d[\d\s.,]*\s*\+\s*\d[\d\s.,]*|(?:итого|всего|суммарн\w*|total)\s*[:=]|\bобщ(?:ая|ее|ий|ие|ую)\b)",  # noqa: RUF001 -- Russian total labels
     re.IGNORECASE,
 )
 
@@ -957,7 +957,8 @@ def _quantity_relationship_batches(
     """Select bounded quantity groups for a dedicated semantic relation pass.
 
     Exact facility identity is retained when available. Unassigned quantities
-    are grouped only by construction family; Qwen must still establish any
+    are grouped by construction family or an exact source/unit measure lane;
+    Qwen must still establish any
     relationship from the supplied source context. Numeric proximity is never
     used as evidence of compatibility.
     """
@@ -966,12 +967,23 @@ def _quantity_relationship_batches(
     groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     family_rows: dict[str, list[dict[str, Any]]] = defaultdict(list)
     family_locations: dict[str, set[str]] = defaultdict(set)
+    non_work_measure_groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for raw in rows:
         row = dict(raw)
         if row.get("relationship_review_needed") is not True:
             continue
         family = str(row.get("deterministic_family_hint") or "")
         if not family:
+            if row.get("non_work_measure_context") is not True:
+                continue
+            # A structural length, area or mass may form a total/component
+            # relation even when its source row is correctly NOT_A_WORK.
+            # Source and unit only assemble bounded context; neither asserts
+            # an additive relationship or matching engineering scope.
+            source_id = str(row.get("source_version_id") or "")
+            dimensions = _relationship_unit_dimensions(row)
+            if source_id and len(dimensions) == 1:
+                non_work_measure_groups[(source_id, next(iter(dimensions)))].append(row)
             continue
         hints = tuple(
             str(value).strip() for value in row.get("facility_hints") or () if str(value).strip()
@@ -980,6 +992,16 @@ def _quantity_relationship_batches(
         groups[(location, family)].append(row)
         family_rows[family].append(row)
         family_locations[family].add(location)
+
+    for (source_id, dimension), values in non_work_measure_groups.items():
+        if len(values) < 2 or not any(
+            _quantity_may_be_stated_total(quantity)
+            for row in values
+            for quantity in row.get("quantity_observations") or ()
+            if isinstance(quantity, Mapping)
+        ):
+            continue
+        groups[("unassigned", f"source-measure:{source_id}:{dimension}")] = values
 
     # A project/VOR total may intentionally cover components assigned to
     # different facilities. Keep the exact-location groups, but also assemble
@@ -1020,7 +1042,7 @@ def _quantity_relationship_batches(
     )
     batches: list[list[dict[str, Any]]] = []
     selected: set[str] = set()
-    for (location, _family), values in ordered_groups:
+    for (location, family), values in ordered_groups:
         if len(batches) >= max_batches:
             break
         ordered = sorted(
@@ -1041,6 +1063,15 @@ def _quantity_relationship_batches(
             (left, right)
             for left, right in combinations(ordered, 2)
             if _relationship_pair_is_professionally_relevant(left, right)
+            and (
+                not family.startswith("source-measure:")
+                or any(
+                    _quantity_may_be_stated_total(quantity)
+                    for row in (left, right)
+                    for quantity in row.get("quantity_observations") or ()
+                    if isinstance(quantity, Mapping)
+                )
+            )
             and _relationship_quantity_ids(left) != _relationship_quantity_ids(right)
             and _relationship_pair_key(left.get("candidate_id"), right.get("candidate_id"))
             not in attempted_pairs
@@ -1171,6 +1202,63 @@ def _quantity_relationship_batches(
         batches.append(batch)
         selected.update(str(row["candidate_id"]) for row in batch)
     return batches, selected
+
+
+def _non_work_measure_relation_ids(
+    work_rows: Iterable[Mapping[str, Any]],
+    *,
+    quantities_by_work: Mapping[str, Iterable[Mapping[str, Any]]],
+    prior_resolutions: Mapping[str, Mapping[str, Any]],
+) -> set[str]:
+    """Select reviewed non-work measures near a stated same-source total.
+
+    This only admits source-bound context to Qwen. It does not reclassify a
+    heading/structure description as work or declare any numeric relationship.
+    Previously unreviewed values and resources/rates are not reopened here.
+    """
+
+    groups: dict[tuple[str, str], list[tuple[str, bool]]] = defaultdict(list)
+    for raw in work_rows:
+        row = dict(raw)
+        candidate_id = str(row.get("candidate_id") or "")
+        source_id = str(row.get("source_version_id") or "")
+        resolution = prior_resolutions.get(candidate_id) or {}
+        if not candidate_id or not source_id or resolution.get("status") != "NOT_A_WORK":
+            continue
+        reviews = {
+            str(value.get("quantity_candidate_id") or ""): value
+            for value in resolution.get("quantity_reviews") or ()
+            if isinstance(value, Mapping)
+        }
+        for raw_quantity in quantities_by_work.get(candidate_id) or ():
+            quantity = dict(raw_quantity)
+            review = reviews.get(str(quantity.get("candidate_id") or "")) or {}
+            if review.get("status") != "DIMENSION":
+                continue
+            dimensions = _relationship_unit_dimensions(
+                {
+                    "quantity_observations": [
+                        {"unit": quantity.get("normalized_unit") or quantity.get("raw_unit")}
+                    ]
+                }
+            )
+            if len(dimensions) != 1:
+                continue
+            total_hint = _quantity_may_be_stated_total(
+                {
+                    "prior_quantity_type": review.get("quantity_type"),
+                    "prior_semantic_scope": review.get("semantic_scope"),
+                    "nearby_context": row.get("value") or row.get("label"),
+                }
+            )
+            groups[(source_id, next(iter(dimensions)))].append((candidate_id, total_hint))
+    return {
+        candidate_id
+        for values in groups.values()
+        if len({candidate_id for candidate_id, _ in values}) >= 2
+        and any(total_hint for _, total_hint in values)
+        for candidate_id, _ in values
+    }
 
 
 def _work_reconciliation_attempt_sets(
@@ -6830,6 +6918,11 @@ class SpinePostgresRepository:
             for raw_material in candidates.get("materials", []):
                 material = dict(raw_material)
                 materials_by_work[str(material.get("work_candidate_id") or "")].append(material)
+            non_work_measure_ids = _non_work_measure_relation_ids(
+                candidates.get("work_types", ()),
+                quantities_by_work=quantities_by_work,
+                prior_resolutions=prior,
+            )
             unresolved = []
             for raw in candidates.get("work_types", []):
                 row = dict(raw)
@@ -6841,17 +6934,21 @@ class SpinePostgresRepository:
                 linked_quantities = all_linked_quantities
                 explicit_facility = facility_designation(f"{wording} {row.get('scope_key') or ''}")
                 existing = prior.get(candidate_id)
+                non_work_measure_context = candidate_id in non_work_measure_ids
                 if (
                     not candidate_id
                     or not wording
-                    or non_work_reason(
-                        wording,
-                        linked_material=(
-                            bool(materials_by_work.get(candidate_id))
-                            and str((existing or {}).get("status") or "") != "MATCHED"
-                        ),
+                    or (
+                        not non_work_measure_context
+                        and non_work_reason(
+                            wording,
+                            linked_material=(
+                                bool(materials_by_work.get(candidate_id))
+                                and str((existing or {}).get("status") or "") != "MATCHED"
+                            ),
+                        )
+                        is not None
                     )
-                    is not None
                 ):
                     continue
                 linked_quantities, comparison_context_only = _quantity_comparison_context_policy(
@@ -6890,7 +6987,9 @@ class SpinePostgresRepository:
                     # settled work only for quantity observations that have not
                     # yet received a validated meaning decision.
                     if (
-                        existing_status == "NOT_A_WORK" and not potential_work_description(wording)
+                        existing_status == "NOT_A_WORK"
+                        and not potential_work_description(wording)
+                        and not non_work_measure_context
                     ) or (
                         existing_status == "MATCHED"
                         and existing.get("facility")
@@ -6924,6 +7023,7 @@ class SpinePostgresRepository:
                 )
                 row["linked_quantities"] = linked_quantities
                 row["prior_resolution"] = existing or {}
+                row["non_work_measure_context"] = non_work_measure_context
                 row["comparison_context_only"] = comparison_context_only
                 row["scope_comparison_context_only"] = scope_comparison_context_only
                 unresolved.append(row)
@@ -7097,6 +7197,7 @@ class SpinePostgresRepository:
                         "scope": str(row.get("scope_key") or ""),
                         "facility_hints": hints,
                         "deterministic_family_hint": row.get("deterministic_family_hint"),
+                        "non_work_measure_context": bool(row.get("non_work_measure_context")),
                         "nearby_context": context_text,
                         "nearby_context_locator_ids": list(context_window["source_locator_ids"]),
                         "quantity_observations": quantity_observations,
@@ -8097,9 +8198,20 @@ class SpinePostgresRepository:
                 prior_quantity_reviews: Iterable[Mapping[str, Any]] = (
                     compatible_current.get("quantity_reviews") or ()
                 )
+                incoming_quantity_reviews = item.get("quantity_reviews") or ()
+                if analysis_tasks.get(
+                    candidate_id
+                ) == TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value and str(
+                    item.get("reason") or ""
+                ).startswith("Интерпретация не принята после ограниченного повтора"):
+                    # A failed relation pass is not authority to erase a
+                    # previously validated numeric meaning. Keep the prior
+                    # source-bound interpretation and report the typed
+                    # recovery code separately.
+                    incoming_quantity_reviews = ()
                 quantity_reviews = _merged_quantity_reviews(
                     prior_quantity_reviews,
-                    item.get("quantity_reviews") or (),
+                    incoming_quantity_reviews,
                 )
                 material_reviews = _merged_material_reviews(
                     compatible_current.get("material_reviews") or (),
@@ -8125,7 +8237,7 @@ class SpinePostgresRepository:
                 }
                 if (
                     same_candidate_version
-                    and str(compatible_current.get("status") or "") == "MATCHED"
+                    and str(compatible_current.get("status") or "") in {"MATCHED", "NOT_A_WORK"}
                     and analysis_tasks.get(candidate_id)
                     == TenderAnalysisTask.QUANTITY_RELATIONSHIP_ANALYSIS.value
                 ):

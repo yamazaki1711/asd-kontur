@@ -2790,3 +2790,23 @@ identities, both budgets, and validated structured reviews. This change does
 not retroactively certify the control corpus or resolve the non-work quantity
 graph; `GeneralizedTenderHarness` remains false. No manual Qwen task or queue
 repair was issued.
+
+The deterministic component/total projection now also accepts reviewed
+engineering measures from source rows that are correctly **not construction
+works**. This retains the work schedule boundary: a segment length or stated
+structure total is not renamed as an installation operation. Only a validated
+`TOTAL_FOR` relationship with an explicitly complete component set can reach
+Decimal arithmetic; unreviewed values stay out. Parameterized changed-value
+tests cover length and mass, including a matching total and a mismatch. This
+is not yet a new live control-project finding.
+
+The lane is now implemented as a bounded source/unit context selector. It
+reopens only previously reviewed `DIMENSION` rows that are correctly
+`NOT_A_WORK`, and only when at least one same-source measure has an explicit
+stated-total cue. Candidate rows are grouped by exact source version and
+normalized unit; component-only pairs are not submitted. Qwen must still
+establish a complete, reciprocal total/component relationship. A failed
+relation pass cannot overwrite a prior validated dimension or turn a heading
+into a construction operation. Changed-name/number tests cover both the
+context selection and deterministic arithmetic. No live finding is claimed
+until supervised processing accepts the semantic relationship independently.

@@ -18,6 +18,7 @@ from asd_kontur.tender.project_engineering import (
     _display_quantity,
     _document_composition,
     _documents,
+    _engineering_quantity_rows,
     _explicit_work_locations_compatible,
     _facility_material_schedule,
     _isolated_unassigned_comparison,
@@ -2155,6 +2156,107 @@ def test_component_total_comparison_can_join_separate_schedule_rows() -> None:
         "locator-b",
         "locator-total",
     ]
+
+
+@pytest.mark.parametrize(
+    ("unit", "stated", "parts", "expected_difference"),
+    [
+        ("м", "270", ("150", "90"), "30"),
+        ("т", "9.4", ("5.1", "4.3"), "0"),
+    ],
+)
+def test_reviewed_non_work_project_measures_enter_generic_total_check(
+    unit: str,
+    stated: str,
+    parts: tuple[str, str],
+    expected_difference: str,
+) -> None:
+    observations = [
+        {
+            "project_wording": "Общая характеристика сооружения",
+            "document_role": "РД",
+            "facility_id": "structure-a",
+            "facility": "Сооружение А",
+            "quantity_interpretations": [
+                {
+                    "quantity_candidate_id": "total",
+                    "value": stated,
+                    "unit": unit,
+                    "semantic_scope": "Общее количество для сооружения А",
+                    "quantity_type": "TOTAL",
+                    "relation_kind": "TOTAL_FOR",
+                    "related_quantity_candidate_ids": ["part-a", "part-b"],
+                    "scope_compatibility": "COMPONENT_VS_TOTAL",
+                    "relationship_reviewed": True,
+                    "component_set_complete": True,
+                    "source_locator_id": "locator-total",
+                }
+            ],
+        },
+        *[
+            {
+                "project_wording": f"Характеристика элемента {suffix}",
+                "document_role": "РД",
+                "facility_id": "structure-a",
+                "facility": "Сооружение А",
+                "quantity_interpretations": [
+                    {
+                        "quantity_candidate_id": f"part-{suffix}",
+                        "value": value,
+                        "unit": unit,
+                        "semantic_scope": f"Количество элемента {suffix}",
+                        "quantity_type": "COMPONENT",
+                        "relation_kind": "COMPONENT_OF",
+                        "related_quantity_candidate_ids": ["total"],
+                        "scope_compatibility": "COMPONENT_VS_TOTAL",
+                        "relationship_reviewed": True,
+                        "source_locator_id": f"locator-{suffix}",
+                    }
+                ],
+            }
+            for suffix, value in zip(("a", "b"), parts, strict=True)
+        ],
+    ]
+
+    rows = _engineering_quantity_rows(observations)
+    comparisons, unresolved = _component_total_analysis(rows)
+
+    assert len(rows) == 3
+    assert unresolved == []
+    assert len(comparisons) == 1
+    assert comparisons[0]["difference"] == expected_difference
+    assert comparisons[0]["classification"] == (
+        "MATCH" if expected_difference == "0" else "COMPONENT_TOTAL_MISMATCH"
+    )
+    assert comparisons[0]["source_locator_ids"] == [
+        "locator-a",
+        "locator-b",
+        "locator-total",
+    ]
+
+
+def test_unreviewed_non_work_project_measures_do_not_enter_total_check() -> None:
+    rows = _engineering_quantity_rows(
+        [
+            {
+                "project_wording": "Общая характеристика",
+                "document_role": "РД",
+                "quantity_interpretations": [
+                    {
+                        "quantity_candidate_id": "total",
+                        "value": "100",
+                        "unit": "м",
+                        "quantity_type": "TOTAL",
+                        "relation_kind": "TOTAL_FOR",
+                        "related_quantity_candidate_ids": ["part-a"],
+                        "relationship_reviewed": False,
+                    }
+                ],
+            }
+        ]
+    )
+
+    assert rows == []
 
 
 def test_component_total_comparison_rejects_explicitly_incomplete_component_set() -> None:

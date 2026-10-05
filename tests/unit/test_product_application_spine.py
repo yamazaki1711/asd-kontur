@@ -33,6 +33,7 @@ from asd_kontur.application_spine.postgres import (
     _exact_unreviewed_cross_role_candidate_ids,
     _merged_quantity_reviews,
     _merged_work_scope_assertions,
+    _non_work_measure_relation_ids,
     _priority_semantic_batch_limit,
     _quantities_requiring_semantic_review,
     _quantity_comparison_context_policy,
@@ -1892,6 +1893,94 @@ def test_quantity_relationship_batches_do_not_replay_same_role_settled_context()
 
     assert batches == []
     assert selected == set()
+
+
+def test_reviewed_non_work_measures_get_one_bounded_total_context() -> None:
+    rows = [
+        {
+            "candidate_id": candidate_id,
+            "source_version_id": "design-source",
+            "wording": wording,
+            "source_role": "РД",
+            "relationship_review_needed": True,
+            "non_work_measure_context": True,
+            "quantity_observations": [
+                {
+                    "quantity_candidate_id": f"measure-{candidate_id}",
+                    "value": value,
+                    "unit": "м2",
+                    "prior_semantic_scope": wording,
+                    "prior_quantity_type": "DIMENSION",
+                }
+            ],
+        }
+        for candidate_id, wording, value in (
+            ("total", "Общая площадь участка", "480"),
+            ("sector-a", "Площадь сектора А", "200"),
+            ("sector-b", "Площадь сектора Б", "250"),
+        )
+    ]
+    batches, selected = _quantity_relationship_batches(rows, batch_size=4, max_batches=1)
+
+    assert len(batches) == 1
+    assert {value["candidate_id"] for value in batches[0]} == {
+        "total",
+        "sector-a",
+        "sector-b",
+    }
+    assert selected == {"total", "sector-a", "sector-b"}
+
+    rows[2]["source_version_id"] = "different-source"
+    batches, _ = _quantity_relationship_batches(rows, batch_size=4, max_batches=1)
+    assert all("sector-b" not in {value["candidate_id"] for value in batch} for batch in batches)
+
+
+def test_non_work_measure_lane_requires_prior_review_and_stated_total() -> None:
+    work_rows = [
+        {
+            "candidate_id": candidate_id,
+            "source_version_id": "design-source",
+            "value": wording,
+        }
+        for candidate_id, wording in (
+            ("total", "Общая масса конструкции"),
+            ("part-a", "Масса элемента А"),
+            ("part-b", "Масса элемента Б"),
+        )
+    ]
+    quantities_by_work = {
+        candidate_id: [{"candidate_id": f"measure-{candidate_id}", "raw_unit": "т"}]
+        for candidate_id in ("total", "part-a", "part-b")
+    }
+    prior = {
+        candidate_id: {
+            "status": "NOT_A_WORK",
+            "quantity_reviews": [
+                {
+                    "quantity_candidate_id": f"measure-{candidate_id}",
+                    "status": "DIMENSION",
+                    "quantity_type": "DIMENSION",
+                    "semantic_scope": wording,
+                }
+            ],
+        }
+        for candidate_id, wording in (
+            ("total", "Общая масса конструкции"),
+            ("part-a", "Масса элемента А"),
+            ("part-b", "Масса элемента Б"),
+        )
+    }
+
+    assert _non_work_measure_relation_ids(
+        work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
+    ) == {"total", "part-a", "part-b"}
+    prior["total"]["quantity_reviews"][0]["status"] = "AMBIGUOUS"
+    assert (
+        _non_work_measure_relation_ids(
+            work_rows, quantities_by_work=quantities_by_work, prior_resolutions=prior
+        )
+        == set()
+    )
 
 
 def test_work_reconciliation_attempt_sets_separate_single_and_mixed_context() -> None:

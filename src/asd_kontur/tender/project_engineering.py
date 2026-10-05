@@ -832,7 +832,10 @@ def build_project_engineering_model(
     )
     pits = _attach_pit_work_scopes(pits, work_model["works"])
     component_comparisons, unresolved_component_totals = _component_total_analysis(
-        work_model["works"]
+        [
+            *work_model["works"],
+            *_engineering_quantity_rows(work_model["excluded"]),
+        ]
     )
     cross_work_comparisons, unresolved_cross_work_pairs = _cross_work_quantity_pair_analysis(
         work_model["works"]
@@ -4107,6 +4110,45 @@ def _component_total_comparisons(
 
     comparisons, _ = _component_total_analysis(works)
     return comparisons
+
+
+def _engineering_quantity_rows(
+    excluded_non_work: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """Retain reviewed structural measures without inventing construction work.
+
+    A section length, area, mass, or stated total can be a professional project
+    quantity even when the source row is correctly not a work operation. Only
+    explicit, validated model relationships can make these rows eligible for
+    component/total arithmetic; the work schedule remains unchanged.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for raw in excluded_non_work:
+        observation = dict(raw)
+        values = [
+            dict(value)
+            for value in observation.get("quantity_interpretations") or ()
+            if isinstance(value, Mapping)
+            and value.get("relationship_reviewed") is True
+            and str(value.get("quantity_type") or "") in {"TOTAL", "SUBTOTAL", "COMPONENT"}
+        ]
+        if not values:
+            continue
+        role = str(observation.get("document_role") or "")
+        if not role:
+            continue
+        rows.append(
+            {
+                "work_scope_id": None,
+                "facility_id": observation.get("facility_id"),
+                "facility": observation.get("facility"),
+                "work_name": str(observation.get("project_wording") or "Параметр сооружения"),
+                "project_wording": (str(observation.get("project_wording") or ""),),
+                "quantities_by_document": {role: values},
+            }
+        )
+    return rows
 
 
 def _component_total_analysis(
