@@ -290,6 +290,40 @@ def test_revised_contract_replaces_one_exact_fragment_inside_paragraph() -> None
     ]
 
 
+def test_revised_contract_preserves_unedited_run_styles_across_split_clause() -> None:
+    prefix = "3.4. Предмет: "
+    unsafe = "оплата по решению Заказчика"
+    suffix = "; остальные условия сохраняются."
+    document = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<w:document xmlns:w="{_WORD_NS}"><w:body><w:p>'
+        f'<w:r><w:rPr><w:b/></w:rPr><w:t>{prefix}</w:t></w:r>'
+        '<w:r><w:t>оплата по </w:t></w:r>'
+        '<w:r><w:t>решению Заказчика</w:t></w:r>'
+        f'<w:r><w:rPr><w:i/></w:rPr><w:t>{suffix}</w:t></w:r>'
+        '</w:p></w:body></w:document>'
+    ).encode()
+    source_buffer = io.BytesIO()
+    with zipfile.ZipFile(source_buffer, "w") as package:
+        package.writestr("word/document.xml", document)
+    view = _view(prefix + unsafe + suffix)
+    revisions = view["revised_clauses"]
+    assert isinstance(revisions, list)
+    revisions[0]["replacement_source_text"] = unsafe
+    revisions[0]["revised_text"] = "оплата после приёмки"
+
+    revised = render_revised_contract_candidate_docx(source_buffer.getvalue(), view)
+
+    assert _paragraphs(revised) == [prefix + "оплата после приёмки" + suffix]
+    with zipfile.ZipFile(io.BytesIO(revised)) as package:
+        root = ET.fromstring(package.read("word/document.xml"))
+    runs = list(root.iter(f"{{{_WORD_NS}}}r"))
+    assert runs[0].find(f"{{{_WORD_NS}}}rPr/{{{_WORD_NS}}}b") is not None
+    assert runs[-1].find(f"{{{_WORD_NS}}}rPr/{{{_WORD_NS}}}i") is not None
+    assert "".join(node.text or "" for node in runs[0].iter(f"{{{_WORD_NS}}}t")) == prefix
+    assert "".join(node.text or "" for node in runs[-1].iter(f"{{{_WORD_NS}}}t")) == suffix
+
+
 def test_revised_contract_does_not_duplicate_boundary_punctuation() -> None:
     unsafe = "3.5. Расходы во всех случаях несёт Подрядчик"
     source = _source_docx(unsafe + ".")

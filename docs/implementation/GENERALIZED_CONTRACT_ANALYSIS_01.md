@@ -1,5 +1,18 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 exact-span Word formatting correction
+
+The revised-contract renderer previously placed an entire edited paragraph in
+its first Word text run. A source clause split across bold, plain and italic
+runs therefore lost the styling of untouched text outside the change. The
+renderer now edits only text nodes intersecting the exact validated source
+span, preserving unrelated runs and package members. A changed-name synthetic
+contract test covers a clause crossing two runs with separately styled prefix
+and suffix. All 14 focused revised-contract tests and Ruff pass. This is a
+source-code checkpoint, **not** a deployed or multi-page visually qualified
+contract result. Full contract-only, legal-authority, attachment-reference and
+four-mode acceptance remain open; `ProductReady=false`.
+
 ## Baseline defect
 
 ASD-KONTUR exposed contract-analysis tables, API projection, UI, CSV, and DOCX,

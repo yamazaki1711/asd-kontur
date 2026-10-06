@@ -75,8 +75,11 @@ candidate schedule of revised clauses. For one admitted DOCX contract, the
 application may also generate a format-preserving revised-contract candidate
 when every proposed replacement maps to exactly one source fragment inside one
 paragraph. Missing or ambiguous matches fail closed and remain a clause
-schedule. Untouched package members and untouched paragraphs remain unchanged;
-source namespace declarations used by Word compatibility metadata are
+schedule. Untouched package members and untouched paragraphs remain unchanged.
+Within an edited paragraph, runs outside the exact source span retain their
+formatting; replacement text takes the first affected run's style. This is not
+tracked changes or legal approval. Source namespace declarations used by Word
+compatibility metadata are
 preserved. Generated protocol/report packages must pass OOXML validation, and
 visual qualification remains a separate release gate. Every artifact remains a
 candidate for professional legal review rather than an approved or signed

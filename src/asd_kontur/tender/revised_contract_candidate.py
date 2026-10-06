@@ -86,8 +86,14 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
             and suffix[0] in ".;:!?"
         ):
             suffix = suffix[1:]
+            end += 1
         revised_paragraph = original_paragraph[:start] + normalized_revision + suffix
-        _replace_paragraph_text(paragraphs[paragraph_index], revised_paragraph)
+        _replace_paragraph_span(
+            paragraphs[paragraph_index],
+            start=start,
+            end=end,
+            replacement=normalized_revision,
+        )
         paragraph_texts[paragraph_index] = revised_paragraph
 
     serialized_document = ET.tostring(root, encoding="utf-8", xml_declaration=True)
@@ -109,17 +115,38 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
     return output.getvalue()
 
 
-def _replace_paragraph_text(paragraph: ET.Element, revised_text: str) -> None:
+def _replace_paragraph_span(
+    paragraph: ET.Element, *, start: int, end: int, replacement: str
+) -> None:
+    """Preserve untouched run formatting on both sides of an exact edit.
+
+    Word routinely splits a clause over styled runs. Replacing the entire
+    paragraph in its first run would silently erase formatting and hyperlinks
+    outside the proposed change. Only text nodes intersecting the validated
+    source span are changed; replacement takes the first affected run's style.
+    """
+
     text_nodes = list(paragraph.iter(_TEXT))
     if not text_nodes:
         raise RevisedContractCandidateError("revised_contract_source_paragraph_empty")
-    original = "".join(node.text or "" for node in text_nodes)
-    leading = original[: len(original) - len(original.lstrip())]
-    trailing = original[len(original.rstrip()) :]
-    text_nodes[0].text = f"{leading}{revised_text.strip()}{trailing}"
-    text_nodes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
-    for node in text_nodes[1:]:
-        node.text = ""
+    offset = 0
+    inserted = False
+    for node in text_nodes:
+        original = node.text or ""
+        node_start, node_end = offset, offset + len(original)
+        offset = node_end
+        if node_end <= start or node_start >= end:
+            continue
+        prefix = original[: max(0, start - node_start)]
+        suffix = original[max(0, end - node_start) :] if end <= node_end else ""
+        if not inserted:
+            node.text = prefix + replacement + suffix
+            inserted = True
+        else:
+            node.text = suffix
+        node.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    if not inserted:
+        raise RevisedContractCandidateError("revised_contract_clause_match_not_unique")
 
 
 def _paragraph_text(paragraph: ET.Element) -> str:
