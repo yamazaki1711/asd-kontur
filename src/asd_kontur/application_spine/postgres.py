@@ -1860,6 +1860,35 @@ class SpinePostgresRepository:
             raise SpinePersistenceError("workspace_not_found")
         return _workspace_summary(row)
 
+    def redact_destroyed_construction_object(
+        self,
+        *,
+        organization_id: UUID,
+        workspace_id: UUID,
+        construction_object_id: UUID,
+    ) -> bool:
+        """Redact only after a full-org check in the privileged lifecycle function.
+
+        Workspace RLS exposes only the selected workspace to this connection;
+        an ordinary NOT EXISTS query here would miss another workspace sharing
+        the construction object.
+        """
+
+        with Session(self._engine) as session, session.begin():
+            return bool(
+                session.scalar(
+                    sa.text(
+                        "SELECT application.redact_destroyed_construction_object("
+                        ":organization,:workspace,:object)"
+                    ),
+                    {
+                        "organization": organization_id,
+                        "workspace": workspace_id,
+                        "object": construction_object_id,
+                    },
+                )
+            )
+
     def project_processing_status(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> ProjectProcessingStatus:

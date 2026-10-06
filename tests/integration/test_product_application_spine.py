@@ -815,6 +815,27 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
             {"workspace": workspace_a["workspace_id"]},
         )
         assert state == "DESTROYED"
+        redacted = connection.execute(
+            sa.text(
+                "SELECT c.display_name,c.external_id,c.status FROM "
+                "organization.construction_objects c JOIN workspace.workspaces w "
+                "ON w.organization_id=c.organization_id AND "
+                "w.construction_object_id=c.construction_object_id "
+                "WHERE w.workspace_id=:workspace"
+            ),
+            {"workspace": workspace_a["workspace_id"]},
+        ).one()
+        assert redacted == ("Удалённый объект", None, "closed")
+        retained_name = connection.scalar(
+            sa.text(
+                "SELECT c.display_name FROM organization.construction_objects c "
+                "JOIN workspace.workspaces w ON w.organization_id=c.organization_id "
+                "AND w.construction_object_id=c.construction_object_id "
+                "WHERE w.workspace_id=:workspace"
+            ),
+            {"workspace": workspace_b["workspace_id"]},
+        )
+        assert retained_name == workspace_b["display_name"]
         assert (
             connection.scalar(
                 sa.text(

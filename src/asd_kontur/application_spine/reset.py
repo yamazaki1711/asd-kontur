@@ -662,6 +662,11 @@ class WorkspaceResetService:
             LifecycleState.DESTROYED,
             operation_id,
         )
+        self._repository.redact_destroyed_construction_object(
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            construction_object_id=workspace.construction_object_id,
+        )
         deleted_rows = sum(
             receipt.before_count - receipt.after_count
             for receipt in reset_outcome.receipts
