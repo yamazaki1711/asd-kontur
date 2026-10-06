@@ -9,6 +9,21 @@ document or analysis—not a processing, candidate, test-count or readiness
 claim. Traceability, recovery, isolation and non-fabrication remain mandatory
 supporting qualities.
 
+## Owner correction — product recovery (2026-10-06)
+
+The earlier OZERO-specific hierarchy and archive language below are historical
+delivery records, not universal product requirements. The current active slice
+is general project consultation: Qwen interprets a bounded, source-linked
+entity/operation/property context; deterministic code retrieves, validates and
+persists it. A pipe attribute must not depend on a pit/facility association.
+Codex repairs the harness and verifies results but does not supply project
+answers. Ordinary inference and continuation belong to supervised workers.
+
+Full OKS removal is a distinct later slice. An optional user-requested export
+must not become an automatic retained internal archive during deletion. Tender,
+Support, Audit and Restoration remain required; one answered question does not
+establish ProductReady.
+
 ## Governing active slice — generalized Tender result (2026-10-05)
 
 The OZERO validation workspace has been retired and its active project data

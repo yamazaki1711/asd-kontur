@@ -41,8 +41,14 @@ supporting infrastructure for correctness and safety.
 
 The primary application hierarchy is:
 
-`PROJECT → AREA/FACILITY → STRUCTURE/PIT → WORK → QUANTITY/MATERIAL`
+`PROJECT → LOCATION/SECTION → ENGINEERING ENTITY → OPERATION/WORK → ATTRIBUTE/QUANTITY/MATERIAL`
 `→ REQUIREMENT → ISSUE/RISK → ACTION → DOCUMENT`.
+
+The location and entity levels are extensible and optional where a source-supported
+fact has no such association. Pipes, walls, buildings, road sections and pits are
+possible entity types, not mandatory ancestors. A project without excavation pits
+must not display a universal pit category or require a pit before publishing a
+source-supported pipe dimension.
 
 Processing and diagnostic state is secondary. UUIDs, candidate lifecycles,
 reconciliation terminology, and model-operation details are not the normal
