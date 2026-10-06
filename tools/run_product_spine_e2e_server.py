@@ -96,6 +96,18 @@ def _database_identifier(name: str) -> str:
     return name
 
 
+def _require_isolated_test_cluster(base_url: URL, database_names: set[str]) -> None:
+    """Reject the owner's live PostgreSQL cluster before creating any fixture."""
+
+    if (base_url.database or "").startswith("asd_kontur_public") or base_url.username in {
+        "asd_public_app",
+        "asd_public_worker",
+    }:
+        raise RuntimeError("E2E target must be an isolated cluster admin database")
+    if any(name.startswith("asd_kontur_public") for name in database_names):
+        raise RuntimeError("E2E target is the owner's live PostgreSQL cluster")
+
+
 def _seed_active_rule_path(engine: sa.Engine) -> None:
     """Exercise the human-authorized active path only in a disposable E2E clone."""
 
@@ -247,6 +259,12 @@ def main() -> None:
     app_engine: sa.Engine | None = None
     qwen_server: ThreadingHTTPServer | None = None
     try:
+        with cluster.connect() as connection:
+            database_names = {
+                str(value)
+                for value in connection.scalars(sa.text("SELECT datname FROM pg_database"))
+            }
+        _require_isolated_test_cluster(base_url, database_names)
         template_database = os.environ.get("ASD_E2E_TEMPLATE_DATABASE")
         with cluster.begin() as connection:
             if template_database:

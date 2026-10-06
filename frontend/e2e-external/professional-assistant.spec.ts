@@ -12,6 +12,10 @@ if (!password) throw new Error("ASD_PUBLIC_E2E_PASSWORD is required");
 test("local Qwen assistant serves all four modes with scoped exact sources", async ({
   page,
 }) => {
+  test.skip(
+    true,
+    "This case creates a control workspace; run it only against an isolated E2E database",
+  );
   test.setTimeout(900_000);
   await login(page);
   await page
@@ -154,6 +158,10 @@ test("local Qwen assistant serves all four modes with scoped exact sources", asy
 test("an interrupted local inference has a durable visible outcome", async ({
   page,
 }) => {
+  test.skip(
+    true,
+    "Restart qualification writes test turns and belongs to the isolated E2E target",
+  );
   test.skip(
     process.env.ASD_ASSISTANT_RESTART_E2E !== "1",
     "ASD_ASSISTANT_RESTART_E2E=1 is required for the controlled restart check",

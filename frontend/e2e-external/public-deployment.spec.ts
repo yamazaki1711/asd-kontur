@@ -260,6 +260,10 @@ test("owner creates an object and completes the four-mode pilot path", async ({
   page,
 }) => {
   test.skip(
+    true,
+    "Fixture creation is prohibited against the owner's live application; use the isolated E2E target",
+  );
+  test.skip(
     !corpusRoot,
     "ASD_PUBLIC_E2E_CORPUS_ROOT is required for the full pilot path",
   );
