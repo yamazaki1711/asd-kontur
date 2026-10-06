@@ -13,6 +13,14 @@ source-code checkpoint, **not** a deployed or multi-page visually qualified
 contract result. Full contract-only, legal-authority, attachment-reference and
 four-mode acceptance remain open; `ProductReady=false`.
 
+Read-only application generation from the retained real contract projection
+also produced an 86,479-byte revised candidate (SHA-256
+`73c3dbddb2ebe3bb5b8e75174dc86797388eb96b890402ea7a3c496f0d3714b7`).
+Its 18-member OOXML package has no corrupt ZIP member and contains
+`word/document.xml`. This did not schedule Qwen work or mutate the workspace.
+The host still lacks LibreOffice, so this check does not establish complete
+visual layout acceptance.
+
 ## Baseline defect
 
 ASD-KONTUR exposed contract-analysis tables, API projection, UI, CSV, and DOCX,
