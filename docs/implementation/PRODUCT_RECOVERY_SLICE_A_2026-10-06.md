@@ -4,8 +4,8 @@ This record describes the inspected running boundary, not four-mode readiness. I
 
 ## Executable baseline
 
-- Inspected source: `e42e7caf37b889853eb415f62ccdc0ec938a9e40` (the focused consultant change), on `codex/product-continuation-20260921`.
-- Running API, document worker and orchestrator remained pinned to `9e15d8ab1bd9e7c225eeabc24577cc890e8dd9b0` during this slice. The assistant worker was switched from `e23f06e4bc491280a0a977b5617aa7e924f7885b` to `e42e7caf37b889853eb415f62ccdc0ec938a9e40` without restarting those services or Qwen/NTD. PostgreSQL migration head: `0127_task_scoped_quantity_profile`.
+- Inspected source and assistant release: `caef72e786bfdd0f686869cf6d3e4ae8e66d9647`, on `codex/product-continuation-20260921`.
+- Running API, document worker and orchestrator remained pinned to `9e15d8ab1bd9e7c225eeabc24577cc890e8dd9b0` during this slice. The assistant worker was switched from `e23f06e4bc491280a0a977b5617aa7e924f7885b` to `caef72e786bfdd0f686869cf6d3e4ae8e66d9647` without restarting those services or Qwen/NTD. PostgreSQL migration head: `0127_task_scoped_quantity_profile`.
 - The two failed assistant turns were retrieved from durable turn, tool and quality receipts. Both retrieved workspace sources and were then rejected by deterministic answer checks. One draft was typed `insufficient_data` without a next question; the other was typed `clarification`, cited sources and omitted a question. The worker published the same generic insufficient-data fallback for both.
 - The workspace search returned isolated native-layout cells. A read-only query established that one retrieved pipe-work description had separate adjacent cells for unit and quantity. The old tool result did not present those cells together. This is a retrieval-context defect, not proof that every requested attribute is already extracted or that the documents agree.
 
@@ -28,7 +28,9 @@ This record describes the inspected running boundary, not four-mode readiness. I
 
 The workspace search now returns a small envelope from the same source version and page: the same table row when row coordinates exist, otherwise nearby reading-order elements. Every cell keeps its own locator and row/column coordinates. Retrieval does not infer which numeric cell is a diameter or length; Qwen must do that interpretation. A source-grounded partial answer may ask for clarification without being rejected merely because it cites a source.
 
-Focused tests passed, and a read-only live query showed the relevant table row and source identifiers enter the assistant prompt. A different workspace scope returned zero rows. This is **not** real user acceptance: there was no authenticated browser or API session available in this engineering session to ask the question through the running application. No project fact was manually inserted or reprocessed.
+The assistant prompt projection now serializes primary search matches before optional row context. It removes a duplicate source-fragment index and bounds the context as valid JSON instead of truncating the tool result mid-record. A read-only check on the real workspace showed all ten primary matches, including a design-document match, and the relevant adjacent table cells in the bounded prompt. This is context delivery, not a project conclusion.
+
+Focused tests passed, and a read-only live query showed the relevant table row and source identifiers enter the assistant prompt. A different workspace scope returned zero rows. This is **not** real user acceptance: the in-app browser was unavailable and no approved API/E2E login credential was available in this engineering session. The live question was not submitted. No project fact was manually inserted or reprocessed.
 
 ## Remaining acceptance for slice A
 
