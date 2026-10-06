@@ -950,6 +950,28 @@ function WorkspacesPage() {
       return requireData(data, error);
     },
   });
+  useEffect(() => {
+    if (!workspaces.data) return;
+    const active = new Set(
+      workspaces.data
+        .filter((workspace) => workspace.lifecycle_state === "ACTIVE")
+        .map((workspace) => workspace.workspace_id),
+    );
+    for (const candidateMode of MODES) {
+      const key = `asd-recent-${MODE_DEFINITIONS[candidateMode].slug}`;
+      const workspaceId = window.localStorage.getItem(key);
+      if (workspaceId && !active.has(workspaceId)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+    for (let index = window.localStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.localStorage.key(index);
+      const workspaceId = key?.match(/^asd-assistant-(?:open|conversation)-(.+)$/)?.[1];
+      if (key && workspaceId && !active.has(workspaceId)) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  }, [workspaces.data]);
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/api/v1/workspaces", {
