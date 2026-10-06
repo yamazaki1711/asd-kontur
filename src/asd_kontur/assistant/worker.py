@@ -2406,6 +2406,12 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
             for source in response.get("sources", [])
             if isinstance(source, dict) and source.get("source_id")
         ]
+        workspace_search = receipt.get("tool") == "consultant.search_workspace_documents"
+        if workspace_search:
+            # Every workspace-search item already carries its exact locator,
+            # document and page. Repeating fragment text in the evidence index
+            # used to evict later design matches before Qwen could see them.
+            source_index = []
         structured_project_tool = receipt.get("tool") in {
             "consultant.get_work_packages",
             "consultant.get_discrepancies",
@@ -2417,6 +2423,10 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         while source_index and len(json.dumps(source_index, ensure_ascii=False)) > source_budget:
             source_index.pop()
         result = {key: value for key, value in response.items() if key != "sources"}
+        if workspace_search:
+            result = _bounded_workspace_search_prompt_result(
+                response, max(500, min(4_500, remaining - 300))
+            )
         if structured_project_tool:
             result = _structured_project_prompt_result(str(receipt.get("tool")), result)
         available = min(9_000 if structured_project_tool else 5_000, remaining)
@@ -2436,6 +2446,26 @@ def _tool_results_for_prompt(receipts: list[dict[str, Any]]) -> str:
         remaining -= len(record_text)
         bounded.append(record)
     return json.dumps(bounded, ensure_ascii=False)
+
+
+def _bounded_workspace_search_prompt_result(
+    response: dict[str, Any], budget: int
+) -> dict[str, Any]:
+    """Keep the primary matches before optional row cells as valid JSON."""
+
+    items = [item for item in response.get("items", []) if isinstance(item, dict)]
+    matches = [item for item in items if item.get("search_match") is True]
+    context = [item for item in items if item.get("search_match") is False]
+    result = {
+        "outcome": response.get("outcome"),
+        "matches": matches,
+        "row_context": context,
+    }
+    while context and len(json.dumps(result, ensure_ascii=False, default=str)) > budget:
+        context.pop()
+    while len(matches) > 1 and len(json.dumps(result, ensure_ascii=False, default=str)) > budget:
+        matches.pop()
+    return result
 
 
 def _structured_project_prompt_result(tool: str, response: dict[str, Any]) -> dict[str, Any]:

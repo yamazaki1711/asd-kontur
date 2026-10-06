@@ -8,6 +8,7 @@ from uuid import uuid4
 from sqlalchemy import Engine
 
 from asd_kontur.assistant import gateway
+from asd_kontur.assistant.worker import _bounded_workspace_search_prompt_result
 
 
 def test_search_carries_bounded_same_row_context_without_crossing_source(
@@ -91,3 +92,24 @@ def test_search_carries_bounded_same_row_context_without_crossing_source(
     assert items[1]["content"]["fragment"] == "86 m"
     assert items[1]["content"]["table_row"] == 3
     assert items[1]["content"]["table_column"] == 4
+
+
+def test_search_prompt_retains_all_primary_matches_before_optional_context() -> None:
+    matches = [
+        {"source_id": str(uuid4()), "fragment": f"Element {number}", "search_match": True}
+        for number in range(4)
+    ]
+    context = [
+        {
+            "source_id": str(uuid4()),
+            "fragment": "unrelated neighboring text " * 15,
+            "search_match": False,
+        }
+        for _ in range(12)
+    ]
+    result = _bounded_workspace_search_prompt_result(
+        {"outcome": "found", "items": [*matches, *context]}, 550
+    )
+
+    assert result["matches"] == matches
+    assert len(result["row_context"]) < len(context)

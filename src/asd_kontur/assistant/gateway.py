@@ -1678,7 +1678,9 @@ class ProfessionalAssistantKnowledgeQuery:
         # neighboring cells mean.
         seen = {str(row["source_locator_id"]) for row in ranked[:limit]}
         for row in ranked[:limit]:
-            items.append(self._workspace_item(row, workspace_id, mode))
+            matched = self._workspace_item(row, workspace_id, mode)
+            matched["content"]["search_match"] = True
+            items.append(matched)
             if row["reading_order"] is None:
                 continue
             with Session(self._engine) as session, session.begin():
@@ -1720,7 +1722,10 @@ class ProfessionalAssistantKnowledgeQuery:
                 identity = str(neighbor["source_locator_id"])
                 if identity not in seen and str(neighbor["raw_text"] or "").strip():
                     seen.add(identity)
-                    items.append(self._workspace_item(neighbor, workspace_id, mode))
+                    contextual = self._workspace_item(neighbor, workspace_id, mode)
+                    contextual["content"]["search_match"] = False
+                    contextual["content"]["anchor_source_id"] = str(row["source_locator_id"])
+                    items.append(contextual)
         return items
 
     def _workspace_fragment(
