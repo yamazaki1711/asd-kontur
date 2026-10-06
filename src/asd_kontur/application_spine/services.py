@@ -688,6 +688,7 @@ class ProductSpineService:
             "commercial_conditions": _project_facts(engineering.get("commercial_conditions")),
             "procurement_requirements": list(engineering.get("procurement_requirements") or ()),
             "project_contract_findings": project_contract_findings,
+            "cross_checks": _contract_cross_check_coverage(engineering),
         }
 
     def tender_contract_analysis_export(
@@ -1939,7 +1940,30 @@ def _contract_context_with_clause_fallback(
         "commercial_conditions": [],
         "procurement_requirements": [],
         "project_contract_findings": [],
+        "cross_checks": _contract_cross_check_coverage({}),
     }
+
+
+def _contract_cross_check_coverage(engineering: dict[str, Any]) -> list[dict[str, str]]:
+    """Describe available comparison inputs, never infer that no conflict exists."""
+
+    roles = {
+        str(document.get("document_role") or "")
+        for document in engineering.get("documents") or ()
+        if isinstance(document, dict)
+    }
+    requirements = (
+        ("design_scope", {"ПД", "РД", "Проектный документ", "Техническое задание"}),
+        ("commercial_scope", {"ВОР", "Смета", "Смета контракта"}),  # noqa: RUF001
+        ("schedule", {"Календарный график"}),
+    )
+    return [
+        {
+            "check": check,
+            "status": "input_available" if roles & accepted else "input_not_established",
+        }
+        for check, accepted in requirements
+    ]
 
 
 def _facts_for_sources_or_locators(

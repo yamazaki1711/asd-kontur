@@ -108,6 +108,16 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         ),
         _paragraph(f"Ограничения результата: {gaps}"),
     ]
+    unavailable_checks = _unavailable_project_cross_checks(project_context)
+    if unavailable_checks:
+        body.append(
+            _paragraph(
+                "Сопоставление договора с проектом ограничено: по текущей модели не "
+                "установлены исходные данные для проверки: "
+                + ", ".join(unavailable_checks)
+                + ". Это не означает отсутствия противоречий."
+            )
+        )
     if process:
         if process.get("revision"):
             body.append(_paragraph(f"Редакция анализа: {process.get('revision')}."))
@@ -179,6 +189,20 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         )
     )
     return _docx_package(_document_xml(body))
+
+
+def _unavailable_project_cross_checks(project_context: Mapping[str, Any]) -> list[str]:
+    labels = {
+        "design_scope": "проектный объём ПД/РД",
+        "commercial_scope": "объёмы ВОР/сметы",
+        "schedule": "календарный график",
+    }
+    return [
+        labels[check]
+        for item in _records(project_context.get("cross_checks"))
+        if (check := str(item.get("check") or "")) in labels
+        and str(item.get("status") or "") == "input_not_established"
+    ]
 
 
 def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:

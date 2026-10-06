@@ -5,6 +5,7 @@ import csv
 import io
 import zipfile
 
+from asd_kontur.application_spine.services import _contract_cross_check_coverage
 from asd_kontur.tender.contract_analysis_export import render_tender_contract_analysis_csv
 from asd_kontur.tender.contract_analysis_report import (
     render_tender_contract_analysis_docx,
@@ -93,6 +94,47 @@ def test_contract_report_explains_role_reclassification_in_product_language() ->
 
     assert "назначение ранее найденного проекта договора уточняется повторно" in report_xml
     assert "CONTRACT_SOURCE_RECLASSIFICATION_PENDING" not in report_xml
+
+
+def test_contract_only_input_declares_unperformed_project_cross_checks() -> None:
+    checks = _contract_cross_check_coverage(
+        {"documents": [{"document_role": "Договор"}]}
+    )
+    assert {item["status"] for item in checks} == {"input_not_established"}
+    content = render_tender_contract_analysis_docx(
+        {
+            "status": "drafted",
+            "clauses": [],
+            "issues": [],
+            "disagreement_items": [],
+            "revised_clauses": [],
+            "deliverables": [],
+            "gaps": [],
+            "project_context": {"cross_checks": checks},
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "проектный объём ПД/РД" in report_xml
+    assert "объёмы ВОР/сметы" in report_xml
+    assert "календарный график" in report_xml
+    assert "Это не означает отсутствия противоречий" in report_xml
+
+
+def test_contract_cross_checks_use_roles_not_source_names() -> None:
+    checks = _contract_cross_check_coverage(
+        {
+            "documents": [
+                {"name": "alpha.bin", "document_role": "РД"},
+                {"name": "beta.bin", "document_role": "Смета"},
+            ]
+        }
+    )
+    assert checks == [
+        {"check": "design_scope", "status": "input_available"},
+        {"check": "commercial_scope", "status": "input_available"},
+        {"check": "schedule", "status": "input_not_established"},
+    ]
 
 
 def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() -> None:

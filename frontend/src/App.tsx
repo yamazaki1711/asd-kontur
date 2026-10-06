@@ -2758,6 +2758,18 @@ function TenderContractAnalysisBody({
   ];
   const projectContractFindings = (projectContext.project_contract_findings ??
     []) as Array<Record<string, unknown>>;
+  const unavailableCrossChecks = (
+    (projectContext.cross_checks ?? []) as Array<Record<string, unknown>>
+  )
+    .filter((item) => item.status === "input_not_established")
+    .map((item) => {
+      const labels: Record<string, string> = {
+        design_scope: "проектный объём ПД/РД",
+        commercial_scope: "объёмы ВОР/сметы",
+        schedule: "календарный график",
+      };
+      return labels[String(item.check)] ?? "неустановленный исходный документ";
+    });
   if (value.status === "contract_input_unavailable") {
     return (
       <InfoNotice>
@@ -2881,6 +2893,13 @@ function TenderContractAnalysisBody({
       </section>
       <section className="panel">
         <h2>Связь договора с проектом</h2>
+        {unavailableCrossChecks.length ? (
+          <InfoNotice>
+            Сопоставление ограничено: в текущей модели не установлены исходные
+            данные для проверки ({unavailableCrossChecks.join(", ")}). Это не
+            означает отсутствия противоречий.
+          </InfoNotice>
+        ) : null}
         {projectContractFindings.length ? (
           <div className="table-wrap">
             <table>
@@ -2907,7 +2926,11 @@ function TenderContractAnalysisBody({
             </table>
           </div>
         ) : (
-          <p>Связанные проектно-договорные расхождения пока не установлены.</p>
+          <p>
+            {unavailableCrossChecks.length
+              ? "Проектно-договорные расхождения пока нельзя оценить по отсутствующим исходным данным."
+              : "Связанные проектно-договорные расхождения пока не установлены."}
+          </p>
         )}
       </section>
       <section className="panel">

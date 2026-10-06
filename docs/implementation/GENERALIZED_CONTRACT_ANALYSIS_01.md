@@ -1016,3 +1016,18 @@ tables are readable and the revised candidate preserves the admitted source
 layout. A complete multi-page render and XSD validation are not claimed in
 this checkpoint because the available environment lacks LibreOffice and the
 validator environment lacks `lxml`.
+
+## 2026-10-07 contract-only comparison coverage correction
+
+The source implementation now distinguishes an absent project comparison input
+from a completed comparison with no finding. The contract projection reports
+whether design-scope, commercial-scope and schedule source roles are represented
+in the current project model. The contract screen and editable analysis report
+name missing inputs and explicitly warn that no finding is not proof of no
+contradiction. This is a conservative availability indicator, not proof that a
+cross-check ran or that the supplied documents are complete. Document roles,
+not filenames or project-specific names, drive it. Contract-only input remains
+an independent valid analysis path, with project cross-check limitations shown.
+
+This checkpoint is source-only pending a controlled release. It neither changes
+the live contract projection nor establishes full contract or product readiness.
