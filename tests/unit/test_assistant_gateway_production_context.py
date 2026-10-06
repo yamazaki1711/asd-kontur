@@ -37,6 +37,32 @@ def _source(title: str) -> dict[str, Any]:
     }
 
 
+def test_workspace_layout_cell_retains_citable_table_coordinates() -> None:
+    locator_id = uuid4()
+    source_version_id = uuid4()
+    item = ProfessionalAssistantKnowledgeQuery._workspace_item(
+        {
+            "source_locator_id": locator_id,
+            "source_version_id": source_version_id,
+            "safe_display_name": "Commercial schedule",
+            "page_number": 4,
+            "raw_text": "86",
+            "row_index": 12,
+            "column_index": 4,
+            "locator_value": "page:4:row:12:column:4",
+            "fragment_digest": "sha256:" + "2" * 64,
+        },
+        uuid4(),
+        "Tender",
+    )
+
+    assert item["content"]["source_id"] == str(locator_id)
+    assert item["content"]["table_row"] == 12
+    assert item["content"]["table_column"] == 4
+    assert item["source"]["source_version_id"] == str(source_version_id)
+    assert item["source"]["page"] == 4
+
+
 def test_semantic_coverage_complete_uses_the_project_view_state_contract() -> None:
     assert _semantic_coverage_complete([]) is False
     assert _semantic_coverage_complete([{"state": "complete"}]) is True

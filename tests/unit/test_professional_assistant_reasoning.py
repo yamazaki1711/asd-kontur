@@ -257,6 +257,26 @@ def test_clarification_may_explain_that_normative_source_was_not_found() -> None
     assert receipt["passed"] is True
 
 
+def test_clarification_preserves_source_grounded_partial_project_fact() -> None:
+    source_id = "22222222-2222-4222-8222-222222222222"
+    answer = parse_synthesized_answer(
+        '{"answer":"Для нового участка указан диаметр 110 мм; длина демонтажа не установлена. '
+        'Какой участок существующей сети имеется в виду?",'
+        '"answer_type":"clarification","needs_clarification":true,'
+        f'"used_source_ids":["{source_id}"],'
+        '"dialogue_summary":"Сравниваются проектные участки.","active_subjects":[]}',
+        {source_id},
+    )
+    receipt = validate_answer(
+        answer,
+        intent="workspace",
+        tool_names=("consultant.search_workspace_documents",),
+        sources=({"source_id": source_id, "authority_layer": "workspace_fact"},),
+        question="Каковы диаметр и длина существующей и новой трубы?",
+    )
+    assert receipt["passed"] is True
+
+
 def test_clarification_rejects_unverified_numeric_estimate_and_requires_question() -> None:
     answer = parse_synthesized_answer(
         '{"answer":"Обычно бетон набирает 30–40% прочности.",'

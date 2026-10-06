@@ -628,8 +628,9 @@ def validate_answer(
     selected = [item for item in sources if str(item.get("source_id")) in answer.used_source_ids]
     selected_layers = {str(item.get("authority_layer")) for item in selected}
     problems: list[str] = []
-    if answer.needs_clarification and answer.used_source_ids:
-        problems.append("clarification_has_sources")
+    # A useful clarification can include a source-supported partial answer
+    # (for example, one operation is specified while another is unresolved).
+    # Source use alone must not turn it into a generic refusal.
     if answer.needs_clarification and "?" not in answer.answer:
         problems.append("clarification_without_question")
     if answer.needs_clarification and re.search(r"\d+\s*%", answer.answer):

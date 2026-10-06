@@ -1643,6 +1643,7 @@ class ProfessionalAssistantKnowledgeQuery:
                     sa.text(
                         "WITH candidates AS (SELECT sl.source_locator_id,sl.source_version_id,"
                         "sl.locator_value,sl.fragment_digest,v.safe_display_name,e.raw_text,e.page_number,"
+                        "e.reading_order,e.row_index,e.column_index,"
                         "ts_rank_cd(to_tsvector('russian',coalesce(e.raw_text,'')||' '||v.safe_display_name),"
                         "websearch_to_tsquery('russian',:query)) rank,row_number() OVER (PARTITION BY "
                         "sl.source_locator_id ORDER BY e.version DESC NULLS LAST) rn FROM "
@@ -1654,7 +1655,8 @@ class ProfessionalAssistantKnowledgeQuery:
                         "WHERE sl.organization_id=:o AND sl.workspace_id=:w AND "
                         "to_tsvector('russian',coalesce(e.raw_text,'')||' '||v.safe_display_name) @@ "
                         "websearch_to_tsquery('russian',:query)) SELECT source_locator_id,source_version_id,"
-                        "locator_value,fragment_digest,safe_display_name,raw_text,page_number,rank FROM "
+                        "locator_value,fragment_digest,safe_display_name,raw_text,page_number,"
+                        "reading_order,row_index,column_index,rank FROM "
                         "candidates WHERE rn=1 AND rank>0 ORDER BY rank DESC,source_locator_id LIMIT :limit"
                     ),
                     {
@@ -1668,7 +1670,58 @@ class ProfessionalAssistantKnowledgeQuery:
         ranked = sorted(
             rows, key=lambda row: (-float(row["rank"] or 0), str(row["source_locator_id"]))
         )
-        return [self._workspace_item(row, workspace_id, mode) for row in ranked[:limit]]
+        items: list[dict[str, Any]] = []
+        # Native table extraction stores descriptions, units and values in
+        # separate source locators. A hit on the description alone cannot
+        # establish the quantity. Carry a small, independently citable row
+        # envelope to Qwen; it, not this retrieval code, decides what the
+        # neighboring cells mean.
+        seen = {str(row["source_locator_id"]) for row in ranked[:limit]}
+        for row in ranked[:limit]:
+            items.append(self._workspace_item(row, workspace_id, mode))
+            if row["reading_order"] is None:
+                continue
+            with Session(self._engine) as session, session.begin():
+                _scope(session, organization_id, workspace_id)
+                neighbors = list(
+                    session.execute(
+                        sa.text(
+                            "WITH nearby AS (SELECT sl.source_locator_id,sl.source_version_id,"
+                            "sl.locator_value,sl.fragment_digest,v.safe_display_name,e.raw_text,"
+                            "e.page_number,e.reading_order,e.row_index,e.column_index,"
+                            "row_number() OVER (PARTITION BY sl.source_locator_id ORDER BY "
+                            "e.version DESC NULLS LAST) rn FROM workspace.source_locators sl "
+                            "JOIN workspace.document_versions v ON v.organization_id=sl.organization_id "
+                            "AND v.workspace_id=sl.workspace_id AND v.source_version_id=sl.source_version_id "
+                            "JOIN workspace.native_layout_element_versions e ON "
+                            "e.organization_id=sl.organization_id AND e.workspace_id=sl.workspace_id "
+                            "AND e.source_locator_id=sl.source_locator_id WHERE sl.organization_id=:o "
+                            "AND sl.workspace_id=:w AND sl.source_version_id=:source_version "
+                            "AND e.page_number=:page AND (e.row_index=CAST(:row_index AS bigint) "
+                            "OR (CAST(:row_index AS bigint) IS NULL AND "
+                            "e.reading_order BETWEEN :reading_start "
+                            "AND :reading_end))) SELECT source_locator_id,source_version_id,"
+                            "locator_value,fragment_digest,safe_display_name,raw_text,page_number,"
+                            "reading_order,row_index,column_index FROM nearby WHERE rn=1 "
+                            "ORDER BY reading_order LIMIT 12"
+                        ),
+                        {
+                            "o": organization_id,
+                            "w": workspace_id,
+                            "source_version": row["source_version_id"],
+                            "page": row["page_number"],
+                            "row_index": row["row_index"],
+                            "reading_start": int(row["reading_order"]) - 2,
+                            "reading_end": int(row["reading_order"]) + 2,
+                        },
+                    ).mappings()
+                )
+            for neighbor in neighbors:
+                identity = str(neighbor["source_locator_id"])
+                if identity not in seen and str(neighbor["raw_text"] or "").strip():
+                    seen.add(identity)
+                    items.append(self._workspace_item(neighbor, workspace_id, mode))
+        return items
 
     def _workspace_fragment(
         self,
@@ -1979,9 +2032,12 @@ class ProfessionalAssistantKnowledgeQuery:
         page = int(row.get("page_number") or _page_from_locator(row["locator_value"]))
         return {
             "content": {
+                "source_id": str(row["source_locator_id"]),
                 "document": str(row["safe_display_name"]),
                 "page": page,
                 "fragment": str(row["raw_text"] or "")[:4000],
+                "table_row": row.get("row_index"),
+                "table_column": row.get("column_index"),
                 "authority": "workspace_fact",
             },
             "source": {
