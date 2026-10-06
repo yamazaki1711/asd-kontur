@@ -740,6 +740,7 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         )
         assert prepared.status_code == 200, prepared.text
         challenge = prepared.json()
+        assert any(settings.archive_store_root.rglob("*.zip"))
         executed = client.post(
             f"/api/v1/workspaces/{workspace_a['workspace_id']}/lifecycle/reset/execute",
             json={
