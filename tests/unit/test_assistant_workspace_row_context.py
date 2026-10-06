@@ -113,3 +113,25 @@ def test_search_prompt_retains_all_primary_matches_before_optional_context() -> 
 
     assert result["matches"] == matches
     assert len(result["row_context"]) < len(context)
+
+
+def test_search_prompt_bounds_long_native_fragment_without_losing_identity() -> None:
+    source_id = str(uuid4())
+    result = _bounded_workspace_search_prompt_result(
+        {
+            "outcome": "found",
+            "items": [
+                {
+                    "source_id": source_id,
+                    "document": "Drawing Q",
+                    "page": 9,
+                    "fragment": "long source text " * 1000,
+                    "search_match": True,
+                }
+            ],
+        },
+        1200,
+    )
+
+    assert result["matches"][0]["source_id"] == source_id
+    assert len(result["matches"][0]["fragment"]) == 700

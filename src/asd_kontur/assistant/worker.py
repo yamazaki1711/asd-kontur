@@ -2453,7 +2453,24 @@ def _bounded_workspace_search_prompt_result(
 ) -> dict[str, Any]:
     """Keep the primary matches before optional row cells as valid JSON."""
 
-    items = [item for item in response.get("items", []) if isinstance(item, dict)]
+    items = [
+        {
+            key: (str(item[key])[:700] if key == "fragment" else item[key])
+            for key in (
+                "source_id",
+                "document",
+                "page",
+                "fragment",
+                "table_row",
+                "table_column",
+                "search_match",
+                "anchor_source_id",
+            )
+            if key in item
+        }
+        for item in response.get("items", [])
+        if isinstance(item, dict)
+    ]
     matches = [item for item in items if item.get("search_match") is True]
     context = [item for item in items if item.get("search_match") is False]
     result = {
