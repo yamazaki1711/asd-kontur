@@ -5271,7 +5271,7 @@ function ProjectSourceLinks({
   );
 }
 
-function ProjectEngineeringResult({
+export function ProjectEngineeringResult({
   model,
   section,
   workspaceId,
@@ -5545,7 +5545,7 @@ function ProjectEngineeringResult({
           </section>
         ) : null}
         <section className="panel">
-          <h2>Карточки сооружений</h2>
+          <h2>Инженерные карточки объекта</h2>
           <div className="card-grid">
             {facilityCards.slice(0, 30).map((card) => {
               const facility = (card.facility ?? {}) as Record<string, unknown>;
@@ -5576,7 +5576,9 @@ function ProjectEngineeringResult({
                   key={displayValue(facility.facility_id)}
                 >
                   <h3>{displayValue(facility.name)}</h3>
-                  <p>Котлованы: {String(cardPits.length)}</p>
+                  {cardPits.length > 0 && (
+                    <p>Котлованы: {String(cardPits.length)}</p>
+                  )}
                   <p>Конструкции: {String(cardStructures.length)}</p>
                   <p>Работы: {String(cardWorks.length)}</p>
                   <p>
@@ -5641,7 +5643,9 @@ function ProjectEngineeringResult({
                         </ul>
                       </>
                     )}
-                    <h4>Котлованы и конструкции</h4>
+                    {(cardPits.length > 0 || cardStructures.length > 0) && (
+                      <h4>Конструкции и элементы</h4>
+                    )}
                     {cardPits.length ? (
                       <ul>
                         {cardPits.map((value, index) => {
@@ -5664,12 +5668,7 @@ function ProjectEngineeringResult({
                           );
                         })}
                       </ul>
-                    ) : (
-                      <p>
-                        Котлован для сооружения не установлен или не
-                        предусмотрен.
-                      </p>
-                    )}
+                    ) : null}
                     {cardStructures.length > 0 && (
                       <ul>
                         {cardStructures.map((value, index) => {
@@ -6600,7 +6599,7 @@ function ProjectUnderstandingPage() {
   });
   const sections = [
     ["general", "Объект"],
-    ["structure", "Сооружения и котлованы"],
+    ["structure", "Конструкции и элементы"],
     ["works", "Работы и объёмы"],
     ["materials", "Материалы"],
     ["packages", "Работы по сооружениям"],
@@ -6627,11 +6626,6 @@ function ProjectUnderstandingPage() {
             }
           </h2>
           <p>
-            Документы: {processingStatus.data.processed_document_count} из{" "}
-            {processingStatus.data.document_count}. Общий прогресс:{" "}
-            {processingStatus.data.progress_percent}%.
-          </p>
-          <p>
             {processingStatus.data.qwen_active
               ? "Локальный инженерный анализ выполняется."
               : processingStatus.data.active_job_count > 0
@@ -6652,6 +6646,16 @@ function ProjectUnderstandingPage() {
               обработки.
             </InfoNotice>
           )}
+          <details className="technical-details">
+            <summary>Ход обработки документов</summary>
+            <p>
+              Обработано документов:{" "}
+              {processingStatus.data.processed_document_count} из{" "}
+              {processingStatus.data.document_count}. Технический прогресс
+              этапов: {processingStatus.data.progress_percent}%. Этот показатель
+              не означает готовность инженерного анализа.
+            </p>
+          </details>
         </section>
       )}
       <div className="model-actions">

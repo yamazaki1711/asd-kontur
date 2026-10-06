@@ -35,11 +35,15 @@ test("project consultant answers a pipe property question with source links", as
       "Каковы диаметр и протяженность водоводной трубы, подлежащей демонтажу и замене новой трубой? Разделите существующую и новую трубы и укажите источники.",
     );
   await panel.getByRole("button", { name: "Отправить" }).click();
-  await expect(panel.getByRole("button", { name: "Остановить" })).not.toBeVisible({
+  await expect(
+    panel.getByRole("button", { name: "Остановить" }),
+  ).not.toBeVisible({
     timeout: 480_000,
   });
 
-  const answer = panel.locator(".assistant-message-answer .assistant-answer").last();
+  const answer = panel
+    .locator(".assistant-message-answer .assistant-answer")
+    .last();
   await expect(answer).toBeVisible();
   const text = (await answer.innerText()).trim();
   expect(text).not.toMatch(/Не могу надёжно опубликовать сформированный вывод/);
