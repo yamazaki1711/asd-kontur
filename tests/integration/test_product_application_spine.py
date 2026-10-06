@@ -756,7 +756,10 @@ def test_spine_browser_contract_jobs_evidence_and_reset_isolation(
         assert [value["workspace_id"] for value in remaining] == [workspace_b["workspace_id"]]
         assert client.get("/api/v1/platform/knowledge-status").json() == knowledge_before
         assert client.get("/api/v1/platform/ntd-seed-status").json() == ntd_seed_before
-        assert any(settings.archive_store_root.rglob("*.zip"))
+        # Reset archives are an intermediate lifecycle artifact, not a retained
+        # project backup. A separate user-requested export is the only portable
+        # copy that may outlive a destroyed workspace.
+        assert not any(settings.archive_store_root.rglob("*.zip"))
         trial_criteria = {
             "owner_ui_path": True,
             "four_mode_results": True,

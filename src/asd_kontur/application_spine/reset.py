@@ -126,6 +126,93 @@ class WorkspaceObjectLifecycleAdapter:
         )
 
 
+class WorkspaceResetArchiveLifecycleAdapter:
+    """Purge reset-created archives with the workspace, never retain them implicitly."""
+
+    def __init__(
+        self,
+        root: Path,
+        organization_id: UUID,
+        definition: StorageAdapterDefinition,
+    ) -> None:
+        self._root = root
+        self._organization_id = organization_id
+        self.definition = definition
+        self._receipts: dict[tuple[UUID, str], AdapterReceipt] = {}
+
+    def _directory(self, workspace_id: UUID) -> Path:
+        organization = self._root / str(self._organization_id)
+        directory = organization / str(workspace_id)
+        if organization.is_symlink() or directory.is_symlink():
+            raise RuntimeError("workspace_reset_archive_symlink")
+        return directory
+
+    def inventory(self, workspace_id: UUID) -> tuple[InventoryItem, ...]:
+        directory = self._directory(workspace_id)
+        if not directory.exists():
+            return ()
+        if not directory.is_dir():
+            raise RuntimeError("workspace_reset_archive_directory_invalid")
+        items: list[InventoryItem] = []
+        for path in sorted(directory.iterdir()):
+            if path.is_symlink() or not path.is_file():
+                raise RuntimeError("workspace_reset_archive_unknown_entry")
+            items.append(
+                InventoryItem(
+                    path.name,
+                    workspace_id,
+                    "application/zip" if path.suffix == ".zip" else "application/octet-stream",
+                    path.stat().st_size,
+                    _path_digest(path),
+                )
+            )
+        return tuple(items)
+
+    def purge_item(self, *, workspace_id: UUID, item_id: str, operation_id: UUID) -> AdapterReceipt:
+        key = (operation_id, item_id)
+        prior = self._receipts.get(key)
+        if prior is not None:
+            return prior
+        directory = self._directory(workspace_id)
+        if item_id == "__inventory_empty__":
+            before = 0
+            deleted = False
+        elif item_id not in {item.item_id for item in self.inventory(workspace_id)}:
+            before = 0
+            deleted = False
+        else:
+            # Inventory constrains item_id to a direct child and rejects links.
+            path = directory / item_id
+            path.unlink()
+            before = 1
+            deleted = True
+            if not any(directory.iterdir()):
+                directory.rmdir()
+        receipt = AdapterReceipt(
+            uuid7(),
+            self.definition.adapter_key,
+            item_id,
+            AdapterOutcome.DELETED if deleted else AdapterOutcome.ALREADY_ABSENT,
+            before,
+            0,
+            operation_id,
+            datetime.now(UTC),
+        )
+        self._receipts[key] = receipt
+        return receipt
+
+    def find_residue(
+        self,
+        *,
+        workspace_id: UUID,
+        known_ids: frozenset[str],
+        known_digests: frozenset[str],
+        known_fragments: frozenset[str],
+    ) -> tuple[InventoryItem, ...]:
+        del known_ids, known_digests, known_fragments
+        return self.inventory(workspace_id)
+
+
 class WorkspaceResetService:
     """Development-assurance reset; never claims independent production attestation."""
 
@@ -745,6 +832,20 @@ class WorkspaceResetService:
             "2.1.0",
             AdapterHealth.AVAILABLE,
         )
+        archive_definition = StorageAdapterDefinition(
+            "workspace.reset_archives",
+            "2.2.0",
+            "workspace_reset_archive_store",
+            "workspace",
+            "workspace",
+            True,
+            True,
+            True,
+            True,
+            True,
+            "2.2.0",
+            AdapterHealth.AVAILABLE,
+        )
         adapters: tuple[StorageAdapter, ...] = (
             PostgresWorkspaceStorageAdapter(
                 self._destruction_engine,
@@ -756,10 +857,15 @@ class WorkspaceResetService:
                 organization_id,
                 object_definition,
             ),
+            WorkspaceResetArchiveLifecycleAdapter(
+                self._archives,
+                organization_id,
+                archive_definition,
+            ),
         )
         return DestructionCoordinator(
             RegistrySnapshot(
-                ExactVersionReference("storage-adapters.product-spine", "2.1.0"),
+                ExactVersionReference("storage-adapters.product-spine", "2.2.0"),
                 adapters,
             )
         )
