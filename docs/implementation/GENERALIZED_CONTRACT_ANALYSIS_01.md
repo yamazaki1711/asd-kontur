@@ -1,5 +1,26 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 durable contract-obligation review (source checkpoint)
+
+The Support contract handover now has a human confirmation/rejection command.
+Its contract is source-bound: the Qwen candidate retains clause, party,
+condition and locator; a reviewer supplies a reason; the decision is appended
+to the existing workspace-owned candidate-review history. A digest covers the
+exact obligation, source clause and locator. If the model/source candidate
+changes, the old decision appears as stale rather than confirming new text.
+An idempotency key prevents duplicate decisions, and a workspace write or
+Support-review grant is required. Nothing here approves a negotiated contract,
+creates a field fact, or silently blocks construction work.
+
+Migration `0130_contract_obligation_review` adds one candidate kind to an
+existing RLS-protected, deletion-scoped table; it does not modify global NTD
+or platform memory. Disposable PostgreSQL acceptance checked append-only
+recording, replay, stale input rejection, idempotency conflict and cross-
+workspace/read-only denial. An isolated browser scenario exercised the
+confirm action and refreshed review state. Before public deployment the
+database backup/restore/upgrade path still needs qualification. This is a
+source checkpoint, not a deployed product claim.
+
 ## 2026-10-07 reviewer-selected draft revisions (source checkpoint)
 
 The Tender contract page now lets a reviewer choose which Qwen-proposed

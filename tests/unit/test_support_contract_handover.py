@@ -4,7 +4,10 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from asd_kontur.application_spine.services import ProductSpineService
-from asd_kontur.support.contract_handover import contract_obligation_handover
+from asd_kontur.support.contract_handover import (
+    apply_contract_obligation_reviews,
+    contract_obligation_handover,
+)
 
 
 def test_contract_obligations_keep_party_condition_and_source() -> None:
@@ -33,7 +36,8 @@ def test_contract_obligations_keep_party_condition_and_source() -> None:
                     "customer_obligation": "Do something without source.",
                 },
             ]
-        }
+        },
+        workspace_id=uuid4(),
     )
     assert len(rows) == 2
     assert {row["party"] for row in rows} == {"customer", "contractor"}
@@ -51,7 +55,35 @@ def test_duplicate_extracted_clause_does_not_duplicate_handover() -> None:
         "source_locator_id": "locator-c",
         "contractor_obligation": "Repair defects in the stated warranty period.",
     }
-    assert len(contract_obligation_handover({"clauses": [clause, clause]})) == 1
+    assert (
+        len(contract_obligation_handover({"clauses": [clause, clause]}, workspace_id=uuid4())) == 1
+    )
+
+
+def test_changed_candidate_invalidates_previous_human_confirmation() -> None:
+    workspace_id = uuid4()
+    clause = {
+        "clause_id": "payment-4",
+        "source_version_id": str(uuid4()),
+        "source_locator_id": str(uuid4()),
+        "customer_obligation": "Pay accepted work.",
+    }
+    original = contract_obligation_handover({"clauses": [clause]}, workspace_id=workspace_id)[0]
+    decision = {
+        "candidate_id": original["candidate_id"],
+        "action": "confirmed",
+        "original_value": {"candidate_digest": original["candidate_digest"]},
+    }
+    assert apply_contract_obligation_reviews([original], [decision])[0]["review_state"] == (
+        "confirmed"
+    )
+    clause["customer_obligation"] = "Pay only after a separate approval."
+    changed = contract_obligation_handover({"clauses": [clause]}, workspace_id=workspace_id)[0]
+    assert changed["candidate_id"] == original["candidate_id"]
+    assert changed["candidate_digest"] != original["candidate_digest"]
+    assert apply_contract_obligation_reviews([changed], [decision])[0]["review_state"] == (
+        "stale_requires_review"
+    )
 
 
 def test_support_view_reads_contract_only_with_same_workspace_scope() -> None:
@@ -69,6 +101,7 @@ def test_support_view_reads_contract_only_with_same_workspace_scope() -> None:
     service = object.__new__(ProductSpineService)
     service._support_production = SimpleNamespace(view=support_view)
     service._tender_contract_analysis = SimpleNamespace(latest=contract_view)
+    service._contract_obligation_reviews = SimpleNamespace(latest_decisions=lambda **kwargs: [])
     result = service.support_production_view(owner_identity_id="owner-a", workspace_id=workspace_id)
     assert calls == [
         ("support", "owner-a", workspace_id),

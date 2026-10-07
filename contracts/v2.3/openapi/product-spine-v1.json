@@ -719,6 +719,79 @@
         "title": "ConstructionConsultantQuestionRequest",
         "type": "object"
       },
+      "ContractObligationReviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "confirmed",
+              "rejected"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "candidate_digest": {
+            "pattern": "^sha256:[a-f0-9]{64}$",
+            "title": "Candidate Digest",
+            "type": "string"
+          },
+          "idempotency_key": {
+            "maxLength": 256,
+            "minLength": 8,
+            "title": "Idempotency Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 3,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_digest",
+          "action",
+          "reason",
+          "idempotency_key"
+        ],
+        "title": "ContractObligationReviewRequest",
+        "type": "object"
+      },
+      "ContractObligationReviewView": {
+        "additionalProperties": false,
+        "properties": {
+          "candidate_id": {
+            "format": "uuid",
+            "title": "Candidate Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "idempotent_replay": {
+            "title": "Idempotent Replay",
+            "type": "boolean"
+          },
+          "review_state": {
+            "enum": [
+              "confirmed",
+              "rejected"
+            ],
+            "title": "Review State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "candidate_id",
+          "review_state",
+          "decided_at",
+          "idempotent_replay"
+        ],
+        "title": "ContractObligationReviewView",
+        "type": "object"
+      },
       "DeploymentStatusView": {
         "additionalProperties": false,
         "properties": {
@@ -7687,6 +7760,69 @@
         "summary": "Capture Restoration Recovery Plan",
         "tags": [
           "restoration"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review": {
+      "post": {
+        "operationId": "review_contract_obligation_api_v1_workspaces__workspace_id__support_contract_obligations__candidate_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "candidate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Candidate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ContractObligationReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContractObligationReviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Review Contract Obligation",
+        "tags": [
+          "support-production"
         ]
       }
     },

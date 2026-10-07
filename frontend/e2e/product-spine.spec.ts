@@ -568,11 +568,30 @@ test("contract analysis refreshes as supervised work publishes clauses", async (
 test("Support shows source-linked contract duties as review candidates", async ({
   page,
 }) => {
+  let reviewed = false;
   await page.route("**/api/v1/**", async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === "/api/v1/session") return json(route, session());
     if (path === `/api/v1/workspaces/${workspaceA}`)
       return json(route, workspace(workspaceA, "Changed construction project"));
+    if (
+      path.endsWith(`/support/contract-obligations/${challengeId}/review`) &&
+      route.request().method() === "POST"
+    ) {
+      const body = route.request().postDataJSON() as {
+        action: string;
+        reason: string;
+      };
+      expect(body.action).toBe("confirmed");
+      expect(body.reason).toBe("Source clause checked.");
+      reviewed = true;
+      return json(route, {
+        candidate_id: challengeId,
+        review_state: "confirmed",
+        decided_at: timestamp,
+        idempotent_replay: false,
+      });
+    }
     if (path.endsWith("/support/id-production"))
       return json(route, {
         workspace_id: workspaceA,
@@ -584,6 +603,8 @@ test("Support shows source-linked contract duties as review candidates", async (
         authority_layers: {},
         contract_obligation_candidates: [
           {
+            candidate_id: challengeId,
+            candidate_digest: digest("b"),
             clause_id: "payment-4",
             clause_key: "4.2",
             party: "customer",
@@ -593,6 +614,7 @@ test("Support shows source-linked contract duties as review candidates", async (
             source_locator_id: documentId,
             source_name: "changed-contract.docx",
             authority: "qwen_extracted_candidate_requires_contract_review",
+            review_state: reviewed ? "confirmed" : "unreviewed",
           },
         ],
       });
@@ -608,6 +630,12 @@ test("Support shows source-linked contract duties as review candidates", async (
   ).toBeVisible();
   await expect(page.getByText("Pay accepted work.")).toBeVisible();
   await expect(page.getByText("After acceptance.")).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Причина решения по пункту 4.2" })
+    .fill("Source clause checked.");
+  await page.getByRole("button", { name: "Подтвердить" }).click();
+  await expect(page.getByText("Подтверждено пользователем")).toBeVisible();
+  expect(reviewed).toBe(true);
   await expect(
     page.getByRole("link", { name: "changed-contract.docx" }),
   ).toHaveAttribute(

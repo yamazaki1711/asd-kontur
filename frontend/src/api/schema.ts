@@ -1030,6 +1030,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Contract Obligation */
+        post: operations["review_contract_obligation_api_v1_workspaces__workspace_id__support_contract_obligations__candidate_id__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/fields/confirmations": {
         parameters: {
             query?: never;
@@ -1640,6 +1657,40 @@ export interface components {
              * Format: uuid
              */
             request_id: string;
+        };
+        /** ContractObligationReviewRequest */
+        ContractObligationReviewRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "confirmed" | "rejected";
+            /** Candidate Digest */
+            candidate_digest: string;
+            /** Idempotency Key */
+            idempotency_key: string;
+            /** Reason */
+            reason: string;
+        };
+        /** ContractObligationReviewView */
+        ContractObligationReviewView: {
+            /**
+             * Candidate Id
+             * Format: uuid
+             */
+            candidate_id: string;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Idempotent Replay */
+            idempotent_replay: boolean;
+            /**
+             * Review State
+             * @enum {string}
+             */
+            review_state: "confirmed" | "rejected";
         };
         /** DeploymentStatusView */
         DeploymentStatusView: {
@@ -5139,6 +5190,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RestorationRecoveryPlanView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_contract_obligation_api_v1_workspaces__workspace_id__support_contract_obligations__candidate_id__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                candidate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ContractObligationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContractObligationReviewView"];
                 };
             };
             /** @description Validation Error */

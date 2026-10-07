@@ -29,7 +29,14 @@ from asd_kontur.restoration import (
     build_recovery_plan,
     render_recovery_plan_csv,
 )
-from asd_kontur.support.contract_handover import contract_obligation_handover
+from asd_kontur.support.contract_handover import (
+    apply_contract_obligation_reviews,
+    contract_obligation_handover,
+)
+from asd_kontur.support.contract_obligation_review import (
+    ContractObligationReviewError,
+    ContractObligationReviewRepository,
+)
 from asd_kontur.support.package_consistency import assess_id_package_consistency
 from asd_kontur.support.package_export import build_editable_id_package_archive
 from asd_kontur.support.production_postgres import SupportProductionRepository
@@ -158,6 +165,7 @@ class ProductSpineService:
         self._object_store = object_store
         self._settings = settings
         self._support_production = SupportProductionRepository(repository.engine)
+        self._contract_obligation_reviews = ContractObligationReviewRepository(repository.engine)
         self._tender_contract_analysis = TenderContractAnalysisRepository(repository.engine)
         self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
@@ -1383,11 +1391,51 @@ class ProductSpineService:
         contract = self._tender_contract_analysis.latest(
             owner_identity_id=owner_identity_id, workspace_id=workspace_id
         )
+        obligations = contract_obligation_handover(contract, workspace_id=workspace_id)
+        decisions = self._contract_obligation_reviews.latest_decisions(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
         return {
             **view,
             "consistency": assess_id_package_consistency(view),
-            "contract_obligation_candidates": contract_obligation_handover(contract),
+            "contract_obligation_candidates": apply_contract_obligation_reviews(
+                obligations, decisions
+            ),
         }
+
+    def review_contract_obligation(
+        self,
+        *,
+        owner_identity_id: str,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        candidate_digest: str,
+        action: str,
+        reason: str,
+        idempotency_key: str,
+    ) -> dict[str, Any]:
+        contract = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        candidate = next(
+            (
+                item
+                for item in contract_obligation_handover(contract, workspace_id=workspace_id)
+                if item["candidate_id"] == str(candidate_id)
+            ),
+            None,
+        )
+        if candidate is None:
+            raise ContractObligationReviewError("contract_obligation_candidate_not_found")
+        return self._contract_obligation_reviews.record(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            candidate=candidate,
+            expected_digest=candidate_digest,
+            action=action,
+            reason=reason,
+            idempotency_key=idempotency_key,
+        )
 
     def audit_expected_actual_preflight(
         self, *, owner_identity_id: str, workspace_id: UUID

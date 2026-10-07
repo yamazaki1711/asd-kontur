@@ -2562,6 +2562,41 @@ function SupportProductionPage() {
       });
     },
   });
+  const reviewContractObligation = useMutation({
+    mutationFn: async ({
+      candidate,
+      action,
+      reason,
+    }: {
+      candidate: Record<string, unknown>;
+      action: "confirmed" | "rejected";
+      reason: string;
+    }) => {
+      const { data, error } = await api.POST(
+        "/api/v1/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              candidate_id: String(candidate.candidate_id),
+            },
+          },
+          body: {
+            candidate_digest: String(candidate.candidate_digest),
+            action,
+            reason,
+            idempotency_key: globalThis.crypto.randomUUID(),
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["support-id-production", workspaceId],
+      });
+    },
+  });
   const finalizeCandidate = useMutation({
     mutationFn: async (candidateId: string) => {
       const { data, error } = await api.POST(
@@ -2604,6 +2639,10 @@ function SupportProductionPage() {
             generationPending={startGeneration.isPending}
             review={(identity) => reviewCandidate.mutate(identity)}
             reviewPending={reviewCandidate.isPending}
+            reviewContractObligation={(candidate, action, reason) =>
+              reviewContractObligation.mutate({ candidate, action, reason })
+            }
+            contractReviewPending={reviewContractObligation.isPending}
             finalize={(identity) => finalizeCandidate.mutate(identity)}
             finalizationPending={finalizeCandidate.isPending}
             correctSourceField={(correction) =>
@@ -2620,6 +2659,7 @@ function SupportProductionPage() {
               configureScope.error ??
               startGeneration.error ??
               reviewCandidate.error ??
+              reviewContractObligation.error ??
               finalizeCandidate.error ??
               correctSourceField.error ??
               confirmSourceField.error
@@ -3849,6 +3889,8 @@ function SupportProductionBody({
   generationPending,
   review,
   reviewPending,
+  reviewContractObligation,
+  contractReviewPending,
   finalize,
   finalizationPending,
   correctSourceField,
@@ -3873,6 +3915,12 @@ function SupportProductionBody({
   generationPending: boolean;
   review: (candidateId: string) => void;
   reviewPending: boolean;
+  reviewContractObligation: (
+    candidate: Record<string, unknown>,
+    action: "confirmed" | "rejected",
+    reason: string,
+  ) => void;
+  contractReviewPending: boolean;
   finalize: (candidateId: string) => void;
   finalizationPending: boolean;
   correctSourceField: (
@@ -3899,6 +3947,9 @@ function SupportProductionBody({
   const fieldRows = mergeFieldResolutionRows(fields);
   const sourceFieldCandidates = value.source_field_candidates ?? [];
   const contractObligations = value.contract_obligation_candidates ?? [];
+  const [contractReviewReasons, setContractReviewReasons] = useState<
+    Record<string, string>
+  >({});
   const supportProcess = value.support_process;
   return (
     <>
@@ -3919,11 +3970,18 @@ function SupportProductionBody({
                   <th>Действие</th>
                   <th>Условие</th>
                   <th>Источник</th>
+                  <th>Проверка</th>
                 </tr>
               </thead>
               <tbody>
                 {contractObligations.map((item, index) => {
                   const locator = displayValue(item.source_locator_id, "");
+                  const candidateId = displayValue(item.candidate_id, "");
+                  const reviewState = displayValue(
+                    item.review_state,
+                    "unreviewed",
+                  );
+                  const reason = contractReviewReasons[candidateId] ?? "";
                   return (
                     <tr
                       key={`${displayValue(item.clause_id, String(index))}:${displayValue(item.party, "")}`}
@@ -3950,6 +4008,64 @@ function SupportProductionBody({
                         ) : (
                           displayValue(item.source_name, "Источник не привязан")
                         )}
+                      </td>
+                      <td>
+                        <StatusPill
+                          tone={
+                            reviewState === "confirmed" ? "default" : "warning"
+                          }
+                        >
+                          {reviewState === "confirmed"
+                            ? "Подтверждено пользователем"
+                            : reviewState === "rejected"
+                              ? "Отклонено пользователем"
+                              : reviewState === "stale_requires_review"
+                                ? "Изменилось — проверить заново"
+                                : "Не проверено"}
+                        </StatusPill>
+                        <label>
+                          Причина решения
+                          <input
+                            value={reason}
+                            onChange={(event) =>
+                              setContractReviewReasons((current) => ({
+                                ...current,
+                                [candidateId]: event.target.value,
+                              }))
+                            }
+                            placeholder="Укажите основание проверки"
+                            aria-label={`Причина решения по пункту ${displayValue(item.clause_key, "без номера")}`}
+                          />
+                        </label>
+                        <div className="button-row">
+                          <button
+                            type="button"
+                            disabled={
+                              contractReviewPending || reason.trim().length < 3
+                            }
+                            onClick={() =>
+                              reviewContractObligation(
+                                item,
+                                "confirmed",
+                                reason,
+                              )
+                            }
+                          >
+                            Подтвердить
+                          </button>
+                          <button
+                            type="button"
+                            className="secondary"
+                            disabled={
+                              contractReviewPending || reason.trim().length < 3
+                            }
+                            onClick={() =>
+                              reviewContractObligation(item, "rejected", reason)
+                            }
+                          >
+                            Отклонить
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

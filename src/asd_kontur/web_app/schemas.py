@@ -452,6 +452,20 @@ class SupportProductionView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class ContractObligationReviewRequest(ApiModel):
+    candidate_digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
+    action: Literal["confirmed", "rejected"]
+    reason: str = Field(min_length=3, max_length=1000)
+    idempotency_key: str = Field(min_length=8, max_length=256)
+
+
+class ContractObligationReviewView(ApiModel):
+    candidate_id: UUID
+    review_state: Literal["confirmed", "rejected"]
+    decided_at: datetime
+    idempotent_replay: bool
+
+
 class SupportFieldCorrectionRequest(ApiModel):
     work_package_id: UUID
     field_key: str = Field(min_length=1, max_length=128)

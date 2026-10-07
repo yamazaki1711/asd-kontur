@@ -56,6 +56,7 @@ from asd_kontur.pilot import PilotExportFormat, PilotExportKind, PilotReviewActi
 from asd_kontur.pilot.postgres import PilotResultError
 from asd_kontur.restoration import RestorationRecoveryError
 from asd_kontur.support import SupportError
+from asd_kontur.support.contract_obligation_review import ContractObligationReviewError
 from asd_kontur.support.field_commands import (
     SupportFieldCommandError,
     SupportFieldCommandService,
@@ -95,6 +96,8 @@ from .schemas import (
     ConstructionConsultantConversationView,
     ConstructionConsultantMessageView,
     ConstructionConsultantQuestionRequest,
+    ContractObligationReviewRequest,
+    ContractObligationReviewView,
     DocumentPage,
     ErrorDetail,
     ErrorEnvelope,
@@ -315,6 +318,19 @@ def _install_middleware(app: FastAPI) -> None:
     ) -> JSONResponse:
         status_code = 404 if exc.code.endswith("not_found") else 409
         return _error(request, exc.code, status_code)
+
+    @app.exception_handler(ContractObligationReviewError)
+    async def contract_obligation_review_error(
+        request: Request, exc: ContractObligationReviewError
+    ) -> JSONResponse:
+        status_code = (
+            404
+            if str(exc).endswith("not_found")
+            else 403
+            if str(exc).endswith("forbidden")
+            else 409
+        )
+        return _error(request, str(exc), status_code)
 
     @app.exception_handler(SupportScopeCommandError)
     async def support_scope_command_error(
@@ -1468,6 +1484,29 @@ def _api_router() -> APIRouter:
             work_package_id=work_package_id,
         )
         return SupportProductionView(**jsonable_encoder(value))
+
+    @router.post(
+        "/workspaces/{workspace_id}/support/contract-obligations/{candidate_id}/review",
+        response_model=ContractObligationReviewView,
+        tags=["support-production"],
+    )
+    def review_contract_obligation(
+        request: Request,
+        workspace_id: UUID,
+        candidate_id: UUID,
+        payload: ContractObligationReviewRequest,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> ContractObligationReviewView:
+        value = _container(request).service.review_contract_obligation(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            candidate_id=candidate_id,
+            candidate_digest=payload.candidate_digest,
+            action=payload.action,
+            reason=payload.reason,
+            idempotency_key=payload.idempotency_key,
+        )
+        return ContractObligationReviewView(**jsonable_encoder(value))
 
     @router.post(
         "/workspaces/{workspace_id}/support/fields/corrections",
