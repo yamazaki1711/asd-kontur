@@ -31,6 +31,12 @@ from asd_kontur.document_understanding.qwen_semantic import (
     QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
     QwenDocumentSemanticAdapter,
 )
+from asd_kontur.lifecycle import (
+    AdapterOutcome,
+    AdapterReceipt,
+    DestructionCoordinator,
+    PurgeOutcome,
+)
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_contract_references import CONTRACT_REFERENCE_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
@@ -540,6 +546,92 @@ def _csrf(client: TestClient) -> dict[str, str]:
     value = client.cookies.get("asd_csrf")
     assert value
     return {"X-CSRF-Token": value}
+
+
+def test_incomplete_destroy_records_recovery_instead_of_claiming_deletion(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="destroy-recovery-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Destroy recovery owner",
+    )
+    original_execute = DestructionCoordinator.execute
+
+    def incomplete_destroy(self, *, plan, **kwargs):
+        if plan.operation_kind != "destroy":
+            return original_execute(self, plan=plan, **kwargs)
+        item = plan.items[0]
+        operation_id = uuid4()
+        return PurgeOutcome(
+            operation_id,
+            (
+                AdapterReceipt(
+                    uuid4(),
+                    item.adapter_key,
+                    item.item_id,
+                    AdapterOutcome.INCOMPLETE,
+                    1,
+                    1,
+                    operation_id,
+                    kwargs["now"],
+                ),
+            ),
+            False,
+        )
+
+    monkeypatch.setattr(DestructionCoordinator, "execute", incomplete_destroy)
+    with TestClient(app) as client:
+        _login(client, "destroy-recovery-owner", "Synthetic-Owner-Password-42!")
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Disposable destroy recovery case"},
+            headers=_csrf(client),
+        ).json()
+        prepared = client.post(
+            f"/api/v1/workspaces/{workspace['workspace_id']}/lifecycle/reset/prepare",
+            json={"confirmation": "PREPARE_WORKSPACE_RESET"},
+            headers=_csrf(client),
+        )
+        assert prepared.status_code == 200, prepared.text
+        challenge = prepared.json()
+        with pytest.raises(RuntimeError, match="workspace_destroy_reconciliation_required"):
+            client.post(
+                f"/api/v1/workspaces/{workspace['workspace_id']}/lifecycle/reset/execute",
+                json={
+                    "challenge_id": challenge["challenge_id"],
+                    "confirmation_text": challenge["confirmation_text"],
+                },
+                headers=_csrf(client),
+            )
+        with postgres_environment.owner_engine.connect() as connection:
+            state = connection.scalar(
+                sa.text(
+                    "SELECT lifecycle_state FROM workspace.workspaces "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            )
+            checkpoints = connection.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.recovery_checkpoints "
+                    "WHERE organization_id=:organization AND workspace_id=:workspace "
+                    "AND failed_operation='destroy'"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace["workspace_id"],
+                },
+            )
+        assert state == "RECOVERY_REQUIRED"
+        assert checkpoints == 1
 
 
 def test_spine_browser_contract_jobs_evidence_and_reset_isolation(

@@ -26,15 +26,20 @@ from asd_kontur.lifecycle import (
     Basis,
     DeletionItem,
     DeletionPlan,
+    DestructionAttestation,
     DestructionCoordinator,
     ExactVersionReference,
     InventoryItem,
     LifecycleState,
     PostgresLifecycleRepository,
     PostgresWorkspaceStorageAdapter,
+    PurgeOutcome,
+    RecoveryCheckpoint,
     RegistrySnapshot,
+    ResidualScan,
     RetentionProfile,
     StorageAdapterDefinition,
+    VerificationOutcome,
 )
 from asd_kontur.lifecycle.storage import StorageAdapter
 from asd_kontur.persistence.scope import WorkspaceContext
@@ -628,6 +633,16 @@ class WorkspaceResetService:
             now=datetime.now(UTC),
             operation_id=uuid7(),
         )
+        self._require_destroy_completion(
+            coordinator=coordinator,
+            context=context,
+            plan=destroy_plan,
+            outcome=destroy_outcome,
+            workspace=workspace,
+            owner_identity_id=owner_identity_id,
+            correlation_id=correlation_id,
+            operation_id=operation_id,
+        )
         destroy_scans = coordinator.verify(
             plan=destroy_plan,
             known_ids=frozenset(),
@@ -654,6 +669,17 @@ class WorkspaceResetService:
             receipts=destroy_outcome.receipts,
             scans=destroy_scans,
             attestation=destroy_attestation,
+        )
+        self._require_destroy_verification(
+            context=context,
+            plan=destroy_plan,
+            outcome=destroy_outcome,
+            scans=destroy_scans,
+            attestation=destroy_attestation,
+            workspace=workspace,
+            owner_identity_id=owner_identity_id,
+            correlation_id=correlation_id,
+            operation_id=operation_id,
         )
         workspace = self._transition(
             workspace,
@@ -734,6 +760,101 @@ class WorkspaceResetService:
             after,
             completed_at,
         )
+
+    def _require_destroy_completion(
+        self,
+        *,
+        coordinator: DestructionCoordinator,
+        context: WorkspaceContext,
+        plan: DeletionPlan,
+        outcome: PurgeOutcome,
+        workspace: WorkspaceSummary,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        operation_id: UUID,
+    ) -> None:
+        if outcome.complete:
+            return
+        self._lifecycle.persist_adapter_receipts(
+            context=context,
+            plan=plan,
+            receipts=outcome.receipts,
+        )
+        self._lifecycle.persist_recovery_checkpoint(
+            context=context,
+            plan=plan,
+            checkpoint=coordinator.checkpoint(
+                plan=plan,
+                outcome=outcome,
+                now=datetime.now(UTC),
+            ),
+        )
+        self._transition(
+            workspace,
+            owner_identity_id,
+            correlation_id,
+            LifecycleState.RECOVERY_REQUIRED,
+            operation_id,
+        )
+        raise RuntimeError("workspace_destroy_reconciliation_required")
+
+    def _require_destroy_verification(
+        self,
+        *,
+        context: WorkspaceContext,
+        plan: DeletionPlan,
+        outcome: PurgeOutcome,
+        scans: tuple[ResidualScan, ...],
+        attestation: DestructionAttestation,
+        workspace: WorkspaceSummary,
+        owner_identity_id: str,
+        correlation_id: UUID,
+        operation_id: UUID,
+    ) -> None:
+        if attestation.outcome is VerificationOutcome.VERIFIED:
+            return
+        if (
+            attestation.outcome is VerificationOutcome.QUARANTINED
+            or attestation.platform_integrity_before != attestation.platform_integrity_after
+        ):
+            self._transition(
+                workspace,
+                owner_identity_id,
+                correlation_id,
+                LifecycleState.QUARANTINED,
+                operation_id,
+            )
+            raise RuntimeError("workspace_destroy_integrity_quarantined")
+        failed_adapters = tuple(
+            sorted(
+                scan.adapter_key
+                for scan in scans
+                if scan.outcome is not VerificationOutcome.VERIFIED
+            )
+        )
+        self._lifecycle.persist_recovery_checkpoint(
+            context=context,
+            plan=plan,
+            checkpoint=RecoveryCheckpoint(
+                uuid7(),
+                outcome.operation_id,
+                plan.digest,
+                plan.operation_kind,
+                failed_adapters,
+                tuple(f"{receipt.adapter_key}:{receipt.item_id}" for receipt in outcome.receipts),
+                tuple(f"verify:{adapter}" for adapter in failed_adapters)
+                or ("verify:attestation_incomplete",),
+                datetime.now(UTC),
+            ),
+        )
+        self._transition(
+            workspace,
+            owner_identity_id,
+            correlation_id,
+            LifecycleState.RECOVERY_REQUIRED,
+            operation_id,
+        )
+        raise RuntimeError("workspace_destroy_verification_required")
 
     def _transition(
         self,
