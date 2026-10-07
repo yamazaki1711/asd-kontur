@@ -30,7 +30,28 @@ slice* are superseded by this owner direction. No real project is a universal
 schema or a source of expected answers. The current deployed release is
 recorded in the implementation evidence, never inferred from this plan.
 
-Checkpoint 2026-10-07 (Asia/Kamchatka): source HEAD
+The locally installed `anthropic-skills:asd` skill still describes the old
+MAC_ASD four-schema/Yandex-archive programme and an owner-accepted readiness
+report as its sole terminal condition. Those instructions conflict with the
+owner's current full four-mode, no-hidden-project-retention mandate and this
+repository's AGENTS.md. They remain historical discipline for evidence and
+non-fabrication, not authority to narrow ASD-KONTUR's scope or retain an OKS
+archive after deletion. The plugin-owned skill file was inspected but not
+modified in place; its upstream/local maintainer must update it separately.
+
+Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
+`039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
+`0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence
+contexts completed autonomously after a schema mismatch in the previous v2
+attempts was corrected; the professional read model reports only bounded
+related-clause review, not whole-contract legal clearance. The exact-ID
+control-workspace cleanup reached `DESTROYED` and preserved the real project and
+NTD. Source-only cleanup-client checkpoint `5802be8` is ahead of the deployed
+application SHA. Contract FFC-01 and ProductReady remain `PARTIAL` and false,
+respectively. Continue the full accepted-register sequence; this checkpoint
+is not the stopping boundary.
+
+Earlier 2026-10-07 checkpoint (superseded release identity): source HEAD
 `90ae82aa3fe26bff2c76684000e97d3f66194081`; deployed application SHA
 `85628fda3a1cbb69bde78bcee3b164cefb767b12`, migration
 `0133_contract_coherence_review`. The exact release adds contractor-entered

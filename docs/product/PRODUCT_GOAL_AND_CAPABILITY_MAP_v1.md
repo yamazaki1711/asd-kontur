@@ -206,6 +206,18 @@ pass does not substitute for a sufficient-input success path.
 | FFC-11 | Delivery and acceptance | Run qualified diverse-corpus, false-negative/positive and representative thousands-of-documents acceptance | Qwen production tasks only; code measures work, replay, failure and time-to-value | Same tested/deployed release exposes all results and files | NOT VERIFIED |
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
 
+Current FFC-01 delivery checkpoint: application SHA
+`039ce694a10200a2f24e7cadda61b9c8cd6a58ac`, migration
+`0134_contract_coherence_profile_v2`. A changed-party contract-only corpus
+passed the isolated live-Qwen result path, and the owner's already-admitted
+contract reached 5/5 accepted bounded cross-clause contexts autonomously.
+The reviewed editable package and protocol consistency checks are delivered,
+but these results do not certify unreviewed clauses, legal authority, owner
+negotiation choices or authenticated browser acceptance. FFC-01 stays
+`PARTIAL`; the other FFC rows and `ProductReady=false` are unchanged. The
+exact lifecycle cleanup of an accidental control workspace was separately
+verified without altering the owner workspace or permanent NTD memory.
+
 FFC-01 remains `PARTIAL` after the 7 October contract output checkpoint. The
 delivered application release is
 `1be4a7f0d5aad9368c904e17034acfa3f0ce6d31` on migration
