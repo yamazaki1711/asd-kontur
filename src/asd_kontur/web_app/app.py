@@ -105,6 +105,7 @@ from .schemas import (
     AssistantTurnView,
     AuditExpectedActualPreflightView,
     AuditReportProjectionView,
+    AuditUploadedIdDuplicateReviewView,
     CapabilityStatusView,
     ConstructionConsultantAnswerView,
     ConstructionConsultantConversationCreate,
@@ -2070,6 +2071,22 @@ def _api_router() -> APIRouter:
                 "ETag": f'"{value.content_digest[7:]}"',
             },
         )
+
+    @router.get(
+        "/workspaces/{workspace_id}/audit/uploaded-id-duplicate-review",
+        response_model=AuditUploadedIdDuplicateReviewView,
+        tags=["audit-preflight"],
+    )
+    def audit_uploaded_id_duplicate_review(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> AuditUploadedIdDuplicateReviewView:
+        value = _container(request).service.audit_uploaded_id_duplicate_review(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return AuditUploadedIdDuplicateReviewView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/audit/reports/latest",

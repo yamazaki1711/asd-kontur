@@ -243,6 +243,41 @@ def test_field_document_upload_keeps_declared_role_and_rejects_path_role_conflic
             )
         assert str(sources[UUID(project_document_id)]) in project_jobs
         assert str(sources[UUID(document_id)]) not in project_jobs
+        copy = client.post(
+            endpoint,
+            files=[("files", ("actual-copy.pdf", _pdf(), "application/pdf"))],
+            data={"source_kind": "field_document"},
+            headers=_csrf(client),
+        )
+        assert copy.status_code == 202, copy.text
+        copy_document_id = copy.json()["accepted_document_ids"][0]
+        assert copy_document_id != document_id
+        duplicate_review = client.get(
+            f"/api/v1/workspaces/{workspace['workspace_id']}/audit/uploaded-id-duplicate-review"
+        )
+        assert duplicate_review.status_code == 200, duplicate_review.text
+        reviewed = duplicate_review.json()
+        assert reviewed["document_count"] == 3
+        assert reviewed["field_document_count"] == 2
+        assert reviewed["duplicate_group_count"] == 1
+        assert reviewed["duplicate_document_count"] == 2
+        assert reviewed["status"] == "partial"
+        assert reviewed["groups"][0]["finding_kind"] == ("EXACT_BYTES_MULTIPLE_ID_RECORDS_REVIEW")
+        assert {member["document_id"] for member in reviewed["groups"][0]["members"]} == {
+            document_id,
+            copy_document_id,
+        }
+        other_workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Another isolated Audit project"},
+            headers=_csrf(client),
+        ).json()
+        other_review = client.get(
+            f"/api/v1/workspaces/{other_workspace['workspace_id']}/audit/"
+            "uploaded-id-duplicate-review"
+        )
+        assert other_review.status_code == 200
+        assert other_review.json()["duplicate_group_count"] == 0
 
 
 def test_processing_status_ignores_obsolete_contract_profile_failures(

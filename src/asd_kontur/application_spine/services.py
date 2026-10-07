@@ -10,6 +10,7 @@ from uuid import UUID
 
 import sqlalchemy as sa
 
+from asd_kontur.audit.duplicate_review import review_uploaded_id_duplicates
 from asd_kontur.audit.inventory_export import render_uploaded_document_inventory_csv
 from asd_kontur.audit.package_preflight import build_expected_actual_preflight
 from asd_kontur.audit.preflight_export import render_expected_actual_preflight_csv
@@ -1730,6 +1731,34 @@ class ProductSpineService:
     ) -> DocumentContent:
         """Export all current admitted versions, not just the visible UI page."""
 
+        documents = self._audit_uploaded_documents(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        data = render_uploaded_document_inventory_csv(documents)
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "text/csv; charset=utf-8",
+            len(data),
+            digest,
+            f"audit-uploaded-document-inventory-{workspace_id}.csv",
+            0,
+            len(data),
+            (data,),
+        )
+
+    def audit_uploaded_id_duplicate_review(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        """Find exact-byte ID copies without claiming a content Audit verdict."""
+
+        documents = self._audit_uploaded_documents(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        return review_uploaded_id_duplicates(documents)
+
+    def _audit_uploaded_documents(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> tuple[dict[str, Any], ...]:
         documents: list[dict[str, Any]] = []
         cursor: str | None = None
         seen_cursors: set[str] = set()
@@ -1750,17 +1779,7 @@ class ProductSpineService:
                 raise ValueError("document_inventory_cursor_cycle")
             seen_cursors.add(next_cursor)
             cursor = next_cursor
-        data = render_uploaded_document_inventory_csv(documents)
-        digest = "sha256:" + hashlib.sha256(data).hexdigest()
-        return DocumentContent(
-            "text/csv; charset=utf-8",
-            len(data),
-            digest,
-            f"audit-uploaded-document-inventory-{workspace_id}.csv",
-            0,
-            len(data),
-            (data,),
-        )
+        return tuple(documents)
 
     def latest_audit_report_projection(
         self, *, owner_identity_id: str, workspace_id: UUID

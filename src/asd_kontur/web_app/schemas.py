@@ -748,6 +748,17 @@ class AuditExpectedActualPreflightView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class AuditUploadedIdDuplicateReviewView(ApiModel):
+    review_kind: Literal["uploaded_id_exact_duplicate_triage"]
+    status: Literal["partial"]
+    document_count: int
+    field_document_count: int
+    duplicate_group_count: int
+    duplicate_document_count: int
+    groups: list[dict[str, Any]]
+    authority_boundary: str
+
+
 class TenderContractAnalysisView(ApiModel):
     status: str
     process: dict[str, Any] | None

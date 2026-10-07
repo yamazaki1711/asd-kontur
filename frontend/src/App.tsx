@@ -39,6 +39,8 @@ type SupportProduction = components["schemas"]["SupportProductionView"];
 type SupportScopeReadiness = components["schemas"]["SupportScopeReadinessView"];
 type AuditExpectedActualPreflight =
   components["schemas"]["AuditExpectedActualPreflightView"];
+type AuditUploadedIdDuplicateReview =
+  components["schemas"]["AuditUploadedIdDuplicateReviewView"];
 type AuditReportProjection = components["schemas"]["AuditReportProjectionView"];
 type TenderContractAnalysis =
   components["schemas"]["TenderContractAnalysisView"];
@@ -4150,6 +4152,16 @@ function AuditExpectedActualPreflightWorkspace({
       return requireData(data, error);
     },
   });
+  const duplicateReview = useQuery({
+    queryKey: ["audit-uploaded-id-duplicates", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/audit/uploaded-id-duplicate-review",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
   return (
     <Page
       title="Предварительная сверка комплекта"
@@ -4270,6 +4282,58 @@ function AuditExpectedActualPreflightWorkspace({
           )}
         </QueryState>
       </section>
+      <QueryState query={duplicateReview}>
+        {(value: AuditUploadedIdDuplicateReview) =>
+          value.field_document_count === 0 ? (
+            <InfoNotice>
+              Документы фактического выполнения не загружены. Проверка состава и
+              содержания ИД пока невозможна; проектные и договорные исходные
+              документы не считаются исполнительной документацией.
+            </InfoNotice>
+          ) : value.duplicate_group_count > 0 ? (
+            <section className="panel">
+              <h2>Одинаковые файлы ИД — проверить назначение копий</h2>
+              <p>
+                Файлы в каждой группе совпадают побайтово, но это не доказывает,
+                что записи дублируют один и тот же документ по назначению.
+                Уточните, какая запись является действующей и нужны ли копии в
+                разных разделах комплекта.
+              </p>
+              <ul>
+                {value.groups.map((group) => {
+                  const members = (group.members ?? []) as Array<
+                    Record<string, unknown>
+                  >;
+                  return (
+                    <li key={String(group.content_digest)}>
+                      {members.map((member, index) => (
+                        <span key={String(member.document_id)}>
+                          {index > 0 ? "; " : ""}
+                          <Link
+                            to={workspaceRoute(
+                              "Audit",
+                              workspaceId,
+                              `/documents/${String(member.document_id)}`,
+                            )}
+                          >
+                            {displayValue(member.safe_display_name)}
+                          </Link>
+                        </span>
+                      ))}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          ) : (
+            <InfoNotice>
+              Среди загруженных документов ИД побайтово одинаковых файлов не
+              найдено. Это не подтверждает их содержание, реквизиты или
+              комплектность.
+            </InfoNotice>
+          )
+        }
+      </QueryState>
     </Page>
   );
 }

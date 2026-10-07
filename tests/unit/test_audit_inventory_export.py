@@ -7,6 +7,7 @@ from uuid import uuid4
 
 from asd_kontur.application_spine.models import DocumentSummary
 from asd_kontur.application_spine.services import ProductSpineService
+from asd_kontur.audit.duplicate_review import review_uploaded_id_duplicates
 from asd_kontur.audit.inventory_export import render_uploaded_document_inventory_csv
 
 
@@ -81,3 +82,46 @@ def test_service_inventory_export_reaches_later_pages() -> None:
         str(first.document_id),
         str(second.document_id),
     }
+
+
+def test_exact_duplicate_review_requires_distinct_active_field_documents() -> None:
+    digest = "sha256:" + "a" * 64
+    rows = [
+        {
+            "document_id": "field-a",
+            "version": 2,
+            "safe_display_name": "Акт.pdf",
+            "source_kind": "field_document",
+            "content_digest": digest,
+        },
+        {
+            "document_id": "field-a",
+            "version": 1,
+            "safe_display_name": "Акт-старый.pdf",
+            "source_kind": "field_document",
+            "content_digest": digest,
+        },
+        {
+            "document_id": "design-a",
+            "version": 1,
+            "safe_display_name": "Чертёж.pdf",
+            "source_kind": "project_evidence",
+            "content_digest": digest,
+        },
+    ]
+    assert review_uploaded_id_duplicates(rows)["duplicate_group_count"] == 0
+    rows.append(
+        {
+            "document_id": "field-b",
+            "version": 1,
+            "safe_display_name": "Копия акта.pdf",
+            "source_kind": "field_document",
+            "content_digest": digest,
+        }
+    )
+    reviewed = review_uploaded_id_duplicates(rows)
+    assert reviewed["duplicate_group_count"] == 1
+    assert reviewed["duplicate_document_count"] == 2
+    assert reviewed["groups"][0]["uncertainty"] == (
+        "identical_bytes_do_not_prove_duplicate_document_purpose"
+    )

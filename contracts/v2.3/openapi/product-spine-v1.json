@@ -437,6 +437,61 @@
         "title": "AuditReportProjectionView",
         "type": "object"
       },
+      "AuditUploadedIdDuplicateReviewView": {
+        "additionalProperties": false,
+        "properties": {
+          "authority_boundary": {
+            "title": "Authority Boundary",
+            "type": "string"
+          },
+          "document_count": {
+            "title": "Document Count",
+            "type": "integer"
+          },
+          "duplicate_document_count": {
+            "title": "Duplicate Document Count",
+            "type": "integer"
+          },
+          "duplicate_group_count": {
+            "title": "Duplicate Group Count",
+            "type": "integer"
+          },
+          "field_document_count": {
+            "title": "Field Document Count",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "review_kind": {
+            "const": "uploaded_id_exact_duplicate_triage",
+            "title": "Review Kind",
+            "type": "string"
+          },
+          "status": {
+            "const": "partial",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_kind",
+          "status",
+          "document_count",
+          "field_document_count",
+          "duplicate_group_count",
+          "duplicate_document_count",
+          "groups",
+          "authority_boundary"
+        ],
+        "title": "AuditUploadedIdDuplicateReviewView",
+        "type": "object"
+      },
       "Body_upload_documents_api_v1_workspaces__workspace_id__documents_post": {
         "properties": {
           "files": {
@@ -6853,6 +6908,49 @@
           }
         },
         "summary": "Audit Uploaded Document Inventory Export",
+        "tags": [
+          "audit-preflight"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/audit/uploaded-id-duplicate-review": {
+      "get": {
+        "operationId": "audit_uploaded_id_duplicate_review_api_v1_workspaces__workspace_id__audit_uploaded_id_duplicate_review_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditUploadedIdDuplicateReviewView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Uploaded Id Duplicate Review",
         "tags": [
           "audit-preflight"
         ]

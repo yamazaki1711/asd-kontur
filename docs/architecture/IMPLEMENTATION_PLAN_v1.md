@@ -74,6 +74,12 @@ The full-inventory editable CSV is deployed in release
 remains unverified. Continue the same Audit delivery slice with a bounded
 Qwen-grounded ID subtype/work association and independently validated checks;
 do not misrepresent this CSV as a completed Audit.
+The following source slice introduces exact-byte duplicate-ID triage across
+distinct uploaded field-document records and an explicit no-ID-input message.
+It cannot establish ID completeness or document validity. A real Audit pass
+still requires Qwen-grounded subtype/work association, individual checks,
+cross-document checks and a corrective report; continue that same capability
+chain after deploying the triage slice.
 
 Checkpoint 2026-10-07 (later): the owner-supplied mandate in
 `/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read

@@ -484,6 +484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/audit/uploaded-id-duplicate-review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Audit Uploaded Id Duplicate Review */
+        get: operations["audit_uploaded_id_duplicate_review_api_v1_workspaces__workspace_id__audit_uploaded_id_duplicate_review_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/documents": {
         parameters: {
             query?: never;
@@ -1775,6 +1792,33 @@ export interface components {
              * @enum {string}
              */
             status: "not_published" | "partial" | "published";
+        };
+        /** AuditUploadedIdDuplicateReviewView */
+        AuditUploadedIdDuplicateReviewView: {
+            /** Authority Boundary */
+            authority_boundary: string;
+            /** Document Count */
+            document_count: number;
+            /** Duplicate Document Count */
+            duplicate_document_count: number;
+            /** Duplicate Group Count */
+            duplicate_group_count: number;
+            /** Field Document Count */
+            field_document_count: number;
+            /** Groups */
+            groups: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Review Kind
+             * @constant
+             */
+            review_kind: "uploaded_id_exact_duplicate_triage";
+            /**
+             * Status
+             * @constant
+             */
+            status: "partial";
         };
         /** Body_upload_documents_api_v1_workspaces__workspace_id__documents_post */
         Body_upload_documents_api_v1_workspaces__workspace_id__documents_post: {
@@ -4756,6 +4800,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_uploaded_id_duplicate_review_api_v1_workspaces__workspace_id__audit_uploaded_id_duplicate_review_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditUploadedIdDuplicateReviewView"];
                 };
             };
             /** @description Validation Error */

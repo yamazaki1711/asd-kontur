@@ -87,6 +87,20 @@ two scoped active document versions, later-page inclusion and formula-safe
 filenames. Qwen/NTD processes were not restarted; no owner project processing
 was manually scheduled.
 
+The next Audit slice adds a narrow, source-byte-grounded finding candidate:
+two distinct active `field_document` records with the same SHA-256 content are
+shown as copies whose *purpose* must be checked. Identical bytes are not called
+invalid forms, and project/design source files are excluded from the ID check.
+The endpoint scans the complete paginated active inventory under the owner
+scope, not just the visible first page. The UI links each candidate back to
+both source documents. When no field documents are present, it explicitly
+states that ID composition/content cannot yet be audited; design inputs do
+not count as ID. A read-only check of the current owner workspace found 21
+active files, zero `field_document` files and therefore zero duplicate-ID
+candidates. No document inference or owner-data mutation was performed. This
+is an independent exact-byte inventory check, **not** semantic ID subtype,
+signature, chronology, quantity or work-link audit and not FFC-04 acceptance.
+
 ## 1. Scope and boundary
 
 WP-14 implements a universal workspace-scoped acquisition/corpus capability and
