@@ -1812,3 +1812,17 @@ including a document whose title suggests procurement description. Whether it
 is an amendable contract attachment or contextual tender material requires a
 source-grounded semantic authority decision; filename alone is not a safe
 exclusion rule. No source was reclassified or manually patched here.
+
+The explicitly opted-in, changed-party contract-only journey then passed in
+an isolated `asd_g04_test_*` database and temporary object store against the
+same application code (`1be4a7f0d5aad9368c904e17034acfa3f0ce6d31`). It
+uploaded a synthetic DOCX, let the application orchestrator and worker perform
+the ordinary stages through the persistent local Qwen runtime, and asserted a
+grounded payment risk, a benign warranty clause left unflagged, a disagreement
+proposal, editable protocol and a revised-source package. Duration was 86.55
+seconds; Qwen's completed-request counter moved from 887 to 890. The test
+database was removed by teardown; historical unrelated `asd_g04_test_*`
+databases were not touched. The full disposable PostgreSQL suite also passed:
+1490 passed, two skipped, one warning, in 125.98 seconds. This test drives the
+orchestrator and worker classes inside a test process and therefore does not
+alone prove Codex-disconnected supervisor autonomy or owner-browser access.

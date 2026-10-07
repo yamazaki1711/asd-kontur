@@ -206,6 +206,20 @@ pass does not substitute for a sufficient-input success path.
 | FFC-11 | Delivery and acceptance | Run qualified diverse-corpus, false-negative/positive and representative thousands-of-documents acceptance | Qwen production tasks only; code measures work, replay, failure and time-to-value | Same tested/deployed release exposes all results and files | NOT VERIFIED |
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
 
+FFC-01 remains `PARTIAL` after the 7 October contract output checkpoint. The
+delivered application release is
+`1be4a7f0d5aad9368c904e17034acfa3f0ce6d31` on migration
+`0132_tender_participation_assessments`. A changed-party contract-only corpus
+passed the isolated upload-to-editable-output path with live local Qwen and a
+benign-clause false-positive control (one scenario, 86.55 seconds). A read-only
+render of the owner workspace's persisted Qwen result produced a two-page
+editable disagreement protocol whose clause numbers are shown only when
+present in exact source wording. The in-app browser connection was unavailable
+for authenticated download and visual UI acceptance. Legal/cross-clause
+coherence, attachment authority, user selection of revisions, and full
+contract-only supervisor-disconnected acceptance remain unverified; no
+contract journey PASS or `ProductReady` change follows from these checks.
+
 The FFC-02 partial delivery is pinned to application release
 `81af71af3d12a988dbd2100d664233272bc20f09` on migration
 `0131_contract_revision_review`. A read-only render of the current real
