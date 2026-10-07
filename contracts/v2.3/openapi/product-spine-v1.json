@@ -1920,6 +1920,14 @@
             "title": "Processes",
             "type": "array"
           },
+          "requirements": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
           "truncated_sections": {
             "items": {
               "type": "string"
@@ -1940,6 +1948,7 @@
           "processes",
           "batches",
           "works",
+          "requirements",
           "preflights",
           "evidence",
           "grants",

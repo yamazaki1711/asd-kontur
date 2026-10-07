@@ -81,7 +81,8 @@ def _seed_batch_and_work(
     )
     rule_set, _rule, _evaluation, trace = _seed_rule(environment, tenant)
     ids = {
-        key: uuid7() for key in ("work_type", "material", "structure", "element", "work", "batch")
+        key: uuid7()
+        for key in ("work_type", "material", "structure", "element", "work", "batch", "requirement")
     }
     with environment.owner_engine.begin() as connection:
         connection.execute(
@@ -133,6 +134,12 @@ def _seed_batch_and_work(
             "INSERT INTO workspace.material_batch_versions VALUES "
             "(:o,:w,:batch,1,:material,'1.0.0','delivery-42','candidate',:fact,1,"
             ":digest,CURRENT_TIMESTAMP)",
+            "INSERT INTO workspace.material_requirement_versions "
+            "(organization_id,workspace_id,material_requirement_id,version,work_instance_id,"
+            "work_instance_version,material_class_id,material_class_version,quantity,unit_code,"
+            "precision_scale,applicability,status,rule_trace_id,requirement_digest,recorded_at) "
+            "VALUES (:o,:w,:requirement,1,:work,1,:material,'1.0.0',NULL,NULL,NULL,"
+            "'applicable','required',:trace,:digest,CURRENT_TIMESTAMP)",
         ):
             connection.execute(sa.text(statement), params)
     return ids["batch"], ids["work"], source, locator
@@ -269,6 +276,7 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
         "delivery_quantity",
     }
     assert context["grants"][0]["grant_id"] == grant.grant_id
+    assert context["requirements"][0]["work_instance_id"] == work_id
     unrelated = create_tenant(postgres_environment)
     with pytest.raises(MaterialAdmissionError, match="workspace_not_found"):
         service.context(owner_identity_id=owner, workspace_id=unrelated.workspace_id)
@@ -364,6 +372,25 @@ def test_material_admission_requires_bound_basis_and_survives_api_reload(
     )
     assert quarantined["outcome"] == "quarantined"
     assert "INCOMING_CONTROL_NONCONFORMING" in quarantined["reason_codes"]
+
+    with postgres_environment.owner_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO workspace.material_requirement_versions "
+                "(organization_id,workspace_id,material_requirement_id,version,work_instance_id,"
+                "work_instance_version,material_class_id,material_class_version,quantity,unit_code,"
+                "precision_scale,applicability,status,rule_trace_id,"
+                "requirement_digest,recorded_at) "
+                "SELECT organization_id,workspace_id,material_requirement_id,2,work_instance_id,"
+                "work_instance_version,material_class_id,material_class_version,quantity,unit_code,"
+                "precision_scale,applicability,'superseded',rule_trace_id,requirement_digest,"
+                "CURRENT_TIMESTAMP FROM workspace.material_requirement_versions WHERE "
+                "organization_id=:o AND workspace_id=:w AND work_instance_id=:work AND version=1"
+            ),
+            {"o": tenant.organization_id, "w": tenant.workspace_id, "work": work_id},
+        )
+    with pytest.raises(MaterialAdmissionError, match="work_material_not_specified"):
+        service.record(**{**command, "idempotency_key": "material-obsolete-work-requirement"})
 
     transition(
         PostgresLifecycleRepository(postgres_environment.lifecycle_engine),

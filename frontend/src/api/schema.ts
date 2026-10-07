@@ -2259,6 +2259,10 @@ export interface components {
             processes: {
                 [key: string]: unknown;
             }[];
+            /** Requirements */
+            requirements: {
+                [key: string]: unknown;
+            }[];
             /** Truncated Sections */
             truncated_sections: string[];
             /** Works */

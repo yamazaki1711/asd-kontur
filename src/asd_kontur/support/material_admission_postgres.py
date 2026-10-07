@@ -55,6 +55,7 @@ class MaterialAdmissionService:
                 ),
                 "batches": (
                     "SELECT b.material_batch_id,b.version,b.batch_reference,b.admission_state,"
+                    "b.material_class_id,b.material_class_version,"
                     "m.title AS material_name FROM workspace.material_batch_versions b "
                     "JOIN platform.material_class_versions m ON "
                     "m.material_class_id=b.material_class_id AND "
@@ -76,6 +77,17 @@ class MaterialAdmissionService:
                     "AND v.work_instance_id=wi.work_instance_id) AND wi.work_state IN "
                     "('planned','ready','in_progress') ORDER BY wi.recorded_at DESC,"
                     "wi.work_instance_id LIMIT 201"
+                ),
+                "requirements": (
+                    "SELECT r.material_requirement_id,r.version,r.work_instance_id,"
+                    "r.work_instance_version,r.material_class_id,r.material_class_version,"
+                    "r.applicability,r.status FROM workspace.material_requirement_versions r "
+                    "WHERE r.organization_id=:o AND r.workspace_id=:w AND "
+                    "r.version=(SELECT max(v.version) FROM "
+                    "workspace.material_requirement_versions v "
+                    "WHERE v.organization_id=r.organization_id AND v.workspace_id=r.workspace_id "
+                    "AND v.material_requirement_id=r.material_requirement_id) "
+                    "ORDER BY r.recorded_at DESC,r.material_requirement_id LIMIT 201"
                 ),
                 "preflights": (
                     "SELECT p.preflight_id,p.material_batch_id,p.material_batch_version,"
@@ -255,6 +267,30 @@ class MaterialAdmissionService:
             )
             if latest_work_version != work_instance_version:
                 raise MaterialAdmissionError("material_admission_work_version_stale")
+            specified_material = session.scalar(
+                sa.text(
+                    "SELECT 1 FROM workspace.material_requirement_versions r WHERE "
+                    "r.organization_id=:o AND r.workspace_id=:w AND "
+                    "r.work_instance_id=:work AND r.work_instance_version=:work_version AND "
+                    "r.material_class_id=:class AND r.material_class_version=:class_version "
+                    "AND r.applicability='applicable' AND "
+                    "r.status IN ('required','conditional','satisfied') AND "
+                    "r.version=(SELECT max(v.version) FROM "
+                    "workspace.material_requirement_versions v "
+                    "WHERE v.organization_id=r.organization_id AND v.workspace_id=r.workspace_id "
+                    "AND v.material_requirement_id=r.material_requirement_id) LIMIT 1"
+                ),
+                {
+                    "o": organization_id,
+                    "w": workspace_id,
+                    "work": work_instance_id,
+                    "work_version": work_instance_version,
+                    "class": batch["material_class_id"],
+                    "class_version": batch["material_class_version"],
+                },
+            )
+            if specified_material != 1:
+                raise MaterialAdmissionError("material_admission_work_material_not_specified")
             preflight = self._row(
                 session,
                 "SELECT batch_reference,material_batch_id,material_batch_version,result FROM "

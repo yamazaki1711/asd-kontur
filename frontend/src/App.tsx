@@ -3011,6 +3011,31 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
   const batch = data?.batches.find(
     (item) => String(item.material_batch_id) === batchId,
   );
+  const eligibleRequirementWorkVersions = new Set(
+    (data?.requirements ?? [])
+      .filter(
+        (item) =>
+          batch &&
+          String(item.material_class_id) === String(batch.material_class_id) &&
+          String(item.material_class_version) ===
+            String(batch.material_class_version) &&
+          item.applicability === "applicable" &&
+          ["required", "conditional", "satisfied"].includes(
+            String(item.status),
+          ),
+      )
+      .map(
+        (item) =>
+          `${String(item.work_instance_id)}:${String(item.work_instance_version)}`,
+      ),
+  );
+  const eligibleWorks = (data?.works ?? []).filter(
+    (item) =>
+      !batch ||
+      eligibleRequirementWorkVersions.has(
+        `${String(item.work_instance_id)}:${String(item.version)}`,
+      ),
+  );
   const work = data?.works.find(
     (item) => String(item.work_instance_id) === workId,
   );
@@ -3087,6 +3112,7 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
   const canSubmit = Boolean(
     batch &&
     work &&
+    eligibleRequirementWorkVersions.has(`${workId}:${String(work.version)}`) &&
     process &&
     grant &&
     preflight &&
@@ -3197,7 +3223,7 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
                 }}
               >
                 <option value="">Выберите работу</option>
-                {data.works.map((item) => (
+                {eligibleWorks.map((item) => (
                   <option
                     key={String(item.work_instance_id)}
                     value={String(item.work_instance_id)}
@@ -3208,6 +3234,13 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
               </select>
             </label>
           </div>
+          {batch && !eligibleWorks.length ? (
+            <p role="alert">
+              Для выбранной партии нет действующего требования к материалу ни в
+              одной запланированной работе. Сначала уточните проектное
+              требование; допуск по одному заявлению неприменимости недопустим.
+            </p>
+          ) : null}
           <div className="form-row">
             <label>
               Процесс сопровождения

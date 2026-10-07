@@ -569,6 +569,7 @@ class MaterialAdmissionContextView(ApiModel):
     processes: list[dict[str, Any]]
     batches: list[dict[str, Any]]
     works: list[dict[str, Any]]
+    requirements: list[dict[str, Any]]
     preflights: list[dict[str, Any]]
     evidence: list[dict[str, Any]]
     grants: list[dict[str, Any]]

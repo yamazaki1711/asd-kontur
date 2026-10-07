@@ -210,3 +210,16 @@ NTD documents/editions/semantics were 15/15/1,669 and inspected
 embedding/graph/search rows remained 0/0/0. This proves preservation for the
 specified cutover, not an operational Support-mode completion or an
 authenticated owner-browser acceptance.
+
+## Work-material requirement guard (follow-up)
+
+The first admission command confirmed the batch and work independently, but a
+human-selected applicability checkbox could still pair a batch with a work
+that had no current requirement for its material class. The follow-up queries
+the latest exact work-material requirement version and permits a decision only
+when the material class/version is applicable to that work and its requirement
+state is current. The Support UI lists only eligible works for the selected
+batch and explains when no work has such a requirement. A superseded
+requirement blocks a new decision even if an older admission exists. This is
+a general material-to-work scope guard, not an inferred approval of a
+material substitution or an additional-work change.
