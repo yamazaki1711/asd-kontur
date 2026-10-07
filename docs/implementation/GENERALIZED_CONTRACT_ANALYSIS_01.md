@@ -2440,3 +2440,16 @@ original DOCX. That source-inherited layout defect remains a manual document
 review item, not a change introduced by this reconstruction. The protocol is
 an editable candidate, not an agreed legal instrument. Unresolved referenced
 attachments and bounded-context coherence review remain substantive limits.
+
+The code was released as exact SHA
+`5f1ef77e76c3f2df974b2761f58882b10bfc677f` on unchanged migration
+`0142_audit_id_document_interpretation`. All four application launchd roles
+reported running from that pinned release and API readiness passed. Qwen and
+NTD worker processes retained their previous PIDs. The deployed interpreter
+reopened the real workspace's persisted contract view and generated the
+protocol: all five complete proposed clauses were present. Focused unit tests
+passed 57/57. The temporary qualification exports and source copy were removed
+after inspection; they remain reproducible from the workspace. A first
+launchd bootstrap sometimes returned I/O error 5 while the old process was
+still in `SIGTERMed`; the orchestrator was resumed after its old process exited.
+This is a release-operations race to eliminate, not a semantic processing job.
