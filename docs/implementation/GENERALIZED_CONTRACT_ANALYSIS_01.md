@@ -1034,3 +1034,17 @@ the live contract projection nor establishes full contract or product readiness.
 The editable CSV export now carries the same per-input coverage states as the
 screen and Word report, so a spreadsheet consumer does not silently interpret
 an empty findings table as a completed project-to-contract comparison.
+
+The OCR route was checked before altering scheduling: persisted Qwen OCR elements
+enter `native_layout_element_versions` with source locators; the supervised
+reconciler counts readable persisted elements and can queue role classification
+and contract analysis for that source. The `native_locator_count` field is
+misleadingly named, but it does not exclude OCR output. No OCR scheduler change
+was justified by this inspection.
+
+Comparison coverage semantics were also tightened. Presence of a document role
+is now reported as `source_role_present`, not `input_available`; it does not
+claim that a comparison has run. Where no project-contract finding is
+published, the UI and Word report state that comparison completeness is not
+confirmed. These are truthful source-only presentation boundaries, not a
+substitute for the still-missing exhaustive project/contract comparison engine.

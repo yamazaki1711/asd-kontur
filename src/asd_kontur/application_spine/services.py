@@ -1960,7 +1960,7 @@ def _contract_cross_check_coverage(engineering: dict[str, Any]) -> list[dict[str
     return [
         {
             "check": check,
-            "status": "input_available" if roles & accepted else "input_not_established",
+            "status": "source_role_present" if roles & accepted else "input_not_established",
         }
         for check, accepted in requirements
     ]

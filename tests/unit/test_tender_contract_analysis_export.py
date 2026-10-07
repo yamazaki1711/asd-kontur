@@ -149,10 +149,38 @@ def test_contract_cross_checks_use_roles_not_source_names() -> None:
         }
     )
     assert checks == [
-        {"check": "design_scope", "status": "input_available"},
-        {"check": "commercial_scope", "status": "input_available"},
+        {"check": "design_scope", "status": "source_role_present"},
+        {"check": "commercial_scope", "status": "source_role_present"},
         {"check": "schedule", "status": "input_not_established"},
     ]
+
+
+def test_source_roles_without_published_findings_do_not_claim_clean_comparison() -> None:
+    checks = _contract_cross_check_coverage(
+        {
+            "documents": [
+                {"document_role": "РД"},
+                {"document_role": "Смета"},
+                {"document_role": "Календарный график"},
+            ]
+        }
+    )
+    assert {item["status"] for item in checks} == {"source_role_present"}
+    content = render_tender_contract_analysis_docx(
+        {
+            "status": "drafted",
+            "clauses": [],
+            "issues": [],
+            "disagreement_items": [],
+            "revised_clauses": [],
+            "deliverables": [],
+            "gaps": [],
+            "project_context": {"cross_checks": checks, "project_contract_findings": []},
+        }
+    )
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "полнота сопоставления не подтверждена" in report_xml
 
 
 def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() -> None:
