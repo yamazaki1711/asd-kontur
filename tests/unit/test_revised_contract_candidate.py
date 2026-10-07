@@ -11,6 +11,7 @@ from xml.etree import ElementTree as ET
 
 import pytest
 
+import asd_kontur.tender.revised_contract_candidate as revised_contract_module
 from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.tender.contract_analysis_view import _select_primary_revised_contract_source
 from asd_kontur.tender.contract_revision_selection import (
@@ -403,6 +404,24 @@ def test_revised_contract_changes_only_exact_source_clause() -> None:
     ]
     with zipfile.ZipFile(io.BytesIO(revised)) as package:
         assert package.read("custom/untouched.bin") == b"exact-untouched-package-member"
+
+
+def test_revised_contract_rejects_post_edit_serialization_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _source_docx("Unchanged text.", "Change this clause.")
+    original_restore = revised_contract_module._restore_ignorable_namespaces
+
+    def damaged_restore(document: bytes, *, source_namespaces: dict[str, str]) -> bytes:
+        restored = original_restore(document, source_namespaces=source_namespaces)
+        return restored.replace(b"Unchanged text.", b"Unexpected change.")
+
+    monkeypatch.setattr(revised_contract_module, "_restore_ignorable_namespaces", damaged_restore)
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_post_edit_integrity_failed",
+    ):
+        render_revised_contract_candidate_docx(source, _view("Change this clause."))
 
 
 def test_revised_contract_rejects_ambiguous_clause_match() -> None:

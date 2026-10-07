@@ -47,6 +47,29 @@ check; no owner project row or source was changed. It establishes file
 openability and basic pagination, not legal approval, full-page visual quality
 or correctness of each proposed revision.
 
+The next read-only acceptance checked every rendered page. All 40 pages
+contained extractable words; the protocol and second contract source had no
+out-of-page word coordinates. The first contract source had one out-of-page
+word coordinate on page 14. Rendering its admitted original independently
+showed the exact same coordinate on the same page; this is inherited source
+layout, not a new revision overflow. Original and revised versions both had
+30 pages. The five persisted proposed texts were present in the three-page
+protocol and in the revised source package (5/5 in each), and the package
+manifest counted three plus two edits. The admitted/revised DOCX files had no
+actual Word tracked-change elements; an initial raw substring count of
+`<w:ins` was a false alarm caused by similarly prefixed tags. These checks
+prove deterministic transfer and basic render integrity, not that the five
+drafted amendments are legally coherent or agreed. That substantive review
+remains a mandatory contract acceptance gap.
+
+The revised-source renderer now performs a post-serialization integrity check:
+the complete XML element-tag sequence must remain unchanged and every
+paragraph's resulting text must equal the exact in-memory replacement plan.
+Malformed or unexpectedly altered serialized output fails closed. A synthetic
+corruption check proves rejection, and the current owner-scoped two-DOCX
+package still renders read-only from the changed source code with a valid ZIP
+CRC. This is deterministic assembly assurance, not semantic legal review.
+
 ## 2026-10-07 confirmed execution-conditions schedule
 
 The Support production view now separates reviewed contract candidates from

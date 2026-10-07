@@ -178,6 +178,7 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
 
     paragraphs = list(root.iter(_PARAGRAPH))
+    original_tags = tuple(node.tag for node in root.iter())
     paragraph_texts = [_paragraph_text(paragraph) for paragraph in paragraphs]
     for source_text, revised_text in replacements:
         matches = [
@@ -213,6 +214,15 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         serialized_document,
         source_namespaces=source_namespaces,
     )
+    try:
+        checked = ET.fromstring(payloads["word/document.xml"])
+    except ET.ParseError as exc:
+        raise RevisedContractCandidateError("revised_contract_post_edit_integrity_failed") from exc
+    if (
+        tuple(node.tag for node in checked.iter()) != original_tags
+        or [_paragraph_text(paragraph) for paragraph in checked.iter(_PARAGRAPH)] != paragraph_texts
+    ):
+        raise RevisedContractCandidateError("revised_contract_post_edit_integrity_failed")
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w") as target:
         for info in infos:
