@@ -344,6 +344,34 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
             " ".join(str(item.get("revised_text") or "").split()) in " ".join(revised_text.split())
             for item in revised_clauses
         )
+        review_candidates = view.get("revision_review_candidates")
+        assert isinstance(review_candidates, list) and review_candidates
+        candidate = review_candidates[0]
+        review = client.post(
+            f"/api/v1/workspaces/{workspace_id}/tender/contract-revisions/"
+            f"{candidate['candidate_id']}/review",
+            json={
+                "candidate_digest": candidate["candidate_digest"],
+                "action": "confirmed",
+                "reason": "Synthetic acceptance of the source-bound proposed wording.",
+                "idempotency_key": "contract-only-reviewed-package-001",
+            },
+            headers=headers,
+        )
+        assert review.status_code == 200, review.text
+        reviewed_package = client.get(
+            f"/api/v1/workspaces/{workspace_id}/tender/reviewed-contract-package.zip"
+        )
+        assert reviewed_package.status_code == 200, reviewed_package.text[:300]
+        with zipfile.ZipFile(io.BytesIO(reviewed_package.content)) as archive:
+            assert archive.testzip() is None
+            manifest = json.loads(archive.read("manifest.json"))
+            assert manifest["reviewed_protocol"]["proposal_count"] == 1
+            reviewed_protocol = _docx_text(archive.read("reviewed-disagreement-protocol.docx"))
+            reviewed_contract = _docx_text(archive.read("contract-source-01.docx"))
+        selected_text = str(candidate.get("revised_text") or "")
+        assert selected_text and selected_text in reviewed_protocol
+        assert selected_text in reviewed_contract
         package = client.get(
             f"/api/v1/workspaces/{workspace_id}/tender/revised-contract-package.zip"
         )

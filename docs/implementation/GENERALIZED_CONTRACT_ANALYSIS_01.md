@@ -2017,3 +2017,18 @@ clause source locators and clause references in the owner's read-only
 projection. PDF page references remain unchanged. That correction shipped in
 release `199a6b15c54697f087e407a2706299d3f5915852` without reprocessing
 the owner's contract or restarting Qwen/NTD.
+
+The reviewed contract package now validates its editable disagreement protocol
+against the exact clause revisions applied to the source DOCX files. A ZIP-valid
+but stale protocol, an extra amendment row, or an original/proposed wording
+mismatch fails closed; the manifest cannot label those inconsistent artifacts
+as one reviewed package. A changed-party, contract-only journey in a disposable
+PostgreSQL database used the persistent local Qwen runtime and ordinary
+orchestration, then confirmed one source-bound proposal through the application
+API and downloaded the matched protocol/contract package. It passed in 184.27
+seconds; Qwen's completed-request counter increased from 948 to 954. The
+contract-only run did not touch the public owner workspace, and its temporary
+test database was removed by fixture teardown. Focused contract/export checks
+passed 45/45. This is a consistency safeguard for a human-review candidate,
+not proof of contract-wide legal coherence or an approved agreement. The source
+change is not yet the public deployed release.
