@@ -285,7 +285,7 @@ Focused exact-release tests passed 35/35; frontend typecheck, lint and build
 passed. Authenticated owner-screen acceptance and real field-material evidence
 remain unavailable, so Support and `ProductReady` remain incomplete.
 
-## Actual material application — source checkpoint
+## Actual material application — public checkpoint
 
 The next Support capability records the *actual use* of an admitted batch on a
 specific work. It is deliberately separate from delivery, incoming inspection
@@ -305,7 +305,26 @@ authority links and scoped writer/read policies to the existing kernel
 material-application table. Isolated PostgreSQL/API qualification covers
 idempotency, over-application, wrong units, delivery evidence used as a false
 work-use source, superseded preflight, reload and write fencing. This is a
-source checkpoint until an exact release is cut over; no public material
-application or owner field fact was created. A verified material-use evidence
+released checkpoint at exact application SHA
+`18ce8439198c3d39e63d8a3a1559e80d5c499612`. A public backup was made at
+`~/.asd-kontur/public-demo/backups/0137-material-application-18ce843/pre-migration.dump`
+(SHA-256 `1e6458335606b55f2212ef6dfb7977cd10b0cbcf2c68845c0d4f87cd4ff281eb`).
+It restored to a separate qualification database and passed 0137 upgrade,
+downgrade to 0136 and re-upgrade. The public migration then reached 0137;
+all four supervised application roles are pinned to the exact release. The
+API readiness check passed, the served OpenAPI was structurally equal to the
+built artifact (SHA-256
+`0e87c18dceac5522ab4e1d0e772dc500a9a63de46dea50cb0643def452affc79`),
+the frontend returned HTTP 200 and the new unauthenticated command returned
+401. Qwen and NTD workers were not restarted. The real workspace still has
+21 source versions and zero material applications; the full platform-data
+fingerprint remains
+`ff6e99703e35fa28887ed16571aa62f552649ccd8027b60305691155f863e3da`.
+The prior launchd plists are backed up privately under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-18ce843-material-application/`.
+Exact-release focused tests passed 36/36 and frontend typecheck/lint/build
+passed. No public material application or owner field fact was created.
+Authenticated owner-screen acceptance was unavailable because the browser
+connection was absent. A verified material-use evidence
 link must already exist, and material balance, work acceptance and KS/payment
 readiness are **not** established by this slice. `ProductReady=false`.
