@@ -29,3 +29,18 @@ document. Its first page now contains contractor risk rows with professional
 Russian labels; the first page was visually inspected. This is not a legal
 opinion on Qwen's underlying proposals or an owner-authenticated browser
 download acceptance.
+
+## Release state
+
+Exact source `a35ce09cda40bd1b1db298692daf90a89d309d9a` is pinned to all
+four supervised application roles from
+`~/.asd-kontur/public-demo/releases/20261008-a35ce09-contract-risk-first`.
+The release passed 70/70 focused contract/report tests and Ruff. It reused
+the unchanged frontend build, verified source-identical to the prior release;
+the public migration remains `0141_contract_reference_partial_package`.
+The cutover occurred with no queued, leased or running durable job. API
+readiness passed. Qwen and NTD processes retained their PIDs; the platform
+data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+The read-only render was generated from the application service, but an
+authenticated owner-browser download was not available in this session.
