@@ -2842,12 +2842,12 @@ function TenderContractAnalysisBody({
     revisionFingerprint && selectedRevisionIds.length
       ? `/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip?revision_ids=${encodeURIComponent(selectedRevisionIds.join(","))}&revision_fingerprint=${encodeURIComponent(revisionFingerprint)}`
       : null;
-  const reviewedRevisionIds = revisionReviewCandidates
-    .filter((candidate) => candidate.review_state === "confirmed")
-    .map((candidate) => String(candidate.candidate_id));
+  const reviewedRevisionIds = revisionReviewCandidates.filter(
+    (candidate) => candidate.review_state === "confirmed",
+  );
   const reviewedPackageHref =
     revisionFingerprint && reviewedRevisionIds.length
-      ? `/api/v1/workspaces/${workspaceId}/tender/revised-contract-package.zip?revision_ids=${encodeURIComponent(reviewedRevisionIds.join(","))}&revision_fingerprint=${encodeURIComponent(revisionFingerprint)}`
+      ? `/api/v1/workspaces/${workspaceId}/tender/reviewed-contract-package.zip`
       : null;
   const revisedContracts = value.revised_contracts as Array<
     Record<string, unknown>

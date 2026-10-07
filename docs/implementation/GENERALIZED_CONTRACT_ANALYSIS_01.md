@@ -1,5 +1,19 @@
 # Generalized Contract Analysis 01
 
+## Server-authoritative reviewed contract package follow-up
+
+The next source change removes a trust ambiguity: the URL for the reviewed
+draft no longer supplies revision IDs. The server loads current workspace
+decisions, discards rejected/stale/unreviewed proposals and refuses the
+reviewed-package route if none remain. The ad-hoc selection export remains a
+separate explicitly unapproved draft. This prevents a hand-edited query string
+from turning an unreviewed proposal into an artifact labeled as reviewed.
+Unit qualification checks that the server includes only one current confirmed
+proposal out of two and rejects the zero-confirmed case; the isolated browser
+check verifies the reviewed link has no client-selected IDs. No database
+migration or Qwen work is required for this follow-up. Public release evidence
+is recorded separately after cutover; source tests alone are not deployment.
+
 ## 2026-10-07 source-bound revision review (source checkpoint)
 
 The contract screen now separates Qwen-proposed wording from a human decision

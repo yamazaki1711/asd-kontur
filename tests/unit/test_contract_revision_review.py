@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
+from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
+
+from asd_kontur.application_spine.services import ProductSpineService
 from asd_kontur.tender.contract_revision_review import (
     apply_revision_reviews,
     revision_review_candidates,
 )
+from asd_kontur.tender.revised_contract_candidate import RevisedContractCandidateError
 
 
 def _view() -> dict[str, object]:
@@ -58,3 +64,44 @@ def test_review_does_not_create_candidate_without_source_locator() -> None:
     view = _view()
     view["clauses"][0]["source_locator_id"] = None
     assert revision_review_candidates(view) == []
+
+
+def test_reviewed_package_uses_server_decisions_not_client_ids() -> None:
+    view = _view()
+    second = deepcopy(view["revised_clauses"][0])
+    second["revised_clause_id"] = str(uuid4())
+    second["revised_text"] = "A second changed condition."
+    view["revised_clauses"].append(second)
+    candidates = revision_review_candidates(view)
+    decision = {
+        "candidate_id": candidates[1]["candidate_id"],
+        "action": "confirmed",
+        "original_value": {"candidate_digest": candidates[1]["candidate_digest"]},
+    }
+    service = ProductSpineService.__new__(ProductSpineService)
+    service._tender_contract_analysis = SimpleNamespace(latest=lambda **kwargs: view)
+    service._contract_revision_reviews = SimpleNamespace(
+        latest_decisions=lambda **kwargs: [decision]
+    )
+    selected_views: list[dict[str, object]] = []
+
+    def render(**kwargs: object) -> tuple[bytes, int]:
+        selected_views.append(kwargs["view"])
+        return b"synthetic-reviewed-package", 1
+
+    service._render_revised_contract_source_package = render
+    output = service.tender_reviewed_contract_package(
+        owner_identity_id="owner:synthetic", workspace_id=uuid4()
+    )
+    assert b"".join(output.chunks) == b"synthetic-reviewed-package"
+    assert [
+        item["revised_clause_id"] for item in selected_views[0]["revised_clauses"]
+    ] == [candidates[1]["candidate_id"]]
+
+    service._contract_revision_reviews = SimpleNamespace(latest_decisions=lambda **kwargs: [])
+    with pytest.raises(
+        RevisedContractCandidateError, match="reviewed_contract_revisions_unavailable"
+    ):
+        service.tender_reviewed_contract_package(
+            owner_identity_id="owner:synthetic", workspace_id=uuid4()
+        )

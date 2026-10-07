@@ -787,8 +787,10 @@ test("reviewer selects only desired contract revisions for draft export", async 
   const reviewedLink = page.getByRole("link", {
     name: "Скачать черновик по проверенным предложениям (ZIP)",
   });
-  await expect(reviewedLink).toHaveAttribute("href", new RegExp(second));
-  await expect(reviewedLink).not.toHaveAttribute("href", new RegExp(first));
+  await expect(reviewedLink).toHaveAttribute(
+    "href",
+    `/api/v1/workspaces/${workspaceA}/tender/reviewed-contract-package.zip`,
+  );
 });
 
 for (const viewport of [

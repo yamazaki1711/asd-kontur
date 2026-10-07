@@ -893,6 +893,48 @@ class ProductSpineService:
             (data,),
         )
 
+    def tender_reviewed_contract_package(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> DocumentContent:
+        """Export only current source-bound human-reviewed proposals."""
+
+        view = self._tender_contract_analysis.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        reviewed = apply_revision_reviews(
+            revision_review_candidates(view),
+            self._contract_revision_reviews.latest_decisions(
+                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            ),
+        )
+        selected_ids = [
+            str(item["candidate_id"])
+            for item in reviewed
+            if item["review_state"] == "confirmed"
+        ]
+        if not selected_ids:
+            raise RevisedContractCandidateError("reviewed_contract_revisions_unavailable")
+        selected = select_contract_revisions(
+            view,
+            revision_ids=selected_ids,
+            fingerprint=contract_revision_fingerprint(view),
+        )
+        data, _ = self._render_revised_contract_source_package(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            view=selected,
+        )
+        digest = "sha256:" + hashlib.sha256(data).hexdigest()
+        return DocumentContent(
+            "application/zip",
+            len(data),
+            digest,
+            f"tender-reviewed-contract-draft-{workspace_id}.zip",
+            0,
+            len(data),
+            (data,),
+        )
+
     def _render_revised_contract_source_package(
         self,
         *,
