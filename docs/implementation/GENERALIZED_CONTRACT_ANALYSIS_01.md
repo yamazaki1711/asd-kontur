@@ -21,6 +21,35 @@ confirm action and refreshed review state. Before public deployment the
 database backup/restore/upgrade path still needs qualification. This is a
 source checkpoint, not a deployed product claim.
 
+The public database was backed up to the private local archive
+`~/.asd-kontur/public-demo/backups/20261007-pre-0130-contract-obligation-review.dump`
+(72 MiB, SHA-256 `02c96d0f040c59a7d3c57302aa422afec880ab2f74a9529319a14a2387e83c46`).
+It restored without error in an isolated PostgreSQL cluster after the
+application role names were recreated there. Migration `0129 -> 0130`,
+disposable downgrade `0130 -> 0129`, and re-upgrade passed on the restored
+copy. The public application queue was empty before the controlled cutover.
+The four application roles now run exact code SHA
+`f57276e9df70400a52017cae62a4aae9e52b2f01` from
+`~/.asd-kontur/public-demo/releases/20261007-f57276e-contract-obligation-review-v1`;
+API readiness and the new frontend asset returned HTTP 200. Qwen and NTD
+workers were not restarted. The previous application plists are at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-f57276e-contract-obligation-review/`.
+The pinned read path showed 274 source-linked obligations and zero human
+confirmations in the owner's workspace; the unauthenticated review command
+returned HTTP 401. No owner candidate was confirmed merely to test the API.
+
+A raw whole-file `pg_dump` hash changed between invocations because dump
+metadata is not a stable data fingerprint. Exact per-table COPY-section
+digests matched for all 170 platform tables between the restored pre-migration
+backup and the migrated public database (aggregate SHA-256
+`9723d28216e88cf6d7540f40cc96b5df8f80664a74c84054868fc95614cf2e70`).
+The checked NTD counters remained 15 documents, 15 editions, 1,669 semantic
+rows, and zero in the three inspected embedding/graph/search tables. The
+isolated restored cluster and diagnostic dumps were stopped and moved to
+Trash; the secured pre-migration backup remains for rollback. This validates
+platform data preservation for this cutover, not full NTD operational
+readiness or four-mode product readiness.
+
 ## 2026-10-07 reviewer-selected draft revisions (source checkpoint)
 
 The Tender contract page now lets a reviewer choose which Qwen-proposed
