@@ -403,6 +403,16 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "source_locator_id": "locator-independent-311",
                 "evidence_link_id": "evidence-independent-808",
                 "authority_layer": "contract",
+                "customer_obligation": "Provide site access before mobilisation.",
+            }
+        ],
+        "attachment_references": [
+            {
+                "source_quote": "Site access appendix",
+                "target_description": "Site access conditions",
+                "match_decision": "unresolved",
+                "source_name": "Changed-contract-terms.docx",
+                "source_page": 12,
             }
         ],
         "issues": [
@@ -410,7 +420,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "issue_id": "issue-independent-11",
                 "issue_version": 1,
                 "issue_kind": "contract_risk",
-                "subject": "Acceptance deadline",
+                "subject": "payment_dependency",
                 "description": "Acceptance depends on an undefined Customer review period.",
                 "trigger_text": "Customer accepts work after its internal review.",
                 "adverse_effect_text": "Payment is due only after Customer acceptance.",
@@ -510,6 +520,11 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "не является подписанным соглашением сторон" in document
         assert "Обоснование / практическая причина" in document
         assert "Acceptance depends on an undefined Customer review period." in document
+        assert "Договорный риск" in document
+        assert "Зависимость оплаты от внешнего условия" in document
+        assert "Применимо" in document
+        assert ">payment_dependency<" not in document
+        assert ">contract_risk<" not in document
         assert "Customer accepts work after its internal review." in document
         assert "Payment is due only after Customer acceptance." in document
         assert "Define one evidence-backed acceptance period." in document
@@ -517,6 +532,14 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "5 месяцев" in document
         assert "Связь договора с проектом" in document
         assert "ПОС: 3 месяца; закупка: 5 месяцев." in document
+        assert (
+            document.index("Вопросы и риски")
+            < document.index("Предложения для протокола разногласий")
+            < document.index("Ключевые условия договора и закупки")
+            < document.index("Связь договора с проектом")
+            < document.index("Документы, на которые ссылается договор")
+            < document.index("Обязательства сторон и условия исполнения")
+        )
 
     protocol = render_tender_disagreement_protocol_docx(view)
     with zipfile.ZipFile(io.BytesIO(protocol)) as package:

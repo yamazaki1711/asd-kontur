@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import io
+import re
 import zipfile
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
@@ -15,6 +16,29 @@ from asd_kontur.tender.clause_reference import (
 )
 
 _FIXED_ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+_RISK_SUBJECT_LABELS = {
+    "payment_dependency": "Зависимость оплаты от внешнего условия",
+    "uncontrolled_obligation": "Неконтролируемое обязательство Подрядчика",
+    "unclear_acceptance": "Неопределённый порядок приёмки",
+    "unpaid_change": "Изменение работ без гарантии оплаты",
+    "deadline_exposure": "Риск нарушения срока",
+    "one_sided_liability": "Односторонняя ответственность",
+    "excessive_warranty": "Гарантийные обязательства",
+    "unlimited_liability": "Неограниченная ответственность",
+    "asymmetric_termination": "Неравные условия расторжения",
+    "missing_price_adjustment": "Отсутствие механизма изменения цены",
+    "customer_input_dependency": "Зависимость от исходных данных Заказчика",
+    "open_ended_documentation": "Неопределённый состав документации",
+    "project_contract_conflict": "Расхождение договора с проектом",
+    "other_contract_risk": "Иной договорный риск",
+}
+_ISSUE_KIND_LABELS = {"contract_risk": "Договорный риск"}
+_APPLICABILITY_LABELS = {
+    "candidate": "Предварительный вывод",
+    "applicable": "Применимо",
+    "uncertain": "Требует уточнения",
+    "not_applicable": "Не применимо",
+}
 
 
 def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
@@ -67,7 +91,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         disagreement_rows.append(
             (
                 str(ordinal),
-                display_clause_reference(clause),
+                display_protocol_clause_reference(clause),
                 str(clause.get("source_text") or "Текст исходного пункта не извлечён"),
                 _source_reference(clause),
                 str(revised.get("revised_text") or item.get("proposed_clause_text") or ""),
@@ -79,11 +103,15 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     issue_rows = [
         (
             str(ordinal),
-            str(item.get("issue_kind") or "Не указано"),
-            str(item.get("subject") or "Не указано"),
+            _professional_code_label(item.get("issue_kind"), _ISSUE_KIND_LABELS, "Иной вопрос"),
+            _professional_code_label(
+                item.get("subject"), _RISK_SUBJECT_LABELS, "Другой договорный риск"
+            ),
             str(item.get("description") or "Не указано"),
             _risk_source_wording(item),
-            str(item.get("applicability") or "Не указано"),
+            _professional_code_label(
+                item.get("applicability"), _APPLICABILITY_LABELS, "Требует уточнения"
+            ),
             str(item.get("recommendation_text") or "Требуется уточнение"),
             str(item.get("consequence_code") or "Не указано"),
         )
@@ -226,6 +254,61 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             )
         )
 
+    body.extend(
+        (
+            _heading("Вопросы и риски", "Heading1"),
+            _table(
+                (
+                    "№",
+                    "Вид",
+                    "Предмет",
+                    "Риск для Подрядчика",
+                    "Точная формулировка риска",
+                    "Применимость",
+                    "Рекомендация",
+                    "Последствие",
+                ),
+                issue_rows,
+                "Канонические вопросы и риски ещё не зарегистрированы.",
+            ),
+            _heading("Предложения для протокола разногласий", "Heading1"),
+            _table(
+                (
+                    "№",
+                    "Пункт договора / документа",
+                    "Редакция Заказчика",
+                    "Источник",
+                    "Предлагаемая редакция",
+                    "Обоснование / практическая причина",
+                    "Неопределённость",
+                ),
+                disagreement_rows,
+                "Предложения для профессиональной проверки ещё не подготовлены.",
+            ),
+            _heading("Ключевые условия договора и закупки", "Heading1"),
+            _table(
+                ("№", "Условие", "Значение", "Источник"),
+                key_condition_rows,
+                "Ключевые условия ещё извлекаются.",
+            ),
+            _heading("Связь договора с проектом", "Heading1"),
+            _table(
+                (
+                    "№",
+                    "Вопрос",
+                    "Предмет",
+                    "Расхождение или неопределённость",
+                    "Последствие для Подрядчика",
+                    "Рекомендуемое действие",
+                    "Источники",
+                ),
+                project_finding_rows,
+                "Проектно-договорные выводы пока не опубликованы; полнота "
+                "сопоставления не подтверждена.",
+            ),
+        )
+    )
+
     if reference_rows:
         body.extend(
             (
@@ -292,56 +375,6 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
 
     body.extend(
         (
-            _heading("Ключевые условия договора и закупки", "Heading1"),
-            _table(
-                ("№", "Условие", "Значение", "Источник"),
-                key_condition_rows,
-                "Ключевые условия ещё извлекаются.",
-            ),
-            _heading("Связь договора с проектом", "Heading1"),
-            _table(
-                (
-                    "№",
-                    "Вопрос",
-                    "Предмет",
-                    "Расхождение или неопределённость",
-                    "Последствие для Подрядчика",
-                    "Рекомендуемое действие",
-                    "Источники",
-                ),
-                project_finding_rows,
-                "Проектно-договорные выводы пока не опубликованы; полнота "
-                "сопоставления не подтверждена.",
-            ),
-            _heading("Предложения для протокола разногласий", "Heading1"),
-            _table(
-                (
-                    "№",
-                    "Пункт договора",
-                    "Редакция Заказчика",
-                    "Источник",
-                    "Предлагаемая редакция",
-                    "Обоснование / практическая причина",
-                    "Неопределённость",
-                ),
-                disagreement_rows,
-                "Предложения для профессиональной проверки ещё не подготовлены.",
-            ),
-            _heading("Вопросы и риски", "Heading1"),
-            _table(
-                (
-                    "№",
-                    "Вид",
-                    "Предмет",
-                    "Риск для Подрядчика",
-                    "Точная формулировка риска",
-                    "Применимость",
-                    "Рекомендация",
-                    "Последствие",
-                ),
-                issue_rows,
-                "Канонические вопросы и риски ещё не зарегистрированы.",
-            ),
             _heading("Подготовленные результаты", "Heading1"),
             _table(
                 ("№", "Результат", "Состояние", "Блокеры", "Неопределённость"),
@@ -708,6 +741,15 @@ def _joined(value: Any) -> str:
     if isinstance(value, (list, tuple, set)):
         return "; ".join(str(item) for item in value)
     return "" if value is None else str(value)
+
+
+def _professional_code_label(value: object, labels: Mapping[str, str], fallback: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "Не указано"
+    if raw in labels:
+        return labels[raw]
+    return fallback if re.fullmatch(r"[a-z]+(?:_[a-z]+)*", raw) else raw
 
 
 def _mapping(value: Any) -> Mapping[str, Any]:
