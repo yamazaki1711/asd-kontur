@@ -81,7 +81,11 @@ class MaterialAdmissionService:
                 "requirements": (
                     "SELECT r.material_requirement_id,r.version,r.work_instance_id,"
                     "r.work_instance_version,r.material_class_id,r.material_class_version,"
-                    "r.applicability,r.status FROM workspace.material_requirement_versions r "
+                    "r.applicability,r.status,r.quantity,r.unit_code,"
+                    "m.title AS material_name FROM workspace.material_requirement_versions r "
+                    "JOIN platform.material_class_versions m ON "
+                    "m.material_class_id=r.material_class_id AND "
+                    "m.version=r.material_class_version "
                     "WHERE r.organization_id=:o AND r.workspace_id=:w AND "
                     "r.version=(SELECT max(v.version) FROM "
                     "workspace.material_requirement_versions v "

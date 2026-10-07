@@ -239,3 +239,13 @@ The prior four plists are retained privately in
 `~/.asd-kontur/public-demo/launchd-backups/20261007-pre-8e3cf85-material-scope/`.
 No owner-specific material outcome or authenticated owner-screen acceptance
 is claimed. `ProductReady=false`.
+
+Follow-up source checkpoint: the Support screen now also lists current
+applicable material requirements by work, with the project quantity where
+stated and the latest visible admission decisions for matching batches. It
+states explicitly that admission does not prove actual application or
+quantity sufficiency; truncated histories cannot be presented as an absence
+of decisions. This is a professional requirement-to-decision view, not a
+work-readiness or KS/payment approval. Isolated PostgreSQL/API checks and
+frontend typecheck/lint pass; this follow-up is not in the public release
+named above until a separate controlled cutover.

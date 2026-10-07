@@ -3181,6 +3181,96 @@ function MaterialAdmissionPanel({ workspaceId }: { workspaceId: string }) {
           Процесс сопровождения ещё не находится на стадии допуска материалов.
         </p>
       ) : null}
+      {data?.requirements.length ? (
+        <div className="table-wrap">
+          <h3>Материалы, предусмотренные для работ</h3>
+          <p>
+            Наличие допуска партии не подтверждает её фактическое применение или
+            достаточность количества для всей работы.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Работа</th>
+                <th>Материал</th>
+                <th>Плановое количество</th>
+                <th>Допуск партии</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.requirements
+                .filter(
+                  (item) =>
+                    item.applicability === "applicable" &&
+                    ["required", "conditional", "satisfied"].includes(
+                      String(item.status),
+                    ),
+                )
+                .map((item) => {
+                  const relatedWork = data.works.find(
+                    (workItem) =>
+                      String(workItem.work_instance_id) ===
+                        String(item.work_instance_id) &&
+                      Number(workItem.version) ===
+                        Number(item.work_instance_version),
+                  );
+                  const relatedBatches = data.batches.filter(
+                    (batchItem) =>
+                      String(batchItem.material_class_id) ===
+                        String(item.material_class_id) &&
+                      String(batchItem.material_class_version) ===
+                        String(item.material_class_version),
+                  );
+                  const latestDecisions = relatedBatches
+                    .map((batchItem) =>
+                      data.decisions.find(
+                        (decision) =>
+                          String(decision.material_batch_id) ===
+                            String(batchItem.material_batch_id) &&
+                          Number(decision.material_batch_version) ===
+                            Number(batchItem.version) &&
+                          String(decision.work_instance_id) ===
+                            String(item.work_instance_id) &&
+                          Number(decision.work_instance_version) ===
+                            Number(item.work_instance_version),
+                      ),
+                    )
+                    .filter((decision) => decision !== undefined);
+                  return (
+                    <tr key={String(item.material_requirement_id)}>
+                      <td>
+                        {relatedWork
+                          ? String(relatedWork.work_name)
+                          : "Работа изменилась — проверить связь"}
+                      </td>
+                      <td>{String(item.material_name)}</td>
+                      <td>
+                        {item.quantity == null
+                          ? "Не указано"
+                          : `${displayValue(item.quantity)} ${displayValue(item.unit_code)}`}
+                      </td>
+                      <td>
+                        {latestDecisions.length
+                          ? latestDecisions
+                              .map(
+                                (decision) =>
+                                  outcomeLabels[String(decision.outcome)] ??
+                                  "Требует проверки",
+                              )
+                              .join("; ")
+                          : data.truncated_sections.some((name) =>
+                                ["decisions", "batches"].includes(name),
+                              )
+                            ? "История показана не полностью"
+                            : "Нет решения о допуске"}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {data ? (
         <form
           onSubmit={(event) => {
