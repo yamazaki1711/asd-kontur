@@ -15,6 +15,14 @@ creates a workspace or advances the production queue.
 The contract-analysis UI now refreshes its structured result every 30 seconds
 while open. An isolated browser test observed the initial extraction message
 change to a source-linked clause without a page reload or a manual job action.
+The exact `18bf2a2b57f84c3c8a478f65603d0bb15c926eff` release was then
+installed under the four supervised application roles with migration
+`0129_contract_reference_review` unchanged. The candidate passed the 4/4
+launchd topology preflight, the post-cutover API readiness check returned
+HTTP 200, and the new frontend asset returned HTTP 200. No project jobs were
+queued or running at cutover; Qwen and the NTD worker were not restarted.
+Rollback plists are in
+`/Users/oleg/.asd-kontur/public-demo/launchd-backups/20261007-pre-18bf2a2-contract-progress/`.
 This closes a progressive-display defect, **not** the contract-only autonomous
 application acceptance. Full legal-authority review, source-preserving
 multi-page visual qualification, authenticated live download, and all four
