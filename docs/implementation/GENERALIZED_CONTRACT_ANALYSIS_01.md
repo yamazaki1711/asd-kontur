@@ -1775,3 +1775,40 @@ package-relevant gap. This is a draft for human/legal review, not a signed or
 agreed contract. The in-app browser was unavailable to this session, so an
 authenticated browser download and all-page Word-compatible visual inspection
 remain unverified. `ProductReady=false`.
+
+## 2026-10-07 contract Word output quality checkpoint
+
+Read-only owner-scoped rendering of the persisted Qwen contract result found
+that the disagreement protocol's six equal-width columns compressed long
+practical reasons and created a near-empty third page. The generic renderer now
+uses five purpose-sized columns, retains the source reference inside the reason
+cell, repeats the table header and prevents splitting one proposed change
+across pages. The resulting owner-derived protocol rendered as two populated
+pages in LibreOffice; both pages were inspected visually. No Qwen job or project
+fact was created by this qualification. This change is deployed at
+`f4c599ff7ebdca5a22ce2fbadd1398573bff5abb`.
+
+That rendering also exposed model working identifiers such as `clause_3` in two
+clause-reference cells. A second generic renderer correction accepts a clause
+number only when it is present at the beginning of the exact persisted source
+text. Otherwise it labels the passage unnumbered and gives its source page;
+it never treats a model-generated alias as legal numbering. The real protocol
+still renders as two populated pages after this correction. Release
+`1be4a7f0d5aad9368c904e17034acfa3f0ce6d31` is pinned in the public
+application at migration `0132_tender_participation_assessments`. The four
+application roles passed the launchd preflight and API readiness; Qwen and NTD
+were not restarted. The Qwen-derived proposals remain draft professional
+candidates, not approved contract terms.
+
+Focused contract export/candidate tests passed (33/33). The Python suite with
+the migration round-trip module excluded passed (1370 passed, 121 skipped),
+and Ruff, formatting and mypy passed. The full migration round-trip gate
+requires an explicitly disposable `ASD_TEST_DATABASE_URL`; that target was not
+configured in this shell, so the destructive gate was not pointed at the public
+database. Authenticated browser download, legal/cross-clause coherence review,
+and the complete contract-only acceptance remain open. The read-only source
+inventory shows two current-profile sources classified `contract` by Qwen,
+including a document whose title suggests procurement description. Whether it
+is an amendable contract attachment or contextual tender material requires a
+source-grounded semantic authority decision; filename alone is not a safe
+exclusion rule. No source was reclassified or manually patched here.
