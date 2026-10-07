@@ -19,6 +19,18 @@ pre-cutover application plists are preserved under
 This is deterministic output safety, not Qwen legal coherence or professional approval.
 `ProductReady=false`.
 
+The changed-party contract-only journey was rerun against this source and an
+isolated disposable PostgreSQL cluster after deployment. The application's
+ordinary orchestrator and worker produced grounded contract risk analysis,
+left the benign warranty clause unflagged, and returned editable protocol and
+revised-contract outputs: 1/1 integration test passed in 84.82 seconds. The
+already-loaded local Qwen service's completed-request count advanced from 884
+to 887; it was not reloaded. The test cluster was stopped and moved to Trash
+for recoverable cleanup. No public test workspace was created. Browser-visible
+acceptance remains unverified because no browser backend was available to this
+session; API, artifact and source-bound checks do not substitute for that UI
+check.
+
 ## Clause-number and overlapping-edit safety (deployed checkpoint)
 
 Exact DOCX substitution now preserves the source's explicit clause number when
