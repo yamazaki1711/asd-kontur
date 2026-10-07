@@ -17,6 +17,21 @@ browser check confirms that review refreshes the schedule and both displayed
 source links resolve to the same admitted document locator. No owner-project
 decision is inserted for qualification.
 
+Release `2dc743c438a38cbbb2f045960ebd933d65055dba` is pinned at
+`~/.asd-kontur/public-demo/releases/20261007-2dc743c-contract-execution-conditions-v1`.
+The public database remains at `0130_contract_obligation_review`; no migration
+or owner-project review decision was added for this release. The application
+queue had zero queued/running jobs at cutover. The four application launchd
+roles now report the exact pinned SHA; API readiness and the built frontend
+asset returned HTTP 200. Qwen and NTD were not restarted. The previous four
+plists remain recoverable at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-2dc743c-contract-execution-conditions/`.
+The first bulk bootstrap hit a launchd removal/registration timing race. The
+previous roles were restored, then the pinned roles were started with a drain
+interval and verified individually. This deployment verifies service and UI
+artifact health; it does not constitute an authenticated owner-browser review
+or confirmation of any real clause. `ProductReady=false`.
+
 ## 2026-10-07 durable contract-obligation review (source checkpoint)
 
 The Support contract handover now has a human confirmation/rejection command.
