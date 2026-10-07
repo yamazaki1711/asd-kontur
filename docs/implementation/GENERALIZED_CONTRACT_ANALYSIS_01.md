@@ -18,6 +18,19 @@ checkbox selection and the fingerprinted export link. A durable human review
 decision and legal-authority gate remain necessary before a contract can be
 called accepted. This checkpoint is source-only until a controlled release.
 
+The checkpoint was deployed as exact release
+`ef34c48ff7eb85e457d411a10f7cad10a7b85de7` at
+`~/.asd-kontur/public-demo/releases/20261007-ef34c48-contract-selection-v1`.
+All four application launchd roles run that SHA after a 4/4 staging
+preflight. The API and new frontend asset returned HTTP 200 after startup;
+the selected-export route returned HTTP 401 without authentication. The
+database remains at `0129_contract_reference_review`; no migration was
+introduced and no public queue job was active at cutover. Qwen and NTD were
+left running. Previous plists are at
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-ef34c48-contract-selection/`.
+An authenticated browser download and all-page layout inspection remain
+unverified, so neither contract readiness nor ProductReady is claimed.
+
 ## 2026-10-07 source-linked Support handover candidate
 
 The Support production view now carries the same workspace's Qwen-extracted
