@@ -37,9 +37,23 @@ separate disposable database using a dedicated non-production role. The
 broader integration suite could not migrate its newly created databases under
 that restricted role because `CREATE EXTENSION vector` requires superuser
 privileges. The exact disposable database and role were removed afterward;
-other historical test databases were left untouched. No public migration,
-release cutover or live Audit acceptance has occurred. Browser control was
+other historical test databases were left untouched. Browser control was
 unavailable in this session.
+
+The public database was backed up to a private custom-format dump before
+migration (SHA-256 `3bc9e04fc31bf649780c232c340aa69fc06799ccdffd5cd2251764f14fb55e10`).
+The dump restored into a separate database with 44 workspace rows and 7,097
+durable-job rows; migration 0142 upgraded, downgraded and re-upgraded there.
+The restored NTD chunk fingerprint exactly matched the public pre-migration
+fingerprint (`f85797e67e4beeeab1052a462ba29445`). After controlled public
+migration, that fingerprint and the platform NTD counters remained unchanged.
+The temporary restored database was removed; the backup was retained for
+rollback. API, worker, assistant worker and orchestrator were cut over to
+source SHA `1201cff1118356911b9765f5058da63347d1d71f`, migration 0142;
+Qwen and NTD services were not restarted. API readiness and frontend returned
+HTTP 200. The owner workspace has zero ID-document interpretation jobs because
+it has zero `field_document` sources. Live Audit semantic acceptance is therefore
+still unverified, and this is not Audit mode acceptance.
 
 ## Still required for Audit
 
