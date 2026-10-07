@@ -66,6 +66,16 @@ def render_tender_contract_analysis_csv(view: Mapping[str, Any]) -> bytes:
                 missing_source_classes=_joined(assessment.get("missing_source_classes")),
             )
         )
+        coverage = _mapping(assessment.get("source_coverage"))
+        for source_name in coverage.get("incomplete_source_names") or ():
+            writer.writerow(
+                _row(
+                    common,
+                    row_kind="contract_source_coverage",
+                    subject=source_name,
+                    state="incomplete",
+                )
+            )
 
     project_context = _mapping(view.get("project_context"))
     for check in _records(project_context.get("cross_checks")):

@@ -366,12 +366,32 @@ class TenderContractAnalysisRepository:
             ).mappings()
         )
         results = _preferred_contract_results(results, current_run_terminal=effective_run_terminal)
-        analysis_complete = bool(results) and effective_run_terminal and not failed
         source_name_by_id = {
             str(source["source_version_id"]): str(source["safe_display_name"])
             for source in contract_sources
         }
         source_ids = [UUID(value) for value in source_name_by_id]
+        readable_elements = list(
+            session.execute(
+                sa.text(
+                    "SELECT DISTINCT ON (source_locator_id) source_version_id,source_locator_id,"
+                    "length(COALESCE(NULLIF(raw_text,''),normalized_text)) AS text_length "
+                    "FROM workspace.native_layout_element_versions WHERE organization_id=:o "
+                    "AND workspace_id=:w AND source_version_id=ANY(:sources) AND "
+                    "COALESCE(NULLIF(raw_text,''),normalized_text)<>'' "
+                    "ORDER BY source_locator_id,page_number,reading_order"
+                ),
+                {"o": organization_id, "w": workspace_id, "sources": source_ids},
+            ).mappings()
+        )
+        uncovered_sources = _uncovered_contract_sources(
+            source_name_by_id,
+            readable_elements=readable_elements,
+            results=results,
+        )
+        analysis_complete = (
+            bool(results) and effective_run_terminal and not failed and not uncovered_sources
+        )
         locator_page_by_id = {
             str(row["source_locator_id"]): int(row["page_number"])
             for row in session.execute(
@@ -539,6 +559,8 @@ class TenderContractAnalysisRepository:
             gaps.append("CONTRACT_ANALYSIS_IN_PROGRESS")
         if failed:
             gaps.append("CONTRACT_ANALYSIS_BATCH_FAILURES")
+        if uncovered_sources:
+            gaps.append("CONTRACT_ANALYSIS_SOURCE_COVERAGE_INCOMPLETE")
         if results and not issues:
             gaps.append("CONTRACT_RISKS_NOT_IDENTIFIED_IN_COMPLETED_BATCHES")
         revised_source_ids = {
@@ -595,7 +617,7 @@ class TenderContractAnalysisRepository:
                 "updated_at": max((result["recorded_at"] for result in results), default=None),
             },
             "assessment": {
-                "status": "partial" if active or failed else "complete",
+                "status": "partial" if active or failed or uncovered_sources else "complete",
                 "required_source_classes": ["draft_contract"],
                 "available_source_classes": ["draft_contract"],
                 "missing_source_classes": [],
@@ -608,6 +630,13 @@ class TenderContractAnalysisRepository:
                     }
                     for source in contract_sources
                 ],
+                "source_coverage": {
+                    "total_sources": len(contract_sources),
+                    "complete_sources": len(contract_sources) - len(uncovered_sources),
+                    "incomplete_source_names": [
+                        source_name_by_id[source_id] for source_id in uncovered_sources
+                    ],
+                },
             },
             "clauses": clauses,
             "issues": issues,
@@ -792,6 +821,74 @@ def _latest_job_attempts(jobs: list[Any]) -> list[Any]:
     for job in jobs:
         latest.setdefault(str(job["input_digest"]), job)
     return list(latest.values())
+
+
+def _uncovered_contract_sources(
+    source_names: dict[str, str],
+    *,
+    readable_elements: list[Any],
+    results: list[Any],
+) -> list[str]:
+    """Require successful model-result segments to cover each admitted source.
+
+    Terminal jobs alone cannot establish complete contract analysis: a source
+    may never have been scheduled, or only one of its bounded batches may have
+    succeeded. The expected denominator is the same readable layout selected
+    by the scheduler. An older result without exact segment provenance cannot
+    silently count as full-source coverage.
+    """
+
+    expected: dict[str, dict[str, int]] = {source_id: {} for source_id in source_names}
+    for element in readable_elements:
+        source_id = str(element["source_version_id"])
+        locator_id = str(element["source_locator_id"])
+        length = int(element["text_length"] or 0)
+        if source_id in expected and locator_id and length > 0:
+            expected[source_id][locator_id] = length
+
+    covered: dict[str, dict[str, list[tuple[int, int]]]] = {}
+    for result in results:
+        source_id = str(result["source_version_id"])
+        manifest = result["input_manifest"]
+        if source_id not in expected or not isinstance(manifest, dict):
+            continue
+        segments = manifest.get("source_segments")
+        if not isinstance(segments, list):
+            continue
+        for segment in segments:
+            if not isinstance(segment, dict):
+                continue
+            locator_id = str(segment.get("source_locator_id") or "")
+            source_length = expected[source_id].get(locator_id)
+            start, end = segment.get("start"), segment.get("end")
+            if (
+                source_length is None
+                or not isinstance(start, int)
+                or isinstance(start, bool)
+                or not isinstance(end, int)
+                or isinstance(end, bool)
+                or start < 0
+                or end <= start
+                or end > source_length
+            ):
+                continue
+            covered.setdefault(source_id, {}).setdefault(locator_id, []).append((start, end))
+
+    incomplete: list[str] = []
+    for source_id, elements in expected.items():
+        if not elements:
+            incomplete.append(source_id)
+            continue
+        for locator_id, length in elements.items():
+            cursor = 0
+            for start, end in sorted(covered.get(source_id, {}).get(locator_id, [])):
+                if start > cursor:
+                    break
+                cursor = max(cursor, end)
+            if cursor < length:
+                incomplete.append(source_id)
+                break
+    return incomplete
 
 
 def _empty_candidate_projection(*, status: str, gaps: list[str]) -> dict[str, Any]:

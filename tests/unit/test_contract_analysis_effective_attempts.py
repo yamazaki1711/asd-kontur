@@ -2,6 +2,7 @@ from asd_kontur.tender.contract_analysis_view import (
     _effective_profile_jobs,
     _latest_job_attempts,
     _preferred_contract_results,
+    _uncovered_contract_sources,
 )
 
 
@@ -86,3 +87,62 @@ def test_contract_transition_retains_prior_progress_until_current_run_starts() -
 
     assert [job["job_id"] for job in _effective_profile_jobs(prior)] == ["old-running"]
     assert [job["job_id"] for job in _effective_profile_jobs([current, *prior])] == ["new-queued"]
+
+
+def test_contract_completion_requires_all_readable_source_segments() -> None:
+    sources = {"source-a": "Contract", "source-b": "Attachment"}
+    elements = [
+        {"source_version_id": "source-a", "source_locator_id": "a-1", "text_length": 10},
+        {"source_version_id": "source-a", "source_locator_id": "a-2", "text_length": 4},
+        {"source_version_id": "source-b", "source_locator_id": "b-1", "text_length": 3},
+    ]
+    accepted = [
+        {
+            "source_version_id": "source-a",
+            "input_manifest": {
+                "source_segments": [
+                    {"source_locator_id": "a-1", "start": 0, "end": 5},
+                    {"source_locator_id": "a-2", "start": 0, "end": 4},
+                ]
+            },
+        }
+    ]
+    assert _uncovered_contract_sources(sources, readable_elements=elements, results=accepted) == [
+        "source-a",
+        "source-b",
+    ]
+
+    accepted.extend(
+        [
+            {
+                "source_version_id": "source-a",
+                "input_manifest": {
+                    "source_segments": [{"source_locator_id": "a-1", "start": 5, "end": 10}]
+                },
+            },
+            {
+                "source_version_id": "source-b",
+                "input_manifest": {
+                    "source_segments": [{"source_locator_id": "b-1", "start": 0, "end": 3}]
+                },
+            },
+        ]
+    )
+    assert _uncovered_contract_sources(sources, readable_elements=elements, results=accepted) == []
+
+
+def test_contract_completion_rejects_unknown_or_unversioned_segment_coverage() -> None:
+    sources = {"source-a": "Contract"}
+    elements = [{"source_version_id": "source-a", "source_locator_id": "a-1", "text_length": 8}]
+    results = [
+        {"source_version_id": "source-a", "input_manifest": {"source_locator_ids": ["a-1"]}},
+        {
+            "source_version_id": "source-a",
+            "input_manifest": {
+                "source_segments": [{"source_locator_id": "a-1", "start": 0, "end": 6}]
+            },
+        },
+    ]
+    assert _uncovered_contract_sources(sources, readable_elements=elements, results=results) == [
+        "source-a"
+    ]

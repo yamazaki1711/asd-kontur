@@ -1048,3 +1048,16 @@ claim that a comparison has run. Where no project-contract finding is
 published, the UI and Word report state that comparison completeness is not
 confirmed. These are truthful source-only presentation boundaries, not a
 substitute for the still-missing exhaustive project/contract comparison engine.
+
+The candidate contract projection previously called the corpus assessment
+`complete` whenever all *existing* effective jobs were terminal. That was
+insufficient: an admitted contract source could have no job, or one of its
+bounded source segments could have no accepted result. The projection now
+checks successful result segments against the readable layout denominator for
+every current contract source. Incomplete source names are disclosed in the
+screen, Word report and CSV; protocol/revised-contract readiness remains
+partial until coverage is complete. The planner's readable-locator count was
+aligned with the same raw-or-normalized text rule used to form contract batches.
+This prevents a normalized-only source from being silently excluded at the
+scheduling gate. The change has no database migration and has not been
+deployed or exercised on a live contract in this checkpoint.

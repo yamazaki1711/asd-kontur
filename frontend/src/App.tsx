@@ -2781,6 +2781,13 @@ function TenderContractAnalysisBody({
     );
   }
   const assessment = (value.assessment ?? {}) as Record<string, unknown>;
+  const sourceCoverage = (assessment.source_coverage ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const incompleteContractSources = (
+    (sourceCoverage.incomplete_source_names ?? []) as unknown[]
+  ).map(String);
   return (
     <>
       <InfoNotice>
@@ -2788,6 +2795,12 @@ function TenderContractAnalysisBody({
           ? "Анализ договора выполняется автоматически. Положения, риски и предложения появляются по мере обработки документа."
           : "Это рабочий анализ коммерческих рисков Подрядчика. Он не меняет исходный договор и требует профессиональной юридической проверки перед согласованием или подписанием."}
       </InfoNotice>
+      {incompleteContractSources.length ? (
+        <InfoNotice>
+          Анализ договорных документов ещё не завершён: {incompleteContractSources.join(", ")}.
+          Выводы и предложения относятся только к уже обработанному тексту.
+        </InfoNotice>
+      ) : null}
       <div className="candidate-actions">
         <a
           className="button-link secondary"

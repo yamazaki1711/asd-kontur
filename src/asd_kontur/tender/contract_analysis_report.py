@@ -108,6 +108,20 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
         ),
         _paragraph(f"Ограничения результата: {gaps}"),
     ]
+    source_coverage = _mapping(_mapping(view.get("assessment")).get("source_coverage"))
+    incomplete_sources = [
+        str(name)
+        for name in source_coverage.get("incomplete_source_names") or ()
+        if str(name).strip()
+    ]
+    if incomplete_sources:
+        body.append(
+            _paragraph(
+                "Анализ исходных договорных документов не завершён: "
+                + ", ".join(incomplete_sources)
+                + ". Выводы и предложения ниже относятся только к уже обработанному тексту."
+            )
+        )
     unavailable_checks = _unavailable_project_cross_checks(project_context)
     if unavailable_checks:
         body.append(

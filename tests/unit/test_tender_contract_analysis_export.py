@@ -183,6 +183,32 @@ def test_source_roles_without_published_findings_do_not_claim_clean_comparison()
     assert "полнота сопоставления не подтверждена" in report_xml
 
 
+def test_partial_contract_source_coverage_is_visible_in_editable_outputs() -> None:
+    view = {
+        "status": "drafted",
+        "assessment": {
+            "status": "partial",
+            "source_coverage": {
+                "total_sources": 2,
+                "complete_sources": 1,
+                "incomplete_source_names": ["Attachment Q"],
+            },
+        },
+        "project_context": {},
+    }
+    with zipfile.ZipFile(io.BytesIO(render_tender_contract_analysis_docx(view))) as package:
+        report_xml = package.read("word/document.xml").decode("utf-8")
+    assert "Анализ исходных договорных документов не завершён: Attachment Q" in report_xml
+    rows = list(
+        csv.DictReader(io.StringIO(render_tender_contract_analysis_csv(view).decode("utf-8-sig")))
+    )
+    assert {
+        (row["subject"], row["state"])
+        for row in rows
+        if row["row_kind"] == "contract_source_coverage"
+    } == {("Attachment Q", "incomplete")}
+
+
 def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() -> None:
     view = {
         "status": "drafted",
