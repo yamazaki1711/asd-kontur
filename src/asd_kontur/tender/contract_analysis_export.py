@@ -67,6 +67,17 @@ def render_tender_contract_analysis_csv(view: Mapping[str, Any]) -> bytes:
             )
         )
 
+    project_context = _mapping(view.get("project_context"))
+    for check in _records(project_context.get("cross_checks")):
+        writer.writerow(
+            _row(
+                common,
+                row_kind="project_cross_check_input",
+                item_kind=check.get("check", ""),
+                state=check.get("status", ""),
+            )
+        )
+
     clauses = tuple(_records(view.get("clauses")))
     clause_by_identity = {
         (str(item.get("clause_id", "")), str(item.get("clause_version", ""))): item

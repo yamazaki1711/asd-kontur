@@ -97,9 +97,7 @@ def test_contract_report_explains_role_reclassification_in_product_language() ->
 
 
 def test_contract_only_input_declares_unperformed_project_cross_checks() -> None:
-    checks = _contract_cross_check_coverage(
-        {"documents": [{"document_role": "Договор"}]}
-    )
+    checks = _contract_cross_check_coverage({"documents": [{"document_role": "Договор"}]})
     assert {item["status"] for item in checks} == {"input_not_established"}
     content = render_tender_contract_analysis_docx(
         {
@@ -119,6 +117,26 @@ def test_contract_only_input_declares_unperformed_project_cross_checks() -> None
     assert "объёмы ВОР/сметы" in report_xml
     assert "календарный график" in report_xml
     assert "Это не означает отсутствия противоречий" in report_xml
+    rows = list(
+        csv.DictReader(
+            io.StringIO(
+                render_tender_contract_analysis_csv(
+                    {
+                        "status": "drafted",
+                        "project_context": {"cross_checks": checks},
+                    }
+                ).decode("utf-8-sig")
+            )
+        )
+    )
+    assert [row["item_kind"] for row in rows if row["row_kind"] == "project_cross_check_input"] == [
+        "design_scope",
+        "commercial_scope",
+        "schedule",
+    ]
+    assert {row["state"] for row in rows if row["row_kind"] == "project_cross_check_input"} == {
+        "input_not_established"
+    }
 
 
 def test_contract_cross_checks_use_roles_not_source_names() -> None:

@@ -1031,3 +1031,6 @@ an independent valid analysis path, with project cross-check limitations shown.
 
 This checkpoint is source-only pending a controlled release. It neither changes
 the live contract projection nor establishes full contract or product readiness.
+The editable CSV export now carries the same per-input coverage states as the
+screen and Word report, so a spreadsheet consumer does not silently interpret
+an empty findings table as a completed project-to-contract comparison.
