@@ -1061,3 +1061,13 @@ aligned with the same raw-or-normalized text rule used to form contract batches.
 This prevents a normalized-only source from being silently excluded at the
 scheduling gate. The change has no database migration and has not been
 deployed or exercised on a live contract in this checkpoint.
+
+An isolated PostgreSQL API qualification now covers the actual normalized-only
+case: one admitted `text/plain` contract source with blank `raw_text`, readable
+`normalized_text`, and a current Qwen contract-role decision. Before Qwen runs,
+the API reports one incomplete contract source rather than a complete corpus;
+the project-understanding scheduler creates one current-profile
+`CONTRACT_ANALYSIS` job from that same source. The test database is created as
+`asd_g04_test_*` and removed by the integration fixture. This establishes the
+application/SQL boundary for this case, not a live model result or full
+contract-only journey.

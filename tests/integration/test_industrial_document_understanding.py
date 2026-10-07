@@ -291,6 +291,11 @@ def test_tender_contract_analysis_is_scoped_and_honest_when_not_started(
                 "commercial_conditions": [],
                 "procurement_requirements": [],
                 "project_contract_findings": [],
+                "cross_checks": [
+                    {"check": "design_scope", "status": "input_not_established"},
+                    {"check": "commercial_scope", "status": "input_not_established"},
+                    {"check": "schedule", "status": "input_not_established"},
+                ],
             },
             "gaps": ["DRAFT_CONTRACT_SOURCE_UNAVAILABLE"],
             "authority_boundary": "read_only_projection",

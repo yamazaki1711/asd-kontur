@@ -25,6 +25,9 @@ from asd_kontur.assistant.models import AssistantMode
 from asd_kontur.assistant.postgres import AssistantRepository
 from asd_kontur.document_understanding.models import StructureIdentityCandidate
 from asd_kontur.document_understanding.postgres import IndustrialUnderstandingRepository
+from asd_kontur.document_understanding.qwen_semantic import (
+    QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+)
 from asd_kontur.tender.qwen_contract_analysis import CONTRACT_ANALYSIS_PROFILE
 from asd_kontur.tender.qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 from asd_kontur.web_app import create_app
@@ -1613,6 +1616,143 @@ def test_effective_jobs_keep_running_retry_visible_beyond_history_window(
         stale = next(item for item in jobs if item["job_id"] == str(stale_lease_job))
         assert stale["state"] == "running"
         assert stale["lease_expired"] is True
+
+
+def test_normalized_only_contract_text_is_scheduled_and_not_declared_complete(
+    postgres_environment: PostgreSQLEnvironment,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(postgres_environment, tmp_path)
+    app = create_app(engine=postgres_environment.application_engine, settings=settings)
+    app.state.container.auth.bootstrap_owner(
+        username="normalized-contract-owner",
+        password="Synthetic-Owner-Password-42!",
+        display_name="Normalized contract owner",
+    )
+    with TestClient(app) as client:
+        _login(client, "normalized-contract-owner", "Synthetic-Owner-Password-42!")
+        csrf = _csrf(client)
+        workspace = client.post(
+            "/api/v1/workspaces",
+            json={"display_name": "Normalized contract qualification"},
+            headers=csrf,
+        ).json()
+        workspace_id = UUID(workspace["workspace_id"])
+        upload = client.post(
+            f"/api/v1/workspaces/{workspace_id}/documents",
+            files=[("files", ("terms.txt", b"Payment on acceptance.", "text/plain"))],
+            headers=csrf,
+        )
+        assert upload.status_code == 202, upload.text
+
+        with postgres_environment.owner_engine.begin() as connection:
+            source = (
+                connection.execute(
+                    sa.text(
+                        "SELECT document_id,version,source_version_id FROM "
+                        "workspace.document_versions "
+                        "WHERE organization_id=:organization AND workspace_id=:workspace"
+                    ),
+                    {
+                        "organization": workspace["organization_id"],
+                        "workspace": workspace_id,
+                    },
+                )
+                .mappings()
+                .one()
+            )
+            locator_id = uuid4()
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.source_locators "
+                    "(organization_id,workspace_id,source_locator_id,source_version_id,"
+                    "locator_kind,locator_key,locator_value,fragment_digest) VALUES "
+                    "(:organization,:workspace,:locator,:source,'document_page_region',"
+                    "'normalized-contract',CAST(:value AS jsonb),:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace_id,
+                    "locator": locator_id,
+                    "source": source["source_version_id"],
+                    "value": json.dumps({"page": 1, "region": [0, 0, 1, 1]}),
+                    "digest": semantic_digest({"source": "normalized-contract"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.native_layout_element_versions "
+                    "(organization_id,workspace_id,element_id,version,document_id,document_version,"
+                    "source_version_id,source_locator_id,page_number,element_kind,raw_text,"
+                    "normalized_text,reading_order,region,cell_locator,row_index,column_index,"
+                    "evidence_digest,extraction_method,profile_version,semantic_digest) VALUES "
+                    "(:organization,:workspace,:element,1,:document,:version,:source,:locator,1,"
+                    "'paragraph','','Payment on acceptance.',1,CAST(:region AS jsonb),NULL,NULL,"
+                    "NULL,:evidence,'qualified_ocr','native-layout-v0.1',:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace_id,
+                    "element": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "source": source["source_version_id"],
+                    "locator": locator_id,
+                    "region": json.dumps([0, 0, 1, 1]),
+                    "evidence": semantic_digest({"source": "normalized-contract"}),
+                    "digest": semantic_digest({"element": "normalized-contract"}),
+                },
+            )
+            connection.execute(
+                sa.text(
+                    "INSERT INTO workspace.document_role_decisions "
+                    "(organization_id,workspace_id,decision_id,decision_version,document_id,"
+                    "document_version,scope,selected_roles,candidate_ids,decision_code,"
+                    "validator_version,source_locator_ids,decision_digest) VALUES "
+                    "(:organization,:workspace,:decision,1,:document,:version,'page:1',"
+                    "ARRAY['contract']::text[],ARRAY[]::uuid[],'qualified_contract_role',"
+                    ":profile,ARRAY[:locator]::uuid[],:digest)"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace_id,
+                    "decision": uuid4(),
+                    "document": source["document_id"],
+                    "version": source["version"],
+                    "profile": QWEN_SEMANTIC_CLASSIFICATION_PROFILE,
+                    "locator": locator_id,
+                    "digest": semantic_digest({"role": "contract"}),
+                },
+            )
+
+        projection = client.get(f"/api/v1/workspaces/{workspace_id}/tender/contract-analysis")
+        assert projection.status_code == 200, projection.text
+        assert projection.json()["assessment"]["status"] == "partial"
+        assert projection.json()["assessment"]["source_coverage"] == {
+            "total_sources": 1,
+            "complete_sources": 0,
+            "incomplete_source_names": ["terms.txt"],
+        }
+        queued = client.post(
+            f"/api/v1/workspaces/{workspace_id}/project-understanding/runs",
+            headers=csrf,
+        )
+        assert queued.status_code == 202, queued.text
+        with postgres_environment.owner_engine.connect() as connection:
+            count = connection.scalar(
+                sa.text(
+                    "SELECT count(*) FROM workspace.durable_jobs WHERE "
+                    "organization_id=:organization AND workspace_id=:workspace "
+                    "AND job_kind='CONTRACT_ANALYSIS' AND "
+                    "input_manifest->>'contract_analysis_profile'=:profile"
+                ),
+                {
+                    "organization": workspace["organization_id"],
+                    "workspace": workspace_id,
+                    "profile": CONTRACT_ANALYSIS_PROFILE,
+                },
+            )
+        assert count == 1
 
 
 def test_start_project_understanding_queues_native_semantic_recovery_once(
