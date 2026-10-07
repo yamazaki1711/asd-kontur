@@ -94,3 +94,14 @@ database/API qualification covers all rows rather than only the latest 100,
 cross-workspace denial, and the hold-for-use marking. Linking preflights to
 confirmed batches, professional grants, work applications and actual field
 evidence remains the next authority-boundary dependency.
+
+The register follow-up was released as exact source SHA
+`141196cb2ed219d5747cd2653940e7af6392edce`, using the private
+four-role plist staging tool and the existing migration 0135. The staged
+OpenAPI file and the served API were structurally equal (87 routes), and the
+new register route returned 401 without authentication. All four application
+launchd roles were healthy after cutover; API readiness, one active workspace,
+21 source versions, and the existing Qwen/NTD PIDs were preserved. The public
+workspace currently has no incoming-inspection preflights, so live export of
+owner-entered inspection data was not exercised. Authenticated browser
+acceptance remains unavailable because no in-app browser is attached.
