@@ -185,3 +185,28 @@ is not yet available there; the application must show those missing
 prerequisites rather than manufacture them. The decision is not yet connected
 to the effective work-readiness, material-balance or KS/payment chain. Support
 mode and ProductReady remain unaccepted.
+
+The controlled public cutover uses exact application SHA
+`27106bae395661fbf61816c19fc83f20ba4d7ef8` and migration
+`0136_support_material_admission_basis`. A custom-format pre-migration backup
+is retained privately at
+`~/.asd-kontur/public-demo/backups/0136-material-admission.b8hjkO/pre-migration.dump`
+with SHA-256
+`dee76335654935f6421e70e564a15b4af1f38845bf7c43e1c7ebf3b26f1d80bb`.
+It restored into a separate disposable database; upgrade, downgrade and
+re-upgrade passed, and that restored copy was removed after verification.
+The four application launchd roles were cut over from private staged plists;
+the prior plists are backed up under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-27106ba-material-admission/`.
+API readiness reports migration 0136, all four loaded release pins match the
+SHA, the served OpenAPI equals the built artifact, and the frontend returns
+HTTP 200. The admission context route returns HTTP 401 without a session.
+The owner workspace retained 21 source versions, zero preflights and zero
+admissions; no admission result was manufactured. Qwen and NTD worker PIDs
+were unchanged. Before and after the cutover, the normalized full platform
+data fingerprint was exactly
+`ff6e99703e35fa28887ed16571aa62f552649ccd8027b60305691155f863e3da`;
+NTD documents/editions/semantics were 15/15/1,669 and inspected
+embedding/graph/search rows remained 0/0/0. This proves preservation for the
+specified cutover, not an operational Support-mode completion or an
+authenticated owner-browser acceptance.
