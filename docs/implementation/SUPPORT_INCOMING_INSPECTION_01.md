@@ -223,3 +223,19 @@ batch and explains when no work has such a requirement. A superseded
 requirement blocks a new decision even if an older admission exists. This is
 a general material-to-work scope guard, not an inferred approval of a
 material substitution or an additional-work change.
+
+This follow-up is deployed as exact application SHA
+`8e3cf85fc5b9d8d2f8e7634885af017c17bb9491` on unchanged migration
+`0136_support_material_admission_basis`. The exact release passed the
+isolated material-admission integration test, frontend typecheck/build and
+4/4 private launchd preflight. All four application roles run the new SHA;
+API readiness and the served OpenAPI digest
+`3c2fe23cf36e3474dc7897fc16d9088dd90e6365f901d613656914f8bfdc8af3`
+match. Qwen and NTD PIDs stayed unchanged. The public workspace still has
+21 source versions and no preflights or admissions. The full platform-data
+fingerprint remains
+`ff6e99703e35fa28887ed16571aa62f552649ccd8027b60305691155f863e3da`.
+The prior four plists are retained privately in
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-8e3cf85-material-scope/`.
+No owner-specific material outcome or authenticated owner-screen acceptance
+is claimed. `ProductReady=false`.
