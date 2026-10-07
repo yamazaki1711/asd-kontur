@@ -1167,3 +1167,15 @@ as a contact sheet. The retained DOCX metadata declares 30 pages, and HTML
 conversion changes pagination and styling. Therefore this is **not** an
 all-page visual qualification of the editable DOCX; that release gate stays
 open until a working direct Word-compatible renderer is available.
+
+The repeatable `tools/qualify_contract_references_live.py` command exercised
+the same validated reference task against the already loaded local Qwen model
+using three changed synthetic inputs, without a live workspace or queue write.
+Unresolved reference, matched attachment and no-reference control all passed
+(3/3); model completed requests increased from 846 to 849, and the measured
+case durations were 8.211, 6.620 and 0.953 seconds. The fingerprinted local
+qualification receipt is
+`~/.asd-kontur/qualification/contract-reference-live.bJqApc/report.json`
+(`sha256:f9419de0bef33af2f33ca8bec4dcfdfec0cbaed8ecf984b2ef04ae9d6c362ff1`).
+This is real Qwen task acceptance on synthetic context, not an autonomous
+project run or a real-contract conclusion.
