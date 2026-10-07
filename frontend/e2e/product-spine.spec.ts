@@ -727,9 +727,14 @@ test("reviewer selects only desired contract revisions for draft export", async 
   const secondBox = page.getByRole("checkbox", {
     name: "Включить изменение пункта 5.1",
   });
-  await expect(firstBox).toBeChecked();
-  await expect(secondBox).toBeChecked();
-  await firstBox.uncheck();
+  await expect(firstBox).not.toBeChecked();
+  await expect(secondBox).not.toBeChecked();
+  await expect(
+    page.getByRole("link", {
+      name: "Скачать выбранные редакции договорных документов (ZIP)",
+    }),
+  ).toHaveCount(0);
+  await secondBox.check();
   const exportLink = page.getByRole("link", {
     name: "Скачать выбранные редакции договорных документов (ZIP)",
   });

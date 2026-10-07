@@ -253,7 +253,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                     "Неопределённость",
                 ),
                 disagreement_rows,
-                "Подтверждённые предложения ещё не подготовлены.",
+                "Предложения для профессиональной проверки ещё не подготовлены.",
             ),
             _heading("Вопросы и риски", "Heading1"),
             _table(

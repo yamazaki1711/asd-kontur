@@ -9,6 +9,27 @@ document or analysis—not a processing, candidate, test-count or readiness
 claim. Traceability, recovery, isolation and non-fabrication remain mandatory
 supporting qualities.
 
+## Governing owner correction — full functional completion (2026-10-07)
+
+The owner-supplied `ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` is the current
+whole-product completion specification. The four modes, three permanent
+results, field/offline operation, autonomous recovery, scale, security and
+complete OKS lifecycle remain mandatory. Earlier OZERO-first, ingestion-first,
+Tender-only and contract-only *stopping points* below are historical. They do
+not reduce the denominator or authorize a readiness claim after one slice.
+The active implementation sequence is contract completion and its shared
+dependencies, then integrated Tender, Support, Audit, Restoration, drawings,
+field/offline and lifecycle qualification. Each checkpoint must preserve the
+working runtime and continue toward the complete product. The current
+source-mapped acceptance register is maintained in the Product Goal and
+Capability Map; the immutable v2.0 capability registry is not rewritten.
+
+The October 6 general-consultation and October 5 Tender sections below remain
+valid technical/history records, but their descriptions of the *current active
+slice* are superseded by this owner direction. No real project is a universal
+schema or a source of expected answers. The current deployed release is
+recorded in the implementation evidence, never inferred from this plan.
+
 ## Owner correction — product recovery (2026-10-06)
 
 The earlier OZERO-specific hierarchy and archive language below are historical

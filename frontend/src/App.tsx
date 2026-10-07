@@ -2796,9 +2796,7 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
-  const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>(() =>
-    revisedClauses.map((item) => String(item.revised_clause_id)),
-  );
+  const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>([]);
   const revisionFingerprint = value.revision_selection_fingerprint;
   const selectedPackageHref =
     revisionFingerprint && selectedRevisionIds.length
@@ -2965,7 +2963,7 @@ function TenderContractAnalysisBody({
             className="button-link secondary"
             href={`/api/v1/workspaces/${workspaceId}/tender/revised-contract.docx`}
           >
-            Скачать редакцию договора Подрядчика (Word)
+            Скачать черновик редакции договора (Word)
           </a>
         ) : null}
         {selectedPackageHref &&
@@ -2993,6 +2991,14 @@ function TenderContractAnalysisBody({
           "exact_source_package_available"
             ? " Полный комплект изменённых исходных договорных файлов доступен отдельно; он остаётся проектом для проверки и согласования."
             : " Полный комплект редактируемых исходных файлов пока не подготовлен."}
+        </InfoNotice>
+      ) : null}
+      {revisedClauses.length ? (
+        <InfoNotice>
+          Предлагаемые изменения подготовлены автоматически и не считаются
+          согласованными. Для выборочного комплекта отметьте пункты после
+          проверки исходного текста. Выбор действует только в текущем просмотре;
+          скачанный документ остаётся черновиком для профессиональной проверки.
         </InfoNotice>
       ) : null}
       <section className="metrics" aria-label="Состояние договорного анализа">
@@ -3198,7 +3204,7 @@ function TenderContractAnalysisBody({
           </div>
         ) : (
           <p>
-            Подтверждённые предложения для протокола разногласий и
+            Предложения для протокола разногласий и
             переработанного договора ещё не подготовлены.
           </p>
         )}
@@ -9782,7 +9788,7 @@ function humanizeStatus(value: string) {
     partial_draft: "Подготовлен частичный рабочий проект",
     source_format_supported: "Можно подготовить редакцию исходного договора",
     exact_source_candidate_available:
-      "Редакция договора Подрядчика подготовлена",
+      "Автоматический черновик редакции исходного договора доступен",
     candidate_clause_schedule: "Подготовлен перечень предлагаемых изменений",
     duplicate: "Повторный файл",
     processing: "Обрабатывается",

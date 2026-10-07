@@ -176,11 +176,40 @@ Rule Registry has infrastructure but zero operational rules.
 
 ## Delivery order
 
-1. preserve stable processing, traceability, isolation, recovery, and accepted
-   document-output foundations;
-2. deliver the **generalized Tender analysis harness** through the shared,
-   object-independent project model; OZERO is a retired historical validation
-   corpus, not an active project or product-specific implementation target;
-3. continue capability streams only when each ends in a visible professional
-   application result across Tender, Support, Audit, or Restoration;
-4. perform Trial Readiness qualification before proposing a new real OKS.
+The owner-supplied full functional completion directive of 7 October 2026
+supersedes the previous Tender-only stopping priority. Work proceeds by
+dependency: finish the source-grounded editable contract journey, integrate
+the remaining Tender result, then Support, Audit, Restoration, verified
+drawings, field/offline and complete lifecycle/scale qualification. Existing
+working components and autonomous processing must be preserved. No source
+checkpoint or single-mode pass establishes `ProductReady`.
+
+The 143 stable capability identities in the composed registry remain the
+machine denominator. The following source-mapped acceptance overlay identifies
+the full-product journeys added or sharpened by the 7 October directive. Each
+row is `NOT VERIFIED` for whole-journey acceptance unless a tested and
+delivered release is named in later evidence. A missing-input/blocked-case
+pass does not substitute for a sufficient-input success path.
+
+| Requirement ID | Directive source | User input/action and required professional output | Qwen / deterministic boundary | UI, API and export acceptance | Current whole-journey state |
+| --- | --- | --- | --- | --- | --- |
+| FFC-01 | Required contract capability | Upload contract alone or with attachments; receive sourced contractor assessment, editable protocol and complete coherent revised contract | Qwen clauses, risks and drafting; code verifies source identity, dates, selection and OOXML assembly | Contract view and DOCX outputs reopen; missing references and conflicting terms reported | PARTIAL: drafts exist; legal coherence and durable amendment review not accepted |
+| FFC-02 | Required Tender mode | Upload PD/RD, commercial and optional company/logistics inputs; receive scoped quantities, omissions, costs, conditions and reasoned participation decision | Qwen semantic scope; code computes quantities, costs and decision gates | Tender view and editable report on distinct projects | NOT VERIFIED |
+| FFC-03 | Required Construction Support mode | Confirm real work, materials and inspections; receive required ID, registers, as-built and KS packages with exact blockers | Qwen applicable requirements; code enforces prerequisites and factual authority | Support workflow, reopenable documents and exports | NOT VERIFIED |
+| FFC-04 | Required Audit mode | Upload existing ID; receive document inventory, findings, corrective actions and declared unexamined scope | Qwen semantic contradiction review; code checks identity, chronology and completeness | Audit view and editable register/report | NOT VERIFIED |
+| FFC-05 | Required Restoration mode | Supply audited ID and confirmed facts; receive prioritized plan, grounded drafts, pre-inspection and final/partial package | Qwen grounded drafting and independent review; code prohibits invented field facts | Restoration workflow and editable package | NOT VERIFIED |
+| FFC-06 | Shared documentation and engineering capabilities | Supply confirmed design/as-built geometry; receive usable drawing, or precise missing-measurement request | Qwen interprets source geometry; code validates confirmed values and assembles drawing | Reopen and inspect drawing file and source linkage | NOT VERIFIED |
+| FFC-07 | Application and field use | Record planned-work confirmation, quantities and evidence offline; reconnect and resolve conflicts; confirm voice transcript | Qwen only for approved speech/semantic tasks; code owns local queue and conflict safety | Supported field client offline/reconnect and voice-confirmation test | NOT VERIFIED |
+| FFC-08 | Shared project lifecycle | Create A, process/export, delete A, then process B without leakage while NTD remains unchanged | Code owns isolation, fence, cleanup and residue checks | Actual application lifecycle and isolated destructive qualification | NOT VERIFIED |
+| FFC-09 | Durable autonomy and bounded execution | Admit project and leave Codex disconnected; receive useful outputs and explicit terminal/partial state after restarts | Qwen performs bounded semantic work; supervised runtime owns durable successors/retries | Same release survives worker/API/Qwen restart without manual queue commands | PARTIAL: earlier autonomous Tender progression; full four-mode path unverified |
+| FFC-10 | Knowledge and regulatory applicability | Ask for applicable requirements on real scoped works; receive edition-qualified source-linked conclusions | Qwen reasons over Knowledge Gateway context; code checks source/version/applicability | Mode outputs cite exact normative locators without altering global memory | NOT VERIFIED |
+| FFC-11 | Delivery and acceptance | Run qualified diverse-corpus, false-negative/positive and representative thousands-of-documents acceptance | Qwen production tasks only; code measures work, replay, failure and time-to-value | Same tested/deployed release exposes all results and files | NOT VERIFIED |
+| FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
+
+For each row, the detailed acceptance record must additionally name the
+tested release, delivered release, actual observed result and remaining
+blocker. Until that evidence exists, implementation or a passing unit test is
+not a journey PASS. The historical v16.1 enumeration of 19 audit checks,
+nine Support blocking rules and 12 laboratory steps is not asserted from an
+unverified count; recover the source definitions or mark the specific
+specification gap without weakening known requirements.
