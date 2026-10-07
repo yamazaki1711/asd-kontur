@@ -121,6 +121,20 @@ def _model() -> dict[str, object]:
     }
 
 
+def test_primary_tender_report_discloses_missing_participation_inputs() -> None:
+    model = _model()
+    model["participation_decision"] = {
+        "decision": "INSUFFICIENT_INPUT",
+        "blockers": [],
+        "missing_inputs": ["company_scope_fit", "minimum_viable_price_rub"],
+    }
+    data = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(data)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Недостаточно исходных данных для решения об участии" in xml
+    assert "минимальная экономически допустимая цена Подрядчика" in xml
+
+
 def test_work_and_finding_schedules_are_editable_professional_outputs() -> None:
     work_rows = list(
         csv.DictReader(

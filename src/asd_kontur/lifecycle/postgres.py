@@ -919,6 +919,7 @@ class PostgresWorkspaceStorageAdapter:
         "workspace.support_professional_grants",
         "workspace.support_scope_versions",
         "workspace.support_processes",
+        "workspace.tender_participation_assessments",
         "workspace.tender_terminal_outcomes",
         "workspace.tender_review_decisions",
         "workspace.tender_deliverable_versions",

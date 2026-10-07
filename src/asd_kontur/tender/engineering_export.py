@@ -231,6 +231,39 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
     add_context_section("procurement_requirements", "Требования закупки")
     add_context_section("contract_conditions", "Договорные условия и гарантии")
 
+    participation = dict(model.get("participation_decision") or {})
+    if participation:
+        decision_labels = {
+            "DO_NOT_PARTICIPATE": "Не участвовать",
+            "INSUFFICIENT_INPUT": "Недостаточно исходных данных для решения об участии",
+            "PARTICIPATE_SUBJECT_TO_CONDITIONS": "Участвовать при выполнении условий",
+            "PARTICIPATE": "Участвовать",
+        }
+        decision = str(participation.get("decision") or "INSUFFICIENT_INPUT")
+        lines = [
+            _paragraph(
+                "Предварительная рекомендация: "
+                + decision_labels.get(decision, "Требует уточнения")
+            )
+        ]
+        for blocker in participation.get("blockers") or ():
+            lines.append(_paragraph(str(dict(blocker).get("reason") or "")))
+        missing_labels = {
+            "company_scope_fit": "соответствие профиля Подрядчика предмету работ",
+            "contract_acceptable": "приемлемость условий договора",
+            "conditions_feasible": "выполнимость условий тендера",
+            "minimum_viable_price_rub": "минимальная экономически допустимая цена Подрядчика",
+            "project_price_ceiling": "документально подтверждённая предельная цена",
+            "price_basis_confirmation": "подтверждение сопоставимости ценовых баз",
+        }
+        missing = [
+            missing_labels.get(str(item), str(item))
+            for item in participation.get("missing_inputs") or ()
+        ]
+        if missing:
+            lines.append(_paragraph("Для решения требуется: " + "; ".join(missing) + "."))
+        add_section("Предварительное решение об участии", lines)
+
     primary_findings = _primary_tender_conclusions(model)
     if primary_findings:
         add_section(

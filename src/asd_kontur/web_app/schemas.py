@@ -387,6 +387,37 @@ class ProjectUnderstandingView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class TenderParticipationAssessmentRequest(ApiModel):
+    company_scope_fit: Literal["yes", "no", "unknown"] = "unknown"
+    company_scope_fit_reason: str = Field(default="", max_length=1000)
+    contract_acceptable: Literal["yes", "no", "unknown"] = "unknown"
+    contract_acceptable_reason: str = Field(default="", max_length=1000)
+    conditions_feasible: Literal["yes", "no", "unknown"] = "unknown"
+    conditions_feasible_reason: str = Field(default="", max_length=1000)
+    minimum_viable_price_rub: str | None = None
+    minimum_viable_price_reason: str = Field(default="", max_length=1000)
+    price_basis_confirmed: bool = False
+
+
+class TenderParticipationDecisionView(ApiModel):
+    decision: Literal[
+        "DO_NOT_PARTICIPATE",
+        "INSUFFICIENT_INPUT",
+        "PARTICIPATE_SUBJECT_TO_CONDITIONS",
+        "PARTICIPATE",
+    ]
+    blockers: list[dict[str, str]]
+    missing_inputs: list[str]
+    project_price_ceiling: dict[str, Any]
+    contractor_assessment: dict[str, Any]
+    professional_issue_count: int
+    project_analysis_complete: bool
+    authority: str
+    decision_digest: str
+    assessment_id: UUID | None
+    assessment_submitted_at: datetime | None
+
+
 class ProjectProcessingStatusView(ApiModel):
     status: Literal[
         "processing",

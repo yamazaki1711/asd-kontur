@@ -2796,11 +2796,12 @@ function TenderContractAnalysisBody({
   const revisedClauses = value.revised_clauses as Array<
     Record<string, unknown>
   >;
-  const revisionReviewCandidates = (value.revision_review_candidates ?? []) as Array<
-    Record<string, unknown>
-  >;
+  const revisionReviewCandidates = (value.revision_review_candidates ??
+    []) as Array<Record<string, unknown>>;
   const [selectedRevisionIds, setSelectedRevisionIds] = useState<string[]>([]);
-  const [reviewReasons, setReviewReasons] = useState<Record<string, string>>({});
+  const [reviewReasons, setReviewReasons] = useState<Record<string, string>>(
+    {},
+  );
   const queryClient = useQueryClient();
   const reviewRevision = useMutation({
     mutationFn: async ({
@@ -3329,8 +3330,8 @@ function TenderContractAnalysisBody({
           </div>
         ) : (
           <p>
-            Предложения для протокола разногласий и
-            переработанного договора ещё не подготовлены.
+            Предложения для протокола разногласий и переработанного договора ещё
+            не подготовлены.
           </p>
         )}
         {reviewRevision.isError ? (
@@ -7140,6 +7141,204 @@ export function ProjectEngineeringResult({
   );
 }
 
+type ParticipationChoice = "yes" | "no" | "unknown";
+
+function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
+  const queryClient = useQueryClient();
+  const [scopeFit, setScopeFit] = useState<ParticipationChoice>("unknown");
+  const [scopeReason, setScopeReason] = useState("");
+  const [contractAcceptable, setContractAcceptable] =
+    useState<ParticipationChoice>("unknown");
+  const [contractReason, setContractReason] = useState("");
+  const [conditionsFeasible, setConditionsFeasible] =
+    useState<ParticipationChoice>("unknown");
+  const [conditionsReason, setConditionsReason] = useState("");
+  const [minimumPrice, setMinimumPrice] = useState("");
+  const [priceReason, setPriceReason] = useState("");
+  const [basisConfirmed, setBasisConfirmed] = useState(false);
+  const decision = useQuery({
+    queryKey: ["tender-participation-decision", workspaceId],
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/tender/participation-decision",
+        { params: { path: { workspace_id: workspaceId } } },
+      );
+      return requireData(data, error);
+    },
+  });
+  const save = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.PUT(
+        "/api/v1/workspaces/{workspace_id}/tender/participation-decision",
+        {
+          params: { path: { workspace_id: workspaceId } },
+          body: {
+            company_scope_fit: scopeFit,
+            company_scope_fit_reason: scopeReason,
+            contract_acceptable: contractAcceptable,
+            contract_acceptable_reason: contractReason,
+            conditions_feasible: conditionsFeasible,
+            conditions_feasible_reason: conditionsReason,
+            minimum_viable_price_rub: minimumPrice || null,
+            minimum_viable_price_reason: priceReason,
+            price_basis_confirmed: basisConfirmed,
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["tender-participation-decision", workspaceId],
+      });
+    },
+  });
+  const labels: Record<string, string> = {
+    DO_NOT_PARTICIPATE: "Не участвовать",
+    INSUFFICIENT_INPUT: "Недостаточно данных для решения",
+    PARTICIPATE_SUBJECT_TO_CONDITIONS: "Участвовать при выполнении условий",
+    PARTICIPATE: "Участвовать",
+  };
+  const missingLabels: Record<string, string> = {
+    company_scope_fit: "профиль компании",
+    contract_acceptable: "оценка договора",
+    conditions_feasible: "выполнимость условий",
+    minimum_viable_price_rub: "минимальная экономически допустимая цена",
+    project_price_ceiling: "подтверждённая цена проекта",
+    price_basis_confirmation: "сопоставимость ценовых баз",
+  };
+  return (
+    <section className="panel">
+      <h2>Решение об участии</h2>
+      {decision.data && (
+        <>
+          <p>{labels[decision.data.decision]}</p>
+          {decision.data.blockers.map((item) => (
+            <p key={item.code}>{item.reason}</p>
+          ))}
+          {decision.data.missing_inputs.length > 0 && (
+            <p>
+              Требуется уточнить:{" "}
+              {decision.data.missing_inputs
+                .map((item) => missingLabels[item] ?? item)
+                .join("; ")}
+              .
+            </p>
+          )}
+          {typeof decision.data.project_price_ceiling.value_rub ===
+            "string" && (
+            <p>
+              Цена из документов:{" "}
+              {decision.data.project_price_ceiling.value_rub} руб.
+            </p>
+          )}
+          {decision.data.assessment_submitted_at && (
+            <small>
+              Оценка Подрядчика сохранена:{" "}
+              {new Date(decision.data.assessment_submitted_at).toLocaleString(
+                "ru-RU",
+              )}
+            </small>
+          )}
+        </>
+      )}
+      {decision.isError && <p>Не удалось получить оценку участия.</p>}
+      <details>
+        <summary>Представить новую оценку Подрядчика</summary>
+        <p>
+          Эти сведения вводит Подрядчик. Они не считаются фактами проектной
+          документации. Новая оценка заменит предыдущую в текущем решении,
+          сохранив историю. При отрицательном ответе укажите причину не короче 8
+          символов.
+        </p>
+        {(
+          [
+            [
+              "Соответствие профиля компании",
+              scopeFit,
+              setScopeFit,
+              scopeReason,
+              setScopeReason,
+            ],
+            [
+              "Приемлемость договора",
+              contractAcceptable,
+              setContractAcceptable,
+              contractReason,
+              setContractReason,
+            ],
+            [
+              "Выполнимость условий тендера",
+              conditionsFeasible,
+              setConditionsFeasible,
+              conditionsReason,
+              setConditionsReason,
+            ],
+          ] as const
+        ).map(([label, value, setValue, reason, setReason]) => (
+          <div key={label}>
+            <label>
+              {label}
+              <select
+                value={value}
+                onChange={(event) =>
+                  setValue(event.target.value as ParticipationChoice)
+                }
+              >
+                <option value="unknown">Не установлено</option>
+                <option value="yes">Да</option>
+                <option value="no">Нет</option>
+              </select>
+            </label>
+            <label>
+              Основание / причина
+              <input
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+                maxLength={1000}
+              />
+            </label>
+          </div>
+        ))}
+        <label>
+          Минимальная экономически допустимая цена, руб.
+          <input
+            value={minimumPrice}
+            onChange={(event) => setMinimumPrice(event.target.value)}
+            inputMode="decimal"
+          />
+        </label>
+        <label>
+          Основание расчёта цены
+          <input
+            value={priceReason}
+            onChange={(event) => setPriceReason(event.target.value)}
+            maxLength={1000}
+          />
+        </label>
+        <label>
+          <input
+            type="checkbox"
+            checked={basisConfirmed}
+            onChange={(event) => setBasisConfirmed(event.target.checked)}
+          />
+          Ценовые базы сопоставимы (НДС, состав работ и условия)
+        </label>
+        <button
+          type="button"
+          disabled={save.isPending}
+          onClick={() => save.mutate()}
+        >
+          Сохранить оценку
+        </button>
+        {save.isError && (
+          <p>Оценка не сохранена: проверьте данные и основания.</p>
+        )}
+      </details>
+    </section>
+  );
+}
+
 function ProjectUnderstandingPage() {
   const { workspaceId = "", mode } = useParams();
   const queryClient = useQueryClient();
@@ -7464,6 +7663,9 @@ function ProjectUnderstandingPage() {
                 workspaceId={workspaceId}
                 modeSlug={mode}
               />
+              {mode === "tender" && workspaceId && (
+                <TenderParticipationDecision workspaceId={workspaceId} />
+              )}
               <details className="panel technical-details">
                 <summary>Обработка и техническая диагностика</summary>
                 <div className="metrics">

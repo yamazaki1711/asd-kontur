@@ -75,6 +75,8 @@ from asd_kontur.tender.facility_work_projection import (
 from asd_kontur.tender.finding_model import ProfessionalFindingKind
 from asd_kontur.tender.findings_report import render_tender_findings_docx
 from asd_kontur.tender.findings_schedule import render_tender_findings_csv
+from asd_kontur.tender.participation_decision import assess_tender_participation
+from asd_kontur.tender.participation_repository import TenderParticipationRepository
 from asd_kontur.tender.revised_contract_candidate import (
     RevisedContractCandidateError,
     render_revised_contract_candidate_docx,
@@ -178,6 +180,7 @@ class ProductSpineService:
         self._contract_obligation_reviews = ContractObligationReviewRepository(repository.engine)
         self._contract_revision_reviews = ContractRevisionReviewRepository(repository.engine)
         self._tender_contract_analysis = TenderContractAnalysisRepository(repository.engine)
+        self._tender_participation = TenderParticipationRepository(repository.engine)
         self._restoration_recovery = RestorationRecoveryRepository(repository.engine)
         self._pilot = PilotResultService(
             repository,
@@ -909,9 +912,7 @@ class ProductSpineService:
             ),
         )
         selected_ids = [
-            str(item["candidate_id"])
-            for item in reviewed
-            if item["review_state"] == "confirmed"
+            str(item["candidate_id"]) for item in reviewed if item["review_state"] == "confirmed"
         ]
         if not selected_ids:
             raise RevisedContractCandidateError("reviewed_contract_revisions_unavailable")
@@ -921,8 +922,7 @@ class ProductSpineService:
             fingerprint=contract_revision_fingerprint(view),
         )
         selected_item_ids = {
-            str(item.get("disagreement_item_id") or "")
-            for item in selected["revised_clauses"]
+            str(item.get("disagreement_item_id") or "") for item in selected["revised_clauses"]
         }
         if "" in selected_item_ids or len(selected_item_ids) != len(selected_ids):
             raise RevisedContractCandidateError("reviewed_contract_protocol_mapping_invalid")
@@ -1091,6 +1091,50 @@ class ProductSpineService:
             page_limit=page_limit,
         )
 
+    def tender_participation_decision(
+        self, *, owner_identity_id: str, workspace_id: UUID
+    ) -> dict[str, Any]:
+        view = self.project_understanding(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        if view is None:
+            raise ValueError("project_understanding_no_result")
+        latest = self._tender_participation.latest(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+        engineering = self._engineering_with_contract_analysis(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            engineering=view.get("project_engineering"),
+        )
+        contract = dict(engineering.get("contract_analysis") or {})
+        issue_count = sum(
+            len(engineering.get(key) or ())
+            for key in ("issues", "comparison_findings", "risk_register")
+        ) + len(contract.get("issues") or ())
+        materialization = dict(view.get("materialization") or {})
+        result = assess_tender_participation(
+            dict(latest["assessment"]) if latest else None,
+            commercial_conditions=engineering.get("commercial_conditions"),
+            professional_issue_count=issue_count,
+            project_analysis_complete=materialization.get("state") == "complete",
+        )
+        result["assessment_id"] = str(latest["assessment_id"]) if latest else None
+        result["assessment_submitted_at"] = latest["submitted_at"].isoformat() if latest else None
+        return result
+
+    def record_tender_participation_assessment(
+        self, *, owner_identity_id: str, workspace_id: UUID, assessment: dict[str, Any]
+    ) -> dict[str, Any]:
+        self._tender_participation.record(
+            owner_identity_id=owner_identity_id,
+            workspace_id=workspace_id,
+            assessment=assessment,
+        )
+        return self.tender_participation_decision(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id
+        )
+
     def tender_findings_schedule(
         self, *, owner_identity_id: str, workspace_id: UUID
     ) -> DocumentContent:
@@ -1155,6 +1199,9 @@ class ProductSpineService:
             engineering=view.get("project_engineering"),
         )
         if engineering:
+            engineering["participation_decision"] = self.tender_participation_decision(
+                owner_identity_id=owner_identity_id, workspace_id=workspace_id
+            )
             data = render_engineering_tender_report_docx(engineering)
             digest = "sha256:" + hashlib.sha256(data).hexdigest()
             return DocumentContent(

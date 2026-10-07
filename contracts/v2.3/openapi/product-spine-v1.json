@@ -4060,6 +4060,180 @@
         "title": "TenderContractAnalysisView",
         "type": "object"
       },
+      "TenderParticipationAssessmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "company_scope_fit": {
+            "default": "unknown",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "title": "Company Scope Fit",
+            "type": "string"
+          },
+          "company_scope_fit_reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Company Scope Fit Reason",
+            "type": "string"
+          },
+          "conditions_feasible": {
+            "default": "unknown",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "title": "Conditions Feasible",
+            "type": "string"
+          },
+          "conditions_feasible_reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Conditions Feasible Reason",
+            "type": "string"
+          },
+          "contract_acceptable": {
+            "default": "unknown",
+            "enum": [
+              "yes",
+              "no",
+              "unknown"
+            ],
+            "title": "Contract Acceptable",
+            "type": "string"
+          },
+          "contract_acceptable_reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Contract Acceptable Reason",
+            "type": "string"
+          },
+          "minimum_viable_price_reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Minimum Viable Price Reason",
+            "type": "string"
+          },
+          "minimum_viable_price_rub": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimum Viable Price Rub"
+          },
+          "price_basis_confirmed": {
+            "default": false,
+            "title": "Price Basis Confirmed",
+            "type": "boolean"
+          }
+        },
+        "title": "TenderParticipationAssessmentRequest",
+        "type": "object"
+      },
+      "TenderParticipationDecisionView": {
+        "additionalProperties": false,
+        "properties": {
+          "assessment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Id"
+          },
+          "assessment_submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Submitted At"
+          },
+          "authority": {
+            "title": "Authority",
+            "type": "string"
+          },
+          "blockers": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "contractor_assessment": {
+            "additionalProperties": true,
+            "title": "Contractor Assessment",
+            "type": "object"
+          },
+          "decision": {
+            "enum": [
+              "DO_NOT_PARTICIPATE",
+              "INSUFFICIENT_INPUT",
+              "PARTICIPATE_SUBJECT_TO_CONDITIONS",
+              "PARTICIPATE"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "decision_digest": {
+            "title": "Decision Digest",
+            "type": "string"
+          },
+          "missing_inputs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Inputs",
+            "type": "array"
+          },
+          "professional_issue_count": {
+            "title": "Professional Issue Count",
+            "type": "integer"
+          },
+          "project_analysis_complete": {
+            "title": "Project Analysis Complete",
+            "type": "boolean"
+          },
+          "project_price_ceiling": {
+            "additionalProperties": true,
+            "title": "Project Price Ceiling",
+            "type": "object"
+          }
+        },
+        "required": [
+          "decision",
+          "blockers",
+          "missing_inputs",
+          "project_price_ceiling",
+          "contractor_assessment",
+          "professional_issue_count",
+          "project_analysis_complete",
+          "authority",
+          "decision_digest",
+          "assessment_id",
+          "assessment_submitted_at"
+        ],
+        "title": "TenderParticipationDecisionView",
+        "type": "object"
+      },
       "TrialReadinessRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9039,6 +9213,116 @@
           }
         },
         "summary": "Tender Disagreement Protocol",
+        "tags": [
+          "tender"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/tender/participation-decision": {
+      "get": {
+        "operationId": "tender_participation_decision_api_v1_workspaces__workspace_id__tender_participation_decision_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenderParticipationDecisionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tender Participation Decision",
+        "tags": [
+          "tender"
+        ]
+      },
+      "put": {
+        "operationId": "record_tender_participation_assessment_api_v1_workspaces__workspace_id__tender_participation_decision_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Csrf-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TenderParticipationAssessmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TenderParticipationDecisionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Record Tender Participation Assessment",
         "tags": [
           "tender"
         ]

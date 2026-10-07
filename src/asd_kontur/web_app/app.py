@@ -74,6 +74,7 @@ from asd_kontur.support.scope_commands import (
 )
 from asd_kontur.tender.contract_analysis_view import TenderContractAnalysisError
 from asd_kontur.tender.contract_revision_review import ContractRevisionReviewError
+from asd_kontur.tender.participation_decision import TenderParticipationInputError
 
 from ..application_spine.auth import AuthError, OwnerAuthService
 from ..application_spine.config import SpineSettings
@@ -140,6 +141,8 @@ from .schemas import (
     SupportScopeConfigureRequest,
     SupportScopeReadinessView,
     TenderContractAnalysisView,
+    TenderParticipationAssessmentRequest,
+    TenderParticipationDecisionView,
     TrialReadinessRequest,
     TrialReadinessView,
     UploadBatchView,
@@ -346,6 +349,13 @@ def _install_middleware(app: FastAPI) -> None:
             if str(exc).endswith("forbidden")
             else 409
         )
+        return _error(request, str(exc), status_code)
+
+    @app.exception_handler(TenderParticipationInputError)
+    async def tender_participation_error(
+        request: Request, exc: TenderParticipationInputError
+    ) -> JSONResponse:
+        status_code = 404 if str(exc) == "workspace_not_found" else 409
         return _error(request, str(exc), status_code)
 
     @app.exception_handler(SupportScopeCommandError)
@@ -1085,6 +1095,39 @@ def _api_router() -> APIRouter:
         if value is None:
             raise HTTPException(status_code=404, detail="project_understanding_no_result")
         return ProjectUnderstandingView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/tender/participation-decision",
+        response_model=TenderParticipationDecisionView,
+        tags=["tender"],
+    )
+    def tender_participation_decision(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> TenderParticipationDecisionView:
+        value = _container(request).service.tender_participation_decision(
+            owner_identity_id=principal.owner_identity_id, workspace_id=workspace_id
+        )
+        return TenderParticipationDecisionView(**jsonable_encoder(value))
+
+    @router.put(
+        "/workspaces/{workspace_id}/tender/participation-decision",
+        response_model=TenderParticipationDecisionView,
+        tags=["tender"],
+    )
+    def record_tender_participation_assessment(
+        request: Request,
+        workspace_id: UUID,
+        payload: TenderParticipationAssessmentRequest,
+        principal: Annotated[SessionPrincipal, Depends(_mutation_principal)],
+    ) -> TenderParticipationDecisionView:
+        value = _container(request).service.record_tender_participation_assessment(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            assessment=payload.model_dump(),
+        )
+        return TenderParticipationDecisionView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/tender/contract-analysis",

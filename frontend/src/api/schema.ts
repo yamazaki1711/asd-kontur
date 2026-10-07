@@ -1370,6 +1370,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/tender/participation-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tender Participation Decision */
+        get: operations["tender_participation_decision_api_v1_workspaces__workspace_id__tender_participation_decision_get"];
+        /** Record Tender Participation Assessment */
+        put: operations["record_tender_participation_assessment_api_v1_workspaces__workspace_id__tender_participation_decision_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/tender/reviewed-contract-package.zip": {
         parameters: {
             query?: never;
@@ -3071,6 +3089,88 @@ export interface components {
             revision_selection_fingerprint?: string | null;
             /** Status */
             status: string;
+        };
+        /** TenderParticipationAssessmentRequest */
+        TenderParticipationAssessmentRequest: {
+            /**
+             * Company Scope Fit
+             * @default unknown
+             * @enum {string}
+             */
+            company_scope_fit: "yes" | "no" | "unknown";
+            /**
+             * Company Scope Fit Reason
+             * @default
+             */
+            company_scope_fit_reason: string;
+            /**
+             * Conditions Feasible
+             * @default unknown
+             * @enum {string}
+             */
+            conditions_feasible: "yes" | "no" | "unknown";
+            /**
+             * Conditions Feasible Reason
+             * @default
+             */
+            conditions_feasible_reason: string;
+            /**
+             * Contract Acceptable
+             * @default unknown
+             * @enum {string}
+             */
+            contract_acceptable: "yes" | "no" | "unknown";
+            /**
+             * Contract Acceptable Reason
+             * @default
+             */
+            contract_acceptable_reason: string;
+            /**
+             * Minimum Viable Price Reason
+             * @default
+             */
+            minimum_viable_price_reason: string;
+            /** Minimum Viable Price Rub */
+            minimum_viable_price_rub?: string | null;
+            /**
+             * Price Basis Confirmed
+             * @default false
+             */
+            price_basis_confirmed: boolean;
+        };
+        /** TenderParticipationDecisionView */
+        TenderParticipationDecisionView: {
+            /** Assessment Id */
+            assessment_id: string | null;
+            /** Assessment Submitted At */
+            assessment_submitted_at: string | null;
+            /** Authority */
+            authority: string;
+            /** Blockers */
+            blockers: {
+                [key: string]: string;
+            }[];
+            /** Contractor Assessment */
+            contractor_assessment: {
+                [key: string]: unknown;
+            };
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "DO_NOT_PARTICIPATE" | "INSUFFICIENT_INPUT" | "PARTICIPATE_SUBJECT_TO_CONDITIONS" | "PARTICIPATE";
+            /** Decision Digest */
+            decision_digest: string;
+            /** Missing Inputs */
+            missing_inputs: string[];
+            /** Professional Issue Count */
+            professional_issue_count: number;
+            /** Project Analysis Complete */
+            project_analysis_complete: boolean;
+            /** Project Price Ceiling */
+            project_price_ceiling: {
+                [key: string]: unknown;
+            };
         };
         /** TrialReadinessRequest */
         TrialReadinessRequest: {
@@ -5967,6 +6067,74 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tender_participation_decision_api_v1_workspaces__workspace_id__tender_participation_decision_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenderParticipationDecisionView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_tender_participation_assessment_api_v1_workspaces__workspace_id__tender_participation_decision_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-CSRF-Token"?: string | null;
+            };
+            path: {
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TenderParticipationAssessmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TenderParticipationDecisionView"];
                 };
             };
             /** @description Validation Error */
