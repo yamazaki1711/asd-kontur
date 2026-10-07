@@ -1,6 +1,6 @@
 # Primary Tender Report Compaction 01
 
-## Decision-first follow-up — source checkpoint
+## Decision-first follow-up — deployed checkpoint
 
 The rendered primary report was readable after compaction but still placed raw
 participant, price, time and procurement tables before the professional
@@ -9,8 +9,17 @@ decision and source-derived key conclusions immediately after the object
 summary. The underlying facts, calculations and findings do not change;
 context tables follow the conclusion and the full schedules remain in the
 archive. A changed-party test verifies section order. The focused report suite
-passed 16/16. This follow-up is source-only until an exact release is checked
-and deployed; the prior 28-page release remains the public baseline.
+passed 16/16. Exact source `b8a85df54fb019284b0f3c29cca05a9fe77d77dd`
+was built and deployed as
+`~/.asd-kontur/public-demo/releases/20261008-b8a85df-tender-decision-first`.
+The API, document worker, assistant worker and project orchestrator all run
+from that release. Exact-release focused checks passed 88/88; isolated
+PostgreSQL checks passed 3/3; frontend typecheck, lint and build passed.
+The API returned ready at migration `0141_contract_reference_partial_package`
+and the frontend returned HTTP 200. The Qwen and NTD services were not
+restarted. The platform-only data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Owner-authenticated browser acceptance remains unavailable.
 
 ## Observed product defect
 
