@@ -39,6 +39,27 @@ non-fabrication, not authority to narrow ASD-KONTUR's scope or retain an OKS
 archive after deletion. The plugin-owned skill file was inspected but not
 modified in place; its upstream/local maintainer must update it separately.
 
+Checkpoint 2026-10-07 (later): the owner-supplied mandate in
+`/Users/oleg/Downloads/ASD_KONTUR_FULL_FUNCTIONAL_COMPLETION_EN.md` was read
+in full and reconciled with this plan, AGENTS.md and the product capability
+map. The persisted goal is active and substantively compatible but not the
+directive's exact replacement wording: the available goal interface cannot
+replace an unfinished goal's objective. The exact replacement text remains
+in the owner directive for the operator-controlled goal update; this does
+not narrow the authorised four-mode work. No v16.1 companion description or
+gap-analysis file was present beside the directive at inspection.
+
+Public application release `8129a50af813338019475f22c8f04393c5208340`
+is now pinned to all four supervised application roles; migration remains
+`0134_contract_coherence_profile_v2`. The release includes unchanged readable
+PDF contract appendices in the revised-source ZIP and removes the duplicate
+worker-side idle reconciliation scan while retaining the supervised
+orchestrator's safety net. Exact-SHA preflight passed 4/4 application roles,
+the API readiness check passed, and the newly released idle worker used 0.4%
+CPU after 23 seconds versus 99.9% for the previous worker after 41 minutes.
+Qwen and NTD services were not restarted. This is an operational and contract
+package improvement, not FFC-01 or full-product acceptance.
+
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
 `0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence

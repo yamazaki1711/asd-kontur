@@ -207,8 +207,13 @@ pass does not substitute for a sufficient-input success path.
 | FFC-12 | Application and field use | Use role-appropriate access and protected device/session data | Code enforces authentication, authorization, attempt limits and local-data controls | API/UI/field security and offline-lock boundary acceptance | NOT VERIFIED |
 
 Current FFC-01 delivery checkpoint: application SHA
-`039ce694a10200a2f24e7cadda61b9c8cd6a58ac`, migration
-`0134_contract_coherence_profile_v2`. A changed-party contract-only corpus
+`8129a50af813338019475f22c8f04393c5208340`, migration
+`0134_contract_coherence_profile_v2`. The release preserves unchanged readable PDF
+contract appendices in the revised-source package, explicitly marks them
+non-editable, and rejects attempts to apply DOCX clause revisions to a PDF.
+The previous public worker repeatedly scanned an idle workspace despite zero
+claimable jobs; the supervised orchestrator now owns that safety-net sweep,
+and the released worker idles between claims. A changed-party contract-only corpus
 passed the isolated live-Qwen result path, and the owner's already-admitted
 contract reached 5/5 accepted bounded cross-clause contexts autonomously.
 The reviewed editable package and protocol consistency checks are delivered,
