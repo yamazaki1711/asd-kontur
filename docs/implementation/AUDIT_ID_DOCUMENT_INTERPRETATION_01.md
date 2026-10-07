@@ -55,6 +55,11 @@ HTTP 200. The owner workspace has zero ID-document interpretation jobs because
 it has zero `field_document` sources. Live Audit semantic acceptance is therefore
 still unverified, and this is not Audit mode acceptance.
 
+The backup is an 80 MiB private migration rollback artifact (file mode 0600,
+directory mode 0700), not an Audit export. It contains the public database's
+workspace data at backup time; lifecycle deletion must account for its
+retention/removal before claiming complete removal of any included project.
+
 One bounded synthetic, non-workspace Qwen qualification was run against the
 persistently loaded local `/generate` service. It returned
 `concealed_work_act` and the cited cable-installation work scope in 12.1 seconds
