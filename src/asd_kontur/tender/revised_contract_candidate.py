@@ -8,6 +8,7 @@ import io
 import json
 import re
 import zipfile
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any, cast
 from xml.etree import ElementTree as ET
@@ -24,6 +25,9 @@ _OFFICE_DOCUMENT_REL = (
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
+_TABLE = f"{{{_WORD_NS}}}tbl"
+_ROW = f"{{{_WORD_NS}}}tr"
+_CELL = f"{{{_WORD_NS}}}tc"
 _TRACKED_CHANGE_TAGS = frozenset(
     f"{{{_WORD_NS}}}{name}" for name in ("ins", "del", "moveFrom", "moveTo")
 )
@@ -78,6 +82,7 @@ def render_revised_contract_source_package(
     files: list[tuple[str, bytes]] = []
     manifest_sources: list[dict[str, Any]] = []
     change_rows: list[tuple[str, ...]] = []
+    protocol_rows: list[tuple[str, str, str]] = []
     for ordinal, source in enumerate(sources, start=1):
         source_id = str(source["source_version_id"])
         original = source.get("content")
@@ -119,6 +124,13 @@ def render_revised_contract_source_package(
                     str(revision.get("replacement_source_text") or clause.get("source_text") or ""),
                     str(revision.get("revised_text") or ""),
                     "Проект редакции; требует согласования",
+                )
+            )
+            protocol_rows.append(
+                (
+                    display_clause_reference(clause),
+                    str(clause.get("source_text") or ""),
+                    str(revision.get("revised_text") or ""),
                 )
             )
         manifest_sources.append(
@@ -171,6 +183,7 @@ def render_revised_contract_source_package(
             with zipfile.ZipFile(io.BytesIO(protocol_docx)) as protocol:
                 if protocol.testzip() is not None or "word/document.xml" not in protocol.namelist():
                     raise RevisedContractCandidateError("reviewed_contract_protocol_invalid")
+                _validate_protocol_rows(protocol.read("word/document.xml"), protocol_rows)
         except zipfile.BadZipFile as exc:
             raise RevisedContractCandidateError("reviewed_contract_protocol_invalid") from exc
         manifest["reviewed_protocol"] = {
@@ -200,6 +213,46 @@ def render_revised_contract_source_package(
             ).encode(),
         )
     return archive.getvalue()
+
+
+def _validate_protocol_rows(document: bytes, expected_rows: Sequence[tuple[str, str, str]]) -> None:
+    """Bind the editable protocol to the exact revisions in this package.
+
+    A valid DOCX can still be stale or refer to another selected subset. The
+    disagreement table must contain exactly one row per applied clause edit,
+    including the original source wording and the proposed replacement.
+    """
+
+    try:
+        root = ET.fromstring(document)
+    except ET.ParseError as exc:
+        raise RevisedContractCandidateError("reviewed_contract_protocol_invalid") from exc
+    matched_tables: list[list[tuple[str, ...]]] = []
+    for table in root.iter(_TABLE):
+        rows = [
+            tuple(
+                "".join(node.text or "" for node in cell.iter(_TEXT)) for cell in row.findall(_CELL)
+            )
+            for row in table.findall(_ROW)
+        ]
+        if (
+            rows
+            and len(rows[0]) == 5
+            and rows[0][1:4]
+            == (
+                "Пункт договора",
+                "Редакция Заказчика",
+                "Редакция Подрядчика",
+            )
+        ):
+            matched_tables.append(rows)
+    if len(matched_tables) != 1:
+        raise RevisedContractCandidateError("reviewed_contract_protocol_mapping_invalid")
+    actual_rows = [tuple(row[1:4]) for row in matched_tables[0][1:] if len(row) == 5]
+    if len(actual_rows) != len(matched_tables[0]) - 1 or Counter(actual_rows) != Counter(
+        expected_rows
+    ):
+        raise RevisedContractCandidateError("reviewed_contract_protocol_mapping_invalid")
 
 
 def _render_change_register(rows: Sequence[tuple[str, ...]]) -> bytes:

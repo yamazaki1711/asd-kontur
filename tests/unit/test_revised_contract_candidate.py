@@ -16,6 +16,7 @@ import pytest
 
 import asd_kontur.tender.revised_contract_candidate as revised_contract_module
 from asd_kontur.application_spine.services import ProductSpineService
+from asd_kontur.tender.contract_analysis_report import render_tender_disagreement_protocol_docx
 from asd_kontur.tender.contract_analysis_view import _select_primary_revised_contract_source
 from asd_kontur.tender.contract_revision_selection import (
     contract_revision_fingerprint,
@@ -173,7 +174,32 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
 def test_reviewed_package_carries_matching_editable_protocol() -> None:
     original = "4.2. Customer may delay payment indefinitely."
     proposed = "4.2. Payment follows documented acceptance."
-    protocol = _source_docx("ПРОТОКОЛ РАЗНОГЛАСИЙ", proposed)
+    view = {
+        "clauses": [
+            {
+                "clause_id": "clause-42",
+                "clause_version": 1,
+                "source_version_id": "source-contract",
+                "source_text": original,
+            }
+        ],
+        "disagreement_items": [
+            {
+                "item_id": "item-42",
+                "clause_id": "clause-42",
+                "clause_version": 1,
+            }
+        ],
+        "revised_clauses": [
+            {
+                "disagreement_item_id": "item-42",
+                "source_clause_id": "clause-42",
+                "source_clause_version": 1,
+                "revised_text": proposed,
+            }
+        ],
+    }
+    protocol = render_tender_disagreement_protocol_docx(view)
     package = render_revised_contract_source_package(
         [
             {
@@ -182,23 +208,7 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
                 "content": _source_docx(original),
             }
         ],
-        {
-            "clauses": [
-                {
-                    "clause_id": "clause-42",
-                    "clause_version": 1,
-                    "source_version_id": "source-contract",
-                    "source_text": original,
-                }
-            ],
-            "revised_clauses": [
-                {
-                    "source_clause_id": "clause-42",
-                    "source_clause_version": 1,
-                    "revised_text": proposed,
-                }
-            ],
-        },
+        view,
         protocol_docx=protocol,
     )
     with zipfile.ZipFile(io.BytesIO(package)) as archive:
@@ -212,6 +222,55 @@ def test_reviewed_package_carries_matching_editable_protocol() -> None:
         assert manifest["reviewed_protocol"]["proposal_count"] == 1
         assert archive.read("reviewed-disagreement-protocol.docx") == protocol
         assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+
+
+def test_reviewed_package_rejects_stale_or_unrelated_protocol() -> None:
+    original = "4.2. Payment follows acceptance."
+    source = _source_docx(original)
+    view = {
+        "clauses": [
+            {
+                "clause_id": "clause-42",
+                "clause_version": 1,
+                "source_version_id": "source-contract",
+                "source_text": original,
+            }
+        ],
+        "disagreement_items": [
+            {"item_id": "item-42", "clause_id": "clause-42", "clause_version": 1}
+        ],
+        "revised_clauses": [
+            {
+                "disagreement_item_id": "item-42",
+                "source_clause_id": "clause-42",
+                "source_clause_version": 1,
+                "revised_text": "4.2. Payment is due within ten days after acceptance.",
+            }
+        ],
+    }
+    stale = {
+        **view,
+        "revised_clauses": [
+            {
+                **view["revised_clauses"][0],
+                "revised_text": "4.2. Payment is due within thirty days after acceptance.",
+            }
+        ],
+    }
+    with pytest.raises(
+        RevisedContractCandidateError, match="reviewed_contract_protocol_mapping_invalid"
+    ):
+        render_revised_contract_source_package(
+            [
+                {
+                    "source_version_id": "source-contract",
+                    "safe_display_name": "contract.docx",
+                    "content": source,
+                }
+            ],
+            view,
+            protocol_docx=render_tender_disagreement_protocol_docx(stale),
+        )
 
 
 def test_revised_contract_refuses_unresolved_proposal_placeholder() -> None:
