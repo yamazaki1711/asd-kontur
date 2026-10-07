@@ -13,6 +13,18 @@ Changed-name/changed-term Word qualification and the isolated browser scenario
 passed. The Support obligation-transfer and human decision workflow remain
 open before contract capability readiness.
 
+The exact `f952863e2fbded996f9f7d12e9d462b3850ea677` code-only release is
+now pinned under all four supervised application roles. The deployment kept
+database migration `0129_contract_reference_review`; API readiness and the new
+frontend asset both returned HTTP 200. Qwen and NTD were not restarted, and no
+public project job was queued or running at cutover. Read-only qualification
+of the retained owner contract projection found 307 source-linked clauses,
+with 63 extracted Customer obligations and 211 Contractor obligations; the
+editable Word report rendered as a nonempty 27,434-byte package. The count is
+an observation of candidate clauses, not an accepted obligation register.
+The previous launchd plists are recoverable from
+`/Users/oleg/.asd-kontur/public-demo/launchd-backups/20261007-pre-f952863-contract-obligations/`.
+
 ## 2026-10-07 contract-only live integration qualification
 
 An opt-in isolated PostgreSQL acceptance now uploads one changed-party synthetic
