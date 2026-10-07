@@ -51,3 +51,17 @@ API readiness passed. Qwen and NTD processes retained their PIDs, and the
 platform-only data fingerprint stayed
 `9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
 The owner-authenticated browser download was not available for verification.
+
+## Multi-source numbered-clause integrity follow-up
+
+Numbered clauses in different admitted documents may use the same number.
+The protocol therefore now includes the source document for *every* proposal,
+not only unnumbered ones. The reviewed-source package validates the exact
+document-bound protocol rows. A changed two-document fixture with identical
+clause number, original text and proposed text passes with correct source
+labels and rejects a forged protocol that attributes the second row to the
+first document. The source-reference column was widened without changing the
+overall table width. A read-only owner-scoped render reopened as two pages;
+both pages were visually inspected and remain readable. No project fact or
+proposal was changed, and no Qwen job was submitted for this deterministic
+integrity correction.

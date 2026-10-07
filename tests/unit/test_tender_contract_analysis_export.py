@@ -62,7 +62,7 @@ def test_protocol_identifies_unnumbered_source_without_inventing_a_clause_number
     )
     assert display_protocol_clause_reference(
         {"source_text": "8.3. Оплата после приёмки", "source_name": "Договор.docx"}
-    ) == "8.3"
+    ) == "Договор.docx: 8.3"
     assert display_protocol_clause_reference({"source_text": "Условие без номера"}) == (
         "Пункт без номера — см. источник"
     )
@@ -558,7 +558,7 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "evidence-independent-808" not in document
         assert "ООО «Северный заказчик»" in document
         assert "Объект и стороны" in document
-        assert '<w:gridCol w:w="5900"/>' in document
+        assert '<w:gridCol w:w="5350"/>' in document
         assert '<w:cantSplit w:val="true"/>' in document
         assert '<w:tblHeader w:val="true"/>' in document
         assert "Источник: Документ: Changed-contract-terms.docx" in document

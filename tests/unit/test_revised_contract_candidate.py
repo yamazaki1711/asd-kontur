@@ -617,6 +617,58 @@ def test_reviewed_package_maps_unnumbered_attachment_reference() -> None:
     assert "Site Conditions.docx: Пункт без номера (стр./лист 3)" in xml
 
 
+def test_reviewed_protocol_distinguishes_same_numbered_clause_in_two_sources() -> None:
+    original = "4.2. Payment follows approval."
+    proposed = "4.2. Payment follows documented acceptance."
+    view = {
+        "clauses": [
+            {
+                "clause_id": f"clause-{suffix}",
+                "clause_version": 1,
+                "source_version_id": f"source-{suffix}",
+                "source_name": f"Contract {suffix.upper()}.docx",
+                "source_text": original,
+            }
+            for suffix in ("a", "b")
+        ],
+        "disagreement_items": [
+            {"item_id": f"item-{suffix}", "clause_id": f"clause-{suffix}", "clause_version": 1}
+            for suffix in ("a", "b")
+        ],
+        "revised_clauses": [
+            {
+                "disagreement_item_id": f"item-{suffix}",
+                "source_clause_id": f"clause-{suffix}",
+                "source_clause_version": 1,
+                "revised_text": proposed,
+            }
+            for suffix in ("a", "b")
+        ],
+    }
+    sources = [
+        {
+            "source_version_id": f"source-{suffix}",
+            "safe_display_name": f"Contract {suffix.upper()}.docx",
+            "content": _source_docx(original),
+        }
+        for suffix in ("a", "b")
+    ]
+    protocol = render_tender_disagreement_protocol_docx(view)
+    package = render_revised_contract_source_package(sources, view, protocol_docx=protocol)
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+        assert _paragraphs(archive.read("contract-source-02.docx")) == [proposed]
+        assert archive.read("reviewed-disagreement-protocol.docx") == protocol
+
+    wrong_source_protocol_view = deepcopy(view)
+    wrong_source_protocol_view["clauses"][1]["source_name"] = "Contract A.docx"
+    wrong_source_protocol = render_tender_disagreement_protocol_docx(wrong_source_protocol_view)
+    with pytest.raises(RevisedContractCandidateError, match="protocol_mapping_invalid"):
+        render_revised_contract_source_package(
+            sources, view, protocol_docx=wrong_source_protocol
+        )
+
+
 def test_reviewed_package_rejects_stale_or_unrelated_protocol() -> None:
     original = "4.2. Payment follows acceptance."
     source = _source_docx(original)

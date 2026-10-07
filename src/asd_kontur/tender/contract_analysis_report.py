@@ -472,7 +472,7 @@ def render_tender_disagreement_protocol_docx(view: Mapping[str, Any]) -> bytes:
             ),
             rows,
             "Обоснованные предложения для протокола разногласий пока не подготовлены.",
-            column_widths=(550, 1150, 3750, 3750, 5900),
+            column_widths=(550, 1900, 3650, 3650, 5350),
             keep_rows_together=True,
         ),
     ]
