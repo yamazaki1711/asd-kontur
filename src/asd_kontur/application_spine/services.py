@@ -919,10 +919,26 @@ class ProductSpineService:
             revision_ids=selected_ids,
             fingerprint=contract_revision_fingerprint(view),
         )
+        selected_item_ids = {
+            str(item.get("disagreement_item_id") or "")
+            for item in selected["revised_clauses"]
+        }
+        if "" in selected_item_ids or len(selected_item_ids) != len(selected_ids):
+            raise RevisedContractCandidateError("reviewed_contract_protocol_mapping_invalid")
+        selected_items = [
+            item
+            for item in view.get("disagreement_items") or ()
+            if str(item.get("item_id") or "") in selected_item_ids
+        ]
+        if len(selected_items) != len(selected_item_ids):
+            raise RevisedContractCandidateError("reviewed_contract_protocol_mapping_invalid")
+        selected["disagreement_items"] = selected_items
+        protocol_docx = render_tender_disagreement_protocol_docx(selected)
         data, _ = self._render_revised_contract_source_package(
             owner_identity_id=owner_identity_id,
             workspace_id=workspace_id,
             view=selected,
+            protocol_docx=protocol_docx,
         )
         digest = "sha256:" + hashlib.sha256(data).hexdigest()
         return DocumentContent(
@@ -941,6 +957,7 @@ class ProductSpineService:
         owner_identity_id: str,
         workspace_id: UUID,
         view: dict[str, Any],
+        protocol_docx: bytes | None = None,
     ) -> tuple[bytes, int]:
         assessment = view.get("assessment")
         source_rows = assessment.get("sources") if isinstance(assessment, dict) else None
@@ -988,7 +1005,12 @@ class ProductSpineService:
                         "content": source_file.read(),
                     }
                 )
-        return render_revised_contract_source_package(package_sources, view), len(package_sources)
+        return (
+            render_revised_contract_source_package(
+                package_sources, view, protocol_docx=protocol_docx
+            ),
+            len(package_sources),
+        )
 
     def _render_revised_contract_candidate(
         self,

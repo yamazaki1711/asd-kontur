@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from copy import deepcopy
 from types import SimpleNamespace
 from uuid import uuid4
@@ -18,6 +20,7 @@ from asd_kontur.tender.revised_contract_candidate import RevisedContractCandidat
 
 def _view() -> dict[str, object]:
     clause_id = str(uuid4())
+    item_id = str(uuid4())
     return {
         "clauses": [
             {
@@ -32,10 +35,19 @@ def _view() -> dict[str, object]:
         "revised_clauses": [
             {
                 "revised_clause_id": str(uuid4()),
+                "disagreement_item_id": item_id,
                 "source_clause_id": clause_id,
                 "source_clause_version": 1,
                 "replacement_source_text": "The original condition applies.",
                 "revised_text": "The changed condition applies.",
+            }
+        ],
+        "disagreement_items": [
+            {
+                "item_id": item_id,
+                "clause_id": clause_id,
+                "clause_version": 1,
+                "proposed_clause_text": "The changed condition applies.",
             }
         ],
     }
@@ -71,7 +83,16 @@ def test_reviewed_package_uses_server_decisions_not_client_ids() -> None:
     second = deepcopy(view["revised_clauses"][0])
     second["revised_clause_id"] = str(uuid4())
     second["revised_text"] = "A second changed condition."
+    second["disagreement_item_id"] = str(uuid4())
     view["revised_clauses"].append(second)
+    view["disagreement_items"].append(
+        {
+            "item_id": second["disagreement_item_id"],
+            "clause_id": second["source_clause_id"],
+            "clause_version": 1,
+            "proposed_clause_text": second["revised_text"],
+        }
+    )
     candidates = revision_review_candidates(view)
     decision = {
         "candidate_id": candidates[1]["candidate_id"],
@@ -84,9 +105,11 @@ def test_reviewed_package_uses_server_decisions_not_client_ids() -> None:
         latest_decisions=lambda **kwargs: [decision]
     )
     selected_views: list[dict[str, object]] = []
+    protocols: list[bytes] = []
 
     def render(**kwargs: object) -> tuple[bytes, int]:
         selected_views.append(kwargs["view"])
+        protocols.append(kwargs["protocol_docx"])
         return b"synthetic-reviewed-package", 1
 
     service._render_revised_contract_source_package = render
@@ -97,6 +120,13 @@ def test_reviewed_package_uses_server_decisions_not_client_ids() -> None:
     assert [
         item["revised_clause_id"] for item in selected_views[0]["revised_clauses"]
     ] == [candidates[1]["candidate_id"]]
+    assert [item["item_id"] for item in selected_views[0]["disagreement_items"]] == [
+        second["disagreement_item_id"]
+    ]
+    with zipfile.ZipFile(io.BytesIO(protocols[0])) as package:
+        xml = package.read("word/document.xml").decode()
+    assert "A second changed condition." in xml
+    assert "The changed condition applies." not in xml
 
     service._contract_revision_reviews = SimpleNamespace(latest_decisions=lambda **kwargs: [])
     with pytest.raises(

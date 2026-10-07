@@ -1,5 +1,17 @@
 # Generalized Contract Analysis 01
 
+## Matching protocol and revised-source package (source checkpoint)
+
+The server-authoritative reviewed ZIP now includes both the exact edited
+source DOCX files and a separately editable `reviewed-disagreement-protocol.docx`
+for the same current human-confirmed proposal set. Every selected revision
+must map one-to-one to a disagreement item; missing or duplicate mappings fail
+closed. The ZIP manifest records the protocol digest and selected proposal
+count. Deterministic tests cover that the protocol contains only selected
+wording and the source DOCX remains editable. This improves internal package
+consistency but is not a semantic/legal-coherence review or agreement by the
+Customer. No current owner proposal has been selected for production export.
+
 ## Server-authoritative reviewed contract package follow-up
 
 The next source change removes a trust ambiguity: the URL for the reviewed

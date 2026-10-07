@@ -22,7 +22,10 @@ class RevisedContractCandidateError(ValueError):
 
 
 def render_revised_contract_source_package(
-    sources: Sequence[Mapping[str, Any]], view: Mapping[str, Any]
+    sources: Sequence[Mapping[str, Any]],
+    view: Mapping[str, Any],
+    *,
+    protocol_docx: bytes | None = None,
 ) -> bytes:
     """Return every admitted DOCX contract source, editing only selected clauses.
 
@@ -109,12 +112,31 @@ def render_revised_contract_source_package(
         ],
         "sources": manifest_sources,
     }
+    if protocol_docx is not None:
+        try:
+            with zipfile.ZipFile(io.BytesIO(protocol_docx)) as protocol:
+                if (
+                    protocol.testzip() is not None
+                    or "word/document.xml" not in protocol.namelist()
+                ):
+                    raise RevisedContractCandidateError("reviewed_contract_protocol_invalid")
+        except zipfile.BadZipFile as exc:
+            raise RevisedContractCandidateError("reviewed_contract_protocol_invalid") from exc
+        manifest["reviewed_protocol"] = {
+            "entry": "reviewed-disagreement-protocol.docx",
+            "sha256": hashlib.sha256(protocol_docx).hexdigest(),
+            "proposal_count": len(_records(view.get("revised_clauses"))),
+        }
     archive = io.BytesIO()
     with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as package:
         for entry_name, output in files:
             member = zipfile.ZipInfo(entry_name, (1980, 1, 1, 0, 0, 0))
             member.compress_type = zipfile.ZIP_DEFLATED
             package.writestr(member, output)
+        if protocol_docx is not None:
+            member = zipfile.ZipInfo("reviewed-disagreement-protocol.docx", (1980, 1, 1, 0, 0, 0))
+            member.compress_type = zipfile.ZIP_DEFLATED
+            package.writestr(member, protocol_docx)
         member = zipfile.ZipInfo("manifest.json", (1980, 1, 1, 0, 0, 0))
         member.compress_type = zipfile.ZIP_DEFLATED
         package.writestr(

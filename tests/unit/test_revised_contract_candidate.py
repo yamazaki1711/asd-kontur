@@ -126,6 +126,49 @@ def test_revised_contract_package_applies_two_sources_and_preserves_unchanged_do
     assert manifest["analysis_gaps"] == ["CONTRACT_REFERENCED_DOCUMENT_UNRESOLVED"]
 
 
+def test_reviewed_package_carries_matching_editable_protocol() -> None:
+    original = "4.2. Customer may delay payment indefinitely."
+    proposed = "4.2. Payment follows documented acceptance."
+    protocol = _source_docx("ПРОТОКОЛ РАЗНОГЛАСИЙ", proposed)
+    package = render_revised_contract_source_package(
+        [
+            {
+                "source_version_id": "source-contract",
+                "safe_display_name": "contract.docx",
+                "content": _source_docx(original),
+            }
+        ],
+        {
+            "clauses": [
+                {
+                    "clause_id": "clause-42",
+                    "clause_version": 1,
+                    "source_version_id": "source-contract",
+                    "source_text": original,
+                }
+            ],
+            "revised_clauses": [
+                {
+                    "source_clause_id": "clause-42",
+                    "source_clause_version": 1,
+                    "revised_text": proposed,
+                }
+            ],
+        },
+        protocol_docx=protocol,
+    )
+    with zipfile.ZipFile(io.BytesIO(package)) as archive:
+        assert archive.namelist() == [
+            "contract-source-01.docx",
+            "reviewed-disagreement-protocol.docx",
+            "manifest.json",
+        ]
+        manifest = json.loads(archive.read("manifest.json"))
+        assert manifest["reviewed_protocol"]["proposal_count"] == 1
+        assert archive.read("reviewed-disagreement-protocol.docx") == protocol
+        assert _paragraphs(archive.read("contract-source-01.docx")) == [proposed]
+
+
 def test_selected_revision_package_preserves_unselected_contract_source() -> None:
     source_a = _source_docx("Payment follows acceptance.")
     source_b = _source_docx("Warranty lasts two years.")
