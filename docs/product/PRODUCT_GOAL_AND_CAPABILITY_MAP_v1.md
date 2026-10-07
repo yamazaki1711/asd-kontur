@@ -329,6 +329,18 @@ single-valued material mismatch remains. The owner workspace was not reset or
 manually reprocessed; Qwen and NTD processes were not restarted. These are
 professional-quality improvements, not FFC-02 acceptance.
 
+The 8 October role-aware Tender release
+`962ae7f7ec6a40643c9d135ad0bc6bf27de757a2` is delivered on migration
+`0142_audit_id_document_interpretation`. The deployed, read-only project model
+now reports 40 complete, 16 partial and 307 unresolved design/commercial work
+scope comparisons out of 363. Candidate-specific Qwen decisions authorize
+partial coverage only across proven design/commercial roles; a single reviewed
+pair cannot certify an entire multi-row work group. The three existing
+professional issues did not increase. Focused tests passed 216/216 and the
+four supervised application roles passed readiness, but authenticated
+owner-browser acceptance and complete professional Tender findings remain
+unverified. This is FFC-02 `PARTIAL`, not a Tender-mode or product PASS.
+
 For each row, the detailed acceptance record must additionally name the
 tested release, delivered release, actual observed result and remaining
 blocker. Until that evidence exists, implementation or a passing unit test is
