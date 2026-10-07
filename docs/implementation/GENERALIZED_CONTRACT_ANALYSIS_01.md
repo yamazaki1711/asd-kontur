@@ -12,7 +12,23 @@ Unit qualification checks that the server includes only one current confirmed
 proposal out of two and rejects the zero-confirmed case; the isolated browser
 check verifies the reviewed link has no client-selected IDs. No database
 migration or Qwen work is required for this follow-up. Public release evidence
-is recorded separately after cutover; source tests alone are not deployment.
+follows; source tests alone are not deployment.
+
+The follow-up is deployed at exact SHA
+`e8f522245528fbfb32eeb870ae5b41fce4ebb164` in
+`~/.asd-kontur/public-demo/releases/20261007-e8f5222-reviewed-contract-package-v1`.
+All four application roles are pinned there; API readiness and the new asset
+returned HTTP 200; the live OpenAPI document exposes the reviewed-package
+route. Public migration remains `0131_contract_revision_review`, and there
+were no queued/leased/running jobs at cutover or afterward. Qwen and NTD
+workers were not restarted. The prior plists are retained under
+`~/.asd-kontur/public-demo/launchd-backups/20261007-pre-e8f5222-reviewed-contract-package/`.
+The pinned owner-scoped service still returned one real OKS, 307 source-linked
+clauses, five revision-review candidates and zero human-reviewed proposals.
+The reviewed-package route therefore has no live owner-approved output yet;
+the controlled two-proposal case proves its fail-closed policy. Legal
+coherence, contract attachment resolution, and complete four-mode readiness
+remain unaccepted. `ProductReady=false`.
 
 ## 2026-10-07 source-bound revision review (source checkpoint)
 
