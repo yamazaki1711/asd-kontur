@@ -105,3 +105,7 @@ launchd roles were healthy after cutover; API readiness, one active workspace,
 workspace currently has no incoming-inspection preflights, so live export of
 owner-entered inspection data was not exercised. Authenticated browser
 acceptance remains unavailable because no in-app browser is attached.
+The broader isolated Python unit/integration gate for this source checkpoint
+finished with 1,544 passed and two skipped in 127.88 seconds; frontend
+typecheck and production build also passed. This qualification is not a
+four-mode product-readiness result.
