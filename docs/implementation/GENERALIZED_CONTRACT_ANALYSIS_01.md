@@ -6,7 +6,8 @@ The exact-source revised-contract renderer now refuses a proposed clause text
 that appears only inside a different clause number (for example, a reference
 to 7.4 inside 17.4). It also refuses a selected or unchanged DOCX source with
 unresolved Word tracked-change elements, rather than silently presenting a
-candidate based on an ambiguous source revision. The tests use changed,
+candidate based on an ambiguous source revision in the main document XML. Other
+Word parts such as headers and footers are not yet covered by this guard. The tests use changed,
 project-independent clause text. The guard is deployed at exact SHA
 `8ce13f51d73fe69c02114ad89b24ddce395cc432` in
 `~/.asd-kontur/public-demo/releases/20261007-8ce13f5-contract-source-ambiguity-v1`.
