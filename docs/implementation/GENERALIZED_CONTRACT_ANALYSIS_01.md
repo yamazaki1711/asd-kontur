@@ -1,5 +1,19 @@
 # Generalized Contract Analysis 01
 
+## Clause-number and overlapping-edit safety (source checkpoint)
+
+Exact DOCX substitution now preserves the source's explicit clause number when
+the drafted replacement omits it, rejects a conflicting proposed clause
+number, and refuses two revisions mapped to one paragraph. These are generic
+deterministic formatting safeguards, not legal interpretation. Focused tests
+cover omitted/changed numbering and the overlapping-edit refusal. A read-only
+render of the current owner workspace's existing draft package still succeeds
+under the new guard (121,155 bytes); no project fact or review decision was
+written. This source checkpoint is not yet deployed. It does not establish
+cross-clause semantic coherence, defined-term consistency or attachment
+completeness; those require the production Qwen harness and professional
+review. `ProductReady=false`.
+
 ## Matching protocol and revised-source package (source checkpoint)
 
 The server-authoritative reviewed ZIP now includes both the exact edited

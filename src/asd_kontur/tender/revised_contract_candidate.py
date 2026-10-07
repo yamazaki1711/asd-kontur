@@ -15,6 +15,7 @@ _WORD_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _MARKUP_COMPATIBILITY_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 _TEXT = f"{{{_WORD_NS}}}t"
 _PARAGRAPH = f"{{{_WORD_NS}}}p"
+_CLAUSE_NUMBER = re.compile(r"^(?P<prefix>\s*(?P<number>\d+(?:\.\d+){1,5})\.?\s+)")
 
 
 class RevisedContractCandidateError(ValueError):
@@ -202,6 +203,7 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
     paragraphs = list(root.iter(_PARAGRAPH))
     original_tags = tuple(node.tag for node in root.iter())
     paragraph_texts = [_paragraph_text(paragraph) for paragraph in paragraphs]
+    edited_paragraphs: set[int] = set()
     for source_text, revised_text in replacements:
         matches = [
             (index, span)
@@ -211,9 +213,19 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
         if len(matches) != 1:
             raise RevisedContractCandidateError("revised_contract_clause_match_not_unique")
         paragraph_index, (start, end) = matches[0]
+        if paragraph_index in edited_paragraphs:
+            raise RevisedContractCandidateError("revised_contract_overlapping_clause_edits")
+        edited_paragraphs.add(paragraph_index)
         original_paragraph = paragraph_texts[paragraph_index]
         suffix = original_paragraph[end:]
         normalized_revision = revised_text.strip()
+        source_number = _CLAUSE_NUMBER.match(source_text)
+        if source_number is not None:
+            proposed_number = _CLAUSE_NUMBER.match(normalized_revision)
+            if proposed_number is None:
+                normalized_revision = source_number.group("prefix") + normalized_revision
+            elif proposed_number.group("number") != source_number.group("number"):
+                raise RevisedContractCandidateError("revised_contract_clause_number_changed")
         if (
             normalized_revision
             and suffix

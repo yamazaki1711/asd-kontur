@@ -451,6 +451,55 @@ def test_revised_contract_changes_only_exact_source_clause() -> None:
         assert package.read("custom/untouched.bin") == b"exact-untouched-package-member"
 
 
+def test_revised_contract_preserves_clause_number_when_draft_omits_it() -> None:
+    original = "7.4. Customer may delay payment."
+    view = {
+        "clauses": [
+            {
+                "clause_id": "numbered-clause",
+                "clause_version": 1,
+                "source_text": original,
+            }
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "numbered-clause",
+                "source_clause_version": 1,
+                "revised_text": "Payment follows acceptance.",
+            }
+        ],
+    }
+    revised = render_revised_contract_candidate_docx(_source_docx(original), view)
+    assert _paragraphs(revised) == ["7.4. Payment follows acceptance."]
+    view["revised_clauses"][0]["revised_text"] = "8.1. Payment follows acceptance."
+    with pytest.raises(RevisedContractCandidateError, match="clause_number_changed"):
+        render_revised_contract_candidate_docx(_source_docx(original), view)
+
+
+def test_revised_contract_rejects_two_edits_to_one_paragraph() -> None:
+    original = "4.1. First obligation; second obligation."
+    view = {
+        "clauses": [
+            {"clause_id": "first", "clause_version": 1, "source_text": "First obligation"},
+            {"clause_id": "second", "clause_version": 1, "source_text": "second obligation"},
+        ],
+        "revised_clauses": [
+            {
+                "source_clause_id": "first",
+                "source_clause_version": 1,
+                "revised_text": "Changed first",
+            },
+            {
+                "source_clause_id": "second",
+                "source_clause_version": 1,
+                "revised_text": "changed second",
+            },
+        ],
+    }
+    with pytest.raises(RevisedContractCandidateError, match="overlapping_clause_edits"):
+        render_revised_contract_candidate_docx(_source_docx(original), view)
+
+
 def test_revised_contract_rejects_post_edit_serialization_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -488,12 +537,16 @@ def test_revised_contract_uses_explicit_replacement_source_span() -> None:
     revisions = view["revised_clauses"]
     assert isinstance(revisions, list)
     revisions[0]["replacement_source_text"] = first
+    revisions[0]["revised_text"] = (
+        "5.5. Заказчик передаёт площадку не позднее пяти рабочих дней; "
+        "просрочка продлевает срок выполнения работ."
+    )
 
     revised = render_revised_contract_candidate_docx(source, view)
 
     assert _paragraphs(revised) == [
         (
-            "4.2. Заказчик передаёт площадку не позднее пяти рабочих дней; "
+            "5.5. Заказчик передаёт площадку не позднее пяти рабочих дней; "
             "просрочка продлевает срок выполнения работ."
         ),
         continuation,
@@ -585,6 +638,10 @@ def test_product_projection_advertises_only_verified_exact_candidate() -> None:
     clauses = view["clauses"]
     assert isinstance(clauses, list)
     clauses[0]["source_version_id"] = source_id
+    view["revised_clauses"][0]["revised_text"] = (
+        "7.3. Заказчик передаёт площадку не позднее пяти рабочих дней; "
+        "просрочка продлевает срок выполнения работ."
+    )
     view.update(
         {
             "revised_contracts": [
@@ -613,7 +670,7 @@ def test_product_projection_advertises_only_verified_exact_candidate() -> None:
     assert candidate.safe_display_name == (
         "changed-project-contract-contractor-revision-candidate.docx"
     )
-    assert _paragraphs(b"".join(candidate.chunks))[1].startswith("4.2.")
+    assert _paragraphs(b"".join(candidate.chunks))[1].startswith("7.3.")
 
 
 def test_product_projection_keeps_ambiguous_source_as_clause_schedule() -> None:
