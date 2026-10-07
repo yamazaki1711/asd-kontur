@@ -421,6 +421,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
                 "issue_version": 1,
                 "issue_kind": "contract_risk",
                 "subject": "payment_dependency",
+                "clause_id": "clause-independent-7",
+                "clause_version": 2,
                 "description": "Acceptance depends on an undefined Customer review period.",
                 "trigger_text": "Customer accepts work after its internal review.",
                 "adverse_effect_text": "Payment is due only after Customer acceptance.",
@@ -522,6 +524,8 @@ def test_contract_analysis_word_report_is_editable_and_preserves_exact_source() 
         assert "Acceptance depends on an undefined Customer review period." in document
         assert "Договорный риск" in document
         assert "Зависимость оплаты от внешнего условия" in document
+        assert "Пункт / документ" in document
+        assert "Changed-contract-terms.docx: Пункт без номера (стр./лист 12)" in document
         assert "Применимо" in document
         assert ">payment_dependency<" not in document
         assert ">contract_risk<" not in document

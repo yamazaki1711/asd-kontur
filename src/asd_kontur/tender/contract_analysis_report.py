@@ -103,9 +103,13 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
     issue_rows = [
         (
             str(ordinal),
-            _professional_code_label(item.get("issue_kind"), _ISSUE_KIND_LABELS, "Иной вопрос"),
-            _professional_code_label(
-                item.get("subject"), _RISK_SUBJECT_LABELS, "Другой договорный риск"
+            _risk_clause_source(item, clause_by_identity),
+            (
+                _professional_code_label(item.get("issue_kind"), _ISSUE_KIND_LABELS, "Иной вопрос")
+                + ": "
+                + _professional_code_label(
+                    item.get("subject"), _RISK_SUBJECT_LABELS, "Другой договорный риск"
+                )
             ),
             str(item.get("description") or "Не указано"),
             _risk_source_wording(item),
@@ -260,8 +264,8 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
             _table(
                 (
                     "№",
-                    "Вид",
-                    "Предмет",
+                    "Пункт / документ",
+                    "Вид и предмет",
                     "Риск для Подрядчика",
                     "Точная формулировка риска",
                     "Применимость",
@@ -486,6 +490,24 @@ def _source_reference(clause: Mapping[str, Any]) -> str:
         "; ".join(f"{label}: {value}" for label, value in values if value)
         or "Источник доступен по ссылке результата"
     )
+
+
+def _risk_clause_source(
+    issue: Mapping[str, Any], clauses: Mapping[tuple[str, str], Mapping[str, Any]]
+) -> str:
+    clause = clauses.get(
+        (str(issue.get("clause_id") or ""), str(issue.get("clause_version") or ""))
+    )
+    if clause is None:
+        return "Пункт и документ требуют уточнения"
+    reference = display_protocol_clause_reference(clause)
+    source_name = str(clause.get("source_name") or "").strip()
+    if source_name and source_name not in reference:
+        reference += f" — {source_name}"
+    page = clause.get("source_page") or clause.get("page_number")
+    if page and "стр./лист" not in reference:
+        reference += f", стр./лист {page}"
+    return reference
 
 
 def _status_label(value: Any) -> str:
