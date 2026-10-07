@@ -1894,3 +1894,18 @@ and two skipped; the targeted browser E2E, Python static checks and frontend
 checks also passed. The read-only authorized owner list still contains exactly
 one real workspace, `01a0eba7-70ba-7770-9601-1a713dd359cf`. Neither the
 isolated browser runs nor the release created a live test workspace.
+
+Next contract slice: the currently deployed `CONTRACT_ANALYSIS` jobs interpret
+bounded native-layout batches (`application_spine/postgres.py` schedules them;
+`document_understanding/pipeline.py` executes and persists them). The read
+model merges their clauses and risks, but there is no accepted aggregate
+semantic check that the selected revisions remain coherent across separate
+batches and all admitted contract sources. Implement a separate, bounded,
+workspace-scoped Qwen review only after the effective source batches complete;
+its persisted input identity must cover the accepted batch digests and selected
+source versions. The supervised reconciler must enqueue it idempotently, and
+the validator must require exact clause/source links before publishing a
+cross-clause conflict or blocker. The review must not rewrite accepted clauses
+or make an API request wait on Qwen. Qualify conflicting and benign changed
+contracts, then use the same release path. Until then the revised package is
+an editable candidate, not a semantically or legally approved contract.
