@@ -602,6 +602,27 @@ class MaterialApplicationView(ApiModel):
     recorded_at: datetime
 
 
+class MaterialBalanceView(ApiModel):
+    material_batch_id: UUID
+    batch_reference: str
+    material_batch_version: int
+    status: Literal[
+        "no_delivery_basis",
+        "conflicting_delivery_basis",
+        "revision_scope_unresolved",
+        "unit_scope_unresolved",
+        "over_applied",
+        "recorded_balance",
+    ]
+    delivered_quantity: Decimal | None
+    applied_quantity: Decimal | None
+    remaining_quantity: Decimal | None
+    unit_code: str | None
+    admission_ids: list[str]
+    application_ids: list[str]
+    warning: str
+
+
 class MaterialUseEvidenceRequest(ApiModel):
     admission_id: UUID
     source_locator_id: UUID

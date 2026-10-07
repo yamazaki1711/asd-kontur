@@ -2301,6 +2301,116 @@
         "title": "MaterialApplicationView",
         "type": "object"
       },
+      "MaterialBalanceView": {
+        "additionalProperties": false,
+        "properties": {
+          "admission_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Admission Ids",
+            "type": "array"
+          },
+          "application_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Application Ids",
+            "type": "array"
+          },
+          "applied_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Quantity"
+          },
+          "batch_reference": {
+            "title": "Batch Reference",
+            "type": "string"
+          },
+          "delivered_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered Quantity"
+          },
+          "material_batch_id": {
+            "format": "uuid",
+            "title": "Material Batch Id",
+            "type": "string"
+          },
+          "material_batch_version": {
+            "title": "Material Batch Version",
+            "type": "integer"
+          },
+          "remaining_quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Quantity"
+          },
+          "status": {
+            "enum": [
+              "no_delivery_basis",
+              "conflicting_delivery_basis",
+              "revision_scope_unresolved",
+              "unit_scope_unresolved",
+              "over_applied",
+              "recorded_balance"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Code"
+          },
+          "warning": {
+            "title": "Warning",
+            "type": "string"
+          }
+        },
+        "required": [
+          "material_batch_id",
+          "batch_reference",
+          "material_batch_version",
+          "status",
+          "delivered_quantity",
+          "applied_quantity",
+          "remaining_quantity",
+          "unit_code",
+          "admission_ids",
+          "application_ids",
+          "warning"
+        ],
+        "title": "MaterialBalanceView",
+        "type": "object"
+      },
       "MaterialUseEvidenceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -9966,6 +10076,59 @@
           }
         },
         "summary": "Record Material Application",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
+    "/api/v1/workspaces/{workspace_id}/support/material-batches/{material_batch_id}/balance": {
+      "get": {
+        "operationId": "material_batch_balance_api_v1_workspaces__workspace_id__support_material_batches__material_batch_id__balance_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "material_batch_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Material Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialBalanceView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Material Batch Balance",
         "tags": [
           "support-production"
         ]

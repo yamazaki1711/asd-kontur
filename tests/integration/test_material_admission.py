@@ -578,6 +578,15 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
         }
     )
     assert second["quantity"] == Decimal("7.250")
+    balance = service.balance(
+        owner_identity_id=owner,
+        workspace_id=tenant.workspace_id,
+        material_batch_id=batch_id,
+    )
+    assert balance["status"] == "recorded_balance"
+    assert balance["delivered_quantity"] == Decimal("12.500")
+    assert balance["applied_quantity"] == Decimal("12.500")
+    assert balance["remaining_quantity"] == Decimal("0.000")
     context = MaterialAdmissionService(
         postgres_environment.application_engine, postgres_environment.support_engine
     ).context(owner_identity_id=owner, workspace_id=tenant.workspace_id)
@@ -620,6 +629,15 @@ def test_material_application_requires_actual_use_and_caps_batch_total(
         )
         assert evidence_response.status_code == 201, evidence_response.text
         assert evidence_response.json()["evidence_link_id"] == str(use_evidence)
+        balance_response = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/material-batches/{batch_id}/balance"
+        )
+        assert balance_response.status_code == 200, balance_response.text
+        assert Decimal(balance_response.json()["remaining_quantity"]) == 0
+        unavailable = client.get(
+            f"/api/v1/workspaces/{tenant.workspace_id}/support/material-batches/{uuid7()}/balance"
+        )
+        assert unavailable.status_code == 404
 
     inspection.submit(
         owner_identity_id=owner,

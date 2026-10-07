@@ -3651,6 +3651,25 @@ function MaterialApplicationPanel({
   const selected = currentAdmissions.find(
     (item) => String(item.admission_id) === admissionId,
   );
+  const selectedBatchId = selected ? String(selected.material_batch_id) : "";
+  const balance = useQuery({
+    queryKey: ["support-material-balance", workspaceId, selectedBatchId],
+    enabled: Boolean(selectedBatchId),
+    queryFn: async () => {
+      const { data, error } = await api.GET(
+        "/api/v1/workspaces/{workspace_id}/support/material-batches/{material_batch_id}/balance",
+        {
+          params: {
+            path: {
+              workspace_id: workspaceId,
+              material_batch_id: selectedBatchId,
+            },
+          },
+        },
+      );
+      return requireData(data, error);
+    },
+  });
   const selectedEvidence = (context?.application_evidence ?? []).filter(
     (item) =>
       selected &&
@@ -3716,9 +3735,14 @@ function MaterialApplicationPanel({
     onSuccess: async () => {
       setRequestKey(globalThis.crypto.randomUUID());
       setQuantity("");
-      await queryClient.invalidateQueries({
-        queryKey: ["support-material-admission-context", workspaceId],
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["support-material-admission-context", workspaceId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["support-material-balance", workspaceId, selectedBatchId],
+        }),
+      ]);
     },
   });
   const canSubmit = Boolean(
@@ -3743,6 +3767,32 @@ function MaterialApplicationPanel({
       {context && !context.application_grants.length ? (
         <p>Нет действующего полномочия на подтверждение применения материала.</p>
       ) : null}
+      {balance.data ? (
+        <div role="status">
+          <h4>Учётный баланс партии {balance.data.batch_reference}</h4>
+          {balance.data.status === "recorded_balance" ? (
+            <p>
+              Поставка: {displayValue(balance.data.delivered_quantity)} {balance.data.unit_code};
+              подтверждённое применение: {displayValue(balance.data.applied_quantity)} {balance.data.unit_code};
+              расчётный остаток: {displayValue(balance.data.remaining_quantity)} {balance.data.unit_code}.
+            </p>
+          ) : (
+            <p>
+              Расчёт остатка не подтверждён: {(
+                {
+                  no_delivery_basis: "нет единого основания поставки",
+                  conflicting_delivery_basis: "объёмы или единицы поставки противоречат друг другу",
+                  revision_scope_unresolved: "изменилась версия партии — требуется сверка остатков",
+                  unit_scope_unresolved: "единицы применения несовместимы с поставкой",
+                  over_applied: "учтённое применение превышает поставку",
+                } as Record<string, string>
+              )[balance.data.status] ?? "требуется проверка"}.
+            </p>
+          )}
+          <p>Это сверка записей, не физическая инвентаризация и не приёмка работы.</p>
+        </div>
+      ) : null}
+      {balance.error ? <p role="alert">Баланс недоступен: {String(balance.error)}</p> : null}
       {context && !context.field_locators.length ? (
         <p>
           Нет принятого полевого документа. Загрузите акт, журнал или иной документ

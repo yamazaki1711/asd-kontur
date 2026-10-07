@@ -377,3 +377,22 @@ before and after this cutover:
 The existing Qwen and NTD processes were not restarted. Authenticated
 owner-browser acceptance and a real field-document application remain
 unverified. Support-mode and `ProductReady` remain unaccepted.
+
+## Recorded material balance per batch (source qualification)
+
+The next Support output computes a batch-level recorded balance from one
+documented delivery basis and all confirmed applications. Delivery is not
+summed again for each admitted work. Decimal arithmetic and source record IDs
+are returned by an owner-scoped API and shown beside the selected batch in
+Support. The calculation refuses to publish a remaining quantity when there
+is no delivery basis, conflicting delivery bases, a changed batch version or
+incompatible application units; a corrupted over-application is flagged. It
+is explicitly a reconciliation of records, not a physical inventory, work
+acceptance or KS/payment authorization. The result is recalculated on read,
+so it cannot remain stale after a new application.
+
+Parameterized tests change quantities and units, repeat the same delivery
+basis across works, and exercise the refusal states. The isolated PostgreSQL
+test records two applications, checks zero remaining without duplicate
+delivery, reloads the API and rejects an unknown batch. No real owner stock
+or field quantity is inferred. Support-mode and ProductReady remain incomplete.

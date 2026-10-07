@@ -20,6 +20,7 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import uuid7
 
 from .material_admission_postgres import MaterialAdmissionService
+from .material_balance import calculate_material_balance
 
 
 class MaterialApplicationError(RuntimeError):
@@ -30,6 +31,72 @@ class MaterialApplicationService:
     def __init__(self, application_engine: Engine, support_engine: Engine) -> None:
         self._application_engine = application_engine
         self._support_engine = support_engine
+
+    def balance(
+        self, *, owner_identity_id: str, workspace_id: UUID, material_batch_id: UUID
+    ) -> dict[str, Any]:
+        with Session(self._application_engine) as session, session.begin():
+            try:
+                organization_id = MaterialAdmissionService._owner_scope(
+                    session, owner_identity_id, workspace_id
+                )
+                MaterialAdmissionService._require_active_workspace(
+                    session, organization_id, workspace_id
+                )
+            except RuntimeError as exc:
+                raise MaterialApplicationError(str(exc)) from exc
+            versions = (
+                session.execute(
+                    sa.text(
+                        "SELECT version,batch_reference FROM workspace.material_batch_versions "
+                        "WHERE organization_id=:o AND workspace_id=:w AND material_batch_id=:batch "
+                        "ORDER BY version DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "batch": material_batch_id},
+                )
+                .mappings()
+                .all()
+            )
+            if not versions:
+                raise MaterialApplicationError("material_batch_not_found")
+            admissions = (
+                session.execute(
+                    sa.text(
+                        "SELECT DISTINCT ON (work_instance_id) admission_id,"
+                        "material_batch_version,outcome,delivered_quantity,delivered_unit "
+                        "FROM workspace.support_material_admissions WHERE "
+                        "organization_id=:o AND workspace_id=:w AND material_batch_id=:batch "
+                        "ORDER BY work_instance_id,admitted_at DESC,admission_id DESC"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "batch": material_batch_id},
+                )
+                .mappings()
+                .all()
+            )
+            applications = (
+                session.execute(
+                    sa.text(
+                        "SELECT material_application_id,material_batch_version,quantity,unit_code "
+                        "FROM workspace.material_applications WHERE organization_id=:o "
+                        "AND workspace_id=:w AND material_batch_id=:batch "
+                        "ORDER BY recorded_at,material_application_id"
+                    ),
+                    {"o": organization_id, "w": workspace_id, "batch": material_batch_id},
+                )
+                .mappings()
+                .all()
+            )
+            return {
+                "material_batch_id": material_batch_id,
+                "batch_reference": versions[0]["batch_reference"],
+                "material_batch_version": int(versions[0]["version"]),
+                **calculate_material_balance(
+                    batch_version=int(versions[0]["version"]),
+                    version_count=len(versions),
+                    admissions=admissions,
+                    applications=applications,
+                ),
+            }
 
     def confirm_evidence(
         self,

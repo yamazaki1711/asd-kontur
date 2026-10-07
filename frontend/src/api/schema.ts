@@ -1337,6 +1337,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workspaces/{workspace_id}/support/material-batches/{material_batch_id}/balance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Material Batch Balance */
+        get: operations["material_batch_balance_api_v1_workspaces__workspace_id__support_material_batches__material_batch_id__balance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{workspace_id}/support/material-use-evidence": {
         parameters: {
             query?: never;
@@ -2458,6 +2475,37 @@ export interface components {
             recorded_at: string;
             /** Unit Code */
             unit_code: string;
+        };
+        /** MaterialBalanceView */
+        MaterialBalanceView: {
+            /** Admission Ids */
+            admission_ids: string[];
+            /** Application Ids */
+            application_ids: string[];
+            /** Applied Quantity */
+            applied_quantity: string | null;
+            /** Batch Reference */
+            batch_reference: string;
+            /** Delivered Quantity */
+            delivered_quantity: string | null;
+            /**
+             * Material Batch Id
+             * Format: uuid
+             */
+            material_batch_id: string;
+            /** Material Batch Version */
+            material_batch_version: number;
+            /** Remaining Quantity */
+            remaining_quantity: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "no_delivery_basis" | "conflicting_delivery_basis" | "revision_scope_unresolved" | "unit_scope_unresolved" | "over_applied" | "recorded_balance";
+            /** Unit Code */
+            unit_code: string | null;
+            /** Warning */
+            warning: string;
         };
         /** MaterialUseEvidenceRequest */
         MaterialUseEvidenceRequest: {
@@ -6492,6 +6540,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialApplicationView"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    material_batch_balance_api_v1_workspaces__workspace_id__support_material_batches__material_batch_id__balance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workspace_id: string;
+                material_batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialBalanceView"];
                 };
             };
             /** @description Validation Error */

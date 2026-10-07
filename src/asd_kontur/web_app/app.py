@@ -133,6 +133,7 @@ from .schemas import (
     MaterialAdmissionView,
     MaterialApplicationRequest,
     MaterialApplicationView,
+    MaterialBalanceView,
     MaterialUseEvidenceRequest,
     MaterialUseEvidenceView,
     ModeView,
@@ -418,7 +419,9 @@ def _install_middleware(app: FastAPI) -> None:
     async def material_application_error(
         request: Request, exc: MaterialApplicationError
     ) -> JSONResponse:
-        status_code = 404 if str(exc) == "workspace_not_found" else 409
+        status_code = (
+            404 if str(exc) in {"workspace_not_found", "material_batch_not_found"} else 409
+        )
         return _error(request, str(exc), status_code)
 
     @app.exception_handler(SupportFieldCommandError)
@@ -1827,6 +1830,27 @@ def _api_router() -> APIRouter:
             **payload.model_dump(),
         )
         return MaterialUseEvidenceView(**jsonable_encoder(value))
+
+    @router.get(
+        "/workspaces/{workspace_id}/support/material-batches/{material_batch_id}/balance",
+        response_model=MaterialBalanceView,
+        tags=["support-production"],
+    )
+    def material_batch_balance(
+        request: Request,
+        workspace_id: UUID,
+        material_batch_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> MaterialBalanceView:
+        service = _container(request).material_applications
+        if service is None:
+            raise HTTPException(status_code=503, detail="support_material_writer_unavailable")
+        value = service.balance(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+            material_batch_id=material_batch_id,
+        )
+        return MaterialBalanceView(**jsonable_encoder(value))
 
     @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",
