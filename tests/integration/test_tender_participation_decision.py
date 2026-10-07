@@ -58,6 +58,28 @@ def test_tender_participation_is_workspace_scoped_and_versioned(
         replay = client.put(path, json=payload, headers=_csrf(client))
         assert replay.status_code == 200
         assert replay.json()["assessment_id"] == saved.json()["assessment_id"]
+        cost_payload = {
+            **payload,
+            "company_scope_fit": "yes",
+            "company_scope_fit_reason": "Confirmed contractor scope",
+            "cost_items": [
+                {
+                    "category": "logistics",
+                    "description": "Delivery to site",
+                    "quantity": "2.5",
+                    "unit": "trip",
+                    "unit_rate_rub": "125.20",
+                    "basis": "Carrier quotation 2026",
+                }
+            ],
+            "cost_scope_complete": True,
+            "required_profit_rub": "10.00",
+        }
+        cost_saved = client.put(path, json=cost_payload, headers=_csrf(client))
+        assert cost_saved.status_code == 200, cost_saved.text
+        assert cost_saved.json()["cost_build_up"]["cost_subtotal_rub"] == "313.00"
+        assert cost_saved.json()["cost_build_up"]["derived_minimum_viable_price_rub"] == "323.00"
+        assert client.get(path).json()["assessment_id"] == cost_saved.json()["assessment_id"]
         other = client.get(f"/api/v1/workspaces/{second}/tender/participation-decision")
         assert other.status_code == 200
         assert other.json()["assessment_id"] is None

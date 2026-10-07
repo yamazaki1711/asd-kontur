@@ -146,3 +146,109 @@ def test_negative_declaration_requires_a_reason() -> None:
             professional_issue_count=0,
             project_analysis_complete=True,
         )
+
+
+def test_contractor_cost_build_up_derives_viable_price_without_model_arithmetic() -> None:
+    values = _ready_input()
+    values["minimum_viable_price_rub"] = None
+    values["minimum_viable_price_reason"] = ""
+    values.update(
+        {
+            "cost_items": [
+                {
+                    "category": "materials",
+                    "description": "Pipe procurement",
+                    "quantity": "3.5",
+                    "unit": "m",
+                    "unit_rate_rub": "200.10",
+                    "basis": "Signed supplier quotation",
+                },
+                {
+                    "category": "logistics",
+                    "description": "Site transport",
+                    "quantity": "2",
+                    "unit": "trip",
+                    "unit_rate_rub": "150.00",
+                    "basis": "Carrier quotation 2026",
+                },
+            ],
+            "required_profit_rub": "50.00",
+            "cost_scope_complete": True,
+        }
+    )
+    result = assess_tender_participation(
+        values,
+        commercial_conditions=_project_price(),
+        professional_issue_count=0,
+        project_analysis_complete=True,
+    )
+    assert result["cost_build_up"]["cost_subtotal_rub"] == "1000.35"
+    assert result["cost_build_up"]["derived_minimum_viable_price_rub"] == "1050.35"
+    assert result["decision"] == "DO_NOT_PARTICIPATE"
+    assert result["blockers"][0]["code"] == "PRICE_BELOW_VIABLE_COST"
+
+
+def test_incomplete_cost_build_up_cannot_be_used_as_viability_gate() -> None:
+    values = _ready_input()
+    values["minimum_viable_price_rub"] = None
+    values["minimum_viable_price_reason"] = ""
+    values.update(
+        {
+            "cost_items": [
+                {
+                    "category": "materials",
+                    "description": "Steel supply",
+                    "quantity": "2",
+                    "unit": "t",
+                    "unit_rate_rub": "600.00",
+                    "basis": "Supplier quotation",
+                }
+            ],
+            "required_profit_rub": "100.00",
+            "cost_scope_complete": False,
+        }
+    )
+    result = assess_tender_participation(
+        values,
+        commercial_conditions=_project_price(),
+        professional_issue_count=0,
+        project_analysis_complete=True,
+    )
+    assert result["decision"] == "INSUFFICIENT_INPUT"
+    assert result["cost_build_up"]["derived_minimum_viable_price_rub"] is None
+
+
+def test_cost_build_up_rejects_unsupported_basis_and_conflicting_manual_total() -> None:
+    values = _ready_input()
+    values.update(
+        {
+            "cost_items": [
+                {
+                    "category": "labor",
+                    "description": "Crew hours",
+                    "quantity": "10",
+                    "unit": "h",
+                    "unit_rate_rub": "20.00",
+                    "basis": "Company rate card",
+                }
+            ],
+            "required_profit_rub": "10.00",
+            "cost_scope_complete": True,
+        }
+    )
+    with pytest.raises(TenderParticipationInputError, match="cost_build_up_conflict"):
+        assess_tender_participation(
+            values,
+            commercial_conditions=_project_price(),
+            professional_issue_count=0,
+            project_analysis_complete=True,
+        )
+    values["minimum_viable_price_rub"] = None
+    values["cost_items"][0]["basis"] = "unsure"  # type: ignore[index]
+    with pytest.raises(TenderParticipationInputError, match="cost_item_basis_invalid"):
+        assess_tender_participation(
+            values,
+            commercial_conditions=_project_price(),
+            professional_issue_count=0,
+            project_analysis_complete=True,
+        )

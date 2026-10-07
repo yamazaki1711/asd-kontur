@@ -248,6 +248,39 @@ def render_engineering_tender_report_docx(model: Mapping[str, Any]) -> bytes:
         ]
         for blocker in participation.get("blockers") or ():
             lines.append(_paragraph(str(dict(blocker).get("reason") or "")))
+        cost_build_up = dict(participation.get("cost_build_up") or {})
+        cost_items = cost_build_up.get("items") or ()
+        if cost_items:
+            lines.append(
+                _paragraph(
+                    "Расчёт Подрядчика по заявленным статьям: "
+                    + str(cost_build_up.get("cost_subtotal_rub") or "не установлен")
+                    + " руб."
+                )
+            )
+            for item in cost_items:
+                line = dict(item)
+                lines.append(
+                    _paragraph(
+                        f"{line.get('description')}: {line.get('quantity')} {line.get('unit')} × "
+                        f"{line.get('unit_rate_rub')} руб. = {line.get('amount_rub')} руб.; "
+                        f"основание: {line.get('basis')}."
+                    )
+                )
+            derived = cost_build_up.get("derived_minimum_viable_price_rub")
+            if derived:
+                lines.append(
+                    _paragraph(
+                        f"Расчётная минимальная цена с заявленной прибылью: {derived} руб."
+                    )
+                )
+            else:
+                lines.append(
+                    _paragraph(
+                        "Состав затрат не подтверждён как полный; частичный итог не используется "
+                        "для вывода об экономической допустимости цены."
+                    )
+                )
         missing_labels = {
             "company_scope_fit": "соответствие профиля Подрядчика предмету работ",
             "contract_acceptable": "приемлемость условий договора",

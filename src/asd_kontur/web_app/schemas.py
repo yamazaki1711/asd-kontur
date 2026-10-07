@@ -387,6 +387,17 @@ class ProjectUnderstandingView(ApiModel):
     authority_layers: dict[str, str]
 
 
+class TenderCostItemRequest(ApiModel):
+    category: Literal[
+        "labor", "materials", "equipment", "subcontract", "logistics", "site", "other"
+    ]
+    description: str = Field(min_length=3, max_length=200)
+    quantity: str
+    unit: str = Field(min_length=1, max_length=30)
+    unit_rate_rub: str
+    basis: str = Field(min_length=8, max_length=1000)
+
+
 class TenderParticipationAssessmentRequest(ApiModel):
     company_scope_fit: Literal["yes", "no", "unknown"] = "unknown"
     company_scope_fit_reason: str = Field(default="", max_length=1000)
@@ -397,6 +408,9 @@ class TenderParticipationAssessmentRequest(ApiModel):
     minimum_viable_price_rub: str | None = None
     minimum_viable_price_reason: str = Field(default="", max_length=1000)
     price_basis_confirmed: bool = False
+    cost_items: list[TenderCostItemRequest] = Field(default_factory=list, max_length=50)
+    cost_scope_complete: bool = False
+    required_profit_rub: str | None = None
 
 
 class TenderParticipationDecisionView(ApiModel):
@@ -409,6 +423,7 @@ class TenderParticipationDecisionView(ApiModel):
     blockers: list[dict[str, str]]
     missing_inputs: list[str]
     project_price_ceiling: dict[str, Any]
+    cost_build_up: dict[str, Any]
     contractor_assessment: dict[str, Any]
     professional_issue_count: int
     project_analysis_complete: bool

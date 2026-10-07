@@ -135,6 +135,34 @@ def test_primary_tender_report_discloses_missing_participation_inputs() -> None:
     assert "минимальная экономически допустимая цена Подрядчика" in xml
 
 
+def test_primary_tender_report_shows_cost_basis_and_refuses_partial_total_as_viability() -> None:
+    model = _model()
+    model["participation_decision"] = {
+        "decision": "INSUFFICIENT_INPUT",
+        "blockers": [],
+        "missing_inputs": ["minimum_viable_price_rub"],
+        "cost_build_up": {
+            "items": [
+                {
+                    "description": "Pipe delivery",
+                    "quantity": "4",
+                    "unit": "trip",
+                    "unit_rate_rub": "120.00",
+                    "amount_rub": "480.00",
+                    "basis": "Signed carrier quote",
+                }
+            ],
+            "cost_subtotal_rub": "480.00",
+            "derived_minimum_viable_price_rub": None,
+        },
+    }
+    data = render_engineering_tender_report_docx(model)
+    with zipfile.ZipFile(io.BytesIO(data)) as document:
+        xml = document.read("word/document.xml").decode("utf-8")
+    assert "Signed carrier quote" in xml
+    assert "частичный итог не используется" in xml
+
+
 def test_work_and_finding_schedules_are_editable_professional_outputs() -> None:
     work_rows = list(
         csv.DictReader(

@@ -7264,6 +7264,35 @@ export function ProjectEngineeringResult({
 }
 
 type ParticipationChoice = "yes" | "no" | "unknown";
+type TenderCostCategory =
+  | "labor"
+  | "materials"
+  | "equipment"
+  | "subcontract"
+  | "logistics"
+  | "site"
+  | "other";
+type TenderCostFormItem = {
+  category: TenderCostCategory;
+  description: string;
+  quantity: string;
+  unit: string;
+  unit_rate_rub: string;
+  basis: string;
+};
+
+const emptyTenderCostItem = (): TenderCostFormItem => ({
+  category: "materials",
+  description: "",
+  quantity: "",
+  unit: "",
+  unit_rate_rub: "",
+  basis: "",
+});
+const participationText = (value: unknown): string =>
+  typeof value === "string" ? value : "";
+const participationChoice = (value: unknown): ParticipationChoice =>
+  value === "yes" || value === "no" ? value : "unknown";
 
 function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
   const queryClient = useQueryClient();
@@ -7278,6 +7307,12 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
   const [minimumPrice, setMinimumPrice] = useState("");
   const [priceReason, setPriceReason] = useState("");
   const [basisConfirmed, setBasisConfirmed] = useState(false);
+  const [costItems, setCostItems] = useState<TenderCostFormItem[]>([]);
+  const [costScopeComplete, setCostScopeComplete] = useState(false);
+  const [requiredProfit, setRequiredProfit] = useState("");
+  const [loadedAssessmentId, setLoadedAssessmentId] = useState<string | null>(
+    null,
+  );
   const decision = useQuery({
     queryKey: ["tender-participation-decision", workspaceId],
     queryFn: async () => {
@@ -7288,6 +7323,40 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
       return requireData(data, error);
     },
   });
+  useEffect(() => {
+    if (
+      !decision.data?.assessment_id ||
+      decision.data.assessment_id === loadedAssessmentId
+    ) {
+      return;
+    }
+    const assessment: Record<string, unknown> =
+      decision.data.contractor_assessment;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Hydrate the editable form once per persisted assessment version.
+    setScopeFit(participationChoice(assessment.company_scope_fit));
+    setScopeReason(participationText(assessment.company_scope_fit_reason));
+    setContractAcceptable(participationChoice(assessment.contract_acceptable));
+    setContractReason(participationText(assessment.contract_acceptable_reason));
+    setConditionsFeasible(participationChoice(assessment.conditions_feasible));
+    setConditionsReason(
+      participationText(assessment.conditions_feasible_reason),
+    );
+    setMinimumPrice(
+      assessment.cost_scope_complete === true
+        ? ""
+        : participationText(assessment.minimum_viable_price_rub),
+    );
+    setPriceReason(participationText(assessment.minimum_viable_price_reason));
+    setBasisConfirmed(assessment.price_basis_confirmed === true);
+    setCostItems(
+      Array.isArray(assessment.cost_items)
+        ? (assessment.cost_items as TenderCostFormItem[])
+        : [],
+    );
+    setCostScopeComplete(assessment.cost_scope_complete === true);
+    setRequiredProfit(participationText(assessment.required_profit_rub));
+    setLoadedAssessmentId(decision.data.assessment_id);
+  }, [decision.data, loadedAssessmentId]);
   const save = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.PUT(
@@ -7301,9 +7370,15 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
             contract_acceptable_reason: contractReason,
             conditions_feasible: conditionsFeasible,
             conditions_feasible_reason: conditionsReason,
-            minimum_viable_price_rub: minimumPrice || null,
+            minimum_viable_price_rub:
+              costItems.length > 0 && costScopeComplete
+                ? null
+                : minimumPrice || null,
             minimum_viable_price_reason: priceReason,
             price_basis_confirmed: basisConfirmed,
+            cost_items: costItems,
+            cost_scope_complete: costScopeComplete,
+            required_profit_rub: requiredProfit || null,
           },
         },
       );
@@ -7354,6 +7429,20 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
               {decision.data.project_price_ceiling.value_rub} руб.
             </p>
           )}
+          {decision.data.cost_build_up.items instanceof Array &&
+            decision.data.cost_build_up.items.length > 0 && (
+              <p>
+                Расчёт Подрядчика: затраты{" "}
+                {participationText(
+                  decision.data.cost_build_up.cost_subtotal_rub,
+                )}{" "}
+                руб.;
+                {typeof decision.data.cost_build_up
+                  .derived_minimum_viable_price_rub === "string"
+                  ? ` минимальная цена с заявленной прибылью ${decision.data.cost_build_up.derived_minimum_viable_price_rub} руб.`
+                  : " состав затрат пока не подтверждён как полный."}
+              </p>
+            )}
           {decision.data.assessment_submitted_at && (
             <small>
               Оценка Подрядчика сохранена:{" "}
@@ -7428,6 +7517,7 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
             value={minimumPrice}
             onChange={(event) => setMinimumPrice(event.target.value)}
             inputMode="decimal"
+            disabled={costItems.length > 0 && costScopeComplete}
           />
         </label>
         <label>
@@ -7438,6 +7528,109 @@ function TenderParticipationDecision({ workspaceId }: { workspaceId: string }) {
             maxLength={1000}
           />
         </label>
+        <fieldset>
+          <legend>Расчёт цены по известным затратам Подрядчика</legend>
+          <p>
+            Вводите только подтверждённые количества и ставки. Неполный расчёт
+            не используется для решения о рентабельности.
+          </p>
+          {costItems.map((item, index) => (
+            <div key={index} className="panel">
+              <label>
+                Статья
+                <select
+                  value={item.category}
+                  onChange={(event) =>
+                    setCostItems((items) =>
+                      items.map((current, position) =>
+                        position === index
+                          ? {
+                              ...current,
+                              category: event.target
+                                .value as TenderCostCategory,
+                            }
+                          : current,
+                      ),
+                    )
+                  }
+                >
+                  <option value="labor">Труд</option>
+                  <option value="materials">Материалы</option>
+                  <option value="equipment">Механизмы</option>
+                  <option value="subcontract">Субподряд</option>
+                  <option value="logistics">Логистика</option>
+                  <option value="site">Площадка</option>
+                  <option value="other">Прочее</option>
+                </select>
+              </label>
+              {(
+                [
+                  ["description", "Работа / ресурс"],
+                  ["quantity", "Количество"],
+                  ["unit", "Единица"],
+                  ["unit_rate_rub", "Ставка, руб. за единицу"],
+                  ["basis", "Основание количества и ставки"],
+                ] as const
+              ).map(([field, label]) => (
+                <label key={field}>
+                  {label}
+                  <input
+                    value={item[field]}
+                    onChange={(event) =>
+                      setCostItems((items) =>
+                        items.map((current, position) =>
+                          position === index
+                            ? { ...current, [field]: event.target.value }
+                            : current,
+                        ),
+                      )
+                    }
+                    inputMode={
+                      field === "quantity" || field === "unit_rate_rub"
+                        ? "decimal"
+                        : undefined
+                    }
+                  />
+                </label>
+              ))}
+              <button
+                type="button"
+                onClick={() =>
+                  setCostItems((items) =>
+                    items.filter((_, position) => position !== index),
+                  )
+                }
+              >
+                Удалить статью
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            disabled={costItems.length >= 50}
+            onClick={() =>
+              setCostItems((items) => [...items, emptyTenderCostItem()])
+            }
+          >
+            Добавить статью затрат
+          </button>
+          <label>
+            Требуемая прибыль, руб. (укажите 0, если она не требуется)
+            <input
+              value={requiredProfit}
+              onChange={(event) => setRequiredProfit(event.target.value)}
+              inputMode="decimal"
+            />
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={costScopeComplete}
+              onChange={(event) => setCostScopeComplete(event.target.checked)}
+            />
+            Подтверждаю, что все необходимые затраты учтены
+          </label>
+        </fieldset>
         <label>
           <input
             type="checkbox"

@@ -4065,6 +4065,60 @@
         "title": "TenderContractAnalysisView",
         "type": "object"
       },
+      "TenderCostItemRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "basis": {
+            "maxLength": 1000,
+            "minLength": 8,
+            "title": "Basis",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "labor",
+              "materials",
+              "equipment",
+              "subcontract",
+              "logistics",
+              "site",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 200,
+            "minLength": 3,
+            "title": "Description",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_rate_rub": {
+            "title": "Unit Rate Rub",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "description",
+          "quantity",
+          "unit",
+          "unit_rate_rub",
+          "basis"
+        ],
+        "title": "TenderCostItemRequest",
+        "type": "object"
+      },
       "TenderParticipationAssessmentRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4116,6 +4170,19 @@
             "title": "Contract Acceptable Reason",
             "type": "string"
           },
+          "cost_items": {
+            "items": {
+              "$ref": "#/components/schemas/TenderCostItemRequest"
+            },
+            "maxItems": 50,
+            "title": "Cost Items",
+            "type": "array"
+          },
+          "cost_scope_complete": {
+            "default": false,
+            "title": "Cost Scope Complete",
+            "type": "boolean"
+          },
           "minimum_viable_price_reason": {
             "default": "",
             "maxLength": 1000,
@@ -4137,6 +4204,17 @@
             "default": false,
             "title": "Price Basis Confirmed",
             "type": "boolean"
+          },
+          "required_profit_rub": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required Profit Rub"
           }
         },
         "title": "TenderParticipationAssessmentRequest",
@@ -4188,6 +4266,11 @@
             "title": "Contractor Assessment",
             "type": "object"
           },
+          "cost_build_up": {
+            "additionalProperties": true,
+            "title": "Cost Build Up",
+            "type": "object"
+          },
           "decision": {
             "enum": [
               "DO_NOT_PARTICIPATE",
@@ -4228,6 +4311,7 @@
           "blockers",
           "missing_inputs",
           "project_price_ceiling",
+          "cost_build_up",
           "contractor_assessment",
           "professional_issue_count",
           "project_analysis_complete",

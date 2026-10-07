@@ -3094,6 +3094,24 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** TenderCostItemRequest */
+        TenderCostItemRequest: {
+            /** Basis */
+            basis: string;
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "labor" | "materials" | "equipment" | "subcontract" | "logistics" | "site" | "other";
+            /** Description */
+            description: string;
+            /** Quantity */
+            quantity: string;
+            /** Unit */
+            unit: string;
+            /** Unit Rate Rub */
+            unit_rate_rub: string;
+        };
         /** TenderParticipationAssessmentRequest */
         TenderParticipationAssessmentRequest: {
             /**
@@ -3129,6 +3147,13 @@ export interface components {
              * @default
              */
             contract_acceptable_reason: string;
+            /** Cost Items */
+            cost_items?: components["schemas"]["TenderCostItemRequest"][];
+            /**
+             * Cost Scope Complete
+             * @default false
+             */
+            cost_scope_complete: boolean;
             /**
              * Minimum Viable Price Reason
              * @default
@@ -3141,6 +3166,8 @@ export interface components {
              * @default false
              */
             price_basis_confirmed: boolean;
+            /** Required Profit Rub */
+            required_profit_rub?: string | null;
         };
         /** TenderParticipationDecisionView */
         TenderParticipationDecisionView: {
@@ -3156,6 +3183,10 @@ export interface components {
             }[];
             /** Contractor Assessment */
             contractor_assessment: {
+                [key: string]: unknown;
+            };
+            /** Cost Build Up */
+            cost_build_up: {
                 [key: string]: unknown;
             };
             /**
