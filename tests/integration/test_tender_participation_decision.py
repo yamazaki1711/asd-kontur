@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 
 from asd_kontur.web_app import create_app
@@ -60,3 +61,38 @@ def test_tender_participation_is_workspace_scoped_and_versioned(
         other = client.get(f"/api/v1/workspaces/{second}/tender/participation-decision")
         assert other.status_code == 200
         assert other.json()["assessment_id"] is None
+
+        prepared = client.post(
+            f"/api/v1/workspaces/{first}/lifecycle/reset/prepare",
+            json={"confirmation": "PREPARE_WORKSPACE_RESET"},
+            headers=_csrf(client),
+        )
+        assert prepared.status_code == 200, prepared.text
+        challenge = prepared.json()
+        destroyed = client.post(
+            f"/api/v1/workspaces/{first}/lifecycle/reset/execute",
+            json={
+                "challenge_id": challenge["challenge_id"],
+                "confirmation_text": challenge["confirmation_text"],
+            },
+            headers=_csrf(client),
+        )
+        assert destroyed.status_code == 200, destroyed.text
+        assert destroyed.json()["outcome"] == "verified"
+        assert client.get(path).status_code == 404
+        assert client.put(path, json=payload, headers=_csrf(client)).status_code == 404
+        assert (
+            client.get(f"/api/v1/workspaces/{second}/tender/participation-decision").status_code
+            == 200
+        )
+        with postgres_environment.owner_engine.connect() as connection:
+            assert (
+                connection.scalar(
+                    sa.text(
+                        "SELECT count(*) FROM workspace.tender_participation_assessments "
+                        "WHERE workspace_id=:workspace"
+                    ),
+                    {"workspace": first},
+                )
+                == 0
+            )
