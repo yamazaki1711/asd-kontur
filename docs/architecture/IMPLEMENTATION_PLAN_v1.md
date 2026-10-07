@@ -30,6 +30,22 @@ slice* are superseded by this owner direction. No real project is a universal
 schema or a source of expected answers. The current deployed release is
 recorded in the implementation evidence, never inferred from this plan.
 
+Checkpoint 2026-10-07 (Asia/Kamchatka): source HEAD
+`90ae82aa3fe26bff2c76684000e97d3f66194081`; deployed application SHA
+`85628fda3a1cbb69bde78bcee3b164cefb767b12`, migration
+`0133_contract_coherence_review`. The exact release adds contractor-entered
+Tender cost build-up and a scope guard that downgrades multi-item material
+property sets from asserted mismatch to an item-mapping question. Isolated
+API/browser acceptance passed; the owner's read-only Tender projection shows
+the intended scope distinction without owner-data mutation. The source HEAD
+additionally recognizes `project_purpose` as a candidate alias, but that
+post-release change has not been deployed or invalidated into the current
+project definition. The next product gap is source-grounded semantic
+resolution of conflicting project identity/purpose candidates through the
+supervised Qwen harness, followed by remaining Tender and four-mode user
+results. Do not manually promote the 299 project-field candidates or create
+successor jobs to force the current workspace forward. `ProductReady=false`.
+
 ## Owner correction — product recovery (2026-10-06)
 
 The earlier OZERO-specific hierarchy and archive language below are historical
