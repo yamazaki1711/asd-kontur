@@ -35,6 +35,9 @@ _CELL = f"{{{_WORD_NS}}}tc"
 _TRACKED_CHANGE_TAGS = frozenset(
     f"{{{_WORD_NS}}}{name}" for name in ("ins", "del", "moveFrom", "moveTo")
 )
+_VISIBLE_WORD_PART = re.compile(
+    r"word/(?:document|header[1-9]\d*|footer[1-9]\d*|footnotes|endnotes)\.xml\Z"
+)
 _CLAUSE_NUMBER = re.compile(r"^(?P<prefix>\s*(?P<number>\d+(?:\.\d+){1,5})\.?\s+)")
 
 
@@ -124,7 +127,7 @@ def render_revised_contract_source_package(
                         raise RevisedContractCandidateError("revised_contract_source_docx_invalid")
                     _require_office_document_relationship(package.read("_rels/.rels"))
                     _require_word_content_type(package.read("[Content_Types].xml"))
-                    _parse_source_document(package.read("word/document.xml"))
+                    _validate_visible_word_parts(package)
             except (zipfile.BadZipFile, KeyError) as exc:
                 raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
             output = (
@@ -419,6 +422,7 @@ def render_revised_contract_candidate_docx(source_docx: bytes, view: Mapping[str
                 for info in infos
             ):
                 raise RevisedContractCandidateError("revised_contract_signed_source_unsupported")
+            _validate_visible_word_parts(source)
             payloads = {info.filename: source.read(info.filename) for info in infos}
     except (zipfile.BadZipFile, KeyError) as exc:
         raise RevisedContractCandidateError("revised_contract_source_docx_invalid") from exc
@@ -579,6 +583,19 @@ def _parse_source_document(document: bytes) -> ET.Element:
     if any(node.tag in _TRACKED_CHANGE_TAGS for node in root.iter()):
         raise RevisedContractCandidateError("revised_contract_source_tracked_changes_unsupported")
     return root
+
+
+def _validate_visible_word_parts(package: zipfile.ZipFile) -> None:
+    """Reject unresolved edits in any visible contract story, not just its body.
+
+    Headers, footers and notes can contain operative terms. Preserving those
+    parts byte-for-byte while editing the body must not be described as a
+    clean revised contract if their tracked-change state is unresolved.
+    """
+
+    for name in package.namelist():
+        if _VISIBLE_WORD_PART.fullmatch(name):
+            _parse_source_document(package.read(name))
 
 
 def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, int] | None:

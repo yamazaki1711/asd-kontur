@@ -848,6 +848,81 @@ def test_revised_contract_rejects_unresolved_source_tracked_changes() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "part_name",
+    ("word/header1.xml", "word/footer2.xml", "word/footnotes.xml", "word/endnotes.xml"),
+)
+def test_revised_contract_rejects_unresolved_changes_outside_main_body(
+    part_name: str,
+) -> None:
+    paragraph = "4.2. Payment follows acceptance."
+    source = io.BytesIO()
+    changed_part = (
+        f'<w:hdr xmlns:w="{_WORD_NS}"><w:p><w:ins w:id="7">'
+        "<w:r><w:t>Payment condition under review.</w:t></w:r>"
+        "</w:ins></w:p></w:hdr>"
+    ).encode()
+    with zipfile.ZipFile(source, "w") as output:
+        with zipfile.ZipFile(io.BytesIO(_source_docx(paragraph))) as original:
+            for member in original.namelist():
+                output.writestr(member, original.read(member))
+        output.writestr(part_name, changed_part)
+    changed_source = source.getvalue()
+
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_source_tracked_changes_unsupported",
+    ):
+        render_revised_contract_candidate_docx(changed_source, _view(paragraph))
+
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_source_tracked_changes_unsupported",
+    ):
+        render_revised_contract_source_package(
+            [
+                {"source_version_id": "selected", "content": _source_docx(paragraph)},
+                {"source_version_id": "unchanged", "content": changed_source},
+            ],
+            {
+                "clauses": [
+                    {
+                        "clause_id": "payment",
+                        "clause_version": 1,
+                        "source_version_id": "selected",
+                        "source_text": paragraph,
+                    }
+                ],
+                "revised_clauses": [
+                    {
+                        "source_clause_id": "payment",
+                        "source_clause_version": 1,
+                        "revised_text": "4.2. Payment follows signed acceptance.",
+                    }
+                ],
+            },
+        )
+
+
+def test_revised_contract_preserves_clean_header_while_editing_body() -> None:
+    paragraph = "4.2. Payment follows acceptance."
+    header = (
+        f'<w:hdr xmlns:w="{_WORD_NS}"><w:p><w:r><w:t>Contract terms</w:t></w:r></w:p></w:hdr>'
+    ).encode()
+    source = io.BytesIO()
+    with zipfile.ZipFile(source, "w") as output:
+        with zipfile.ZipFile(io.BytesIO(_source_docx(paragraph))) as original:
+            for member in original.namelist():
+                output.writestr(member, original.read(member))
+        output.writestr("word/header1.xml", header)
+
+    result = render_revised_contract_candidate_docx(source.getvalue(), _view(paragraph))
+    with zipfile.ZipFile(io.BytesIO(result)) as output:
+        assert output.testzip() is None
+        assert output.read("word/header1.xml") == header
+        assert "Заказчик передаёт площадку" in output.read("word/document.xml").decode()
+
+
 def _view(source_text: str) -> dict[str, Any]:
     return {
         "clauses": [

@@ -1,5 +1,19 @@
 # Generalized Contract Analysis 01
 
+## Visible Word-part revision guard — 2026-10-08 source checkpoint
+
+The format-preserving revised-contract renderer previously rejected unresolved
+tracked changes only in `word/document.xml`. Operative wording may also appear
+in headers, footers, footnotes and endnotes. The source-package path now checks
+those visible Word parts in both edited and unchanged DOCX members before
+presenting a revised-contract candidate. It preserves a clean header exactly.
+Changed-source tests cover four non-body part classes and an unchanged-source
+package member; 40/40 focused contract-output unit cases passed. A read-only
+check found no such blocker in the retained workspace's four admitted DOCX
+sources. This is a deterministic source-integrity guard, not legal approval,
+whole-contract coherence or browser acceptance. Deployment is not yet claimed
+at this source checkpoint.
+
 ## Source-document ambiguity guards (deployed checkpoint)
 
 The exact-source revised-contract renderer now refuses a proposed clause text
