@@ -15,10 +15,23 @@ explicit constraints for exact contract quotes and admitted-source identities;
 malformed output still fails closed. If a historical v1 replacement also
 failed with a typed invalid output, the supervised reconciler may create one
 final `invalid-output-split-v2` replacement. No third replacement is permitted.
-Accepted batches remain accepted. This has passed 21/21 focused model-contract
-checks and 2/2 isolated PostgreSQL scheduling cases. It remains source-only
-until the current owner's bounded Qwen run drains, so no live worker is
-interrupted and no public recovery claim is made yet.
+Accepted batches remain accepted. This passed 21/21 focused model-contract
+checks and 2/2 isolated PostgreSQL scheduling cases. After the original six
+v3 batches finished, the historical v1 recovery failed with the same typed
+code. The queue drained before the controlled cutover. Exact release
+`5b6fcc42f1c66811cee6eac0715915e74e7a50d3` is pinned to all four
+application launchd roles under
+`~/.asd-kontur/public-demo/releases/20261008-5b6fcc4-contract-reference-repair`;
+public migration remains `0141_contract_reference_partial_package`. The
+supervised reconciler created one final `invalid-output-split-v2` job without
+a Codex command; it carried six source locators and the new worker claimed it.
+Its Qwen outcome is pending at this checkpoint. The exact release passed
+88/88 focused unit and 4/4 isolated PostgreSQL checks plus frontend typecheck,
+lint and build. API readiness passed; Qwen PID 9105 and NTD worker PID 1356
+were not restarted. The platform-only fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
+Previous application plists are private under
+`~/.asd-kontur/public-demo/launchd-backups/20261008-pre-5b6fcc4-contract-reference-repair/`.
 
 ## Partial contract-package evidence — 2026-10-08 source checkpoint
 
