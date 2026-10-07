@@ -6172,15 +6172,20 @@ export function ProjectEngineeringResult({
                 const fieldLabel =
                   ambiguity.field === "purpose"
                     ? "Назначение объекта"
-                    : ambiguity.field === "object_name" || ambiguity.field === "project_name"
+                    : ambiguity.field === "object_name" ||
+                        ambiguity.field === "project_name"
                       ? "Наименование объекта"
                       : "Характеристика объекта";
                 return (
-                  <div key={`${String(ambiguity.field)}-${String(ambiguityIndex)}`}>
+                  <div
+                    key={`${String(ambiguity.field)}-${String(ambiguityIndex)}`}
+                  >
                     <p>{fieldLabel}: в документах приведены разные сведения.</p>
                     <ul>
                       {alternatives.map((alternative, alternativeIndex) => (
-                        <li key={`${String(alternative.value)}-${String(alternativeIndex)}`}>
+                        <li
+                          key={`${String(alternative.value)}-${String(alternativeIndex)}`}
+                        >
                           {displayValue(alternative.value)} —{" "}
                           <ProjectSourceLinks
                             locatorIds={alternative.source_locator_ids}
