@@ -20,6 +20,13 @@ terminates early if the isolated job queue becomes quiescent without the
 deliverables, while retaining a 900-second ceiling. Command:
 `ASD_RUN_LIVE_CONTRACT_ONLY=1 ASD_TEST_DATABASE_URL=<isolated PostgreSQL admin URL> .venv/bin/pytest -q tests/integration/test_contract_only_live.py`.
 
+A stricter follow-up on a fresh isolated database passed in 83.11 seconds. It
+checked the actual revised DOCX text: the selected Qwen proposal was applied,
+the unrelated ordinary warranty clause remained, and both DOCX and ZIP
+containers reopened without corrupt members. This run stopped on the direct
+editable revised-contract candidate, so a one-source contract does not wait
+for a redundant multi-source package UI state.
+
 This establishes one controlled contract-only professional path, not a full
 contract-capability or four-mode acceptance. The qualification is source-code
 only at this checkpoint; the deployed release remains `18bf2a2`. The public

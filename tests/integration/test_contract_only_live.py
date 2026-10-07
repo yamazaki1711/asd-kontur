@@ -17,6 +17,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from uuid import UUID
+from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 
 import pytest
@@ -84,6 +85,13 @@ def _qwen_idle() -> bool:
     ) as response:
         value = json.load(response)
     return isinstance(value, dict) and value.get("status") == "QWEN_READY_IDLE"
+
+
+def _docx_text(content: bytes) -> str:
+    with zipfile.ZipFile(io.BytesIO(content)) as package:
+        assert package.testzip() is None
+        root = ElementTree.fromstring(package.read("word/document.xml"))
+    return "".join(node.text or "" for node in root.iter(f"{{{_WORD_NS}}}t"))
 
 
 def test_contract_only_upload_autonomously_reaches_editable_outputs(
@@ -183,7 +191,7 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
                 and isinstance(revisions, list)
                 and any(
                     isinstance(item, dict)
-                    and item.get("package_state") == "exact_source_package_available"
+                    and item.get("state") == "exact_source_candidate_available"
                     for item in revisions
                 )
             ):
@@ -218,10 +226,23 @@ def test_contract_only_upload_autonomously_reaches_editable_outputs(
         assert isinstance(risks, list)
         assert any("7.4." in str(item.get("source_text")) for item in clauses)
         assert not any("9.2." in str(item.get("trigger_text")) for item in risks)
-        for suffix in ("disagreement-protocol.docx", "revised-contract-package.zip"):
+        for suffix in (
+            "disagreement-protocol.docx",
+            "revised-contract.docx",
+            "revised-contract-package.zip",
+        ):
             artifact = client.get(f"/api/v1/workspaces/{workspace_id}/tender/{suffix}")
             assert artifact.status_code == 200, (suffix, artifact.text[:300])
             assert artifact.content
+        revised = client.get(f"/api/v1/workspaces/{workspace_id}/tender/revised-contract.docx")
+        revised_text = _docx_text(revised.content)
+        assert "9.2." in revised_text
+        revised_clauses = view.get("revised_clauses")
+        assert isinstance(revised_clauses, list) and revised_clauses
+        assert any(
+            " ".join(str(item.get("revised_text") or "").split()) in " ".join(revised_text.split())
+            for item in revised_clauses
+        )
         package = client.get(
             f"/api/v1/workspaces/{workspace_id}/tender/revised-contract-package.zip"
         )
