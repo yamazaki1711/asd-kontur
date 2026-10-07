@@ -316,7 +316,26 @@ def _exact_fragment_span(paragraph_text: str, source_text: str) -> tuple[int, in
     if not words:
         return None
     pattern = re.compile(r"\s+".join(re.escape(word) for word in words))
-    matches = list(pattern.finditer(paragraph_text))
+    matches = [
+        match
+        for match in pattern.finditer(paragraph_text)
+        if (
+            match.start() == 0
+            or not (
+                paragraph_text[match.start() - 1].isalnum()
+                or (
+                    source_text[0].isdigit()
+                    and paragraph_text[match.start() - 1] == "."
+                )
+            )
+        )
+        and (
+            match.end() == len(paragraph_text)
+            or not (
+                source_text[-1].isalnum() and paragraph_text[match.end()].isalnum()
+            )
+        )
+    ]
     if len(matches) != 1:
         return None
     return matches[0].span()

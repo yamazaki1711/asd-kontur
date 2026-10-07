@@ -529,6 +529,17 @@ def test_revised_contract_rejects_ambiguous_clause_match() -> None:
         render_revised_contract_candidate_docx(source, _view(repeated))
 
 
+def test_revised_contract_does_not_match_clause_number_inside_another_number() -> None:
+    clause = "7.4. Payment follows acceptance."
+    source = _source_docx("17.4. Payment follows acceptance.")
+
+    with pytest.raises(
+        RevisedContractCandidateError,
+        match="revised_contract_clause_match_not_unique",
+    ):
+        render_revised_contract_candidate_docx(source, _view(clause))
+
+
 def test_revised_contract_uses_explicit_replacement_source_span() -> None:
     first = "5.5. Документ подписывается Подрядчиком не позднее одного часа."
     continuation = "Датой поступления документа считается дата его размещения."
