@@ -1158,3 +1158,12 @@ contract file is malformed. All-page visual qualification remains open.
 macOS Quick Look rendered the first page of the real revised-contract candidate
 locally; the title, body text and first two sections are legible in that
 thumbnail. This is first-page evidence only, not an all-page layout pass.
+
+The DOCX skill's independent OOXML/XSD validator passed the generated revised
+candidate with 566 paragraphs. As a bounded local content-continuity check,
+macOS `textutil` converted that DOCX to HTML and headless Chromium printed the
+HTML to a 13-page A4 PDF; all 13 surrogate pages were rendered and inspected
+as a contact sheet. The retained DOCX metadata declares 30 pages, and HTML
+conversion changes pagination and styling. Therefore this is **not** an
+all-page visual qualification of the editable DOCX; that release gate stays
+open until a working direct Word-compatible renderer is available.
