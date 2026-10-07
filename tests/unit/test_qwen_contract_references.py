@@ -148,3 +148,59 @@ def test_output_exhaustion_splits_only_the_bounded_input(
     )
     assert len(calls) == 3
     assert result["references"] == []
+
+
+def test_invalid_repair_splits_without_accepting_an_invented_quote(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    def complete(_endpoint: str, prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        calls.append(prompt)
+        if len(calls) <= 2:
+            return json.dumps(
+                {
+                    "references": [
+                        {
+                            "source_locator_id": "a",
+                            "source_quote": "Invented Annex Z",
+                            "target_description": "invented appendix",
+                            "kind": "attachment",
+                            "match_decision": "unresolved",
+                            "matched_source_version_id": None,
+                            "confidence": 0.5,
+                        }
+                    ]
+                }
+            )
+        return '{"references":[]}'
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
+    result = QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
+        [
+            {"source_locator_id": "a", "text": "Appendix A is incorporated."},
+            {"source_locator_id": "b", "text": "Annex B is incorporated."},
+        ],
+        admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
+    )
+    assert len(calls) == 4
+    assert result["references"] == []
+
+
+def test_invalid_single_locator_stays_failed_after_bounded_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def complete(_endpoint: str, _prompt: str, _timeout: float, *, max_tokens: int) -> str:
+        nonlocal calls
+        calls += 1
+        return '{"references":[{"source_locator_id":"missing"}]}'
+
+    monkeypatch.setattr("asd_kontur.tender.qwen_contract_references._complete", complete)
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_reference_invalid_item"):
+        QwenContractReferenceReviewer("http://127.0.0.1:8765/v1").review(
+            [{"source_locator_id": "a", "text": "Appendix A is incorporated."}],
+            admitted_sources=[{"source_version_id": "source-c", "safe_display_name": "Contract"}],
+        )
+    assert calls == 2

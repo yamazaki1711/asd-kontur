@@ -84,19 +84,7 @@ class QwenContractReferenceReviewer:
         except QwenSemanticFailure as exc:
             if exc.code != "qwen_semantic_response_output_exhausted" or len(rows) < 2:
                 raise
-            midpoint = len(rows) // 2
-            left = self.review(rows[:midpoint], admitted_sources=sources)
-            right = self.review(rows[midpoint:], admitted_sources=sources)
-            merged: dict[str, object] = {
-                "contract": CONTRACT_REFERENCE_CONTRACT,
-                "profile_version": CONTRACT_REFERENCE_PROFILE,
-                "references": [
-                    *cast(list[dict[str, object]], left["references"]),
-                    *cast(list[dict[str, object]], right["references"]),
-                ],
-            }
-            merged["result_digest"] = semantic_digest(merged)
-            return merged
+            return self._split_review(rows, sources)
         try:
             parsed = parse_contract_references(raw, allowed_text=allowed_text, inventory=inventory)
         except QwenSemanticFailure as exc:
@@ -106,19 +94,32 @@ class QwenContractReferenceReviewer:
                 "qwen_contract_reference_invalid_item",
             }:
                 raise
-            repair = _complete(
-                self._endpoint,
-                prompt
-                + "\nОтвет отклонён: "
-                + exc.code
-                + ". Исправь только JSON без новых фактов.\n"
-                + raw[:5000],
-                self._timeout_seconds,
-                max_tokens=3000,
-            )
-            parsed = parse_contract_references(
-                repair, allowed_text=allowed_text, inventory=inventory
-            )
+            try:
+                repair = _complete(
+                    self._endpoint,
+                    prompt
+                    + "\nОтвет отклонён: "
+                    + exc.code
+                    + ". Исправь только JSON без новых фактов.\n"
+                    + raw[:5000],
+                    self._timeout_seconds,
+                    max_tokens=3000,
+                )
+                parsed = parse_contract_references(
+                    repair, allowed_text=allowed_text, inventory=inventory
+                )
+            except QwenSemanticFailure as repair_error:
+                if (
+                    repair_error.code
+                    not in {
+                        "qwen_contract_reference_invalid_json",
+                        "qwen_contract_reference_invalid_shape",
+                        "qwen_contract_reference_invalid_item",
+                    }
+                    or len(rows) < 2
+                ):
+                    raise
+                return self._split_review(rows, sources)
         result: dict[str, object] = {
             "contract": CONTRACT_REFERENCE_CONTRACT,
             "profile_version": CONTRACT_REFERENCE_PROFILE,
@@ -126,6 +127,25 @@ class QwenContractReferenceReviewer:
         }
         result["result_digest"] = semantic_digest(result)
         return result
+
+    def _split_review(
+        self, rows: list[dict[str, object]], sources: list[dict[str, object]]
+    ) -> dict[str, object]:
+        """Shrink a rejected multi-locator task without accepting invalid output."""
+
+        midpoint = len(rows) // 2
+        left = self.review(rows[:midpoint], admitted_sources=sources)
+        right = self.review(rows[midpoint:], admitted_sources=sources)
+        merged: dict[str, object] = {
+            "contract": CONTRACT_REFERENCE_CONTRACT,
+            "profile_version": CONTRACT_REFERENCE_PROFILE,
+            "references": [
+                *cast(list[dict[str, object]], left["references"]),
+                *cast(list[dict[str, object]], right["references"]),
+            ],
+        }
+        merged["result_digest"] = semantic_digest(merged)
+        return merged
 
 
 def parse_contract_references(

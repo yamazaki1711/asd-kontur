@@ -1202,11 +1202,29 @@ before and after rehearsal and public migration.
 
 The active local API returned HTTP 200 `ready` at migration `0129`, its exact
 built frontend asset returned HTTP 200, and an unauthenticated contract route
-returned HTTP 401. The supervised orchestrator autonomously created eight
-`CONTRACT_REFERENCE_REVIEW` jobs from currently admitted contract sources; the
-local Qwen service accepted and completed the first batches without a Codex
-queue command. The owner-scoped read projection exposed the accepted references
+returned HTTP 401. The supervised orchestrator autonomously created seven
+`CONTRACT_REFERENCE_REVIEW` jobs for the owner project and one for a separate
+active workspace; the local Qwen service accepted and completed the first owner
+batches without a Codex queue command. The owner-scoped read projection exposed the accepted references
 and marked the review in progress. The in-app/external browser was unavailable
 to this execution session, so authenticated visual acceptance is not claimed.
 No legal approval, full contract-only journey, or direct all-page DOCX visual
 acceptance is implied by this incremental release. `ProductReady=false`.
+
+## 2026-10-07 bounded invalid-output recovery candidate
+
+Read-only observation of the autonomous owner run found one six-segment
+`CONTRACT_REFERENCE_REVIEW` batch terminally rejected with
+`qwen_contract_reference_invalid_item` after the existing one-shot JSON
+repair. Accepted earlier batches remained intact. The candidate implementation
+now splits a still-invalid multi-locator response into smaller local Qwen
+tasks, retaining the exact quote and inventory validators. A single-locator
+invalid response remains a typed terminal failure. For an already-failed batch,
+the supervised reconciler schedules one idempotent `invalid-output-split-v1`
+replacement using the same source/inventory identity; accepted batches are
+not replayed. The read projection treats a failed predecessor as recovered
+only when its matching batch has a running or accepted replacement. A
+disposable-PostgreSQL API test covered one replacement, repeated sweeps,
+recovery status and supersession after source-inventory change. This fix is
+source-only until a controlled release; the public worker is still running the
+earlier pinned code and no live repair result is claimed here.

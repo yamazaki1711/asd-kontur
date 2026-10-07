@@ -422,7 +422,8 @@ class TenderContractAnalysisRepository:
         reference_jobs = list(
             session.execute(
                 sa.text(
-                    "SELECT job_id,state,input_digest FROM workspace.durable_jobs WHERE organization_id=:o "
+                    "SELECT job_id,state,input_digest,input_manifest->>'batch_digest' AS batch_digest "
+                    "FROM workspace.durable_jobs WHERE organization_id=:o "
                     "AND workspace_id=:w AND job_kind='CONTRACT_REFERENCE_REVIEW' AND "
                     "input_manifest->>'contract_reference_profile'=:profile AND "
                     "input_manifest->>'source_inventory_digest'=:inventory AND "
@@ -440,12 +441,18 @@ class TenderContractAnalysisRepository:
         reference_active = any(
             str(job["state"]) in {"queued", "leased", "running"} for job in reference_jobs
         )
-        accepted_reference_digests = {
-            str(job["input_digest"]) for job in reference_jobs if str(job["state"]) == "succeeded"
+        accepted_reference_batches = {
+            str(job["batch_digest"]) for job in reference_jobs if str(job["state"]) == "succeeded"
+        }
+        active_reference_batches = {
+            str(job["batch_digest"])
+            for job in reference_jobs
+            if str(job["state"]) in {"queued", "leased", "running"}
         }
         reference_failed = any(
             str(job["state"]) in {"failed", "reconciliation_required"}
-            and str(job["input_digest"]) not in accepted_reference_digests
+            and str(job["batch_digest"]) not in accepted_reference_batches
+            and str(job["batch_digest"]) not in active_reference_batches
             for job in reference_jobs
         )
         reference_results = list(

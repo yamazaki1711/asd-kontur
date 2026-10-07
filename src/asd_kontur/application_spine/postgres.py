@@ -6600,7 +6600,7 @@ class SpinePostgresRepository:
                 existing = (
                     session.execute(
                         sa.text(
-                            "SELECT job_id,state FROM workspace.durable_jobs WHERE "
+                            "SELECT job_id,state,typed_failure_code FROM workspace.durable_jobs WHERE "
                             "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
                         ),
                         {"o": organization_id, "w": workspace_id, "key": key},
@@ -6608,6 +6608,32 @@ class SpinePostgresRepository:
                     .mappings()
                     .one_or_none()
                 )
+                repair_version: str | None = None
+                if (
+                    existing is not None
+                    and str(existing["state"]) == "failed"
+                    and str(existing["typed_failure_code"])
+                    in {
+                        "qwen_contract_reference_invalid_json",
+                        "qwen_contract_reference_invalid_shape",
+                        "qwen_contract_reference_invalid_item",
+                    }
+                ):
+                    # A changed, bounded repair strategy may replace one failed
+                    # batch. Accepted batches keep their original job identity.
+                    repair_version = "invalid-output-split-v1"
+                    key = f"{key}:{repair_version}"
+                    existing = (
+                        session.execute(
+                            sa.text(
+                                "SELECT job_id,state,typed_failure_code FROM workspace.durable_jobs WHERE "
+                                "organization_id=:o AND workspace_id=:w AND idempotency_key=:key"
+                            ),
+                            {"o": organization_id, "w": workspace_id, "key": key},
+                        )
+                        .mappings()
+                        .one_or_none()
+                    )
                 if existing is not None:
                     scheduled.append(
                         {"job_id": str(existing["job_id"]), "state": str(existing["state"])}
@@ -6632,6 +6658,8 @@ class SpinePostgresRepository:
                     "source_inventory_digest": inventory_digest,
                     "model_identity": "local-qwen3.8-27b",
                 }
+                if repair_version is not None:
+                    manifest["repair_policy_version"] = repair_version
                 session.execute(
                     sa.text(
                         "INSERT INTO workspace.durable_jobs (organization_id,workspace_id,job_id,"
