@@ -151,6 +151,55 @@ def test_assistant_contract_projection_keeps_professional_facts_not_process_ids(
     assert str(issue_id) not in str(projected)
 
 
+def test_consultant_receives_bounded_cross_clause_review_without_whole_contract_claim() -> None:
+    changed_locator, related_locator = uuid4(), uuid4()
+    projected = _assistant_contract_analysis(
+        {
+            "clauses": [
+                {
+                    "clause_id": "changed",
+                    "display_clause_ref": "4.1",
+                    "source_locator_id": str(changed_locator),
+                },
+                {
+                    "clause_id": "related",
+                    "display_clause_ref": "7.3",
+                    "source_locator_id": str(related_locator),
+                },
+            ],
+            "revised_clauses": [{"revised_clause_id": "revision", "source_clause_id": "changed"}],
+            "coherence_review": {
+                "status": "reviewed_bounded_context",
+                "accepted_contexts": 1,
+                "scheduled_contexts": 1,
+                "conflicts": [
+                    {
+                        "revision_id": "revision",
+                        "other_clause_id": "related",
+                        "source_locator_id": str(changed_locator),
+                        "other_source_locator_id": str(related_locator),
+                        "proposal_quote": "Pay within ten days",
+                        "other_quote": "Pay after funding",
+                        "conflict": "Different payment triggers",
+                        "contractor_consequence": "Payment timing is unclear",
+                        "recommended_action": "Agree one trigger",
+                    }
+                ],
+            },
+        }
+    )
+    review = projected["coherence_review"]
+    assert review["status"] == "reviewed_bounded_context"
+    assert review["scope"] == "selected_related_clauses_only"
+    assert review["potential_conflicts"][0]["changed_clause"] == "4.1"
+    assert review["potential_conflicts"][0]["related_clause"] == "7.3"
+    assert review["potential_conflicts"][0]["source_locator_ids"] == [
+        str(changed_locator),
+        str(related_locator),
+    ]
+    assert "not full-contract" in review["limitation"]
+
+
 def test_public_inventory_candidate_preserves_evidence_sources_not_internal_ids() -> None:
     source_id = uuid4()
     candidate = _public_inventory_candidate(

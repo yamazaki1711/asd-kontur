@@ -224,6 +224,17 @@ appendix as `unresolved` with an exact source quote and an explicit contract
 gap (one scenario, 103.60 seconds, four local-Qwen requests). This closes only
 the missing-attachment subcase; it does not promote FFC-01 to PASS.
 
+Release `25b8a6d0b68f7ef16b79582caa932917a60137bc` on migration
+`0133_contract_coherence_review` adds an autonomous, source-linked Qwen review
+of selected related clauses for each proposed revision. The changed-party
+contract-only scenario passed with live Qwen in 121.98 seconds, and the
+owner's already-admitted contract advanced without Codex scheduling: five
+review jobs succeeded and the application read model reports bounded review
+complete. Zero candidate conflicts means only that none was established in
+those selected contexts. A complete legal coherence review, authenticated
+browser acceptance and the remaining contract obligations are still open;
+FFC-01 remains `PARTIAL` and `ProductReady=false`.
+
 The FFC-02 partial delivery is pinned to application release
 `81af71af3d12a988dbd2100d664233272bc20f09` on migration
 `0131_contract_revision_review`. A read-only render of the current real

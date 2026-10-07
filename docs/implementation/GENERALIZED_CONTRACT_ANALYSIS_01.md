@@ -1943,3 +1943,19 @@ in LibreOffice, rendered to one PDF page and was visually checked for source
 quotes, action and bounded-review warning. Authenticated owner-browser and
 four-mode acceptance are not claimed. The owner workspace was not modified
 during qualification.
+
+The controlled public release is now
+`25b8a6d0b68f7ef16b79582caa932917a60137bc` on migration
+`0133_contract_coherence_review`. The four application launchd roles passed
+preflight and restarted; the existing local Qwen and NTD process IDs remained
+unchanged. API readiness reports the exact migration head. The owner's
+existing contract projection autonomously scheduled five bounded review jobs;
+all five succeeded with five distinct persisted input digests. The read model
+reports `reviewed_bounded_context` with no candidate conflict among those
+selected related clauses. This is not a finding that the entire contract is
+coherent. The owner's workspace and existing documents were not reset or
+manually reprocessed. Selected NTD canonical/projection counts and the
+publication fingerprint were identical immediately before and after the
+workspace-only migration. The in-app browser connector exposed no browser in
+this session, so authenticated visual acceptance of the new panel remains
+unverified; API/read-model and isolated output acceptance were completed.

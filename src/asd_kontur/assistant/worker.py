@@ -93,6 +93,8 @@ def _asks_for_contract_analysis(normalized_question: str) -> bool:
             "ответствен",
             "гарант",
             "обеспеч",
+            "согласован",
+            "противореч",
             "прием",
             "приём",
         )
@@ -1628,6 +1630,9 @@ def _append_prepared_project_result(
     asks_for_contract_revisions = asks_for_contract_analysis and any(
         marker in normalized for marker in ("измен", "редакц", "протокол", "разноглас")
     )
+    asks_for_contract_coherence = asks_for_contract_analysis and any(
+        marker in normalized for marker in ("согласован", "противореч", "совместим")
+    )
     asks_for_sheet_pile_schedule = "шпунт" in normalized and any(
         marker in normalized
         for marker in ("все", "покаж", "где", "работ", "объём", "объем", "профил", "пояс")
@@ -2264,6 +2269,29 @@ def _append_prepared_project_result(
                     revision_rows.append(row)
                 if revision_rows:
                     headings_and_rows.append(("Предлагаемая редакция Подрядчика:", revision_rows))
+            if asks_for_contract_coherence:
+                review = contract_analysis.get("coherence_review")
+                if isinstance(review, dict):
+                    accepted = int(review.get("accepted_contexts") or 0)
+                    scheduled = int(review.get("scheduled_contexts") or 0)
+                    if scheduled:
+                        review_rows = [
+                            f"Проверено {accepted} из {scheduled} отобранных контекстов. "
+                            "Проверка не охватывает весь договор и не является юридическим согласованием."
+                        ]
+                    else:
+                        review_rows = ["Проверка согласованности редакций ещё не выполнена."]
+                    for conflict in review.get("potential_conflicts") or ():
+                        if not isinstance(conflict, dict):
+                            continue
+                        changed = str(conflict.get("changed_clause") or "изменяемый пункт")
+                        related = str(conflict.get("related_clause") or "связанный пункт")
+                        description = str(conflict.get("possible_conflict") or "").strip()
+                        if description:
+                            review_rows.append(f"Пункты {changed} и {related}: {description}")
+                    headings_and_rows.append(
+                        ("Ограниченная проверка согласованности редакций:", review_rows)
+                    )
         if (
             not asks_for_customer_questions
             and not asks_for_contractor_risks
@@ -2343,7 +2371,12 @@ def _append_prepared_project_result(
     prepared_result = "\n\n".join(sections)
     published_answer = (
         prepared_result
-        if asks_for_sheet_pile_schedule or asks_for_pit_inventory or asks_for_facility_dossier
+        if (
+            asks_for_sheet_pile_schedule
+            or asks_for_pit_inventory
+            or asks_for_facility_dossier
+            or asks_for_contract_coherence
+        )
         else answer.answer.rstrip() + "\n\n" + prepared_result
     )
     return SynthesizedAnswer(

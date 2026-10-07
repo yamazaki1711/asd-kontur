@@ -57,6 +57,11 @@ def test_contract_questions_use_prepared_analysis_and_preserve_exact_revisions()
 
     assert plan is not None
     assert plan.steps[0].tool == "consultant.get_contract_analysis"
+    coherence_plan = _direct_project_result_plan(
+        "Согласованы ли предлагаемые редакции договора с остальными пунктами?"
+    )
+    assert coherence_plan is not None
+    assert coherence_plan.steps[0].tool == "consultant.get_contract_analysis"
 
     completed = _append_prepared_project_result(
         SynthesizedAnswer(
@@ -102,6 +107,49 @@ def test_contract_questions_use_prepared_analysis_and_preserve_exact_revisions()
     assert "Договорные риски Подрядчика" in completed.answer
     assert "Заказчик контролирует условие оплаты" in completed.answer
     assert "Оплата производится в течение 15 календарных дней" in completed.answer
+    assert completed.used_source_ids == ("contract-source",)
+
+
+def test_contract_coherence_answer_preserves_bounded_review_and_conflict() -> None:
+    completed = _append_prepared_project_result(
+        SynthesizedAnswer(
+            "Предлагаемые редакции согласованы с договором.",
+            "workspace_conclusion",
+            False,
+            (),
+            "Договорная проверка.",
+            ("договор",),
+        ),
+        [
+            {
+                "tool": "consultant.get_contract_analysis",
+                "response": {
+                    "value": {
+                        "contract_analysis": {
+                            "coherence_review": {
+                                "status": "reviewed_bounded_context",
+                                "accepted_contexts": 1,
+                                "scheduled_contexts": 1,
+                                "potential_conflicts": [
+                                    {
+                                        "changed_clause": "4.1",
+                                        "related_clause": "7.3",
+                                        "possible_conflict": "Различаются условия оплаты.",
+                                    }
+                                ],
+                            }
+                        }
+                    },
+                    "sources": [{"source_id": "contract-source"}],
+                },
+            }
+        ],
+        "Согласованы ли предлагаемые редакции договора с остальными пунктами?",
+    )
+
+    assert "Проверено 1 из 1 отобранных контекстов" in completed.answer
+    assert "не охватывает весь договор" in completed.answer
+    assert "Пункты 4.1 и 7.3: Различаются условия оплаты" in completed.answer
     assert completed.used_source_ids == ("contract-source",)
 
 

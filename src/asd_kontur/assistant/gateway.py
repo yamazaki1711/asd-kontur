@@ -2429,6 +2429,39 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
         for item in view.get("attachment_references") or ()
         if isinstance(item, Mapping) and item.get("source_locator_id")
     ]
+    coherence = view.get("coherence_review")
+    coherence = coherence if isinstance(coherence, Mapping) else {}
+    revision_clause_by_id = {
+        str(item.get("revised_clause_id")): clause_by_id.get(str(item.get("source_clause_id")), {})
+        for item in view.get("revised_clauses") or ()
+        if isinstance(item, Mapping) and item.get("revised_clause_id")
+    }
+    coherence_conflicts = [
+        {
+            "changed_clause": revision_clause_by_id.get(str(conflict.get("revision_id")), {}).get(
+                "display_clause_ref"
+            ),
+            "related_clause": clause_by_id.get(str(conflict.get("other_clause_id")), {}).get(
+                "display_clause_ref"
+            ),
+            "proposed_quote": conflict.get("proposal_quote"),
+            "related_quote": conflict.get("other_quote"),
+            "possible_conflict": conflict.get("conflict"),
+            "contractor_consequence": conflict.get("contractor_consequence"),
+            "recommended_action": conflict.get("recommended_action"),
+            "uncertainty": conflict.get("uncertainty"),
+            "source_locator_ids": [
+                str(value)
+                for value in (
+                    conflict.get("source_locator_id"),
+                    conflict.get("other_source_locator_id"),
+                )
+                if value
+            ],
+        }
+        for conflict in coherence.get("conflicts") or ()
+        if isinstance(conflict, Mapping)
+    ][:8]
     return {
         "status": view.get("status"),
         "source_documents": list(assessment_mapping.get("source_names") or ()),
@@ -2445,6 +2478,17 @@ def _assistant_contract_analysis(view: Mapping[str, Any], *, limit: int = 24) ->
         "contractor_risks": professional_risks,
         "proposed_revisions": proposed_revisions,
         "referenced_documents": referenced_documents[:limit],
+        "coherence_review": {
+            "status": str(coherence.get("status") or "not_applicable"),
+            "scope": "selected_related_clauses_only",
+            "accepted_contexts": int(coherence.get("accepted_contexts") or 0),
+            "scheduled_contexts": int(coherence.get("scheduled_contexts") or 0),
+            "potential_conflicts": coherence_conflicts,
+            "limitation": (
+                "The review covers selected related clauses only; absence of a candidate "
+                "conflict is not full-contract or legal approval."
+            ),
+        },
         "deliverables": [
             {
                 "kind": item.get("deliverable_kind"),
@@ -2476,6 +2520,7 @@ def _focused_contract_analysis(
             "deliverables",
             "gaps",
             "authority_boundary",
+            "coherence_review",
         )
     }
     if focus == "risks":
