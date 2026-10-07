@@ -2698,6 +2698,10 @@ function TenderContractAnalysisPage() {
       return requireData(data, error);
     },
     retry: false,
+    // Contract clauses, risks and revised-file availability are published by
+    // supervised workers after the page is opened. Keep the professional view
+    // current without a browser refresh or a developer-triggered queue action.
+    refetchInterval: 30_000,
   });
   return (
     <Page

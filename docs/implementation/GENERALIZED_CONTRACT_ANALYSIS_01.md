@@ -1,5 +1,25 @@
 # Generalized Contract Analysis 01
 
+## 2026-10-07 bounded live-model and progressive-view checkpoint
+
+The reusable contract-analysis task was exercised against the existing,
+persistent local Qwen service with two changed synthetic clauses. Its strict
+validator accepted one exact-source customer-controlled payment risk and left
+an ordinary 24-month defect warranty unflagged. The model completed two
+requests (counter 873 to 875); elapsed times were 31.368 and 12.856 seconds.
+The fingerprinted qualification receipt is
+`sha256:54d280d23627ef2bd75a82f5959104dec36f6af941f19e5241875a6959d3805e`.
+The repeatable command is `tools/qualify_contract_analysis_live.py`; it never
+creates a workspace or advances the production queue.
+
+The contract-analysis UI now refreshes its structured result every 30 seconds
+while open. An isolated browser test observed the initial extraction message
+change to a source-linked clause without a page reload or a manual job action.
+This closes a progressive-display defect, **not** the contract-only autonomous
+application acceptance. Full legal-authority review, source-preserving
+multi-page visual qualification, authenticated live download, and all four
+mode terminal acceptance remain open. `ProductReady=false`.
+
 ## 2026-10-07 exact-span Word formatting correction
 
 The revised-contract renderer previously placed an entire edited paragraph in

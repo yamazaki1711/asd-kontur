@@ -504,6 +504,57 @@ test("Tender shows confirmed work pairing with both document sides", async ({
   ).toBeVisible();
 });
 
+test("contract analysis refreshes as supervised work publishes clauses", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let reads = 0;
+  await page.route("**/api/v1/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/v1/session") return json(route, session());
+    if (path.endsWith("/tender/contract-analysis")) {
+      reads += 1;
+      return json(route, {
+        status: reads === 1 ? "analyzing" : "drafted",
+        clauses:
+          reads === 1
+            ? []
+            : [
+                {
+                  clause_id: "clause-1",
+                  clause_key: "4.2",
+                  source_text: "Payment follows acceptance.",
+                  source_name: "changed-contract.docx",
+                  source_page: 2,
+                  source_locator_id: documentId,
+                },
+              ],
+        attachment_references: [],
+        reference_review: {},
+        issues: [],
+        disagreement_items: [],
+        revised_clauses: [],
+        revised_contracts: [],
+        deliverables: [],
+        project_context: {},
+        assessment: { source_coverage: { incomplete_source_names: [] } },
+        gaps: [],
+      });
+    }
+    return json(route, error("synthetic_route_not_defined"), 404);
+  });
+
+  await page.goto(
+    `/modes/tender/workspaces/${workspaceA}/tender-contract-analysis`,
+  );
+  await expect(
+    page.getByText("Положения договора ещё извлекаются."),
+  ).toBeVisible();
+  await page.clock.runFor(30_100);
+  await expect(page.getByText("Payment follows acceptance.")).toBeVisible();
+  expect(reads).toBeGreaterThanOrEqual(2);
+});
+
 for (const viewport of [
   { width: 1440, height: 900 },
   { width: 1280, height: 720 },
