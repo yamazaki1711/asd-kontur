@@ -46,5 +46,17 @@ role of each candidate in that assertion. A partial result is deliberately
 withheld there until a source-role-aware candidate link is available.
 
 Focused generic tests cover mixed exact-pair decisions, location-only
-false-positive rejection and report disclosure. They do not prove the 307
+false-positive rejection and report disclosure. They do not prove the 308
 remaining scopes are comparable or that Tender mode is complete.
+
+## Controlled release
+
+Source and deployed application SHA:
+`137c53bf0979844cb0fc44cddb61e002064b2ceb`. All four supervised
+application roles (API, project worker, assistant worker and orchestrator)
+report this exact SHA; API readiness passed against unchanged migration
+`0142_audit_id_document_interpretation`, and the frontend returned HTTP 200.
+The existing frontend build was carried forward unchanged. Qwen and NTD
+services were not restarted. The 214 focused tests and source checks passed
+before staging. Authenticated owner-browser acceptance of this release was
+not performed, so FFC-02 and ProductReady remain incomplete.
