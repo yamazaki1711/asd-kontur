@@ -1669,6 +1669,27 @@ def _api_router() -> APIRouter:
         return [IncomingInspectionView(**jsonable_encoder(value)) for value in values]
 
     @router.get(
+        "/workspaces/{workspace_id}/support/incoming-inspections/register.csv",
+        tags=["support-production"],
+    )
+    def export_incoming_inspection_register(
+        request: Request,
+        workspace_id: UUID,
+        principal: Annotated[SessionPrincipal, Depends(_principal)],
+    ) -> Response:
+        content = _container(request).incoming_inspections.export_register(
+            owner_identity_id=principal.owner_identity_id,
+            workspace_id=workspace_id,
+        )
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": ('attachment; filename="incoming-inspection-register.csv"')
+            },
+        )
+
+    @router.get(
         "/workspaces/{workspace_id}/support/contract-execution-conditions.csv",
         tags=["support-production"],
     )

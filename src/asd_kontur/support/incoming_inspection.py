@@ -6,6 +6,8 @@ material-admission decision or a substitute for a physical observation.
 
 from __future__ import annotations
 
+import csv
+import io
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -78,3 +80,61 @@ def evaluate_incoming_inspection(checks: Sequence[Mapping[str, Any]]) -> dict[st
     }
     result["fingerprint"] = semantic_digest(result)
     return result
+
+
+def render_incoming_inspection_register(records: Sequence[Mapping[str, Any]]) -> bytes:
+    """Export every recorded check without presenting a preflight as admission."""
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        (
+            "Дата записи",
+            "Материал",
+            "Партия / накладная",
+            "Проверка",
+            "Вид проверки",
+            "Результат",
+            "Основание / замечание",
+            "Итог по партии",
+            "Допуск к применению",
+        )
+    )
+    for record in records:
+        result = record.get("result")
+        if not isinstance(result, Mapping) or result.get("hold_for_use") is not True:
+            raise ValueError("incoming_inspection_register_result_invalid")
+        checks = result.get("checks")
+        if not isinstance(checks, list) or len(checks) != len(INCOMING_CHECKS):
+            raise ValueError("incoming_inspection_register_checks_invalid")
+        submitted_at = record.get("submitted_at")
+        submitted = (
+            submitted_at.isoformat()
+            if hasattr(submitted_at, "isoformat")
+            else str(submitted_at or "")
+        )
+        for check in checks:
+            if not isinstance(check, Mapping):
+                raise ValueError("incoming_inspection_register_checks_invalid")
+            writer.writerow(
+                (
+                    _csv_cell(submitted),
+                    _csv_cell(record.get("material_name")),
+                    _csv_cell(record.get("batch_reference")),
+                    _csv_cell(check.get("label")),
+                    _csv_cell(check.get("kind")),
+                    _csv_cell(check.get("state")),
+                    _csv_cell(check.get("basis")),
+                    _csv_cell(result.get("outcome")),
+                    "Материал не допущен — требуется решение ответственного лица",
+                )
+            )
+    return ("\ufeff" + output.getvalue()).encode("utf-8")
+
+
+def _csv_cell(value: object) -> str:
+    text = str(value or "")
+    # Spreadsheet applications must not execute formulas from user-entered text.
+    if text.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + text
+    return text

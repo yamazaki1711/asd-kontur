@@ -191,6 +191,18 @@ def test_owner_scoped_submission_replay_and_lifecycle_fence(
         )
         assert listing.status_code == 200
         assert len(listing.json()) == 2
+        register = client.get(
+            f"/api/v1/workspaces/{first.workspace_id}/support/incoming-inspections/register.csv"
+        )
+        assert register.status_code == 200
+        assert register.content.startswith(b"\xef\xbb\xbf")
+        assert register.text.count("Материал не допущен") == 16
+        assert "Reinforcement steel" in register.text
+        denied_register = client.get(
+            f"/api/v1/workspaces/{second.workspace_id}/support/"
+            "incoming-inspections/register.csv"
+        )
+        assert denied_register.status_code in {403, 404}
     transition(lifecycle, first, 2, LifecycleState.FREEZING, "inspection-owner-freeze")
     with pytest.raises(IncomingInspectionError, match="support_workspace_not_active"):
         repository.submit(**{**command, "idempotency_key": "inspection-delivery-42-after-freeze"})

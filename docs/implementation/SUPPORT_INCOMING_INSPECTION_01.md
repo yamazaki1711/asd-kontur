@@ -81,3 +81,16 @@ This is one Support result, not Support-mode readiness. It does not yet bind
 the preflight to a material-admission decision, field evidence, work-package
 blocking, laboratory records or KS/payment outputs. Tender, Audit and
 Restoration readiness are unchanged. `ProductReady=false`.
+
+## Editable inspection register follow-up
+
+The owner-scoped Support API now exports a complete CSV register of all saved
+preflights, with one row per required check, original basis, outcome, and an
+explicit statement that the material has **not** been admitted for use. The
+Support screen offers the export directly. User-entered cells are neutralised
+against spreadsheet formula execution. This is an editable working register,
+not a signed incoming-control journal or an admission decision. The isolated
+database/API qualification covers all rows rather than only the latest 100,
+cross-workspace denial, and the hold-for-use marking. Linking preflights to
+confirmed batches, professional grants, work applications and actual field
+evidence remains the next authority-boundary dependency.

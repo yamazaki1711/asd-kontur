@@ -9191,6 +9191,47 @@
         ]
       }
     },
+    "/api/v1/workspaces/{workspace_id}/support/incoming-inspections/register.csv": {
+      "get": {
+        "operationId": "export_incoming_inspection_register_api_v1_workspaces__workspace_id__support_incoming_inspections_register_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Workspace Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Export Incoming Inspection Register",
+        "tags": [
+          "support-production"
+        ]
+      }
+    },
     "/api/v1/workspaces/{workspace_id}/support/processes": {
       "post": {
         "operationId": "configure_support_scope_api_v1_workspaces__workspace_id__support_processes_post",

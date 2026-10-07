@@ -14,7 +14,10 @@ from sqlalchemy.orm import Session
 from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.domain import uuid7
 
-from .incoming_inspection import evaluate_incoming_inspection
+from .incoming_inspection import (
+    evaluate_incoming_inspection,
+    render_incoming_inspection_register,
+)
 
 
 class IncomingInspectionError(RuntimeError):
@@ -145,7 +148,11 @@ class IncomingInspectionRepository:
             "submitted_at": row["submitted_at"],
         }
 
-    def list(self, *, owner_identity_id: str, workspace_id: UUID) -> list[dict[str, Any]]:
+    def list(
+        self, *, owner_identity_id: str, workspace_id: UUID, limit: int | None = 100
+    ) -> list[dict[str, Any]]:
+        if limit is not None and not 1 <= limit <= 100:
+            raise IncomingInspectionError("incoming_inspection_list_limit_invalid")
         with Session(self._engine) as session, session.begin():
             organization_id = self._scope(session, owner_identity_id, workspace_id)
             rows = (
@@ -154,11 +161,18 @@ class IncomingInspectionRepository:
                         "SELECT preflight_id,material_name,batch_reference,payload_digest,"
                         "result,submitted_at FROM workspace.support_incoming_inspection_preflights "
                         "WHERE organization_id=:o AND workspace_id=:w "
-                        "ORDER BY submitted_at DESC,preflight_id DESC LIMIT 100"
+                        "ORDER BY submitted_at DESC,preflight_id DESC "
+                        + ("LIMIT :limit" if limit is not None else "")
                     ),
-                    {"o": organization_id, "w": workspace_id},
+                    {"o": organization_id, "w": workspace_id, "limit": limit},
                 )
                 .mappings()
                 .all()
             )
             return [self._view(row, row) for row in rows]
+
+    def export_register(self, *, owner_identity_id: str, workspace_id: UUID) -> bytes:
+        records = self.list(
+            owner_identity_id=owner_identity_id, workspace_id=workspace_id, limit=None
+        )
+        return render_incoming_inspection_register(records)

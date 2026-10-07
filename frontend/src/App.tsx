@@ -2733,6 +2733,7 @@ function IncomingInspectionPanel({ workspaceId }: { workspaceId: string }) {
     <section className="panel">
       <h2>Входной контроль материалов</h2>
       <p>Лист предварительной проверки партии. Заполнение не означает приёмку материала или разрешение на применение: фактический осмотр и решение остаются за ответственным лицом.</p>
+      <p><a href={`/api/v1/workspaces/${workspaceId}/support/incoming-inspections/register.csv`}>Скачать реестр входных проверок (CSV)</a></p>
       <form onSubmit={(event) => { event.preventDefault(); submit.mutate(); }}>
         <div className="form-row">
           <label>Материал или изделие<input required minLength={2} maxLength={200} value={materialName} onChange={(event) => { setMaterialName(event.target.value); setRequestKey(globalThis.crypto.randomUUID()); }} /></label>
