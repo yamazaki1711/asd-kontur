@@ -91,3 +91,16 @@ def test_tied_cross_source_values_remain_unresolved() -> None:
 
     assert "object_name" not in result["candidate_fields"]
     assert result["outcomes"]["object_name"]["state"] == "candidate_conflict"
+
+
+def test_project_purpose_alias_is_reconciled_without_promoting_conflicting_model_values() -> None:
+    result = reconcile_project_identity_fields(
+        [
+            _field(1, key="project_purpose", value="Reconstruct a warehouse", source=1),
+            _field(2, key="purpose", value="Extend a loading yard", source=2),
+        ]
+    )
+
+    assert result["outcomes"]["purpose"]["state"] == "candidate_conflict"
+    assert "purpose" not in result["verified_fields"]
+    assert "purpose" not in result["candidate_fields"]

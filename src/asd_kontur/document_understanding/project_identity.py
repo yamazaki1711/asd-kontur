@@ -16,7 +16,7 @@ from typing import Any
 
 PROJECT_IDENTITY_ALIASES: dict[str, frozenset[str]] = {
     "object_name": frozenset({"object_name", "project_name"}),
-    "purpose": frozenset({"purpose"}),
+    "purpose": frozenset({"purpose", "project_purpose"}),
     "object_composition": frozenset({"object_composition"}),
     "object_class": frozenset({"object_class", "printed_class"}),
 }
