@@ -158,7 +158,12 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                 display_clause_reference(original),
                 str(conflict.get("proposal_quote") or ""),
                 display_clause_reference(related),
-                str(conflict.get("other_quote") or ""),
+                (
+                    "Предлагаемая редакция: "
+                    if conflict.get("other_text_kind") == "proposed_revision"
+                    else "Исходный пункт: "
+                )
+                + str(conflict.get("other_quote") or ""),
                 str(conflict.get("conflict") or ""),
                 str(conflict.get("contractor_consequence") or ""),
                 str(conflict.get("recommended_action") or ""),
@@ -247,7 +252,7 @@ def render_tender_contract_analysis_docx(view: Mapping[str, Any]) -> bytes:
                         "Изменяемый пункт",
                         "Предложенная формулировка",
                         "Связанный пункт",
-                        "Исходная формулировка",
+                        "Сопоставляемая формулировка",
                         "Противоречие",
                         "Последствие",
                         "Действие",

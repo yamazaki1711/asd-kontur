@@ -191,6 +191,78 @@ def test_unroutable_explicit_reference_remains_visible_as_coverage_gap() -> None
     assert unreviewed_explicit_reference_count(view, tasks) == 1
 
 
+def test_review_uses_effective_wording_when_related_clause_is_also_revised() -> None:
+    view = _view(conflicting=True)
+    view["revised_clauses"].append(
+        {
+            "revised_clause_id": "revision-b",
+            "source_clause_id": "payment-b",
+            "source_clause_version": 1,
+            "revised_text": "7.3. Payment is due after design approval.",
+        }
+    )
+    task = next(
+        item for item in contract_coherence_tasks(view) if item["revision_id"] == "revision-a"
+    )
+    related = task["related_clauses"][0]
+    assert related["source_text"] == "7.3. Payment is due only after investor funding."
+    assert related["proposed_candidate_text"] == "7.3. Payment is due after design approval."
+    response = {
+        "conflicts": [
+            {
+                "other_clause_id": "payment-b",
+                "proposal_quote": "within ten days of acceptance",
+                "other_quote": "after design approval",
+                "conflict": "The triggers differ.",
+                "contractor_consequence": "Payment may be delayed.",
+                "recommended_action": "Align the two proposed clauses.",
+                "confidence": 0.8,
+                "uncertainty": None,
+            }
+        ]
+    }
+    accepted = parse_contract_coherence(json.dumps(response), context=task)
+    assert accepted[0]["other_revision_id"] == "revision-b"
+    assert accepted[0]["other_text_kind"] == "proposed_revision"
+    view["coherence_review"] = {"conflicts": [{"revision_id": "revision-a", **accepted[0]}]}
+    rendered = render_tender_contract_analysis_docx(view)
+    with zipfile.ZipFile(io.BytesIO(rendered)) as package:
+        body = package.read("word/document.xml").decode("utf-8")
+    assert "Предлагаемая редакция:" in body
+    assert "after design approval" in body
+    response["conflicts"][0]["other_quote"] = "only after investor funding"
+    with pytest.raises(QwenSemanticFailure, match="qwen_contract_coherence_source_invalid"):
+        parse_contract_coherence(json.dumps(response), context=task)
+
+
+def test_removed_cross_reference_is_not_a_false_coverage_gap() -> None:
+    view = _view(conflicting=False)
+    view["clauses"] = [
+        view["clauses"][0],
+        {
+            "clause_id": "scope-b",
+            "clause_version": 1,
+            "source_version_id": "source-b",
+            "source_locator_id": "locator-b",
+            "source_page": 88,
+            "display_clause_ref": "12.8",
+            "category": "scope",
+            "source_text": "12.8. Исполнение производится согласно п. 4.1.",
+        },
+    ]
+    view["revised_clauses"].append(
+        {
+            "revised_clause_id": "revision-b",
+            "source_clause_id": "scope-b",
+            "source_clause_version": 1,
+            "revised_text": "12.8. Исполнение производится после приёмки результата.",
+        }
+    )
+    tasks = contract_coherence_tasks(view)
+    assert not any(task["revision_id"] == "revision-a" for task in tasks)
+    assert unreviewed_explicit_reference_count(view, tasks) == 0
+
+
 def test_same_number_as_measurement_does_not_create_contract_reference() -> None:
     view = _view(conflicting=False)
     view["clauses"] = [

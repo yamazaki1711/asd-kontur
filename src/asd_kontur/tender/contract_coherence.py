@@ -50,6 +50,15 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
         (str(item.get("clause_id") or ""), str(item.get("clause_version") or "")): item
         for item in clauses
     }
+    revisions_by_source: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in revisions:
+        revisions_by_source.setdefault(
+            (
+                str(item.get("source_clause_id") or ""),
+                str(item.get("source_clause_version") or ""),
+            ),
+            [],
+        ).append(item)
     tasks: list[dict[str, Any]] = []
     for revision in sorted(revisions, key=lambda item: str(item.get("revised_clause_id") or ""))[
         :MAX_CONTRACT_COHERENCE_REVISIONS
@@ -84,7 +93,14 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
         reverse_reference_ids: set[str] = set()
         for other in clauses:
             other_id = str(other.get("clause_id") or "")
-            other_text = str(other.get("source_text") or "").strip()
+            related_context = _related_clause_context(other, revisions_by_source)
+            other_text = (
+                str(
+                    related_context.get("proposed_candidate_text") or related_context["source_text"]
+                )
+                if related_context is not None
+                else ""
+            )
             if (
                 other_id
                 and other_id != str(source.get("clause_id"))
@@ -126,18 +142,18 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
                 + same_source
             )
             if score:
-                scored.append((score, other_id, other))
+                scored.append((score, other_id, related_context))
         scored.sort(key=lambda row: (-row[0], row[1]))
         selected: list[dict[str, Any]] = []
         chars = len(source_text) + len(proposed_text)
         for _score, _id, other in scored:
             if len(selected) >= _MAX_RELATED_CLAUSES:
                 break
-            text = str(other["source_text"]).strip()
-            if chars + len(text) > _MAX_CONTEXT_CHARS:
+            related_chars = _related_context_chars(other)
+            if chars + related_chars > _MAX_CONTEXT_CHARS:
                 continue
-            selected.append(_clause_context(other))
-            chars += len(text)
+            selected.append(other)
+            chars += related_chars
         if not selected:
             continue
         revision_digest = semantic_digest(
@@ -186,18 +202,18 @@ def contract_coherence_tasks(view: Mapping[str, Any]) -> tuple[dict[str, Any], .
         batch: list[dict[str, Any]] = []
         batch_chars = len(source_text) + len(proposed_text)
         for other in overflow:
-            other_text = str(other["source_text"]).strip()
+            related_chars = _related_context_chars(other)
             if batch and (
                 len(batch) >= _MAX_RELATED_CLAUSES
-                or batch_chars + len(other_text) > _MAX_CONTEXT_CHARS
+                or batch_chars + related_chars > _MAX_CONTEXT_CHARS
             ):
                 overflow_batches.append(batch)
                 batch = []
                 batch_chars = len(source_text) + len(proposed_text)
-            if batch_chars + len(other_text) > _MAX_CONTEXT_CHARS:
+            if batch_chars + related_chars > _MAX_CONTEXT_CHARS:
                 continue
-            batch.append(_clause_context(other))
-            batch_chars += len(other_text)
+            batch.append(other)
+            batch_chars += related_chars
         if batch:
             overflow_batches.append(batch)
         for index, related in enumerate(
@@ -240,6 +256,33 @@ def _clause_context(clause: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _related_clause_context(
+    clause: Mapping[str, Any],
+    revisions_by_source: Mapping[tuple[str, str], list[dict[str, Any]]],
+) -> dict[str, Any] | None:
+    context = _clause_context(clause)
+    if not context["source_text"] or len(context["source_text"]) > _MAX_RELATED_CHARS:
+        return None
+    candidate_revisions = revisions_by_source.get(
+        (context["clause_id"], context["clause_version"]), []
+    )
+    if len(candidate_revisions) > 1:
+        return None  # Selection between competing revisions requires human authority.
+    if candidate_revisions:
+        candidate = candidate_revisions[0]
+        text = str(candidate.get("revised_text") or "").strip()
+        revision_id = str(candidate.get("revised_clause_id") or "")
+        if not text or not revision_id or len(text) > _MAX_RELATED_CHARS:
+            return None
+        context["proposed_candidate_text"] = text
+        context["proposed_revision_id"] = revision_id
+    return context
+
+
+def _related_context_chars(context: Mapping[str, Any]) -> int:
+    return len(str(context["source_text"])) + len(str(context.get("proposed_candidate_text") or ""))
+
+
 def current_coherence_digests(view: Mapping[str, Any]) -> set[str]:
     """Only results for the current exact source/proposal context may be shown."""
 
@@ -261,6 +304,15 @@ def unreviewed_explicit_reference_count(
         (str(item.get("clause_id") or ""), str(item.get("clause_version") or "")): item
         for item in clauses
     }
+    revisions_by_source: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for item in revisions:
+        revisions_by_source.setdefault(
+            (
+                str(item.get("source_clause_id") or ""),
+                str(item.get("source_clause_version") or ""),
+            ),
+            [],
+        ).append(item)
     scheduled: dict[str, set[str]] = {}
     for task in tasks:
         scheduled.setdefault(str(task["revision_id"]), set()).update(
@@ -289,10 +341,23 @@ def unreviewed_explicit_reference_count(
             if not other_id or other_id == str(source.get("clause_id")):
                 continue
             other_number = display_clause_reference(other)
+            other_candidates = revisions_by_source.get(
+                (other_id, str(other.get("clause_version") or "")), []
+            )
+            reference_texts = (
+                [str(other_candidates[0].get("revised_text") or "")]
+                if len(other_candidates) == 1
+                else [
+                    str(other.get("source_text") or ""),
+                    *(str(item.get("revised_text") or "") for item in other_candidates),
+                ]
+            )
             reverse = bool(
                 source_number
-                and source_number
-                in _EXPLICIT_CLAUSE_REFERENCE.findall(str(other.get("source_text") or ""))
+                and any(
+                    source_number in _EXPLICIT_CLAUSE_REFERENCE.findall(text)
+                    for text in reference_texts
+                )
             )
             if (reverse or other_number in forward_numbers) and other_id not in selected:
                 unreviewed += 1

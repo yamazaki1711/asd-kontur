@@ -2156,3 +2156,20 @@ were not restarted. The frontend index digest matched the pinned plist.
 No public database rows were manually enqueued or repaired. No authenticated
 owner-browser check or real-project new overflow result is claimed by this
 release check; those remain separate product acceptance steps.
+
+Next source slice: a second professional consistency gap remained in the
+editable revised contract. The bounded reviewer used the original wording
+of every related clause, even when that related clause also had a selected
+proposed revision. The task builder now passes both the exact original and
+the effective proposed candidate for a singly revised related clause. Qwen
+is explicitly asked to compare against the effective candidate. Deterministic
+validation rejects a purported conflict whose related quote exists only in
+the superseded original; accepted results identify the related revision and
+label its quote as proposed wording in the UI and editable report. Competing
+revisions for the same source clause remain unresolved rather than selecting
+one silently. The task digest changes only where the effective context
+changes, so unrelated accepted reviews remain reusable. Changed-corpus tests
+cover the proposed-versus-proposed conflict and rejected original-only quote;
+the synthetic one-page DOCX was reopened, rendered and visually inspected.
+This source slice has not yet been deployed, and it does not certify legal
+coherence of unreviewed clauses or authority to adopt any proposal.

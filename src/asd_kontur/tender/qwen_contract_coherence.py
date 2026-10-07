@@ -16,7 +16,7 @@ from asd_kontur.application_spine.models import semantic_digest
 from asd_kontur.document_understanding.qwen_semantic import QwenSemanticFailure, _complete
 from asd_kontur.tender.contract_coherence import CONTRACT_COHERENCE_PROFILE
 
-CONTRACT_COHERENCE_CONTRACT = "contract-revision-coherence-candidate@1.0.0"
+CONTRACT_COHERENCE_CONTRACT = "contract-revision-coherence-candidate@1.1.0"
 
 
 class QwenContractCoherenceReviewer:
@@ -95,13 +95,16 @@ def parse_contract_coherence(raw: str, *, context: Mapping[str, Any]) -> list[di
         proposal_quote = str(item.get("proposal_quote") or "")
         other_quote = str(item.get("other_quote") or "")
         confidence = item.get("confidence")
+        other_effective_text = str(
+            (other or {}).get("proposed_candidate_text") or (other or {}).get("source_text") or ""
+        )
         if (
             other is None
             or other_id in seen
             or not proposal_quote
             or not other_quote
             or _normalize(proposal_quote) not in _normalize(proposal)
-            or _normalize(other_quote) not in _normalize(str(other.get("source_text") or ""))
+            or _normalize(other_quote) not in _normalize(other_effective_text)
             or isinstance(confidence, bool)
             or not isinstance(confidence, (int, float))
             or not 0 <= float(confidence) <= 1
@@ -119,6 +122,10 @@ def parse_contract_coherence(raw: str, *, context: Mapping[str, Any]) -> list[di
                 "other_clause_id": other_id,
                 "other_source_version_id": str(other.get("source_version_id") or ""),
                 "other_source_locator_id": str(other.get("source_locator_id") or ""),
+                "other_revision_id": str(other.get("proposed_revision_id") or "") or None,
+                "other_text_kind": (
+                    "proposed_revision" if other.get("proposed_candidate_text") else "source_clause"
+                ),
                 "proposal_quote": proposal_quote,
                 "other_quote": other_quote,
                 **narrative,
@@ -143,6 +150,8 @@ def _review_prompt(context: Mapping[str, Any]) -> str:
     return (
         "Проверь только прямые содержательные противоречия между предложенной редакцией "
         "пункта строительного договора и предоставленными связанными пунктами. "
+        "Если у связанного пункта есть proposed_candidate_text, сравнивай с ним как с "
+        "предлагаемой действующей редакцией, а не с исходным source_text. "
         "Не утверждай, что проверен весь договор. Не выдумывай нормы права, сроки или суммы. "
         "Обычное выгодное Заказчику условие само по себе не противоречие. "
         'Верни только JSON: {"conflicts":[{"other_clause_id":"точный id из входа",'

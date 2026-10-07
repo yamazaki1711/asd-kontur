@@ -3245,6 +3245,11 @@ function TenderContractAnalysisBody({
                       </td>
                       <td>
                         {displayValue(item.other_quote, "—")}
+                        {item.other_text_kind === "proposed_revision" ? (
+                          <small>
+                            Цитата из предлагаемой редакции связанного пункта.
+                          </small>
+                        ) : null}
                         {typeof item.other_source_locator_id === "string" &&
                         item.other_source_locator_id ? (
                           <small>
