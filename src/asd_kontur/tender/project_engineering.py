@@ -30,7 +30,7 @@ from .quantity_semantics import (
 )
 from .qwen_work_reconciliation import PROJECT_WORK_RECONCILIATION_PROFILE
 
-PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v85"
+PROJECT_ENGINEERING_MODEL_VERSION = "project-engineering-model-v86"
 _DESIGN_QUANTITY_ROLES = ("РД", "Спецификация", "ПД")
 _COMMERCIAL_QUANTITY_ROLES = ("ВОР", "Смета", "Смета контракта")
 _DESIGN_QUANTITY_ROLE_SET = frozenset(_DESIGN_QUANTITY_ROLES)
@@ -3563,6 +3563,11 @@ def _work_schedule(
             "candidate_ids": sorted(
                 str(item["candidate_id"]) for item in observations if item.get("candidate_id")
             ),
+            "candidate_document_roles": {
+                str(item["candidate_id"]): str(item["document_role"])
+                for item in observations
+                if item.get("candidate_id") and item.get("document_role")
+            },
             "work_scope_assertions": _deduplicate_dicts(grouped_work_scope_assertions),
             "facility_id": next(
                 (str(item["facility_id"]) for item in observations if item.get("facility_id")),
@@ -4139,6 +4144,37 @@ def _reviewed_cross_work_pair(left: Mapping[str, Any], right: Mapping[str, Any])
                 _normalized(direct.get("normalized_operation"))
             ):
                 return True
+    return False
+
+
+def _reviewed_cross_role_pair_within_schedule(row: Mapping[str, Any]) -> bool:
+    """Require a reciprocal Qwen pair with proven design/commercial roles."""
+
+    roles = row.get("candidate_document_roles") or {}
+    if not isinstance(roles, Mapping):
+        return False
+    assertions = _work_assertions_by_pair(row)
+    for (left_id, right_id), direct in assertions.items():
+        left_role = str(roles.get(left_id) or "")
+        right_role = str(roles.get(right_id) or "")
+        if not (
+            (left_role in _DESIGN_QUANTITY_ROLE_SET and right_role in _COMMERCIAL_QUANTITY_ROLE_SET)
+            or (
+                right_role in _DESIGN_QUANTITY_ROLE_SET
+                and left_role in _COMMERCIAL_QUANTITY_ROLE_SET
+            )
+        ):
+            continue
+        reciprocal = assertions.get((right_id, left_id))
+        if reciprocal is None or any(
+            direct.get(key) != reciprocal.get(key)
+            for key in ("scope_compatibility", "normalized_operation", "reason")
+        ):
+            continue
+        if direct.get("scope_compatibility") == ScopeCompatibility.SAME_SCOPE.value and bool(
+            _normalized(direct.get("normalized_operation"))
+        ):
+            return True
     return False
 
 
@@ -5043,7 +5079,15 @@ def _scope_comparisons(
             bounded_semantic_match = (
                 semantic_operation is not None and len(row.get("project_wording") or ()) <= 2
             )
-            if pair_compatibility is True or (
+            if _reviewed_cross_role_pair_within_schedule(row) and pair_compatibility is not True:
+                status = "PARTIAL_SCOPE_MATCH"
+                professional_status = "Часть операций сопоставлена"
+                conclusion = (
+                    "Отдельная проектная и коммерческая позиции взаимно сопоставлены "
+                    "по точным источникам, но соответствие всей группы работ не установлено. "
+                    "Остальные операции и количество требуют проверки."
+                )
+            elif pair_compatibility is True or (
                 pair_compatibility is None and (exact_operation or bounded_semantic_match)
             ):
                 status = "MATCH"
@@ -5406,6 +5450,49 @@ def _work_pair_scope_compatibility(
 def _work_pair_scope_compatibility_within_schedule(work: Mapping[str, Any]) -> bool | None:
     candidate_ids = {str(value) for value in work.get("candidate_ids") or () if value}
     assertions = _work_assertions_by_pair(work)
+    candidate_roles = work.get("candidate_document_roles") or {}
+    if isinstance(candidate_roles, Mapping) and candidate_roles:
+        design_ids = {
+            candidate_id
+            for candidate_id in candidate_ids
+            if str(candidate_roles.get(candidate_id) or "") in _DESIGN_QUANTITY_ROLE_SET
+        }
+        commercial_ids = {
+            candidate_id
+            for candidate_id in candidate_ids
+            if str(candidate_roles.get(candidate_id) or "") in _COMMERCIAL_QUANTITY_ROLE_SET
+        }
+        if not design_ids or not commercial_ids:
+            return None
+        matched_design: set[str] = set()
+        matched_commercial: set[str] = set()
+        match_counts: dict[str, int] = defaultdict(int)
+        for design_id in design_ids:
+            for commercial_id in commercial_ids:
+                direct = assertions.get((design_id, commercial_id))
+                reciprocal = assertions.get((commercial_id, design_id))
+                if (
+                    direct is None
+                    or reciprocal is None
+                    or any(
+                        direct.get(key) != reciprocal.get(key)
+                        for key in ("scope_compatibility", "normalized_operation", "reason")
+                    )
+                ):
+                    continue
+                if direct.get("scope_compatibility") != ScopeCompatibility.SAME_SCOPE.value:
+                    return False
+                if not _normalized(direct.get("normalized_operation")):
+                    return False
+                matched_design.add(design_id)
+                matched_commercial.add(commercial_id)
+                match_counts[design_id] += 1
+                match_counts[commercial_id] += 1
+        if any(count > 1 for count in match_counts.values()):
+            return None
+        return (
+            True if matched_design == design_ids and matched_commercial == commercial_ids else None
+        )
     decisions: list[bool] = []
     for candidate_id in sorted(candidate_ids):
         for peer_id in sorted(candidate_ids - {candidate_id}):

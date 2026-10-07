@@ -3365,6 +3365,107 @@ def test_shared_facility_alone_cannot_authorize_design_commercial_match() -> Non
     assert comparisons[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
 
 
+def test_combined_schedule_uses_only_reviewed_cross_role_candidate_pair() -> None:
+    reason = "The same roof truss installation is stated in both sources."
+    row = {
+        "work_scope_id": "roof-structure",
+        "candidate_ids": ["design-truss", "design-brace", "commercial-truss"],
+        "candidate_document_roles": {
+            "design-truss": "РД",
+            "design-brace": "РД",
+            "commercial-truss": "Смета",
+        },
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": left,
+                "related_candidate_id": right,
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install roof trusses",
+                "reason": reason,
+            }
+            for left, right in (
+                ("design-truss", "commercial-truss"),
+                ("commercial-truss", "design-truss"),
+            )
+        ],
+        "facility_id": "hangar-q",
+        "facility": "Hangar Q",
+        "family_key": "structural_steel",
+        "work_name": "Steel roof works",
+        "document_roles": ["РД", "Смета"],
+        "source_locator_ids": ["design-source", "commercial-source"],
+    }
+    comparison = _scope_comparisons([row])[0]
+
+    assert comparison["classification"] == "PARTIAL_SCOPE_MATCH"
+    assert comparison["source_locator_ids"] == ["commercial-source", "design-source"]
+
+    row["candidate_document_roles"]["commercial-truss"] = "РД"
+    assert _scope_comparisons([row])[0]["classification"] == "UNRESOLVED_SCOPE_MATCH"
+
+
+def test_combined_schedule_requires_coverage_of_every_role_candidate_for_full_match() -> None:
+    row = {
+        "work_scope_id": "road-crossings",
+        "candidate_ids": ["design-east", "design-west", "estimate-east", "estimate-west"],
+        "candidate_document_roles": {
+            "design-east": "РД",
+            "design-west": "РД",
+            "estimate-east": "Смета",
+            "estimate-west": "Смета",
+        },
+        "work_scope_assertions": [
+            {
+                "source_candidate_id": left,
+                "related_candidate_id": right,
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": operation,
+                "reason": reason,
+            }
+            for left, right, operation, reason in (
+                ("design-east", "estimate-east", "Install east crossing", "Same east crossing"),
+                ("estimate-east", "design-east", "Install east crossing", "Same east crossing"),
+                ("design-west", "estimate-west", "Install west crossing", "Same west crossing"),
+                ("estimate-west", "design-west", "Install west crossing", "Same west crossing"),
+            )
+        ],
+        "facility_id": "road-r",
+        "facility": "Road R",
+        "family_key": "pipeline",
+        "work_name": "Pipeline crossings",
+        "document_roles": ["РД", "Смета"],
+        "source_locator_ids": ["design-road", "estimate-road"],
+    }
+
+    assert _scope_comparisons([row])[0]["classification"] == "MATCH"
+
+    row["work_scope_assertions"] = row["work_scope_assertions"][:2]
+    assert _scope_comparisons([row])[0]["classification"] == "PARTIAL_SCOPE_MATCH"
+
+    row["candidate_ids"] = ["design-east", "estimate-east", "estimate-west"]
+    row["work_scope_assertions"] = [
+        value
+        for value in (
+            *row["work_scope_assertions"],
+            {
+                "source_candidate_id": "design-east",
+                "related_candidate_id": "estimate-west",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install east crossing",
+                "reason": "Both priced lines claim the east crossing",
+            },
+            {
+                "source_candidate_id": "estimate-west",
+                "related_candidate_id": "design-east",
+                "scope_compatibility": "SAME_SCOPE",
+                "normalized_operation": "Install east crossing",
+                "reason": "Both priced lines claim the east crossing",
+            },
+        )
+    ]
+    assert _scope_comparisons([row])[0]["classification"] == "PARTIAL_SCOPE_MATCH"
+
+
 def test_commercial_work_is_not_called_unsupported_while_design_rows_are_unclassified() -> None:
     comparisons = _scope_comparisons(
         [
@@ -3798,7 +3899,7 @@ def _model() -> dict[str, object]:
 def test_model_exposes_professional_project_pits_and_sheet_pile_schedule() -> None:
     model = _model()
 
-    assert model["model_version"] == "project-engineering-model-v85"
+    assert model["model_version"] == "project-engineering-model-v86"
     assert model["project"]["name"]["value"] == ("Система водоотведения испытательного объекта")
     assert [item["name"] for item in model["facilities"]] == ["КНС 2"]
     assert model["pits"]["established_count"] == 2
