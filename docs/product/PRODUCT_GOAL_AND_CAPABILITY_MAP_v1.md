@@ -229,6 +229,16 @@ negotiation choices or authenticated browser acceptance. FFC-01 stays
 exact lifecycle cleanup of an accidental control workspace was separately
 verified without altering the owner workspace or permanent NTD memory.
 
+FFC-01 follow-up: application release
+`56300deabcdc9aaa6d1271d9433b5d5c8e945cbe` keeps accepted bounded
+contract reviews reusable while scheduling additional local-Qwen reviews for
+explicit clause cross-references that previously exceeded the 12-clause
+context. Unreviewed explicit links and revisions beyond the bounded cap are
+visible as coverage gaps on the contract screen. This advances review
+coverage, but it does not certify the entire revised contract, authorize
+negotiated wording, or pass an authenticated owner-browser deliverable check.
+The FFC-01 whole-journey state remains `PARTIAL`.
+
 FFC-01 remains `PARTIAL` after the 7 October contract output checkpoint. The
 delivered application release is
 `1be4a7f0d5aad9368c904e17034acfa3f0ce6d31` on migration

@@ -88,6 +88,18 @@ browser had no connected session, so authenticated owner UI/export acceptance
 is still unverified. Qwen and NTD were not restarted. FFC-01 and ProductReady
 remain PARTIAL and false.
 
+Contract coverage release `56300deabcdc9aaa6d1271d9433b5d5c8e945cbe`
+is now pinned to the four supervised application roles on unchanged migration
+`0134_contract_coherence_profile_v2`. Explicit clause cross-references that
+overflow the original 12-clause context now receive separate bounded Qwen
+reviews through the autonomous scheduler. References that remain unroutable
+and revisions beyond the 16-revision cap are visible coverage gaps, not a
+false coherence pass. The staged exact release passed 95 focused contract
+tests, frontend typecheck/build, 4/4 launchd preflight and API readiness;
+Qwen and NTD were not restarted. No authenticated owner-browser or new
+real-project overflow result is claimed. FFC-01 remains `PARTIAL`; continue
+the full four-mode sequence.
+
 Checkpoint 2026-10-07 (Asia/Kamchatka): public application release
 `039ce694a10200a2f24e7cadda61b9c8cd6a58ac` runs migration
 `0134_contract_coherence_profile_v2`. Five owner-workspace contract coherence
