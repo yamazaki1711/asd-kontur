@@ -26,9 +26,24 @@ The source checkpoint passed 38/38 focused unit and isolated PostgreSQL/API
 checks. A read-only real-workspace context assembly found 21 eligible sources,
 20 with first-page excerpts and a maximum excerpt length of 160 characters.
 No owner project result was manually inserted or Qwen job manually queued.
-Whether the new context resolves any of the 31 references remains unverified
-until supervised v2 processing finishes; unmatched references must stay
-explicitly unresolved. This checkpoint is not yet a public deployment.
+
+The exact source SHA `9f9dd5ef3a6bb956d6d7e139ecc3128d9f128fb7` is deployed
+under `~/.asd-kontur/public-demo/releases/20261008-9f9dd5e-contract-reference-context`.
+The public database moved from migration 0139 to
+`0140_contract_reference_inventory_context` after a private backup was restored
+and upgrade/downgrade/re-upgrade were checked in a separate PostgreSQL database.
+API, document worker, project orchestrator and assistant worker are pinned to
+this exact release. Qwen and the NTD worker were not restarted. The supervised
+orchestrator created seven v2 reference-review jobs without a Codex queue
+command. All seven succeeded by 2026-10-08 01:14 +12. The final contract view
+reported 39 references: three matched to admitted sources and 36 unresolved.
+The historical v1 view had 34 references: three matched and 31 unresolved. The
+additional bounded title-page context increased detected references but did
+not improve source matching. Neither result establishes that an unresolved
+attachment is absent; the application leaves it as a clarification item. The
+revised-contract candidate still explicitly excludes proposals for non-primary
+source files. The platform-only data fingerprint remained
+`9941ef97d43749ffc396287f008fef03e3fb2e56804e5972f13a3bd68e158627`.
 
 ## Visible Word-part revision guard — 2026-10-08 source checkpoint
 
